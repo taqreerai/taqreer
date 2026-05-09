@@ -14,7 +14,7 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
     <main>
       
     
-    <nav className="fixed w-full z-50 bg-[#0A0710]/80 backdrop-blur-md border-b border-white/5">
+    <nav className="fixed w-full z-50 bg-brand-dark/80 backdrop-blur-md border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-20 relative">
                 
@@ -215,7 +215,7 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
                 
                 <ScrollReveal direction="up" delay={0.2} className="flex">
                 <div
-                    className="glass-card rounded-3xl p-8 border-t-4 border-t-brand-purple-500 flex flex-col relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)] bg-[#1A1423] w-full">
+                    className="glass-card rounded-3xl p-8 border-t-4 border-t-brand-purple-500 flex flex-col relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)] bg-surface-container-high w-full">
                     <div
                         className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-brand-purple-500 text-xs px-3 py-1 rounded-full font-bold">
                         الأكثر شعبية</div>

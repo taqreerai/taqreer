@@ -176,11 +176,8 @@ body {
 
 /* ─── Header ─── */
 .header-bg {
-  background: linear-gradient(90deg, rgba(5, 5, 16, 0.95) 0%, rgba(55, 11, 244, 0.06) 40%, rgba(125, 45, 255, 0.04) 60%, rgba(5, 5, 16, 0.95) 100%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(125, 45, 255, 0.12);
-  box-shadow: 0 1px 30px rgba(55, 11, 244, 0.06);
+  background: rgba(10, 7, 16, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* ─── Progress Bar ─── */
@@ -424,6 +421,132 @@ body {
 
 .group:hover .nav-icon {
   color: #ffffff !important;
+}
+
+/* ─── Muted Text ─── */
+.text-muted {
+  color: var(--tq-muted);
+}
+
+/* ─── Icon Button ─── */
+.btn-icon {
+  color: var(--tq-muted);
+  border-radius: 9999px;
+  padding: 0.5rem;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.btn-icon:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ─── Search Input ─── */
+.input-search {
+  width: 100%;
+  border-radius: 0.5rem;
+  padding: 0.5rem 2.5rem 0.5rem 1rem;
+  color: white;
+  background: rgba(26, 20, 35, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-search:focus {
+  outline: none;
+  border-color: var(--tq-violet);
+  box-shadow: 0 0 0 1px var(--tq-violet);
+}
+
+.input-search::placeholder {
+  color: var(--tq-muted);
+}
+
+/* ─── Sidebar Logo Section ─── */
+.sidebar-logo {
+  height: 80px;
+  border-bottom: 1px solid rgba(42, 36, 59, 0.6);
+}
+
+/* ─── Sidebar Usage Bar ─── */
+.sidebar-usage {
+  border-bottom: 1px solid rgba(42, 36, 59, 0.6);
+}
+
+/* ─── Avatar Ring ─── */
+.avatar-ring {
+  border: 1px solid rgba(125, 45, 255, 0.3);
+}
+
+/* ─── Template Card Thumbnail ─── */
+.template-thumbnail {
+  background: rgba(26, 20, 35, 0.8);
+}
+
+/* ─── Template Card Hover Overlay ─── */
+.template-overlay {
+  background: rgba(3, 3, 13, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ─── Hide Scrollbar ─── */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Dashboard Glow Orbs ─── */
+.glow-orb {
+  pointer-events: none;
+  position: fixed;
+  border-radius: 9999px;
+  z-index: 0;
+}
+
+.glow-orb-blue {
+  top: -120px;
+  left: 20%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(55, 11, 244, 0.07) 0%, transparent 70%);
+  filter: blur(40px);
+}
+
+.glow-orb-violet {
+  bottom: -150px;
+  left: 40%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(125, 45, 255, 0.06) 0%, transparent 70%);
+  filter: blur(60px);
+}
+
+.glow-orb-magenta {
+  top: 30%;
+  left: 10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(224, 54, 184, 0.04) 0%, transparent 70%);
+  filter: blur(50px);
+}
+
+/* ─── Sidebar Tooltip ─── */
+.sidebar-tooltip {
+  background: var(--color-surface-container-high);
+  border: 1px solid var(--tq-border);
+  color: white;
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* ─── Dashboard background lighting ─── */
