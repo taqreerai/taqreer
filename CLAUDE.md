@@ -31,6 +31,72 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 - Full CSS design system in globals.css
 - Prisma schema with migrations
 - Coming soon page
+- **Supabase Auth & Storage (Phase 1–4 complete)** — see Progress section below
+
+---
+
+## Current Progress (last session: 2026-05-09)
+
+### ✅ Step 1 — Supabase Auth & Storage (Phase 1–4 complete)
+
+**Files created:**
+- `lib/supabase/client.ts` — browser client
+- `lib/supabase/server.ts` — server client (Server Components, route handlers)
+- `lib/supabase/middleware.ts` — middleware client for session refresh
+- `middleware.ts` (root) — refreshes session on every request, protects `/dashboard`, `/projects`, `/editor`, `/create`, `/enhance`, `/settings`, `/brand-kits`, `/folders`. Redirects unauthenticated users to `/auth/login?next={path}`. Preserves `?template=` and `?next=` params.
+- `app/(auth)/layout.tsx` — RTL centered auth shell (no html/body — root layout owns those)
+- `app/(auth)/auth/login/page.tsx` — email + Google OAuth login
+- `app/(auth)/auth/signup/page.tsx` — name + email + password + Google OAuth
+- `app/(auth)/auth/forgot-password/page.tsx` — password reset request
+- `app/(auth)/auth/callback/route.ts` — OAuth code exchange + user sync
+- `app/api/auth/user-sync/route.ts` — upserts Supabase user into PostgreSQL `users` table
+- `hooks/useUser.ts` — client hook for current user with auth-state subscription
+- `components/app/LogoutButton.tsx` — sidebar logout button
+- `components/marketing/ComingSoonContent.tsx` — client component for framer-motion content (split out so the marketing page can be a server component for auth-aware CTAs)
+- `scripts/setup-storage.ts` — creates 5 storage buckets (NOT YET RUN)
+
+**Files updated:**
+- `app/(app)/layout.tsx` — async server component, fetches session, redirects to `/auth/login?next=/dashboard` if no session
+- `app/(marketing)/page.tsx` — server component with auth-aware CTAs (Dashboard if logged in, Sign up + Login if not)
+- `app/(marketing)/preview/page.tsx` — same auth-aware nav treatment
+- `components/app/Sidebar.tsx` — LogoutButton integrated at the bottom
+
+**Verified working locally:**
+- `/` → 200 (auth-aware homepage)
+- `/auth/signup`, `/auth/login`, `/auth/forgot-password` → 200
+- `/dashboard` → 307 redirect to login (middleware enforced)
+
+### 🔜 Remaining for Step 1 (do these next)
+
+1. **Configure Supabase Console** — register OAuth redirect URLs:
+   - `http://localhost:3000/auth/callback` (local)
+   - `https://taqreer.ai/auth/callback` (prod)
+2. **Run storage setup script:**
+   ```bash
+   npx ts-node scripts/setup-storage.ts
+   ```
+   Creates: `source-files`, `brand-assets`, `generated-presentations`, `slide-previews` (private) and `template-assets` (public).
+3. **Test full auth flow** — signup, email confirmation, login, Google OAuth, logout, protected route redirect, `?next=` preservation, `?template=` preservation.
+4. **Decide on email verification** — Supabase default behavior (check Supabase project settings); if confirmation emails are needed, integrate Resend later.
+5. **Password reset email delivery** via Resend — not wired up yet (forgot-password page calls Supabase, but Supabase needs an SMTP provider configured).
+
+### 🔜 Then Step 2 — Inngest background jobs (see "Build Order" below)
+
+### Cleanup notes from last session
+
+- Removed all hardcoded CSS / inline styles from dashboard + landing components; everything uses Tailwind utility classes or semantic classes from `globals.css`.
+- Deleted unused Next.js scaffold files (`public/file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg`, `app/api/backup/route.ts`).
+- The branch `claude/festive-lalande-d17edc` was merged into local `main` but **NOT YET PUSHED** to origin. Run `git push origin main` when ready, then `git branch -D claude/festive-lalande-d17edc`.
+
+### Required env vars (already in `.env.local`)
+
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+---
 
 ## Branding & Design System
 
