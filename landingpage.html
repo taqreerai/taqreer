@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="ar">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Taqreer AI - Presentations</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&amp;display=swap"
+        rel="stylesheet" />
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cairo', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            dark: '#0A0710',
+                            purple: {
+                                400: '#C084FC',
+                                500: '#A855F7',
+                                600: '#9333EA',
+                                900: '#3B0764',
+                            },
+                            gray: {
+                                800: '#1F2937',
+                                900: '#111827',
+                            }
+                        }
+                    },
+                    backgroundImage: {
+                        'gradient-text': 'linear-gradient(90deg, #E879F9 0%, #A855F7 50%, #3B82F6 100%)',
+                        'card-gradient': 'linear-gradient(180deg, rgba(31, 41, 55, 0.4) 0%, rgba(17, 24, 39, 0.8) 100%)',
+                        'button-gradient': 'linear-gradient(90deg, #A855F7 0%, #6366F1 100%)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style data-purpose="custom-styles">
+        body {
+            background-color: #0A0710;
+            color: #ffffff;
+        }
+
+        .text-gradient {
+            background: linear-gradient(90deg, #E879F9 0%, #A855F7 50%, #3B82F6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        .glow-effect {
+            position: relative;
+        }
+
+        .glow-effect::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            z-index: -1;
+            filter: blur(40px);
+        }
+
+        .feature-card-glow {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card-glow::after {
+            content: '';
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle at top right, rgba(168, 85, 247, 0.3) 0%, rgba(168, 85, 247, 0) 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .feature-card-glow:hover::after {
+            opacity: 1;
+        }
+
+        .feature-card-glow>* {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+</head>
+
+<body class="antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
+    <!-- BEGIN: Navigation -->
+    <nav class="fixed w-full z-50 bg-[#0A0710]/80 backdrop-blur-md border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center">
+                    <a class="flex items-center gap-2" href="#">
+                        <span class="text-xl font-bold tracking-wider">Vaultflow</span>
+                        <svg class="w-6 h-6 text-white" fill="currentColor" viewbox="0 0 24 24">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>
+                    </a>
+                </div>
+                <!-- Desktop Menu -->
+                <div class="hidden md:flex space-x-8 space-x-reverse">
+                    <a class="text-sm text-gray-300 hover:text-white transition-colors" href="#">الرئيسية</a>
+                    <a class="text-sm text-gray-300 hover:text-white transition-colors" href="#">المميزات</a>
+                    <a class="text-sm text-gray-300 hover:text-white transition-colors" href="#">الأسعار</a>
+                    <a class="text-sm text-gray-300 hover:text-white transition-colors" href="#">القوالب</a>
+                </div>
+                <!-- CTA Buttons -->
+                <div class="hidden md:flex items-center space-x-4 space-x-reverse">
+                    <a class="text-sm text-gray-300 hover:text-white px-4 py-2 rounded-full border border-white/10 hover:border-white/30 transition-all"
+                        href="#">تسجيل الدخول</a>
+                    <a class="text-sm text-black bg-white hover:bg-gray-100 px-6 py-2 rounded-full font-medium transition-colors"
+                        href="#">إنشاء حساب</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <!-- END: Navigation -->
+    <!-- BEGIN: Hero Section -->
+    <section class="relative pt-40 pb-32 overflow-hidden glow-effect">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+            <!-- Badges -->
+            <div class="flex justify-center gap-3 mb-8">
+                <span
+                    class="px-4 py-1.5 rounded-full text-xs font-medium bg-brand-purple-900/30 text-brand-purple-400 border border-brand-purple-500/20 flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-brand-purple-500"></span>
+                    تم إنشاء 12,345 عرض تقديمي حتى الآن
+                </span>
+                <span
+                    class="px-4 py-1.5 rounded-full text-xs font-medium bg-white/5 text-gray-300 border border-white/10">
+                    مدعوم بتقنية Claude Design
+                </span>
+            </div>
+            <!-- Headline -->
+            <h1 class="text-5xl md:text-7xl font-bold mb-8 leading-tight">
+                حوّل محتواك إلى عرض <br />
+                <span class="text-gradient">احترافي خلال دقائق</span>
+            </h1>
+            <!-- Subheadline -->
+            <p class="text-lg md:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+                taqreer.ai يحوّل محتواك إلى عروض تقديمية مصممة بالكامل، يدعم العربية والإنجليزية.
+                يحافظ على هويتك البصرية، ويمنحك محررًا متقدمًا لتعديل كل شريحة مباشرة داخل المتصفح.
+            </p>
+            <!-- CTA -->
+            <div class="flex justify-center gap-4 mb-20">
+                <button
+                    class="px-8 py-3 rounded-full bg-button-gradient text-white font-medium hover:opacity-90 transition-opacity">
+                    ابدأ الآن
+                </button>
+                <button
+                    class="px-8 py-3 rounded-full bg-transparent border border-white/20 text-white font-medium hover:bg-white/5 transition-colors">
+                    استعرض القوالب
+                </button>
+            </div>
+            <!-- Dashboard Image -->
+            <div class="relative max-w-5xl mx-auto">
+                <div
+                    class="absolute -inset-1 bg-gradient-to-r from-brand-purple-600 to-blue-600 rounded-2xl blur opacity-20">
+                </div>
+                <img alt="Dashboard Mockup"
+                    class="relative rounded-2xl border border-white/10 shadow-2xl w-full h-auto mx-auto"
+                    src="https://lh3.googleusercontent.com/aida/ADBb0uiOr-DESEXkqkE9BaoA2AvmyY_e0Du0EPjEueisx6sfkDZwhPas3KD7v3Tvm0I1YJ71g6Sywa_Akg8lm3XSucywemblkgpu5I6APAllNL26z8av2SkzCoBaksszU5W_nDgFZs11AGMnnU3stTkUK8pS6LQAGq0s4y96medmeWHXiKr7SjhoD3CWzR0E8mJoq13JXr9wIjMo1de9nPFVdnqZQBbW3BO82C90tq-NMrbYmUUejWgiZOi5qMdxvVAnrjc9X3ZBy5CcCg" />
+            </div>
+        </div>
+    </section>
+    <!-- END: Hero Section -->
+    <!-- BEGIN: Trusted By -->
+    <section class="py-32">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p class="text-2xl font-medium text-gray-300 mb-12">موثوق بنا من قبل</p>
+            <div
+                class="flex flex-wrap justify-center items-center gap-12 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+                <!-- Logos (Simulated) -->
+                <span class="text-2xl font-bold tracking-widest">TED</span>
+                <span class="text-xl font-bold flex items-center gap-1"><svg class="w-6 h-6" fill="currentColor"
+                        viewbox="0 0 24 24">
+                        <path d="M12 2L2 22h20L12 2z"></path>
+                    </svg>Lattice</span>
+                <span class="text-xl font-bold">NCR</span>
+                <span class="text-xl font-bold">PACIFIC FUNDS</span>
+                <span class="text-xl font-bold">Rakuten</span>
+                <span class="text-xl font-bold">zendesk</span>
+                <span class="text-xl font-bold">DELL</span>
+            </div>
+        </div>
+    </section>
+    <!-- END: Trusted By -->
+    <!-- BEGIN: Features Overview -->
+    <section class="py-32 relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-8">كل ما تحتاجه لإنشاء عرض <br /> تقديمي احترافي</h2>
+                <p class="text-gray-400 text-lg mb-8">ابدأ من محتوى خام، طوّر عرضًا موجودًا، أو استخدم قالبًا جاهزًا.
+                    تقرير <br /> يساعدك في كل مرحلة من مراحل إنشاء العرض.</p>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Feature 1 -->
+                <div class="glass-card rounded-2xl p-8 hover:bg-white/5 transition-colors group feature-card-glow">
+                    <div
+                        class="w-12 h-12 rounded-xl bg-brand-purple-900/50 flex items-center justify-center text-brand-purple-400 mb-6 border border-brand-purple-500/20 group-hover:bg-brand-purple-500 group-hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                            <path
+                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                                stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">أنشئ عرضًا مصممًا بالكامل <br /> بدون أي Prompt</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        اجمع المحتوى والهوية البصرية معًا، وسيقوم تقرير بإنشاء عرض PowerPoint كامل،
+                        بتصميم احترافي، مع مراعاة ألوان العلامة، الخطوط، الشعار، وأسلوب التوجيه البصري.
+                    </p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="glass-card rounded-2xl p-8 hover:bg-white/5 transition-colors group feature-card-glow">
+                    <div
+                        class="w-12 h-12 rounded-xl bg-brand-purple-900/50 flex items-center justify-center text-brand-purple-400 mb-6 border border-brand-purple-500/20 group-hover:bg-brand-purple-500 group-hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                            <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round"
+                                stroke-width="2"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">حسّن عرض PowerPoint <br /> موجود مسبقًا</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        ارفع ملف PowerPoint الحالي، وسيقوم تقرير بتحسين التصميم، الألوان، المساحات،
+                        التسلسل الهرمي، وتنسيق النصوص، مع الحفاظ على المحتوى الأساسي للعرض.
+                    </p>
+                </div>
+            </div>
+            <!-- Feature 3 (Wide) -->
+            <div
+                class="mt-6 glass-card rounded-2xl p-8 flex flex-col md:flex-row items-center gap-12 overflow-hidden relative feature-card-glow hover:bg-white/5 transition-colors">
+                <div class="md:w-1/2 z-10">
+                    <div
+                        class="w-12 h-12 rounded-xl bg-brand-purple-900/50 flex items-center justify-center text-brand-purple-400 mb-6 border border-brand-purple-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+                            <path
+                                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                                stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-3xl font-bold mb-4">قوالب جاهزة تدعم RTL</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed mb-8">
+                        ابدأ من قوالب مصممة للعروض العربية والإنجليزية، مع دعم كامل لاتجاه النص من
+                        اليمين إلى اليسار، وتنسيق مناسب للعناوين، الفقرات، الجداول، والشرائح ثنائية اللغة.
+                    </p>
+                    <button
+                        class="px-6 py-2 rounded-full bg-button-gradient text-white font-medium hover:opacity-90 transition-opacity">
+                        ابدأ مجانًا
+                    </button>
+                </div>
+                <div class="md:w-1/2 relative">
+                    <!-- Decorative Code Snippet Background -->
+                    <div
+                        class="bg-[#110D1A] p-4 rounded-xl border border-white/5 font-mono text-xs text-gray-500 opacity-50 absolute inset-0 transform translate-x-4 translate-y-4">
+                        <pre><code>
+DigitalToken.js
+
+// addNumbersToToken
+function addNumbersToToken(num1, num2) {
+  let sum = num1 + num2;
+  let token = {
+    value: sum,
+    value: sum,
+  return token;
+};
+                        </code></pre>
+                    </div>
+                    <div
+                        class="bg-[#1A1625] p-6 rounded-xl border border-white/10 shadow-2xl relative z-10 font-mono text-sm">
+                        <div class="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <span class="text-gray-400 ml-2 text-xs">DigitalToken.js</span>
+                        </div>
+                        <pre class="text-gray-300"><code><span class="text-gray-500">1</span>  <span class="text-gray-500">// addNumbersToToken</span>
+<span class="text-gray-500">2</span>  <span class="text-brand-purple-400">function</span> <span class="text-blue-400">addNumbersToToken</span>(num1, num2) {
+<span class="text-gray-500">3</span>    <span class="text-brand-purple-400">let</span> sum = num1 + num2;
+<span class="text-gray-500">4</span>    <span class="text-brand-purple-400">let</span> token = {
+<span class="text-gray-500">5</span>      value: <span class="text-red-400">sum</span>,
+<span class="text-gray-500">6</span>      value: <span class="text-red-400">sum</span>,
+<span class="text-gray-500">7</span>    <span class="text-brand-purple-400">return</span> token;
+<span class="text-gray-500">8</span>  };</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- END: Features Overview -->
+    <!-- BEGIN: Pricing Section -->
+    <section class="py-32 relative glow-effect">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-8">خطط بسيطة حسب <br /> احتياجك</h2>
+                <p class="text-gray-400 text-lg mb-8">ابدأ مجانًا، أو اختر خطة شهرية تناسب حجم عروضك وعدد الشرائح التي
+                    تحتاجها.</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                <!-- Free Plan -->
+                <div class="glass-card rounded-3xl p-8 border-t-4 border-t-gray-600 flex flex-col">
+                    <h3 class="text-2xl font-bold mb-4 text-center">مجاني</h3>
+                    <p class="text-gray-400 text-sm text-center mb-8 h-10">للتجربة وإنشاء عروض <br /> بسيطة بسرعة.</p>
+                    <div class="space-y-4 mb-8 flex-grow">
+                        <!-- Checklist -->
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm text-gray-500"><svg class="w-4 h-4 opacity-50"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm text-gray-500"><svg class="w-4 h-4 opacity-50"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm text-gray-500"><svg class="w-4 h-4 opacity-50"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                    </div>
+                    <div class="text-center mt-auto">
+                        <div class="text-4xl font-bold mb-2">$0</div>
+                        <div class="text-xs text-gray-400 mb-6">يمكنك الترقية في أي وقت</div>
+                        <button
+                            class="w-full py-3 rounded-full bg-button-gradient text-white font-medium hover:opacity-90 transition-opacity">ابدأ
+                            مجانًا</button>
+                    </div>
+                </div>
+                <!-- Pro Plan (Highlighted) -->
+                <div
+                    class="glass-card rounded-3xl p-8 border-t-4 border-t-brand-purple-500 flex flex-col relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)] bg-[#1A1423]">
+                    <div
+                        class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-brand-purple-500 text-xs px-3 py-1 rounded-full font-bold">
+                        الأكثر شعبية</div>
+                    <h3 class="text-2xl font-bold mb-4 text-center">احترافي</h3>
+                    <p class="text-gray-400 text-sm text-center mb-8 h-10">للمستخدمين الذين ينشئون <br /> عروضًا وتقارير
+                        بشكل مستمر.</p>
+                    <div class="space-y-4 mb-8 flex-grow">
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm text-gray-500"><svg class="w-4 h-4 opacity-50"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                    </div>
+                    <div class="text-center mt-auto">
+                        <div class="flex justify-center items-end gap-1 mb-2">
+                            <span class="text-4xl font-bold">$196</span>
+                            <span class="text-gray-400 mb-1">/ شهرياً</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mb-6">يمكنك ترقية أو تخفيض خطتك في أي وقت</div>
+                        <button
+                            class="w-full py-3 rounded-full bg-white text-brand-dark font-bold hover:bg-gray-100 transition-colors">ابدأ
+                            مجانًا</button>
+                    </div>
+                </div>
+                <!-- Enterprise Plan -->
+                <div class="glass-card rounded-3xl p-8 border-t-4 border-t-gray-600 flex flex-col">
+                    <h3 class="text-2xl font-bold mb-4 text-center">شركة</h3>
+                    <p class="text-gray-400 text-sm text-center mb-8 h-10">للفرق والشركات التي تحتاج إلى تعاون، <br />
+                        هوية موحدة، ومشاريع أكبر.</p>
+                    <div class="space-y-4 mb-8 flex-grow">
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                        <div class="flex items-center gap-3 text-sm"><svg class="w-4 h-4 text-brand-purple-500"
+                                fill="currentColor" viewbox="0 0 20 20">
+                                <path clip-rule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    fill-rule="evenodd"></path>
+                            </svg> إنشاء عروض بالذكاء الاصطناعي</div>
+                    </div>
+                    <div class="text-center mt-auto">
+                        <div class="flex justify-center items-end gap-1 mb-2">
+                            <span class="text-4xl font-bold">$196</span>
+                            <span class="text-gray-400 mb-1">/ شهرياً</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mb-6">يمكنك تخصيص خطتك في أي وقت</div>
+                        <button
+                            class="w-full py-3 rounded-full bg-button-gradient text-white font-medium hover:opacity-90 transition-opacity">ابدأ
+                            مجانًا</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- END: Pricing Section -->
+    <!-- BEGIN: Footer -->
+    <footer class="border-t border-white/10 pt-20 pb-8 bg-black/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+                <!-- Column 1 -->
+                <div>
+                    <h4 class="text-white font-bold mb-6">تواصل</h4>
+                    <ul class="space-y-3 text-sm text-gray-400">
+                        <li><a class="hover:text-white transition-colors" href="#">البريد الإلكتروني</a></li>
+                        <li><a class="hover:text-white transition-colors" href="#">الدعم الفني</a></li>
+                        <li><a class="hover:text-white transition-colors" href="#">نموذج التواصل</a></li>
+                    </ul>
+                </div>
+                <!-- Column 2 -->
+                <div>
+                    <h4 class="text-white font-bold mb-6">روابط</h4>
+                    <ul class="space-y-3 text-sm text-gray-400">
+                        <li><a class="hover:text-white transition-colors" href="#">المميزات</a></li>
+                        <li><a class="hover:text-white transition-colors" href="#">الأسعار</a></li>
+                        <li><a class="hover:text-white transition-colors" href="#">الأسئلة الشائعة</a></li>
+                    </ul>
+                </div>
+                <!-- Column 3 -->
+                <div>
+                    <h4 class="text-white font-bold mb-6">التواصل الاجتماعي</h4>
+                    <ul class="space-y-3 text-sm text-gray-400">
+                        <li><a class="hover:text-white transition-colors" href="#">Twitter</a></li>
+                        <li><a class="hover:text-white transition-colors" href="#">LinkedIn</a></li>
+                        <li><a class="hover:text-white transition-colors" href="#">Instagram</a></li>
+                    </ul>
+                </div>
+                <!-- Column 4 -->
+                <div>
+                    <h4 class="text-white font-bold mb-6">قانوني</h4>
+                    <ul class="space-y-3 text-sm text-gray-400">
+                        <li><a class="hover:text-white transition-colors" href="#">سياسة الخصوصية</a></li>
+                        <li><a class="hover:text-white transition-colors" href="#">الشروط والأحكام</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div
+                class="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-white/10 text-sm text-gray-500">
+                <div class="flex items-center gap-2 mb-4 md:mb-0">
+                    <span class="font-bold text-white">Vaultflow</span>
+                    <svg class="w-5 h-5 text-white" fill="currentColor" viewbox="0 0 24 24">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                    </svg>
+                </div>
+                <p>© 2024 taqreer.ai جميع الحقوق محفوظة.</p>
+            </div>
+        </div>
+    </footer>
+    <!-- END: Footer -->
+</body>
+
+</html>

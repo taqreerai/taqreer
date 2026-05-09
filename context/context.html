@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Taqreer Web App Architecture Documentation</title>
+    <style>
+        :root {
+            --bg: #f7f7f4;
+            --paper: #ffffff;
+            --ink: #141414;
+            --muted: #6f6f68;
+            --line: #e3e2dc;
+            --soft: #f0efea;
+            --accent: #111111;
+            --accent-soft: #eeeeea;
+            --code-bg: #151515;
+            --code-ink: #f5f5f5;
+            --success: #2c7a4b;
+            --warning: #aa6a00;
+            --danger: #a33a3a;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 10px;
+            --shadow: 0 20px 60px rgba(0, 0, 0, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.65;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .page {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr);
+            min-height: 100vh;
+        }
+
+        aside {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            padding: 32px 24px;
+            border-right: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(18px);
+            overflow-y: auto;
+        }
+
+        .brand-mark {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: var(--ink);
+            color: #fff;
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            margin-bottom: 20px;
+        }
+
+        .doc-title {
+            font-size: 22px;
+            line-height: 1.1;
+            letter-spacing: -0.04em;
+            margin: 0 0 8px;
+        }
+
+        .doc-subtitle {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 0 0 28px;
+        }
+
+        nav {
+            display: grid;
+            gap: 4px;
+            margin-top: 20px;
+        }
+
+        nav a {
+            display: block;
+            padding: 9px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #42423d;
+        }
+
+        nav a:hover {
+            background: var(--soft);
+        }
+
+        main {
+            padding: 48px;
+            max-width: 1240px;
+            width: 100%;
+        }
+
+        .hero {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
+            padding: 56px;
+            box-shadow: var(--shadow);
+            margin-bottom: 28px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: var(--ink);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 24px;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+            line-height: 1.15;
+            letter-spacing: -0.04em;
+            margin: 0;
+        }
+
+        h1 {
+            max-width: 820px;
+            font-size: clamp(42px, 6vw, 84px);
+            margin-bottom: 20px;
+        }
+
+        .hero p {
+            max-width: 780px;
+            color: var(--muted);
+            font-size: 18px;
+            margin: 0;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 34px;
+        }
+
+        .meta-card {
+            background: var(--soft);
+            border-radius: var(--radius-md);
+            padding: 18px;
+            min-height: 110px;
+        }
+
+        .meta-card strong {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .meta-card span {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        section {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            margin-bottom: 24px;
+        }
+
+        section>h2 {
+            font-size: 34px;
+            margin-bottom: 14px;
+        }
+
+        section>p.lead {
+            color: var(--muted);
+            max-width: 820px;
+            margin: 0 0 28px;
+            font-size: 16px;
+        }
+
+        h3 {
+            font-size: 24px;
+            margin: 34px 0 14px;
+        }
+
+        h4 {
+            font-size: 17px;
+            margin: 24px 0 10px;
+        }
+
+        p {
+            margin: 0 0 16px;
+        }
+
+        ul,
+        ol {
+            padding-left: 22px;
+            margin: 0 0 18px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            margin: 22px 0;
+        }
+
+        .cards.three {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .card {
+            background: var(--soft);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            padding: 22px;
+        }
+
+        .card h4 {
+            margin-top: 0;
+            font-size: 18px;
+        }
+
+        .card p {
+            color: var(--muted);
+            font-size: 14px;
+            margin-bottom: 0;
+        }
+
+        .pill-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0 4px;
+        }
+
+        .pill {
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: 12px;
+            background: #fff;
+            color: #474742;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0 30px;
+            overflow: hidden;
+            border-radius: 16px;
+            font-size: 14px;
+        }
+
+        th,
+        td {
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: var(--soft);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        td {
+            background: #fff;
+            color: #34342f;
+        }
+
+        pre {
+            background: var(--code-bg);
+            color: var(--code-ink);
+            padding: 22px;
+            border-radius: 18px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.55;
+            margin: 18px 0 26px;
+        }
+
+        code {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        }
+
+        .flow {
+            display: grid;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .flow-step {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            background: var(--soft);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 16px;
+        }
+
+        .num {
+            flex: 0 0 32px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--ink);
+            color: #fff;
+            display: grid;
+            place-items: center;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .flow-step strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .flow-step span {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .note {
+            border-left: 4px solid var(--ink);
+            background: var(--soft);
+            padding: 18px 20px;
+            border-radius: 0 16px 16px 0;
+            margin: 22px 0;
+            color: #34342f;
+        }
+
+        .warning {
+            border-left-color: var(--warning);
+        }
+
+        .success {
+            border-left-color: var(--success);
+        }
+
+        .danger {
+            border-left-color: var(--danger);
+        }
+
+        .diagram {
+            background: var(--soft);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 24px;
+            margin: 20px 0;
+        }
+
+        .diagram pre {
+            margin: 0;
+        }
+
+        .checklist {
+            columns: 2;
+            column-gap: 40px;
+        }
+
+        .checklist li {
+            break-inside: avoid;
+        }
+
+        .footer {
+            color: var(--muted);
+            font-size: 13px;
+            padding: 20px 0 60px;
+        }
+
+        @media (max-width: 1100px) {
+            .page {
+                grid-template-columns: 1fr;
+            }
+
+            aside {
+                position: relative;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--line);
+            }
+
+            nav {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            main {
+                padding: 24px;
+            }
+
+            .hero {
+                padding: 34px;
+            }
+
+            .meta-grid,
+            .cards,
+            .cards.three {
+                grid-template-columns: 1fr;
+            }
+
+            .checklist {
+                columns: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <aside>
+            <div class="brand-mark">T</div>
+            <h2 class="doc-title">Taqreer Architecture</h2>
+            <p class="doc-subtitle">Developer handoff documentation for the full-stack AI presentation platform.</p>
+
+            <nav>
+                <a href="#overview">01. Overview</a>
+                <a href="#product-flows">02. Product Flows</a>
+                <a href="#stack">03. Tech Stack</a>
+                <a href="#architecture">04. System Architecture</a>
+                <a href="#routes">05. Routes</a>
+                <a href="#data-model">06. Data Model</a>
+                <a href="#presentation-json">07. Presentation JSON</a>
+                <a href="#ai-pipeline">08. AI Pipeline</a>
+                <a href="#editor">09. PPT Editor</a>
+                <a href="#comments">10. AI Comments</a>
+                <a href="#templates">11. Templates</a>
+                <a href="#exports">12. Export System</a>
+                <a href="#pricing">13. Pricing & Quotas</a>
+                <a href="#phases">14. Build Phases</a>
+                <a href="#risks">15. Risks</a>
+                <a href="#mvp">16. MVP Scope</a>
+            </nav>
+        </aside>
+
+        <main>
+            <header class="hero">
+                <div class="eyebrow">AI Presentation Platform</div>
+                <h1>Taqreer Full-Stack Web App Architecture</h1>
+                <p>
+                    A complete product and technical plan for building Taqreer with Next.js: an AI-powered platform
+                    where users create, enhance, edit, export, and save brand-aware PowerPoint presentations.
+                </p>
+
+                <div class="meta-grid">
+                    <div class="meta-card">
+                        <strong>Product Type</strong>
+                        <span>AI presentation generator and editor</span>
+                    </div>
+                    <div class="meta-card">
+                        <strong>Frontend</strong>
+                        <span>Next.js, TypeScript, Tailwind, custom editor</span>
+                    </div>
+                    <div class="meta-card">
+                        <strong>Core Output</strong>
+                        <span>PPTX, PDF, saved projects, reusable templates</span>
+                    </div>
+                    <div class="meta-card">
+                        <strong>Main Differentiator</strong>
+                        <span>Promptless, brand-aware presentation generation</span>
+                    </div>
+                </div>
+            </header>
+
+            <section id="overview">
+                <h2>01. Product Overview</h2>
+                <p class="lead">
+                    Taqreer is a web app that helps users create professional presentations without manually prompting
+                    the AI. The user provides content, brand material, existing presentations, or templates. The system
+                    analyzes the input and generates a designed presentation that can be edited inside a built-in
+                    PowerPoint-style editor.
+                </p>
+
+                <div class="cards">
+                    <div class="card">
+                        <h4>Create presentations without a prompt</h4>
+                        <p>Users paste or upload their content, upload brand guidelines, logos, and images, then AI
+                            creates a fully designed presentation.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Enhance existing presentations</h4>
+                        <p>Users upload an existing PPT and either mimic another deck style or apply brand guidelines
+                            while preserving the original content.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Use premade templates</h4>
+                        <p>Users choose a template from the library, provide content, and AI maps the content into the
+                            selected template structure.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Create templates from scratch</h4>
+                        <p>Users generate reusable branded templates that can be saved, reused, and applied to future
+                            presentations.</p>
+                    </div>
+                </div>
+
+                <div class="note success">
+                    <strong>Core product rule:</strong> every journey ends inside the built-in PPT editor. The editor is
+                    where users review, manually edit, add AI comments, regenerate, export, save, or convert a deck into
+                    a template.
+                </div>
+            </section>
+
+            <section id="product-flows">
+                <h2>02. Product Flows</h2>
+                <p class="lead">The app should support four primary user journeys from the dashboard.</p>
+
+                <h3>Flow 1: Create PPT Without Prompt</h3>
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="num">1</div>
+                        <div><strong>Start from dashboard</strong><span>User clicks “Create Presentation”.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">2</div>
+                        <div><strong>Add content</strong><span>User pastes text, uploads documents, adds images, or
+                                imports content from files.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">3</div>
+                        <div><strong>Add brand assets</strong><span>User uploads brand guidelines, logo, images, colors,
+                                or selects a saved brand kit.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">4</div>
+                        <div><strong>AI analyzes inputs</strong><span>The system extracts content structure, brand
+                                rules, design style, and recommended slide logic.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">5</div>
+                        <div><strong>Review outline</strong><span>User can approve, edit, delete, or reorder the
+                                proposed slide outline.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">6</div>
+                        <div><strong>Generate deck</strong><span>AI creates the presentation as structured internal
+                                JSON.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">7</div>
+                        <div><strong>Open editor</strong><span>User reviews, edits, comments, regenerates, exports, or
+                                saves.</span></div>
+                    </div>
+                </div>
+
+                <h3>Flow 2: Enhance Existing PPT</h3>
+                <p>User uploads an existing PowerPoint file, then chooses one of two enhancement modes.</p>
+
+                <div class="cards">
+                    <div class="card">
+                        <h4>Mode A: Mimic another PPT</h4>
+                        <p>The user uploads the original PPT and a reference PPT. AI keeps the original content but
+                            rebuilds it using the visual style of the reference deck.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Mode B: Enhance with brand guidelines</h4>
+                        <p>The user uploads the original PPT and brand assets. AI improves layout, consistency,
+                            typography, spacing, and hierarchy.</p>
+                    </div>
+                </div>
+
+                <h4>Recommended options before enhancement</h4>
+                <div class="pill-row">
+                    <span class="pill">Keep wording exactly</span>
+                    <span class="pill">Improve wording slightly</span>
+                    <span class="pill">Rewrite for clarity</span>
+                    <span class="pill">Keep same slide count</span>
+                    <span class="pill">Allow better structure</span>
+                </div>
+
+                <h3>Flow 3: Use Premade Template</h3>
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="num">1</div>
+                        <div><strong>Browse templates</strong><span>User filters by category, style, language, RTL/LTR,
+                                and plan.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">2</div>
+                        <div><strong>Select template</strong><span>User previews a template and starts from it.</span>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">3</div>
+                        <div><strong>Add content</strong><span>User pastes or uploads content.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">4</div>
+                        <div><strong>AI maps content</strong><span>The system distributes content into the template
+                                slide types.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">5</div>
+                        <div><strong>Open editor</strong><span>User tweaks the final deck and exports.</span></div>
+                    </div>
+                </div>
+
+                <h3>Flow 4: Create Template From Scratch</h3>
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="num">1</div>
+                        <div><strong>Choose template purpose</strong><span>Example: pitch deck, proposal, report,
+                                training deck, or company profile.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">2</div>
+                        <div><strong>Add brand assets</strong><span>User uploads guidelines, logo, colors, and style
+                                references.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">3</div>
+                        <div><strong>Generate template system</strong><span>AI creates reusable slide types and design
+                                rules.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">4</div>
+                        <div><strong>Edit and save</strong><span>User edits in the editor, then saves to the template
+                                library.</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="stack">
+                <h2>03. Recommended Tech Stack</h2>
+                <p class="lead">The stack should allow fast iteration, strong typing, background jobs, heavy file
+                    processing, AI workflows, and export generation.</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Layer</th>
+                            <th>Recommended Tools</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Frontend</td>
+                            <td>Next.js App Router, React, TypeScript</td>
+                            <td>Application shell, dashboard, creation flows, editor pages.</td>
+                        </tr>
+                        <tr>
+                            <td>Styling</td>
+                            <td>Tailwind CSS, shadcn/ui, Framer Motion</td>
+                            <td>Clean UI components, app layout, refined interactions.</td>
+                        </tr>
+                        <tr>
+                            <td>State</td>
+                            <td>Zustand or Jotai, TanStack Query</td>
+                            <td>Editor state, selected elements, undo/redo, server state.</td>
+                        </tr>
+                        <tr>
+                            <td>Database</td>
+                            <td>PostgreSQL with Prisma or Drizzle</td>
+                            <td>Users, projects, presentations, brand kits, templates, comments, jobs.</td>
+                        </tr>
+                        <tr>
+                            <td>Storage</td>
+                            <td>S3, Cloudflare R2, Supabase Storage</td>
+                            <td>Uploaded files, logos, PDFs, PPTX files, exported files.</td>
+                        </tr>
+                        <tr>
+                            <td>Queue</td>
+                            <td>Redis, BullMQ, Inngest, Trigger.dev, or QStash</td>
+                            <td>Long-running AI generation, parsing, export, and regeneration tasks.</td>
+                        </tr>
+                        <tr>
+                            <td>AI</td>
+                            <td>AI SDK, model provider APIs, structured JSON output</td>
+                            <td>Content analysis, brand extraction, slide generation, AI edits.</td>
+                        </tr>
+                        <tr>
+                            <td>Export</td>
+                            <td>PptxGenJS, Playwright/Puppeteer, optional LibreOffice worker</td>
+                            <td>Generate PPTX and PDF exports.</td>
+                        </tr>
+                        <tr>
+                            <td>Auth</td>
+                            <td>Clerk, Auth.js, or Supabase Auth</td>
+                            <td>Login, signup, sessions, user identity.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="note">
+                    <strong>Important decision:</strong> do not use PPTX as the app’s editable source of truth. Store
+                    presentations as structured JSON, then export that JSON to PPTX and PDF.
+                </div>
+            </section>
+
+            <section id="architecture">
+                <h2>04. High-Level System Architecture</h2>
+                <p class="lead">The app should be structured around projects, presentations, brand kits, AI jobs, editor
+                    state, and export generation.</p>
+
+                <div class="diagram">
+                    <pre><code>User
+ |
+ | Next.js Web App
+ | - Landing Page
+ | - Dashboard
+ | - Project Creation Flows
+ | - PPT Editor
+ |
+API Layer
+ |
+ |-- Auth Service
+ |-- Project Service
+ |-- File Upload Service
+ |-- AI Generation Service
+ |-- Template Service
+ |-- Editor Service
+ |-- Export Service
+ |-- Billing / Quota Service
+ |
+PostgreSQL Database
+ |
+ |-- Users
+ |-- Workspaces
+ |-- Projects
+ |-- Presentations
+ |-- Brand Kits
+ |-- Templates
+ |-- Comments
+ |-- AI Jobs
+ |-- Exports
+ |
+Object Storage
+ |
+ |-- Uploaded PPTs
+ |-- Brand PDFs
+ |-- Logos
+ |-- Images
+ |-- Generated PPTX
+ |-- Generated PDF
+ |
+Background Workers
+ |
+ |-- Parse Files
+ |-- Analyze Brand
+ |-- Generate Deck
+ |-- Enhance Deck
+ |-- Export PPTX/PDF
+ |-- Regenerate Commented Areas</code></pre>
+                </div>
+
+                <h3>Main Services</h3>
+                <div class="cards three">
+                    <div class="card">
+                        <h4>Project Service</h4>
+                        <p>Creates projects, tracks project status, and connects source files, brand kits,
+                            presentations, and exports.</p>
+                    </div>
+                    <div class="card">
+                        <h4>AI Service</h4>
+                        <p>Handles content parsing, outline generation, brand analysis, slide generation, and
+                            comment-based regeneration.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Export Service</h4>
+                        <p>Converts internal presentation JSON into PPTX and PDF files, then stores generated files.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Template Service</h4>
+                        <p>Manages public templates, user templates, template categories, thumbnails, and template
+                            application.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Brand Kit Service</h4>
+                        <p>Stores extracted brand systems from guidelines, logos, existing decks, and manual user
+                            inputs.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Editor Service</h4>
+                        <p>Saves presentation JSON, versions, comments, AI patches, and editor updates.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="routes">
+                <h2>05. App Routes and API Routes</h2>
+                <p class="lead">Use a clear route structure so the product flows are easy to maintain and scale.</p>
+
+                <h3>Frontend Routes</h3>
+                <pre><code>src/app/
+  page.tsx                          // Landing page
+
+  login/page.tsx
+  signup/page.tsx
+
+  dashboard/page.tsx
+  dashboard/projects/page.tsx
+  dashboard/templates/page.tsx
+  dashboard/brand-kits/page.tsx
+  dashboard/settings/page.tsx
+  dashboard/billing/page.tsx
+
+  create/page.tsx
+  create/content/page.tsx
+  create/brand/page.tsx
+  create/outline/page.tsx
+  create/generating/page.tsx
+
+  enhance/page.tsx
+  enhance/upload/page.tsx
+  enhance/mode/page.tsx
+  enhance/reference/page.tsx
+  enhance/generating/page.tsx
+
+  templates/page.tsx
+  templates/[templateId]/page.tsx
+
+  editor/[presentationId]/page.tsx</code></pre>
+
+                <h3>API Routes</h3>
+                <pre><code>src/app/api/
+  upload/route.ts
+  projects/route.ts
+  presentations/route.ts
+  brand-kits/route.ts
+  templates/route.ts
+
+  ai/jobs/route.ts
+  ai/analyze-brand/route.ts
+  ai/generate-outline/route.ts
+  ai/generate-deck/route.ts
+  ai/enhance-deck/route.ts
+  ai/regenerate/route.ts
+
+  export/pptx/route.ts
+  export/pdf/route.ts
+
+  webhooks/stripe/route.ts</code></pre>
+
+                <h3>Suggested Source Structure</h3>
+                <pre><code>src/
+  components/
+    landing/
+    dashboard/
+    upload/
+    editor/
+    templates/
+    brand-kit/
+    ai/
+
+  lib/
+    ai/
+    db/
+    auth/
+    storage/
+    export/
+    pptx/
+    validation/
+
+  server/
+    actions/
+    services/
+    jobs/
+
+  types/
+    presentation.ts
+    brand-kit.ts
+    template.ts
+    comments.ts
+    ai-jobs.ts</code></pre>
+            </section>
+
+            <section id="data-model">
+                <h2>06. Database Model</h2>
+                <p class="lead">PostgreSQL should store relational entities, while heavy files should live in object
+                    storage. Presentation data can initially be stored as JSONB for flexibility.</p>
+
+                <h3>Core Tables</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Table</th>
+                            <th>Purpose</th>
+                            <th>Important Fields</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>users</td>
+                            <td>Stores user account records.</td>
+                            <td>id, email, name, avatar_url, plan, created_at</td>
+                        </tr>
+                        <tr>
+                            <td>workspaces</td>
+                            <td>Groups users, projects, templates, and brand kits.</td>
+                            <td>id, name, owner_id, created_at</td>
+                        </tr>
+                        <tr>
+                            <td>workspace_members</td>
+                            <td>Future team and role management.</td>
+                            <td>workspace_id, user_id, role</td>
+                        </tr>
+                        <tr>
+                            <td>projects</td>
+                            <td>Parent container for each presentation workflow.</td>
+                            <td>id, workspace_id, user_id, name, status</td>
+                        </tr>
+                        <tr>
+                            <td>presentations</td>
+                            <td>Stores the editable deck JSON.</td>
+                            <td>id, project_id, title, language, direction, aspect_ratio, json_data</td>
+                        </tr>
+                        <tr>
+                            <td>presentation_versions</td>
+                            <td>Stores version history snapshots.</td>
+                            <td>presentation_id, version_number, json_data, created_by</td>
+                        </tr>
+                        <tr>
+                            <td>brand_kits</td>
+                            <td>Stores reusable brand systems.</td>
+                            <td>workspace_id, name, json_data</td>
+                        </tr>
+                        <tr>
+                            <td>files</td>
+                            <td>Tracks uploaded and generated files.</td>
+                            <td>project_id, type, filename, mime_type, storage_url, metadata</td>
+                        </tr>
+                        <tr>
+                            <td>templates</td>
+                            <td>Stores public and user-generated templates.</td>
+                            <td>workspace_id, name, category, language, direction, thumbnail_url, json_data</td>
+                        </tr>
+                        <tr>
+                            <td>comments</td>
+                            <td>Stores AI comments attached to slide areas or elements.</td>
+                            <td>presentation_id, slide_id, element_id, type, position_json, content, status</td>
+                        </tr>
+                        <tr>
+                            <td>ai_jobs</td>
+                            <td>Tracks AI generation and processing tasks.</td>
+                            <td>type, status, input_json, output_json, progress, error_message</td>
+                        </tr>
+                        <tr>
+                            <td>exports</td>
+                            <td>Tracks generated PPTX and PDF exports.</td>
+                            <td>presentation_id, type, file_url, status</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>AI Job Types</h3>
+                <div class="pill-row">
+                    <span class="pill">analyze_brand</span>
+                    <span class="pill">parse_content</span>
+                    <span class="pill">generate_outline</span>
+                    <span class="pill">generate_deck</span>
+                    <span class="pill">enhance_deck</span>
+                    <span class="pill">mimic_ppt</span>
+                    <span class="pill">generate_template</span>
+                    <span class="pill">regenerate_slide</span>
+                    <span class="pill">regenerate_region</span>
+                    <span class="pill">export_pptx</span>
+                    <span class="pill">export_pdf</span>
+                </div>
+
+                <h3>File Types</h3>
+                <div class="pill-row">
+                    <span class="pill">source_content</span>
+                    <span class="pill">brand_guideline</span>
+                    <span class="pill">logo</span>
+                    <span class="pill">reference_ppt</span>
+                    <span class="pill">original_ppt</span>
+                    <span class="pill">image</span>
+                    <span class="pill">exported_pptx</span>
+                    <span class="pill">exported_pdf</span>
+                </div>
+            </section>
+
+            <section id="presentation-json">
+                <h2>07. Internal Presentation JSON</h2>
+                <p class="lead">The internal presentation format is the most important technical decision. It should be
+                    independent from PPTX and designed for web editing, AI updates, templates, and export.</p>
+
+                <h3>Presentation Object</h3>
+                <pre><code>{
+  "id": "presentation_123",
+  "title": "Q4 Business Report",
+  "language": "ar",
+  "direction": "rtl",
+  "size": {
+    "width": 1920,
+    "height": 1080,
+    "ratio": "16:9"
+  },
+  "theme": {
+    "brandKitId": "brand_123",
+    "colors": [],
+    "typography": {},
+    "spacing": {},
+    "layoutRules": {}
+  },
+  "slides": []
+}</code></pre>
+
+                <h3>Slide Object</h3>
+                <pre><code>{
+  "id": "slide_1",
+  "index": 0,
+  "type": "cover",
+  "title": "Annual Report 2026",
+  "notes": "",
+  "background": {
+    "type": "solid",
+    "color": "#FFFFFF"
+  },
+  "elements": []
+}</code></pre>
+
+                <h3>Element Object</h3>
+                <pre><code>{
+  "id": "element_1",
+  "type": "text",
+  "x": 120,
+  "y": 160,
+  "width": 800,
+  "height": 120,
+  "rotation": 0,
+  "content": "Strategic Growth Report",
+  "style": {
+    "fontFamily": "Inter",
+    "fontSize": 48,
+    "fontWeight": 700,
+    "color": "#111111",
+    "align": "left",
+    "lineHeight": 1.1,
+    "direction": "ltr"
+  }
+}</code></pre>
+
+                <h3>Supported Element Types</h3>
+                <div class="pill-row">
+                    <span class="pill">text</span>
+                    <span class="pill">image</span>
+                    <span class="pill">shape</span>
+                    <span class="pill">icon</span>
+                    <span class="pill">chart</span>
+                    <span class="pill">table</span>
+                    <span class="pill">line</span>
+                    <span class="pill">group</span>
+                    <span class="pill">placeholder</span>
+                </div>
+
+                <div class="note warning">
+                    <strong>Arabic and RTL support must be included from day one.</strong> Every text element should
+                    support language, direction, alignment, font fallback, and line-height rules.
+                </div>
+            </section>
+
+            <section id="ai-pipeline">
+                <h2>08. AI Pipeline</h2>
+                <p class="lead">The AI system should be split into multiple controlled stages instead of one large
+                    prompt. Each stage should return structured data and pass validation before moving to the next
+                    stage.</p>
+
+                <h3>Create Deck From Content</h3>
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="num">1</div>
+                        <div><strong>Parse content</strong><span>Extract clean text, headings, lists, tables, images,
+                                and source structure.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">2</div>
+                        <div><strong>Analyze brand</strong><span>Extract colors, typography, logo rules, image style,
+                                tone, and layout patterns.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">3</div>
+                        <div><strong>Generate outline</strong><span>Create presentation title, sections, slide list, and
+                                slide objectives.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">4</div>
+                        <div><strong>Create slide narrative</strong><span>Define the role of each slide and the message
+                                it should communicate.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">5</div>
+                        <div><strong>Select layouts</strong><span>Map each slide to a suitable slide type.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">6</div>
+                        <div><strong>Generate slide JSON</strong><span>Create structured slide elements, positions,
+                                styles, and assets.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">7</div>
+                        <div><strong>Validate output</strong><span>Check schema, overflow, missing assets, coordinates,
+                                and RTL rules.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">8</div>
+                        <div><strong>Open editor</strong><span>Deck becomes editable inside the built-in PPT
+                                editor.</span></div>
+                    </div>
+                </div>
+
+                <h3>Enhance Existing Deck</h3>
+                <pre><code>1. Upload original PPTX
+2. Parse slides into internal JSON
+3. Extract content and current layout
+4. Detect weak slides and inconsistencies
+5. Apply brand kit or reference style
+6. Generate improved slide JSON
+7. Validate output
+8. Open in editor</code></pre>
+
+                <h3>Mimic Reference PPT</h3>
+                <pre><code>1. Upload original PPTX
+2. Upload reference PPTX
+3. Extract content from original PPTX
+4. Extract visual system from reference PPTX
+5. Build a style map
+6. Recreate original content using reference style
+7. Validate and open editor</code></pre>
+
+                <h3>Brand Kit JSON Example</h3>
+                <pre><code>{
+  "brandName": "Example Brand",
+  "colors": [
+    {
+      "name": "Primary Blue",
+      "hex": "#174CFF",
+      "usage": "Main CTA, titles, visual accents"
+    }
+  ],
+  "typography": {
+    "heading": "Example Display",
+    "body": "Inter",
+    "fallbacks": ["Arial", "Helvetica"]
+  },
+  "logoRules": {
+    "clearSpace": "Use generous whitespace",
+    "preferredPlacement": "Top-right or bottom-left"
+  },
+  "visualStyle": {
+    "mood": ["clean", "modern", "corporate"],
+    "shapes": ["rounded rectangles", "thin lines"],
+    "imageTreatment": "High contrast, desaturated background images"
+  },
+  "layoutRules": {
+    "grid": "12-column flexible grid",
+    "spacing": "Large margins, minimal text blocks",
+    "rtlSupport": true
+  }
+}</code></pre>
+            </section>
+
+            <section id="editor">
+                <h2>09. Built-In PPT Editor</h2>
+                <p class="lead">The editor is the main product experience. It should feel like a simplified PowerPoint
+                    with AI commenting and regeneration built in.</p>
+
+                <h3>Editor Layout</h3>
+                <div class="diagram">
+                    <pre><code>---------------------------------------------------
+| Top Bar: File name / Save / Export / Regenerate |
+---------------------------------------------------
+| Slide List | Main Canvas                 | Panel |
+|            |                             |       |
+| Thumbnails | Editable slide              | AI    |
+|            |                             | Props |
+---------------------------------------------------</code></pre>
+                </div>
+
+                <h3>MVP Editing Features</h3>
+                <ul class="checklist">
+                    <li>Select text and elements</li>
+                    <li>Edit text content</li>
+                    <li>Move elements</li>
+                    <li>Resize elements</li>
+                    <li>Change color</li>
+                    <li>Change font size</li>
+                    <li>Change alignment</li>
+                    <li>Add image</li>
+                    <li>Add text</li>
+                    <li>Add shape</li>
+                    <li>Delete element</li>
+                    <li>Duplicate slide</li>
+                    <li>Reorder slides</li>
+                    <li>Add new slide</li>
+                    <li>Undo and redo</li>
+                    <li>Zoom in and out</li>
+                    <li>Snap to grid</li>
+                    <li>Export</li>
+                </ul>
+
+                <h3>Editor State Example</h3>
+                <pre><code>type EditorState = {
+  presentation: Presentation;
+  selectedSlideId: string | null;
+  selectedElementIds: string[];
+  zoom: number;
+  mode: "select" | "text" | "comment" | "preview";
+  comments: Comment[];
+  history: {
+    past: Presentation[];
+    future: Presentation[];
+  };
+};</code></pre>
+
+                <div class="note">
+                    <strong>Recommended rendering approach:</strong> render slides as HTML/React using
+                    absolute-positioned elements on a fixed 1920 × 1080 canvas. Use this same coordinate system for
+                    thumbnails, editor, PPTX export, and PDF export.
+                </div>
+            </section>
+
+            <section id="comments">
+                <h2>10. AI Commenting and Regeneration</h2>
+                <p class="lead">Users should be able to highlight an area, comment on it, and ask AI to regenerate that
+                    specific area or slide. This is one of Taqreer’s strongest product features.</p>
+
+                <h3>Comment Types</h3>
+                <div class="pill-row">
+                    <span class="pill">deck_comment</span>
+                    <span class="pill">slide_comment</span>
+                    <span class="pill">element_comment</span>
+                    <span class="pill">region_comment</span>
+                </div>
+
+                <h3>Comment Object</h3>
+                <pre><code>{
+  "id": "comment_123",
+  "presentationId": "presentation_123",
+  "slideId": "slide_5",
+  "elementId": "element_8",
+  "type": "element_comment",
+  "position": {
+    "x": 320,
+    "y": 180,
+    "width": 240,
+    "height": 120
+  },
+  "text": "Make this more premium and reduce the text.",
+  "status": "pending",
+  "createdBy": "user_123"
+}</code></pre>
+
+                <h3>Regeneration Logic</h3>
+                <p>When the user clicks regenerate, send AI a focused context package:</p>
+                <ul>
+                    <li>Current slide JSON</li>
+                    <li>Relevant deck context</li>
+                    <li>Brand kit</li>
+                    <li>Selected element or selected region</li>
+                    <li>User comment</li>
+                    <li>Instruction to update only the selected area unless the comment says otherwise</li>
+                </ul>
+
+                <h3>AI Patch Example</h3>
+                <pre><code>{
+  "slideId": "slide_5",
+  "operations": [
+    {
+      "type": "update_element",
+      "elementId": "element_8",
+      "changes": {
+        "text": "A clearer, shorter headline",
+        "fontSize": 34,
+        "color": "#111111"
+      }
+    },
+    {
+      "type": "add_element",
+      "element": {
+        "type": "shape",
+        "x": 100,
+        "y": 400,
+        "width": 600,
+        "height": 2,
+        "fill": "#174CFF"
+      }
+    }
+  ]
+}</code></pre>
+
+                <div class="note warning">
+                    <strong>Important:</strong> AI should return patch operations whenever possible, not a full
+                    replacement deck. This reduces unexpected changes and makes regeneration safer.
+                </div>
+            </section>
+
+            <section id="templates">
+                <h2>11. Template System</h2>
+                <p class="lead">Templates should be stored as structured slide systems, not just static PPTX files. They
+                    should be reusable, searchable, editable, and compatible with AI content mapping.</p>
+
+                <h3>Recommended Template Categories</h3>
+                <div class="pill-row">
+                    <span class="pill">Business Proposal</span>
+                    <span class="pill">Investor Report</span>
+                    <span class="pill">Pitch Deck</span>
+                    <span class="pill">Company Profile</span>
+                    <span class="pill">Training Deck</span>
+                    <span class="pill">Financial Report</span>
+                    <span class="pill">Strategy Deck</span>
+                    <span class="pill">Marketing Plan</span>
+                    <span class="pill">Event Proposal</span>
+                    <span class="pill">Arabic RTL</span>
+                    <span class="pill">Government Style</span>
+                    <span class="pill">Minimal Corporate</span>
+                </div>
+
+                <h3>Required Template Slide Types</h3>
+                <ul class="checklist">
+                    <li>Cover slide</li>
+                    <li>Agenda slide</li>
+                    <li>Section divider</li>
+                    <li>Text-heavy slide</li>
+                    <li>Data slide</li>
+                    <li>Image slide</li>
+                    <li>Comparison slide</li>
+                    <li>Timeline slide</li>
+                    <li>Team slide</li>
+                    <li>Closing slide</li>
+                </ul>
+
+                <h3>Template Object</h3>
+                <pre><code>{
+  "id": "template_123",
+  "name": "Premium Investor Report",
+  "category": "Investor Reports",
+  "language": "ar",
+  "direction": "rtl",
+  "thumbnail": "template-thumbnail.jpg",
+  "slideTypes": [
+    "cover",
+    "agenda",
+    "sectionDivider",
+    "content",
+    "data",
+    "comparison",
+    "closing"
+  ],
+  "theme": {
+    "colors": [],
+    "typography": {},
+    "spacing": {},
+    "layoutRules": {}
+  },
+  "slides": []
+}</code></pre>
+            </section>
+
+            <section id="exports">
+                <h2>12. Export System</h2>
+                <p class="lead">The export service converts internal presentation JSON into external formats. Export
+                    jobs should run in the background.</p>
+
+                <h3>PPTX Export</h3>
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="num">1</div>
+                        <div><strong>Read presentation JSON</strong><span>Use the saved deck as the source of
+                                truth.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">2</div>
+                        <div><strong>Convert slide dimensions</strong><span>Map 1920 × 1080 coordinates to 16:9
+                                PowerPoint size.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">3</div>
+                        <div><strong>Render elements</strong><span>Convert text, images, shapes, charts, and tables into
+                                PPTX objects.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">4</div>
+                        <div><strong>Generate PPTX</strong><span>Create the file and store it in object storage.</span>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">5</div>
+                        <div><strong>Return download URL</strong><span>Save the export record and show it to the
+                                user.</span></div>
+                    </div>
+                </div>
+
+                <h3>PDF Export Options</h3>
+                <div class="cards">
+                    <div class="card">
+                        <h4>Option A: HTML to PDF</h4>
+                        <p>Render slides in the browser using the same React slide renderer, then export to PDF with
+                            Playwright or Puppeteer. Best for MVP fidelity.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Option B: PPTX to PDF</h4>
+                        <p>Generate PPTX first, then convert to PDF using a worker with LibreOffice. Better for
+                            PowerPoint consistency, but more infrastructure-heavy.</p>
+                    </div>
+                </div>
+
+                <div class="note success">
+                    <strong>MVP recommendation:</strong> start with PPTX export and HTML-to-PDF export. Add LibreOffice
+                    conversion later if needed.
+                </div>
+            </section>
+
+            <section id="pricing">
+                <h2>13. Pricing and Quota Logic</h2>
+                <p class="lead">The pricing system should control slide limits, daily generations, upload size, export
+                    access, templates, and brand kits.</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Suggested Limits</th>
+                            <th>Features</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Free</td>
+                            <td>10 slides, daily quota, limited exports</td>
+                            <td>Create PPT, enhance PPT, use selected templates, basic editor</td>
+                        </tr>
+                        <tr>
+                            <td>Plus</td>
+                            <td>Up to 60 slides, higher quota, larger uploads</td>
+                            <td>Reusable brand kits, more templates, PPTX/PDF export, better AI generation</td>
+                        </tr>
+                        <tr>
+                            <td>Pro</td>
+                            <td>Up to 90 slides, highest quota, priority jobs</td>
+                            <td>Advanced editor tools, save custom templates, advanced regeneration, premium templates
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Quota Fields</h3>
+                <pre><code>{
+  "plan": "pro",
+  "maxSlidesPerDeck": 90,
+  "maxDailyGenerations": 50,
+  "maxUploadSizeMb": 100,
+  "maxBrandKits": 20,
+  "maxSavedTemplates": 50,
+  "maxExportsPerDay": 100
+}</code></pre>
+            </section>
+
+            <section id="phases">
+                <h2>14. Development Phases</h2>
+                <p class="lead">Build the app in controlled phases. Do not start with all features at once.</p>
+
+                <h3>Phase 1: Foundation</h3>
+                <ul>
+                    <li>Set up Next.js, TypeScript, Tailwind, shadcn/ui.</li>
+                    <li>Set up authentication.</li>
+                    <li>Set up PostgreSQL and ORM.</li>
+                    <li>Set up object storage.</li>
+                    <li>Connect landing page and dashboard.</li>
+                    <li>Create project creation flow.</li>
+                </ul>
+
+                <h3>Phase 2: Presentation JSON Engine</h3>
+                <ul>
+                    <li>Define presentation, slide, and element schemas.</li>
+                    <li>Build slide renderer.</li>
+                    <li>Build slide thumbnail renderer.</li>
+                    <li>Save and load presentation JSON.</li>
+                    <li>Validate slide JSON with Zod.</li>
+                </ul>
+
+                <h3>Phase 3: AI Deck Generation</h3>
+                <ul>
+                    <li>Parse pasted content.</li>
+                    <li>Upload logo and brand files.</li>
+                    <li>Generate brand kit JSON.</li>
+                    <li>Generate presentation outline.</li>
+                    <li>Generate slide JSON.</li>
+                    <li>Show progress UI.</li>
+                </ul>
+
+                <h3>Phase 4: Editor MVP</h3>
+                <ul>
+                    <li>Build slide list.</li>
+                    <li>Build canvas editor.</li>
+                    <li>Support text editing, move, resize, delete, duplicate.</li>
+                    <li>Add undo and redo.</li>
+                    <li>Add slide-level AI comments.</li>
+                    <li>Regenerate selected slide from comment.</li>
+                </ul>
+
+                <h3>Phase 5: Export</h3>
+                <ul>
+                    <li>Generate PPTX from internal JSON.</li>
+                    <li>Generate PDF from slide renderer.</li>
+                    <li>Store exported files.</li>
+                    <li>Create export history.</li>
+                </ul>
+
+                <h3>Phase 6: Templates</h3>
+                <ul>
+                    <li>Create template library.</li>
+                    <li>Add template detail pages.</li>
+                    <li>Apply content to template.</li>
+                    <li>Save project as template.</li>
+                    <li>Support user templates.</li>
+                </ul>
+
+                <h3>Phase 7: Enhance Existing PPT</h3>
+                <ul>
+                    <li>Upload PPTX.</li>
+                    <li>Parse PPT content.</li>
+                    <li>Support enhancement modes.</li>
+                    <li>Support reference deck mimic mode.</li>
+                    <li>Open enhanced deck inside editor.</li>
+                </ul>
+            </section>
+
+            <section id="risks">
+                <h2>15. Technical Risks and Recommendations</h2>
+                <p class="lead">These are the main areas that can slow development or affect output quality.</p>
+
+                <div class="cards">
+                    <div class="card">
+                        <h4>PPTX import is complex</h4>
+                        <p>Do not promise perfect PPTX-to-editor conversion at MVP stage. Start by extracting text,
+                            images, and rough layout.</p>
+                    </div>
+                    <div class="card">
+                        <h4>AI layout quality can vary</h4>
+                        <p>Use strict slide types, layout templates, schema validation, overflow checks, and design
+                            scoring.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Export fidelity can break</h4>
+                        <p>Use the same 1920 × 1080 coordinate system across editor, thumbnails, PDF, and PPTX export.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <h4>RTL cannot be added later</h4>
+                        <p>Arabic direction, right alignment, font fallback, and RTL layout rules must be part of the
+                            initial schema.</p>
+                    </div>
+                </div>
+
+                <div class="note danger">
+                    <strong>Critical recommendation:</strong> avoid letting AI directly write unvalidated production
+                    presentation data. Every AI output should go through schema validation, layout validation, and
+                    versioning before replacing editor state.
+                </div>
+            </section>
+
+            <section id="mvp">
+                <h2>16. Recommended MVP Scope</h2>
+                <p class="lead">The first release should prove the main product promise before adding the harder
+                    systems.</p>
+
+                <h3>MVP User Flow</h3>
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="num">1</div>
+                        <div><strong>User logs in</strong><span>Authentication and dashboard access.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">2</div>
+                        <div><strong>User creates presentation</strong><span>User starts a new deck from pasted
+                                content.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">3</div>
+                        <div><strong>User uploads logo or brand colors</strong><span>Basic brand kit is created.</span>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">4</div>
+                        <div><strong>AI generates outline</strong><span>User reviews and approves the structure.</span>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">5</div>
+                        <div><strong>AI generates deck</strong><span>Deck is created as structured JSON.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">6</div>
+                        <div><strong>Deck opens in editor</strong><span>User can edit text and layout.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">7</div>
+                        <div><strong>User adds slide-level comments</strong><span>AI regenerates selected slides.</span>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">8</div>
+                        <div><strong>User exports PPTX</strong><span>Project is saved and downloadable.</span></div>
+                    </div>
+                </div>
+
+                <h3>Build in MVP</h3>
+                <ul class="checklist">
+                    <li>Auth</li>
+                    <li>Dashboard</li>
+                    <li>Create presentation from pasted content</li>
+                    <li>Upload logo</li>
+                    <li>Choose basic colors</li>
+                    <li>Generate outline</li>
+                    <li>Generate slide JSON</li>
+                    <li>Basic editor</li>
+                    <li>Slide-level comments</li>
+                    <li>Regenerate slide</li>
+                    <li>Export PPTX</li>
+                    <li>Save project</li>
+                </ul>
+
+                <h3>Delay Until V2</h3>
+                <ul class="checklist">
+                    <li>Perfect PPTX import</li>
+                    <li>Reference PPT mimic</li>
+                    <li>Advanced collaboration</li>
+                    <li>Region-level comments</li>
+                    <li>Advanced charts</li>
+                    <li>Template marketplace</li>
+                    <li>Team permissions</li>
+                    <li>Approval workflow</li>
+                </ul>
+
+                <div class="note success">
+                    <strong>Final recommendation:</strong> focus the first build on one clean promise: paste content,
+                    apply brand, generate a designed deck, edit it, comment for AI changes, and export PPTX.
+                </div>
+            </section>
+
+            <div class="footer">
+                Taqreer Architecture Documentation. Prepared as a developer handoff structure for a Next.js full-stack
+                implementation.
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>
