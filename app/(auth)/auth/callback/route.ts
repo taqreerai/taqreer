@@ -43,10 +43,8 @@ export async function GET(request: NextRequest) {
         // Continue even if sync fails
       }
 
-      const redirectPath = template
-        ? `${next}?template=${template}`
-        : next;
-      return NextResponse.redirect(new URL(redirectPath, request.url));
+      // Always go through the confirmation page first, then /dashboard
+      return NextResponse.redirect(new URL("/auth/confirmed", request.url));
     }
   }
 

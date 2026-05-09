@@ -30,5 +30,13 @@ export function useUser() {
     };
   }, []);
 
-  return { user, loading };
+  const avatarUrl: string | null = user?.user_metadata?.avatar_url ?? null;
+  const name: string =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split("@")[0] ||
+    "User";
+  const email: string = user?.email ?? "";
+
+  return { user, loading, avatarUrl, name, email };
 }

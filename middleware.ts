@@ -18,6 +18,14 @@ export async function middleware(request: NextRequest) {
   const { supabase, response } = await createClient(request);
   const { pathname, searchParams } = request.nextUrl;
 
+  // Bypass the coming-soon gate on localhost / development
+  const isDev = process.env.NODE_ENV === "development";
+  const host = request.headers.get("host") ?? "";
+  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+  if ((isDev || isLocalhost) && pathname === "/") {
+    return NextResponse.rewrite(new URL("/preview?key=taqreer2025", request.url));
+  }
+
   // Get session
   const {
     data: { session },

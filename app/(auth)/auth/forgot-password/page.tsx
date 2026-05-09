@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
+
+const fadeUp = (delay: number) => ({
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.4, delay },
+});
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -16,22 +23,17 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        email,
-        {
-          redirectTo: `${window.location.origin}/auth/reset-password`,
-        }
-      );
-
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
       if (resetError) {
-        setError(resetError.message);
+        setError("حدث خطأ. يرجى المحاولة مرة أخرى");
       } else {
         setSuccess(true);
       }
-    } catch (err) {
-      setError("حدث خطأ. يرجى المحاولة مرة أخرى.");
+    } catch {
+      setError("حدث خطأ. يرجى المحاولة مرة أخرى");
     } finally {
       setLoading(false);
     }
@@ -39,39 +41,51 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="space-y-6 text-center">
-        <div className="text-center">
+      <motion.div
+        key="forgot-success"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="space-y-6 text-center"
+      >
+        <div>
           <h1 className="text-3xl font-bold mb-2">✓ تحقق من بريدك</h1>
           <p className="text-[#9A94A8]">أرسلنا لك رابط لاستعادة كلمة المرور</p>
         </div>
-
-        <div className="bg-blue-500/20 border border-blue-500/40 rounded-lg p-4">
+        <div className="bg-blue-500/20 border border-blue-500/40 rounded-xl p-4">
           <p className="text-blue-200 text-sm">
             تحقق من بريدك الإلكتروني لتلقي رابط استعادة كلمة المرور. قد يستغرق وصول الرسالة بضع دقائق.
           </p>
         </div>
-
-        <Link href="/auth/login" className="text-[#370BF4] hover:text-[#E036B8] transition">
+        <Link href="/auth/login" className="text-white hover:text-cyan-400 transition-colors cursor-pointer">
           العودة إلى تسجيل الدخول
         </Link>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
+    <motion.div
+      key="forgot"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="space-y-6"
+    >
+      <motion.div {...fadeUp(0)} className="text-center">
         <h1 className="text-3xl font-bold mb-2">استعادة كلمة المرور</h1>
         <p className="text-[#9A94A8]">أدخل بريدك الإلكتروني لاستعادة كلمة المرور</p>
-      </div>
+      </motion.div>
 
       {error && (
-        <div className="bg-red-500/20 border border-red-500/40 rounded-lg p-3 text-red-200 text-sm">
+        <motion.div {...fadeUp(0.05)} className="bg-red-500/20 border border-red-500/40 rounded-xl p-3 text-red-200 text-sm">
           {error}
-        </div>
+        </motion.div>
       )}
 
-      <form onSubmit={handleResetRequest} className="space-y-4">
+      <motion.form {...fadeUp(0.1)} onSubmit={handleResetRequest} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-2">البريد الإلكتروني</label>
           <input
@@ -80,25 +94,24 @@ export default function ForgotPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="example@email.com"
             required
-            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-lg px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition"
+            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-xl px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition cursor-text"
           />
         </div>
-
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-[#370BF4] to-[#E036B8] hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-lg px-4 py-3 transition"
+          className="w-full bg-gradient-to-r from-[#370BF4] to-[#E036B8] hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-xl px-4 py-3 transition cursor-pointer"
         >
           {loading ? "جاري الإرسال..." : "إرسال رابط الاستعادة"}
         </button>
-      </form>
+      </motion.form>
 
-      <p className="text-sm text-center text-[#9A94A8]">
+      <motion.p {...fadeUp(0.2)} className="text-sm text-center">
         تذكرت كلمة المرور؟{" "}
-        <Link href="/auth/login" className="text-[#370BF4] hover:text-[#E036B8] transition">
+        <Link href="/auth/login" className="text-white hover:text-cyan-400 transition-colors cursor-pointer">
           تسجيل الدخول
         </Link>
-      </p>
-    </div>
+      </motion.p>
+    </motion.div>
   );
 }

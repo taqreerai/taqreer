@@ -1,8 +1,8 @@
 export default function ProjectsPage() {
   return (
-    <section>
-      <h1 className="font-headline-lg text-4xl font-bold text-on-surface mb-6">مشاريعي</h1>
-      <p className="text-on-surface-variant">صفحة المشاريع قيد التطوير...</p>
-    </section>
+    <div className="page-container">
+      <h1 className="text-2xl font-bold text-white mb-6">مشاريعي</h1>
+      <p className="text-[#9A94A8]">صفحة المشاريع قيد التطوير...</p>
+    </div>
   );
 }

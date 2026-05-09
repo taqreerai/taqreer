@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { AuthAnimations } from "./AuthAnimations";
 
 export const metadata = {
   title: "تقرير - المصادقة",
@@ -13,7 +14,7 @@ export default function AuthLayout({
 }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 bg-[#03030D]">
-      <Link href="/" className="mb-12 flex-shrink-0">
+      <Link href="/" className="mb-12 flex-shrink-0 cursor-pointer">
         <Image
           src="/logo-light.svg"
           alt="Taqreer"
@@ -22,7 +23,9 @@ export default function AuthLayout({
           className="h-10 w-auto"
         />
       </Link>
-      <div className="w-full max-w-md">{children}</div>
+      <div className="w-full max-w-md">
+        <AuthAnimations>{children}</AuthAnimations>
+      </div>
     </div>
   );
 }
