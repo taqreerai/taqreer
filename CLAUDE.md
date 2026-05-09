@@ -35,38 +35,30 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 
 ---
 
-## Current Progress (last session: 2026-05-09)
+## Current Progress (last session: 2026-05-10)
 
-### ✅ Step 1 — Supabase Auth & Storage (Phase 1–4 complete)
+### ✅ Step 1 — Supabase Auth & Storage (complete — all pushed to main)
 
-**Files created:**
+**Auth files in place:**
 - `lib/supabase/client.ts` — browser client
-- `lib/supabase/server.ts` — server client (Server Components, route handlers)
+- `lib/supabase/server.ts` — server client (fixed TypeScript inference on `setAll`)
 - `lib/supabase/middleware.ts` — middleware client for session refresh
-- `middleware.ts` (root) — refreshes session on every request, protects `/dashboard`, `/projects`, `/editor`, `/create`, `/enhance`, `/settings`, `/brand-kits`, `/folders`. Redirects unauthenticated users to `/auth/login?next={path}`. Preserves `?template=` and `?next=` params.
-- `app/(auth)/layout.tsx` — RTL centered auth shell (no html/body — root layout owns those)
-- `app/(auth)/auth/login/page.tsx` — email + Google OAuth login
-- `app/(auth)/auth/signup/page.tsx` — name + email + password + Google OAuth
+- `middleware.ts` — protects `/dashboard`, `/projects`, `/editor`, `/create`, `/enhance`, `/settings`, `/brand-kits`, `/folders`. Rewrites `/` → `/preview` on localhost in development.
+- `app/(auth)/layout.tsx` — RTL centered auth shell
+- `app/(auth)/AuthAnimations.tsx` — Framer Motion `AnimatePresence` wrapper for auth pages
+- `app/(auth)/auth/login/page.tsx` — email + Google OAuth, Arabic error messages, `?deleted=true` success banner
+- `app/(auth)/auth/signup/page.tsx` — name + email + password + Google OAuth, handles session-returned-immediately (no email confirmation)
 - `app/(auth)/auth/forgot-password/page.tsx` — password reset request
-- `app/(auth)/auth/callback/route.ts` — OAuth code exchange + user sync
+- `app/(auth)/auth/callback/route.ts` — OAuth code exchange + user sync → always redirects to `/auth/confirmed`
+- `app/(auth)/auth/confirmed/page.tsx` — animated SVG checkmark, auto-redirects to `/dashboard` after 2500 ms
 - `app/api/auth/user-sync/route.ts` — upserts Supabase user into PostgreSQL `users` table
-- `hooks/useUser.ts` — client hook for current user with auth-state subscription
-- `components/app/LogoutButton.tsx` — sidebar logout button
-- `components/marketing/ComingSoonContent.tsx` — client component for framer-motion content (split out so the marketing page can be a server component for auth-aware CTAs)
-- `scripts/setup-storage.ts` — creates 5 storage buckets (NOT YET RUN)
+- `app/api/auth/delete-account/route.ts` — deletes all user data in FK-safe order then calls `auth.admin.deleteUser()`
+- `hooks/useUser.ts` — returns `avatarUrl`, `name`, `email` from Supabase user_metadata with auth-state subscription
+- `scripts/setup-storage.ts` — creates 5 storage buckets (**NOT YET RUN**)
 
-**Files updated:**
-- `app/(app)/layout.tsx` — async server component, fetches session, redirects to `/auth/login?next=/dashboard` if no session
-- `app/(marketing)/page.tsx` — server component with auth-aware CTAs (Dashboard if logged in, Sign up + Login if not)
-- `app/(marketing)/preview/page.tsx` — same auth-aware nav treatment
-- `components/app/Sidebar.tsx` — LogoutButton integrated at the bottom
+**All auth pages have:** Framer Motion staggered fade-up animations, Arabic error messages mapped from Supabase errors, RTL layout, consistent link styles.
 
-**Verified working locally:**
-- `/` → 200 (auth-aware homepage)
-- `/auth/signup`, `/auth/login`, `/auth/forgot-password` → 200
-- `/dashboard` → 307 redirect to login (middleware enforced)
-
-### 🔜 Remaining for Step 1 (do these next)
+### 🔜 Remaining for Step 1
 
 1. **Configure Supabase Console** — register OAuth redirect URLs:
    - `http://localhost:3000/auth/callback` (local)
@@ -75,18 +67,41 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
    ```bash
    npx ts-node scripts/setup-storage.ts
    ```
-   Creates: `source-files`, `brand-assets`, `generated-presentations`, `slide-previews` (private) and `template-assets` (public).
-3. **Test full auth flow** — signup, email confirmation, login, Google OAuth, logout, protected route redirect, `?next=` preservation, `?template=` preservation.
-4. **Decide on email verification** — Supabase default behavior (check Supabase project settings); if confirmation emails are needed, integrate Resend later.
-5. **Password reset email delivery** via Resend — not wired up yet (forgot-password page calls Supabase, but Supabase needs an SMTP provider configured).
+3. **Password reset email delivery** via Resend — forgot-password calls Supabase but Supabase needs an SMTP provider configured.
 
-### 🔜 Then Step 2 — Inngest background jobs (see "Build Order" below)
+### ✅ Dashboard & Settings UI Polish (complete — pushed to main)
 
-### Cleanup notes from last session
+**Sidebar (`components/app/Sidebar.tsx`):**
+- Collapsible with saved state in `localStorage`
+- Profile popup via `ReactDOM.createPortal` — always renders above trigger button using `getBoundingClientRect()`. Fixed positioning: `bottom: window.innerHeight - rect.top`. When collapsed → popup appears to the left; when expanded → popup appears above.
+- No hover background on profile avatar button
+- Usage section divider hidden when collapsed (transitions with `opacity-0 h-0`)
+- Active nav item: solid `#370BF4` background, white icon — `nav-active` class, no `border-r-2`
+- All nav item hovers unified: `hover:bg-white/5`
+- Icons use `font-thin` (Material Symbols weight 100) throughout
+- Collapsed sidebar tooltips via `.sidebar-tooltip` class
 
-- Removed all hardcoded CSS / inline styles from dashboard + landing components; everything uses Tailwind utility classes or semantic classes from `globals.css`.
-- Deleted unused Next.js scaffold files (`public/file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg`, `app/api/backup/route.ts`).
-- The branch `claude/festive-lalande-d17edc` was merged into local `main` but **NOT YET PUSHED** to origin. Run `git push origin main` when ready, then `git branch -D claude/festive-lalande-d17edc`.
+**QuickActions (`components/app/QuickActions.tsx`):**
+- 4 cards using `plan-banner` class (gradient bg, purple border, blur)
+- Icon right-aligned (`dir="rtl"` on card + `<div className="text-right">` wrapper)
+- Heading `text-[20px] font-bold`, description in muted color
+- `hover:scale-[1.02] transition-transform` — no color or border changes on hover
+- Radial glow orb in top-right of each card
+
+**Settings page (`app/(app)/settings/page.tsx`):**
+- Wrapped in `.page-container` (no extra padding — DashboardShell owns outer spacing)
+- Full-width `PlanUsage` banner at top
+- 2-column grid: Profile | تغيير كلمة المرور / حذف الحساب | إعدادات إضافية (مقبلاً badge)
+- Delete modal: Framer Motion scale+fade, `backdrop-blur-sm`, calls `/api/auth/delete-account`, redirects to `/auth/login?deleted=true`
+
+**All app pages** use `<div className="page-container">` — consistent RTL direction, no extra padding.
+
+**globals.css — removed dead classes:** `.btn-primary`, `.btn-ghost`, `.action-btn-{blue/magenta/lavender/violet}`, `.sidebar-action-{blue/magenta/lavender/violet}`, `.sidebar-logo`, `.avatar-ring`
+
+**Active semantic classes in globals.css:**
+`page-container`, `settings-card`, `settings-card-title`, `settings-divider`, `input-dark`, `btn-danger`, `btn-gradient`, `btn-outline-dark`, `sidebar-bg`, `nav-active`, `nav-item`, `header-bg`, `progress-track`, `progress-bar`, `badge-purple`, `plan-banner`, `divider-dark`, `dashboard-bg`, `nav-icon`, `card-dark`, `glass-card`, `glow-effect`, `feature-card-glow`, `glow-orb`, `glow-orb-blue`, `glow-orb-violet`, `glow-orb-magenta`, `sidebar-tooltip`, `sidebar-usage`, `template-thumbnail`, `template-overlay`, `hide-scrollbar`, `text-muted`, `btn-icon`, `input-search`
+
+### 🔜 Next — Step 2: Inngest Background Jobs
 
 ### Required env vars (already in `.env.local`)
 
@@ -105,8 +120,8 @@ SUPABASE_SERVICE_ROLE_KEY
 - Muted: `#9A94A8`, Border: `rgba(42,36,59,0.8)`
 - Fonts: Cairo (Arabic), Poppins (English)
 - Dark theme, RTL-first
-- CSS classes in globals.css: `card-dark`, `btn-gradient`, `btn-outline-dark`, `sidebar-bg`, `nav-active`, `nav-item`, `header-bg`, `progress-track`, `progress-bar`, `badge-purple`, `plan-banner`, `divider-dark`, `dashboard-bg`, `nav-icon`
-- Sidebar has 4 colored action buttons: إنشاء `#370BF4`, تحسين `#E036B8`, محاكاة `#9326C9`, مخصص `#7D2DFF`
+- Key globals.css semantic classes: `plan-banner`, `settings-card`, `card-dark`, `glass-card`, `btn-gradient`, `btn-outline-dark`, `btn-danger`, `btn-icon`, `nav-active` (solid `#370BF4` bg, white text), `nav-item`, `sidebar-bg`, `page-container`, `divider-dark`, `dashboard-bg`, `badge-purple`, `progress-track`, `progress-bar`, `input-dark`, `input-search`
+- Sidebar: 4 action buttons (إنشاء `#370BF4`, تحسين `#E036B8`, محاكاة `#9326C9`, مخصص `#7D2DFF`) — active state uses solid brand color bg; nav links active state uses solid `#370BF4`
 
 ---
 
