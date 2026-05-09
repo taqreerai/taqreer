@@ -60,10 +60,7 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 
 ### 🔜 Remaining for Step 1
 
-1. **Configure Supabase Console** — register OAuth redirect URLs:
-   - `http://localhost:3000/auth/callback` (local)
-   - `https://taqreer.ai/auth/callback` (prod)
-2. **Run storage setup script:**
+1. **Run storage setup script:**
    ```bash
    npx ts-node scripts/setup-storage.ts
    ```
