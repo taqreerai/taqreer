@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { Hero } from "@/components/marketing/Hero";
 import { TemplatesScroll } from "@/components/marketing/TemplatesScroll";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
@@ -9,6 +11,12 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
   if (searchParams?.key !== "taqreer2025") {
     redirect("/");
   }
+
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const isLoggedIn = !!session;
 
   return (
     <main>
@@ -32,10 +40,29 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
                 </div>
                 
                 <div className="hidden md:flex items-center gap-4">
-                    <a className="text-sm text-gray-300 hover:text-white px-4 py-2 rounded-full border border-white/10 hover:border-white/30 transition-all cursor-pointer"
-                        href="#">تسجيل الدخول</a>
-                    <a className="text-sm text-black bg-white hover:bg-gray-100 px-6 py-2 rounded-full font-medium transition-colors cursor-pointer"
-                        href="#">إنشاء حساب</a>
+                    {isLoggedIn ? (
+                        <Link
+                            href="/dashboard"
+                            className="text-sm text-black bg-white hover:bg-gray-100 px-6 py-2 rounded-full font-medium transition-colors"
+                        >
+                            لوحة التحكم
+                        </Link>
+                    ) : (
+                        <>
+                            <Link
+                                href="/auth/login"
+                                className="text-sm text-gray-300 hover:text-white px-4 py-2 rounded-full border border-white/10 hover:border-white/30 transition-all"
+                            >
+                                تسجيل الدخول
+                            </Link>
+                            <Link
+                                href="/auth/signup"
+                                className="text-sm text-black bg-white hover:bg-gray-100 px-6 py-2 rounded-full font-medium transition-colors"
+                            >
+                                إنشاء حساب
+                            </Link>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

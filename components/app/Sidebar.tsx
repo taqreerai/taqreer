@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { LogoutButton } from "@/components/app/LogoutButton";
 
 export function Sidebar({
   isCollapsed = false,
@@ -226,6 +227,14 @@ export function Sidebar({
           <div className="progress-track">
             <div className="progress-bar" style={{ width: '10%' }} />
           </div>
+        </div>
+
+        {/* ── Divider ── */}
+        <div className="divider-dark flex-shrink-0" />
+
+        {/* ── Logout Button ── */}
+        <div className="flex flex-col py-3 w-full">
+          <LogoutButton />
         </div>
       </div>
     </aside>
