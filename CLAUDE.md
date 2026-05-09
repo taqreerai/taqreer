@@ -1,5 +1,12 @@
 # Taqreer — Claude Code Project Brief
 
+## Coding Rules
+
+- **Always use Tailwind utility classes for styling.** Never write raw CSS properties (e.g. `backdrop-filter`, `background`, `border`) in custom CSS classes or inline styles when a Tailwind class exists. Tailwind v4 uses a CSS variable chain for composable utilities (e.g. `backdrop-blur-*`, `bg-*`, `border-*`) — using raw CSS overrides that chain and breaks the output.
+- Use `globals.css` only for things Tailwind cannot express: complex animations (`@keyframes`), pseudo-element tricks, and semantic component classes (`.card-dark`, `.btn-gradient`) that combine many utilities into a reusable pattern.
+
+---
+
 You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation platform. Claude generates PowerPoint presentations from user content and brand assets. Users edit the result in a native Taqreer web editor, then export as PPTX or PDF.
 
 ---

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { LogoutButton } from "@/components/app/LogoutButton";
 
 export function Sidebar({
   isCollapsed = false,
@@ -32,7 +33,7 @@ export function Sidebar({
   const Tooltip = ({ text }: { text: string }) => {
     if (!isCollapsed) return null;
     return (
-      <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 px-3 py-1.5 bg-[#1A1423] text-white text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 pointer-events-none border border-[#2A243B] shadow-lg">
+      <div className="sidebar-tooltip absolute right-full top-1/2 -translate-y-1/2 mr-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
         {text}
       </div>
     );
@@ -43,56 +44,49 @@ export function Sidebar({
   return (
     <aside
       aria-label="Sidebar"
-      className={`sidebar-bg fixed right-0 top-0 h-screen z-50 flex flex-col border-l transition-all duration-300 ease-in-out ${isCollapsed ? "w-[80px]" : "w-[260px]"
-        }`}
+      className={`sidebar-bg fixed right-0 top-0 h-screen z-50 flex flex-col border-l transition-all duration-300 ease-in-out ${
+        isCollapsed ? "w-[80px]" : "w-[260px]"
+      }`}
     >
       {/* ── Logo ── */}
-      <div
-        className="flex items-center px-[18px] flex-shrink-0"
-        style={{ height: '80px', borderBottom: '1px solid rgba(42,36,59,0.6)' }}
-      >
+      <div className="h-20 flex items-center px-[18px] flex-shrink-0 border-b border-[rgba(42,36,59,0.6)]">
         <div className="relative flex items-center h-full w-full">
           {/* Collapsed: icon only */}
-          <div className={`absolute right-0 flex items-center justify-center w-[44px] h-[44px] transition-opacity duration-300 ${isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`absolute right-0 flex items-center justify-center w-[44px] h-[44px] transition-opacity duration-300 ${
+            isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}>
             <Image src="/icon-colored.svg" alt="Taqreer Icon" width={22} height={22} className="object-contain" />
           </div>
           {/* Expanded: full logo */}
-          <div className={`absolute right-0 flex items-center h-[44px] transition-opacity duration-300 ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <div className={`absolute right-0 flex items-center h-[44px] transition-opacity duration-300 ${
+            isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}>
             <Image src="/logo-light.svg" alt="Taqreer Logo" width={110} height={28} className="object-contain" />
             <span className="badge-purple mr-3 mt-1">احترافي</span>
           </div>
         </div>
       </div>
 
-
-
       {/* ── Scrollable body ── */}
-      <div
-        className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col w-full"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        <style dangerouslySetInnerHTML={{ __html: `aside ::-webkit-scrollbar { display: none; }` }} />
+      <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col w-full hide-scrollbar">
 
         {/* Burger + Home */}
         <div className="flex flex-col py-3 w-full">
           {/* Burger */}
           <button
             onClick={toggleSidebar}
-            className="flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] mb-1 transition-colors rounded-xl"
-            style={{ color: 'var(--tq-muted)' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--tq-muted)')}
+            className="nav-item flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] mb-1"
             aria-label="Toggle sidebar"
           >
             <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-              <span
-                className={`${iconClass} transition-transform duration-300 ease-in-out`}
-                style={{ transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
-              >
+              <span className={`${iconClass} transition-transform duration-300 ease-in-out`}
+                style={{ transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>
                 {isCollapsed ? 'menu' : 'close'}
               </span>
             </div>
-            <span className={`font-medium text-sm transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
+            <span className={`font-medium text-sm transition-all duration-300 ${
+              isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
+            }`}>
               القائمة
             </span>
           </button>
@@ -101,12 +95,21 @@ export function Sidebar({
           <div className="relative group w-full">
             <Link
               href="/dashboard"
-              className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl border-r-2 ${pathname === '/dashboard' ? 'nav-active' : 'nav-item border-transparent'
-                }`}
+              className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl border-r-2 ${
+                pathname === '/dashboard' ? 'nav-active' : 'nav-item border-transparent'
+              }`}
             >
               <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-                <span className={`${iconClass} nav-icon transition-colors duration-200`} style={{ color: pathname === '/dashboard' ? '#ffffff' : 'var(--tq-muted)' }}>home</span>              </div>
-              <span className={`font-medium text-sm transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
+                <span
+                  className={`${iconClass} nav-icon transition-colors duration-200`}
+                  style={{ color: pathname === '/dashboard' ? '#ffffff' : 'var(--tq-muted)' }}
+                >
+                  home
+                </span>
+              </div>
+              <span className={`font-medium text-sm transition-all duration-300 ${
+                isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
+              }`}>
                 الرئيسية
               </span>
             </Link>
@@ -139,13 +142,16 @@ export function Sidebar({
                     />
                   )}
                   <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0 relative z-10">
-                    <span className={`${iconClass} nav-icon transition-colors duration-200`} style={{ color: isActive ? '#ffffff' : 'var(--tq-muted)' }}>
+                    <span
+                      className={`${iconClass} nav-icon transition-colors duration-200`}
+                      style={{ color: isActive ? '#ffffff' : 'var(--tq-muted)' }}
+                    >
                       {btn.icon}
-                    </span>                  </div>
-                  <span
-                    className={`font-medium text-sm relative z-10 transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
-                      } ${isActive ? 'text-white' : 'text-white group-hover:text-white'}`}
-                  >
+                    </span>
+                  </div>
+                  <span className={`font-medium text-sm relative z-10 transition-all duration-300 ${
+                    isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
+                  } ${isActive ? 'text-white' : 'text-white group-hover:text-white'}`}>
                     {btn.label}
                   </span>
                 </Link>
@@ -166,13 +172,21 @@ export function Sidebar({
               <div key={item.path} className="relative group w-full">
                 <Link
                   href={item.path}
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl border-r-2 ${active ? 'nav-active' : 'nav-item border-transparent'
-                    }`}
+                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl border-r-2 ${
+                    active ? 'nav-active' : 'nav-item border-transparent'
+                  }`}
                 >
                   <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-                    <span className={`${iconClass} nav-icon transition-colors duration-200`} style={{ color: active ? '#ffffff' : 'var(--tq-muted)' }}>{item.icon}</span>                  </div>
-                  <span className={`font-medium text-sm transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
-                    }`}>
+                    <span
+                      className={`${iconClass} nav-icon transition-colors duration-200`}
+                      style={{ color: active ? '#ffffff' : 'var(--tq-muted)' }}
+                    >
+                      {item.icon}
+                    </span>
+                  </div>
+                  <span className={`font-medium text-sm transition-all duration-300 ${
+                    isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
+                  }`}>
                     {item.label}
                   </span>
                 </Link>
@@ -190,30 +204,37 @@ export function Sidebar({
           <div className="w-[44px] h-[44px] flex justify-center items-center flex-shrink-0">
             <img
               alt="أسامة avatar"
-              className="h-[36px] w-[36px] rounded-full object-cover"
-              style={{ border: '1px solid rgba(125, 45, 255, 0.3)' }}
+              className="avatar-ring h-[36px] w-[36px] rounded-full object-cover"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuBIemRiH3GmYrpTuw-Ef2ymnltcDQvirh5Ua5yuZfeUFDXgrb6Qr0136fQRGeWIgVd1Xo5IRK7l-VeDfmwZPZTEew4ZhzlvMGLZEZT_qRBxLlhVpodAUTLRPYLFD_yfnAlyxoo8u6jBc3nq2s0T25WCYaJKnE8Rd7eXxzKErEUnc94RpifEFLsLAXeQ4mUZSUQ0JM-ZzaE-OeoBPfWekNmGOaHiCcejgkXVWbwSEsZKev293na2HfMNc-_72zO1gA98NMImtjVGTbA"
             />
           </div>
-          <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pr-2'
-            }`}>
+          <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 ${
+            isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pr-2'
+          }`}>
             <span className="font-medium text-white text-sm leading-tight">أسامة</span>
-            <span className="text-[11px]" style={{ color: 'var(--tq-muted)' }}>osama@example.com</span>
+            <span className="text-muted text-[11px]">osama@example.com</span>
           </div>
         </div>
-        {/* ── Usage Bar (below logo, hidden when collapsed) ── */}
-        <div
-          className={`flex-shrink-0 transition-all duration-300 overflow-hidden px-[18px] ${isCollapsed ? 'h-0 opacity-0 py-0' : 'h-[56px] opacity-100 py-3'
-            }`}
-          style={{ borderBottom: '1px solid rgba(42,36,59,0.6)' }}
-        >
-          <div className="flex justify-between text-xs mb-1.5 font-medium" style={{ color: 'var(--tq-muted)' }}>
+
+        {/* ── Usage Bar ── */}
+        <div className={`sidebar-usage flex-shrink-0 transition-all duration-300 overflow-hidden px-[18px] ${
+          isCollapsed ? 'h-0 opacity-0 py-0' : 'h-[56px] opacity-100 py-3'
+        }`}>
+          <div className="flex justify-between text-xs mb-1.5 font-medium text-muted">
             <span>الاستخدام</span>
             <span>3 من 30 عرضًا</span>
           </div>
           <div className="progress-track">
             <div className="progress-bar" style={{ width: '10%' }} />
           </div>
+        </div>
+
+        {/* ── Divider ── */}
+        <div className="divider-dark flex-shrink-0" />
+
+        {/* ── Logout Button ── */}
+        <div className="flex flex-col py-3 w-full">
+          <LogoutButton />
         </div>
       </div>
     </aside>

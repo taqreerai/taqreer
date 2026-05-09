@@ -1,9 +1,14 @@
-"use client";
-
+import { createClient } from "@/lib/supabase/server";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 
-export default function ComingSoon() {
+export default async function ComingSoon() {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const isLoggedIn = !!session;
   const containerVariants = {
     hidden: {},
     visible: {
@@ -57,24 +62,42 @@ export default function ComingSoon() {
           </p>
         </motion.div>
 
-        {/* Signup Form */}
-        <form className="w-full max-w-lg mx-auto flex flex-col sm:flex-row gap-4 mt-8">
-          <motion.input 
-            variants={itemVariants}
-            type="email" 
-            placeholder="أدخل بريدك الإلكتروني" 
-            required
-            dir="ltr"
-            className="flex-1 bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white placeholder-gray-500 focus:outline-none focus:border-brand-purple-500 focus:ring-1 focus:ring-brand-purple-500 transition-all text-right sm:text-left"
-          />
-          <motion.button 
-            variants={itemVariants}
-            type="submit"
-            className="bg-button-gradient hover:opacity-90 transition-opacity text-white font-bold rounded-full px-8 py-4 whitespace-nowrap shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-          >
-            أبلغني عند الإطلاق
-          </motion.button>
-        </form>
+        {/* CTA Section */}
+        {isLoggedIn ? (
+          <motion.div variants={itemVariants} className="w-full flex justify-center gap-4">
+            <Link
+              href="/dashboard"
+              className="bg-button-gradient hover:opacity-90 transition-opacity text-white font-bold rounded-full px-8 py-4 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+            >
+              لوحة التحكم
+            </Link>
+          </motion.div>
+        ) : (
+          <form className="w-full max-w-lg mx-auto flex flex-col sm:flex-row gap-4 mt-8">
+            <motion.input
+              variants={itemVariants}
+              type="email"
+              placeholder="أدخل بريدك الإلكتروني"
+              required
+              dir="ltr"
+              className="flex-1 bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white placeholder-gray-500 focus:outline-none focus:border-brand-purple-500 focus:ring-1 focus:ring-brand-purple-500 transition-all text-right sm:text-left"
+            />
+            <motion.div variants={itemVariants} className="flex gap-3">
+              <Link
+                href="/auth/signup"
+                className="bg-button-gradient hover:opacity-90 transition-opacity text-white font-bold rounded-full px-8 py-4 whitespace-nowrap shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+              >
+                ابدأ مجاناً
+              </Link>
+              <Link
+                href="/auth/login"
+                className="border border-white/10 hover:border-white/30 hover:bg-white/5 transition-all text-white font-bold rounded-full px-8 py-4 whitespace-nowrap"
+              >
+                تسجيل الدخول
+              </Link>
+            </motion.div>
+          </form>
+        )}
 
       </motion.div>
     </main>

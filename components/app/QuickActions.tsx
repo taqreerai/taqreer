@@ -24,26 +24,20 @@ export function QuickActions() {
               e.currentTarget.style.boxShadow = 'none';
             }}
           >
-            {/* Icon box — fixed size, centered icon */}
             <div
-              className="flex items-center justify-center rounded-xl mb-4 flex-shrink-0"
+              className="flex items-center justify-center w-12 h-12 rounded-xl mb-4 flex-shrink-0"
               style={{
-                width: '48px',
-                height: '48px',
                 background: `${card.color}25`,
                 border: `1px solid ${card.color}40`,
               }}
             >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: '22px', color: '#ffffff' }}
-              >
+              <span className="material-symbols-outlined text-white" style={{ fontSize: '22px' }}>
                 {card.icon}
               </span>
             </div>
 
             <h3 className="text-[20px] font-semibold text-white mb-1">{card.title}</h3>
-            <p className="text-[#9A94A8] mb-6 text-sm">{card.subtitle}</p>
+            <p className="text-muted mb-6 text-sm">{card.subtitle}</p>
 
             {card.filled ? (
               <button className="btn-gradient w-full py-2">{card.btnLabel}</button>

@@ -27,7 +27,7 @@ export function MyTemplates() {
           <div key={i} className="min-w-[300px] card-dark rounded-xl overflow-hidden group relative snap-start">
 
             {/* Thumbnail */}
-            <div className="h-40 relative" style={{ background: 'rgba(26, 20, 35, 0.8)' }}>
+            <div className="template-thumbnail h-40 relative">
               {template.img ? (
                 <img
                   alt="Template thumbnail"
@@ -36,16 +36,14 @@ export function MyTemplates() {
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-4xl" style={{ color: 'rgba(154, 148, 168, 0.4)' }}>
+                  <span className="material-symbols-outlined text-4xl text-muted opacity-40">
                     add_photo_alternate
                   </span>
                 </div>
               )}
 
               {/* Hover overlay */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-sm"
-                style={{ background: 'rgba(3, 3, 13, 0.75)' }}
-              >
+              <div className="template-overlay absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                 <button className="btn-gradient px-6 py-2">
                   استخدم
                 </button>
@@ -53,7 +51,7 @@ export function MyTemplates() {
             </div>
 
             {/* Footer */}
-            <div className="p-4 divider-dark border-t">
+            <div className="p-4 border-t divider-dark">
               <h4 className="text-[16px] font-semibold text-white">{template.title}</h4>
             </div>
           </div>
