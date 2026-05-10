@@ -9,6 +9,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase/client";
 
+function Tooltip({ isCollapsed, text }: { isCollapsed: boolean; text: string }) {
+  if (!isCollapsed) return null;
+  return (
+    <div className="sidebar-tooltip absolute right-full top-1/2 -translate-y-1/2 mr-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+      {text}
+    </div>
+  );
+}
+
 export function Sidebar({
   isCollapsed = false,
   toggleSidebar
@@ -21,14 +30,18 @@ export function Sidebar({
   const { avatarUrl, name, email } = useUser();
   const supabase = createClient();
   const [profileOpen, setProfileOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{
     top?: number; bottom?: number; right: number; width: number;
   } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const profileBtnRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    queueMicrotask(() => {
+      setMounted(true);
+    });
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -81,15 +94,6 @@ export function Sidebar({
     { path: '/features', icon: 'stars', label: 'المميزات' },
     { path: '/settings', icon: 'settings', label: 'الإعدادات' },
   ];
-
-  const Tooltip = ({ text }: { text: string }) => {
-    if (!isCollapsed) return null;
-    return (
-      <div className="sidebar-tooltip absolute right-full top-1/2 -translate-y-1/2 mr-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-        {text}
-      </div>
-    );
-  };
 
   const iconClass = "material-symbols-outlined text-[20px] flex-shrink-0 font-thin";
 
@@ -165,7 +169,7 @@ export function Sidebar({
                 الرئيسية
               </span>
             </Link>
-            <Tooltip text="الرئيسية" />
+            <Tooltip isCollapsed={isCollapsed} text="الرئيسية" />
           </div>
         </div>
 
@@ -202,7 +206,7 @@ export function Sidebar({
                     {btn.label}
                   </span>
                 </Link>
-                <Tooltip text={btn.label} />
+                <Tooltip isCollapsed={isCollapsed} text={btn.label} />
               </div>
             );
           })}
@@ -237,7 +241,7 @@ export function Sidebar({
                     {item.label}
                   </span>
                 </Link>
-                <Tooltip text={item.label} />
+                <Tooltip isCollapsed={isCollapsed} text={item.label} />
               </div>
             );
           })}

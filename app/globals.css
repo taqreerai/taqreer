@@ -143,6 +143,10 @@ body {
   color: #ffffff;
 }
 
+.font-cairo {
+  font-family: Cairo, var(--font-cairo), ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ─── Text Gradient ─── */
 .text-gradient {
   background: linear-gradient(90deg, #E879F9 0%, #A855F7 50%, #3B82F6 100%);
