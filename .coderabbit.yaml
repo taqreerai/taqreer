@@ -14,37 +14,19 @@ reviews:
       - "main"
     drafts: false
 
-path_instructions:
+path_filters:
   - path: "app/**"
     instructions: |
-      This is a Next.js 16 App Router project. RTL-first, Arabic UI.
-      Always use Tailwind utility classes — no raw CSS in inline styles.
-      Use globals.css semantic classes: card-dark, btn-gradient, btn-outline-dark, plan-banner, nav-active, etc.
-      All app pages must use the page-container class.
-
+      Next.js 16 App Router, RTL-first, Arabic UI. Always use Tailwind utility classes. Use globals.css semantic classes. All app pages must use page-container class.
   - path: "components/**"
     instructions: |
-      RTL-first React components. Cairo font for Arabic, Poppins for English.
-      No hardcoded colors — use design tokens from globals.css.
-      No manual slide editing logic — Claude handles all design.
-
+      RTL-first React components. Cairo font for Arabic, Poppins for English. No hardcoded colors — use design tokens from globals.css.
   - path: "lib/schema/**"
     instructions: |
-      Zod schemas are the single source of truth for slide JSON structure.
-      Never allow properties outside the Taqreer design vocabulary.
-      Every element must have a stable ID field.
-      Validate all Claude output through these schemas before writing to DB.
-
+      Zod schemas are the single source of truth for slide JSON. Never allow properties outside the Taqreer design vocabulary. Every element must have a stable ID.
   - path: "inngest/**"
     instructions: |
-      All AI generation, area redesign, export, and template jobs run here.
-      Jobs must handle retries, partial failures, and status tracking.
-      Never write Claude output to the DB without Zod validation first.
-      Job status lifecycle: queued → running → completed or failed → retryable.
-
-  - path: "scripts/**"
-    instructions: |
-      Utility scripts for setup and migrations. Not part of the app bundle.
+      All AI generation jobs. Must handle retries and failures. Never write Claude output to DB without Zod validation first.
 
 chat:
   auto_reply: true
