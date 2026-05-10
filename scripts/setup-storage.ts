@@ -24,12 +24,12 @@ async function setupBuckets() {
       // Try to get bucket to see if it exists
       const { data, error } = await supabase.storage.getBucket(bucket.name);
 
-      if (error && error.statusCode === 404) {
+      if (error && error.statusCode === "404") {
         // Bucket doesn't exist, create it
         const { data: createdBucket, error: createError } =
           await supabase.storage.createBucket(bucket.name, {
             public: bucket.public,
-            fileSizeLimit: 5368709120, // 5GB
+            fileSizeLimit: 52428800, // 5GB
           });
 
         if (createError) {
