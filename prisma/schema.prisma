@@ -7,22 +7,26 @@ datasource db {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  name           String?
-  email          String    @unique
-  emailVerified  DateTime?
-  image          String?
-  password       String?
-  plan           String    @default("free")
-  language       String    @default("ar")
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  projects       Project[]
-  templates      Template[]
-  brandKits      BrandKit[]
-  folders        Folder[]
-  accounts       Account[]
-  sessions       Session[]
+  id              String         @id @default(cuid())
+  supabaseUserId  String?        @unique
+  name            String?
+  email           String         @unique
+  emailVerified   DateTime?
+  image           String?
+  password        String?
+  plan            String         @default("free")
+  role            String         @default("user")
+  language        String         @default("ar")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  projects        Project[]
+  templates       Template[]
+  brandKits       BrandKit[]
+  folders         Folder[]
+  accounts        Account[]
+  sessions        Session[]
+  subscriptions   Subscription[]
+  usageEvents     UsageEvent[]
 }
 
 model Account {
@@ -39,6 +43,7 @@ model Account {
   id_token          String?
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([provider, providerAccountId])
 }
 
@@ -51,67 +56,133 @@ model Session {
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  type        String
-  language    String   @default("ar")
-  format      String   @default("16:9")
-  tone        String   @default("formal")
-  status      String   @default("draft")
-  thumbnail   String?
-  folderId    String?
-  templateId  String?
-  brandKitId  String?
-  aiPrompt    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  slides      Slide[]
-  folder      Folder?  @relation(fields: [folderId], references: [id])
+  id            String         @id @default(cuid())
+  userId        String
+  title         String
+  type          String         @default("create")
+  language      String         @default("ar")
+  format        String         @default("16:9")
+  tone          String         @default("formal")
+  status        String         @default("draft")
+  thumbnail     String?
+  folderId      String?
+  templateId    String?
+  brandKitId    String?
+  aiPrompt      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder        Folder?        @relation(fields: [folderId], references: [id])
+  presentation  Presentation?
+  files         File[]
+  jobs          Job[]
 }
 
-model Slide {
+model Presentation {
+  id               String                @id @default(cuid())
+  projectId        String                @unique
+  currentVersionId String?
+  title            String
+  language         String                @default("ar")
+  direction        String                @default("rtl")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  project          Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions         PresentationVersion[]
+  comments         Comment[]
+}
+
+model PresentationVersion {
+  id             String       @id @default(cuid())
+  presentationId String
+  versionNumber  Int
+  slideJson      Json
+  status         String       @default("completed")
+  createdAt      DateTime     @default(now())
+  presentation   Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  comments       Comment[]
+
+  @@unique([presentationId, versionNumber])
+}
+
+model File {
+  id         String   @id @default(cuid())
+  projectId  String
+  type       String
+  storageUrl String
+  mimeType   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id             String               @id @default(cuid())
+  presentationId String
+  versionId      String
+  slideId        String
+  areaId         String?
+  elementIds     String[]
+  boundsJson     Json?
+  screenshotUrl  String?
+  content        String
+  status         String               @default("pending")
+  createdAt      DateTime             @default(now())
+  presentation   Presentation         @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  version        PresentationVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+}
+
+model Job {
   id           String   @id @default(cuid())
-  projectId    String
-  slideNumber  Int
-  layoutType   String
-  contentJson  Json
-  speakerNotes String?
-  thumbnail    String?
+  projectId    String?
+  inngestRunId String?  @unique
+  type         String
+  status       String   @default("queued")
+  inputJson    Json?
+  outputJson   Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 }
 
 model Template {
-  id           String   @id @default(cuid())
-  ownerId      String
-  name         String
-  category     String
-  language     String   @default("ar")
-  colors       Json?
-  fonts        Json?
-  layoutRules  Json?
-  thumbnail    String?
-  visibility   String   @default("private")
-  featured     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  ownerId       String
+  title         String
+  category      String
+  industry      String?
+  language      String   @default("ar")
+  direction     String   @default("rtl")
+  featured      Boolean  @default(false)
+  slideCount    Int      @default(0)
+  styleContract Json?
+  pptxUrl       String?
+  thumbnailUrls String[]
+  useCount      Int      @default(0)
+  isPublic      Boolean  @default(false)
+  planRequired  String   @default("free")
+  colors        Json?
+  fonts         Json?
+  layoutRules   Json?
+  thumbnail     String?
+  visibility    String   @default("private")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
 
 model BrandKit {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  logo        String?
-  colors      Json?
-  fonts       Json?
-  aiTone      String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  logo      String?
+  colors    Json?
+  fonts     Json?
+  aiTone    String?
+  assetUrls Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Folder {
@@ -122,4 +193,26 @@ model Folder {
   updatedAt DateTime  @updatedAt
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects  Project[]
+}
+
+model Subscription {
+  id                 String    @id @default(cuid())
+  userId             String
+  stripeCustomerId   String?   @unique
+  plan               String    @default("free")
+  status             String    @default("active")
+  currentPeriodEnd   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UsageEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  eventType String
+  amount    Int      @default(1)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
