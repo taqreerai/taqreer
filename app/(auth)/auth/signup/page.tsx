@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
+import posthog from "posthog-js";
 
 function toArabicError(msg: string): string {
   if (/already registered|already exists|User already registered/i.test(msg))
@@ -62,11 +63,18 @@ export default function SignupPage() {
         setError(toArabicError(signUpError.message));
       } else if (data.session) {
         // Email confirmation disabled — session returned immediately
+        if (data.user) {
+          posthog.identify(data.user.id, { email: data.user.email, name });
+          posthog.capture("user_signed_up", { method: "email" });
+        }
         try { await fetch("/api/auth/user-sync", { method: "POST" }); } catch {}
         router.push("/dashboard");
         router.refresh();
       } else {
         // Email confirmation required
+        if (data.user) {
+          posthog.capture("user_signed_up", { method: "email", requires_confirmation: true });
+        }
         setSuccess(true);
       }
     } catch {
@@ -80,6 +88,7 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
     try {
+      posthog.capture("user_signed_up", { method: "google" });
       const { error: signUpError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },

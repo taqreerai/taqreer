@@ -1,5 +1,7 @@
 "use client";
 
+import posthog from "posthog-js";
+
 const templates = [
   {
     title: 'قالب الشركة الرسمي',
@@ -44,7 +46,10 @@ export function MyTemplates() {
 
               {/* Hover overlay */}
               <div className="template-overlay absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                <button className="btn-gradient px-6 py-2">
+                <button
+                  className="btn-gradient px-6 py-2"
+                  onClick={() => posthog.capture("template_used", { template_title: template.title })}
+                >
                   استخدم
                 </button>
               </div>

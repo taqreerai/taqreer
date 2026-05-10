@@ -25,6 +25,7 @@
     "next": "^16.2.6",
     "pdf-lib": "^1.17.1",
     "posthog-js": "^1.372.10",
+    "posthog-node": "^5.33.4",
     "pptxgenjs": "^4.0.1",
     "prisma": "^7.8.0",
     "puppeteer": "^24.43.0",
