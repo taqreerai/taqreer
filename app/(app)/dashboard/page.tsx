@@ -5,6 +5,7 @@ import { PlanUsage } from "@/components/app/PlanUsage";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getStartOfMonthUTC } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -23,7 +24,7 @@ export default async function DashboardPage() {
   const planLimits = { free: 10, plus: 60, pro: 90 };
   const plan = dbUser && isKnownPlan(dbUser.plan) ? dbUser.plan : "free";
   const limit = planLimits[plan];
-  const startOfMonth = getStartOfMonth();
+  const startOfMonth = getStartOfMonthUTC();
 
   const [projects, templates, subscription, usageCount] = dbUser
     ? await Promise.all([
@@ -63,13 +64,6 @@ export default async function DashboardPage() {
       />
     </div>
   );
-}
-
-function getStartOfMonth() {
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-  return startOfMonth;
 }
 
 function isKnownPlan(plan: string): plan is "free" | "plus" | "pro" {

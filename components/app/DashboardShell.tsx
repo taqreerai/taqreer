@@ -9,7 +9,10 @@ const sidebarStorageEvent = "taqreer_sidebar_collapsed_changed";
 
 function getSidebarSnapshot(initialIsCollapsed: boolean) {
   const savedState = localStorage.getItem(sidebarStorageKey);
-  return savedState !== null ? JSON.parse(savedState) : initialIsCollapsed;
+  if (savedState === null) return initialIsCollapsed;
+  if (savedState === "true") return true;
+  if (savedState === "false") return false;
+  return initialIsCollapsed;
 }
 
 function subscribeToSidebarChanges(onStoreChange: () => void) {

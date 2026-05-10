@@ -27,7 +27,7 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
   const router = useRouter();
 
   const handleDownload = (projectId: string) => {
-    router.push(`/api/projects/${projectId}/download`);
+    window.location.href = `/api/projects/${projectId}/download`;
   };
 
   const handleMoreClick = (projectId: string) => {

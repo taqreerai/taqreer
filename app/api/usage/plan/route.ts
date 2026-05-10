@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { getStartOfMonthUTC } from "@/lib/utils";
 
 const planLimits = { free: 10, plus: 60, pro: 90 };
 
@@ -28,7 +29,7 @@ export async function GET() {
   }
 
   const plan = isKnownPlan(dbUser.plan) ? dbUser.plan : "free";
-  const startOfMonth = getStartOfMonth();
+  const startOfMonth = getStartOfMonthUTC();
   const [subscription, usageCount] = await Promise.all([
     prisma.subscription.findFirst({
       where: { userId: dbUser.id },
@@ -48,13 +49,6 @@ export async function GET() {
     limit: planLimits[plan],
     renewalDate: subscription?.currentPeriodEnd ?? null,
   });
-}
-
-function getStartOfMonth() {
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-  return startOfMonth;
 }
 
 function isKnownPlan(plan: string): plan is keyof typeof planLimits {
