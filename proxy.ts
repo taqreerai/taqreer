@@ -14,7 +14,7 @@ const protectedRoutes = [
 
 const authRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { supabase, response } = await createClient(request);
   const { pathname, searchParams } = request.nextUrl;
 
