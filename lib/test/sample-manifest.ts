@@ -1,0 +1,200 @@
+import { SlideManifest } from "../schema/slide.js";
+
+export const sampleManifest: SlideManifest = {
+  version: "1.0",
+  presentationId: "test_pipeline_001",
+  language: "ar",
+  direction: "rtl",
+  canvas: { width: 1920, height: 1080 },
+  fonts: {
+    heading: {
+      name: "Cairo",
+      url: "https://fonts.gstatic.com/s/cairo/v28/SLXgc1nY6HkvalIhTp2mxdt0UX8.woff2",
+    },
+    body: {
+      name: "Cairo",
+      url: "https://fonts.gstatic.com/s/cairo/v28/SLXgc1nY6HkvalIhTp2mxdt0UX8.woff2",
+    },
+  },
+  palette: {
+    primary: "#370BF4",
+    secondary: "#E036B8",
+    background: "#03030D",
+    text: "#FFFFFF",
+    muted: "#9A94A8",
+  },
+  slides: [
+    {
+      slideId: "slide_01",
+      role: "cover",
+      background: { type: "color", value: "#03030D" },
+      elements: [
+        // Background accent shape
+        {
+          id: "el_bg_shape",
+          type: "shape",
+          kind: "rectangle",
+          role: "accent",
+          x: 1400,
+          y: 0,
+          width: 520,
+          height: 1080,
+          fill: {
+            type: "gradient",
+            gradient: {
+              type: "linear",
+              angle: 135,
+              stops: [
+                { color: "#370BF4", position: 0 },
+                { color: "#E036B8", position: 100 },
+              ],
+            },
+          },
+          opacity: 0.15,
+        },
+        // Main headline
+        {
+          id: "el_headline",
+          type: "text",
+          role: "headline",
+          x: 80,
+          y: 280,
+          width: 1200,
+          height: 200,
+          content: "مرحباً بكم في تقرير",
+          fontFamily: "Cairo",
+          fontSize: 96,
+          fontWeight: 700,
+          color: "#FFFFFF",
+          textAlign: "right",
+          direction: "rtl",
+          lineHeight: 1.3,
+        },
+        // Subtitle
+        {
+          id: "el_subtitle",
+          type: "text",
+          role: "subheading",
+          x: 80,
+          y: 500,
+          width: 1100,
+          height: 100,
+          content: "منصة العروض التقديمية المدعومة بالذكاء الاصطناعي",
+          fontFamily: "Cairo",
+          fontSize: 36,
+          fontWeight: 400,
+          color: "#9A94A8",
+          textAlign: "right",
+          direction: "rtl",
+          lineHeight: 1.5,
+        },
+        // Gradient divider line
+        {
+          id: "el_divider",
+          type: "shape",
+          kind: "rectangle",
+          role: "divider",
+          x: 80,
+          y: 470,
+          width: 400,
+          height: 4,
+          fill: {
+            type: "gradient",
+            gradient: {
+              type: "linear",
+              angle: 90,
+              stops: [
+                { color: "#370BF4", position: 0 },
+                { color: "#E036B8", position: 100 },
+              ],
+            },
+          },
+        },
+        // Small label
+        {
+          id: "el_label",
+          type: "text",
+          role: "label",
+          x: 80,
+          y: 650,
+          width: 400,
+          height: 60,
+          content: "taqreer.ai",
+          fontFamily: "Cairo",
+          fontSize: 24,
+          fontWeight: 300,
+          color: "#370BF4",
+          textAlign: "right",
+          direction: "rtl",
+          lineHeight: 1.5,
+        },
+      ],
+    },
+    {
+      slideId: "slide_02",
+      role: "content",
+      background: { type: "color", value: "#03030D" },
+      elements: [
+        // Section title
+        {
+          id: "el_title",
+          type: "text",
+          role: "headline",
+          x: 80,
+          y: 80,
+          width: 1760,
+          height: 120,
+          content: "لماذا تقرير؟",
+          fontFamily: "Cairo",
+          fontSize: 64,
+          fontWeight: 700,
+          color: "#FFFFFF",
+          textAlign: "right",
+          direction: "rtl",
+          lineHeight: 1.3,
+        },
+        // Divider
+        {
+          id: "el_title_divider",
+          type: "shape",
+          kind: "rectangle",
+          role: "divider",
+          x: 80,
+          y: 210,
+          width: 200,
+          height: 4,
+          fill: {
+            type: "gradient",
+            gradient: {
+              type: "linear",
+              angle: 90,
+              stops: [
+                { color: "#370BF4", position: 0 },
+                { color: "#E036B8", position: 100 },
+              ],
+            },
+          },
+        },
+        // Body text
+        {
+          id: "el_body",
+          type: "text",
+          role: "body",
+          x: 80,
+          y: 260,
+          width: 1760,
+          height: 600,
+          content:
+            "تقرير يحول محتواك العادي إلى عروض تقديمية احترافية بالكامل عبر الذكاء الاصطناعي.\n\nكل ما عليك هو تقديم المحتوى وهوية علامتك التجارية — وكلود سيتولى كل شيء.\n\nبدون تصميم يدوي. بدون تعديلات معقدة. فقط نتائج جميلة.",
+          fontFamily: "Cairo",
+          fontSize: 32,
+          fontWeight: 400,
+          color: "#FFFFFF",
+          textAlign: "right",
+          direction: "rtl",
+          lineHeight: 1.8,
+        },
+      ],
+    },
+  ],
+};

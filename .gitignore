@@ -3,3 +3,6 @@ node_modules/
 .env
 .env.local
 *.tar.gz
+test-output/
+files/
+*.zip
