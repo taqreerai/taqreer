@@ -5,7 +5,7 @@ export const templateSave = inngest.createFunction(
     id: "template-save",
     name: "Save Presentation as Template",
     retries: 2,
-    triggers: [{ event: "template/save.requested" }],
+    triggers: [{ event: "template.save.requested" }],
   },
   async ({ event, step }) => {
     const { versionId, userId, meta } = event.data;
@@ -14,7 +14,7 @@ export const templateSave = inngest.createFunction(
       const { prisma } = await import("@/lib/prisma");
       const version = await prisma.presentationVersion.findUnique({ where: { id: versionId } });
       if (!version) throw new Error("Version not found");
-      return version.slideJson as any;
+      return version.slideJson as { direction: string; slides: unknown[] };
     });
 
     await step.run("save-template", async () => {

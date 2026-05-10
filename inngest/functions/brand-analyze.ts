@@ -1,11 +1,30 @@
 import { inngest } from "@/inngest/client";
+import { z } from "zod";
+
+const HexColor = z
+  .string()
+  .regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Must be a hex color e.g. #FF0000");
+
+const BrandKitSchema = z.object({
+  palette: z.object({
+    primary: HexColor,
+    secondary: HexColor,
+    background: HexColor,
+    text: HexColor,
+    muted: HexColor,
+  }),
+  typography: z.object({
+    headingFont: z.string().nullable(),
+    bodyFont: z.string().nullable(),
+  }),
+});
 
 export const brandAnalyze = inngest.createFunction(
   {
     id: "brand-analyze",
     name: "Analyze Brand Assets",
     retries: 3,
-    triggers: [{ event: "brand/analyze.requested" }],
+    triggers: [{ event: "brand.analyze.requested" }],
   },
   async ({ event, step }) => {
     const { screenshotUrl } = event.data;
@@ -41,7 +60,12 @@ export const brandAnalyze = inngest.createFunction(
       const data = await response.json();
       const content = data.content[0]?.text;
       if (!content) throw new Error("No content from Claude");
-      return JSON.parse(content.replace(/```json|```/g, "").trim());
+      const parsed = JSON.parse(content.replace(/```json|```/g, "").trim());
+      const result = BrandKitSchema.safeParse(parsed);
+      if (!result.success) {
+        throw new Error(`Brand kit validation failed: ${JSON.stringify(result.error.issues)}`);
+      }
+      return result.data;
     });
 
     return { success: true, brandKit };

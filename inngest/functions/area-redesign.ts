@@ -1,11 +1,12 @@
 import { inngest } from "@/inngest/client";
+import { SlideManifestSchema } from "@/lib/schema/slide";
 
 export const areaRedesign = inngest.createFunction(
   {
     id: "area-redesign",
     name: "Redesign Slide Areas",
     retries: 3,
-    triggers: [{ event: "area/redesign.requested" }],
+    triggers: [{ event: "area.redesign.requested" }],
   },
   async ({ event, step }) => {
     const { projectId, versionId, slides } = event.data;
@@ -36,6 +37,14 @@ export const areaRedesign = inngest.createFunction(
       return JSON.parse(content.replace(/```json|```/g, "").trim());
     });
 
+    const validated = await step.run("validate-updated-slides", async () => {
+      const result = SlideManifestSchema.safeParse(updatedSlides);
+      if (!result.success) {
+        throw new Error(`Zod validation failed: ${JSON.stringify(result.error.issues)}`);
+      }
+      return result.data;
+    });
+
     await step.run("save-updated-version", async () => {
       const { prisma } = await import("@/lib/prisma");
       const current = await prisma.presentationVersion.findUnique({ where: { id: versionId } });
@@ -44,7 +53,7 @@ export const areaRedesign = inngest.createFunction(
         data: {
           presentationId: current.presentationId,
           versionNumber: current.versionNumber + 1,
-          slideJson: updatedSlides,
+          slideJson: validated,
           status: "completed",
         },
       });

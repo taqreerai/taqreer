@@ -15,11 +15,11 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 
 ---
 
-## Overall Progress: 18% complete
+## Overall Progress: 35% complete
 
 | Phase | Description | Status | % |
 |---|---|---|---|
-| Phase 1 | Foundation | 🔄 In progress | 60% |
+| Phase 1 | Foundation | 🔄 In progress | 85% |
 | Phase 2 | Core Loop (Create → Preview → Export) | ⏳ Not started | 0% |
 | Phase 3 | Expand Flows (Enhance, Mimic, Custom) | ⏳ Not started | 0% |
 | Phase 4 | Business Layer (Stripe, Brand Kits, Admin) | ⏳ Not started | 0% |
@@ -47,7 +47,23 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 - Full CSS design system in globals.css
 - Prisma schema with migrations
 - Coming soon page
-- **Supabase Auth & Storage (Phase 1–4 complete)**
+- **Supabase Auth & Storage — fully complete**
+- **5 Supabase Storage buckets created:** source-files, brand-assets, generated-presentations, slide-previews, template-assets
+- **Resend configured in Supabase** for password reset emails
+- **Git workflow set up:** main + dev branches, CodeRabbit auto-review on PRs to main
+- **Pipeline validation test — PASSED:** Zod schema, HTML/CSS Arabic rendering, PPTX export, thumbnails all proven
+- **Zod schema for slide JSON:** `lib/schema/slide.ts` — complete, validated, gatekeeper in place
+- **Sample manifest:** `lib/test/sample-manifest.ts` — Arabic test slides with Cairo font
+- **Test page:** `app/test-pipeline/page.tsx` — live at localhost:3000/test-pipeline
+- **Inngest background jobs — set up and connected:**
+  - `deck/generate.requested` → deck-generate.ts
+  - `brand/analyze.requested` → brand-analyze.ts
+  - `area/redesign.requested` → area-redesign.ts
+  - `deck/export.requested` → deck-export.ts
+  - `template/save.requested` → template-save.ts
+- **Prisma client** updated to v7.8.0, `lib/prisma.ts` created
+- **tsx** installed for running TypeScript scripts
+- **CodeRabbit** configured with `.coderabbit.yaml`
 
 ---
 
@@ -72,13 +88,22 @@ ssh root@178.105.88.35
 cd /root/taqreer && git pull && pm2 restart taqreer
 ```
 
-### ⚠️ First thing to do next session — set up dev branch
+---
 
+## Local Dev — How to Start
+
+Always run two terminals:
+
+**Terminal 1 — Next.js:**
 ```bash
 cd ~/taqreer
-git checkout -b dev
-git push origin dev
-# Then on GitHub: set dev as the default branch for PRs
+npm run dev
+```
+
+**Terminal 2 — Inngest:**
+```bash
+cd ~/taqreer
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
 ```
 
 ---
@@ -179,37 +204,28 @@ Save     Retry Claude call with the
 to DB    validation error in the prompt
 ```
 
-**Why this matters:**
-- One bad LLM response without validation = crashed renderer in production
-- Property name drift (e.g., `fontSize` → `size`) breaks the renderer silently
-- Type drift (e.g., color as `[255, 0, 0]` instead of `#FF0000`) corrupts the DB
-- Missing required fields cause render errors users can't recover from
-
 **Self-healing pattern:**
 If validation fails, the Inngest job appends the Zod error message to the original prompt and retries. After 3 retries, the job is marked as failed and surfaced in Sentry. This pattern means most LLM glitches self-heal without user impact.
 
-The Zod schema lives in `lib/schema/slide.ts` and is the single source of truth for slide structure. Both the renderer and PptxGenJS export read from this schema.
+The Zod schema lives in `lib/schema/slide.ts` and is the single source of truth for slide structure.
 
 ---
 
 ## Thumbnail Scaling (RTL Gotcha)
 
-Slides render at 1920×1080 internally and scale down to fit thumbnails and the main preview. Two rules to follow:
+Slides render at 1920×1080 internally and scale down to fit thumbnails and the main preview.
 
-1. **Use `transform: scale()` on the wrapper, not on individual elements.** Resizing text directly via `font-size` causes browsers to re-flow at small sizes, producing blurry or jumpy text. Scaling a 1920×1080 div is what browsers are optimized for.
-
-2. **Set `transform-origin: top right` for RTL slides.** The default is `top left` — for Arabic content, scaling from the wrong corner pushes content out of the visible area. RTL slides must use `top right`. LTR slides use `top left`.
+1. **Use `transform: scale()` on the wrapper, not on individual elements.**
+2. **Set `transform-origin: top right` for RTL slides.** The default is `top left` — for Arabic content, scaling from the wrong corner pushes content out of the visible area.
 
 ```css
 .slide-wrapper {
   width: 1920px;
   height: 1080px;
   transform-origin: top right; /* top left for LTR */
-  transform: scale(var(--scale)); /* e.g., 0.2 for thumbnails, 0.7 for preview */
+  transform: scale(var(--scale));
 }
 ```
-
-The `--scale` CSS variable is calculated based on container size, set inline by the renderer component.
 
 ---
 
@@ -223,13 +239,6 @@ All 4 flows end in the same preview window with the same actions.
 | Enhance | تحسين | Existing PPTX | Converts PPTX → JSON, improves design and flow, keeps content |
 | Mimic | محاكاة | Content + style reference PPTX | Extracts style from reference, rebuilds user content in that style |
 | Custom | مخصص | Content + template style contract | Generates within the chosen template's visual system |
-
-```
-إنشاء   → content + brand brief             ↘
-تحسين   → existing PPTX                      → Claude → slide JSON → Preview window
-محاكاة  → content + style reference PPTX    ↗
-مخصص    → content + template style contract ↗
-```
 
 ---
 
@@ -272,18 +281,6 @@ The preview window is the heart of the product. It is **not** an editor — it i
 └──────────────────────┴──────────────────┘
 ```
 
-**What it shows:**
-- Slide panel on the right — thumbnails are smaller versions of the same HTML/CSS slides
-- Main slide view in the center — full-size HTML/CSS slide, scaled to fit
-- Action bar at the top
-
-**What the user can do:**
-- Browse slides via thumbnail panel
-- Click and drag to select an area on any slide → comment box appears
-- Type a comment in Arabic or English
-- Submit → Taqreer attaches comment to JSON elements + screenshot for context → sends to Claude
-- Claude returns updated JSON → preview re-renders that slide instantly
-
 **Action bar:**
 - `أعد التصميم` — Regenerate entire deck with same inputs
 - `تصدير PPTX` — Export as PowerPoint
@@ -293,8 +290,6 @@ The preview window is the heart of the product. It is **not** an editor — it i
 ---
 
 ## The Commenting System
-
-Comments operate on JSON elements with a screenshot for visual context.
 
 ```
 User draws selection box on slide area
@@ -322,42 +317,20 @@ Payload sent to Claude:
         ↓
 Claude returns updated JSON for the affected elements
         ↓
-Preview re-renders that slide instantly (no PNG conversion needed)
+Preview re-renders that slide instantly
 ```
 
-**Important:** the screenshot is for **visual context only**. Claude can see what the area looks like, but it edits the JSON, not the pixels. The slide re-renders from the updated JSON.
-
-Multiple comments can be added across multiple slides before submitting — Claude processes them all in one job.
+**Important:** the screenshot is for **visual context only**. Claude edits the JSON, not the pixels.
 
 ---
 
 ## Template Storage
-
-Every presentation generated by Claude can be saved as a template.
-
-```
-Claude generates slide JSON
-        ↓
-User clicks "حفظ كقالب"
-        ↓
-User fills: name, category, industry, language, visibility (Private/Public)
-        ↓
-Taqreer:
-  1. Stores JSON → templates table (style_contract column) — primary asset
-  2. Generates PNG thumbnails via html2canvas → Supabase Storage
-  3. Generates PPTX via PptxGenJS → Supabase Storage (for download)
-        ↓
-If Private → My Templates + مخصص picker only
-If Public → community Templates page
-```
 
 | Asset | Format | Stored in | Generated when |
 |---|---|---|---|
 | Style contract / slide JSON | JSON | PostgreSQL `templates.style_contract` | At save (already exists) |
 | Slide thumbnails | PNG | Supabase Storage `template-assets` | At save (html2canvas) |
 | PPTX file | .pptx | Supabase Storage `template-assets` | At save (PptxGenJS) |
-
-**The JSON is the primary asset.** It's what Claude reads when a user picks the template in مخصص. The PPTX is a download artifact. Thumbnails are for the library UI.
 
 ---
 
@@ -378,19 +351,6 @@ Community uses template → use_count increments
         ↓
 High use_count → Taqreer team can feature it on Templates hero section
 ```
-
-**What links to what:**
-
-| Created / Saved | Auto-appears in |
-|---|---|
-| Any generation | Projects, Recent Projects on dashboard |
-| Save as template | My Templates, مخصص template picker |
-| Make template public | Community Templates page, مخصص |
-| Save brand in any flow | Brand Kits, reusable across all 4 flows |
-| Export | Project version history, re-downloadable anytime |
-| Used a community template | Recently Used Templates |
-
-**Why everything is interoperable:** every project, template, and brand kit shares the same JSON-based structure. A user's deck and a template are the same data type. Switching styles is just swapping the style contract while keeping content. Mimicking is extracting the style contract from one JSON and applying it to another.
 
 ---
 
@@ -450,16 +410,16 @@ On export: PptxGenJS (PPTX) or Puppeteer (PDF) generates files
 |---|---|
 | Hosting | Hetzner CPX22 — already running |
 | Frontend | Next.js 16, RTL-first — already running |
-| Database | PostgreSQL + Prisma — already running |
+| Database | PostgreSQL + Prisma v7.8.0 — already running |
 | Cache | Redis — already running |
-| Auth | Supabase Auth — email + Google OAuth |
-| Storage | Supabase Storage buckets |
-| Background jobs | Inngest |
-| Real-time updates | Supabase Realtime — listens to `presentation_versions` for slide-by-slide rendering |
-| Error monitoring | Sentry |
-| Analytics | PostHog |
+| Auth | Supabase Auth — email + Google OAuth ✅ |
+| Storage | Supabase Storage buckets ✅ (5 buckets created) |
+| Background jobs | Inngest v4.3.0 ✅ (5 functions connected) |
+| Real-time updates | Supabase Realtime — listens to `presentation_versions` |
+| Error monitoring | Sentry — 🔜 next |
+| Analytics | PostHog — 🔜 next |
 | AI | Anthropic Claude API |
-| Payments | Stripe |
+| Payments | Stripe — Phase 4 |
 | Slide rendering (preview + thumbnails) | HTML/CSS in the browser — no server-side rendering |
 | Custom fonts | @font-face from Supabase URLs — no server installs |
 | Thumbnail capture | html2canvas — only when saving as template |
@@ -472,67 +432,35 @@ On export: PptxGenJS (PPTX) or Puppeteer (PDF) generates files
 
 ## Build Order & Progress
 
-### PHASE 1 — Foundation · 60% done
-
-**Goal:** Everything needed before a single user flow can work.
+### PHASE 1 — Foundation · 85% done
 
 #### ✅ 1.1 Infrastructure & Auth (complete)
-- Hetzner server, domain, SSL, PM2, Nginx
-- Supabase Auth — email + Google OAuth
-- All auth pages with RTL, Framer Motion, Arabic errors
-- Middleware protecting all app routes
-- User sync into PostgreSQL
-
 #### ✅ 1.2 Dashboard UI (complete)
-- Collapsible RTL sidebar, glass header
-- QuickActions, RecentProjects, MyTemplates, PlanUsage
-- Settings page with delete account flow
-- Full globals.css design system
+#### ✅ 1.3 Storage Buckets (complete — 5 buckets created)
+#### ✅ 1.4 Resend Email (complete — configured in Supabase)
+#### ✅ 1.5 Dev Branch (complete — main/dev structure, CodeRabbit configured)
+#### ✅ 1.6 Pipeline Validation Test (complete — all 5 steps passed)
+- Zod schema validates correctly ✅
+- HTML/CSS Arabic rendering works ✅
+- PPTX export with Arabic text works ✅
+- Thumbnails scale correctly with `transform-origin: top right` ✅
+- PDF via Puppeteer works ✅
 
-#### 🔜 1.3 Finish Storage & Email (next — quick)
-- Run storage setup script: `npx ts-node scripts/setup-storage.ts`
-- Configure Resend in Supabase for password reset emails
+#### ✅ 1.7 Inngest Background Jobs (complete — 5 functions registered)
+- `deck/generate.requested` — calls Claude API, validates with Zod, saves to DB
+- `brand/analyze.requested` — Claude vision extracts colors/fonts from screenshot
+- `area/redesign.requested` — Claude redesigns commented areas, saves new version
+- `deck/export.requested` — PptxGenJS or Puppeteer, uploads to Supabase, returns signed URL
+- `template/save.requested` — saves JSON + generates PPTX artifact
 
-#### 🔜 1.4 Dev Branch (⚠️ first thing next session)
-```bash
-cd ~/taqreer
-git checkout -b dev
-git push origin dev
-```
+#### 🔜 1.8 Sentry + PostHog (next)
 
-#### 🔜 1.5 Pipeline Validation Test (must pass before Phase 2)
-Build a small proof of concept that validates the entire JSON pipeline end to end. **Do not skip this.** This is the most important step in Phase 1 — proving the architecture works manually before building UI.
+**Sentry:** server errors, client errors, failed uploads, failed generation jobs, export failures.
 
-1. **Define the Zod schema** for slide JSON in `lib/schema/slide.ts` (start minimal — text, image, shape elements with the design vocabulary constraints)
-2. **Hardcode a sample slide JSON** that passes the Zod schema, with Arabic text + a custom font URL
-3. **Render it as HTML/CSS** in a Next.js test page → verify Arabic shows correctly, custom font loads via @font-face, RTL alignment works
-4. **Generate a PPTX** from the JSON via PptxGenJS → open in PowerPoint → verify Arabic text is connected, font is correct, layout matches the preview
-5. **Capture a thumbnail** via html2canvas with `transform-origin: top right` → verify it matches the live preview
-6. **Generate a PDF** via Puppeteer → verify Arabic + fonts work
-7. **Test Zod rejection** — feed it a malformed JSON, confirm it fails cleanly with a useful error message
-
-If all 7 pass, the architecture is proven. If any fail, fix that step before building anything user-facing. The word `مرحبا` rendering correctly through the entire pipeline is 70% of the battle.
-
-#### 🔜 1.6 Inngest Background Jobs
-| Function | Trigger | Output |
-|---|---|---|
-| project.create.started | User submits any flow | Project created, files attached, generation queued |
-| brand.analyze.requested | Brand screenshot uploaded | Brand kit JSON |
-| deck.generate.requested | User approves inputs | Slide JSON saved to DB, slides streamed in via Realtime |
-| deck.enhance.requested | User uploads PPTX | Existing PPTX read once, rebuilt as slide JSON |
-| area.redesign.requested | User submits area comments | Updated JSON for commented elements |
-| deck.export.requested | User clicks export | PPTX (PptxGenJS) or PDF (Puppeteer) signed URL |
-| template.save.requested | User saves as template | Thumbnails (html2canvas) + PPTX (PptxGenJS) generated and stored |
-
-Job status lifecycle: `queued → running → completed` or `queued → running → failed → retryable`
-
-#### 🔜 1.7 Sentry + PostHog
-**Sentry:** server errors, client errors, failed uploads, failed generation jobs, export failures, render failures.
-
-**PostHog events:**
+**PostHog events to track:**
 `signup_completed`, `login_completed`, `project_created`, `content_uploaded`, `brand_uploaded`, `template_browsed`, `template_selected`, `generation_started`, `generation_completed`, `preview_opened`, `area_commented`, `redesign_requested`, `regeneration_started`, `export_clicked`, `template_saved`, `payment_started`
 
-#### 🔜 1.8 Connect Dashboard to Real Data
+#### 🔜 1.9 Connect Dashboard to Real Data
 - RecentProjects — query projects table for current user
 - MyTemplates — query templates table for current user
 - PlanUsage — query subscriptions and usage_events for current user
@@ -583,7 +511,7 @@ Two CTAs:
 - `إنشاء` — generate only
 - `إنشاء وحفظ كهوية بصرية` — generate + save as brand kit
 
-On approval → build brief → trigger Inngest `deck.generate.requested` → generation screen.
+On approval → build brief → trigger Inngest `deck/generate.requested` → generation screen.
 
 **Generation Screen (`/create/generating`)**
 - All slide placeholders appear immediately as shimmer cards
@@ -606,6 +534,8 @@ The single most important component in Taqreer. A React component that takes sli
 - Used in: preview window, thumbnail panel, generation shimmer cards, template library cards
 - Used by: html2canvas to capture thumbnails when saving as template
 
+**Note:** A basic version of this already exists at `app/test-pipeline/page.tsx` — use it as the starting point.
+
 #### 2.3 Preview Window (`/preview/[projectId]`)
 
 - Slide panel on right (smaller versions of the same renderer)
@@ -613,138 +543,36 @@ The single most important component in Taqreer. A React component that takes sli
 - Action bar with redesign / export PPTX / export PDF / save as template
 - Click-and-drag area selection on the main view
 - Comment box appears with selected area highlighted
-- Submit → triggers `area.redesign.requested` → Realtime push when done
+- Submit → triggers `area/redesign.requested` → Realtime push when done
 
-#### 2.4 Area Redesign Job
+#### 2.4 Area Redesign Job — already built in Inngest
 
-```
-User submits comments
-        ↓
-For each area:
-  - Detect which JSON element IDs are inside the bounding box
-  - Capture screenshot of the area via html2canvas (vision context for Claude)
-  - Attach comment text and area ID
-        ↓
-Send to Claude (slide JSON + comments + screenshots)
-        ↓
-Claude returns updated JSON for affected elements
-        ↓
-Server saves new version to presentation_versions
-        ↓
-Supabase Realtime pushes the update to the browser
-        ↓
-Affected slide re-renders instantly
-```
-
-#### 2.5 Export
-- **PPTX:** PptxGenJS converts slide JSON → .pptx → Supabase Storage → signed URL
-- **PDF:** Puppeteer loads slide HTML pages, prints to PDF → Supabase Storage → signed URL
-- Both saved to project version history
+#### 2.5 Export — already built in Inngest
 
 ---
 
 ### PHASE 3 — Expand Flows · 0% done
 
-**Goal:** Add the other 3 flows. All reuse the same preview window, renderer, and export pipeline.
-
 #### 3.1 Enhance Flow (تحسين)
-1. User uploads existing PPTX
-2. Server reads PPTX once → converts to initial JSON via a parser library
-3. Claude rebuilds JSON — better design, better flow, same content
-4. Generation screen with Realtime updates
-5. Preview window opens
-
 #### 3.2 Mimic Flow (محاكاة)
-1. User uploads reference PPTX (the style they want)
-2. User provides their own content (upload or paste)
-3. Server extracts style contract from reference PPTX
-4. Claude applies that style contract to user content → returns JSON
-5. Preview window opens
-
 #### 3.3 Templates Page
-- Public browse page — no login required
-- Filters: Category, Language, Industry
-- Featured hero section (manually flagged by Taqreer team)
-- Template card: thumbnail, name, category, language, slide count, Preview + Use buttons
-- Preview modal: all slide thumbnails (rendered live from JSON), palette, fonts
-- Unauthenticated "Use Template" → login with `?template=template_id` → returns after auth
-- Plan gating: Free → general only. Plus/Pro → industry, bilingual, premium
-
 #### 3.4 Custom Flow (مخصص)
-1. User picks a template from the library (or one they created)
-2. Adds their content (upload or paste)
-3. Taqreer passes template style contract JSON + content to Claude
-4. Claude generates new JSON within that visual system
-5. Preview window opens
 
 ---
 
 ### PHASE 4 — Business Layer · 0% done
 
-**Goal:** Monetization, plan enforcement, and internal management tools.
-
 #### 4.1 Stripe Payments
-
-| Plan | Slide Limit | Features |
-|---|---|---|
-| Free | 10 slides | Create, preview, commenting, general templates, limited exports |
-| Plus | 60 slides | Brand kits, PDF export, more templates, larger uploads |
-| Pro | 90 slides | Advanced redesign, save templates, premium templates, priority jobs |
-
-Requirements: Stripe customer creation, checkout session, billing portal, webhook handler, subscription sync, plan limits middleware, usage events, upgrade/downgrade anytime.
-
 #### 4.2 Brand Kits (standalone)
-- Full Brand Kits management page in sidebar
-- Create, edit, delete brand kits
-- Each kit: logo, primary/secondary/bg/text colors, heading font, body font (all stored in Supabase)
-- Reusable across all 4 flows — pick at start of any flow
-
-#### 4.3 Admin Panel
-
-Custom `/admin` section inside the main Next.js app. Role-protected — only `role: admin` users can access.
-
-| Part | Tool |
-|---|---|
-| Users, templates, brand kits, jobs tables | `next-admin` (auto CRUD from Prisma) |
-| Feature flags, job monitor, front page CMS | Custom pages under `/admin` |
-
-Pages:
-- **Users** — view all, plan, usage, signup date. Upgrade/downgrade/ban/delete.
-- **Templates** — create, edit, publish, unpublish, set featured, plan gating, category/industry/language.
-- **Front page CMS** — edit hero text, featured templates, marquee logos. Toggle sections.
-- **Feature flags** — enable/disable flows, plan features, maintenance mode.
-- **Job monitor** — view running/failed Inngest jobs, retry failures, see errors.
-- **Analytics** — signups, projects created, exports, active plans.
+#### 4.3 Admin Panel (next-admin + custom pages)
 
 ---
 
 ### PHASE 5 — Ecosystem · 0% done
 
-**Goal:** Self-growing platform where users contribute templates and the community benefits.
-
 #### 5.1 Save as Template (from preview window)
-- User clicks "حفظ كقالب" in the action bar
-- Fills: name, category, industry, language
-- Chooses visibility: Private or Public
-- Taqreer:
-  1. Saves slide JSON to templates table (already in memory!)
-  2. Captures thumbnails via html2canvas → Supabase Storage
-  3. Generates PPTX via PptxGenJS → Supabase Storage
-- If Private → My Templates + مخصص picker only
-- If Public → community Templates page
-
 #### 5.2 Community Templates
-- Public templates page — all user-submitted public templates
-- Sorted by: use_count, newest, featured
-- use_count increments each time a template is used
-- Taqreer team can feature high-quality templates on the hero section
-
 #### 5.3 Template Creation (Taqreer team)
-1. Run any flow → Claude generates a beautiful deck
-2. Save as template from preview window
-3. Set category, industry, language, plan gating, featured flag
-4. Publish to public Templates page
-- No external tools needed — Claude generates all official templates
 
 ---
 
@@ -768,7 +596,9 @@ Pages:
 
 ---
 
-## Slide JSON Schema (Sketch)
+## Slide JSON Schema
+
+The full Zod schema lives in `lib/schema/slide.ts`. Here is a sample manifest:
 
 ```json
 {
@@ -805,13 +635,6 @@ Pages:
           "color": "#FFFFFF",
           "textAlign": "right",
           "direction": "rtl"
-        },
-        {
-          "id": "el_02",
-          "type": "image",
-          "role": "logo",
-          "x": 1700, "y": 80, "width": 140, "height": 60,
-          "src": "https://supabase.../logo.svg"
         }
       ]
     }
@@ -836,6 +659,7 @@ Rules:
 - Reference fonts by their declared name in the fonts object.
 - For Arabic, set direction: "rtl" and textAlign: "right".
 - Return only valid JSON matching the Taqreer schema.
+- Only use properties from the Taqreer design vocabulary (no CSS filters, no backdrop-blur, no radial gradients).
 ```
 
 **Area redesign prompt contract:**
@@ -849,7 +673,7 @@ For each area, you receive:
 - The bounding box of the area
 
 Rules:
-- Only modify the specified element IDs (or replace them with new elements within the same bounds)
+- Only modify the specified element IDs
 - Keep all other elements unchanged
 - Maintain the slide's overall style and palette
 - Return only the updated elements with their IDs
@@ -874,8 +698,6 @@ Inngest writes new slide JSON to DB → Realtime pushes to frontend
 Frontend re-renders affected slides instantly via the slide renderer component
 ```
 
-This replaces polling. Every change — initial generation, area redesign, regeneration — flows through Realtime.
-
 ---
 
 ## Export Pipeline
@@ -890,22 +712,21 @@ Slide JSON → PptxGenJS → .pptx file → Supabase Storage → signed URL
 Slide JSON → render HTML pages → Puppeteer prints to PDF → Supabase Storage → signed URL
 ```
 
-Both run as Inngest jobs. The user sees a progress indicator and gets a download link when done.
+Both run as Inngest jobs (`deck/export.requested`).
 
 ---
 
 ## Key Risks
 
-- **Visual parity (PPTX vs HTML):** the slide may look perfect in the browser but render broken in PowerPoint after PPTX export. PptxGenJS doesn't support 100% of CSS. Mitigated by the strict Design Vocabulary that constrains Claude to only use properties supported by both.
-- **JSON schema drift:** Claude may return slightly malformed JSON (renamed properties, type changes) that crashes the renderer. Mitigated by Zod validation as a hard gatekeeper between Claude and the database, with self-healing retries.
-- **Thumbnail scaling on RTL:** scaling slides with the wrong `transform-origin` pushes Arabic content out of the visible area. Mitigated by always using `transform-origin: top right` for RTL.
-- **Slide JSON schema design:** the JSON is the most important asset in Taqreer. Spend real time on the schema before building. Bad schema = pain forever.
-- **Area redesign accuracy:** Claude must update only the targeted element IDs without breaking the rest. Heavy prompt engineering required.
-- **Custom font loading edge cases:** some user-uploaded font files may have CORS or format issues. Validate uploads (only accept .woff2, .woff, .ttf, .otf). Convert to .woff2 server-side if possible.
-- **html2canvas fidelity:** thumbnails may differ slightly from the live preview, especially for complex CSS. Test with real Arabic decks early.
-- **Long AI jobs:** Inngest retries, partial progress, and recoverable failures.
-- **Storage access:** all buckets private, signed URLs only.
-- **RTL bugs:** Arabic direction, alignment, font fallback must be in the JSON schema from day one.
+- **Visual parity (PPTX vs HTML):** Mitigated by strict Design Vocabulary constraining Claude's output.
+- **JSON schema drift:** Mitigated by Zod validation as a hard gatekeeper, with self-healing retries.
+- **Thumbnail scaling on RTL:** Always use `transform-origin: top right` for RTL slides.
+- **Area redesign accuracy:** Claude must update only targeted element IDs. Heavy prompt engineering required.
+- **Custom font loading edge cases:** Validate uploads (only .woff2, .woff, .ttf, .otf). CORS must be configured on Supabase Storage.
+- **html2canvas fidelity:** Thumbnails may differ slightly from live preview for complex CSS.
+- **Long AI jobs:** Inngest retries, partial progress, recoverable failures — already configured with retries: 3.
+- **Storage access:** All buckets private, signed URLs only.
+- **RTL bugs:** Arabic direction, alignment, font fallback must be in JSON schema from day one.
 
 ---
 
@@ -913,20 +734,21 @@ Both run as Inngest jobs. The user sees a progress indicator and gets a download
 
 **Local development:**
 ```bash
-npm run dev          # runs on localhost:3000
-docker compose up -d # PostgreSQL + Redis
+# Terminal 1
+npm run dev
+
+# Terminal 2
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
 ```
 
 **Deploy to production:**
 ```bash
-# On Mac — always work on dev
 git checkout dev
 git add .
 git commit -m "feat: description"
 git push origin dev
 # Open PR dev → main on GitHub → CodeRabbit reviews → merge
 
-# SSH into server after merge
 ssh root@178.105.88.35
 cd /root/taqreer
 git pull
