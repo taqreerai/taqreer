@@ -1,6 +1,5 @@
 import { inngest } from "@/inngest/client";
 import { SlideManifestSchema } from "@/lib/schema/slide";
-import { getPostHogClient } from "@/lib/posthog-server";
 
 export const deckExport = inngest.createFunction(
   {
@@ -80,16 +79,6 @@ export const deckExport = inngest.createFunction(
         if (urlError) throw new Error(`Supabase signed URL failed: ${urlError.message}`);
         if (!data?.signedUrl) throw new Error("Supabase signed URL missing from response");
         return data.signedUrl;
-      });
-
-      await step.run("track-presentation-exported", async () => {
-        const posthog = getPostHogClient();
-        posthog.capture({
-          distinctId: userId,
-          event: "presentation_exported",
-          properties: { project_id: projectId, version_id: versionId, format: "pptx" },
-        });
-        await posthog.shutdown();
       });
 
       return { success: true, signedUrl, format: "pptx" };

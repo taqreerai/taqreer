@@ -1,6 +1,5 @@
 import { inngest } from "@/inngest/client";
 import { SlideManifestSchema } from "@/lib/schema/slide";
-import { getPostHogClient } from "@/lib/posthog-server";
 
 export const deckGenerate = inngest.createFunction(
   {
@@ -10,7 +9,7 @@ export const deckGenerate = inngest.createFunction(
     triggers: [{ event: "deck.generate.requested" }],
   },
   async ({ event, step }) => {
-    const { projectId, brief, userId } = event.data;
+    const { projectId, brief } = event.data;
 
     const validated = await step.run("generate-and-validate-slide-json", async () => {
       let prompt = `Generate slides for: ${JSON.stringify(brief)}`;
@@ -71,18 +70,6 @@ export const deckGenerate = inngest.createFunction(
           status: "completed",
         },
       });
-    });
-
-    await step.run("track-presentation-generated", async () => {
-      if (userId) {
-        const posthog = getPostHogClient();
-        posthog.capture({
-          distinctId: userId,
-          event: "presentation_generated",
-          properties: { project_id: projectId },
-        });
-        await posthog.shutdown();
-      }
     });
 
     return { success: true, projectId };

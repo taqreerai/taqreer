@@ -1,7 +1,6 @@
 "use client";
 
 import { DashboardEmptyState, DashboardWidget, DashboardWidgetHeader } from "@/components/app/DashboardWidget";
-import { analytics } from "@/lib/posthog-client";
 
 type Template = {
   id: string;
@@ -50,7 +49,6 @@ export function MyTemplates({ templates }: { templates: Template[] }) {
                   <div className="template-overlay absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                     <button
                       className="btn-gradient px-6 py-2"
-                      onClick={() => analytics.capture("template_used", { template_id: template.id, template_title: template.title })}
                       type="button"
                     >
                       استخدم

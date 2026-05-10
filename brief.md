@@ -417,7 +417,7 @@ On export: PptxGenJS (PPTX) or Puppeteer (PDF) generates files
 | Background jobs | Inngest v4.3.0 ✅ (5 functions connected) |
 | Real-time updates | Supabase Realtime — listens to `presentation_versions` |
 | Error monitoring | Sentry — 🔜 next |
-| Analytics | PostHog — 🔜 next |
+| Analytics | Not configured |
 | AI | Anthropic Claude API |
 | Payments | Stripe — Phase 4 |
 | Slide rendering (preview + thumbnails) | HTML/CSS in the browser — no server-side rendering |
@@ -453,12 +453,9 @@ On export: PptxGenJS (PPTX) or Puppeteer (PDF) generates files
 - `deck/export.requested` — PptxGenJS or Puppeteer, uploads to Supabase, returns signed URL
 - `template/save.requested` — saves JSON + generates PPTX artifact
 
-#### 🔜 1.8 Sentry + PostHog (next)
+#### 🔜 1.8 Sentry (next)
 
 **Sentry:** server errors, client errors, failed uploads, failed generation jobs, export failures.
-
-**PostHog events to track:**
-`signup_completed`, `login_completed`, `project_created`, `content_uploaded`, `brand_uploaded`, `template_browsed`, `template_selected`, `generation_started`, `generation_completed`, `preview_opened`, `area_commented`, `redesign_requested`, `regeneration_started`, `export_clicked`, `template_saved`, `payment_started`
 
 #### 🔜 1.9 Connect Dashboard to Real Data
 - RecentProjects — query projects table for current user

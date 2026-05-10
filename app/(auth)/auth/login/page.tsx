@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import { analytics } from "@/lib/posthog-client";
 
 function toArabicError(msg: string): string {
   if (/Invalid login credentials/i.test(msg))
@@ -50,14 +49,10 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
         setError(toArabicError(signInError.message));
       } else {
-        if (signInData.user) {
-          analytics.identify(signInData.user.id, { email: signInData.user.email });
-          analytics.capture("user_logged_in", { method: "email" });
-        }
         try { await fetch("/api/auth/user-sync", { method: "POST" }); } catch {}
         router.push(templateId ? `${nextUrl}?template=${templateId}` : nextUrl);
         router.refresh();
@@ -73,7 +68,6 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      analytics.capture("user_logged_in", { method: "google" });
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
