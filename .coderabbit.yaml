@@ -13,20 +13,19 @@ reviews:
     base_branches:
       - "main"
     drafts: false
-
-path_filters:
-  - path: "app/**"
-    instructions: |
-      Next.js 16 App Router, RTL-first, Arabic UI. Always use Tailwind utility classes. Use globals.css semantic classes. All app pages must use page-container class.
-  - path: "components/**"
-    instructions: |
-      RTL-first React components. Cairo font for Arabic, Poppins for English. No hardcoded colors — use design tokens from globals.css.
-  - path: "lib/schema/**"
-    instructions: |
-      Zod schemas are the single source of truth for slide JSON. Never allow properties outside the Taqreer design vocabulary. Every element must have a stable ID.
-  - path: "inngest/**"
-    instructions: |
-      All AI generation jobs. Must handle retries and failures. Never write Claude output to DB without Zod validation first.
+  path_instructions:
+    - path: "app/**"
+      instructions: |
+        Next.js 16 App Router, RTL-first, Arabic UI. Always use Tailwind utility classes — no raw CSS in inline styles. Use globals.css semantic classes. All app pages must use page-container class.
+    - path: "components/**"
+      instructions: |
+        RTL-first React components. Cairo font for Arabic, Poppins for English. No hardcoded colors — use design tokens from globals.css.
+    - path: "lib/schema/**"
+      instructions: |
+        Zod schemas are the single source of truth for slide JSON. Never allow properties outside the Taqreer design vocabulary. Every element must have a stable ID field.
+    - path: "inngest/**"
+      instructions: |
+        All AI generation jobs. Must handle retries and failures. Never write Claude output to DB without Zod validation first.
 
 chat:
   auto_reply: true
