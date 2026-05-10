@@ -33,9 +33,15 @@ export function Sidebar({
   const [dropdownPos, setDropdownPos] = useState<{
     top?: number; bottom?: number; right: number; width: number;
   } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const profileBtnRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const mounted = typeof document !== "undefined";
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setMounted(true);
+    });
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

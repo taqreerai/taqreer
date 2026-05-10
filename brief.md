@@ -15,12 +15,12 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 
 ---
 
-## Overall Progress: 35% complete
+## Overall Progress: 42% complete
 
 | Phase | Description | Status | % |
 |---|---|---|---|
-| Phase 1 | Foundation | 🔄 In progress | 85% |
-| Phase 2 | Core Loop (Create → Preview → Export) | ⏳ Not started | 0% |
+| Phase 1 | Foundation | ✅ Complete | 100% |
+| Phase 2 | Core Loop (Create → Preview → Export) | 🔄 In progress | 0% |
 | Phase 3 | Expand Flows (Enhance, Mimic, Custom) | ⏳ Not started | 0% |
 | Phase 4 | Business Layer (Stripe, Brand Kits, Admin) | ⏳ Not started | 0% |
 | Phase 5 | Ecosystem (Templates, Community, Public) | ⏳ Not started | 0% |
@@ -48,6 +48,16 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 - Prisma schema with migrations
 - Coming soon page
 - **Supabase Auth & Storage — fully complete**
+- **5 Supabase Storage buckets created** — source-files, brand-assets, generated-presentations, slide-previews, template-assets
+- **Resend configured** for password reset emails
+- **Git workflow** — main/dev branches, CodeRabbit auto-review on PRs
+- **Zod schema** for slide JSON — `lib/schema/slide.ts` complete
+- **Inngest** — 5 background job functions registered and connected (dot-format event names)
+- **Sentry** — error monitoring configured (sentry.client/server/edge.config.ts, global-error.tsx)
+- **Prisma schema** — fully migrated with all models: User, Project, Presentation, PresentationVersion, File, Comment, Job, Template, BrandKit, Folder, Subscription, UsageEvent
+- **Dashboard connected to real data** — RecentProjects, MyTemplates, PlanUsage all query DB with empty states
+- **proxy.ts** — middleware renamed and updated for Next.js 16
+- **date-fns** installed for relative time formatting
 - **5 Supabase Storage buckets created:** source-files, brand-assets, generated-presentations, slide-previews, template-assets
 - **Resend configured in Supabase** for password reset emails
 - **Git workflow set up:** main + dev branches, CodeRabbit auto-review on PRs to main
@@ -416,7 +426,7 @@ On export: PptxGenJS (PPTX) or Puppeteer (PDF) generates files
 | Storage | Supabase Storage buckets ✅ (5 buckets created) |
 | Background jobs | Inngest v4.3.0 ✅ (5 functions connected) |
 | Real-time updates | Supabase Realtime — listens to `presentation_versions` |
-| Error monitoring | Sentry — 🔜 next |
+| Error monitoring | Sentry ✅ — configured |
 | Analytics | Not configured |
 | AI | Anthropic Claude API |
 | Payments | Stripe — Phase 4 |
@@ -453,7 +463,7 @@ On export: PptxGenJS (PPTX) or Puppeteer (PDF) generates files
 - `deck/export.requested` — PptxGenJS or Puppeteer, uploads to Supabase, returns signed URL
 - `template/save.requested` — saves JSON + generates PPTX artifact
 
-#### 🔜 1.8 Sentry (next)
+#### ✅ 1.8 Sentry (integrated)
 
 **Sentry:** server errors, client errors, failed uploads, failed generation jobs, export failures.
 

@@ -48,7 +48,9 @@ export function MyTemplates({ templates }: { templates: Template[] }) {
 
                   <div className="template-overlay absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                     <button
-                      className="btn-gradient px-6 py-2"
+                      aria-disabled="true"
+                      className="btn-gradient px-6 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled
                       type="button"
                     >
                       استخدم

@@ -9,6 +9,12 @@ import { PlanUsage } from "@/components/app/PlanUsage";
 import type { User } from "@supabase/supabase-js";
 
 type Msg = { type: "success" | "error"; text: string } | null;
+type PlanUsageData = {
+  plan: string;
+  usageCount: number;
+  limit: number;
+  renewalDate: string | null;
+};
 
 function StatusMsg({ msg }: { msg: Msg }) {
   if (!msg) return null;
@@ -24,10 +30,11 @@ function StatusMsg({ msg }: { msg: Msg }) {
 }
 
 export default function SettingsPage() {
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [planUsage, setPlanUsage] = useState<PlanUsageData | null>(null);
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,7 +55,20 @@ export default function SettingsPage() {
       setName(user?.user_metadata?.full_name || user?.user_metadata?.name || "");
       setLoading(false);
     });
-  }, []);
+  }, [supabase.auth]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    fetch("/api/usage/plan")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: PlanUsageData | null) => {
+        setPlanUsage(data);
+      })
+      .catch(() => {
+        setPlanUsage(null);
+      });
+  }, [user]);
 
   const avatarUrl: string | null = user?.user_metadata?.avatar_url ?? null;
   const displayName: string =
@@ -118,7 +138,14 @@ export default function SettingsPage() {
   return (
     <div className="page-container">
       {/* Plan banner — full width at top */}
-      <PlanUsage plan="free" usageCount={0} limit={10} renewalDate={null} />
+      {planUsage ? (
+        <PlanUsage
+          plan={planUsage.plan}
+          usageCount={planUsage.usageCount}
+          limit={planUsage.limit}
+          renewalDate={planUsage.renewalDate ? new Date(planUsage.renewalDate) : null}
+        />
+      ) : null}
 
       {/* Page title */}
       <h1 className="text-2xl font-bold text-white mt-8 mb-6">الإعدادات</h1>

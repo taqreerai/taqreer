@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import Link from "next/link";
 
 type PlanUsageProps = {
   plan: string;
@@ -25,7 +26,7 @@ export function PlanUsage({ plan, usageCount, limit, renewalDate }: PlanUsagePro
 
         <div className="w-full md:w-1/2 mb-6 md:mb-0 relative z-10">
           <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-[24px] font-bold text-white">الخطة {planName}</h3>
+            <h3 className="text-[24px] font-bold text-on-surface">الخطة {planName}</h3>
             <span className="badge-purple">{planName}</span>
           </div>
           <p className="text-muted mb-4 text-sm">استخدام العروض التقديمية هذا الشهر</p>
@@ -39,7 +40,9 @@ export function PlanUsage({ plan, usageCount, limit, renewalDate }: PlanUsagePro
         </div>
 
         <div className="flex flex-col items-end space-y-3 relative z-10">
-          <button className="btn-gradient px-8 py-3" type="button">ترقية الخطة</button>
+          <Link className="btn-gradient px-8 py-3 no-underline" href="/#pricing">
+            ترقية الخطة
+          </Link>
           <span className="text-muted text-xs">
             {renewalDate ? `تاريخ التجديد: ${format(renewalDate, "d MMMM", { locale: ar })}` : "لا يوجد تاريخ تجديد"}
           </span>

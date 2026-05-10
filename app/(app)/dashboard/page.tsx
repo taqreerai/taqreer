@@ -4,6 +4,7 @@ import { MyTemplates } from "@/components/app/MyTemplates";
 import { PlanUsage } from "@/components/app/PlanUsage";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -11,7 +12,9 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  if (!user) {
+    redirect("/auth/login?next=/dashboard");
+  }
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
@@ -48,7 +51,7 @@ export default async function DashboardPage() {
     : [[], [], null, 0];
 
   return (
-    <>
+    <div className="page-container space-y-16">
       <QuickActions />
       <RecentProjects projects={projects} />
       <MyTemplates templates={templates} />
@@ -58,7 +61,7 @@ export default async function DashboardPage() {
         limit={limit}
         renewalDate={subscription?.currentPeriodEnd ?? null}
       />
-    </>
+    </div>
   );
 }
 

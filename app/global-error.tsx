@@ -16,32 +16,12 @@ export default function GlobalError({
 
   return (
     <html dir="rtl" lang="ar">
-      <body
-        style={{
-          background: "#03030D",
-          color: "#FFFFFF",
-          fontFamily: "Cairo, sans-serif",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-          gap: "16px",
-        }}
-      >
-        <h2 style={{ fontSize: "24px" }}>حدث خطأ غير متوقع</h2>
-        <p style={{ color: "#9A94A8" }}>تم إبلاغ فريقنا تلقائياً</p>
+      <body className="page-container flex min-h-screen flex-col items-center justify-center gap-4 bg-[#03030D] text-white font-cairo">
+        <h2 className="text-2xl">حدث خطأ غير متوقع</h2>
+        <p className="text-muted">تم إبلاغ فريقنا تلقائياً</p>
         <button
           onClick={reset}
-          style={{
-            background: "#370BF4",
-            color: "#FFFFFF",
-            border: "none",
-            borderRadius: "8px",
-            padding: "12px 24px",
-            cursor: "pointer",
-            fontSize: "16px",
-          }}
+          className="rounded-lg bg-[#370BF4] px-6 py-3 text-base text-white cursor-pointer"
         >
           حاول مجدداً
         </button>

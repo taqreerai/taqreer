@@ -1,13 +1,16 @@
+"use client";
+
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DashboardEmptyState, DashboardWidget, DashboardWidgetHeader } from "@/components/app/DashboardWidget";
 
 type Project = {
   id: string;
   title: string;
   type: string;
-  updatedAt: Date;
+  updatedAt: Date | string;
   thumbnail: string | null;
 };
 
@@ -21,6 +24,16 @@ const projectTypeLabels: Record<string, string> = {
 };
 
 export function RecentProjects({ projects }: { projects: Project[] }) {
+  const router = useRouter();
+
+  const handleDownload = (projectId: string) => {
+    router.push(`/api/projects/${projectId}/download`);
+  };
+
+  const handleMoreClick = (projectId: string) => {
+    router.push(`/projects?project=${projectId}`);
+  };
+
   return (
     <DashboardWidget>
       <DashboardWidgetHeader title="أحدث المشاريع" href="/projects" />
@@ -57,18 +70,28 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
                   {project.title}
                 </h4>
                 <p className="text-xs text-on-surface-variant mb-4">
-                  {formatDistanceToNow(project.updatedAt, { addSuffix: true, locale: ar })}
+                  {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true, locale: ar })}
                 </p>
                 <div className="flex items-center justify-between border-t border-outline-variant/30 pt-3">
                   <div className="flex space-x-reverse space-x-2">
-                    <button className="text-on-surface-variant hover:text-primary transition-colors" type="button">
+                    <button
+                      aria-label="Download project"
+                      className="text-on-surface-variant hover:text-primary transition-colors"
+                      onClick={() => handleDownload(project.id)}
+                      type="button"
+                    >
                       <span className="material-symbols-outlined text-lg">download</span>
                     </button>
                     <Link className="text-on-surface-variant hover:text-primary transition-colors" href={`/preview/${project.id}`}>
                       <span className="material-symbols-outlined text-lg">edit</span>
                     </Link>
                   </div>
-                  <button className="text-on-surface-variant hover:text-on-surface transition-colors" type="button">
+                  <button
+                    aria-label="Open more actions"
+                    className="text-on-surface-variant hover:text-on-surface transition-colors"
+                    onClick={() => handleMoreClick(project.id)}
+                    type="button"
+                  >
                     <span className="material-symbols-outlined text-lg">more_vert</span>
                   </button>
                 </div>
