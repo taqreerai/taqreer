@@ -8,11 +8,25 @@ const sidebarStorageKey = "taqreer_sidebar_collapsed";
 const sidebarStorageEvent = "taqreer_sidebar_collapsed_changed";
 
 function getSidebarSnapshot(initialIsCollapsed: boolean) {
-  const savedState = localStorage.getItem(sidebarStorageKey);
-  if (savedState === null) return initialIsCollapsed;
-  if (savedState === "true") return true;
-  if (savedState === "false") return false;
-  return initialIsCollapsed;
+  try {
+    return parseSidebarState(
+      localStorage.getItem(sidebarStorageKey),
+      initialIsCollapsed
+    );
+  } catch {
+    const cookieValue = document.cookie
+      .split("; ")
+      .find((cookie) => cookie.startsWith(`${sidebarStorageKey}=`))
+      ?.split("=")[1];
+
+    return parseSidebarState(cookieValue, initialIsCollapsed);
+  }
+}
+
+function parseSidebarState(value: string | null | undefined, fallback: boolean) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
 }
 
 function subscribeToSidebarChanges(onStoreChange: () => void) {
@@ -26,7 +40,11 @@ function subscribeToSidebarChanges(onStoreChange: () => void) {
 }
 
 function setSidebarCollapsed(isCollapsed: boolean) {
-  localStorage.setItem(sidebarStorageKey, JSON.stringify(isCollapsed));
+  try {
+    localStorage.setItem(sidebarStorageKey, JSON.stringify(isCollapsed));
+  } catch {
+    // Cookie fallback below keeps the preference available when storage is blocked.
+  }
   document.cookie = `${sidebarStorageKey}=${isCollapsed}; path=/; max-age=31536000; samesite=lax`;
   window.dispatchEvent(new Event(sidebarStorageEvent));
 }

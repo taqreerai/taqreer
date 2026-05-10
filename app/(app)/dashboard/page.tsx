@@ -17,39 +17,55 @@ export default async function DashboardPage() {
     redirect("/auth/login?next=/dashboard");
   }
 
-  const dbUser = await prisma.user.findUnique({
+  const existingUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
+    select: { id: true },
+  });
+  const dbUser = await prisma.user.upsert({
+    where: { supabaseUserId: user.id },
+    update: {},
+    create: {
+      supabaseUserId: user.id,
+      email: user.email ?? `${user.id}@supabase.local`,
+      name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+      image: user.user_metadata?.avatar_url ?? null,
+      plan: "free",
+    },
   });
 
+  if (!existingUser) {
+    console.info("Created missing Prisma user for authenticated Supabase user", {
+      supabaseUserId: user.id,
+    });
+  }
+
   const planLimits = { free: 10, plus: 60, pro: 90 };
-  const plan = dbUser && isKnownPlan(dbUser.plan) ? dbUser.plan : "free";
+  const plan = isKnownPlan(dbUser.plan) ? dbUser.plan : "free";
   const limit = planLimits[plan];
   const startOfMonth = getStartOfMonthUTC();
 
-  const [projects, templates, subscription, usageCount] = dbUser
-    ? await Promise.all([
-        prisma.project.findMany({
-          where: { userId: dbUser.id },
-          orderBy: { updatedAt: "desc" },
-          take: 6,
-        }),
-        prisma.template.findMany({
-          where: { ownerId: dbUser.id },
-          orderBy: { createdAt: "desc" },
-          take: 6,
-        }),
-        prisma.subscription.findFirst({
-          where: { userId: dbUser.id },
-        }),
-        prisma.usageEvent.count({
-          where: {
-            userId: dbUser.id,
-            eventType: "presentation_generated",
-            createdAt: { gte: startOfMonth },
-          },
-        }),
-      ])
-    : [[], [], null, 0];
+  const [projects, templates, subscription, usageCount] = await Promise.all([
+    prisma.project.findMany({
+      where: { userId: dbUser.id },
+      orderBy: { updatedAt: "desc" },
+      take: 6,
+    }),
+    prisma.template.findMany({
+      where: { ownerId: dbUser.id },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+    }),
+    prisma.subscription.findFirst({
+      where: { userId: dbUser.id },
+    }),
+    prisma.usageEvent.count({
+      where: {
+        userId: dbUser.id,
+        eventType: "presentation_generated",
+        createdAt: { gte: startOfMonth },
+      },
+    }),
+  ]);
 
   return (
     <div className="page-container space-y-16">
