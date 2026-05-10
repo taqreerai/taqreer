@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { DashboardShell } from "@/components/app/DashboardShell";
 import { createClient } from "@/lib/supabase/server";
 
@@ -21,5 +22,8 @@ export default async function AppLayout({
     redirect("/auth/login?next=/dashboard");
   }
 
-  return <DashboardShell>{children}</DashboardShell>;
+  const cookieStore = await cookies();
+  const initialSidebarCollapsed = cookieStore.get("taqreer_sidebar_collapsed")?.value === "true";
+
+  return <DashboardShell initialIsCollapsed={initialSidebarCollapsed}>{children}</DashboardShell>;
 }

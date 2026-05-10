@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { PlanUsage } from "@/components/app/PlanUsage";
-import posthog from "posthog-js";
+import { analytics } from "@/lib/posthog-client";
 import type { User } from "@supabase/supabase-js";
 
 type Msg = { type: "success" | "error"; text: string } | null;
@@ -70,7 +70,7 @@ export default function SettingsPage() {
     if (error) {
       setProfileMsg({ type: "error", text: "حدث خطأ أثناء الحفظ" });
     } else {
-      posthog.capture("profile_updated");
+      analytics.capture("profile_updated");
       try { await fetch("/api/auth/user-sync", { method: "POST" }); } catch {}
       setProfileMsg({ type: "success", text: "تم حفظ التغييرات بنجاح" });
     }
@@ -87,7 +87,7 @@ export default function SettingsPage() {
     if (error) {
       setPwMsg({ type: "error", text: "حدث خطأ. يرجى المحاولة مرة أخرى" });
     } else {
-      posthog.capture("password_changed");
+      analytics.capture("password_changed");
       setPwMsg({ type: "success", text: "تم تغيير كلمة المرور بنجاح" });
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
     }
@@ -99,8 +99,8 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/auth/delete-account", { method: "POST" });
       if (res.ok) {
-        posthog.capture("account_deleted");
-        posthog.reset();
+        analytics.capture("account_deleted");
+        analytics.reset();
         router.push("/auth/login?deleted=true");
       } else {
         setDeleteLoading(false);
@@ -123,7 +123,7 @@ export default function SettingsPage() {
   return (
     <div className="page-container">
       {/* Plan banner — full width at top */}
-      <PlanUsage />
+      <PlanUsage plan="free" usageCount={0} limit={10} renewalDate={null} />
 
       {/* Page title */}
       <h1 className="text-2xl font-bold text-white mt-8 mb-6">الإعدادات</h1>

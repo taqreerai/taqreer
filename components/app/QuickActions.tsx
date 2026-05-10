@@ -1,6 +1,6 @@
 "use client";
 
-import posthog from "posthog-js";
+import { analytics } from "@/lib/posthog-client";
 
 const cards = [
   {
@@ -37,7 +37,7 @@ export function QuickActions() {
           <a
             key={card.path}
             href={card.path}
-            onClick={() => posthog.capture("quick_action_clicked", { action: card.path.replace("/", ""), title: card.title })}
+            onClick={() => analytics.capture("quick_action_clicked", { action: card.path.replace("/", ""), title: card.title })}
             className="plan-banner p-6 flex flex-col gap-4 cursor-pointer hover:scale-[1.02] transition-transform duration-200 relative overflow-hidden no-underline"
             dir="rtl"
           >

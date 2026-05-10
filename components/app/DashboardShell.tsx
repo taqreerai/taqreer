@@ -1,43 +1,51 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { Sidebar } from "@/components/app/Sidebar";
 import { Header } from "@/components/app/Header";
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
+const sidebarStorageKey = "taqreer_sidebar_collapsed";
+const sidebarStorageEvent = "taqreer_sidebar_collapsed_changed";
 
-  useEffect(() => {
-    const savedState = localStorage.getItem("taqreer_sidebar_collapsed");
-    if (savedState !== null) {
-      setIsCollapsed(JSON.parse(savedState));
-    }
-    setMounted(true);
-  }, []);
+function getSidebarSnapshot(initialIsCollapsed: boolean) {
+  const savedState = localStorage.getItem(sidebarStorageKey);
+  return savedState !== null ? JSON.parse(savedState) : initialIsCollapsed;
+}
+
+function subscribeToSidebarChanges(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(sidebarStorageEvent, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(sidebarStorageEvent, onStoreChange);
+  };
+}
+
+function setSidebarCollapsed(isCollapsed: boolean) {
+  localStorage.setItem(sidebarStorageKey, JSON.stringify(isCollapsed));
+  document.cookie = `${sidebarStorageKey}=${isCollapsed}; path=/; max-age=31536000; samesite=lax`;
+  window.dispatchEvent(new Event(sidebarStorageEvent));
+}
+
+export function DashboardShell({
+  children,
+  initialIsCollapsed,
+}: {
+  children: React.ReactNode;
+  initialIsCollapsed: boolean;
+}) {
+  const isCollapsed = useSyncExternalStore(
+    subscribeToSidebarChanges,
+    () => getSidebarSnapshot(initialIsCollapsed),
+    () => initialIsCollapsed
+  );
 
   const toggleSidebar = () => {
-    const newState = !isCollapsed;
-    setIsCollapsed(newState);
-    localStorage.setItem("taqreer_sidebar_collapsed", JSON.stringify(newState));
+    setSidebarCollapsed(!isCollapsed);
   };
 
   const sidebarWidth = isCollapsed ? 80 : 260;
-
-  if (!mounted) {
-    return (
-      <div className="dashboard-bg min-h-screen relative">
-        <Sidebar isCollapsed={false} toggleSidebar={toggleSidebar} />
-        <main
-          className="min-h-screen text-on-background"
-          style={{ marginRight: "260px", marginLeft: 0 }}
-        >
-          <Header isCollapsed={false} />
-          <div className="pt-28 px-8 pb-8 space-y-16">{children}</div>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="dashboard-bg min-h-screen relative">
