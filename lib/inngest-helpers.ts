@@ -8,8 +8,9 @@ type InngestEvent = Parameters<typeof inngest.send>[0];
  * status to "queued"; if the send fails and there's no retry, the row sits in
  * "queued" forever.
  *
- * Retries 4 times with exponential backoff (0.2s, 0.5s, 1.5s, 4s). Throws on
- * final failure so the calling route can return 500.
+ * Up to 4 attempts total with 3 delays in between (~200ms, ~500ms, ~1.25s)
+ * plus ~0–100ms jitter on each. ~2 seconds of total wait before throwing
+ * on final failure so the calling route can return 500.
  */
 export async function sendInngestEventWithRetry(
   event: InngestEvent,
