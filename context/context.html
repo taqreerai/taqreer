@@ -1514,9 +1514,12 @@ inngest/
                     <li><strong>Dashboard</strong> — real DB-backed RecentProjects, MyTemplates, PlanUsage (empty states OK).</li>
                     <li><strong>Create wizard (Flow 1)</strong> — 4 screens: content → brand → summary → generating. Wired to <code>POST /api/projects</code>.</li>
                     <li><strong>Enhance wizard (Flow 2)</strong> — upload at <code>/enhance</code>, review at <code>/enhance/review</code>. <em>Review page doesn't yet display Claude's extracted theme — Phase 3.1 work.</em></li>
-                    <li><strong>Claude pipeline</strong> — <code>deck.generate.requested</code> Inngest function calls Claude Opus 4.7 with adaptive thinking, system-prompt cache, self-healing retry. Generates valid Zod-passing slide JSON, writes to <code>PresentationVersion.slideJson</code>. ~75s for 5 slides.</li>
-                    <li><strong>Slide renderer</strong> — minimal client component at <code>components/slides/SlideRenderer.tsx</code> renders text, image, and shape elements at 1920×1080 with RTL <code>transform-origin: top right</code>.</li>
+                    <li><strong>Claude pipeline</strong> — <code>deck.generate.requested</code> Inngest function calls Claude Opus 4.7 with adaptive thinking, system-prompt cache, self-healing retry. Font-by-script + no-gradient rules baked into the prompt. Generates valid Zod-passing slide JSON, writes to <code>PresentationVersion.slideJson</code>. ~75s for 5 slides.</li>
+                    <li><strong>Slide renderer</strong> — client component at <code>components/slides/SlideRenderer.tsx</code> renders text, image, and shape elements at 1920×1080 with RTL <code>transform-origin: top right</code>.</li>
                     <li><strong>Preview route</strong> — <code>/preview/[projectId]</code> loads the latest completed version, links Google Fonts CSS from the manifest, stacks slides at 50% scale.</li>
+                    <li><strong>Preview action bar</strong> — sticky RTL bar with <code>أعد التصميم</code> (POST <code>/api/projects/[id]/regenerate</code> — creates a new version), <code>تصدير PPTX</code> (POST <code>/api/projects/[id]/export</code> → polls <code>/export/[jobId]</code> → auto-downloads signed URL), and <code>حفظ كقالب</code> (POST <code>/api/projects/[id]/save-as-template</code>). PDF tagged <em>قريباً</em>.</li>
+                    <li><strong>PPTX export</strong> — <code>deck-export</code> Inngest function converts slide JSON → .pptx via PptxGenJS, uploads to Supabase Storage, returns a signed URL. Correct pixel→inch scaling (10″ / 1920 × 72), font sizes derived from canvas px, gradient backgrounds approximated as solid + half-transparent overlay (matches well now that the system prompt avoids gradients altogether).</li>
+                    <li><strong>Reliable event dispatch</strong> — every API route that fires an Inngest event after a DB commit uses <code>sendInngestEventWithRetry</code> from <code>lib/inngest-helpers.ts</code> (4 attempts, exponential backoff) and reverts row status to <code>failed</code> on final failure. No more orphaned "queued" projects/jobs.</li>
                 </ul>
 
                 <h3>Not working / not built yet</h3>
@@ -1524,9 +1527,11 @@ inngest/
                     <li>Claude doesn't include the brand logo in generated decks (storageUrl passed isn't absolute; no logo instruction in system prompt). See spawned task <em>"Make Claude include the brand logo in decks"</em>.</li>
                     <li>Enhance review page shows defaults rather than Claude-extracted palette/fonts/logo/structure — needs a <code>brand.analyze.requested</code> or <code>theme.extract.requested</code> job called between upload and review.</li>
                     <li>Create summary outline is hardcoded — needs an <code>outline.generate.requested</code> call to populate from content.</li>
-                    <li>Preview has no action bar (regenerate / export / save-as-template), no slide-panel side navigation, no area-comment overlay.</li>
+                    <li>Preview window has no slide-panel side navigation and no area-comment overlay yet (action bar is done).</li>
+                    <li>PDF export — UI shows <em>قريباً</em>; <code>deck-export.ts</code> throws on <code>format === "pdf"</code>. Needs a Puppeteer (or sharp) path to render HTML→PDF.</li>
                     <li>Mimic flow (<code>/mimic/*</code>) and Build-from-Template flow (<code>/templates/[id]/content</code>) are unbuilt.</li>
-                    <li>Other Inngest functions (<code>brand-analyze</code>, <code>area-redesign</code>, <code>deck-export</code>, <code>template-save</code>) still use the legacy hand-rolled <code>fetch</code> against the Claude API with <code>claude-opus-4-5</code> — they need the same SDK rewrite that <code>deck-generate</code> got today.</li>
+                    <li>Other Inngest functions (<code>brand-analyze</code>, <code>area-redesign</code>) still use the legacy hand-rolled <code>fetch</code> against the Claude API with <code>claude-opus-4-5</code> — they need the same SDK rewrite that <code>deck-generate</code> got. <code>deck-export</code> and <code>template-save</code> now write back to <code>Job.outputJson</code> so the client can poll status.</li>
+                    <li>Style guidelines drift on the new components (<code>PreviewActionBar</code>, <code>/preview/[projectId]</code>) — they use inline-styled hex colors instead of the design tokens from <code>globals.css</code>. Refactor pending; see "Coding Rules" below.</li>
                 </ul>
 
                 <h3>Lessons learned — do not repeat</h3>
@@ -1563,7 +1568,101 @@ inngest/
 
                     <div class="card">
                         <h4>Inngest function updates v1 (don't create v2)</h4>
-                        <p><code>POST /api/projects</code> creates a v1 <code>PresentationVersion</code> with status <code>queued</code>. The original <code>deck-generate</code> handler created a <em>new</em> v2 with status <code>completed</code>, leaving v1 stuck at <code>queued</code> forever. The rewrite <strong>updates</strong> the v1 row using <code>versionId</code> from the event payload.</p>
+                        <p><code>POST /api/projects</code> creates a v1 <code>PresentationVersion</code> with status <code>queued</code>. The original <code>deck-generate</code> handler created a <em>new</em> v2 with status <code>completed</code>, leaving v1 stuck at <code>queued</code> forever. The rewrite <strong>updates</strong> the v1 row using <code>versionId</code> from the event payload. (The new <code>/regenerate</code> route is the correct place to <em>create</em> v_n+1 and fire generation against it.)</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>PPTX coordinates: <code>px × (SLIDE_W_IN / CANVAS_W) × 72</code></h4>
+                        <p>The CSS-px→pt ratio at 96 DPI is 0.75, but our 1920px canvas is scaled to a 10″ slide — the right factor for font size and positioning is <code>(10/1920) × 72 = 0.375</code>. Using 0.75 doubled every glyph and made stat numbers wrap inside their cards. Also: pick <code>LAYOUT_16x9</code> (10×5.625″) so the inch-constants match what PptxGenJS expects.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Pick the slide font by script, not role</h4>
+                        <p>The earlier rule ("headlines use heading font, body uses body font") tagged Arabic <code>caption</code>/<code>label</code> elements with Poppins (the body font). On any machine without Cairo installed, PowerPoint fell back to a Latin font and the Arabic letters visibly <em>disconnected</em>. The new rule: <strong>pick by script.</strong> Arabic content → Cairo, Latin → Poppins. Role drives weight/size only.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Send-after-commit is not atomic</h4>
+                        <p>Routes that fire Inngest events after a Prisma transaction (<code>/api/projects</code>, <code>/retry</code>, <code>/regenerate</code>, <code>/export</code>, <code>/save-as-template</code>) can leak orphaned "queued" rows if the send fails. <strong>Always</strong> wrap with <code>sendInngestEventWithRetry</code> (in <code>lib/inngest-helpers.ts</code>) and on final failure revert Project/Version/Job statuses to <code>failed</code> so the UI surfaces a clear error instead of an infinite spinner.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Ban gradients in slide JSON</h4>
+                        <p>PptxGenJS doesn't expose multi-stop linear gradients on slide backgrounds or shape fills. The closest workaround is a solid color + half-transparent overlay rectangle, which is a mediocre approximation. The system prompt now forbids <code>{type: "gradient", ...}</code> in <code>slide.background</code> and <code>shape.fill</code> entirely. For two-color effects, Claude paints a full-canvas rect in one color and overlays a second shape at lower opacity — clean to export. Schema still accepts gradients (so old decks render); the generator just doesn't emit them.</p>
+                    </div>
+                </div>
+
+                <h3>Coding Rules (from <code>globals.css</code>)</h3>
+                <p>The top comment of <code>app/globals.css</code> is the canonical reference for the design system. The rules below are <strong>not optional</strong> — CodeRabbit will flag violations.</p>
+                <div class="cards">
+                    <div class="card">
+                        <h4>Token-driven, not hex-driven</h4>
+                        <p>Build new UI by composing semantic classes — <strong>never hardcode hex values or <code>rgba()</code></strong> in TSX. Token layers (bottom→top): brand palette (<code>--tq-blue</code>, <code>--tq-magenta</code>, <code>--tq-violet</code>, <code>--tq-lavender</code>), surfaces (<code>--tq-surface-*</code>, <code>--tq-bg</code>), text (<code>--tq-text-*</code>), borders (<code>--tq-border-*</code>), gradients (<code>--tq-gradient-*</code>), shadows (<code>--tq-shadow-*</code>), radii (<code>--tq-radius-*</code>), glass system (<code>--glass-*</code>).</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Class catalog (must use, not redefine)</h4>
+                        <p><strong>Cards:</strong> <code>.glass-card</code>, <code>.glass-empty-state</code>, <code>.glass-card-danger</code>.
+                        <strong>Overlays:</strong> <code>.glass-dropdown</code>, <code>.glass-modal</code>.
+                        <strong>Buttons:</strong> <code>.btn-gradient</code> (primary), <code>.btn-outline-dark</code> (secondary), <code>.btn-danger</code>.
+                        <strong>Nav:</strong> <code>.nav-item</code>, <code>.nav-active</code>, <code>.dropdown-item</code>.
+                        <strong>Text:</strong> <code>text-white</code> (Tailwind utility), <code>.text-muted</code>.
+                        <strong>Forms:</strong> <code>.input-dark</code>, <code>.input-search</code>, <code>.status-success</code>, <code>.status-error</code>.
+                        <strong>Avatars:</strong> <code>.tq-avatar-ring</code>, <code>.tq-avatar-fallback</code>.
+                        <strong>Misc:</strong> <code>.tq-thumbnail</code>, <code>.tq-card-divider</code>, <code>.badge-purple</code>, <code>.plan-banner</code>, <code>.progress-track</code>/<code>.progress-bar</code>, <code>.divider-dark</code>, <code>.page-container</code>.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Glass system is runtime-tunable</h4>
+                        <p>The glass card opacity/blur/saturation are CSS variables (<code>--glass-opacity</code>, <code>--glass-blur</code>, <code>--glass-border-opacity</code>, <code>--glass-saturation</code>) initialized by an inline <code>&lt;script&gt;</code> in <code>app/layout.tsx</code> before paint, and switchable live from <strong>Settings → مظهر التطبيق</strong>. <code>.glass-dropdown</code> and <code>.glass-modal</code> are intentionally <strong>not</strong> preset-responsive.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Page chrome</h4>
+                        <p>All authenticated app pages must use the <code>page-container</code> class on the root element. Always use Tailwind utility classes; reach for <code>globals.css</code> semantic classes only when Tailwind can't express it. Raw CSS in inline styles is a smell — flag it.</p>
+                    </div>
+                </div>
+
+                <h3>Code review — CodeRabbit</h3>
+                <p>We use <strong>CodeRabbit</strong> for AI-driven code review of the dev branch before merging into main. Reviews catch the kinds of issues a human reviewer would catch: race conditions, missing defensive checks, leaks, design-system drift, HTML correctness, etc.</p>
+
+                <div class="cards">
+                    <div class="card">
+                        <h4>Installation (Windows + WSL)</h4>
+                        <p>Native Windows is unsupported by the installer. Install in WSL Ubuntu:</p>
+                        <pre><code># inside WSL Ubuntu
+apt-get install -y unzip                  # one-time dependency
+curl -fsSL https://cli.coderabbit.ai/install.sh | sh
+sudo ln -sf /root/.local/bin/coderabbit /usr/local/bin/coderabbit   # so PATH works from PowerShell</code></pre>
+                        <p>Plus the Claude Code plugin:</p>
+                        <pre><code>claude plugin marketplace add anthropics/claude-plugins-official
+claude plugin install coderabbit@claude-plugins-official</code></pre>
+                    </div>
+
+                    <div class="card">
+                        <h4>Authentication (one-time)</h4>
+                        <p>Must be run from a real interactive terminal, not from inside Claude Code:</p>
+                        <pre><code>wsl coderabbit auth login</code></pre>
+                        <p>Opens a browser to complete OAuth. Token persists in WSL after that.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Running a review</h4>
+                        <p>From <code>D:\taqreer</code> in PowerShell (the WSL command inherits the cwd as <code>/mnt/d/taqreer</code>):</p>
+                        <pre><code># Compare current branch (dev) against origin/main — what would be in a PR
+wsl coderabbit review --base origin/main
+
+# Only uncommitted changes
+wsl coderabbit review --type uncommitted
+
+# Structured JSON output for agent workflows
+wsl coderabbit review --base origin/main --agent</code></pre>
+                        <p>Reviews are cached server-side per diff hash; re-running the same diff returns "no findings" because the prior findings are considered shown.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>When to run it</h4>
+                        <p>Before merging <code>dev</code> → <code>main</code>. Also useful after any batch of meaningful changes (a feature branch, a refactor pass). The 2026-05-11 review on <code>dev</code> vs <code>origin/main</code> surfaced 20 findings — most actionable, a few cosmetic. Fix the reliability and bounds issues first; style-guideline violations (missing <code>page-container</code>, inline styles) can be a separate refactor pass but should not pile up.</p>
                     </div>
                 </div>
 
