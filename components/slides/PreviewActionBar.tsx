@@ -57,6 +57,8 @@ export function PreviewActionBar({
   const [templateTitle, setTemplateTitle] = useState(projectTitle);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
+  const pollAttemptsRef = useRef(0);
+  const MAX_POLL_ATTEMPTS = 60; // ~2 minutes at 2s intervals
 
   useEffect(() => () => {
     if (pollRef.current !== null) window.clearInterval(pollRef.current);
@@ -107,10 +109,21 @@ export function PreviewActionBar({
     }
   };
 
-  // Poll for export completion
+  // Poll for export completion (bounded — gives up after MAX_POLL_ATTEMPTS).
   useEffect(() => {
     if (!exportJobId) return;
+    pollAttemptsRef.current = 0;
     const poll = async () => {
+      pollAttemptsRef.current += 1;
+      if (pollAttemptsRef.current > MAX_POLL_ATTEMPTS) {
+        setExportPptx({
+          ...exportPptx,
+          status: "error",
+          message: "انتهت مهلة التصدير — حاول مرة أخرى",
+        });
+        setExportJobId(null);
+        return;
+      }
       try {
         const response = await fetch(`/api/projects/${projectId}/export/${exportJobId}`);
         if (!response.ok) return;
@@ -132,7 +145,7 @@ export function PreviewActionBar({
           setExportJobId(null);
         }
       } catch {
-        // network blip; keep polling
+        // network blip; keep polling (counts toward MAX_POLL_ATTEMPTS).
       }
     };
     void poll();

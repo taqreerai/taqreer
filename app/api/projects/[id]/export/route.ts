@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { inngest } from "@/inngest/client";
+import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -75,16 +75,29 @@ export async function POST(
     },
   });
 
-  await inngest.send({
-    name: "deck.export.requested",
-    data: {
-      projectId: project.id,
-      versionId: version.id,
-      jobId: job.id,
-      userId: dbUser.id,
-      format,
-    },
-  });
+  try {
+    await sendInngestEventWithRetry({
+      name: "deck.export.requested",
+      data: {
+        projectId: project.id,
+        versionId: version.id,
+        jobId: job.id,
+        userId: dbUser.id,
+        format,
+      },
+    });
+  } catch (error) {
+    await prisma.job
+      .update({
+        where: { id: job.id },
+        data: { status: "failed", outputJson: toJson({ error: String(error) }) },
+      })
+      .catch(() => undefined);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to dispatch export" },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ jobId: job.id });
 }

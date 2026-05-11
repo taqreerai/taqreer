@@ -147,6 +147,10 @@ export default function CreateBrandPage() {
   const [bodyFamily, setBodyFamily] = useState("Poppins");
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
+  const fontResourcesRef = useRef<{
+    heading: { style: HTMLStyleElement; url: string } | null;
+    body: { style: HTMLStyleElement; url: string } | null;
+  }>({ heading: null, body: null });
   const [slideSize, setSlideSize] = useState<"16:9" | "9:16">("16:9");
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState(8);
@@ -177,15 +181,39 @@ export default function CreateBrandPage() {
   }, [logo]);
 
   const injectFont = (file: File, target: "heading" | "body") => {
+    // Replace any previously injected <style> + revoke its object URL so we
+    // don't leak DOM nodes or blob URLs if the user re-uploads.
+    const previous = fontResourcesRef.current[target];
+    if (previous) {
+      previous.style.remove();
+      URL.revokeObjectURL(previous.url);
+    }
+
     const url = URL.createObjectURL(file);
     const family = `Taqreer-${target}-${crypto.randomUUID()}`;
     const style = document.createElement("style");
     style.textContent = `@font-face { font-family: "${family}"; src: url("${url}"); }`;
     document.head.appendChild(style);
+    fontResourcesRef.current[target] = { style, url };
 
     if (target === "heading") setHeadingFamily(family);
     else setBodyFamily(family);
   };
+
+  // Final cleanup on unmount (e.g. user navigates away).
+  useEffect(() => {
+    return () => {
+      const resources = fontResourcesRef.current;
+      for (const target of ["heading", "body"] as const) {
+        const entry = resources[target];
+        if (entry) {
+          entry.style.remove();
+          URL.revokeObjectURL(entry.url);
+          resources[target] = null;
+        }
+      }
+    };
+  }, []);
 
   const handleNext = async () => {
     setError("");

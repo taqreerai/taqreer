@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { inngest } from "@/inngest/client";
+import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -86,16 +86,32 @@ export async function POST(
     return { newVersion, newJob };
   });
 
-  await inngest.send({
-    name: "deck.generate.requested",
-    data: {
-      ...eventPayload,
-      projectId: project.id,
-      presentationId: project.presentation.id,
-      versionId: result.newVersion.id,
-      jobId: result.newJob.id,
-    },
-  });
+  try {
+    await sendInngestEventWithRetry({
+      name: "deck.generate.requested",
+      data: {
+        ...eventPayload,
+        projectId: project.id,
+        presentationId: project.presentation.id,
+        versionId: result.newVersion.id,
+        jobId: result.newJob.id,
+      },
+    });
+  } catch (error) {
+    await prisma.project
+      .update({ where: { id: project.id }, data: { status: "failed" } })
+      .catch(() => undefined);
+    await prisma.presentationVersion
+      .update({ where: { id: result.newVersion.id }, data: { status: "failed" } })
+      .catch(() => undefined);
+    await prisma.job
+      .update({ where: { id: result.newJob.id }, data: { status: "failed" } })
+      .catch(() => undefined);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to dispatch regenerate" },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({
     ok: true,

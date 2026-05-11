@@ -8,3 +8,5 @@ tsconfig.tsbuildinfo
 test-output/
 files/
 *.zip
+.claude/
+slide-debug.json

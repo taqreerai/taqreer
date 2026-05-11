@@ -20,7 +20,8 @@ export async function POST(request: Request) {
     }
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!serviceRoleKey || !supabaseUrl) {
       return NextResponse.json({ error: "Storage service is not configured" }, { status: 500 });
     }
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createSupabaseAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabaseUrl,
       serviceRoleKey,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );

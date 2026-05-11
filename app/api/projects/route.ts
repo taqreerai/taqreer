@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { inngest } from "@/inngest/client";
+import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -92,23 +92,26 @@ export async function POST(request: Request) {
       brief,
     };
 
-    const dbUser = await prisma.user.upsert({
-      where: { supabaseUserId: user.id },
-      update: {
-        email: user.email ?? `${user.id}@supabase.local`,
-        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-        image: user.user_metadata?.avatar_url ?? null,
-      },
-      create: {
-        supabaseUserId: user.id,
-        email: user.email ?? `${user.id}@supabase.local`,
-        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-        image: user.user_metadata?.avatar_url ?? null,
-        plan: "free",
-      },
-    });
-
     const result = await prisma.$transaction(async (tx) => {
+      // Upsert is inside the tx so a tx failure rolls back the user row too;
+      // also lets concurrent first-time-user requests resolve cleanly via the
+      // unique constraint on supabaseUserId.
+      const dbUser = await tx.user.upsert({
+        where: { supabaseUserId: user.id },
+        update: {
+          email: user.email ?? `${user.id}@supabase.local`,
+          name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+          image: user.user_metadata?.avatar_url ?? null,
+        },
+        create: {
+          supabaseUserId: user.id,
+          email: user.email ?? `${user.id}@supabase.local`,
+          name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+          image: user.user_metadata?.avatar_url ?? null,
+          plan: "free",
+        },
+      });
+
       const brandKit = payload.saveBrandKit
         ? await tx.brandKit.create({
             data: {
@@ -186,16 +189,34 @@ export async function POST(request: Request) {
       return { project, presentation, version, job };
     });
 
-    await inngest.send({
-      name: "deck.generate.requested",
-      data: {
-        projectId: result.project.id,
-        presentationId: result.presentation.id,
-        versionId: result.version.id,
-        jobId: result.job.id,
-        ...eventPayload,
-      },
-    });
+    try {
+      await sendInngestEventWithRetry({
+        name: "deck.generate.requested",
+        data: {
+          projectId: result.project.id,
+          presentationId: result.presentation.id,
+          versionId: result.version.id,
+          jobId: result.job.id,
+          ...eventPayload,
+        },
+      });
+    } catch (error) {
+      // Inngest unreachable after retries — mark the rows so the user sees a
+      // failed state instead of an indefinite "queued".
+      await prisma.project
+        .update({ where: { id: result.project.id }, data: { status: "failed" } })
+        .catch(() => undefined);
+      await prisma.presentationVersion
+        .update({ where: { id: result.version.id }, data: { status: "failed" } })
+        .catch(() => undefined);
+      await prisma.job
+        .update({
+          where: { id: result.job.id },
+          data: { status: "failed", outputJson: toJson({ error: String(error) }) },
+        })
+        .catch(() => undefined);
+      throw error;
+    }
 
     return NextResponse.json({
       projectId: result.project.id,

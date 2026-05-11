@@ -48,11 +48,22 @@ export const deckExport = inngest.createFunction(
         const PptxGenJS = (await import("pptxgenjs")).default;
         const manifest = SlideManifestSchema.parse(slideJson);
         const pptx = new PptxGenJS();
-        pptx.layout = "LAYOUT_WIDE";
 
-        const SLIDE_W_IN = 10, SLIDE_H_IN = 5.63, CANVAS_W = 1920, CANVAS_H = 1080;
+        // Match canvas exactly: 1920×1080 px at 96dpi = 20"×11.25", scaled to a
+        // standard 16:9 PPT slide (10"×5.625"). The pixel-to-inch ratio is the
+        // same on both axes, so our coordinates map 1:1 with no distortion.
+        pptx.layout = "LAYOUT_16x9";
+        const SLIDE_W_IN = 10;
+        const SLIDE_H_IN = 5.625;
+        const CANVAS_W = 1920;
+        const CANVAS_H = 1080;
         const toIn = (px: number, axis: "x" | "y") =>
           axis === "x" ? (px / CANVAS_W) * SLIDE_W_IN : (px / CANVAS_H) * SLIDE_H_IN;
+        // Canvas-px to PPTX-pt: our 1920px canvas is rendered to a 10" slide.
+        // 10" = 720pt, so 1 canvas px = 720/1920 = 0.375 pt. NOT the 0.75 pt
+        // that CSS-px→pt uses at 96 DPI — that would double-size every glyph
+        // because we're already scaling the whole canvas down by ~2x.
+        const PX_TO_PT = (SLIDE_W_IN / CANVAS_W) * 72;
         const hexToRgb = (hex: string) => {
           const value = hex.replace("#", "");
           return value.length === 3
@@ -62,16 +73,73 @@ export const deckExport = inngest.createFunction(
 
         for (const slide of manifest.slides) {
           const pptSlide = pptx.addSlide();
+
+          // Slide background — solid colors land directly; gradients can't be
+          // expressed on a slide background in PptxGenJS, so we paint a
+          // full-canvas rectangle to fake a 2-stop linear gradient. The
+          // rectangle takes the gradient via XML once added; the high-level
+          // API only does solid, so we paint the first stop as the slide bg
+          // and overlay a second rect at the second stop's color with
+          // transparency. Approximation, but far better than the white default.
           if (slide.background.type === "color") {
             pptSlide.background = { color: hexToRgb(slide.background.value) };
+          } else {
+            const stops = slide.background.gradient.stops;
+            const s0 = stops[0];
+            const s1 = stops[1];
+            if (s0) {
+              pptSlide.background = { color: hexToRgb(s0.color) };
+            }
+            // Overlay a half-transparent rect of the second stop to suggest
+            // the gradient direction. Not a true gradient, but on-brand.
+            if (s1) {
+              pptSlide.addShape(pptx.ShapeType.rect, {
+                x: 0,
+                y: 0,
+                w: SLIDE_W_IN,
+                h: SLIDE_H_IN,
+                fill: { color: hexToRgb(s1.color), transparency: 55 },
+                line: { transparency: 100 },
+              });
+            }
           }
+
           for (const el of slide.elements) {
             const x = toIn(el.x, "x"), y = toIn(el.y, "y"), w = toIn(el.width, "x"), h = toIn(el.height, "y");
             if (el.type === "text") {
-              pptSlide.addText(el.content, { x, y, w, h, fontFace: el.fontFamily, fontSize: el.fontSize * 0.75, bold: el.fontWeight >= 600, color: hexToRgb(el.color), align: el.textAlign, rtlMode: el.direction === "rtl", valign: "top", wrap: true });
+              pptSlide.addText(el.content, {
+                x,
+                y,
+                w,
+                h,
+                fontFace: el.fontFamily,
+                fontSize: el.fontSize * PX_TO_PT,
+                bold: el.fontWeight >= 600,
+                italic: el.italic,
+                underline: el.underline ? { style: "sng" } : undefined,
+                color: hexToRgb(el.color),
+                align: el.textAlign,
+                rtlMode: el.direction === "rtl",
+                valign: "top",
+                wrap: true,
+                margin: 0,
+                lineSpacingMultiple: el.lineHeight,
+              });
             }
             if (el.type === "shape") {
-              const fill = el.fill?.type === "color" ? { color: hexToRgb(el.fill.value), transparency: el.opacity === undefined ? 0 : (1 - el.opacity) * 100 } : undefined;
+              // Shape fill — solid hex if available, else first gradient stop.
+              const fillColor =
+                el.fill?.type === "color"
+                  ? el.fill.value
+                  : el.fill?.type === "gradient"
+                    ? el.fill.gradient.stops[0]?.color
+                    : undefined;
+              const fill = fillColor
+                ? {
+                    color: hexToRgb(fillColor),
+                    transparency: el.opacity === undefined ? 0 : (1 - el.opacity) * 100,
+                  }
+                : undefined;
               const line = el.border ? { color: hexToRgb(el.border.color), width: el.border.width } : { transparency: 100 };
               const shapeType =
                 el.kind === "circle" || el.kind === "ellipse" ? pptx.ShapeType.ellipse :
