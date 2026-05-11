@@ -89,7 +89,7 @@ export function DashboardShell({
   const transitionClass = isReady ? "transition-all duration-300 ease-in-out" : "transition-none";
 
   return (
-    <div className={`dashboard-bg min-h-screen relative ${isReady ? "opacity-100" : "opacity-0"}`}>
+    <div className="dashboard-bg min-h-screen relative opacity-100">
       <Sidebar isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} transitionClass={transitionClass} />
 
       <main

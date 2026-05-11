@@ -52,7 +52,11 @@ export default function SettingsPage() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [glassPreset, setGlassPreset] = useState<GlassPreset>('normal');
+  const [glassPreset, setGlassPreset] = useState<GlassPreset>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    const stored = localStorage.getItem('taqreer_glass_preset') as GlassPreset | null;
+    return (stored && stored in glassPresets) ? stored : 'normal';
+  });
 
   const applyGlassPreset = (preset: GlassPreset) => {
     const p = glassPresets[preset];
@@ -71,8 +75,6 @@ export default function SettingsPage() {
       setName(user?.user_metadata?.full_name || user?.user_metadata?.name || "");
       setLoading(false);
     });
-    const stored = localStorage.getItem('taqreer_glass_preset') as GlassPreset | null;
-    if (stored && stored in glassPresets) setGlassPreset(stored);
   }, [supabase.auth]);
 
   useEffect(() => {

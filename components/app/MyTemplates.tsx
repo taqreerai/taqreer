@@ -45,14 +45,9 @@ export function MyTemplates({ templates }: { templates: Template[] }) {
                   </div>
 
                   <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <button
-                      type="button"
-                      disabled
-                      aria-disabled="true"
-                      className="btn-gradient px-3 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      استخدم
-                    </button>
+                    <span className="text-white text-xs px-3 py-1 rounded-lg bg-white/10">
+                      قالب محفوظ
+                    </span>
                   </div>
                 </div>
 

@@ -27,7 +27,7 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
   const router = useRouter();
 
   const handleDownload = (projectId: string) => {
-    router.push(`/api/projects/${projectId}/download`);
+    window.location.assign(`/api/projects/${projectId}/download`);
   };
 
   const handleMoreClick = (projectId: string) => {
@@ -58,7 +58,7 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[26px] text-muted/25">image</span>
+                    <span className="material-symbols-outlined text-[26px] text-muted opacity-25">image</span>
                   </div>
                 )}
                 <div className="absolute top-2 right-2">

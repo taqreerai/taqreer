@@ -242,7 +242,7 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
                 
                 <ScrollReveal direction="up" delay={0.2} className="flex relative pt-3">
                     <div
-                        className="!absolute -top-3 left-1/2 z-20 w-fit -translate-x-1/2 whitespace-nowrap bg-brand-purple-500 text-xs px-3 py-1 rounded-full font-bold">
+                        className="absolute! -top-3 left-1/2 z-20 w-fit -translate-x-1/2 whitespace-nowrap bg-brand-purple-500 text-xs px-3 py-1 rounded-full font-bold">
                         الأكثر شعبية</div>
                 <div
                     className="plan-banner p-8 flex flex-col relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)] w-full feature-card-glow transition-colors">
