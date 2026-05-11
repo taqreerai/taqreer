@@ -20,7 +20,7 @@ export function LogoutButton() {
       aria-label="تسجيل الخروج"
     >
       <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-        <span className="material-symbols-outlined text-[20px] font-light">logout</span>
+        <span className="material-symbols-outlined text-[20px]">logout</span>
       </div>
       <span className="font-medium text-sm">تسجيل الخروج</span>
     </button>

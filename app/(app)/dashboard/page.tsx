@@ -68,10 +68,12 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="page-container space-y-16">
+    <div className="page-container space-y-8">
       <QuickActions />
-      <RecentProjects projects={projects} />
-      <MyTemplates templates={templates} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <RecentProjects projects={projects} />
+        <MyTemplates templates={templates} />
+      </div>
       <PlanUsage
         plan={plan}
         usageCount={usageCount}

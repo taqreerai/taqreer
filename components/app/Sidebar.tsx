@@ -20,10 +20,12 @@ function Tooltip({ isCollapsed, text }: { isCollapsed: boolean; text: string }) 
 
 export function Sidebar({
   isCollapsed = false,
-  toggleSidebar
+  toggleSidebar,
+  transitionClass = "transition-all duration-300 ease-in-out"
 }: {
   isCollapsed?: boolean;
   toggleSidebar?: () => void;
+  transitionClass?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -95,17 +97,17 @@ export function Sidebar({
     { path: '/settings', icon: 'settings', label: 'الإعدادات' },
   ];
 
-  const iconClass = "material-symbols-outlined text-[20px] flex-shrink-0 font-thin";
+  const iconClass = "material-symbols-outlined text-[20px] flex-shrink-0";
 
   return (
     <aside
       aria-label="Sidebar"
-      className={`sidebar-bg fixed right-0 top-0 h-screen z-50 flex flex-col border-l transition-all duration-300 ease-in-out ${
+      className={`sidebar-bg fixed right-0 top-0 h-screen z-50 flex flex-col border-l ${transitionClass} ${
         isCollapsed ? "w-[80px]" : "w-[260px]"
       }`}
     >
       {/* ── Logo ── */}
-      <div className="h-20 flex items-center px-[18px] flex-shrink-0 border-b border-[rgba(42,36,59,0.6)]">
+      <div className="h-20 flex items-center px-[18px] flex-shrink-0 border-b border-white/[0.08]">
         <div className="relative flex items-center h-full w-full">
           {/* Collapsed: icon only */}
           <div className={`absolute right-0 flex items-center justify-center w-[44px] h-[44px] transition-opacity duration-300 ${
@@ -280,10 +282,10 @@ export function Sidebar({
                   alt={name}
                   width={36}
                   height={36}
-                  className="w-[36px] h-[36px] rounded-full object-cover ring-2 ring-[rgba(55,11,244,0.5)]"
+                  className="w-[36px] h-[36px] rounded-full object-cover tq-avatar-ring"
                 />
               ) : (
-                <div className="w-[36px] h-[36px] rounded-full bg-gradient-to-r from-[#370BF4] to-[#E036B8] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                <div className="w-[36px] h-[36px] rounded-full tq-avatar-fallback text-sm">
                   {name.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -315,27 +317,27 @@ export function Sidebar({
                   width: dropdownPos.width,
                   zIndex: 9999,
                 }}
-                className="bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-2xl shadow-xl p-2"
+                className="glass-dropdown rounded-2xl shadow-2xl p-2"
               >
                 <div className="px-3 py-2">
                   <p className="font-semibold text-white text-sm truncate">{name}</p>
-                  <p className="text-[#9A94A8] text-xs truncate">{email}</p>
+                  <p className="text-muted text-xs truncate">{email}</p>
                 </div>
                 <div className="divider-dark my-1" />
                 <Link
                   href="/settings"
                   onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-[#9A94A8] hover:text-white transition-colors cursor-pointer"
+                  className="dropdown-item"
                 >
-                  <span className="material-symbols-outlined text-[18px] font-thin">settings</span>
-                  <span className="text-sm">الإعدادات</span>
+                  <span className="material-symbols-outlined text-[18px]">settings</span>
+                  <span>الإعدادات</span>
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-[#9A94A8] hover:text-white transition-colors cursor-pointer w-full"
+                  className="dropdown-item"
                 >
-                  <span className="material-symbols-outlined text-[18px] font-thin">logout</span>
-                  <span className="text-sm">تسجيل الخروج</span>
+                  <span className="material-symbols-outlined text-[18px]">logout</span>
+                  <span>تسجيل الخروج</span>
                 </button>
               </motion.div>
             )}

@@ -12,7 +12,7 @@ type Template = {
 export function MyTemplates({ templates }: { templates: Template[] }) {
   return (
     <DashboardWidget>
-      <DashboardWidgetHeader title="قوالبي" />
+      <DashboardWidgetHeader title="قوالبي" href="/templates" />
 
       {templates.length === 0 ? (
         <DashboardEmptyState
@@ -21,46 +21,44 @@ export function MyTemplates({ templates }: { templates: Template[] }) {
           description="عند حفظ عرض كقالب، سيظهر هنا لتستخدمه في عروضك القادمة."
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {templates.map((template) => {
             const thumbnail = template.thumbnailUrls[0] ?? null;
 
             return (
-              <div key={template.id} className="glass-card rounded-xl overflow-hidden group glow-hover transition-all duration-300">
-                <div className="relative h-48 bg-surface-container-high">
+              <div key={template.id} className="glass-card rounded-[14px] overflow-hidden group">
+                <div className="relative h-[88px] tq-thumbnail">
                   {thumbnail ? (
                     <img
                       alt={template.title}
-                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
                       src={thumbnail}
+                      className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-surface-variant">
-                      <span className="material-symbols-outlined text-4xl text-outline-variant">
-                        add_photo_alternate
-                      </span>
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[26px] text-muted/25">add_photo_alternate</span>
                     </div>
                   )}
 
-                  <div className="absolute top-3 right-3 bg-surface/90 backdrop-blur px-2 py-1 rounded text-xs font-label-sm text-primary border border-primary/20">
-                    {template.category}
+                  <div className="absolute top-2 right-2">
+                    <span className="badge-purple">{template.category}</span>
                   </div>
 
-                  <div className="template-overlay absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                     <button
-                      aria-disabled="true"
-                      className="btn-gradient px-6 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled
                       type="button"
+                      disabled
+                      aria-disabled="true"
+                      className="btn-gradient px-3 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       استخدم
                     </button>
                   </div>
                 </div>
 
-                <div className="p-4">
-                  <h4 className="font-headline-md text-[18px] font-semibold text-on-surface mb-1 truncate">{template.title}</h4>
-                  <p className="text-xs text-on-surface-variant">{template.category}</p>
+                <div className="px-3 py-2.5">
+                  <h4 className="text-[13px] font-semibold text-white truncate leading-snug">{template.title}</h4>
+                  <p className="text-[11px] text-muted mt-0.5">{template.category}</p>
                 </div>
               </div>
             );

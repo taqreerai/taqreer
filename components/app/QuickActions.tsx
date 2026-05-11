@@ -5,13 +5,13 @@ const cards = [
     icon: 'add_circle',
     title: 'إنشاء عرض جديد',
     desc: 'ابدأ من الصفر بمحتواك',
-    path: '/create',
+    path: '/create/content',
   },
   {
     icon: 'auto_fix_high',
     title: 'تحسين عرض موجود',
     desc: 'ارفع ملفك واحصل على نسخة محسّنة',
-    path: '/enhance',
+    path: '/enhance/upload',
   },
   {
     icon: 'content_copy',
@@ -35,19 +35,17 @@ export function QuickActions() {
           <a
             key={card.path}
             href={card.path}
-            className="plan-banner p-6 flex flex-col gap-4 cursor-pointer hover:scale-[1.02] transition-transform duration-200 relative overflow-hidden no-underline"
+            className="qa-card p-4 flex flex-col gap-3 cursor-pointer no-underline group transition-all duration-200"
             dir="rtl"
           >
-            <div className="absolute top-[-40px] right-[-40px] w-[160px] h-[160px] pointer-events-none"
-              style={{ background: 'radial-gradient(circle, rgba(55,11,244,0.15) 0%, transparent 70%)', filter: 'blur(20px)' }} />
-            <div className="text-right relative z-10">
-              <span className="material-symbols-outlined text-white font-thin text-[26px]">
+            <div className="text-right">
+              <span className="material-symbols-outlined text-[18px] text-muted group-hover:text-white transition-colors">
                 {card.icon}
               </span>
             </div>
-            <div className="relative z-10">
-              <h3 className="text-white font-bold text-[20px] leading-snug mb-1">{card.title}</h3>
-              <p className="text-[#9A94A8] text-sm leading-relaxed">{card.desc}</p>
+            <div>
+              <h3 className="text-[13px] font-semibold text-white leading-snug mb-0.5">{card.title}</h3>
+              <p className="text-[11px] text-muted leading-relaxed">{card.desc}</p>
             </div>
           </a>
         ))}

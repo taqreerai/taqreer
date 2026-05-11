@@ -21,9 +21,7 @@ export function PlanUsage({ plan, usageCount, limit, renewalDate }: PlanUsagePro
 
   return (
     <section>
-      <div className="plan-banner p-8 flex flex-col md:flex-row items-center justify-between relative overflow-hidden">
-        <div className="absolute -right-[60px] -top-[60px] h-[250px] w-[250px] rounded-full bg-primary/15 blur-[30px]" />
-
+      <div className="plan-banner p-5 flex flex-col md:flex-row items-center justify-between relative overflow-hidden">
         <div className="w-full md:w-1/2 mb-6 md:mb-0 relative z-10">
           <div className="flex items-center gap-3 mb-2">
             <h3 className="text-[24px] font-bold text-on-surface">الخطة {planName}</h3>
