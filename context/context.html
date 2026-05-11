@@ -459,7 +459,7 @@
                 <a href="#data-model">06. Data Model</a>
                 <a href="#presentation-json">07. Presentation JSON</a>
                 <a href="#ai-pipeline">08. AI Pipeline</a>
-                <a href="#editor">09. PPT Editor</a>
+                <a href="#preview">09. Preview Window</a>
                 <a href="#comments">10. AI Comments</a>
                 <a href="#templates">11. Templates</a>
                 <a href="#exports">12. Export System</a>
@@ -476,18 +476,17 @@
                 <div class="eyebrow">AI Presentation Platform</div>
                 <h1>Taqreer Full-Stack Web App Architecture</h1>
                 <p>
-                    A complete product and technical plan for building Taqreer with Next.js: an AI-powered platform
-                    where users create, enhance, edit, export, and save brand-aware PowerPoint presentations.
+                    A complete product and technical plan for Taqreer (taqreer.ai): an Arabic-first, RTL AI presentation platform where users provide content, Claude designs the deck, and users review, comment, regenerate, or export. There is no manual slide editor — Claude does all the design work.
                 </p>
 
                 <div class="meta-grid">
                     <div class="meta-card">
                         <strong>Product Type</strong>
-                        <span>AI presentation generator and editor</span>
+                        <span>AI presentation generator (Arabic-first, RTL)</span>
                     </div>
                     <div class="meta-card">
-                        <strong>Frontend</strong>
-                        <span>Next.js, TypeScript, Tailwind, custom editor</span>
+                        <strong>Stack</strong>
+                        <span>Next.js 16, TypeScript, Tailwind, Prisma/Postgres, Inngest, Supabase, Anthropic Claude API</span>
                     </div>
                     <div class="meta-card">
                         <strong>Core Output</strong>
@@ -495,7 +494,7 @@
                     </div>
                     <div class="meta-card">
                         <strong>Main Differentiator</strong>
-                        <span>Promptless, brand-aware presentation generation</span>
+                        <span>Promptless brand-aware generation; no manual editing — every change goes through Claude</span>
                     </div>
                 </div>
             </header>
@@ -503,39 +502,30 @@
             <section id="overview">
                 <h2>01. Product Overview</h2>
                 <p class="lead">
-                    Taqreer is a web app that helps users create professional presentations without manually prompting
-                    the AI. The user provides content, brand material, existing presentations, or templates. The system
-                    analyzes the input and generates a designed presentation that can be edited inside a built-in
-                    PowerPoint-style editor.
+                    Taqreer turns content into beautiful Arabic presentations. The user provides content, brand assets, an existing deck to improve, a reference deck to mimic, or a template to start from. Claude generates the slide design as structured JSON. The user lands in the Preview Window to review, comment on specific areas (Claude redesigns them), regenerate the whole deck, export to PPTX/PDF, or save as a template.
                 </p>
 
                 <div class="cards">
                     <div class="card">
-                        <h4>Create presentations without a prompt</h4>
-                        <p>Users paste or upload their content, upload brand guidelines, logos, and images, then AI
-                            creates a fully designed presentation.</p>
+                        <h4>Flow 1 — Create (إنشاء)</h4>
+                        <p>Start from scratch. User pastes/uploads content, sets brand (palette, fonts, logo), and Claude designs a fresh deck.</p>
                     </div>
                     <div class="card">
-                        <h4>Enhance existing presentations</h4>
-                        <p>Users upload an existing PPT and either mimic another deck style or apply brand guidelines
-                            while preserving the original content.</p>
+                        <h4>Flow 2 — Enhance (تحسين)</h4>
+                        <p>Upload an ugly PPT. Claude extracts its existing theme/palette/fonts and redesigns the layout while preserving the original visual identity.</p>
                     </div>
                     <div class="card">
-                        <h4>Use premade templates</h4>
-                        <p>Users choose a template from the library, provide content, and AI maps the content into the
-                            selected template structure.</p>
+                        <h4>Flow 3 — Mimic (محاكاة)</h4>
+                        <p>Upload your content + a reference deck whose style you admire. Claude extracts the reference's style contract and rebuilds your content in that style. Iterative review loop.</p>
                     </div>
                     <div class="card">
-                        <h4>Create templates from scratch</h4>
-                        <p>Users generate reusable branded templates that can be saved, reused, and applied to future
-                            presentations.</p>
+                        <h4>Flow 4 — From Template (إنشاء من قالب)</h4>
+                        <p>Pick a template from the library, add content, and Claude maps the content into the template's design system. No brand wizard — the template supplies the design tokens.</p>
                     </div>
                 </div>
 
                 <div class="note success">
-                    <strong>Core product rule:</strong> every journey ends inside the built-in PPT editor. The editor is
-                    where users review, manually edit, add AI comments, regenerate, export, save, or convert a deck into
-                    a template.
+                    <strong>Core product rule:</strong> every journey ends inside the Preview Window. The preview is review-only — users browse slides, comment on areas (which fires <code>area.redesign.requested</code> to Claude), regenerate the whole deck, export to PPTX or PDF, or save as a template. There is no manual slide editor — Claude does all the design work.
                 </div>
             </section>
 
@@ -637,7 +627,7 @@
                         <tr>
                             <td>Frontend</td>
                             <td>Next.js App Router, React, TypeScript</td>
-                            <td>Application shell, dashboard, creation flows, editor pages.</td>
+                            <td>Application shell, dashboard, creation flows, preview pages.</td>
                         </tr>
                         <tr>
                             <td>Styling</td>
@@ -647,7 +637,7 @@
                         <tr>
                             <td>State</td>
                             <td>Zustand or Jotai, TanStack Query</td>
-                            <td>Editor state, selected elements, undo/redo, server state.</td>
+                            <td>Wizard step state, sessionStorage handoff between steps, server state via TanStack Query.</td>
                         </tr>
                         <tr>
                             <td>Database</td>
@@ -690,8 +680,7 @@
 
             <section id="architecture">
                 <h2>04. High-Level System Architecture</h2>
-                <p class="lead">The app should be structured around projects, presentations, brand kits, AI jobs, editor
-                    state, and export generation.</p>
+                <p class="lead">The app is structured around projects, presentations (slide JSON), brand kits, AI jobs, the Preview Window, and export generation.</p>
 
                 <div class="diagram">
                     <pre><code>User
@@ -699,19 +688,19 @@
  | Next.js Web App
  | - Landing Page
  | - Dashboard
- | - Project Creation Flows
- | - PPT Editor
+ | - Project Creation Flows (Create / Enhance / Mimic / From Template)
+ | - Preview Window
  |
 API Layer
  |
- |-- Auth Service
+ |-- Auth Service (Supabase)
  |-- Project Service
  |-- File Upload Service
- |-- AI Generation Service
+ |-- AI Generation Service (Inngest jobs)
  |-- Template Service
- |-- Editor Service
+ |-- Preview / Slide Renderer
  |-- Export Service
- |-- Billing / Quota Service
+ |-- Billing / Quota Service (Stripe — Phase 4)
  |
 PostgreSQL Database
  |
@@ -771,8 +760,8 @@ Background Workers
                             inputs.</p>
                     </div>
                     <div class="card">
-                        <h4>Editor Service</h4>
-                        <p>Saves presentation JSON, versions, comments, AI patches, and editor updates.</p>
+                        <h4>Preview / Versioning Service</h4>
+                        <p>Saves slide JSON versions, comments, and Claude redesign patches. Each generation, area redesign, or saved-as-template action writes a new <code>PresentationVersion</code> row.</p>
                     </div>
                 </div>
             </section>
@@ -843,24 +832,25 @@ Background Workers
   webhooks/stripe/route.ts              ❌  Phase 4</code></pre>
 
                 <h3>Suggested Source Structure</h3>
-                <pre><code>src/
-  components/
-    landing/
-    dashboard/
-    upload/
-    editor/
-    templates/
-    brand-kit/
-    ai/
+                <pre><code>app/                                  // Next.js App Router (no src/ in this project)
+components/
+  app/                                // dashboard shell, sidebar, quick actions
+  marketing/                          // landing-page-only components
+  slides/                             // SlideRenderer + future slide-panel, action bar, area-select overlay
+  upload/                             // shared upload zones
+  brand-kit/                          // brand kit forms (create / edit a brand kit)
 
-  lib/
-    ai/
-    db/
-    auth/
-    storage/
-    export/
-    pptx/
-    validation/
+lib/
+  schema/                             // slide manifest Zod schema (lib/schema/slide.ts)
+  supabase/                           // server + client Supabase clients
+  prisma.ts                           // Prisma singleton
+  constants.ts
+  utils.ts
+
+inngest/
+  client.ts                           // Inngest SDK client
+  index.ts                            // exports the 5 registered functions
+  functions/                          // deck-generate, brand-analyze, area-redesign, deck-export, template-save
 
   server/
     actions/
@@ -1102,29 +1092,29 @@ Background Workers
                     </div>
                     <div class="flow-step">
                         <div class="num">8</div>
-                        <div><strong>Open editor</strong><span>Deck becomes editable inside the built-in PPT
-                                editor.</span></div>
+                        <div><strong>Open Preview Window</strong><span>Deck opens at <code>/preview/[projectId]</code> for review, area comments, regen, and export.</span></div>
                     </div>
                 </div>
 
                 <h3>Enhance Existing Deck</h3>
                 <pre><code>1. Upload original PPTX
 2. Parse slides into internal JSON
-3. Extract content and current layout
-4. Detect weak slides and inconsistencies
-5. Apply brand kit or reference style
-6. Generate improved slide JSON
-7. Validate output
-8. Open in editor</code></pre>
+3. Extract current palette, fonts, logo, slide structure (Claude vision)
+4. Show extraction + redesign plan on /enhance/review for user confirmation/override
+5. Generate improved slide JSON, preserving original brand
+6. Zod validate; self-healing retry on failure
+7. Save to PresentationVersion
+8. Open Preview Window</code></pre>
 
                 <h3>Mimic Reference PPT</h3>
-                <pre><code>1. Upload original PPTX
-2. Upload reference PPTX
-3. Extract content from original PPTX
-4. Extract visual system from reference PPTX
-5. Build a style map
-6. Recreate original content using reference style
-7. Validate and open editor</code></pre>
+                <pre><code>1. Upload your content (/mimic/content)
+2. Upload reference PPTX (/mimic/reference)
+3. Extract content from your upload
+4. Extract style contract (palette, fonts, layout idioms) from reference (Claude vision)
+5. Show /mimic/review with plan in Arabic; user confirms OR re-prompts (iterative loop)
+6. Generate slide JSON: your content × reference style
+7. Zod validate; self-healing retry on failure
+8. Save to PresentationVersion; open Preview Window</code></pre>
 
                 <h3>Brand Kit JSON Example</h3>
                 <pre><code>{
@@ -1158,64 +1148,43 @@ Background Workers
 }</code></pre>
             </section>
 
-            <section id="editor">
-                <h2>09. Built-In PPT Editor</h2>
-                <p class="lead">The editor is the main product experience. It should feel like a simplified PowerPoint
-                    with AI commenting and regeneration built in.</p>
+            <section id="preview">
+                <h2>09. Preview Window</h2>
+                <p class="lead"><strong>The Preview Window is review-only — there is no manual slide editor.</strong> Users do not drag, resize, or type on a slide. Claude does all the design work; the user's interaction after generation is to review, comment, regenerate, export, or save as a template.</p>
 
-                <h3>Editor Layout</h3>
+                <h3>Layout</h3>
                 <div class="diagram">
-                    <pre><code>---------------------------------------------------
-| Top Bar: File name / Save / Export / Regenerate |
----------------------------------------------------
-| Slide List | Main Canvas                 | Panel |
-|            |                             |       |
-| Thumbnails | Editable slide              | AI    |
-|            |                             | Props |
----------------------------------------------------</code></pre>
+                    <pre><code>┌────────────────────────────────────────────────────────────┐
+│  Action bar:  أعد التصميم  ·  تصدير PPTX  ·  تصدير PDF  ·  حفظ كقالب  │
+├──────────────────────────────────┬─────────────────────────┤
+│                                  │  Slide 1                │
+│      Main slide view             │  Slide 2                │
+│      (1920×1080 rendered as      │  Slide 3  ← selected    │
+│       HTML/CSS, scaled to fit)   │  ...                    │
+│                                  │  Slide N                │
+└──────────────────────────────────┴─────────────────────────┘</code></pre>
                 </div>
 
-                <h3>MVP Editing Features</h3>
+                <h3>What the user can do</h3>
                 <ul class="checklist">
-                    <li>Select text and elements</li>
-                    <li>Edit text content</li>
-                    <li>Move elements</li>
-                    <li>Resize elements</li>
-                    <li>Change color</li>
-                    <li>Change font size</li>
-                    <li>Change alignment</li>
-                    <li>Add image</li>
-                    <li>Add text</li>
-                    <li>Add shape</li>
-                    <li>Delete element</li>
-                    <li>Duplicate slide</li>
-                    <li>Reorder slides</li>
-                    <li>Add new slide</li>
-                    <li>Undo and redo</li>
-                    <li>Zoom in and out</li>
-                    <li>Snap to grid</li>
-                    <li>Export</li>
+                    <li>Browse slides via the right-side slide panel</li>
+                    <li>Click-and-drag to select an area on the main slide → opens a comment box → submits to <code>area.redesign.requested</code> Inngest job → Claude updates JSON for those elements → slide re-renders</li>
+                    <li>Trigger a full regeneration with the same brief (action bar <code>أعد التصميم</code>)</li>
+                    <li>Export as PPTX (PptxGenJS, via <code>deck.export.requested</code>)</li>
+                    <li>Export as PDF (Puppeteer, via <code>deck.export.requested</code>)</li>
+                    <li>Save the deck as a template (style contract + thumbnails + PPTX artifact, via <code>template.save.requested</code>)</li>
                 </ul>
 
-                <h3>Editor State Example</h3>
-                <pre><code>type EditorState = {
-  presentation: Presentation;
-  selectedSlideId: string | null;
-  selectedElementIds: string[];
-  zoom: number;
-  mode: "select" | "text" | "comment" | "preview";
-  comments: Comment[];
-  history: {
-    past: Presentation[];
-    future: Presentation[];
-  };
-};</code></pre>
+                <h3>What the user cannot do</h3>
+                <p>Move elements. Resize elements. Change font/color manually. Add a text box. Reorder slides by hand. Undo to a previous "manual edit." None of these exist. Every visual change goes through Claude via a comment or a regen — that's the deliberate product constraint that keeps the JSON-first architecture coherent.</p>
 
+                <h3>Rendering approach</h3>
                 <div class="note">
-                    <strong>Recommended rendering approach:</strong> render slides as HTML/React using
-                    absolute-positioned elements on a fixed 1920 × 1080 canvas. Use this same coordinate system for
-                    thumbnails, editor, PPTX export, and PDF export.
+                    Slides render as HTML/React using absolute-positioned elements on a fixed 1920 × 1080 canvas. The same coordinate system is used for the preview itself, slide-panel thumbnails (via html2canvas when saving as a template), PPTX export (PptxGenJS), and PDF export (Puppeteer printing the HTML). The renderer component lives at <code>components/slides/SlideRenderer.tsx</code>.
                 </div>
+
+                <h3>Current implementation status</h3>
+                <p>As of 2026-05-11, <code>/preview/[projectId]</code> exists with a minimal first cut: it loads the latest completed <code>PresentationVersion</code> from Prisma, links Google Fonts CSS from the manifest, and stacks all slides vertically at 50% scale. The action bar, slide-panel side navigation, area-select-and-comment overlay, and per-element shadow/border rendering are not yet built — see §15 Implementation Status.</p>
             </section>
 
             <section id="comments">
@@ -1426,7 +1395,7 @@ Background Workers
                         <tr>
                             <td>Free</td>
                             <td>10 slides, daily quota, limited exports</td>
-                            <td>Create PPT, enhance PPT, use selected templates, basic editor</td>
+                            <td>Create, enhance, use selected templates, PPTX/PDF export</td>
                         </tr>
                         <tr>
                             <td>Plus</td>
@@ -1436,7 +1405,7 @@ Background Workers
                         <tr>
                             <td>Pro</td>
                             <td>Up to 90 slides, highest quota, priority jobs</td>
-                            <td>Advanced editor tools, save custom templates, advanced regeneration, premium templates
+                            <td>Save custom templates, area-level redesign, advanced regeneration, premium templates, priority Inngest queue
                             </td>
                         </tr>
                     </tbody>
@@ -1487,14 +1456,13 @@ Background Workers
                     <li>Show progress UI.</li>
                 </ul>
 
-                <h3>Phase 4: Editor MVP</h3>
+                <h3>Phase 4: Preview Window MVP</h3>
                 <ul>
-                    <li>Build slide list.</li>
-                    <li>Build canvas editor.</li>
-                    <li>Support text editing, move, resize, delete, duplicate.</li>
-                    <li>Add undo and redo.</li>
-                    <li>Add slide-level AI comments.</li>
-                    <li>Regenerate selected slide from comment.</li>
+                    <li>Build the slide-panel side navigation (thumbnails).</li>
+                    <li>Build the main slide view (full <code>SlideRenderer</code> at scale).</li>
+                    <li>Build the action bar: <code>أعد التصميم</code>, <code>تصدير PPTX</code>, <code>تصدير PDF</code>, <code>حفظ كقالب</code>.</li>
+                    <li>Wire the area-selection overlay → comment box → <code>area.redesign.requested</code>.</li>
+                    <li>Subscribe to Supabase Realtime so re-rendered slides stream in after an area redesign.</li>
                 </ul>
 
                 <h3>Phase 5: Export</h3>
@@ -1618,8 +1586,7 @@ Background Workers
                 <div class="cards">
                     <div class="card">
                         <h4>PPTX import is complex</h4>
-                        <p>Do not promise perfect PPTX-to-editor conversion at MVP stage. Start by extracting text,
-                            images, and rough layout.</p>
+                        <p>Do not promise perfect PPTX-to-slide-JSON conversion at MVP stage. The Enhance flow's PPTX parsing should extract palette, fonts, logo, content outline, and rough slide structure — Claude redesigns from there. Don't aim for pixel-perfect round-tripping.</p>
                     </div>
                     <div class="card">
                         <h4>AI layout quality can vary</h4>
@@ -1628,7 +1595,7 @@ Background Workers
                     </div>
                     <div class="card">
                         <h4>Export fidelity can break</h4>
-                        <p>Use the same 1920 × 1080 coordinate system across editor, thumbnails, PDF, and PPTX export.
+                        <p>Use the same 1920 × 1080 coordinate system across the Preview Window, thumbnails, PDF, and PPTX export.
                         </p>
                     </div>
                     <div class="card">
@@ -1639,9 +1606,7 @@ Background Workers
                 </div>
 
                 <div class="note danger">
-                    <strong>Critical recommendation:</strong> avoid letting AI directly write unvalidated production
-                    presentation data. Every AI output should go through schema validation, layout validation, and
-                    versioning before replacing editor state.
+                    <strong>Critical recommendation:</strong> avoid letting Claude's output land in <code>PresentationVersion.slideJson</code> without validation. Every Claude response goes through Zod validation; on failure, retry with the validation error appended to the prompt (self-healing pattern). After 3 failed attempts the Inngest job fails and surfaces in Sentry.
                 </div>
             </section>
 
@@ -1677,11 +1642,11 @@ Background Workers
                     </div>
                     <div class="flow-step">
                         <div class="num">6</div>
-                        <div><strong>Deck opens in editor</strong><span>User can edit text and layout.</span></div>
+                        <div><strong>Deck opens in Preview Window</strong><span>User reviews slides rendered as HTML/CSS at 1920×1080.</span></div>
                     </div>
                     <div class="flow-step">
                         <div class="num">7</div>
-                        <div><strong>User adds slide-level comments</strong><span>AI regenerates selected slides.</span>
+                        <div><strong>User adds area-level comments</strong><span>Selection box + comment fires <code>area.redesign.requested</code> → Claude redesigns the targeted elements → slide re-renders via Realtime.</span>
                         </div>
                     </div>
                     <div class="flow-step">
@@ -1692,18 +1657,16 @@ Background Workers
 
                 <h3>Build in MVP</h3>
                 <ul class="checklist">
-                    <li>Auth</li>
-                    <li>Dashboard</li>
-                    <li>Create presentation from pasted content</li>
-                    <li>Upload logo</li>
-                    <li>Choose basic colors</li>
-                    <li>Generate outline</li>
-                    <li>Generate slide JSON</li>
-                    <li>Basic editor</li>
-                    <li>Slide-level comments</li>
-                    <li>Regenerate slide</li>
-                    <li>Export PPTX</li>
-                    <li>Save project</li>
+                    <li>Auth (Supabase email + Google OAuth)</li>
+                    <li>Dashboard with real DB data</li>
+                    <li>Create flow: paste content → brand wizard → AI summary → generate</li>
+                    <li>Upload logo + custom fonts (with @font-face from Supabase URLs)</li>
+                    <li>Slide JSON generation via Claude Opus 4.7 (Inngest <code>deck.generate.requested</code>)</li>
+                    <li>Preview Window with SlideRenderer (1920×1080 HTML/CSS, RTL)</li>
+                    <li>Area-level comments → Claude redesign → Realtime push</li>
+                    <li>Full-deck regeneration from the action bar</li>
+                    <li>Export PPTX (PptxGenJS) + PDF (Puppeteer)</li>
+                    <li>Save project; save deck as template</li>
                 </ul>
 
                 <h3>Delay Until V2</h3>
