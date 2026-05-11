@@ -54,9 +54,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl" className={`${cairo.variable} ${poppins.variable}`}>
+    <html lang="ar" dir="rtl" className={`${cairo.variable} ${poppins.variable}`} suppressHydrationWarning>
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0,0&display=swap" rel="stylesheet" />
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            var p = localStorage.getItem('taqreer_glass_preset');
+            var presets = {
+              off:    ['0',    '0px',  '0.08', '100%'],
+              subtle: ['0.04', '8px',  '0.06', '120%'],
+              normal: ['0.07', '16px', '0.12', '160%'],
+              strong: ['0.12', '24px', '0.20', '180%']
+            };
+            var v = presets[p] || presets.normal;
+            var r = document.documentElement;
+            r.style.setProperty('--glass-opacity', v[0]);
+            r.style.setProperty('--glass-blur', v[1]);
+            r.style.setProperty('--glass-border-opacity', v[2]);
+            r.style.setProperty('--glass-saturation', v[3]);
+          } catch(e) {}
+        `}} />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
         {children}

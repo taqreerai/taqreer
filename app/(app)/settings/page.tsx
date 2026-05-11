@@ -16,14 +16,18 @@ type PlanUsageData = {
   renewalDate: string | null;
 };
 
+const glassPresets = {
+  off:    { label: 'لا يوجد', desc: 'بدون تأثير', opacity: '0',    blur: '0px',  borderOpacity: '0.08', saturation: '100%' },
+  subtle: { label: 'خفيف',    desc: 'تأثير ناعم',  opacity: '0.04', blur: '8px',  borderOpacity: '0.06', saturation: '120%' },
+  normal: { label: 'معتدل',   desc: 'الافتراضي',   opacity: '0.07', blur: '16px', borderOpacity: '0.12', saturation: '160%' },
+  strong: { label: 'قوي',     desc: 'تأثير قوي',   opacity: '0.12', blur: '24px', borderOpacity: '0.20', saturation: '180%' },
+} as const;
+type GlassPreset = keyof typeof glassPresets;
+
 function StatusMsg({ msg }: { msg: Msg }) {
   if (!msg) return null;
   return (
-    <div className={`rounded-xl p-3 text-sm border ${
-      msg.type === "success"
-        ? "bg-green-500/20 border-green-500/40 text-green-200"
-        : "bg-red-500/20 border-red-500/40 text-red-200"
-    }`}>
+    <div className={msg.type === "success" ? "status-success" : "status-error"}>
       {msg.text}
     </div>
   );
@@ -48,6 +52,22 @@ export default function SettingsPage() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [glassPreset, setGlassPreset] = useState<GlassPreset>(() => {
+    if (typeof window === 'undefined') return 'normal';
+    const stored = localStorage.getItem('taqreer_glass_preset') as GlassPreset | null;
+    return (stored && stored in glassPresets) ? stored : 'normal';
+  });
+
+  const applyGlassPreset = (preset: GlassPreset) => {
+    const p = glassPresets[preset];
+    const root = document.documentElement;
+    root.style.setProperty('--glass-opacity', p.opacity);
+    root.style.setProperty('--glass-blur', p.blur);
+    root.style.setProperty('--glass-border-opacity', p.borderOpacity);
+    root.style.setProperty('--glass-saturation', p.saturation);
+    localStorage.setItem('taqreer_glass_preset', preset);
+    setGlassPreset(preset);
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -148,13 +168,13 @@ export default function SettingsPage() {
       ) : null}
 
       {/* Page title */}
-      <h1 className="text-2xl font-bold text-white mt-8 mb-6">الإعدادات</h1>
+      <h1 className="cards-title mt-8 mb-6">الإعدادات</h1>
 
       {/* 2-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
 
         {/* ── Col 1 Row 1: Profile ── */}
-        <div className="settings-card">
+        <div className="settings-card glass-card rounded-xl">
           <h2 className="settings-card-title">الملف الشخصي</h2>
           <div className="settings-divider" />
 
@@ -165,16 +185,16 @@ export default function SettingsPage() {
                 alt={displayName}
                 width={64}
                 height={64}
-                className="rounded-full object-cover w-16 h-16 ring-2 ring-[rgba(55,11,244,0.5)]"
+                className="rounded-full object-cover w-16 h-16 tq-avatar-ring"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-[#370BF4] to-[#E036B8] flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
+              <div className="w-16 h-16 rounded-full tq-avatar-fallback text-xl">
                 {displayName.charAt(0).toUpperCase()}
               </div>
             )}
             <div>
               <p className="font-semibold text-white text-sm">{displayName}</p>
-              <p className="text-[#9A94A8] text-xs">{user?.email}</p>
+              <p className="text-muted text-xs">{user?.email}</p>
             </div>
           </div>
 
@@ -195,12 +215,12 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Col 2 Row 1: Password ── */}
-        <div className="settings-card">
+        <div className="settings-card glass-card rounded-xl">
           <h2 className="settings-card-title">تغيير كلمة المرور</h2>
           <div className="settings-divider" />
 
           {isGoogleUser && (
-            <p className="text-[#9A94A8] text-sm mb-4">
+            <p className="text-muted text-sm mb-4">
               أنت مسجل بحساب جوجل. يمكنك إضافة كلمة مرور لتسجيل الدخول بالبريد الإلكتروني أيضاً
             </p>
           )}
@@ -228,23 +248,43 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Col 1 Row 2: Delete Account ── */}
-        <div className="settings-card border-red-500/20">
+        <div className="settings-card glass-card-danger rounded-xl">
           <h2 className="settings-card-title text-red-400">حذف الحساب</h2>
-          <div className="settings-divider border-red-500/20" />
-          <p className="text-[#9A94A8] text-sm mb-5">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع بياناتك نهائياً</p>
+          <div className="settings-divider" />
+          <p className="text-muted text-sm mb-5">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع بياناتك نهائياً</p>
           <button onClick={() => setShowDeleteModal(true)} className="btn-danger cursor-pointer">
             حذف حسابي
           </button>
         </div>
 
-        {/* ── Col 2 Row 2: Coming Soon ── */}
-        <div className="settings-card">
+        {/* ── Col 2 Row 2: Glass Theme Settings ── */}
+        <div className="settings-card glass-card rounded-xl">
           <div className="flex items-center gap-3 mb-1">
-            <h2 className="settings-card-title mb-0">إعدادات إضافية</h2>
-            <span className="badge-purple text-[10px]">مقبلاً</span>
+            <h2 className="settings-card-title mb-0">مظهر التطبيق</h2>
+            <span className="badge-purple text-[10px]">زجاجي</span>
           </div>
           <div className="settings-divider" />
-          <p className="text-[#9A94A8] text-sm opacity-50">إعدادات متقدمة ستكون متاحة قريباً</p>
+          <p className="text-muted text-sm mb-4">اضبط شدة تأثير الزجاج المطفي على البطاقات والواجهة</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.entries(glassPresets) as [GlassPreset, typeof glassPresets.normal][]).map(([key, val]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => applyGlassPreset(key)}
+                className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer ${
+                  glassPreset === key
+                    ? 'border-[rgba(55,11,244,0.7)] bg-[rgba(55,11,244,0.15)] text-white'
+                    : 'border-white/[0.08] bg-white/[0.03] text-[#9A94A8] hover:border-white/20 hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {key === 'off' ? 'blur_off' : key === 'subtle' ? 'blur_linear' : key === 'normal' ? 'blur_on' : 'filter_drama'}
+                </span>
+                <span className="text-[13px] font-semibold leading-none">{val.label}</span>
+                <span className="text-[10px] opacity-60">{val.desc}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -264,10 +304,10 @@ export default function SettingsPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-2xl p-8 max-w-md w-full mt-[20vh] shadow-2xl"
+              className="glass-modal rounded-2xl p-8 max-w-md w-full mt-[20vh] shadow-2xl"
             >
               <h3 className="text-xl font-bold mb-2 text-white">حذف الحساب</h3>
-              <p className="text-[#9A94A8] text-sm mb-8">هل أنت متأكد؟ هذا الإجراء لا يمكن التراجع عنه وسيُحذف حسابك وجميع بياناتك نهائياً.</p>
+              <p className="text-muted text-sm mb-8">هل أنت متأكد؟ هذا الإجراء لا يمكن التراجع عنه وسيُحذف حسابك وجميع بياناتك نهائياً.</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDeleteModal(false)}

@@ -11,6 +11,7 @@ type DashboardEmptyStateProps = {
   icon: string;
   title: string;
   description: string;
+  className?: string;
   action?: {
     label: string;
     href: string;
@@ -19,10 +20,10 @@ type DashboardEmptyStateProps = {
 
 export function DashboardWidgetHeader({ title, href, actionLabel = "عرض الكل" }: DashboardWidgetHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-6">
-      <h2 className="font-headline-lg text-[32px] font-bold text-on-surface">{title}</h2>
+    <div className="flex items-center justify-between">
+      <h2 className="tq-widget-title">{title}</h2>
       {href ? (
-        <Link className="text-primary hover:text-primary-container font-label-lg transition-colors" href={href}>
+        <Link className="tq-widget-link no-underline" href={href}>
           {actionLabel}
         </Link>
       ) : null}
@@ -30,18 +31,16 @@ export function DashboardWidgetHeader({ title, href, actionLabel = "عرض ال�
   );
 }
 
-export function DashboardEmptyState({ icon, title, description, action }: DashboardEmptyStateProps) {
+export function DashboardEmptyState({ icon, title, description, className = "", action }: DashboardEmptyStateProps) {
   return (
-    <div className="glass-card rounded-xl p-8 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <span className="material-symbols-outlined text-[28px]">{icon}</span>
-      </div>
-      <h3 className="mb-2 text-[20px] font-bold text-on-surface">{title}</h3>
-      <p className="mx-auto max-w-md text-sm leading-relaxed text-on-surface-variant">
+    <div className={`glass-empty-state flex flex-col items-center justify-center py-10 px-6 text-center min-h-[160px] ${className}`}>
+      <span className="material-symbols-outlined text-[26px] text-muted/40 mb-3">{icon}</span>
+      <h3 className="text-sm font-semibold text-white mb-1">{title}</h3>
+      <p className="text-xs text-muted leading-6 max-w-[220px]">
         {description}
       </p>
       {action ? (
-        <Link className="btn-gradient mt-6 inline-flex px-6 py-3 no-underline" href={action.href}>
+        <Link className="btn-gradient px-4 py-1.5 text-xs mt-4 inline-block no-underline" href={action.href}>
           {action.label}
         </Link>
       ) : null}
@@ -50,5 +49,5 @@ export function DashboardEmptyState({ icon, title, description, action }: Dashbo
 }
 
 export function DashboardWidget({ children }: { children: ReactNode }) {
-  return <section>{children}</section>;
+  return <section className="space-y-3">{children}</section>;
 }

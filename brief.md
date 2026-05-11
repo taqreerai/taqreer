@@ -3,7 +3,7 @@
 ## Coding Rules
 
 - **Always use Tailwind utility classes for styling.** Never write raw CSS properties (e.g. `backdrop-filter`, `background`, `border`) in custom CSS classes or inline styles when a Tailwind class exists. Tailwind v4 uses a CSS variable chain for composable utilities (e.g. `backdrop-blur-*`, `bg-*`, `border-*`) — using raw CSS overrides that chain and breaks the output.
-- Use `globals.css` only for things Tailwind cannot express: complex animations (`@keyframes`), pseudo-element tricks, and semantic component classes (`.card-dark`, `.btn-gradient`) that combine many utilities into a reusable pattern.
+- Use `globals.css` only for things Tailwind cannot express: complex animations (`@keyframes`), pseudo-element tricks, and semantic component classes (`.btn-gradient`) that combine many utilities into a reusable pattern.
 
 ---
 
@@ -371,7 +371,7 @@ High use_count → Taqreer team can feature it on Templates hero section
 - Muted: `#9A94A8`, Border: `rgba(42,36,59,0.8)`
 - Fonts: Cairo (Arabic), Poppins (English)
 - Dark theme, RTL-first
-- Key globals.css semantic classes: `plan-banner`, `settings-card`, `card-dark`, `glass-card`, `btn-gradient`, `btn-outline-dark`, `btn-danger`, `btn-icon`, `nav-active` (solid `#370BF4` bg, white text), `nav-item`, `sidebar-bg`, `page-container`, `divider-dark`, `dashboard-bg`, `badge-purple`, `progress-track`, `progress-bar`, `input-dark`, `input-search`
+- Key globals.css semantic classes: `plan-banner`, `settings-card`, `glass-card`, `btn-gradient`, `btn-outline-dark`, `btn-danger`, `btn-icon`, `nav-active` (solid `#370BF4` bg, white text), `nav-item`, `sidebar-bg`, `page-container`, `divider-dark`, `dashboard-bg`, `badge-purple`, `progress-track`, `progress-bar`, `input-dark`, `input-search`
 - Sidebar: 4 action buttons (إنشاء `#370BF4`, تحسين `#E036B8`, محاكاة `#9326C9`, مخصص `#7D2DFF`) — active state uses solid brand color bg; nav links active state uses solid `#370BF4`
 
 ---

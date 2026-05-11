@@ -27,7 +27,7 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
   const router = useRouter();
 
   const handleDownload = (projectId: string) => {
-    window.location.href = `/api/projects/${projectId}/download`;
+    window.location.assign(`/api/projects/${projectId}/download`);
   };
 
   const handleMoreClick = (projectId: string) => {
@@ -46,53 +46,56 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
           action={{ label: "إنشاء مشروع", href: "/create" }}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {projects.map((project) => (
-            <div key={project.id} className="glass-card rounded-xl overflow-hidden group glow-hover transition-all duration-300">
-              <div className="relative h-48 bg-surface-container-high">
+            <div key={project.id} className="glass-card rounded-[14px] overflow-hidden group">
+              <div className="relative h-[88px] tq-thumbnail">
                 {project.thumbnail ? (
                   <img
                     alt={project.title}
-                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
                     src={project.thumbnail}
+                    className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-300"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-surface-variant">
-                    <span className="material-symbols-outlined text-4xl text-outline-variant">image</span>
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[26px] text-muted opacity-25">image</span>
                   </div>
                 )}
-                <div className="absolute top-3 right-3 bg-surface/90 backdrop-blur px-2 py-1 rounded text-xs font-label-sm text-primary border border-primary/20">
-                  {projectTypeLabels[project.type] ?? project.type}
+                <div className="absolute top-2 right-2">
+                  <span className="badge-purple">{projectTypeLabels[project.type] ?? project.type}</span>
                 </div>
               </div>
-              <div className="p-4">
-                <h4 className="font-headline-md text-[18px] font-semibold text-on-surface mb-1 truncate">
-                  {project.title}
-                </h4>
-                <p className="text-xs text-on-surface-variant mb-4">
+
+              <div className="px-3 py-2.5">
+                <h4 className="text-[13px] font-semibold text-white truncate leading-snug">{project.title}</h4>
+                <p className="text-[11px] text-muted mt-0.5">
                   {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true, locale: ar })}
                 </p>
-                <div className="flex items-center justify-between border-t border-outline-variant/30 pt-3">
-                  <div className="flex space-x-reverse space-x-2">
+
+                <div className="flex items-center justify-between mt-2.5 pt-2 tq-card-divider">
+                  <div className="flex items-center gap-1">
                     <button
-                      aria-label="Download project"
-                      className="text-on-surface-variant hover:text-primary transition-colors"
-                      onClick={() => handleDownload(project.id)}
                       type="button"
+                      onClick={() => handleDownload(project.id)}
+                      aria-label="تحميل"
+                      className="btn-icon"
                     >
-                      <span className="material-symbols-outlined text-lg">download</span>
+                      <span className="material-symbols-outlined text-[15px]">download</span>
                     </button>
-                    <Link className="text-on-surface-variant hover:text-primary transition-colors" href={`/preview/${project.id}`}>
-                      <span className="material-symbols-outlined text-lg">edit</span>
+                    <Link
+                      href={`/preview/${project.id}`}
+                      className="btn-icon inline-flex items-center justify-center"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">edit</span>
                     </Link>
                   </div>
                   <button
-                    aria-label="Open more actions"
-                    className="text-on-surface-variant hover:text-on-surface transition-colors"
-                    onClick={() => handleMoreClick(project.id)}
                     type="button"
+                    onClick={() => handleMoreClick(project.id)}
+                    aria-label="المزيد"
+                    className="btn-icon"
                   >
-                    <span className="material-symbols-outlined text-lg">more_vert</span>
+                    <span className="material-symbols-outlined text-[15px]">more_vert</span>
                   </button>
                 </div>
               </div>

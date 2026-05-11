@@ -108,7 +108,7 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
             <div className="grid md:grid-cols-2 gap-6">
                 
                 <ScrollReveal direction="up" delay={0.1}>
-                <div className="glass-card rounded-2xl p-8 hover:bg-white/5 transition-colors group feature-card-glow">
+                <div className="plan-banner p-8 transition-colors group feature-card-glow">
                     <div
                         className="w-12 h-12 rounded-xl bg-brand-purple-900/50 flex items-center justify-center text-brand-purple-400 mb-6 border border-brand-purple-500/20 group-hover:bg-brand-purple-500 group-hover:text-white transition-colors">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
                 </ScrollReveal>
                 
                 <ScrollReveal direction="up" delay={0.2}>
-                <div className="glass-card rounded-2xl p-8 hover:bg-white/5 transition-colors group feature-card-glow">
+                <div className="plan-banner p-8 transition-colors group feature-card-glow">
                     <div
                         className="w-12 h-12 rounded-xl bg-brand-purple-900/50 flex items-center justify-center text-brand-purple-400 mb-6 border border-brand-purple-500/20 group-hover:bg-brand-purple-500 group-hover:text-white transition-colors">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,7 +145,7 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
             
             <ScrollReveal direction="up" delay={0.3}>
             <div
-                className="mt-6 glass-card rounded-2xl p-8 flex flex-col md:flex-row items-center gap-12 overflow-hidden relative feature-card-glow hover:bg-white/5 transition-colors">
+                className="mt-6 plan-banner p-8 flex flex-col md:flex-row items-center gap-12 overflow-hidden relative feature-card-glow transition-colors">
                 <div className="w-full md:w-1/2 z-10">
                     <div
                         className="w-12 h-12 rounded-xl bg-brand-purple-900/50 flex items-center justify-center text-brand-purple-400 mb-6 border border-brand-purple-500/20">
@@ -185,10 +185,10 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
                     تحتاجها.</p>
             </div>
             </ScrollReveal>
-            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto pt-4">
                 
                 <ScrollReveal direction="right" delay={0.1} className="flex">
-                <div className="glass-card rounded-3xl p-8 border-t-4 border-t-gray-600 flex flex-col w-full">
+                <div className="plan-banner p-8 flex flex-col w-full feature-card-glow transition-colors">
                     <h3 className="text-2xl font-bold mb-4 text-center">مجاني</h3>
                     <p className="text-gray-400 text-sm text-center mb-8 h-10">للتجربة وإنشاء عروض <br /> بسيطة بسرعة.</p>
                     <div className="space-y-4 mb-8 flex-grow">
@@ -240,12 +240,12 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
                 </div>
                 </ScrollReveal>
                 
-                <ScrollReveal direction="up" delay={0.2} className="flex">
-                <div
-                    className="glass-card rounded-3xl p-8 border-t-4 border-t-brand-purple-500 flex flex-col relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)] bg-surface-container-high w-full">
+                <ScrollReveal direction="up" delay={0.2} className="flex relative pt-3">
                     <div
-                        className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-brand-purple-500 text-xs px-3 py-1 rounded-full font-bold">
+                        className="absolute! -top-3 left-1/2 z-20 w-fit -translate-x-1/2 whitespace-nowrap bg-brand-purple-500 text-xs px-3 py-1 rounded-full font-bold">
                         الأكثر شعبية</div>
+                <div
+                    className="plan-banner p-8 flex flex-col relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)] w-full feature-card-glow transition-colors">
                     <h3 className="text-2xl font-bold mb-4 text-center">احترافي</h3>
                     <p className="text-gray-400 text-sm text-center mb-8 h-10">للمستخدمين الذين ينشئون <br /> عروضًا وتقارير
                         بشكل مستمر.</p>
@@ -301,7 +301,7 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
                 </ScrollReveal>
                 
                 <ScrollReveal direction="left" delay={0.3} className="flex">
-                <div className="glass-card rounded-3xl p-8 border-t-4 border-t-gray-600 flex flex-col w-full">
+                <div className="plan-banner p-8 flex flex-col w-full feature-card-glow transition-colors">
                     <h3 className="text-2xl font-bold mb-4 text-center">شركة</h3>
                     <p className="text-gray-400 text-sm text-center mb-8 h-10">للفرق والشركات التي تحتاج إلى تعاون، <br />
                         هوية موحدة، ومشاريع أكبر.</p>
