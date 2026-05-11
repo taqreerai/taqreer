@@ -2,22 +2,34 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
 
 export const dynamic = "force-dynamic";
 
-async function loadManifest(projectId: string): Promise<SlideManifest | null> {
-  const version = await prisma.presentationVersion.findFirst({
-    where: {
-      presentation: { projectId },
-      status: "completed",
+async function loadPreview(
+  projectId: string,
+): Promise<{ manifest: SlideManifest; projectTitle: string } | null> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      title: true,
+      presentation: {
+        select: {
+          versions: {
+            where: { status: "completed" },
+            orderBy: { versionNumber: "desc" },
+            take: 1,
+            select: { slideJson: true },
+          },
+        },
+      },
     },
-    orderBy: { versionNumber: "desc" },
-    select: { slideJson: true },
   });
-  if (!version) return null;
+  const version = project?.presentation?.versions[0];
+  if (!project || !version) return null;
   const result = SlideManifestSchema.safeParse(version.slideJson);
   if (!result.success) return null;
-  return result.data;
+  return { manifest: result.data, projectTitle: project.title };
 }
 
 export default async function PreviewPage({
@@ -26,8 +38,9 @@ export default async function PreviewPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const manifest = await loadManifest(projectId);
-  if (!manifest) notFound();
+  const data = await loadPreview(projectId);
+  if (!data) notFound();
+  const { manifest, projectTitle } = data;
 
   const fontLinks = [
     manifest.fonts.heading.url,
@@ -55,14 +68,16 @@ export default async function PreviewPage({
         <link key={url} rel="stylesheet" href={url} />
       ))}
 
-      <header style={{ color: "#FFFFFF", textAlign: "center", maxWidth: "1280px" }}>
+      <header style={{ color: "#FFFFFF", textAlign: "center", maxWidth: "1280px", width: "100%" }}>
         <p style={{ fontSize: "14px", color: "#9A94A8", letterSpacing: "0.1em" }}>
           PROJECT {projectId.slice(0, 8)} · {manifest.slides.length} SLIDES
         </p>
-        <h1 style={{ fontSize: "24px", fontWeight: 600, marginTop: "8px" }}>
-          Generated deck preview
+        <h1 style={{ fontSize: "24px", fontWeight: 600, marginTop: "8px", marginBottom: "16px" }}>
+          {projectTitle}
         </h1>
       </header>
+
+      <PreviewActionBar projectId={projectId} projectTitle={projectTitle} />
 
       <div
         style={{

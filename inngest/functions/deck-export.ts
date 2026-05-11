@@ -1,5 +1,10 @@
+import type { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { SlideManifestSchema } from "@/lib/schema/slide";
+
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
+}
 
 export const deckExport = inngest.createFunction(
   {
@@ -7,9 +12,29 @@ export const deckExport = inngest.createFunction(
     name: "Export Presentation",
     retries: 2,
     triggers: [{ event: "deck.export.requested" }],
+    onFailure: async ({ event, error }) => {
+      const jobId = (event.data.event?.data as { jobId?: string } | undefined)?.jobId;
+      if (!jobId) return;
+      const { prisma } = await import("@/lib/prisma");
+      await prisma.job
+        .update({
+          where: { id: jobId },
+          data: {
+            status: "failed",
+            outputJson: toJson({ error: error.message ?? String(error) }),
+          },
+        })
+        .catch(() => undefined);
+    },
   },
-  async ({ event, step }) => {
-    const { projectId, versionId, format, userId } = event.data;
+  async ({ event, step, logger }) => {
+    const { projectId, versionId, format, userId, jobId } = event.data as {
+      projectId: string;
+      versionId: string;
+      format: "pptx" | "pdf";
+      userId: string;
+      jobId?: string;
+    };
 
     const slideJson = await step.run("fetch-slide-json", async () => {
       const { prisma } = await import("@/lib/prisma");
@@ -81,9 +106,23 @@ export const deckExport = inngest.createFunction(
         return data.signedUrl;
       });
 
+      if (jobId) {
+        await step.run("update-job-success", async () => {
+          const { prisma } = await import("@/lib/prisma");
+          await prisma.job.update({
+            where: { id: jobId },
+            data: {
+              status: "succeeded",
+              outputJson: toJson({ signedUrl, format: "pptx" }),
+            },
+          });
+        });
+      }
+
+      logger.info("export_complete", { projectId, format: "pptx" });
       return { success: true, signedUrl, format: "pptx" };
     }
 
-    throw new Error(`Unknown format: ${format}`);
+    throw new Error(`Unsupported export format: ${format}. Only "pptx" is implemented.`);
   }
 );

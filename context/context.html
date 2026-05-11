@@ -1551,16 +1551,6 @@ inngest/
                     </div>
 
                     <div class="card">
-                        <h4>Don't trust brief.md ✅ markers</h4>
-                        <p>The brief overstated Phase 2 completion — flows marked complete didn't exist in the repo. Before relying on any "✅" claim, verify with <code>git ls-tree origin/dev &lt;path&gt;</code>. <code>brief.md</code> is aspirational; the filesystem is authoritative.</p>
-                    </div>
-
-                    <div class="card">
-                        <h4>Keep <code>context.html</code> in sync with brief.md</h4>
-                        <p>Both docs describe the same system from different angles. They diverged badly until we explicitly synced. <strong>Every brief.md edit should mirror into context.html.</strong> When they conflict, brief.md is canonical.</p>
-                    </div>
-
-                    <div class="card">
                         <h4>Strip <code>previewDataUrl</code> from Claude input</h4>
                         <p>The Create wizard sent the logo as a base64 data URL (<code>previewDataUrl</code>) in addition to the storage URL. That bloated each Claude call by ~3000 input tokens for no benefit — the renderer can use <code>storageUrl</code> alone.</p>
                         <p><strong>Fix:</strong> drop <code>previewDataUrl</code> when building the Claude-bound brief in <code>app/api/projects/route.ts</code> (already applied 2026-05-11).</p>
