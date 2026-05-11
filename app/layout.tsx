@@ -62,9 +62,9 @@ export default function RootLayout({
             var p = localStorage.getItem('taqreer_glass_preset');
             var presets = {
               off:    ['0',    '0px',  '0.08', '100%'],
-              subtle: ['0.04', '8px',  '0.06', '120%'],
-              normal: ['0.07', '16px', '0.12', '160%'],
-              strong: ['0.12', '24px', '0.20', '180%']
+              subtle: ['0.02', '4px',  '0.06', '110%'],
+              normal: ['0.04', '8px',  '0.09', '130%'],
+              strong: ['0.07', '16px', '0.12', '160%']
             };
             var v = presets[p] || presets.normal;
             var r = document.documentElement;

@@ -85,7 +85,7 @@ export function Sidebar({
     { label: 'إنشاء', icon: 'add_circle', color: '#370BF4', glow: 'rgba(55,11,244,0.4)', path: '/create' },
     { label: 'تحسين', icon: 'auto_fix_high', color: '#E036B8', glow: 'rgba(224,54,184,0.4)', path: '/enhance' },
     { label: 'محاكاة', icon: 'content_copy', color: '#9326C9', glow: 'rgba(147,38,201,0.4)', path: '/mimic' },
-    { label: 'مخصص', icon: 'edit', color: '#7D2DFF', glow: 'rgba(125,45,255,0.4)', path: '/custom' },
+    { label: 'من قالب', icon: 'grid_view', color: '#7D2DFF', glow: 'rgba(125,45,255,0.4)', path: '/templates' },
   ];
 
   const navLinks = [

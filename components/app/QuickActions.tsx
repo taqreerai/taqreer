@@ -11,7 +11,7 @@ const cards = [
     icon: 'auto_fix_high',
     title: 'تحسين عرض موجود',
     desc: 'ارفع ملفك واحصل على نسخة محسّنة',
-    path: '/enhance/upload',
+    path: '/enhance',
   },
   {
     icon: 'content_copy',
@@ -20,10 +20,10 @@ const cards = [
     path: '/mimic',
   },
   {
-    icon: 'edit',
-    title: 'بناء قالب مخصص',
-    desc: 'صمم هويتك البصرية الخاصة',
-    path: '/custom',
+    icon: 'grid_view',
+    title: 'إنشاء من قالب',
+    desc: 'اختر قالباً جاهزاً وأضف محتواك',
+    path: '/templates',
   },
 ];
 
