@@ -17,10 +17,10 @@ type PlanUsageData = {
 };
 
 const glassPresets = {
-  off:    { label: 'لا يوجد', desc: 'بدون تأثير', opacity: '0',    blur: '0px',  borderOpacity: '0.08', saturation: '100%' },
-  subtle: { label: 'خفيف',    desc: 'تأثير ناعم',  opacity: '0.04', blur: '8px',  borderOpacity: '0.06', saturation: '120%' },
-  normal: { label: 'معتدل',   desc: 'الافتراضي',   opacity: '0.07', blur: '16px', borderOpacity: '0.12', saturation: '160%' },
-  strong: { label: 'قوي',     desc: 'تأثير قوي',   opacity: '0.12', blur: '24px', borderOpacity: '0.20', saturation: '180%' },
+  off:    { label: 'لا يوجد', desc: 'بدون تأثير', opacity: '0',    blur: '0px', borderOpacity: '0.08', saturation: '100%' },
+  subtle: { label: 'خفيف',    desc: 'تأثير ناعم',  opacity: '0.02', blur: '4px', borderOpacity: '0.06', saturation: '110%' },
+  normal: { label: 'معتدل',   desc: 'الافتراضي',   opacity: '0.04', blur: '8px', borderOpacity: '0.09', saturation: '130%' },
+  strong: { label: 'قوي',     desc: 'تأثير قوي',   opacity: '0.07', blur: '16px', borderOpacity: '0.12', saturation: '160%' },
 } as const;
 type GlassPreset = keyof typeof glassPresets;
 
