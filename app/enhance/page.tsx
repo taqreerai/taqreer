@@ -8,7 +8,7 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
 }
 
-export default function EnhanceUploadPage() {
+export default function EnhancePage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);

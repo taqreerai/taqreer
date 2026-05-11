@@ -62,12 +62,27 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as CreateProjectPayload;
     const title = buildProjectTitle(payload);
     const projectType = payload.type === "enhance" ? "enhance" : "create";
+
+    // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000 input tokens).
+    // The full brand (including previewDataUrl) is still kept in `aiPrompt` for debugging.
+    const claudeBrand = payload.brand
+      ? {
+          ...payload.brand,
+          logo: payload.brand.logo
+            ? {
+                name: payload.brand.logo.name,
+                storageUrl: payload.brand.logo.storageUrl,
+              }
+            : payload.brand.logo,
+        }
+      : payload.brand;
+
     const brief = {
       title,
       language: "ar",
       direction: "rtl",
       content: payload.content,
-      brand: payload.brand,
+      brand: claudeBrand,
       outline: payload.outline,
       slideCount: payload.slideCount,
     };

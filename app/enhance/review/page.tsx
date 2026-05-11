@@ -79,7 +79,7 @@ export default function EnhanceReviewPage() {
   useEffect(() => {
     const raw = sessionStorage.getItem("taqreer:enhance:upload");
     if (!raw) {
-      router.replace("/enhance/upload");
+      router.replace("/enhance");
       return;
     }
 
@@ -159,7 +159,7 @@ export default function EnhanceReviewPage() {
           </div>
           <button
             type="button"
-            onClick={() => router.push("/enhance/upload")}
+            onClick={() => router.push("/enhance")}
             className="btn-outline-dark px-3 py-1.5 text-sm"
           >
             تغيير الملف

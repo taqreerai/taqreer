@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { DashboardShell } from "@/components/app/DashboardShell";
 
 const steps = [
-  { step: 1, label: "رفع الملف", path: "/enhance/upload" },
+  { step: 1, label: "رفع الملف", path: "/enhance" },
   { step: 2, label: "مراجعة وإنشاء", path: "/enhance/review" },
 ];
 

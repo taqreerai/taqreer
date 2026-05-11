@@ -15,15 +15,85 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 
 ---
 
-## Overall Progress: 42% complete
+## Overall Progress: ~45% complete
 
 | Phase | Description | Status | % |
 |---|---|---|---|
 | Phase 1 | Foundation | ✅ Complete | 100% |
-| Phase 2 | Core Loop (Create → Preview → Export) | 🔄 In progress | 0% |
-| Phase 3 | Expand Flows (Enhance, Mimic, Custom) | ⏳ Not started | 0% |
+| Phase 2 | Core Loop (Create → Preview → Export) | 🔄 In progress | ~30% — Create wizard UI shipped; **renderer + preview block the loop** |
+| Phase 3 | Expand Flows (Enhance, Mimic, Custom) | 🔄 In progress | ~10% — Enhance wizard UI shipped; same loop blockers |
 | Phase 4 | Business Layer (Stripe, Brand Kits, Admin) | ⏳ Not started | 0% |
 | Phase 5 | Ecosystem (Templates, Community, Public) | ⏳ Not started | 0% |
+
+---
+
+## Current State (2026-05-11)
+
+### Route inventory
+
+**✅ Shipped & rendering on dev**
+
+| Route | Purpose |
+|---|---|
+| `/` | Marketing landing |
+| `/auth/login`, `/auth/signup`, `/auth/forgot-password`, `/auth/confirmed`, `/auth/callback` | Supabase Auth (email + Google OAuth) |
+| `/dashboard` | App home — QuickActions, RecentProjects, MyTemplates, PlanUsage |
+| `/projects` | Project list |
+| `/templates` | Template gallery |
+| `/brand-kits` | Brand kit list |
+| `/folders` | Folder list |
+| `/features` | Features page |
+| `/settings` | User settings |
+| `/create` | Redirects to `/create/content` |
+| `/create/content` | Step 1 — content upload / paste |
+| `/create/brand` | Step 2 — brand colors, fonts, slide count |
+| `/create/summary` | Step 3 — editable AI summary + CTAs |
+| `/create/generating` | Generation progress (Supabase Realtime + polling fallback) |
+| `/enhance` | Step 1 — PPTX upload, enhancement level |
+| `/enhance/review` | Step 2 — brand colors, slide count, trigger |
+
+**❌ Linked from UI but not built (dead ends)**
+
+| Broken link | Linked from | Phase / status |
+|---|---|---|
+| `/preview/[projectId]` | `/create/generating` auto-redirects here on completion | **Critical** — Phase 2.3, blocks the entire MVP loop |
+| `/mimic`, `/mimic/content`, `/mimic/reference`, `/mimic/review` | Sidebar (محاكاة) + Dashboard QuickActions | Phase 3.2 — 3-step flow with iterative review |
+| `/templates` (with search/filter + "create from this template" CTA) | Sidebar (Templates nav) + Dashboard QuickActions tile 4 (إنشاء من قالب) | Phase 3.3 / 3.4 — page exists as empty shell; needs search, filter, and template-launch flow |
+| `/custom` | *(legacy — being removed)* | Folded into "Build from Template" (Flow 4). The 4th CTA now points to `/templates`, not `/custom`. |
+
+### API routes shipped
+
+| Route | Purpose |
+|---|---|
+| `POST /api/projects` | Create project, fire `deck/generate.requested` |
+| `GET /api/projects/[id]/status` | Generation status (polling fallback for Realtime) |
+| `POST /api/projects/[id]/retry` | Retry failed generation |
+| `POST /api/storage/upload` | Signed upload helper (buckets: `source-files`, `brand-assets`) |
+| `GET/PUT /api/inngest` | Inngest SDK connector — 5 functions registered |
+
+### What's actually working end-to-end
+
+- ✅ Signup → email confirm → login → dashboard
+- ✅ Dashboard renders real DB data (empty states for new users)
+- ✅ Sidebar nav + QuickActions wire to existing routes (broken ones still 404)
+- ✅ Create flow wizard fully renders all 4 screens
+- ✅ Enhance flow wizard fully renders both screens
+- ✅ Submitting create/enhance writes a project row and fires Inngest event
+- ✅ Inngest dev server picks up events (visible at http://localhost:8288)
+
+### What's broken / unverified
+
+- ⚠️ **`ANTHROPIC_API_KEY` is the placeholder in `.env.local`** — `deck/generate.requested` will fail on the Claude call until a real key is set
+- ❌ Even with a real key, generated JSON has **nowhere to display** — no slide renderer, no preview window
+- ⚠️ Stale Google avatar URL on at least one seeded user → `403` from Next.js Image proxy (non-blocking)
+
+### Immediate next priorities
+
+1. **Replace `ANTHROPIC_API_KEY` placeholder** + smoke-test one end-to-end generation via the Inngest dashboard. Confirms Claude returns valid JSON before building UI on top.
+2. **Phase 2.2 — Slide Renderer component.** "The single most important component in Taqreer." Takes slide JSON → renders HTML/CSS at 1920×1080 with custom `@font-face` fonts. Unblocks preview, thumbnails, comments, export.
+3. **Phase 2.3 — `/preview/[projectId]`.** Slide panel + main view + action bar (`أعد التصميم` / `تصدير PPTX` / `تصدير PDF` / `حفظ كقالب`). Closes the loop so generation has a landing destination.
+4. **Phase 2.4 — Area redesign UX.** Drawn selection + screenshot capture → `area/redesign.requested` event. The Inngest job exists; the UI doesn't.
+5. **Phase 2.5 — Export UI wiring.** Inngest export jobs (`deck/export.requested`) exist; needs UI buttons that fire them and surface the signed URL when ready.
 
 ---
 
@@ -38,7 +108,7 @@ You are building **Taqreer** (taqreer.ai), an AI-powered Arabic presentation pla
 | Database | PostgreSQL, db: taqreer, user: taqreer_user |
 | App | Next.js 16, TypeScript, Tailwind CSS, live on taqreer.ai |
 | Repo | https://github.com/taqreerai/taqreer.git |
-| Local dev | Mac, running on localhost:3000, PostgreSQL + Redis via Docker |
+| Local dev | Mac + Windows (D:\taqreer, Node 20.19 via nvm-windows), localhost:3000, PostgreSQL + Redis via Docker |
 
 ## What Is Already Built
 
@@ -479,7 +549,7 @@ On export: PptxGenJS (PPTX) or Puppeteer (PDF) generates files
 
 **Goal:** User can create a presentation, review it, comment on it, and export it. This is the MVP.
 
-#### 2.1 Create Flow (إنشاء)
+#### 2.1 Create Flow (إنشاء) — 🔄 wizard UI shipped, blocked on renderer + preview
 
 **Step 1 — Content Input (`/create/content`)**
 - Upload file: PPTX, PDF, DOCX, TXT, images (drag & drop zone)
@@ -558,12 +628,84 @@ The single most important component in Taqreer. A React component that takes sli
 
 ---
 
-### PHASE 3 — Expand Flows · 0% done
+### PHASE 3 — Expand Flows · ~10% done
 
-#### 3.1 Enhance Flow (تحسين)
+The 4 flows on the dashboard QuickActions tiles (RTL right→left):
+
+| # | Tile | Path | Description |
+|---|---|---|---|
+| 1 | إنشاء عرض جديد | `/create/content` | Phase 2.1 — start from scratch |
+| 2 | تحسين عرض موجود | `/enhance` | Make an ugly PPT better, **preserving its original theme/colors** |
+| 3 | محاكاة أسلوب عرض | `/mimic` | Take your content, redesign it in the style of a reference deck |
+| 4 | إنشاء من قالب | `/templates` | Pick a template from the library, then add content |
+
+---
+
+#### 3.1 Enhance Flow (تحسين) — 🔄 wizard UI shipped (`/enhance`, `/enhance/review`), review needs Claude extraction
+
+**Goal:** Make an ugly PPT better while **keeping its original theme, palette, and fonts**. Claude redesigns layout/typography/hierarchy but does not invent a new visual identity.
+
+**Step 1 — Upload (`/enhance`)** ✅ UI built
+- PPTX-only upload (drag & drop)
+- Advanced options accordion: keep colors, keep fonts, custom instructions
+- On Next → upload to Supabase (`source-files/enhance/...`) → handoff via sessionStorage → `/enhance/review`
+
+**Step 2 — Review (`/enhance/review`)** ⚠️ exists but does NOT yet show Claude's extraction
+- Claude analyzes the uploaded PPTX (vision + parsing) and surfaces:
+  - **Extracted palette** — primary/secondary/background/text swatches (with hex)
+  - **Extracted fonts** — heading + body sample renders
+  - **Extracted logo** (if present) — preview
+  - **Detected slide count + structure** — outline of original slides
+- Claude describes its redesign plan in plain Arabic (e.g. *"سأحافظ على هويتك البصرية وأعيد تصميم الشرائح لتكون أكثر وضوحاً وجاذبية، مع تحسين الترتيب والتسلسل..."*)
+- User can override any extracted asset (click a color swatch to edit, swap a font, replace the logo)
+- Click `تحسين` → fires `deck.generate.requested` with `type: "enhance"` and the (possibly overridden) extracted brand contract
+- Goes to `/create/generating` → `/preview/[projectId]` (shared with Create flow)
+
 #### 3.2 Mimic Flow (محاكاة)
-#### 3.3 Templates Page
-#### 3.4 Custom Flow (مخصص)
+
+**Goal:** Take your content and redesign it in the **visual style of a reference deck you admire**. Claude extracts the reference's style contract (palette, fonts, layout idioms, decorative motifs) and applies it to your content.
+
+**Step 1 — Upload your content (`/mimic/content`)**
+- Upload PPTX/PDF/DOCX/TXT — the content you want redesigned
+- OR paste text manually
+- Click التالي →
+
+**Step 2 — Upload reference style (`/mimic/reference`)**
+- Upload a PPTX whose visual style you want to match (the "look I want")
+- Claude extracts the reference's style contract: palette, fonts, layout patterns, header/footer treatment, accent shapes
+- Click التالي →
+
+**Step 3 — Review (`/mimic/review`) — iterative**
+- Claude shows:
+  - Extracted reference style (palette, font samples, 2–3 layout thumbnails)
+  - Outline of how your content will be mapped onto that style (slide-by-slide design plan in plain Arabic)
+- User options:
+  - **Confirm** (`إنشاء`) → fires generation
+  - **Add prompt** (textarea + `أعد المراجعة`) → Claude refines its plan with the new guidance → returns to the same review page with the updated plan; loop until confirmed
+- On confirm → fires `deck.generate.requested` with `type: "mimic"`, content + reference style contract
+- Goes to `/create/generating` → `/preview/[projectId]`
+
+#### 3.3 Templates Page (`/templates`)
+
+**Goal:** Browsable library of templates — both premade (Taqreer team) and saved (user/community). This is also the entry for Flow 4.
+
+- Grid of template cards: thumbnail, title, category, language, slide count, plan tier
+- **Search bar** — title, tag, content keywords
+- **Filters** — category, industry, language (Arabic/English), direction (RTL/LTR), plan tier (Free/Plus/Pro), featured
+- Featured section at top (Taqreer team picks, high `use_count`)
+- Each card has an **`إنشاء من هذا القالب`** CTA → starts Flow 4 with that template's ID
+
+#### 3.4 Build from Template (إنشاء من قالب)
+
+**Goal:** Use an existing template's design system — user just provides content. **Replaces the earlier "Custom Flow" concept** — there is no separate custom-design path; the design comes from the template.
+
+**Entry:** Dashboard QuickAction tile 4 + Sidebar action button 4 → both navigate to `/templates`. From there, user picks a template and clicks `إنشاء من هذا القالب`.
+
+**Step 1 — Template picked** at `/templates` (handoff via query param or sessionStorage)
+**Step 2 — Content (`/templates/[id]/content`)** — upload PPTX/PDF/DOCX/TXT or paste; slide count options (match file / let Claude decide / specify)
+**Step 3 — Generate** — fires `deck.generate.requested` with `type: "custom"` and the template's `style_contract` as the design system → `/create/generating` → `/preview/[projectId]`
+
+No brand wizard step — the template's style contract supplies palette, fonts, logo, layout system. The user only contributes content.
 
 ---
 
