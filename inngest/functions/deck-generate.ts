@@ -23,10 +23,11 @@ LANGUAGE & DIRECTION
 - Use the language and direction from the brief.
 
 TYPOGRAPHY
-- Reference the brief's heading and body font names in element.fontFamily.
+- In element.fontFamily, use ONLY the font names declared in fonts.heading.name and fonts.body.name. Do not invent or substitute other names.
+- **Pick the font by SCRIPT, not by role.** If the text content is Arabic (or any RTL script), use the font that supports Arabic — in this project that is the heading font (Cairo). If the text content is Latin (English, Western digits-only, etc.), use the body font (Poppins). Never tag Arabic content with a Latin-only font (e.g. Poppins) — PowerPoint will fall back to a font without Arabic shaping and the letters will visibly disconnect.
+- A single text element rarely mixes scripts; if it does (e.g. "تقرير موجز • 2024"), pick the font of the dominant script. Western digits render correctly in Arabic-capable fonts like Cairo.
 - Typical sizes: headline 56–96pt, subheading 32–48pt, body 16–22pt, caption 10–14pt.
-- Set role on text elements ("headline" | "subheading" | "body" | "caption" | "label").
-- Use the heading font for headlines/subheadings and the body font for body/caption/label.
+- Set role on text elements ("headline" | "subheading" | "body" | "caption" | "label") — role drives visual weight (size/boldness/color), NOT font choice.
 
 LAYOUT
 - Each slide needs a clear visual hierarchy: one primary focus, supporting elements, breathing room.
@@ -36,7 +37,7 @@ LAYOUT
 
 COLOR
 - Use only the brief's palette (primary, secondary, background, text, muted) plus pure white / pure black where contrast requires.
-- Backgrounds: solid color OR 2-stop linear gradient only.
+- **NO GRADIENTS.** Backgrounds and shape fills must always be solid colors ({type: "color", value: "#hex"}). Do not emit {type: "gradient", ...} on any slide.background or shape.fill — gradients don't round-trip cleanly to PPTX export and degrade the exported deck. If you want a two-color effect on a slide, paint a full-canvas rectangle in one color and overlay a separate shape (circle, rectangle, etc.) in the second color at lower opacity.
 - Maintain WCAG-acceptable text/background contrast on every slide.
 
 SHAPES
@@ -50,10 +51,10 @@ EFFECTS
 OUTPUT — JSON only, no prose
 - Return EXACTLY one JSON object. No markdown fences. No prose before or after. No explanations.
 - Top-level required: version "1.0", presentationId (string), language ("ar"|"en"), direction ("rtl"|"ltr"), canvas {width: 1920, height: 1080}, fonts {heading: {name, url}, body: {name, url}}, palette {primary, secondary, background, text, muted — all hex like "#370BF4"}, slides[] (≥ 1).
-- Each slide: slideId (unique non-empty string), optional role ("cover"|"agenda"|"content"|"stats"|"quote"|"image"|"closing"), background ({type:"color", value:"#hex"} OR {type:"gradient", gradient:{type:"linear", angle:0-360, stops:[{color, position}, {color, position}]}}), elements[].
+- Each slide: slideId (unique non-empty string), optional role ("cover"|"agenda"|"content"|"stats"|"quote"|"image"|"closing"), background ({type:"color", value:"#hex"} — solid only, see COLOR section), elements[].
 - Text element: {id, type:"text", x, y, width, height, content, fontFamily, fontSize, color (hex), textAlign ("left"|"right"|"center"), direction ("ltr"|"rtl"), optional role, fontWeight (100–900), lineHeight, italic, underline}.
 - Image element: {id, type:"image", x, y, width, height, src (absolute URL), optional role, objectFit ("contain"|"cover"|"fill")}.
-- Shape element: {id, type:"shape", x, y, width, height, kind ("rectangle"|"circle"|"ellipse"|"triangle"|"line"), optional role, fill (same shape as background)}.
+- Shape element: {id, type:"shape", x, y, width, height, kind ("rectangle"|"circle"|"ellipse"|"triangle"|"line"), optional role, fill ({type:"color", value:"#hex"} — solid only, see COLOR section)}.
 - All x, y, width, height are pixel numbers on the 1920×1080 canvas.
 - Slide count: match the brief's slideCount; if null or absent, choose 8–12 based on content depth.
 - Element IDs must be unique within their slide.
