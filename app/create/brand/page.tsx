@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 
 type PaletteMode = "manual" | "screenshot";
 type SlideCountMode = "match" | "auto" | "custom";
+type LogoPosition = "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+
+const LOGO_POSITION_OPTIONS: { value: LogoPosition; label: string }[] = [
+  { value: "auto", label: "اتركها لنا" },
+  { value: "top-right", label: "أعلى يمين" },
+  { value: "top-left", label: "أعلى يسار" },
+  { value: "bottom-right", label: "أسفل يمين" },
+  { value: "bottom-left", label: "أسفل يسار" },
+];
 type StoredContent = {
   type: "file" | "text";
   fileName?: string;
@@ -102,6 +111,73 @@ function CompactUploadZone({
   );
 }
 
+function FontSlot({
+  label,
+  file,
+  family,
+  sampleText,
+  sampleSizeClass,
+  onSelect,
+  onRemove,
+}: {
+  label: string;
+  file: File | null;
+  family: string;
+  sampleText: string;
+  sampleSizeClass: string;
+  onSelect: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="space-y-3">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".woff2,.woff,.ttf,.otf"
+        className="hidden"
+        onChange={(event) => {
+          const nextFile = event.target.files?.[0];
+          if (nextFile) onSelect(nextFile);
+        }}
+      />
+      {file ? (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="material-symbols-outlined text-[#7D2DFF]">font_download</span>
+            <span className="truncate font-semibold text-white">{file.name}</span>
+          </div>
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`إزالة ${label}`}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex max-h-[120px] min-h-[100px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#370BF4]/60 bg-[#03030D]/40 p-4 text-center transition-colors hover:border-[#7D2DFF] hover:bg-[#7D2DFF]/10"
+        >
+          <span className="material-symbols-outlined mb-2 text-[28px] text-[#7D2DFF]">font_download</span>
+          <span className="font-semibold text-white">{label}</span>
+          <span className="mt-1 text-xs text-muted">اختياري — Arial افتراضياً</span>
+        </button>
+      )}
+      <p
+        className={`${sampleSizeClass} text-white`}
+        style={family ? { fontFamily: family } : undefined}
+      >
+        {sampleText}
+      </p>
+    </div>
+  );
+}
+
 function ColorField({
   label,
   value,
@@ -140,13 +216,19 @@ export default function CreateBrandPage() {
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("manual");
   const [palette, setPalette] = useState(defaultPalette);
   const [paletteScreenshot, setPaletteScreenshot] = useState<File | null>(null);
-  const [useDefaultFonts, setUseDefaultFonts] = useState(true);
   const [headingFont, setHeadingFont] = useState<File | null>(null);
   const [bodyFont, setBodyFont] = useState<File | null>(null);
-  const [headingFamily, setHeadingFamily] = useState("Cairo");
-  const [bodyFamily, setBodyFamily] = useState("Poppins");
+  // Empty by default — no Cairo/Poppins preselect. When the user uploads a
+  // font we generate a CSS-safe family name and stash it here so the live
+  // preview can render with it. If both stay empty at submit, the API uses
+  // Arial as the universal fallback.
+  const [headingFamily, setHeadingFamily] = useState("");
+  const [bodyFamily, setBodyFamily] = useState("");
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
+  const [logoPosition, setLogoPosition] = useState<LogoPosition>("auto");
+  const [logoExcludeCover, setLogoExcludeCover] = useState(false);
+  const [logoExcludeClosing, setLogoExcludeClosing] = useState(false);
   const fontResourcesRef = useRef<{
     heading: { style: HTMLStyleElement; url: string } | null;
     body: { style: HTMLStyleElement; url: string } | null;
@@ -222,8 +304,8 @@ export default function CreateBrandPage() {
     try {
       const [paletteScreenshotAsset, headingFontAsset, bodyFontAsset, logoAsset, logoPreviewDataUrl] = await Promise.all([
         paletteMode === "screenshot" ? uploadAsset("brand-assets", "palette", paletteScreenshot) : Promise.resolve(null),
-        !useDefaultFonts ? uploadAsset("brand-assets", "fonts", headingFont) : Promise.resolve(null),
-        !useDefaultFonts ? uploadAsset("brand-assets", "fonts", bodyFont) : Promise.resolve(null),
+        uploadAsset("brand-assets", "fonts", headingFont),
+        uploadAsset("brand-assets", "fonts", bodyFont),
         uploadAsset("brand-assets", "logos", logo),
         readFileAsDataUrl(logo),
       ]);
@@ -235,19 +317,29 @@ export default function CreateBrandPage() {
           palette,
           paletteScreenshotUrl: paletteScreenshotAsset?.storageUrl ?? null,
           fonts: {
-            useDefaults: useDefaultFonts,
             heading: {
-              name: useDefaultFonts ? "Cairo" : (headingFontAsset?.name ?? headingFont?.name ?? null),
-              storageUrl: useDefaultFonts ? null : (headingFontAsset?.storageUrl ?? null),
-              family: useDefaultFonts ? "Cairo" : headingFamily,
+              name: headingFontAsset?.name ?? headingFont?.name ?? null,
+              storageUrl: headingFontAsset?.storageUrl ?? null,
+              family: headingFamily || null,
             },
             body: {
-              name: useDefaultFonts ? "Poppins" : (bodyFontAsset?.name ?? bodyFont?.name ?? null),
-              storageUrl: useDefaultFonts ? null : (bodyFontAsset?.storageUrl ?? null),
-              family: useDefaultFonts ? "Poppins" : bodyFamily,
+              name: bodyFontAsset?.name ?? bodyFont?.name ?? null,
+              storageUrl: bodyFontAsset?.storageUrl ?? null,
+              family: bodyFamily || null,
             },
           },
-          logo: logoAsset ? { name: logoAsset.name, storageUrl: logoAsset.storageUrl, previewDataUrl: logoPreviewDataUrl } : null,
+          logo: logoAsset
+            ? {
+                name: logoAsset.name,
+                storageUrl: logoAsset.storageUrl,
+                previewDataUrl: logoPreviewDataUrl,
+                position: logoPosition,
+                exclude: [
+                  logoExcludeCover ? "cover" : null,
+                  logoExcludeClosing ? "closing" : null,
+                ].filter((value): value is "cover" | "closing" => value !== null),
+              }
+            : null,
           slideSize,
           slideCount: {
             mode: slideCountMode,
@@ -332,78 +424,129 @@ export default function CreateBrandPage() {
       </div>
 
       <div className="glass-card rounded-xl p-6 space-y-6">
-        <h2 className="mb-4 font-semibold text-white">الخطوط</h2>
-        <label className="flex items-center gap-3 text-sm text-white">
-          <input
-            type="checkbox"
-            checked={useDefaultFonts}
-            onChange={(event) => setUseDefaultFonts(event.target.checked)}
-            className="h-4 w-4 accent-[#370BF4]"
-          />
-          استخدم Cairo للعناوين و Poppins للنص
-        </label>
+        <h2 className="font-semibold text-white">الخطوط</h2>
+        <p className="text-sm text-muted">
+          ارفع خطوطك الخاصة، أو اتركها فارغة وسنستخدم Arial كخط افتراضي.
+        </p>
 
-        {useDefaultFonts ? (
-          <div className="settings-card space-y-2">
-            <p className="text-2xl font-semibold text-white">أبجد هوز</p>
-            <p className="font-sans text-base text-white">The quick brown fox</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <CompactUploadZone
-                label="خط العناوين"
-                accept=".woff2,.woff,.ttf,.otf"
-                file={headingFont}
-                onSelect={(file) => {
-                  setHeadingFont(file);
-                  injectFont(file, "heading");
-                }}
-              />
-              <p className="mt-3 text-2xl text-white" style={{ fontFamily: headingFamily }}>
-                أبجد هوز
-              </p>
-            </div>
-            <div>
-              <CompactUploadZone
-                label="خط النص"
-                accept=".woff2,.woff,.ttf,.otf"
-                file={bodyFont}
-                onSelect={(file) => {
-                  setBodyFont(file);
-                  injectFont(file, "body");
-                }}
-              />
-              <p className="mt-3 text-base text-white" style={{ fontFamily: bodyFamily }}>
-                The quick brown fox
-              </p>
-            </div>
-          </div>
-        )}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FontSlot
+            label="خط العناوين"
+            file={headingFont}
+            family={headingFamily}
+            sampleText="أبجد هوز"
+            sampleSizeClass="text-2xl"
+            onSelect={(file) => {
+              setHeadingFont(file);
+              injectFont(file, "heading");
+            }}
+            onRemove={() => {
+              const previous = fontResourcesRef.current.heading;
+              if (previous) {
+                previous.style.remove();
+                URL.revokeObjectURL(previous.url);
+                fontResourcesRef.current.heading = null;
+              }
+              setHeadingFont(null);
+              setHeadingFamily("");
+            }}
+          />
+          <FontSlot
+            label="خط النص"
+            file={bodyFont}
+            family={bodyFamily}
+            sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+            sampleSizeClass="text-base"
+            onSelect={(file) => {
+              setBodyFont(file);
+              injectFont(file, "body");
+            }}
+            onRemove={() => {
+              const previous = fontResourcesRef.current.body;
+              if (previous) {
+                previous.style.remove();
+                URL.revokeObjectURL(previous.url);
+                fontResourcesRef.current.body = null;
+              }
+              setBodyFont(null);
+              setBodyFamily("");
+            }}
+          />
+        </div>
       </div>
 
-      <div className="glass-card rounded-xl p-6 space-y-6">
-        <h2 className="mb-4 font-semibold text-white">الشعار</h2>
+      <div className="glass-card rounded-xl p-6 space-y-4">
+        <h2 className="font-semibold text-white">الشعار</h2>
         <CompactUploadZone label="ارفع الشعار" accept=".svg,.png,.jpg,.jpeg" file={logo} onSelect={setLogo} />
         {logo ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
-            <div className="flex items-center gap-3">
-              {logoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoPreview} alt="معاينة الشعار" className="max-h-[60px] max-w-24 object-contain" />
-              ) : null}
-              <p className="font-semibold text-white">{logo.name}</p>
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
+              <div className="flex items-center gap-3">
+                {logoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoPreview} alt="معاينة الشعار" className="max-h-[60px] max-w-24 object-contain" />
+                ) : null}
+                <p className="font-semibold text-white">{logo.name}</p>
+              </div>
+              <button type="button" onClick={() => setLogo(null)} className="badge-purple flex items-center gap-1">
+                <span className="text-base leading-none">×</span>
+                إزالة
+              </button>
             </div>
-            <button type="button" onClick={() => setLogo(null)} className="badge-purple flex items-center gap-1">
-              <span className="text-base leading-none">×</span>
-              إزالة
-            </button>
-          </div>
+
+            <div className="space-y-3">
+              <p className="text-sm text-white">موقع الشعار</p>
+              <div className="flex flex-wrap gap-2">
+                {LOGO_POSITION_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setLogoPosition(option.value)}
+                    className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                      logoPosition === option.value
+                        ? "btn-gradient text-white"
+                        : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm text-white">استثناء الشعار من</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLogoExcludeCover((current) => !current)}
+                  className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                    logoExcludeCover
+                      ? "btn-gradient text-white"
+                      : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
+                  }`}
+                >
+                  صفحة الغلاف
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLogoExcludeClosing((current) => !current)}
+                  className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                    logoExcludeClosing
+                      ? "btn-gradient text-white"
+                      : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
+                  }`}
+                >
+                  صفحة الشكر
+                </button>
+              </div>
+            </div>
+          </>
         ) : null}
       </div>
 
-      <div className="glass-card rounded-xl p-6 space-y-6">
-        <h2 className="mb-4 font-semibold text-white">إعدادات الشريحة</h2>
+      <div className="glass-card rounded-xl p-6 space-y-4">
+        <h2 className="font-semibold text-white">اختر حجم الشريحة</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <button
             type="button"
@@ -420,7 +563,10 @@ export default function CreateBrandPage() {
             <span className="font-semibold text-white">9:16 — عمودي</span>
           </button>
         </div>
+      </div>
 
+      <div className="glass-card rounded-xl p-6 space-y-4">
+        <h2 className="font-semibold text-white">عدد الشرائح</h2>
         <div className="space-y-3">
           {content?.type === "file" ? (
             <button

@@ -20,6 +20,11 @@ export default function CreateContentPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState<1 | 2 | null>(null);
+  // Default: let Claude organize the content (write headings, group bullets,
+  // etc.). When the user flips this off, we send a strict "verbatim" directive
+  // to Claude so the slides surface the user's exact words with no invented
+  // structure.
+  const [letUsHandle, setLetUsHandle] = useState(true);
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -69,12 +74,13 @@ export default function CreateContentPage() {
             fileName: file.name,
             fileSize: file.size,
             storageUrl: uploaded.storageUrl,
+            keepVerbatim: !letUsHandle,
           })
         );
       } else {
         sessionStorage.setItem(
           "taqreer:create:content",
-          JSON.stringify({ type: "text", text: text.trim() })
+          JSON.stringify({ type: "text", text: text.trim(), keepVerbatim: !letUsHandle })
         );
       }
 
@@ -205,6 +211,36 @@ export default function CreateContentPage() {
             ))}
           </div>
         ) : null}
+
+        {/* Verbatim toggle — applies to both file and text inputs */}
+        <div className="mt-6 flex items-start justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4">
+          <div>
+            <p className="font-semibold text-white">اتركها لنا</p>
+            <p className="mt-1 text-xs text-[#9A94A8]">
+              {letUsHandle
+                ? "سننظم محتواك ونصيغ العناوين والأقسام تلقائياً."
+                : "سنحافظ على نصك كما هو بدون إضافة عناوين أو إعادة صياغة."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLetUsHandle((current) => !current)}
+            role="switch"
+            aria-checked={letUsHandle}
+            aria-label="اتركها لنا"
+            className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
+              letUsHandle ? "" : "bg-white/10"
+            }`}
+            style={letUsHandle ? { backgroundImage: "var(--tq-gradient-brand)" } : undefined}
+            dir="ltr"
+          >
+            <span
+              className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                letUsHandle ? "translate-x-[22px]" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
 
         {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
 

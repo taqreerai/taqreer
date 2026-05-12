@@ -549,11 +549,11 @@
                     </div>
                     <div class="flow-step">
                         <div class="num">3</div>
-                        <div><strong>Editable AI Summary (<code>/create/summary</code>)</strong><span>Claude returns extracted palette, font samples, logo, and a content outline — all editable. CTAs: <code>إنشاء</code> or <code>إنشاء وحفظ كهوية بصرية</code>.</span></div>
+                        <div><strong>Editable Summary &amp; Rules (<code>/create/summary</code>)</strong><span>Two cards: <em>brand</em> (palette, fonts, logo, generation rules — tone, design style, fix typos, pagination, persistent overlay) and <em>content</em> (editable textarea + Edit/Save). CTAs: <code>إنشاء</code> or <code>إنشاء وحفظ كهوية بصرية</code>. POST <code>/api/projects</code> → redirect straight to <code>/preview/[projectId]</code>.</span></div>
                     </div>
                     <div class="flow-step">
                         <div class="num">4</div>
-                        <div><strong>Generate (<code>/create/generating</code>)</strong><span>Fires Inngest <code>deck.generate.requested</code>. Slides stream in via Supabase Realtime, then auto-redirect to <code>/preview/[projectId]</code>.</span></div>
+                        <div><strong>Generate (<code>/preview/[projectId]</code>)</strong><span>Fires Inngest <code>deck.generate.requested</code>. The preview page itself handles the generating state — placeholders with per-card progress (done ✓ / current / pending), polled from <code>/api/projects/[id]/status</code>. When complete, slides cascade in and the vertical toolbar slides in from the left.</span></div>
                     </div>
                 </div>
 
@@ -787,23 +787,24 @@ Background Workers
     confirmed/page.tsx                  ✅
     callback/route.ts                   ✅  OAuth handler
 
-  (app)/                                // shared dashboard shell
+  (app)/                                // shared dashboard shell (sidebar + header)
     dashboard/page.tsx                  ✅  QuickActions, RecentProjects, MyTemplates, PlanUsage
     projects/page.tsx                   ✅
     templates/page.tsx                  ⚠️  shell only — needs search, filter, "create from this template" CTA
     templates/[id]/content/page.tsx     ❌  Flow 4 — pick template → add content
-    brand-kits/page.tsx                 ✅
+    brand-kits/page.tsx                 ⚠️  stub
     folders/page.tsx                    ✅
     features/page.tsx                   ✅
     settings/page.tsx                   ✅
+    preview/[projectId]/page.tsx        ✅  Unified preview — generating placeholders + per-card progress + cascade-in slides + vertical toolbar
 
   create/                               // Flow 1 — إنشاء
     page.tsx                            ✅  redirects to /create/content
     layout.tsx                          ✅  3-step wizard chrome
-    content/page.tsx                    ✅  Step 1
-    brand/page.tsx                      ✅  Step 2
-    summary/page.tsx                    ✅  Step 3
-    generating/page.tsx                 ✅  Realtime + polling fallback
+    content/page.tsx                    ✅  Step 1 — content paste/upload + verbatim toggle (اتركها لنا)
+    brand/page.tsx                      ✅  Step 2 — empty fonts default, split slide-size + count cards, logo with position + exclusion pills
+    summary/page.tsx                    ✅  Step 3 — editable content + rules card (tone, design style, fix typos, pagination, persistent overlay)
+    generating/page.tsx                 ⚠️  thin redirect → /preview/[projectId] (kept for old tabs/bookmarks)
 
   enhance/                              // Flow 2 — تحسين
     layout.tsx                          ✅
@@ -814,9 +815,7 @@ Background Workers
     layout.tsx                          ❌
     content/page.tsx                    ❌  Step 1 — your content
     reference/page.tsx                  ❌  Step 2 — reference style
-    review/page.tsx                     ❌  Step 3 — iterative review loop
-
-  preview/[projectId]/page.tsx          ❌  Critical — Phase 2.3, blocks MVP loop</code></pre>
+    review/page.tsx                     ❌  Step 3 — iterative review loop</code></pre>
 
                 <h3>API Routes</h3>
                 <pre><code>app/api/
@@ -1505,33 +1504,37 @@ inngest/
             </section>
 
             <section id="status">
-                <h2>15. Implementation Status &amp; Lessons Learned (2026-05-11)</h2>
+                <h2>15. Implementation Status &amp; Lessons Learned (2026-05-12)</h2>
                 <p class="lead">Snapshot of what's actually working in the repo as of this date, plus traps we hit and the rules that came out of them. Update on each meaningful shipping milestone.</p>
 
                 <h3>What works end-to-end today</h3>
                 <ul>
                     <li><strong>Auth</strong> — Supabase email + Google OAuth → dashboard.</li>
-                    <li><strong>Dashboard</strong> — real DB-backed RecentProjects, MyTemplates, PlanUsage (empty states OK).</li>
-                    <li><strong>Create wizard (Flow 1)</strong> — 4 screens: content → brand → summary → generating. Wired to <code>POST /api/projects</code>.</li>
+                    <li><strong>Dashboard</strong> — real DB-backed RecentProjects, MyTemplates, PlanUsage (empty states OK). Project titles are now Claude-generated (not truncated paste) once a deck completes.</li>
+                    <li><strong>Create wizard (Flow 1)</strong> — content → brand → summary. Content step has a verbatim toggle (<code>اتركها لنا</code>, on by default). Brand step has empty font slots with deletable pills (Arial fallback at the API), split slide-size + slide-count cards, and a logo upload that reveals a position picker + cover/closing exclusion pills. Summary step has an editable content textarea (Edit / Save), rules-only right card replacing the dead outline UI: <em>tone</em> pills, <em>design style</em> pills (إبداعي · بسيط · احترافي · مرح · صحفي · جريء · كلاسيكي), <em>fix typos</em> toggle, <em>pagination</em> toggle, and <em>persistent overlay</em> (text + position picker + cover/closing exclusion pills). After submit → <code>POST /api/projects</code> → straight to <code>/preview/[projectId]</code> (no intermediate route).</li>
                     <li><strong>Enhance wizard (Flow 2)</strong> — upload at <code>/enhance</code>, review at <code>/enhance/review</code>. <em>Review page doesn't yet display Claude's extracted theme — Phase 3.1 work.</em></li>
-                    <li><strong>Claude pipeline</strong> — <code>deck.generate.requested</code> Inngest function calls Claude Opus 4.7 with adaptive thinking, system-prompt cache, self-healing retry. Font-by-script + no-gradient rules baked into the prompt. Generates valid Zod-passing slide JSON, writes to <code>PresentationVersion.slideJson</code>. ~75s for 5 slides.</li>
+                    <li><strong>Claude pipeline</strong> — <code>deck.generate.requested</code> Inngest function calls Claude Opus 4.7 with adaptive thinking, system-prompt cache, self-healing retry. New top-of-prompt <strong>USER RULES (HIGHEST PRIORITY)</strong> section makes user-message rules override system defaults. <code>buildUserMessage</code> translates the summary's rules into directives: tone, design-style (with per-style composition hints), typo policy, pagination on/off, persistent overlay (position + scope), verbatim mode (create flow only), and logo placement (image element with <code>role:"logo"</code>, <code>120×120</code>, chrome-locked corner). Generates valid Zod-passing slide JSON, writes to <code>PresentationVersion.slideJson</code>. Streams text deltas during generation; throttled DB writes to <code>slideJson.progress = { stage, currentSlide, estimatedTotal }</code>.</li>
+                    <li><strong>Manifest title</strong> — schema now requires <code>title</code> (3–8 words, Claude-generated). On completion the title is promoted to <code>Project.title</code> (dashboard display) and <code>Presentation.title</code>, and used as the PPTX export filename via <code>sanitizeFilename</code> (Arabic chars allowed, FS-forbidden chars stripped).</li>
                     <li><strong>Slide renderer</strong> — client component at <code>components/slides/SlideRenderer.tsx</code> renders text, image, and shape elements at 1920×1080 with RTL <code>transform-origin: top right</code>.</li>
-                    <li><strong>Preview route</strong> — <code>/preview/[projectId]</code> loads the latest completed version, links Google Fonts CSS from the manifest, stacks slides at 50% scale.</li>
-                    <li><strong>Preview action bar</strong> — sticky RTL bar with <code>أعد التصميم</code> (POST <code>/api/projects/[id]/regenerate</code> — creates a new version), <code>تصدير PPTX</code> (POST <code>/api/projects/[id]/export</code> → polls <code>/export/[jobId]</code> → auto-downloads signed URL), and <code>حفظ كقالب</code> (POST <code>/api/projects/[id]/save-as-template</code>). PDF tagged <em>قريباً</em>.</li>
-                    <li><strong>PPTX export</strong> — <code>deck-export</code> Inngest function converts slide JSON → .pptx via PptxGenJS, uploads to Supabase Storage, returns a signed URL. Correct pixel→inch scaling (10″ / 1920 × 72), font sizes derived from canvas px, gradient backgrounds approximated as solid + half-transparent overlay (matches well now that the system prompt avoids gradients altogether).</li>
+                    <li><strong>Preview + generating fused</strong> — <code>/preview/[projectId]</code> moved into the <code>(app)</code> dashboard route group, so it inherits the sidebar + header chrome. One page handles three states: <em>generating</em> (placeholder grid + spinner; per-card progress UI: done ✓ / current spinner / pending pulse + stage-aware caption), <em>completed</em> (slides cascade in opacity-only with stagger, Framer Motion), <em>failed</em> (retry + back-to-dashboard). The toolbar is now a Photoshop-style vertical icon column fixed at screen-left, slides in from the left ~1s after the cascade starts. Save-as-template form is a popover to the right of the toolbar. <code>/create/generating</code> is a thin redirect for old tabs.</li>
+                    <li><strong>Progress polling</strong> — <code>/api/projects/[id]/status</code> returns <code>{status, slideCount, progress}</code>. DeckView polls every 1.5 s during generation and feeds the per-card UI; <code>router.refresh()</code> on completion picks up the full manifest. Realtime not required (we don't depend on the Supabase replication publication being configured).</li>
+                    <li><strong>PPTX export</strong> — <code>deck-export</code> Inngest function converts slide JSON → .pptx via PptxGenJS. Pixel→inch scaling unchanged. Two big improvements: (1) <strong>Multi-run BiDi</strong> — <code>segmentRuns</code> splits content at every Arabic↔non-Arabic transition; <code>addText</code> gets an array form with per-run <code>rtl: true|false</code>. No more invisible control-char glyphs in the export. Pure-script content stays single-string. (2) <strong>Gradient shape rasterization</strong> — when Claude emits <code>fill.type === "gradient"</code> on a shape, we generate an SVG with the linear gradient over the shape silhouette (ellipse / triangle / rect), render to PNG via <code>sharp</code> at 2× scale, and embed as a base64 data URL with <code>addImage</code>. Transparent outside the silhouette. Slide backgrounds still solid-only (a 1920×1080 gradient would bloat the file).</li>
                     <li><strong>Reliable event dispatch</strong> — every API route that fires an Inngest event after a DB commit uses <code>sendInngestEventWithRetry</code> from <code>lib/inngest-helpers.ts</code> (4 attempts, exponential backoff) and reverts row status to <code>failed</code> on final failure. No more orphaned "queued" projects/jobs.</li>
+                    <li><strong>Dev tooling</strong> — <code>scripts/wipe-decks.ts</code> wipes all deck-related rows + Supabase Storage objects (keeps Users; uses raw Storage REST so Node 20's missing WebSocket doesn't crash the Supabase JS client). <code>scripts/dump-latest-slide-1.ts</code> prints the most recent completed deck's slide-1 JSON for debugging.</li>
                 </ul>
 
                 <h3>Not working / not built yet</h3>
                 <ul>
-                    <li>Claude doesn't include the brand logo in generated decks (storageUrl passed isn't absolute; no logo instruction in system prompt). See spawned task <em>"Make Claude include the brand logo in decks"</em>.</li>
+                    <li>Logo placement is wired through the prompt, but un-tested in real generations — Claude needs to actually emit the <code>role:"logo"</code> image element at the locked corner. Verify on next test run; tighten prompt if Claude drifts.</li>
+                    <li>Multi-run BiDi via PptxGenJS array text is un-verified against a real opened PPTX — checking that "السياق • المشكلة" and "05 · القيمة" both render correctly is the first acceptance test.</li>
+                    <li>Streaming progress writes are best-effort (<code>prisma…catch(() =&gt; undefined)</code>) — if they silently fail, the polling endpoint returns <code>progress: null</code> and the UI falls back to the static "جارٍ التصميم..." caption. Worth instrumenting if it doesn't update during a real run.</li>
                     <li>Enhance review page shows defaults rather than Claude-extracted palette/fonts/logo/structure — needs a <code>brand.analyze.requested</code> or <code>theme.extract.requested</code> job called between upload and review.</li>
-                    <li>Create summary outline is hardcoded — needs an <code>outline.generate.requested</code> call to populate from content.</li>
-                    <li>Preview window has no slide-panel side navigation and no area-comment overlay yet (action bar is done).</li>
+                    <li>Preview window has no slide-panel side navigation and no area-comment overlay yet (vertical toolbar has a <code>قريباً</code> placeholder slot for Comment).</li>
                     <li>PDF export — UI shows <em>قريباً</em>; <code>deck-export.ts</code> throws on <code>format === "pdf"</code>. Needs a Puppeteer (or sharp) path to render HTML→PDF.</li>
                     <li>Mimic flow (<code>/mimic/*</code>) and Build-from-Template flow (<code>/templates/[id]/content</code>) are unbuilt.</li>
-                    <li>Other Inngest functions (<code>brand-analyze</code>, <code>area-redesign</code>) still use the legacy hand-rolled <code>fetch</code> against the Claude API with <code>claude-opus-4-5</code> — they need the same SDK rewrite that <code>deck-generate</code> got. <code>deck-export</code> and <code>template-save</code> now write back to <code>Job.outputJson</code> so the client can poll status.</li>
-                    <li>Style guidelines drift on the new components (<code>PreviewActionBar</code>, <code>/preview/[projectId]</code>) — they use inline-styled hex colors instead of the design tokens from <code>globals.css</code>. Refactor pending; see "Coding Rules" below.</li>
+                    <li>Other Inngest functions (<code>brand-analyze</code>, <code>area-redesign</code>) still use the legacy hand-rolled <code>fetch</code> against the Claude API with <code>claude-opus-4-5</code> — they need the same SDK rewrite that <code>deck-generate</code> got. <code>deck-export</code> and <code>template-save</code> already write back to <code>Job.outputJson</code>.</li>
+                    <li>Style-guideline drift still present in <code>PreviewActionBar</code>, <code>DeckView</code>, and the brand/summary pages — some inline rgba/hex remain. DeckView now uses <code>.glass-card</code> / <code>.text-muted</code> / <code>.btn-gradient</code> where it can, but structural sizes (<code>w-[640px]</code>, <code>grid-cols-[repeat(auto-fit,640px)]</code>) and a few transient rgba values still ship as Tailwind arbitrary values.</li>
+                    <li>Logo emit uses 120×120 box with <code>objectFit:"contain"</code>; logos with extreme aspect ratios may end up tiny in one dimension. Probably fine for typical 1:1 or 2:1 logos.</li>
                 </ul>
 
                 <h3>Lessons learned — do not repeat</h3>
@@ -1587,8 +1590,38 @@ inngest/
                     </div>
 
                     <div class="card">
-                        <h4>Ban gradients in slide JSON</h4>
-                        <p>PptxGenJS doesn't expose multi-stop linear gradients on slide backgrounds or shape fills. The closest workaround is a solid color + half-transparent overlay rectangle, which is a mediocre approximation. The system prompt now forbids <code>{type: "gradient", ...}</code> in <code>slide.background</code> and <code>shape.fill</code> entirely. For two-color effects, Claude paints a full-canvas rect in one color and overlays a second shape at lower opacity — clean to export. Schema still accepts gradients (so old decks render); the generator just doesn't emit them.</p>
+                        <h4>Gradients are back — but as PNG rasters on shapes only</h4>
+                        <p>The earlier ban (2026-05-11) was because PptxGenJS can't emit multi-stop linear gradients via its high-level API. The fix in <code>deck-export.ts</code> (2026-05-12): when a shape has <code>fill.type === "gradient"</code>, build an SVG with the linear gradient over the shape silhouette (<code>&lt;ellipse&gt;</code>, <code>&lt;polygon&gt;</code>, <code>&lt;rect&gt;</code>) and pipe it through <code>sharp</code> to get a transparent-background PNG at 2× the bbox; then <code>addImage</code> with a base64 data URL. The system prompt now <em>allows</em> gradients on shape fills (un-banned) but still forbids them on <code>slide.background</code> (a full-canvas gradient inflates the file with a big raster).</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Multi-run text &gt; BiDi control characters</h4>
+                        <p>Trying to anchor mixed-script runs by inserting LRE/PDF (U+202A/202C) and later LRM/RLM (U+200E/200F) into the content string failed: Arial in particular renders the embedding controls as visible boxes, and the marks behave inconsistently across PowerPoint's BiDi engine. The replacement: <code>segmentRuns(content)</code> walks the string and splits at every Arabic↔non-Arabic transition (whitespace clings to the current run); when there's more than one run, <code>addText</code> gets the array form <code>[{text, options: {rtl}}]</code> so each run carries its own direction. Single-script content stays single-string. No invisible chars in the output, neutrals (•·|—) stick to their natural neighbors.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>USER RULES override system defaults — at the user-message level</h4>
+                        <p>The system prompt is cached (<code>cache_control: ephemeral</code>) — mutating it per-request kills the cache. Instead, the prompt has a top-of-prompt <strong>USER RULES (HIGHEST PRIORITY)</strong> section that tells Claude rules at the end of the user message win over anything in the system prompt. <code>buildUserMessage</code> emits a "Generation rules" block at the end of every request: tone, design-style (with per-style composition hints like "creative → asymmetric, full-bleed, unusual angles" / "newspaper → multi-column + sidebars"), typo policy, pagination on/off (off explicitly cancels the system prompt's pagination requirement), persistent overlay (text + position + exclusions), verbatim mode (create flow), and logo placement. Cache stays hot; behavior is per-request.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Bbox height must budget for fontSize × lineHeight</h4>
+                        <p>Claude was setting <code>fontSize: 220</code> in a <code>height: 220</code> bbox. At <code>lineHeight: 1.5</code> a single line of 220-px text needs ~330 px of vertical space — the text overflowed the bbox and crashed into the next element below (this is the "Taqreer overlapping the Arabic subhead" bug). Fix: explicit TYPOGRAPHY rule in the system prompt ("Box height ≥ fontSize × lineHeight × line count") with worked examples, plus tightened default lineHeights by role (headline 1.1, subheading 1.2, body 1.5, caption 1.4).</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Progress in slideJson, polled — Realtime not required</h4>
+                        <p>Original plan: stream progress via Supabase Realtime on the <code>presentation_versions</code> table. Reality: Realtime depends on the table being added to the <code>supabase_realtime</code> publication, which wasn't reliable, and the client was actually completing decks via polling all along. Current setup: <code>deck-generate.ts</code> subscribes to <code>stream.on("text")</code>, counts <code>"slideId":</code> occurrences = current slide, throttles DB writes (~800 ms) into <code>slideJson.progress = { stage, currentSlide, estimatedTotal }</code>. <code>/api/projects/[id]/status</code> exposes that progress; DeckView polls every 1.5 s during generation and renders per-card UI (done ✓ / current spinner / pending pulse). Realtime can still fire on top of this — it just isn't load-bearing.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Sync server props into client state on <code>router.refresh()</code></h4>
+                        <p>DeckView holds <code>manifest</code> in <code>useState(initialManifest)</code>. The polling fallback that triggers <code>router.refresh()</code> when status flips to "complete" updates the server-rendered props — but <code>useState</code> only seeds on mount, so the client stayed stuck on "generating" forever in an endless refresh loop. Fix: a <code>useEffect</code> that pulls <code>initialManifest</code> into state when it goes null → non-null (generation completed), AND clears the cached manifest when the server reports a queued version (regenerate flow). Two-way prop ↔ state sync covers both transitions.</p>
+                    </div>
+
+                    <div class="card">
+                        <h4>Discuss before coding (workflow rule)</h4>
+                        <p>For non-trivial UX / architecture / design requests, pause before touching code: paraphrase the user's intent, propose the plan, surface tradeoffs and questions, then wait for explicit "go". Saved as a feedback memory at <code>~/.claude/projects/D--taqreer/memory/feedback_discuss_before_coding.md</code>. Cost data: the earlier rigid-grid system-prompt edit was rejected immediately after shipping — would have been avoided by a 60-second confirm-first pass.</p>
                     </div>
                 </div>
 

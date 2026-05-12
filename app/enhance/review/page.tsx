@@ -134,7 +134,7 @@ export default function EnhanceReviewPage() {
       }
 
       const data = (await response.json()) as { projectId: string };
-      router.push(`/create/generating?projectId=${data.projectId}`);
+      router.push(`/preview/${data.projectId}`);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "تعذر بدء التحسين. حاول مرة أخرى.");
       setLoading(false);

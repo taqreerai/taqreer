@@ -87,8 +87,8 @@ export function Hero() {
                       className="relative rounded-2xl border border-white/10 shadow-2xl w-full h-auto mx-auto"
                       width={1200}
                       height={800}
-                      loading="lazy"
-                      src="https://lh3.googleusercontent.com/aida/ADBb0uiOr-DESEXkqkE9BaoA2AvmyY_e0Du0EPjEueisx6sfkDZwhPas3KD7v3Tvm0I1YJ71g6Sywa_Akg8lm3XSucywemblkgpu5I6APAllNL26z8av2SkzCoBaksszU5W_nDgFZs11AGMnnU3stTkUK8pS6LQAGq0s4y96medmeWHXiKr7SjhoD3CWzR0E8mJoq13JXr9wIjMo1de9nPFVdnqZQBbW3BO82C90tq-NMrbYmUUejWgiZOi5qMdxvVAnrjc9X3ZBy5CcCg" />
+                      priority
+                      src="/hero.png" />
                 </motion.div>
             </div>
         </div>

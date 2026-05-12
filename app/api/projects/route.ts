@@ -12,11 +12,17 @@ type CreateProjectPayload = {
     fileSize?: number;
     storageUrl?: string;
     text?: string;
+    keepVerbatim?: boolean;
   };
   brand?: {
     palette?: Record<string, string>;
     fonts?: unknown;
-    logo?: { name?: string; storageUrl?: string } | null;
+    logo?: {
+      name?: string;
+      storageUrl?: string;
+      position?: "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+      exclude?: ("cover" | "closing")[];
+    } | null;
     slideSize?: string;
     slideCount?: { mode?: string; value?: number | null };
   };
@@ -28,7 +34,17 @@ type CreateProjectPayload = {
     slideCountMode?: "match" | "custom";
     slideCountValue?: number | null;
   };
-  outline?: string[];
+  rules?: {
+    tone: string | null;
+    designStyle: string | null;
+    fixTypos: boolean;
+    pagination: boolean;
+    persistent: {
+      text: string;
+      position: "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+      exclude: ("cover" | "closing")[];
+    } | null;
+  };
   saveBrandKit?: boolean;
   slideCount?: number | null;
 };
@@ -64,14 +80,32 @@ export async function POST(request: Request) {
     const projectType = payload.type === "enhance" ? "enhance" : "create";
 
     // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000 input tokens).
-    // The full brand (including previewDataUrl) is still kept in `aiPrompt` for debugging.
+    // Also fill in font fallbacks — if the user didn't upload custom fonts,
+    // Arial is the universal default (available on every OS, supports both
+    // Arabic and Latin scripts).
+    const incomingFonts = (payload.brand?.fonts ?? null) as
+      | {
+          heading?: { name?: string | null; storageUrl?: string | null } | null;
+          body?: { name?: string | null; storageUrl?: string | null } | null;
+        }
+      | null;
+    const headingFontName = incomingFonts?.heading?.name?.trim() || "Arial";
+    const headingFontUrl = incomingFonts?.heading?.storageUrl || null;
+    const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
+    const bodyFontUrl = incomingFonts?.body?.storageUrl || null;
     const claudeBrand = payload.brand
       ? {
           ...payload.brand,
+          fonts: {
+            heading: { name: headingFontName, storageUrl: headingFontUrl },
+            body: { name: bodyFontName, storageUrl: bodyFontUrl },
+          },
           logo: payload.brand.logo
             ? {
                 name: payload.brand.logo.name,
                 storageUrl: payload.brand.logo.storageUrl,
+                position: payload.brand.logo.position ?? "auto",
+                exclude: payload.brand.logo.exclude ?? [],
               }
             : payload.brand.logo,
         }
@@ -83,7 +117,7 @@ export async function POST(request: Request) {
       direction: "rtl",
       content: payload.content,
       brand: claudeBrand,
-      outline: payload.outline,
+      rules: payload.rules ?? null,
       slideCount: payload.slideCount,
     };
     const eventPayload = {
@@ -141,7 +175,7 @@ export async function POST(request: Request) {
             content: payload.content,
             brand: payload.brand,
             enhance: payload.enhance,
-            outline: payload.outline,
+            rules: payload.rules,
             slideCount: payload.slideCount,
           }),
         },
