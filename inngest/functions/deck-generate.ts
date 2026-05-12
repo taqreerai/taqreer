@@ -26,6 +26,11 @@ LANGUAGE & DIRECTION
 - English content: direction "ltr", textAlign "left".
 - Use the language and direction from the brief.
 
+PUNCTUATION IN ARABIC
+- Slide titles, eyebrows, kickers, bullet items, stat labels, and any short Arabic label should NOT end with a period (.) or Arabic full stop (۔). Periods belong inside multi-sentence body paragraphs only.
+- A trailing period on a one-line Arabic label visually anchors at the leftmost visual position under RTL rendering, which reads as a stray dot floating at the "start" of the line — that's why we ban them on labels.
+- Quotation marks, brackets, and parentheses around Arabic content are fine. Colons and middle dots used as separators between Arabic and Latin tokens (e.g., the breadcrumb "القسم 02 · المشكلة") are fine — the renderer isolates each script run via HTML <bdi> so neutrals stay in place.
+
 TYPOGRAPHY
 - In element.fontFamily, use ONLY the font names declared in fonts.heading.name and fonts.body.name. Do not invent or substitute other names.
 - **Pick the font by SCRIPT, not by role.** Arabic content must use a font that supports Arabic shaping. If the brief's heading font is Arabic-capable, use it for Arabic text; otherwise use the body font. Latin (English, digits) uses whichever font has clearer Latin shaping — typically the body font unless they're the same. "Arial" supports BOTH Arabic and Latin and can be used universally. Never tag Arabic content with a Latin-only font (e.g. Poppins) — PowerPoint will fall back to a system font without Arabic shaping and the letters will visibly disconnect.
@@ -278,10 +283,11 @@ function buildUserMessage(event: DeckGenerateEvent) {
     lines.push(
       ``,
       `LOGO PLACEMENT (brand logo provided):`,
-      `- Emit an image element with role:"logo", src:"${logoSrc}", objectFit:"contain", width:120, height:120 on ${scope}.`,
+      `- Emit an image element with role:"logo", src:"${logoSrc}", objectFit:"contain", width:180, height:80 on ${scope}. (Wider-than-tall box matches typical logo aspect ratios; objectFit:"contain" keeps the logo's true proportions intact regardless of its source aspect.)`,
       `- Position: ${placement}.`,
       `- Use the EXACT same x/y/width/height on every slide where the logo appears (chrome-lock).`,
       `- Do NOT place the logo behind text or other elements; keep it on top of decorative layers.`,
+      `- **Contrast band**: before placing the logo, inspect its tonal value. If the logo is BRIGHT (white / pale / light-color marks), paint a dark contrast band underneath it — a solid rectangle in a near-black or deep-brand color, sized to comfortably enclose the logo with ~20 px padding (so the logo never floats unreadable on a similarly-bright slide background). If the logo is DARK (black / deep marks), do the inverse — a light contrast band (white / cream / pale-brand) underneath. Match this band's color across every slide where the logo appears (chrome-lock). On slides where the slide background already provides enough contrast, the band still appears at the same position (consistency wins over efficiency). The band is a separate shape element, sits BEHIND the logo, and uses the locked logo coordinates expanded by ~20 px padding.`,
     );
   }
 

@@ -38,23 +38,20 @@ function isProgress(value: unknown): value is Progress {
   );
 }
 
-function progressCaption(progress: Progress | null): string {
-  if (!progress) return "جارٍ تصميم الشريحة...";
-  switch (progress.stage) {
-    case "thinking":
-      return "كلود يفكّر في التصميم...";
-    case "designing":
-      return progress.currentSlide > 0
-        ? `جارٍ تصميم الشريحة ${progress.currentSlide} من ${progress.estimatedTotal}...`
-        : "جارٍ تصميم الشرائح...";
-    case "validating":
-      return "جارٍ التحقق من المخرجات...";
-    case "saving":
-      return "جارٍ الحفظ...";
-    default:
-      return "جارٍ تصميم الشريحة...";
-  }
-}
+// Cosmetic rotating captions for the generating screen. They rotate
+// independently of the real per-slide progress (which now lives on the
+// current placeholder card), giving the user a sense of momentum even when
+// Claude pauses between slides.
+const FAKE_FEEDBACK = [
+  "إعداد نظام الألوان...",
+  "البحث في تصاميم التخطيط...",
+  "تحسين بنية العرض...",
+  "تنسيق المحتوى مع الهوية البصرية...",
+  "اختيار الخطوط المناسبة...",
+  "ضبط التباين والحدود...",
+  "ترتيب العناصر على الشبكة...",
+  "تجهيز الشرائح...",
+];
 
 // Map the streaming progress to a 0..100 % bar. Thinking gets a small head
 // start so the bar never sits at 0 while Claude warms up. Designing fills the
@@ -154,6 +151,11 @@ export function DeckView({
   const [retryError, setRetryError] = useState("");
   // Polling sets this when it sees a failed status arrive after mount.
   const [polledFailure, setPolledFailure] = useState(false);
+  // Rotating fake-feedback caption shown under the page title while
+  // generating. `fakeIdx` advances on a 2.5 s timer; `fakeVisible` drives a
+  // 300 ms opacity crossfade between messages.
+  const [fakeIdx, setFakeIdx] = useState(0);
+  const [fakeVisible, setFakeVisible] = useState(true);
 
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
@@ -263,6 +265,21 @@ export function DeckView({
     };
   }, [projectId, status, router]);
 
+  // Drive the rotating fake-feedback caption while generating. Each cycle
+  // fades the current message out (300 ms), swaps the index, and fades the
+  // next one in.
+  useEffect(() => {
+    if (status !== "generating") return;
+    const id = window.setInterval(() => {
+      setFakeVisible(false);
+      window.setTimeout(() => {
+        setFakeIdx((current) => (current + 1) % FAKE_FEEDBACK.length);
+        setFakeVisible(true);
+      }, 300);
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [status]);
+
   const handleRetry = useCallback(async () => {
     setRetrying(true);
     setRetryError("");
@@ -342,6 +359,7 @@ export function DeckView({
     };
 
     const percent = progressPercent(progress);
+    const total = placeholders.length;
     return (
       <section dir="rtl" className="page-container space-y-6">
         <header className="text-center">
@@ -350,7 +368,11 @@ export function DeckView({
           </h1>
           <div className="text-muted mt-3 flex items-center justify-center gap-3 text-sm">
             <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-            <span>{progressCaption(progress)}</span>
+            <span
+              className={`transition-opacity duration-300 ${fakeVisible ? "opacity-100" : "opacity-0"}`}
+            >
+              {FAKE_FEEDBACK[fakeIdx]}
+            </span>
           </div>
           <div className="mx-auto mt-4 max-w-md">
             <div className="progress-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
@@ -389,7 +411,9 @@ export function DeckView({
                 {state === "current" ? (
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
                     <span className="spinner h-6 w-6 rounded-full border-2 border-white/20 border-t-white" />
-                    <span className="text-sm">جارٍ التصميم...</span>
+                    <span className="text-sm" dir="rtl">
+                      جارٍ تصميم الشريحة {idx + 1} من {total}
+                    </span>
                   </div>
                 ) : null}
               </div>

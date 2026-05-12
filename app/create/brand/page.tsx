@@ -369,11 +369,12 @@ function Toggle({
         className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
           value ? "tq-switch-on" : "bg-white/10"
         }`}
-        dir="ltr"
       >
+        {/* RTL: knob anchored to the right edge by default (OFF), slides to
+            the left edge when ON. */}
         <span
-          className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            value ? "translate-x-[22px]" : "translate-x-0.5"
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            value ? "right-[22px]" : "right-0.5"
           }`}
         />
       </button>

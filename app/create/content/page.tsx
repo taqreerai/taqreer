@@ -32,11 +32,9 @@ export default function CreateContentPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState<1 | 2 | null>(null);
-  // Default: let Claude organize the content (write headings, group bullets,
-  // etc.). When the user flips this off, we send a strict "verbatim" directive
-  // to Claude so the slides surface the user's exact words with no invented
-  // structure.
-  const [letUsHandle, setLetUsHandle] = useState(true);
+  // Default OFF: surface the user's content verbatim (no invented headings or
+  // grouping). When the user flips this on, we let Claude reorganize freely.
+  const [letUsHandle, setLetUsHandle] = useState(false);
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -203,7 +201,7 @@ export default function CreateContentPage() {
               placeholder="الصق محتواك هنا — مقالة، تقرير، ملاحظات، أي شيء..."
             />
             <p className="text-left text-sm text-[#9A94A8]">
-              {(text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0).toLocaleString("ar-SA")} كلمة
+              {(text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0).toLocaleString("en-US")} كلمة
             </p>
           </div>
         )}
@@ -245,11 +243,14 @@ export default function CreateContentPage() {
             className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
               letUsHandle ? "tq-switch-on" : "bg-white/10"
             }`}
-            dir="ltr"
           >
+            {/* RTL switch: knob sits on the right when OFF, slides to the
+                left when ON. The button has no explicit dir so it inherits
+                from the page's dir="rtl" — knob travels along the start
+                edge as the user expects in Arabic context. */}
             <span
-              className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                letUsHandle ? "translate-x-[22px]" : "translate-x-0.5"
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                letUsHandle ? "right-[22px]" : "right-0.5"
               }`}
             />
           </button>

@@ -1,59 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { SlideManifestSchema } from "@/lib/schema/slide";
+import { segmentRuns } from "@/lib/bidi";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
 
-// Segment mixed-script text into directional runs so PowerPoint renders each
-// piece with its own BiDi mode instead of trying to fit everything under the
-// frame's base direction. This replaces an earlier LRM/RLM control-char
-// approach — those marks were rendering as visible glyphs in some fonts.
-//
-//   "السياق • المشكلة" → [
-//     { text: "السياق ", rtl: true },
-//     { text: "• ",       rtl: false },  // bullet sticks LTR
-//     { text: "المشكلة",  rtl: true },
-//   ]
-//
-// Whitespace clings to whichever run it follows. Pure single-script content
-// stays as a single run — no churn for the common case.
-const ARABIC_CHAR =
-  /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-const WHITESPACE_CHAR = /\s/;
-
-type DirRun = { text: string; rtl: boolean };
-
-function segmentRuns(content: string): DirRun[] {
-  const runs: DirRun[] = [];
-  let current = "";
-  let currentRtl: boolean | null = null;
-
-  for (const char of content) {
-    if (WHITESPACE_CHAR.test(char)) {
-      current += char;
-      continue;
-    }
-    const charRtl = ARABIC_CHAR.test(char);
-    if (currentRtl === null) {
-      currentRtl = charRtl;
-      current = char;
-      continue;
-    }
-    if (charRtl === currentRtl) {
-      current += char;
-    } else {
-      runs.push({ text: current, rtl: currentRtl });
-      current = char;
-      currentRtl = charRtl;
-    }
-  }
-  if (current.length > 0) {
-    runs.push({ text: current, rtl: currentRtl ?? true });
-  }
-  return runs;
-}
 
 // Strip filesystem-forbidden characters from a Claude-generated title so it
 // can be used as the downloaded PPTX filename. Arabic characters are kept —
