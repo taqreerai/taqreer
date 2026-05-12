@@ -46,6 +46,11 @@ function ElementView({ element }: { element: SlideElementType }) {
   if (element.type === "text") {
     return (
       <div
+        // The HTML `dir` attribute (not just CSS direction) is what anchors
+        // BiDi neutrals — colons, periods, brackets, parens, slashes. Without
+        // it, ":قوة الذكاء" can render with the colon flipped to the visual
+        // start instead of staying at the logical end of the Arabic string.
+        dir={element.direction}
         style={{
           ...baseStyle,
           color: element.color,

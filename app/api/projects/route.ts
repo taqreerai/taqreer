@@ -1,8 +1,27 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+
+// The brand-assets bucket is private. Upload returns a storage *path* (e.g.
+// "userId/create/brand-assets/uuid-name.png"), which Claude / the renderer /
+// the PPTX exporter can't fetch directly. Sign it to a long-lived HTTPS URL
+// once at brief assembly so the manifest stores a fetchable src.
+async function signBrandAssetUrl(path: string): Promise<string | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+  const admin = createSupabaseAdminClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  // 1 year. If we ever need permanent URLs, switch the bucket to public read.
+  const { data } = await admin.storage
+    .from("brand-assets")
+    .createSignedUrl(path, 60 * 60 * 24 * 365);
+  return data?.signedUrl ?? null;
+}
 
 type CreateProjectPayload = {
   type?: "create" | "enhance";
@@ -15,7 +34,7 @@ type CreateProjectPayload = {
     keepVerbatim?: boolean;
   };
   brand?: {
-    palette?: Record<string, string>;
+    colors?: string[];
     fonts?: unknown;
     logo?: {
       name?: string;
@@ -35,7 +54,6 @@ type CreateProjectPayload = {
     slideCountValue?: number | null;
   };
   rules?: {
-    tone: string | null;
     designStyle: string | null;
     fixTypos: boolean;
     pagination: boolean;
@@ -93,6 +111,8 @@ export async function POST(request: Request) {
     const headingFontUrl = incomingFonts?.heading?.storageUrl || null;
     const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
     const bodyFontUrl = incomingFonts?.body?.storageUrl || null;
+    const logoPath = payload.brand?.logo?.storageUrl ?? null;
+    const logoSignedUrl = logoPath ? await signBrandAssetUrl(logoPath) : null;
     const claudeBrand = payload.brand
       ? {
           ...payload.brand,
@@ -104,6 +124,9 @@ export async function POST(request: Request) {
             ? {
                 name: payload.brand.logo.name,
                 storageUrl: payload.brand.logo.storageUrl,
+                // Signed HTTPS URL for the renderer + PPTX export; falls back
+                // to the storage path so the brief is never missing the field.
+                url: logoSignedUrl ?? payload.brand.logo.storageUrl,
                 position: payload.brand.logo.position ?? "auto",
                 exclude: payload.brand.logo.exclude ?? [],
               }
@@ -152,7 +175,7 @@ export async function POST(request: Request) {
               userId: dbUser.id,
               name: `${title} — هوية بصرية`,
               logo: payload.brand?.logo?.storageUrl ?? null,
-              colors: toJson(payload.brand?.palette ?? null),
+              colors: toJson(payload.brand?.colors ?? null),
               fonts: toJson(payload.brand?.fonts ?? null),
               assetUrls: toJson({
                 logo: payload.brand?.logo ?? null,

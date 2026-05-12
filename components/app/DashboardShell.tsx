@@ -97,7 +97,11 @@ export function DashboardShell({
         style={{ marginRight: `${sidebarWidth}px`, marginLeft: 0, zIndex: 1 }}
       >
         <Header isCollapsed={isCollapsed} />
-        <div className="pt-28 px-8 pb-8 space-y-16">{children}</div>
+        {/* Wrap content in a max-width container so the dashboard doesn't
+            stretch edge-to-edge on 24"+ monitors. 1280 is comfortable for
+            wide cards (slide grid is 3×640 = 1920 + gaps, so the slide
+            cascade still breaks past this — but it overflows centered). */}
+        <div className="mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16">{children}</div>
       </main>
     </div>
   );

@@ -15,7 +15,7 @@ const SYSTEM_PROMPT = `You are Taqreer's presentation design engine. You generat
 
 USER RULES (HIGHEST PRIORITY)
 - The user message ends with "Generation rules" — those directives OVERRIDE matching defaults in this system prompt.
-- Examples: if rules disable pagination, do NOT emit a pagination element on any slide even though PAGINATION below is normally required. If rules specify a tone, adapt headlines/body to that tone throughout. If rules specify a persistent element, place it on the indicated slides at the indicated position, identically on every applicable slide.
+- Examples: if rules disable pagination, do NOT emit a pagination element on any slide even though PAGINATION below is normally required. If rules specify a design style, every body composition should reflect that style. If rules specify a persistent element, place it on the indicated slides at the indicated position, identically on every applicable slide.
 
 CANVAS
 - 1920 × 1080 pixel canvas (top-left origin).
@@ -59,7 +59,10 @@ PAGINATION — required on every slide
 - Typical size 16–24 canvas-px, muted color from the palette. Caption-weight, not bold.
 
 COLOR
-- Use only the brief's palette (primary, secondary, background, text, muted) plus pure white / pure black where contrast requires.
+- The brief provides a \`brand.colors\` array (3–5 hex values) — the brand colors. These are the **accent palette**. Use them for headlines, highlights, decorative shapes, charts, accents.
+- **You pick the slide background and main text color yourself** — typically a near-black or near-white for the background, with the opposite for text, chosen for WCAG-acceptable contrast against the body content. Don't take backgrounds/text from \`brand.colors\` unless the user's chosen colors clearly include a background-suitable shade.
+- The OUTPUT manifest's \`palette\` object should be filled with your chosen values: \`primary\` = the strongest brand color (usually colors[0]), \`secondary\` = the next brand color, \`background\` = your chosen background hex, \`text\` = your chosen text hex, \`muted\` = a 40–60 % opacity variant of the text color (as hex). Stay consistent across all slides.
+- Pure white / pure black are allowed where contrast requires.
 - **Gradients are allowed on SHAPE fills** ({type:"gradient", gradient:{type:"linear", angle, stops:[{color,position:0},{color,position:100}]}}). The export pipeline rasterizes gradient shapes to PNG (via SVG → sharp) and embeds them as images, so they round-trip cleanly. Use sparingly — solid color is still the default; gradients are for accent shapes (circles, rounded rects) that benefit from depth.
 - **Slide backgrounds must stay SOLID** ({type:"color", value:"#hex"}) — gradient backgrounds at 1920×1080 inflate the PPTX with a giant raster. For a two-color background effect, paint a full-canvas solid rectangle and overlay a gradient shape (circle/ellipse) at any opacity.
 - Maintain WCAG-acceptable text/background contrast on every slide.
@@ -67,6 +70,15 @@ COLOR
 SHAPES
 - Allowed kinds only: rectangle, circle, ellipse, line, triangle.
 - Use shapes for accents, dividers, decorative geometry, background bands.
+
+BULLETS & TEXT-ANCHORED MARKERS
+- When a shape acts as a bullet, list marker, or decorative anchor for a specific text element, its position MUST be derived from that text element's bounding box, NOT the slide edge. Bullets that hug the slide edge while their text sits in the middle look broken.
+- For each (marker shape, text element) pair, given the text at (text.x, text.y, text.width, text.height):
+  - **RTL text (Arabic):** marker.x = text.x + text.width + 16     (marker sits just to the RIGHT of the text — the visual start of the line for RTL readers)
+  - **LTR text (English):** marker.x = text.x - marker.width - 16  (marker sits just to the LEFT of the text — the visual start of the line for LTR readers)
+  - marker.y = text.y + (text-line-vertical-center)                (so the marker aligns with the first line of the text, not the box top)
+- Markers and their text should read as a unit. Do not anchor decorative bullets to the slide's left/right edge unless the text element is also at that edge.
+- This applies to: bulleted list dots/squares, numbered-list circle backgrounds, "section accent" dots, leading-icon shapes. It does NOT apply to chrome shapes (corner accents, full-bleed background bands, dividers) — those follow the chrome lock independently.
 
 EFFECTS
 - Allowed: drop shadow (color + blur 0–50 + offsetX/offsetY), solid/dashed/dotted borders, single corner radius, element rotation in degrees (-360 to 360).
@@ -114,7 +126,6 @@ function extractJson(text: string): string {
 }
 
 type Rules = {
-  tone: string | null;
   designStyle: string | null;
   fixTypos: boolean;
   pagination: boolean;
@@ -148,9 +159,6 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
 function ruleLines(rules: Rules): string[] {
   if (!rules) return [];
   const lines = ["", "Generation rules (user-specified, OVERRIDE matching defaults):"];
-  if (rules.tone) {
-    lines.push(`- Tone of voice: "${rules.tone}". Adapt headline and body copy to this register throughout the deck.`);
-  }
   if (rules.designStyle) {
     const directive = DESIGN_STYLE_DIRECTIVES[rules.designStyle];
     if (directive) {
@@ -232,11 +240,12 @@ function buildUserMessage(event: DeckGenerateEvent) {
   // identical position/size on every slide it appears on.
   type LogoBrief = {
     storageUrl?: string;
+    url?: string;
     position?: "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
     exclude?: ("cover" | "closing")[];
   };
   const logo = ((event.brief as { brand?: { logo?: LogoBrief | null } } | null)?.brand?.logo ?? null) as LogoBrief | null;
-  if (logo?.storageUrl) {
+  if (logo?.url || logo?.storageUrl) {
     const LOGO_COORDS: Record<string, { x: number; y: number }> = {
       "top-right": { x: 1720, y: 80 },
       "top-left": { x: 80, y: 80 },
@@ -259,10 +268,11 @@ function buildUserMessage(event: DeckGenerateEvent) {
       scopeParts.length === 0
         ? "EVERY slide including cover and closing"
         : `every slide EXCEPT ${scopeParts.join(" and ")}`;
+    const logoSrc = logo.url ?? logo.storageUrl;
     lines.push(
       ``,
       `LOGO PLACEMENT (brand logo provided):`,
-      `- Emit an image element with role:"logo", src:"${logo.storageUrl}", objectFit:"contain", width:120, height:120 on ${scope}.`,
+      `- Emit an image element with role:"logo", src:"${logoSrc}", objectFit:"contain", width:120, height:120 on ${scope}.`,
       `- Position: ${placement}.`,
       `- Use the EXACT same x/y/width/height on every slide where the logo appears (chrome-lock).`,
       `- Do NOT place the logo behind text or other elements; keep it on top of decorative layers.`,
@@ -296,9 +306,15 @@ export const deckGenerate = inngest.createFunction(
       const baseUserMessage = buildUserMessage(data);
       let lastError = "";
 
+      // Progress shown to the user must never go backward. The self-healing
+      // retry restarts Claude from slide 1, so we track the high-watermark
+      // across all attempts and write that to the DB instead of the raw
+      // per-attempt counter.
+      let maxSlideSeen = 0;
+
       // Persists a transient progress payload to the version's slideJson.
-      // Best-effort — failed writes don't block generation. Supabase Realtime
-      // surfaces these updates to the client's <DeckView> generating state.
+      // Best-effort — failed writes don't block generation. The client polls
+      // /api/projects/[id]/status to surface these into <DeckView>.
       const writeProgress = (stage: "thinking" | "designing" | "validating" | "saving", currentSlide: number, total: number) =>
         prisma.presentationVersion
           .update({
@@ -319,7 +335,7 @@ export const deckGenerate = inngest.createFunction(
             ? baseUserMessage
             : `${baseUserMessage}\n\nThe previous attempt was rejected:\n${lastError}\n\nReturn corrected JSON now. JSON only, no prose, no fences.`;
 
-        await writeProgress("thinking", 0, estimatedTotal);
+        await writeProgress("thinking", maxSlideSeen, estimatedTotal);
 
         const stream = client.messages.stream({
           model: "claude-opus-4-7",
@@ -338,21 +354,21 @@ export const deckGenerate = inngest.createFunction(
 
         // Watch the streamed text — count `"slideId":` occurrences to know
         // which slide Claude is currently emitting. Throttle DB writes so we
-        // don't hammer Prisma on every token.
+        // don't hammer Prisma on every token. `maxSlideSeen` is the
+        // non-monotonic ratchet that prevents retry-induced regressions.
         let buffer = "";
-        let currentSlide = 0;
         let lastPushedSlide = -1;
         let lastWriteAt = 0;
         stream.on("text", (delta) => {
           buffer += delta;
           const matches = buffer.match(/"slideId"\s*:/g);
           const seen = matches ? matches.length : 0;
-          if (seen > currentSlide) currentSlide = seen;
+          if (seen > maxSlideSeen) maxSlideSeen = seen;
           const now = Date.now();
-          if (currentSlide !== lastPushedSlide && now - lastWriteAt > 800) {
-            lastPushedSlide = currentSlide;
+          if (maxSlideSeen !== lastPushedSlide && now - lastWriteAt > 800) {
+            lastPushedSlide = maxSlideSeen;
             lastWriteAt = now;
-            void writeProgress("designing", currentSlide, estimatedTotal);
+            void writeProgress("designing", maxSlideSeen, estimatedTotal);
           }
         });
 
@@ -365,7 +381,7 @@ export const deckGenerate = inngest.createFunction(
           cache_write: message.usage.cache_creation_input_tokens,
         });
 
-        await writeProgress("validating", currentSlide, estimatedTotal);
+        await writeProgress("validating", maxSlideSeen, estimatedTotal);
 
         const textBlock = message.content.find((b) => b.type === "text");
         if (!textBlock || textBlock.type !== "text") {

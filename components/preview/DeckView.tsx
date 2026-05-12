@@ -56,6 +56,28 @@ function progressCaption(progress: Progress | null): string {
   }
 }
 
+// Map the streaming progress to a 0..100 % bar. Thinking gets a small head
+// start so the bar never sits at 0 while Claude warms up. Designing fills the
+// long middle (5–90 %). Validating/saving cover the tail.
+function progressPercent(progress: Progress | null): number {
+  if (!progress) return 5;
+  switch (progress.stage) {
+    case "thinking":
+      return 5;
+    case "designing": {
+      if (progress.estimatedTotal <= 0) return 10;
+      const ratio = Math.min(progress.currentSlide / progress.estimatedTotal, 1);
+      return Math.round(5 + ratio * 85);
+    }
+    case "validating":
+      return 92;
+    case "saving":
+      return 98;
+    default:
+      return 5;
+  }
+}
+
 // Each slide renders at 1/3 of the 1920×1080 canvas → 640×360 cell.
 // Placeholder cards use the same dimensions so the cascade fades into the
 // exact slots the shimmer just left.
@@ -315,15 +337,23 @@ export function DeckView({
       return "pending";
     };
 
+    const percent = progressPercent(progress);
     return (
       <section dir="rtl" className="page-container space-y-6">
         <header className="text-center">
           <h1 className="font-headline-lg text-[36px] font-bold text-white">
             جارٍ تصميم عرضك...
           </h1>
-          <p className="text-muted mt-2 text-sm">
-            يعمل تقرير على إنشاء شرائحك — سيستغرق ذلك بضع دقائق
-          </p>
+          <div className="text-muted mt-3 flex items-center justify-center gap-3 text-sm">
+            <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+            <span>{progressCaption(progress)}</span>
+          </div>
+          <div className="mx-auto mt-4 max-w-md">
+            <div className="progress-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+              <div className="progress-bar" style={{ width: `${percent}%` }} />
+            </div>
+            <p className="text-muted mt-2 text-xs">{percent}%</p>
+          </div>
         </header>
 
         <div className="grid grid-cols-[repeat(auto-fit,640px)] justify-center gap-5">
@@ -360,11 +390,6 @@ export function DeckView({
               </div>
             );
           })}
-        </div>
-
-        <div className="text-muted flex items-center justify-center gap-3">
-          <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-          <span>{progressCaption(progress)}</span>
         </div>
       </section>
     );
