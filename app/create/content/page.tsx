@@ -202,7 +202,9 @@ export default function CreateContentPage() {
               }}
               placeholder="الصق محتواك هنا — مقالة، تقرير، ملاحظات، أي شيء..."
             />
-            <p className="text-left text-sm text-[#9A94A8]">{text.length.toLocaleString("ar-SA")} حرف</p>
+            <p className="text-left text-sm text-[#9A94A8]">
+              {(text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0).toLocaleString("ar-SA")} كلمة
+            </p>
           </div>
         )}
 

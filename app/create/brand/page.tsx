@@ -312,6 +312,10 @@ function Pill({
 // 6-button position picker: 3 top + 3 bottom, each button shows a directional
 // arrow (north_west, north, north_east, south_west, south, south_east). Used
 // for both the logo position and the persistent-overlay position.
+// `dir="ltr"` is intentional: it locks the grid so the visually-rightmost
+// button always maps to the *right* side of the canvas, regardless of the
+// page's RTL context. Without this, the array's first entry (top-left) ends
+// up on the visual right under RTL — which would silently flip the mapping.
 function PositionPicker({
   value,
   onChange,
@@ -320,7 +324,7 @@ function PositionPicker({
   onChange: (next: CornerPosition) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 gap-2" dir="ltr">
       {CORNER_OPTIONS.map((option) => {
         const active = value === option.value;
         return (
