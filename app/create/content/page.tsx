@@ -10,6 +10,18 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
 }
 
+// Some upload sources (drag-from-browser, certain file pickers) hand back
+// file.name already URL-percent-encoded. Decode for display + storage so the
+// Arabic name shows as "قوة الذكاء.pptx" not "%D9%82%D9%88%D8%A9...".
+function readableFileName(raw: string): string {
+  if (!/%[0-9A-Fa-f]{2}/.test(raw)) return raw;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export default function CreateContentPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +83,7 @@ export default function CreateContentPage() {
           "taqreer:create:content",
           JSON.stringify({
             type: "file",
-            fileName: file.name,
+            fileName: readableFileName(file.name),
             fileSize: file.size,
             storageUrl: uploaded.storageUrl,
             keepVerbatim: !letUsHandle,
@@ -164,7 +176,7 @@ export default function CreateContentPage() {
             {file ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
                 <div>
-                  <p className="font-semibold text-white">{file.name}</p>
+                  <p className="font-semibold text-white">{readableFileName(file.name)}</p>
                   <p className="text-sm text-[#9A94A8]">{formatFileSize(file.size)}</p>
                 </div>
                 <button
@@ -215,7 +227,7 @@ export default function CreateContentPage() {
         {/* Verbatim toggle — applies to both file and text inputs */}
         <div className="mt-6 flex items-start justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4">
           <div>
-            <p className="font-semibold text-white">اتركها لنا</p>
+            <p className="font-semibold text-white">هل تريد منا تنظيم محتواك؟</p>
             <p className="mt-1 text-xs text-[#9A94A8]">
               {letUsHandle
                 ? "سننظم محتواك ونصيغ العناوين والأقسام تلقائياً."
@@ -227,7 +239,7 @@ export default function CreateContentPage() {
             onClick={() => setLetUsHandle((current) => !current)}
             role="switch"
             aria-checked={letUsHandle}
-            aria-label="اتركها لنا"
+            aria-label="هل تريد منا تنظيم محتواك؟"
             className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
               letUsHandle ? "tq-switch-on" : "bg-white/10"
             }`}

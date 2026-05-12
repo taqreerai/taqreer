@@ -5,10 +5,28 @@ import { useRouter } from "next/navigation";
 
 type PaletteMode = "manual" | "screenshot";
 type SlideCountMode = "match" | "auto" | "custom";
-type LogoPosition = "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
-type PersistentPosition = "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+type CornerPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+type LogoPosition = CornerPosition;
+type PersistentPosition = CornerPosition;
 type FontMode = "upload" | "google";
 type FontTarget = "heading" | "body";
+
+// 6-button position picker: 3 top + 3 bottom, with directional arrow icons.
+// Default to top-right (RTL convention for chrome marks).
+const CORNER_OPTIONS: { value: CornerPosition; icon: string; label: string }[] = [
+  { value: "top-left", icon: "north_west", label: "أعلى يسار" },
+  { value: "top-center", icon: "north", label: "أعلى الوسط" },
+  { value: "top-right", icon: "north_east", label: "أعلى يمين" },
+  { value: "bottom-left", icon: "south_west", label: "أسفل يسار" },
+  { value: "bottom-center", icon: "south", label: "أسفل الوسط" },
+  { value: "bottom-right", icon: "south_east", label: "أسفل يمين" },
+];
 
 type FontSlotState = {
   mode: FontMode;
@@ -52,22 +70,6 @@ function googleFontUrl(family: string): string {
 }
 
 const DESIGN_STYLE_OPTIONS = ["إبداعي", "بسيط", "احترافي", "مرح", "صحفي", "جريء", "كلاسيكي"];
-
-const POSITION_OPTIONS: { value: PersistentPosition; label: string }[] = [
-  { value: "auto", label: "اتركها لنا" },
-  { value: "top-right", label: "أعلى يمين" },
-  { value: "top-left", label: "أعلى يسار" },
-  { value: "bottom-right", label: "أسفل يمين" },
-  { value: "bottom-left", label: "أسفل يسار" },
-];
-
-const LOGO_POSITION_OPTIONS: { value: LogoPosition; label: string }[] = [
-  { value: "auto", label: "اتركها لنا" },
-  { value: "top-right", label: "أعلى يمين" },
-  { value: "top-left", label: "أعلى يسار" },
-  { value: "bottom-right", label: "أسفل يمين" },
-  { value: "bottom-left", label: "أسفل يسار" },
-];
 
 type StoredContent = {
   type: "file" | "text";
@@ -253,12 +255,14 @@ function GoogleFontSlot({
                 key={font.family}
                 type="button"
                 onClick={() => onSelect(isActive ? null : font.family)}
+                // Family name kept in the site default font so the list stays
+                // visually uniform; the live preview at the bottom is the
+                // single place where the selected face renders.
                 className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                   isActive
                     ? "bg-[#370BF4]/20 text-white"
                     : "text-white hover:bg-white/5"
                 }`}
-                style={{ fontFamily: `"${font.family}", system-ui, sans-serif` }}
               >
                 <span>{font.family}</span>
                 {font.arabic ? (
@@ -302,6 +306,41 @@ function Pill({
     >
       {children}
     </button>
+  );
+}
+
+// 6-button position picker: 3 top + 3 bottom, each button shows a directional
+// arrow (north_west, north, north_east, south_west, south, south_east). Used
+// for both the logo position and the persistent-overlay position.
+function PositionPicker({
+  value,
+  onChange,
+}: {
+  value: CornerPosition;
+  onChange: (next: CornerPosition) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {CORNER_OPTIONS.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-label={option.label}
+            title={option.label}
+            className={`flex h-12 items-center justify-center rounded-xl transition-colors ${
+              active
+                ? "btn-gradient text-white"
+                : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">{option.icon}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -458,7 +497,7 @@ export default function CreateBrandPage() {
 
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
-  const [logoPosition, setLogoPosition] = useState<LogoPosition>("auto");
+  const [logoPosition, setLogoPosition] = useState<LogoPosition>("top-right");
   const [logoExcludeCover, setLogoExcludeCover] = useState(false);
   const [logoExcludeClosing, setLogoExcludeClosing] = useState(false);
 
@@ -478,7 +517,7 @@ export default function CreateBrandPage() {
     return readStoredBrand()?.rules?.persistent?.text ?? "";
   });
   const [persistentPosition, setPersistentPosition] = useState<PersistentPosition>(() => {
-    return readStoredBrand()?.rules?.persistent?.position ?? "auto";
+    return readStoredBrand()?.rules?.persistent?.position ?? "top-right";
   });
   const [excludeCover, setExcludeCover] = useState<boolean>(() => {
     return readStoredBrand()?.rules?.persistent?.exclude?.includes("cover") ?? false;
@@ -813,17 +852,10 @@ export default function CreateBrandPage() {
                 <div className="space-y-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4">
                   <div>
                     <p className="mb-2 text-xs text-muted">الموقع</p>
-                    <div className="flex flex-wrap gap-2">
-                      {POSITION_OPTIONS.map((option) => (
-                        <Pill
-                          key={option.value}
-                          active={persistentPosition === option.value}
-                          onClick={() => setPersistentPosition(option.value)}
-                        >
-                          {option.label}
-                        </Pill>
-                      ))}
-                    </div>
+                    <PositionPicker
+                      value={persistentPosition}
+                      onChange={setPersistentPosition}
+                    />
                   </div>
                   <div>
                     <p className="mb-2 text-xs text-muted">استثناء</p>
@@ -1071,18 +1103,17 @@ export default function CreateBrandPage() {
             />
             {logo ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {logoPreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={logoPreview}
-                        alt="معاينة الشعار"
-                        className="max-h-[60px] max-w-24 object-contain"
-                      />
-                    ) : null}
-                    <p className="font-semibold text-white">{logo.name}</p>
-                  </div>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
+                  {logoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoPreview}
+                      alt="معاينة الشعار"
+                      className="max-h-[60px] max-w-32 object-contain"
+                    />
+                  ) : (
+                    <span className="material-symbols-outlined text-muted">image</span>
+                  )}
                   <button
                     type="button"
                     onClick={() => setLogo(null)}
@@ -1095,17 +1126,7 @@ export default function CreateBrandPage() {
 
                 <div className="space-y-3">
                   <p className="text-sm text-white">موقع الشعار</p>
-                  <div className="flex flex-wrap gap-2">
-                    {LOGO_POSITION_OPTIONS.map((option) => (
-                      <Pill
-                        key={option.value}
-                        active={logoPosition === option.value}
-                        onClick={() => setLogoPosition(option.value)}
-                      >
-                        {option.label}
-                      </Pill>
-                    ))}
-                  </div>
+                  <PositionPicker value={logoPosition} onChange={setLogoPosition} />
                 </div>
 
                 <div className="space-y-3">

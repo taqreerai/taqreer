@@ -78,10 +78,14 @@ function progressPercent(progress: Progress | null): number {
   }
 }
 
-// Each slide renders at 1/3 of the 1920×1080 canvas → 640×360 cell.
-// Placeholder cards use the same dimensions so the cascade fades into the
-// exact slots the shimmer just left.
-const SLIDE_SCALE = 1 / 3;
+// Slides render at 0.3× of the 1920×1080 canvas → 576×324 cell. Sized so
+// two cells fit side-by-side inside the dashboard's max-w-[1280px] wrap
+// (with px-8 padding and a 20 px gap). Placeholder cards reuse the same
+// dimensions so the cascade fades into the exact slots the shimmer just
+// left.
+const SLIDE_SCALE = 0.3;
+const SLIDE_CELL_W = 576;
+const SLIDE_CELL_H = 324;
 
 function isCompleted(projectStatus: string, versionStatus: string | null): boolean {
   return (
@@ -356,13 +360,14 @@ export function DeckView({
           </div>
         </header>
 
-        <div className="grid grid-cols-[repeat(auto-fit,640px)] justify-center gap-5">
+        <div className="grid grid-cols-1 justify-center gap-5 md:grid-cols-2">
           {placeholders.map((_, idx) => {
             const state = cardStatus(idx);
             return (
               <div
                 key={idx}
-                className={`glass-card relative h-[360px] w-[640px] overflow-hidden rounded-xl ${
+                style={{ width: SLIDE_CELL_W, height: SLIDE_CELL_H }}
+                className={`glass-card relative mx-auto overflow-hidden rounded-xl ${
                   state === "pending" || state === "current" ? "animate-pulse" : ""
                 }`}
                 aria-label={`الشريحة ${idx + 1} — ${
@@ -425,13 +430,14 @@ export function DeckView({
         variants={slideListVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-[repeat(auto-fit,640px)] justify-center gap-5"
+        className="grid grid-cols-1 justify-center gap-5 md:grid-cols-2"
       >
         {manifest!.slides.map((slide) => (
           <motion.div
             key={slide.slideId}
             variants={slideCardVariants}
-            className="glass-card h-[360px] w-[640px] overflow-hidden rounded-xl"
+            style={{ width: SLIDE_CELL_W, height: SLIDE_CELL_H }}
+            className="glass-card mx-auto overflow-hidden rounded-xl"
           >
             <SlideRenderer slide={slide} scale={SLIDE_SCALE} />
           </motion.div>

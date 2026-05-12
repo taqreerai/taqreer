@@ -23,6 +23,17 @@ function formatFileSize(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
 }
 
+// Some file pickers hand back URL-percent-encoded names. Decode for display.
+function readableFileName(raw: string | undefined): string {
+  if (!raw) return "";
+  if (!/%[0-9A-Fa-f]{2}/.test(raw)) return raw;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export default function CreateSummaryPage() {
   const router = useRouter();
   const [content, setContent] = useState<ContentState | null>(null);
@@ -140,7 +151,7 @@ export default function CreateSummaryPage() {
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-[#7D2DFF]">description</span>
               <div>
-                <p className="font-semibold text-white">{content.fileName}</p>
+                <p className="font-semibold text-white">{readableFileName(content.fileName)}</p>
                 <p className="text-sm text-muted">{formatFileSize(content.fileSize)}</p>
               </div>
             </div>

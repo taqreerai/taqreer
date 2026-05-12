@@ -39,7 +39,13 @@ type CreateProjectPayload = {
     logo?: {
       name?: string;
       storageUrl?: string;
-      position?: "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+      position?:
+        | "top-left"
+        | "top-center"
+        | "top-right"
+        | "bottom-left"
+        | "bottom-center"
+        | "bottom-right";
       exclude?: ("cover" | "closing")[];
     } | null;
     slideSize?: string;
@@ -59,7 +65,13 @@ type CreateProjectPayload = {
     pagination: boolean;
     persistent: {
       text: string;
-      position: "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+      position:
+        | "top-left"
+        | "top-center"
+        | "top-right"
+        | "bottom-left"
+        | "bottom-center"
+        | "bottom-right";
       exclude: ("cover" | "closing")[];
     } | null;
   };
@@ -69,7 +81,17 @@ type CreateProjectPayload = {
 
 function buildProjectTitle(payload: CreateProjectPayload) {
   if (payload.content?.type === "file" && payload.content.fileName) {
-    return payload.content.fileName.replace(/\.[^.]+$/, "");
+    let name = payload.content.fileName;
+    // Decode URL-percent-encoded names (some file pickers hand them back
+    // pre-encoded). Best-effort — fall back to the raw string on failure.
+    if (/%[0-9A-Fa-f]{2}/.test(name)) {
+      try {
+        name = decodeURIComponent(name);
+      } catch {
+        /* keep raw */
+      }
+    }
+    return name.replace(/\.[^.]+$/, "");
   }
 
   const text = payload.content?.text?.trim();
@@ -127,7 +149,7 @@ export async function POST(request: Request) {
                 // Signed HTTPS URL for the renderer + PPTX export; falls back
                 // to the storage path so the brief is never missing the field.
                 url: logoSignedUrl ?? payload.brand.logo.storageUrl,
-                position: payload.brand.logo.position ?? "auto",
+                position: payload.brand.logo.position ?? "top-right",
                 exclude: payload.brand.logo.exclude ?? [],
               }
             : payload.brand.logo,

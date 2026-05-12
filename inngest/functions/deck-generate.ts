@@ -125,13 +125,21 @@ function extractJson(text: string): string {
   return text.trim();
 }
 
+type CornerPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
 type Rules = {
   designStyle: string | null;
   fixTypos: boolean;
   pagination: boolean;
   persistent: {
     text: string;
-    position: "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+    position: CornerPosition;
     exclude: ("cover" | "closing")[];
   } | null;
 } | null;
@@ -187,12 +195,8 @@ function ruleLines(rules: Rules): string[] {
     const scope = exclusions.length === 0
       ? "EVERY slide including cover and closing"
       : `every slide EXCEPT ${exclusions.join(" and ")}`;
-    const position =
-      rules.persistent.position === "auto"
-        ? "a position you pick once and reuse on every applicable slide"
-        : rules.persistent.position;
     lines.push(
-      `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}, at ${position}. Use the EXACT same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock — see DESIGN-SYSTEM LOCK).`,
+      `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}, at the ${rules.persistent.position} corner. Use the EXACT same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock — see DESIGN-SYSTEM LOCK).`,
     );
   }
   return lines;
@@ -241,22 +245,24 @@ function buildUserMessage(event: DeckGenerateEvent) {
   type LogoBrief = {
     storageUrl?: string;
     url?: string;
-    position?: "auto" | "top-right" | "top-left" | "bottom-right" | "bottom-left";
+    position?: CornerPosition;
     exclude?: ("cover" | "closing")[];
   };
   const logo = ((event.brief as { brand?: { logo?: LogoBrief | null } } | null)?.brand?.logo ?? null) as LogoBrief | null;
   if (logo?.url || logo?.storageUrl) {
-    const LOGO_COORDS: Record<string, { x: number; y: number }> = {
-      "top-right": { x: 1720, y: 80 },
+    // Top-row Y = 80, bottom-row Y = 880 (logo is 120 px tall on a 1080 px
+    // canvas — symmetric 80 px margins top + bottom). Horizontal: left = 80,
+    // right = 1720 (1920 - 120 - 80), center = 900 ((1920 - 120) / 2).
+    const LOGO_COORDS: Record<CornerPosition, { x: number; y: number }> = {
       "top-left": { x: 80, y: 80 },
-      "bottom-right": { x: 1720, y: 880 },
+      "top-center": { x: 900, y: 80 },
+      "top-right": { x: 1720, y: 80 },
       "bottom-left": { x: 80, y: 880 },
+      "bottom-center": { x: 900, y: 880 },
+      "bottom-right": { x: 1720, y: 880 },
     };
-    const pos = logo.position ?? "auto";
-    const placement =
-      pos === "auto"
-        ? "a corner you pick once (top-right is conventional for RTL decks) and reuse identically on every slide it appears on"
-        : `the ${pos} corner at coordinates ${JSON.stringify(LOGO_COORDS[pos])}`;
+    const pos: CornerPosition = logo.position ?? "top-right";
+    const placement = `the ${pos} corner at coordinates ${JSON.stringify(LOGO_COORDS[pos])}`;
     const excludes = Array.isArray(logo.exclude) ? logo.exclude : [];
     const excludeCover = excludes.includes("cover");
     const excludeClosing = excludes.includes("closing");
