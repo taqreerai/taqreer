@@ -820,8 +820,12 @@ Background Workers
                 <h3>API Routes</h3>
                 <pre><code>app/api/
   projects/route.ts                     ✅  POST — creates project + fires deck.generate.requested
-  projects/[id]/status/route.ts         ✅  GET  — generation status (polling fallback)
+  projects/[id]/status/route.ts         ✅  GET  — generation status (polling endpoint)
   projects/[id]/retry/route.ts          ✅  POST — retry failed generation
+  projects/[id]/regenerate/route.ts     ✅  POST — allocate v_n+1 + fire deck.generate.requested
+  projects/[id]/export/route.ts         ✅  POST — fires deck.export.requested (PPTX only; PDF rejected with 400)
+  projects/[id]/export/[jobId]/route.ts ✅  GET  — export job status + signed URL
+  projects/[id]/save-as-template/route.ts ✅ POST — fires template.save.requested
   storage/upload/route.ts               ✅  POST — signed upload (source-files, brand-assets)
   inngest/route.ts                      ✅  GET/PUT — Inngest SDK connector, 5 functions registered
 
@@ -829,8 +833,7 @@ Background Workers
   ai/enhance-extract/route.ts           ❌  Flow 2 — Claude vision extracts theme/palette/fonts
   ai/mimic-extract/route.ts             ❌  Flow 3 — extracts reference style contract
   templates/[id]/route.ts               ❌  GET single template
-  export/pptx/route.ts                  ❌  triggered via Inngest deck.export.requested
-  export/pdf/route.ts                   ❌  triggered via Inngest deck.export.requested
+  export/pdf/route.ts                   ❌  PDF path — deck-export currently rejects format=pdf
   webhooks/stripe/route.ts              ❌  Phase 4</code></pre>
 
                 <h3>Suggested Source Structure</h3>
@@ -898,24 +901,24 @@ inngest/
                             <td>workspace_id, user_id, role</td>
                         </tr>
                         <tr>
-                            <td>projects</td>
-                            <td>Parent container for each presentation workflow.</td>
-                            <td>id, workspace_id, user_id, name, status</td>
+                            <td>Project</td>
+                            <td>Parent container for each presentation workflow. <code>title</code> is promoted from the Claude-generated manifest title on completion (via <code>sanitizeFilename</code> for export filenames).</td>
+                            <td>id, workspaceId, userId, title, status</td>
                         </tr>
                         <tr>
-                            <td>presentations</td>
+                            <td>Presentation</td>
                             <td>Stores the editable deck JSON.</td>
-                            <td>id, project_id, title, language, direction, aspect_ratio, json_data</td>
+                            <td>id, projectId, title, language, direction, aspectRatio, currentVersionId</td>
                         </tr>
                         <tr>
-                            <td>presentation_versions</td>
-                            <td>Stores version history snapshots.</td>
-                            <td>presentation_id, version_number, json_data, created_by</td>
+                            <td>PresentationVersion</td>
+                            <td>Stores version history snapshots. <code>slideJson</code> carries either the in-flight progress shape <code>{ stage, currentSlide, estimatedTotal, slides }</code> or the final manifest.</td>
+                            <td>presentationId, versionNumber, slideJson, status, createdBy</td>
                         </tr>
                         <tr>
-                            <td>brand_kits</td>
+                            <td>BrandKit</td>
                             <td>Stores reusable brand systems.</td>
-                            <td>workspace_id, name, json_data</td>
+                            <td>workspaceId, name, jsonData</td>
                         </tr>
                         <tr>
                             <td>files</td>
@@ -1186,7 +1189,7 @@ inngest/
                 </div>
 
                 <h3>Current implementation status</h3>
-                <p>As of 2026-05-11, <code>/preview/[projectId]</code> exists with a minimal first cut: it loads the latest completed <code>PresentationVersion</code> from Prisma, links Google Fonts CSS from the manifest, and stacks all slides vertically at 50% scale. The action bar, slide-panel side navigation, area-select-and-comment overlay, and per-element shadow/border rendering are not yet built — see §15 Implementation Status.</p>
+                <p>As of 2026-05-12, <code>/preview/[projectId]</code> lives inside the <code>(app)</code> route group and is the unified surface for generating / completed / failed states. The vertical Photoshop-style action bar (Regenerate · Export PPTX · Save as Template) is built, slides cascade in opacity-only with Framer stagger, and per-card progress (done ✓ / current spinner / pending pulse) is fed by polling <code>/api/projects/[id]/status</code> at 1.5 s. The slide-panel side navigation, area-select-and-comment overlay, and per-element shadow/border rendering are still not built — see §15 Implementation Status.</p>
             </section>
 
             <section id="comments">
@@ -1664,9 +1667,9 @@ inngest/
                         <h4>Installation (Windows + WSL)</h4>
                         <p>Native Windows is unsupported by the installer. Install in WSL Ubuntu:</p>
                         <pre><code># inside WSL Ubuntu
-apt-get install -y unzip                  # one-time dependency
+sudo apt-get install -y unzip                                       # one-time dependency
 curl -fsSL https://cli.coderabbit.ai/install.sh | sh
-sudo ln -sf /root/.local/bin/coderabbit /usr/local/bin/coderabbit   # so PATH works from PowerShell</code></pre>
+sudo ln -sf "$HOME/.local/bin/coderabbit" /usr/local/bin/coderabbit  # so PATH works from PowerShell</code></pre>
                         <p>Plus the Claude Code plugin:</p>
                         <pre><code>claude plugin marketplace add anthropics/claude-plugins-official
 claude plugin install coderabbit@claude-plugins-official</code></pre>

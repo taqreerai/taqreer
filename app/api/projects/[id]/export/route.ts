@@ -27,7 +27,13 @@ export async function POST(
 
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as ExportPayload;
-  const format = body.format === "pdf" ? "pdf" : "pptx";
+  if (body.format === "pdf") {
+    return NextResponse.json(
+      { error: "PDF export is not yet implemented" },
+      { status: 400 },
+    );
+  }
+  const format = "pptx" as const;
 
   const project = await prisma.project.findFirst({
     where: {

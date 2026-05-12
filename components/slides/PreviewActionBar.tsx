@@ -146,7 +146,12 @@ export function PreviewActionBar({
       }
       try {
         const response = await fetch(`/api/projects/${projectId}/export/${exportJobId}`);
-        if (!response.ok) return;
+        if (!response.ok) {
+          console.warn(
+            `Export poll failed: ${response.status} ${response.statusText}`,
+          );
+          return;
+        }
         const data = (await response.json()) as {
           status: string;
           signedUrl: string | null;
@@ -163,8 +168,9 @@ export function PreviewActionBar({
           });
           setExportJobId(null);
         }
-      } catch {
+      } catch (err) {
         // network blip; keep polling (counts toward MAX_POLL_ATTEMPTS).
+        console.warn("Export poll network error:", err);
       }
     };
     void poll();

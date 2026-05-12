@@ -56,35 +56,60 @@ export async function POST(
     );
   }
   const eventPayload = (latestJob.inputJson ?? {}) as Record<string, unknown>;
-  const latestVersionNumber = project.presentation.versions[0]?.versionNumber ?? 0;
 
-  const result = await prisma.$transaction(async (tx) => {
-    const newVersion = await tx.presentationVersion.create({
-      data: {
-        presentationId: project.presentation!.id,
-        versionNumber: latestVersionNumber + 1,
-        status: "queued",
-        slideJson: toJson({ status: "queued", slides: [] }),
-      },
-    });
-    await tx.presentation.update({
-      where: { id: project.presentation!.id },
-      data: { currentVersionId: newVersion.id },
-    });
-    await tx.project.update({
-      where: { id: project.id },
-      data: { status: "queued" },
-    });
-    const newJob = await tx.job.create({
-      data: {
-        projectId: project.id,
-        type: "deck.generate",
-        status: "queued",
-        inputJson: toJson(eventPayload),
-      },
-    });
-    return { newVersion, newJob };
-  });
+  // Compute the next version number inside the transaction and retry on
+  // unique-constraint races (PresentationVersion(presentationId, versionNumber)).
+  // Without this, two concurrent regenerate calls can both read the same
+  // latestVersionNumber and try to create v_n+1 twice.
+  const MAX_ATTEMPTS = 3;
+  let result: { newVersion: { id: string; versionNumber: number }; newJob: { id: string } } | null = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const latest = await tx.presentationVersion.findFirst({
+          where: { presentationId: project.presentation!.id },
+          orderBy: { versionNumber: "desc" },
+          select: { versionNumber: true },
+        });
+        const nextNumber = (latest?.versionNumber ?? 0) + 1;
+        const newVersion = await tx.presentationVersion.create({
+          data: {
+            presentationId: project.presentation!.id,
+            versionNumber: nextNumber,
+            status: "queued",
+            slideJson: toJson({ status: "queued", slides: [] }),
+          },
+        });
+        await tx.presentation.update({
+          where: { id: project.presentation!.id },
+          data: { currentVersionId: newVersion.id },
+        });
+        await tx.project.update({
+          where: { id: project.id },
+          data: { status: "queued" },
+        });
+        const newJob = await tx.job.create({
+          data: {
+            projectId: project.id,
+            type: "deck.generate",
+            status: "queued",
+            inputJson: toJson(eventPayload),
+          },
+        });
+        return { newVersion, newJob };
+      });
+      break;
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code !== "P2002" || attempt === MAX_ATTEMPTS - 1) throw error;
+    }
+  }
+  if (!result) {
+    return NextResponse.json(
+      { error: "Failed to allocate a new presentation version" },
+      { status: 500 },
+    );
+  }
 
   try {
     await sendInngestEventWithRetry({

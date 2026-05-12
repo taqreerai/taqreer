@@ -87,7 +87,7 @@ export function Hero() {
                       className="relative rounded-2xl border border-white/10 shadow-2xl w-full h-auto mx-auto"
                       width={1200}
                       height={800}
-                      priority
+                      loading="eager"
                       src="/hero.png" />
                 </motion.div>
             </div>

@@ -229,9 +229,8 @@ export default function CreateContentPage() {
             aria-checked={letUsHandle}
             aria-label="اتركها لنا"
             className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
-              letUsHandle ? "" : "bg-white/10"
+              letUsHandle ? "tq-switch-on" : "bg-white/10"
             }`}
-            style={letUsHandle ? { backgroundImage: "var(--tq-gradient-brand)" } : undefined}
             dir="ltr"
           >
             <span

@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 type InitialState = {
   projectTitle: string;
+  presentationId: string | null;
   initialProjectStatus: string;
   initialVersionStatus: string | null;
   initialManifest: SlideManifest | null;
@@ -39,6 +40,7 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
       aiPrompt: true,
       presentation: {
         select: {
+          id: true,
           versions: {
             orderBy: { versionNumber: "desc" },
             take: 1,
@@ -68,6 +70,7 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
 
   return {
     projectTitle: project.title,
+    presentationId: project.presentation?.id ?? null,
     initialProjectStatus: project.status,
     initialVersionStatus: version?.status ?? null,
     initialManifest: manifest,
@@ -83,5 +86,9 @@ export default async function PreviewPage({
   const { projectId } = await params;
   const data = await loadProject(projectId);
   if (!data) notFound();
-  return <DeckView projectId={projectId} {...data} />;
+  // Key DeckView on the server-observed status so a generating→completed (or
+  // completed→generating after regenerate) transition remounts the component
+  // and reseeds state from the new props — no in-effect prop-to-state sync.
+  const deckKey = `${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
+  return <DeckView key={deckKey} projectId={projectId} {...data} />;
 }

@@ -140,6 +140,7 @@ function FontSlot({
         onChange={(event) => {
           const nextFile = event.target.files?.[0];
           if (nextFile) onSelect(nextFile);
+          event.currentTarget.value = "";
         }}
       />
       {file ? (
@@ -150,7 +151,10 @@ function FontSlot({
           </div>
           <button
             type="button"
-            onClick={onRemove}
+            onClick={() => {
+              if (inputRef.current) inputRef.current.value = "";
+              onRemove();
+            }}
             aria-label={`إزالة ${label}`}
             className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-white"
           >
@@ -168,10 +172,7 @@ function FontSlot({
           <span className="mt-1 text-xs text-muted">اختياري — Arial افتراضياً</span>
         </button>
       )}
-      <p
-        className={`${sampleSizeClass} text-white`}
-        style={family ? { fontFamily: family } : undefined}
-      >
+      <p className={`${sampleSizeClass} text-white${family ? ` ${family}` : ""}`}>
         {sampleText}
       </p>
     </div>
@@ -274,7 +275,10 @@ export default function CreateBrandPage() {
     const url = URL.createObjectURL(file);
     const family = `Taqreer-${target}-${crypto.randomUUID()}`;
     const style = document.createElement("style");
-    style.textContent = `@font-face { font-family: "${family}"; src: url("${url}"); }`;
+    // The preview <p> uses the family string as a class so we keep the JSX
+    // class-based (no raw inline fontFamily). Family names are UUID-based, so
+    // they are unique-enough to double as class selectors.
+    style.textContent = `@font-face { font-family: "${family}"; src: url("${url}"); } .${family} { font-family: "${family}"; }`;
     document.head.appendChild(style);
     fontResourcesRef.current[target] = { style, url };
 

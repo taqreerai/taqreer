@@ -16,33 +16,39 @@ async function emptyBucket(url: string, key: string, bucket: string): Promise<vo
   };
 
   const listAndRemove = async (prefix: string) => {
-    const listRes = await fetch(`${url}/storage/v1/object/list/${bucket}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ prefix, limit: 1000, offset: 0 }),
-    });
-    if (!listRes.ok) {
-      console.warn(`  [${bucket}] list "${prefix || "/"}" failed: ${listRes.status} ${await listRes.text()}`);
-      return;
-    }
-    const items = (await listRes.json()) as Array<{ name: string; id: string | null }>;
-    const files = items.filter((item) => item.id !== null);
-    const folders = items.filter((item) => item.id === null);
-    if (files.length > 0) {
-      const paths = files.map((f) => (prefix ? `${prefix}/${f.name}` : f.name));
-      const delRes = await fetch(`${url}/storage/v1/object/${bucket}`, {
-        method: "DELETE",
+    let offset = 0;
+    const LIMIT = 1000;
+    while (true) {
+      const listRes = await fetch(`${url}/storage/v1/object/list/${bucket}`, {
+        method: "POST",
         headers,
-        body: JSON.stringify({ prefixes: paths }),
+        body: JSON.stringify({ prefix, limit: LIMIT, offset }),
       });
-      if (!delRes.ok) {
-        console.warn(`  [${bucket}] delete failed: ${delRes.status} ${await delRes.text()}`);
-      } else {
-        removed += paths.length;
+      if (!listRes.ok) {
+        console.warn(`  [${bucket}] list "${prefix || "/"}" failed: ${listRes.status} ${await listRes.text()}`);
+        return;
       }
-    }
-    for (const folder of folders) {
-      await listAndRemove(prefix ? `${prefix}/${folder.name}` : folder.name);
+      const items = (await listRes.json()) as Array<{ name: string; id: string | null }>;
+      const files = items.filter((item) => item.id !== null);
+      const folders = items.filter((item) => item.id === null);
+      if (files.length > 0) {
+        const paths = files.map((f) => (prefix ? `${prefix}/${f.name}` : f.name));
+        const delRes = await fetch(`${url}/storage/v1/object/${bucket}`, {
+          method: "DELETE",
+          headers,
+          body: JSON.stringify({ prefixes: paths }),
+        });
+        if (!delRes.ok) {
+          console.warn(`  [${bucket}] delete failed: ${delRes.status} ${await delRes.text()}`);
+        } else {
+          removed += paths.length;
+        }
+      }
+      for (const folder of folders) {
+        await listAndRemove(prefix ? `${prefix}/${folder.name}` : folder.name);
+      }
+      if (items.length < LIMIT) break;
+      offset += LIMIT;
     }
   };
   await listAndRemove("");
@@ -50,7 +56,12 @@ async function emptyBucket(url: string, key: string, bucket: string): Promise<vo
 }
 
 async function main() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required");
+  }
+
+  const adapter = new PrismaPg({ connectionString: databaseUrl });
   const prisma = new PrismaClient({ adapter });
 
   const counts = async () => ({

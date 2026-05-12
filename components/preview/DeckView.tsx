@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 type Props = {
   projectId: string;
   projectTitle: string;
+  presentationId: string | null;
   initialProjectStatus: string;
   initialVersionStatus: string | null;
   initialManifest: SlideManifest | null;
@@ -109,64 +110,61 @@ const actionBarVariants: Variants = {
 export function DeckView({
   projectId,
   projectTitle,
+  presentationId,
   initialProjectStatus,
   initialVersionStatus,
   initialManifest,
   initialSlideCount,
 }: Props) {
   const router = useRouter();
+  // Initial state seeds from server props. The parent (re)keys this component
+  // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);
-  const [projectStatus, setProjectStatus] = useState(initialProjectStatus);
+  const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
   const [slideCount, setSlideCount] = useState(initialSlideCount);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
+  // Polling sets this when it sees a failed status arrive after mount.
+  const [polledFailure, setPolledFailure] = useState(false);
 
-  const status: DerivedStatus = isFailed(projectStatus, versionStatus)
+  const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
     : manifest && isCompleted(projectStatus, versionStatus)
       ? "completed"
       : "generating";
 
-  // Sync server-driven props into local state when `router.refresh()` runs.
-  // Two transitions need handling:
-  //  - Generating → Completed: pull the fresh manifest into state so the
-  //    derived status flips from "generating" to "completed" and stops the
-  //    polling loop.
-  //  - Completed → Generating: the user kicked off a regenerate, server now
-  //    reports a queued version with no manifest. Clear the cached manifest
-  //    so the UI returns to placeholders + spinner.
-  useEffect(() => {
-    if (initialManifest && !manifest) {
-      setManifest(initialManifest);
-      setProjectStatus(initialProjectStatus);
-      setVersionStatus(initialVersionStatus);
-      return;
-    }
-    if (!isCompleted(initialProjectStatus, initialVersionStatus) && manifest) {
-      setManifest(null);
-      setProjectStatus(initialProjectStatus);
-      setVersionStatus(initialVersionStatus);
-    }
-  }, [initialManifest, initialProjectStatus, initialVersionStatus, manifest]);
-
   // Realtime — Inngest writes the version → Supabase emits → we parse + render.
+  // Scoped to this presentation via a server-side filter so other projects'
+  // updates can't overwrite our local state.
   useEffect(() => {
     if (status !== "generating") return;
+    if (!presentationId) return;
     const supabase = createClient();
     const channel = supabase
-      .channel(`presentation:${projectId}`)
+      .channel(`presentation:${presentationId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "presentation_versions" },
+        {
+          event: "*",
+          schema: "public",
+          table: "presentation_versions",
+          filter: `presentation_id=eq.${presentationId}`,
+        },
         (payload) => {
           const record = payload.new as {
+            presentation_id?: string;
+            presentationId?: string;
             status?: string;
             slide_json?: unknown;
             slideJson?: unknown;
           } | null;
           if (!record) return;
+          // Defense-in-depth: if the row isn't ours, ignore even if the
+          // server-side filter is misconfigured.
+          const rowPresentationId = record.presentation_id ?? record.presentationId;
+          if (rowPresentationId && rowPresentationId !== presentationId) return;
           if (record.status) setVersionStatus(record.status);
           const slideJson = record.slide_json ?? record.slideJson;
           if (slideJson && typeof slideJson === "object") {
@@ -195,7 +193,7 @@ export function DeckView({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [projectId, status]);
+  }, [presentationId, status]);
 
   // Polling — primary feedback channel for progress while Claude streams.
   // Tighter cadence (1.5 s) so the per-slide progress UI updates close to
@@ -221,7 +219,7 @@ export function DeckView({
           setSlideCount(data.slideCount);
         }
         if (data.status === "failed") {
-          setProjectStatus("failed");
+          setPolledFailure(true);
           return;
         }
         if (data.status === "completed" || data.status === "complete") {
@@ -245,14 +243,15 @@ export function DeckView({
     try {
       const res = await fetch(`/api/projects/${projectId}/retry`, { method: "POST" });
       if (!res.ok) throw new Error("تعذر إعادة المحاولة الآن");
-      setProjectStatus("queued");
-      setVersionStatus("queued");
+      // Let the server re-render the parent with the queued status; parent
+      // keys DeckView so this component remounts back into "generating".
+      router.refresh();
     } catch (err) {
       setRetryError(err instanceof Error ? err.message : "تعذر إعادة المحاولة الآن");
     } finally {
       setRetrying(false);
     }
-  }, [projectId]);
+  }, [projectId, router]);
 
   const placeholders = useMemo(
     () => Array.from({ length: Math.max(slideCount, 1) }),

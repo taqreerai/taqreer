@@ -425,6 +425,11 @@ body {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
+/* ─── Toggle Switch (on state) ─── */
+.tq-switch-on {
+  background-image: var(--tq-gradient-brand);
+}
+
 /* ─── Progress Bar ─── */
 .progress-track {
   background: rgba(42, 36, 59, 0.8);
