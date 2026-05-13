@@ -10,6 +10,18 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
 }
 
+// Some upload sources (drag-from-browser, certain file pickers) hand back
+// file.name already URL-percent-encoded. Decode for display + storage so the
+// Arabic name shows as "قوة الذكاء.pptx" not "%D9%82%D9%88%D8%A9...".
+function readableFileName(raw: string): string {
+  if (!/%[0-9A-Fa-f]{2}/.test(raw)) return raw;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export default function CreateContentPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,6 +32,9 @@ export default function CreateContentPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState<1 | 2 | null>(null);
+  // Default OFF: surface the user's content verbatim (no invented headings or
+  // grouping). When the user flips this on, we let Claude reorganize freely.
+  const [letUsHandle, setLetUsHandle] = useState(false);
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -66,15 +81,16 @@ export default function CreateContentPage() {
           "taqreer:create:content",
           JSON.stringify({
             type: "file",
-            fileName: file.name,
+            fileName: readableFileName(file.name),
             fileSize: file.size,
             storageUrl: uploaded.storageUrl,
+            keepVerbatim: !letUsHandle,
           })
         );
       } else {
         sessionStorage.setItem(
           "taqreer:create:content",
-          JSON.stringify({ type: "text", text: text.trim() })
+          JSON.stringify({ type: "text", text: text.trim(), keepVerbatim: !letUsHandle })
         );
       }
 
@@ -158,7 +174,7 @@ export default function CreateContentPage() {
             {file ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
                 <div>
-                  <p className="font-semibold text-white">{file.name}</p>
+                  <p className="font-semibold text-white">{readableFileName(file.name)}</p>
                   <p className="text-sm text-[#9A94A8]">{formatFileSize(file.size)}</p>
                 </div>
                 <button
@@ -184,7 +200,9 @@ export default function CreateContentPage() {
               }}
               placeholder="الصق محتواك هنا — مقالة، تقرير، ملاحظات، أي شيء..."
             />
-            <p className="text-left text-sm text-[#9A94A8]">{text.length.toLocaleString("ar-SA")} حرف</p>
+            <p className="text-left text-sm text-[#9A94A8]">
+              {(text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0).toLocaleString("en-US")} كلمة
+            </p>
           </div>
         )}
 
@@ -205,6 +223,38 @@ export default function CreateContentPage() {
             ))}
           </div>
         ) : null}
+
+        {/* Verbatim toggle — applies to both file and text inputs */}
+        <div className="mt-6 flex items-start justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4">
+          <div>
+            <p className="font-semibold text-white">هل تريد منا تنظيم محتواك؟</p>
+            <p className="mt-1 text-xs text-[#9A94A8]">
+              {letUsHandle
+                ? "سننظم محتواك ونصيغ العناوين والأقسام تلقائياً."
+                : "سنحافظ على نصك كما هو بدون إضافة عناوين أو إعادة صياغة."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLetUsHandle((current) => !current)}
+            role="switch"
+            aria-checked={letUsHandle}
+            aria-label="هل تريد منا تنظيم محتواك؟"
+            className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
+              letUsHandle ? "tq-switch-on" : "bg-white/10"
+            }`}
+          >
+            {/* RTL switch: knob sits on the right when OFF, slides to the
+                left when ON. The button has no explicit dir so it inherits
+                from the page's dir="rtl" — knob travels along the start
+                edge as the user expects in Arabic context. */}
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                letUsHandle ? "right-[22px]" : "right-0.5"
+              }`}
+            />
+          </button>
+        </div>
 
         {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
 

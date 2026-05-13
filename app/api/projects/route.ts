@@ -1,8 +1,27 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { inngest } from "@/inngest/client";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+
+// The brand-assets bucket is private. Upload returns a storage *path* (e.g.
+// "userId/create/brand-assets/uuid-name.png"), which Claude / the renderer /
+// the PPTX exporter can't fetch directly. Sign it to a long-lived HTTPS URL
+// once at brief assembly so the manifest stores a fetchable src.
+async function signBrandAssetUrl(path: string): Promise<string | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+  const admin = createSupabaseAdminClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  // 1 year. If we ever need permanent URLs, switch the bucket to public read.
+  const { data } = await admin.storage
+    .from("brand-assets")
+    .createSignedUrl(path, 60 * 60 * 24 * 365);
+  return data?.signedUrl ?? null;
+}
 
 type CreateProjectPayload = {
   type?: "create" | "enhance";
@@ -12,11 +31,23 @@ type CreateProjectPayload = {
     fileSize?: number;
     storageUrl?: string;
     text?: string;
+    keepVerbatim?: boolean;
   };
   brand?: {
-    palette?: Record<string, string>;
+    colors?: string[];
     fonts?: unknown;
-    logo?: { name?: string; storageUrl?: string } | null;
+    logo?: {
+      name?: string;
+      storageUrl?: string;
+      position?:
+        | "top-left"
+        | "top-center"
+        | "top-right"
+        | "bottom-left"
+        | "bottom-center"
+        | "bottom-right";
+      exclude?: ("cover" | "closing")[];
+    } | null;
     slideSize?: string;
     slideCount?: { mode?: string; value?: number | null };
   };
@@ -28,14 +59,39 @@ type CreateProjectPayload = {
     slideCountMode?: "match" | "custom";
     slideCountValue?: number | null;
   };
-  outline?: string[];
+  rules?: {
+    designStyle: string | null;
+    fixTypos: boolean;
+    pagination: boolean;
+    persistent: {
+      text: string;
+      position:
+        | "top-left"
+        | "top-center"
+        | "top-right"
+        | "bottom-left"
+        | "bottom-center"
+        | "bottom-right";
+      exclude: ("cover" | "closing")[];
+    } | null;
+  };
   saveBrandKit?: boolean;
   slideCount?: number | null;
 };
 
 function buildProjectTitle(payload: CreateProjectPayload) {
   if (payload.content?.type === "file" && payload.content.fileName) {
-    return payload.content.fileName.replace(/\.[^.]+$/, "");
+    let name = payload.content.fileName;
+    // Decode URL-percent-encoded names (some file pickers hand them back
+    // pre-encoded). Best-effort — fall back to the raw string on failure.
+    if (/%[0-9A-Fa-f]{2}/.test(name)) {
+      try {
+        name = decodeURIComponent(name);
+      } catch {
+        /* keep raw */
+      }
+    }
+    return name.replace(/\.[^.]+$/, "");
   }
 
   const text = payload.content?.text?.trim();
@@ -64,14 +120,37 @@ export async function POST(request: Request) {
     const projectType = payload.type === "enhance" ? "enhance" : "create";
 
     // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000 input tokens).
-    // The full brand (including previewDataUrl) is still kept in `aiPrompt` for debugging.
+    // Also fill in font fallbacks — if the user didn't upload custom fonts,
+    // Arial is the universal default (available on every OS, supports both
+    // Arabic and Latin scripts).
+    const incomingFonts = (payload.brand?.fonts ?? null) as
+      | {
+          heading?: { name?: string | null; storageUrl?: string | null } | null;
+          body?: { name?: string | null; storageUrl?: string | null } | null;
+        }
+      | null;
+    const headingFontName = incomingFonts?.heading?.name?.trim() || "Arial";
+    const headingFontUrl = incomingFonts?.heading?.storageUrl || null;
+    const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
+    const bodyFontUrl = incomingFonts?.body?.storageUrl || null;
+    const logoPath = payload.brand?.logo?.storageUrl ?? null;
+    const logoSignedUrl = logoPath ? await signBrandAssetUrl(logoPath) : null;
     const claudeBrand = payload.brand
       ? {
           ...payload.brand,
+          fonts: {
+            heading: { name: headingFontName, storageUrl: headingFontUrl },
+            body: { name: bodyFontName, storageUrl: bodyFontUrl },
+          },
           logo: payload.brand.logo
             ? {
                 name: payload.brand.logo.name,
                 storageUrl: payload.brand.logo.storageUrl,
+                // Signed HTTPS URL for the renderer + PPTX export; falls back
+                // to the storage path so the brief is never missing the field.
+                url: logoSignedUrl ?? payload.brand.logo.storageUrl,
+                position: payload.brand.logo.position ?? "top-right",
+                exclude: payload.brand.logo.exclude ?? [],
               }
             : payload.brand.logo,
         }
@@ -83,7 +162,7 @@ export async function POST(request: Request) {
       direction: "rtl",
       content: payload.content,
       brand: claudeBrand,
-      outline: payload.outline,
+      rules: payload.rules ?? null,
       slideCount: payload.slideCount,
     };
     const eventPayload = {
@@ -92,30 +171,33 @@ export async function POST(request: Request) {
       brief,
     };
 
-    const dbUser = await prisma.user.upsert({
-      where: { supabaseUserId: user.id },
-      update: {
-        email: user.email ?? `${user.id}@supabase.local`,
-        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-        image: user.user_metadata?.avatar_url ?? null,
-      },
-      create: {
-        supabaseUserId: user.id,
-        email: user.email ?? `${user.id}@supabase.local`,
-        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-        image: user.user_metadata?.avatar_url ?? null,
-        plan: "free",
-      },
-    });
-
     const result = await prisma.$transaction(async (tx) => {
+      // Upsert is inside the tx so a tx failure rolls back the user row too;
+      // also lets concurrent first-time-user requests resolve cleanly via the
+      // unique constraint on supabaseUserId.
+      const dbUser = await tx.user.upsert({
+        where: { supabaseUserId: user.id },
+        update: {
+          email: user.email ?? `${user.id}@supabase.local`,
+          name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+          image: user.user_metadata?.avatar_url ?? null,
+        },
+        create: {
+          supabaseUserId: user.id,
+          email: user.email ?? `${user.id}@supabase.local`,
+          name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+          image: user.user_metadata?.avatar_url ?? null,
+          plan: "free",
+        },
+      });
+
       const brandKit = payload.saveBrandKit
         ? await tx.brandKit.create({
             data: {
               userId: dbUser.id,
               name: `${title} — هوية بصرية`,
               logo: payload.brand?.logo?.storageUrl ?? null,
-              colors: toJson(payload.brand?.palette ?? null),
+              colors: toJson(payload.brand?.colors ?? null),
               fonts: toJson(payload.brand?.fonts ?? null),
               assetUrls: toJson({
                 logo: payload.brand?.logo ?? null,
@@ -138,7 +220,7 @@ export async function POST(request: Request) {
             content: payload.content,
             brand: payload.brand,
             enhance: payload.enhance,
-            outline: payload.outline,
+            rules: payload.rules,
             slideCount: payload.slideCount,
           }),
         },
@@ -186,16 +268,34 @@ export async function POST(request: Request) {
       return { project, presentation, version, job };
     });
 
-    await inngest.send({
-      name: "deck.generate.requested",
-      data: {
-        projectId: result.project.id,
-        presentationId: result.presentation.id,
-        versionId: result.version.id,
-        jobId: result.job.id,
-        ...eventPayload,
-      },
-    });
+    try {
+      await sendInngestEventWithRetry({
+        name: "deck.generate.requested",
+        data: {
+          projectId: result.project.id,
+          presentationId: result.presentation.id,
+          versionId: result.version.id,
+          jobId: result.job.id,
+          ...eventPayload,
+        },
+      });
+    } catch (error) {
+      // Inngest unreachable after retries — mark the rows so the user sees a
+      // failed state instead of an indefinite "queued".
+      await prisma.project
+        .update({ where: { id: result.project.id }, data: { status: "failed" } })
+        .catch(() => undefined);
+      await prisma.presentationVersion
+        .update({ where: { id: result.version.id }, data: { status: "failed" } })
+        .catch(() => undefined);
+      await prisma.job
+        .update({
+          where: { id: result.job.id },
+          data: { status: "failed", outputJson: toJson({ error: String(error) }) },
+        })
+        .catch(() => undefined);
+      throw error;
+    }
 
     return NextResponse.json({
       projectId: result.project.id,

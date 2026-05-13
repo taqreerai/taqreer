@@ -8,3 +8,11 @@ tsconfig.tsbuildinfo
 test-output/
 files/
 *.zip
+.claude/
+slide-debug.json
+
+# Personal scratch files — feedback notes and CodeRabbit autofix workflow
+# artifacts. Not source code; not for the repo.
+comments.txt
+.cr_issues/
+.cr_threads.json

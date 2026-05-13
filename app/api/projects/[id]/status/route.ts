@@ -2,14 +2,31 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
+type Progress = {
+  stage: "thinking" | "designing" | "validating" | "saving";
+  currentSlide: number;
+  estimatedTotal: number;
+};
+
 type SlideJson = {
   status?: string;
   slides?: unknown[];
+  progress?: Progress;
 };
 
 function getSlideJson(value: unknown): SlideJson | null {
   if (!value || typeof value !== "object") return null;
   return value as SlideJson;
+}
+
+function isProgress(value: unknown): value is Progress {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.stage === "string" &&
+    typeof v.currentSlide === "number" &&
+    typeof v.estimatedTotal === "number"
+  );
 }
 
 export async function GET(
@@ -66,8 +83,11 @@ export async function GET(
           ? "complete"
           : project.status;
 
+  const progress = isProgress(slideJson?.progress) ? slideJson.progress : null;
+
   return NextResponse.json({
     status: inferredStatus,
     slideCount,
+    progress,
   });
 }

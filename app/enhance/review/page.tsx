@@ -134,7 +134,7 @@ export default function EnhanceReviewPage() {
       }
 
       const data = (await response.json()) as { projectId: string };
-      router.push(`/create/generating?projectId=${data.projectId}`);
+      router.push(`/preview/${data.projectId}`);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "تعذر بدء التحسين. حاول مرة أخرى.");
       setLoading(false);
@@ -237,7 +237,11 @@ export default function EnhanceReviewPage() {
                 min={1}
                 max={10}
                 value={slideCountValue}
-                onChange={(event) => setSlideCountValue(Number(event.target.value))}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (Number.isNaN(parsed)) return;
+                  setSlideCountValue(Math.max(1, Math.min(10, parsed)));
+                }}
                 className="input-dark max-w-32"
               />
             ) : null}

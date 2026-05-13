@@ -1,6 +1,26 @@
 "use client";
 
 import type { SlideType, SlideElementType } from "@/lib/schema/slide";
+import { segmentRuns } from "@/lib/bidi";
+
+// Render a mixed-script string as a sequence of <bdi> isolates — each Arabic
+// or Latin run is wrapped so the Unicode BiDi algorithm can't reorder
+// neutrals (.,:·) or numbers across script boundaries. This mirrors the
+// per-run rtl flag used in the PPTX export, so what the user sees in preview
+// matches what they get in the exported deck.
+function MultiRunText({ content }: { content: string }) {
+  const runs = segmentRuns(content);
+  if (runs.length <= 1) return <>{content}</>;
+  return (
+    <>
+      {runs.map((run, i) => (
+        <bdi key={i} dir={run.rtl ? "rtl" : "ltr"}>
+          {run.text}
+        </bdi>
+      ))}
+    </>
+  );
+}
 
 type Background =
   | { type: "color"; value: string }
@@ -46,6 +66,11 @@ function ElementView({ element }: { element: SlideElementType }) {
   if (element.type === "text") {
     return (
       <div
+        // The HTML `dir` attribute (not just CSS direction) is what anchors
+        // BiDi neutrals — colons, periods, brackets, parens, slashes. Without
+        // it, ":قوة الذكاء" can render with the colon flipped to the visual
+        // start instead of staying at the logical end of the Arabic string.
+        dir={element.direction}
         style={{
           ...baseStyle,
           color: element.color,
@@ -62,7 +87,7 @@ function ElementView({ element }: { element: SlideElementType }) {
           backgroundColor: element.background,
         }}
       >
-        {element.content}
+        <MultiRunText content={element.content} />
       </div>
     );
   }
