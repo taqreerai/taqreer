@@ -471,6 +471,8 @@
                 <a href="#status">15. Implementation Status</a>
                 <a href="#risks">16. Risks</a>
                 <a href="#mvp">17. MVP Scope</a>
+                <a href="#pivot">18. Pivot — dom-to-pptx</a>
+                <a href="#mac-migration">19. Mac Migration</a>
             </nav>
         </aside>
 
@@ -1381,6 +1383,10 @@ inngest/
                     <strong>MVP recommendation:</strong> start with PPTX export and HTML-to-PDF export. Add LibreOffice
                     conversion later if needed.
                 </div>
+
+                <div class="note danger">
+                    <strong>⚠ Pivot in progress (2026-05-13):</strong> the JSON-manifest + PptxGenJS approach above is being replaced by an HTML-first pipeline using <a href="#pivot"><code>dom-to-pptx</code></a>. See §18. The flow steps in this section describe the legacy architecture and will be rewritten once the pivot lands.
+                </div>
             </section>
 
             <section id="pricing">
@@ -1813,6 +1819,116 @@ wsl coderabbit review --base origin/main --agent</code></pre>
                     <strong>Final recommendation:</strong> focus the first build on one clean promise: paste content,
                     apply brand, generate a designed deck, edit it, comment for AI changes, and export PPTX.
                 </div>
+            </section>
+
+            <section id="pivot">
+                <h2>18. Pivot — dom-to-pptx (decided 2026-05-13)</h2>
+                <p class="lead">
+                    After a week of patching BiDi, coordinate math, gradient rasterization, and logo placement on top of <code>PptxGenJS</code>, the JSON-manifest architecture is being replaced by an HTML-first pipeline using <a href="https://github.com/atharva9167j/dom-to-pptx"><code>dom-to-pptx</code></a>. Claude will author each slide as HTML/CSS, the browser does layout, and the library measures the rendered DOM to emit a native PPTX. Preview and export become the same artifact — no more divergence.
+                </p>
+
+                <h3>Why we pivoted</h3>
+                <ul>
+                    <li><strong>BiDi was death-by-a-thousand-cuts.</strong> Three rounds of fixes (multi-run text in export, <code>&lt;bdi&gt;</code> in renderer, dir attribute, prompt instructions) and the bullets-on-wrong-side / leading-colon / mixed-script-flip bugs kept resurfacing. Root cause: we were hand-coding a layout system that the browser already does correctly.</li>
+                    <li><strong>The schema was a leaky abstraction.</strong> Every new visual feature (gradients, shadows, logo contrast band, RTL bullet anchoring) became another rule in the system prompt and another branch in the renderer. Claude was being asked to do designer math (bbox = fontSize × lineHeight × lines, mirror x for RTL, etc.) instead of designing.</li>
+                    <li><strong>The renderer and the export kept drifting.</strong> What previewed in React didn't match what came out of PPTX — gradients especially. Mixed-script ordering was different between web and PowerPoint.</li>
+                </ul>
+
+                <h3>What <code>dom-to-pptx</code> gets us</h3>
+                <div class="cards">
+                    <div class="card">
+                        <h4>Browser does layout</h4>
+                        <p>Flexbox, grid, abs-positioning, RTL — already solved problems in the browser. The library reads <code>getBoundingClientRect()</code> + computed styles and maps that to PPTX coordinates. No more positional math in the prompt.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Native gradients + shadows + border-radius</h4>
+                        <p>CSS <code>linear-gradient</code> becomes a real OOXML vector gradient. <code>box-shadow</code> becomes a PPT outer shadow. <code>border-radius</code> maps to rounded corners. <code>filter: blur()</code> maps to soft-edge effects. We delete the <code>sharp</code>-based gradient rasterizer.</p>
+                    </div>
+                    <div class="card">
+                        <h4>SVGs stay vector</h4>
+                        <p>With <code>svgAsVector: true</code>, SVG icons and logos stay editable in PowerPoint ("Convert to Shape" / "Ungroup"). Google Material Icons and SVG brand logos work directly. Recoloring an SVG logo for contrast becomes a CSS <code>fill</code> / <code>color</code> change instead of a separate raster pipeline.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Automatic font embedding</h4>
+                        <p>The library detects fonts used in the page and embeds them into the PPTX (via <code>opentype.js</code> + <code>fonteditor-core</code>). Decks render identically on any machine. Google Fonts works via <code>crossorigin="anonymous"</code> on the link tag.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Preview = export</h4>
+                        <p>The HTML we render in the preview is the source of truth for the export. No more "looks fine in preview, breaks in PPTX". One renderer.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Less code to maintain</h4>
+                        <p><code>lib/schema/slide.ts</code>, <code>components/slides/SlideRenderer.tsx</code>, <code>lib/bidi.ts</code>, most of <code>inngest/functions/deck-export.ts</code>, the bbox/coord/bullet sections of the system prompt — all deleted.</p>
+                    </div>
+                </div>
+
+                <h3>What stays the same</h3>
+                <ul>
+                    <li>Create wizard (content → brand → summary).</li>
+                    <li>Inngest generation pipeline (queue, polling, status, retry).</li>
+                    <li>Claude API integration (Opus 4.7, streaming, adaptive thinking, prompt caching).</li>
+                    <li>DB schema for Project / Presentation / PresentationVersion (the <code>slideJson</code> column just stores a different shape).</li>
+                    <li>Auth, Supabase, dashboard, settings — none of this changes.</li>
+                </ul>
+
+                <h3>What we know / don't know about the library</h3>
+                <ul>
+                    <li><strong>It still uses PptxGenJS under the hood.</strong> It's a layout-engine wrapper, not a replacement. We're not "scrapping PptxGenJS" — we're replacing our hand-coded coordinate math with theirs.</li>
+                    <li><strong>It is browser-only.</strong> Needs a real DOM with layout. Two integration paths: <em>(A)</em> client-side export from the preview window, <em>(B)</em> Puppeteer + dom-to-pptx server-side. We'll start with (A) for the spike; revisit (B) if we need background export jobs.</li>
+                    <li><strong>BiDi is unverified.</strong> The README / SUPPORTED.md / USAGE.md and the source code <em>do not mention</em> <code>direction: rtl</code> or <code>dir="rtl"</code> for normal text flow — only <code>writing-mode: vertical-rl</code> for East Asian. Whether mixed-script Arabic text round-trips correctly through the library into PowerPoint is the central open question. The spike must answer this first.</li>
+                    <li><strong>It's young.</strong> v1.0.0 was eight months ago; we're on 1.1.8. Single maintainer, very active (last push three days before this entry), frequent fixes in the changelog. Healthy risk profile but not a "boring tech" choice.</li>
+                </ul>
+
+                <h3>Plan — three gates</h3>
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="num">1</div>
+                        <div><strong>Gate 1: BiDi spike (30 min)</strong><span>One static HTML file with the exact problem strings ("القسم 02 · المشكلة", an Arabic sentence ending with a period, an Arabic bullet list, a mixed-script line). Run <code>exportToPptx</code> in a vanilla browser. Open the .pptx in PowerPoint. If BiDi survives, GO. If not, look elsewhere — we're not rebuilding on the same foundation.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">2</div>
+                        <div><strong>Gate 2: One-pager plan</strong><span>If the spike passes: write the new schema (<code>{ slideId, role, html }</code>), the new system prompt outline (HTML/CSS authoring rules + design tokens + slot patterns instead of coordinate math), the renderer approach (sanitized <code>dangerouslySetInnerHTML</code> or sandboxed iframe; DOMPurify required), the export approach (client-side vs Puppeteer), and the deletion list. User approves before any code lands.</span></div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="num">3</div>
+                        <div><strong>Gate 3: Implementation on a new branch</strong><span>Keep <code>dev</code> producing decks via the current pipeline until the new one is end-to-end. New branch <code>html-pivot</code>: prompt rewrite, schema swap, new renderer, client-side export. Cut over via a flag, then delete the old code.</span></div>
+                    </div>
+                </div>
+
+                <h3>Progress so far this week (2026-05-12 → 2026-05-13)</h3>
+                <div class="cards">
+                    <div class="card">
+                        <h4>Shipped — keep</h4>
+                        <p>Inngest reliability (P2002 retry on regenerate, sendInngestEventWithRetry on every event-after-commit), signed logo URLs from <code>api/projects</code> (so the URL is reachable for any consumer — applies to the new pipeline too), dashboard <code>max-w-[1280px]</code> wrapper, CodeRabbit autofix workflow (PR #20 → 15 fixes landed), brand step rebuild (2-column, rules + slide-size on the left; colors + fonts + logo on the right), summary step stripped to content-only + back button, Google Fonts picker, brand colors 3–5 with no bg/text inputs, 6-button position grid with arrows, RTL toggle (knob on right when OFF), word counter with Western digits, env-shadow auto-strip via <code>scripts/dev.mjs</code>, and the URL-encoded-filename defensive decode.</p>
+                    </div>
+                    <div class="card">
+                        <h4>Shipped — delete during pivot</h4>
+                        <p><code>lib/bidi.ts</code> + <code>segmentRuns</code> in <code>deck-export</code>, the <code>&lt;bdi&gt;</code> multi-run text in <code>SlideRenderer</code>, the bbox/coord/bullet-anchoring/logo-coord/logo-contrast-band sections of the system prompt, the gradient-rasterization branch in <code>deck-export</code>, the Zod manifest schema, the rotating fake-feedback caption (depends on the current progress-by-slide model; will be reworked on top of the new pipeline).</p>
+                    </div>
+                    <div class="card">
+                        <h4>Not built yet — see §18 gates</h4>
+                        <p>BiDi spike, new schema, new prompt, sanitized HTML renderer, dom-to-pptx integration, Puppeteer fallback (optional).</p>
+                    </div>
+                </div>
+
+                <h3>Risks the pivot does NOT solve</h3>
+                <ul>
+                    <li><strong>BiDi in PptxGenJS itself</strong>: dom-to-pptx serializes through PptxGenJS. If the BiDi bug is in PptxGenJS text runs and not in our layer, the spike will fail. We then look at LibreOffice headless conversion as a separate pipeline.</li>
+                    <li><strong>Prompt-injection / unsafe HTML</strong>: Claude's HTML will be injected into the DOM. Required mitigations: <code>dompurify</code> or <code>sanitize-html</code> to strip <code>&lt;script&gt;</code>, event handlers, <code>javascript:</code> URIs, and dangerous CSS. Render in a sandboxed iframe (<code>sandbox="allow-same-origin"</code>) so even sanitization escapes can't reach the parent.</li>
+                    <li><strong>Validation looseness</strong>: HTML is harder to validate than Zod JSON. Need a structural checker: presence of slide container with locked dimensions, no <code>&lt;script&gt;</code> / <code>&lt;iframe&gt;</code> / <code>&lt;object&gt;</code>, no <code>style="position: fixed"</code>, no off-canvas elements. Loose enough to let Claude be creative; strict enough to catch corruption.</li>
+                </ul>
+            </section>
+
+            <section id="mac-migration">
+                <h2>19. Mac Migration</h2>
+                <p class="lead">
+                    Switching the dev environment from Windows to Mac. The full setup checklist (Homebrew, Node, GitHub CLI, Claude Code + CodeRabbit plugin, env vars, optional tools) lives in <a href="../MAC_MIGRATION.md"><code>MAC_MIGRATION.md</code></a> at the repo root. The Windows-only friction points being left behind:
+                </p>
+                <ul>
+                    <li><strong>PowerShell <code>ANTHROPIC_API_KEY</code> shadow</strong> — the harness exported the var as an empty string at process boot, shadowing <code>.env.local</code>. The <code>scripts/dev.mjs</code> wrapper auto-strips it on Windows; on Mac this is a non-issue and the wrapper becomes a no-op (still safe to keep).</li>
+                    <li><strong>nvm-windows quirks</strong> — fresh shells sometimes needed PATH prepending. <code>nvm</code> or <code>fnm</code> on Mac handles this cleanly via shell hooks.</li>
+                    <li><strong>Backslash path handling in npm scripts</strong> — Mac is forward-slash native, no special handling needed.</li>
+                </ul>
             </section>
 
             <div class="footer">
