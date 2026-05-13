@@ -29,6 +29,37 @@ const STRONG_RTL =
   /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﷿ﹰ-﻿]/;
 const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
+/**
+ * Canonical signature of an <a:rPr> for grouping adjacent runs.
+ *
+ * Compatibility rule: same signature → same visual formatting → safe to
+ * concatenate text into a single run. Different signature → inline style
+ * boundary the user authored → keep separate so per-run formatting is
+ * preserved.
+ *
+ * lang is excluded from the signature because we override it to "ar-SA"
+ * on every surviving run in RTL paragraphs anyway. dom-to-pptx emits
+ * different langs across script-segmented runs that otherwise share the
+ * same color/font/size — those SHOULD merge, the lang difference is
+ * incidental.
+ */
+function rPrSignature(rPr: Element | null): string {
+  if (!rPr) return "";
+  const attrs: Array<[string, string]> = [];
+  for (let i = 0; i < rPr.attributes.length; i++) {
+    const a = rPr.attributes[i];
+    if (a.name === "lang") continue;
+    attrs.push([a.name, a.value]);
+  }
+  attrs.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const attrStr = attrs.map(([k, v]) => `${k}=${v}`).join("|");
+  const childStrs: string[] = [];
+  for (let i = 0; i < rPr.children.length; i++) {
+    childStrs.push(rPr.children[i].outerHTML);
+  }
+  return `${attrStr}#${childStrs.join("|")}`;
+}
+
 export type BiDiPostprocessStats = {
   invocations: number;
   slidesScanned: number;
@@ -125,50 +156,64 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     }
     if (touched) modified++;
 
-    // Merge all <a:r> runs in this paragraph into a single run.
+    // Smart-merge <a:r> runs in this paragraph: group adjacent runs by
+    // rPr signature (excluding lang), merge each group into one run.
     //
     // Why: dom-to-pptx splits mixed-script content into multiple text runs
     // at every script transition. PowerPoint applies BiDi per run, so
     // neutral characters (·, %, .) resolve against the run boundary instead
-    // of their logical neighbor — e.g. "12%" becomes "%12" visually because
-    // the % is a separate run that PowerPoint can't merge with the digits.
-    // A single run + pPr rtl="1" lets PowerPoint apply UAX-9 across the
-    // entire paragraph, which correctly glues neutrals to their logical
-    // neighbor and produces the right visual ordering.
+    // of their logical neighbor — e.g. "12%" becomes "%12" visually. The
+    // script-split runs share the same color/font/size — only lang differs.
+    // Merging them lets PowerPoint apply UAX-9 across the merged span and
+    // produces the right visual ordering.
     //
-    // Tradeoff: we inherit the first run's <a:rPr>, so per-run color/bold/
-    // font formatting inside an RTL paragraph is collapsed. Acceptable for
-    // our content shape today (Claude emits uniform-style paragraphs); will
-    // need a smarter "merge by compatible rPr" pass if that changes.
-    const runs: Element[] = [];
+    // But: when Claude authors inline-coloured spans for emphasis
+    // (e.g. <span style="color:var(--accent)">5 minutes</span>), those
+    // produce runs with DIFFERENT solidFill children — same lang, different
+    // colour. Those must stay separate so the emphasis colour survives. The
+    // signature comparison captures this: same colour/font → merge,
+    // different colour → keep separate.
+    const allRuns: Element[] = [];
     for (let j = 0; j < p.childNodes.length; j++) {
       const node = p.childNodes[j];
       if (node.nodeType === 1 && (node as Element).localName === "r") {
-        runs.push(node as Element);
+        allRuns.push(node as Element);
       }
     }
-    if (runs.length > 1) {
-      let mergedText = "";
-      for (const r of runs) {
-        const ts = r.getElementsByTagNameNS(NS_A, "t");
-        for (let k = 0; k < ts.length; k++) {
-          mergedText += ts[k].textContent ?? "";
+    let cursor = 0;
+    while (cursor < allRuns.length) {
+      const first = allRuns[cursor];
+      const sig = rPrSignature(
+        first.getElementsByTagNameNS(NS_A, "rPr")[0] ?? null
+      );
+      let groupEnd = cursor + 1;
+      while (groupEnd < allRuns.length) {
+        const nextSig = rPrSignature(
+          allRuns[groupEnd].getElementsByTagNameNS(NS_A, "rPr")[0] ?? null
+        );
+        if (nextSig !== sig) break;
+        groupEnd++;
+      }
+      if (groupEnd - cursor > 1) {
+        let mergedText = "";
+        for (let k = cursor; k < groupEnd; k++) {
+          const ts = allRuns[k].getElementsByTagNameNS(NS_A, "t");
+          for (let m = 0; m < ts.length; m++) {
+            mergedText += ts[m].textContent ?? "";
+          }
         }
+        let firstT = first.getElementsByTagNameNS(NS_A, "t")[0];
+        if (!firstT) {
+          firstT = doc.createElementNS(NS_A, "a:t");
+          first.appendChild(firstT);
+        }
+        firstT.textContent = mergedText;
+        for (let k = groupEnd - 1; k > cursor; k--) {
+          allRuns[k].parentNode?.removeChild(allRuns[k]);
+        }
+        stats.runsMerged += groupEnd - cursor - 1;
       }
-      const firstRun = runs[0];
-      // Replace the first run's <a:t> content with the merged text. If the
-      // first run has no <a:t> (shouldn't happen for text content), create one.
-      let firstT = firstRun.getElementsByTagNameNS(NS_A, "t")[0];
-      if (!firstT) {
-        firstT = doc.createElementNS(NS_A, "a:t");
-        firstRun.appendChild(firstT);
-      }
-      firstT.textContent = mergedText;
-      // Drop the now-merged tail runs.
-      for (let j = runs.length - 1; j >= 1; j--) {
-        runs[j].parentNode?.removeChild(runs[j]);
-      }
-      stats.runsMerged += runs.length - 1;
+      cursor = groupEnd;
     }
 
     // Retag every surviving run's lang to ar-SA. PowerPoint uses lang to

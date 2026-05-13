@@ -458,7 +458,14 @@ export function DeckView({
         variants={slideListVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 justify-center gap-5 md:grid-cols-2"
+        className="grid justify-center gap-5"
+        style={{
+          // Auto-wrap: 2+ columns when the viewport can fit 576px cells side
+          // by side (so the page-container at typical desktop width shows 2),
+          // single column on narrower screens. No fixed Tailwind breakpoint
+          // because page-container is width:100% and SLIDE_CELL_W is fixed.
+          gridTemplateColumns: `repeat(auto-fit, minmax(${SLIDE_CELL_W}px, 1fr))`,
+        }}
       >
         {manifest!.slides.map((slide) => (
           <motion.div
