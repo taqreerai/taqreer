@@ -4,8 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SlideManifest } from "@/lib/schema/slide";
 import { exportManifestAsPptx } from "@/lib/export/html-export";
+import { downloadHtmlDocument } from "@/lib/export/html-document";
 
 type Status = "idle" | "running" | "success" | "error";
+
+function baseFileName(title: string): string {
+  return (
+    title.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").slice(0, 80) ||
+    "presentation"
+  );
+}
 
 type ButtonState = {
   status: Status;
@@ -73,6 +81,7 @@ export function PreviewActionBar({
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
   const [exportPptx, setExportPptx] = useState<ButtonState>({ status: "idle" });
+  const [exportHtml, setExportHtml] = useState<ButtonState>({ status: "idle" });
   const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
 
   const [showSaveForm, setShowSaveForm] = useState(false);
@@ -104,13 +113,31 @@ export function PreviewActionBar({
     if (exportPptx.status === "running") return;
     setExportPptx({ status: "running", message: "جارٍ التصدير..." });
     try {
-      const fileName = `${(projectTitle || "presentation").trim().replace(/[\\/:*?"<>|]+/g, " ").slice(0, 80)}.pptx`;
+      const fileName = `${baseFileName(projectTitle)}.pptx`;
       await exportManifestAsPptx(manifest, fileName);
       setExportPptx({ status: "success", message: "تم التحميل" });
     } catch (error) {
       setExportPptx({
         status: "error",
         message: error instanceof Error ? error.message : "تعذر التصدير",
+      });
+    }
+  };
+
+  // HTML download — bundles all slides into one standalone .html file at
+  // full 1920×1080 so the user can open it in a browser and screenshot.
+  // No dom-to-pptx, no BiDi post-process; this is the raw rendered preview.
+  const handleDownloadHtml = () => {
+    if (exportHtml.status === "running") return;
+    setExportHtml({ status: "running", message: "جارٍ التحميل..." });
+    try {
+      const fileName = `${baseFileName(projectTitle)}.html`;
+      downloadHtmlDocument(manifest, fileName);
+      setExportHtml({ status: "success", message: "تم التحميل" });
+    } catch (error) {
+      setExportHtml({
+        status: "error",
+        message: error instanceof Error ? error.message : "تعذر التحميل",
       });
     }
   };
@@ -149,11 +176,14 @@ export function PreviewActionBar({
   const visibleMessage =
     regen.status === "error" ? { text: regen.message, kind: "error" as const } :
     exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :
+    exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
     saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
     exportPptx.status === "running" ? { text: exportPptx.message, kind: "info" as const } :
+    exportHtml.status === "running" ? { text: exportHtml.message, kind: "info" as const } :
     saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
     regen.status === "running" ? { text: regen.message, kind: "info" as const } :
     exportPptx.status === "success" ? { text: exportPptx.message, kind: "success" as const } :
+    exportHtml.status === "success" ? { text: exportHtml.message, kind: "success" as const } :
     saveTpl.status === "success" ? { text: saveTpl.message, kind: "success" as const } :
     null;
 
@@ -179,6 +209,12 @@ export function PreviewActionBar({
           label="تصدير PPTX"
           running={exportPptx.status === "running"}
           onClick={handleExport}
+        />
+        <ToolButton
+          icon="code"
+          label="تنزيل HTML"
+          running={exportHtml.status === "running"}
+          onClick={handleDownloadHtml}
         />
         <ToolButton
           icon="picture_as_pdf"
