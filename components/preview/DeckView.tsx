@@ -7,6 +7,7 @@ import { motion, type Variants } from "framer-motion";
 import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
+import { HtmlExportButton } from "@/components/preview/HtmlExportButton";
 import { createClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -437,6 +438,7 @@ export function DeckView({
           {manifest!.slides.length} SLIDES
         </p>
         <h1 className="mt-2 text-3xl font-bold text-white">{manifest!.title}</h1>
+        <HtmlExportButton manifest={manifest!} />
       </header>
 
       {/* Fixed vertical toolbar — slides in from the left after the cascade */}
