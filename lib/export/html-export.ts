@@ -69,7 +69,13 @@ export async function exportManifestAsPptx(
               className: "hx-slide",
               style: { width: 1920, height: 1080, marginBottom: 20 },
             },
-            createElement(SlideRenderer, { slide, scale: 1 })
+            createElement(SlideRenderer, {
+              slide,
+              theme: manifest.theme,
+              direction: manifest.direction,
+              language: manifest.language,
+              scale: 1,
+            })
           )
         )
       )

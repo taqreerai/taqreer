@@ -7,7 +7,6 @@ import { motion, type Variants } from "framer-motion";
 import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
-import { HtmlExportButton } from "@/components/preview/HtmlExportButton";
 import { createClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -304,7 +303,7 @@ export function DeckView({
 
   const fontLinks = useMemo(() => {
     if (!manifest) return [] as string[];
-    return [manifest.fonts.heading.url, manifest.fonts.body.url].filter(
+    return [manifest.theme.fontHeading.url, manifest.theme.fontBody.url].filter(
       (url, idx, all): url is string =>
         !!url && url.includes("fonts.googleapis.com") && all.indexOf(url) === idx,
     );
@@ -438,7 +437,6 @@ export function DeckView({
           {manifest!.slides.length} SLIDES
         </p>
         <h1 className="mt-2 text-3xl font-bold text-white">{manifest!.title}</h1>
-        <HtmlExportButton manifest={manifest!} />
       </header>
 
       {/* Fixed vertical toolbar — slides in from the left after the cascade */}
@@ -449,7 +447,11 @@ export function DeckView({
         className="fixed z-30"
         style={{ left: "16px", top: "50%" }}
       >
-        <PreviewActionBar projectId={projectId} projectTitle={projectTitle} />
+        <PreviewActionBar
+          projectId={projectId}
+          projectTitle={projectTitle}
+          manifest={manifest!}
+        />
       </motion.div>
 
       <motion.div
@@ -465,7 +467,13 @@ export function DeckView({
             style={{ width: SLIDE_CELL_W, height: SLIDE_CELL_H }}
             className="glass-card mx-auto overflow-hidden rounded-xl"
           >
-            <SlideRenderer slide={slide} scale={SLIDE_SCALE} />
+            <SlideRenderer
+              slide={slide}
+              theme={manifest!.theme}
+              direction={manifest!.direction}
+              language={manifest!.language}
+              scale={SLIDE_SCALE}
+            />
           </motion.div>
         ))}
       </motion.div>
