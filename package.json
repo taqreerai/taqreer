@@ -18,6 +18,7 @@
     "@supabase/supabase-js": "^2.105.4",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "dom-to-pptx": "^1.1.8",
     "dotenv": "^17.4.2",
     "framer-motion": "^12.38.0",
     "gsap": "^3.15.0",
