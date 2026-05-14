@@ -31,13 +31,11 @@ const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 
 /**
- * 7% width slack added to single-line text shapes in PASS 3.
- * Compensates for PowerPoint's slightly-wider glyph metrics versus the
- * browser's. Without this, single-line text that fits in preview wraps to
- * two lines in PPT (the shape's measured cx was browser-measured at
- * exactly the text width).
+ * Short single-line text shapes get wrap="none" on their bodyPr in PASS 3
+ * so PowerPoint's slightly-wider glyph metrics don't wrap a one-liner to
+ * two lines. See PASS 3 comment for the trade-off (small horizontal
+ * overflow vs. visual shape-position shift).
  */
-const SHAPE_WIDTH_SLACK = 0.07;
 const MAX_SINGLE_LINE_CHARS = 80;
 
 
@@ -325,34 +323,38 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
 
   stats.paragraphsModified += modified;
 
-  // PASS 3: widen every single-line text shape by SHAPE_WIDTH_SLACK to
-  // absorb PowerPoint's slightly-wider glyph metrics. Without this,
-  // single-line text that fits in browser preview wraps to two lines
-  // in PPT because dom-to-pptx measured the shape's cx at exactly the
-  // browser's text width.
+  // PASS 3: set wrap="none" on every <a:bodyPr> belonging to a short
+  // single-line text shape. This prevents PowerPoint from wrapping a
+  // line of text to a second line when its glyph metrics measure
+  // slightly wider than the browser's (dom-to-pptx sized the shape at
+  // browser-measured width). If the overflow is small (a few px),
+  // PowerPoint renders past the shape's nominal boundary but keeps the
+  // text single-line.
   //
-  // "Single-line" heuristic: no <a:br> in any run, and the total <a:t>
-  // text length across the shape is below MAX_SINGLE_LINE_CHARS. Body
-  // paragraphs above that length are left alone — their height already
-  // budgets for multi-line.
+  // This replaces an earlier "widen cx by 7%, shift off.x left by 3.5%"
+  // approach. That worked for the wrap issue but shifted shape POSITIONS
+  // visibly — for an RTL deck, every short text shape moved ~3.5% of
+  // its width to the right of its measured position. Cards near a slide
+  // margin ended up nudged past the margin. The wrap="none" approach
+  // preserves positions exactly and accepts the occasional pixel of
+  // text overflow, which in our typical layouts (text inside cards with
+  // surrounding padding/whitespace) is invisible.
   //
-  // Growth is centred on the shape's current bounding rect (off.x shifts
-  // left by half the slack, cx grows by the slack). This minimises the
-  // visual shift for both LTR (algn=l, text anchored to left edge) and
-  // RTL (algn=r, text anchored to right edge) — each anchor moves by
-  // ≈3.5%, which is below the threshold of design-noticeable.
+  // "Single-line" heuristic is unchanged: no <a:br> in any run, total
+  // <a:t> text length below MAX_SINGLE_LINE_CHARS.
   const spShapes = doc.getElementsByTagNameNS(NS_P, "sp");
   for (let i = 0; i < spShapes.length; i++) {
     const sp = spShapes[i];
 
-    let spPr: Element | null = null;
     let txBody: Element | null = null;
     for (let j = 0; j < sp.children.length; j++) {
       const c = sp.children[j];
-      if (c.namespaceURI === NS_P && c.localName === "spPr") spPr = c;
-      else if (c.namespaceURI === NS_P && c.localName === "txBody") txBody = c;
+      if (c.namespaceURI === NS_P && c.localName === "txBody") {
+        txBody = c;
+        break;
+      }
     }
-    if (!spPr || !txBody) continue;
+    if (!txBody) continue;
 
     // Single-line test: zero <a:br> AND short total text length.
     if (txBody.getElementsByTagNameNS(NS_A, "br").length > 0) continue;
@@ -363,39 +365,12 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     }
     if (totalChars === 0 || totalChars > MAX_SINGLE_LINE_CHARS) continue;
 
-    // Find <a:xfrm><a:ext cx=.../></a:xfrm> directly inside spPr.
-    let xfrm: Element | null = null;
-    for (let j = 0; j < spPr.children.length; j++) {
-      const c = spPr.children[j];
-      if (c.namespaceURI === NS_A && c.localName === "xfrm") {
-        xfrm = c;
-        break;
-      }
+    const bodyPr = txBody.getElementsByTagNameNS(NS_A, "bodyPr")[0];
+    if (!bodyPr) continue;
+    if (bodyPr.getAttribute("wrap") !== "none") {
+      bodyPr.setAttribute("wrap", "none");
+      stats.shapesWidened++; // re-using the existing stat name for noWrap
     }
-    if (!xfrm) continue;
-
-    let off: Element | null = null;
-    let ext: Element | null = null;
-    for (let j = 0; j < xfrm.children.length; j++) {
-      const c = xfrm.children[j];
-      if (c.namespaceURI === NS_A && c.localName === "off") off = c;
-      else if (c.namespaceURI === NS_A && c.localName === "ext") ext = c;
-    }
-    if (!ext) continue;
-
-    const oldCx = parseInt(ext.getAttribute("cx") ?? "0", 10);
-    if (!Number.isFinite(oldCx) || oldCx <= 0) continue;
-
-    const newCx = Math.round(oldCx * (1 + SHAPE_WIDTH_SLACK));
-    const slack = newCx - oldCx;
-    ext.setAttribute("cx", String(newCx));
-    if (off) {
-      const oldX = parseInt(off.getAttribute("x") ?? "0", 10);
-      if (Number.isFinite(oldX)) {
-        off.setAttribute("x", String(oldX - Math.round(slack / 2)));
-      }
-    }
-    stats.shapesWidened++;
   }
 
   return new XMLSerializer().serializeToString(doc);
