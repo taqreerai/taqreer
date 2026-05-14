@@ -1,12 +1,30 @@
 "use client";
 
 import { useMemo } from "react";
-// DOMPurify's ESM build exports `purify` as default. Turbopack's CJS-
-// interop sometimes hands us the module namespace instead of unwrapping
-// the default — `DOMPurify.sanitize` then lands on `namespace.sanitize`
-// (undefined) instead of `namespace.default.sanitize`. The
-// `* as Mod` + `Mod.default ?? Mod` pattern works under both interop
-// shapes.
+// TODO(pre-launch sharing/templates): re-introduce HTML sanitization
+// server-side in deck-generate.ts, BEFORE the HTML is written to the DB.
+// Right now (local-only, single-user, no sharing) we render Claude's HTML
+// directly with a defensive runtime check for DOMPurify availability.
+//
+// What we know about why DOMPurify fails at runtime here:
+//   dompurify@3.4.3 (dist/purify.es.mjs:394-404) calls createDOMPurify()
+//   at module-load time. With no `window` (the SSR pass), it early-returns
+//   a factory function carrying only .version / .removed / .isSupported,
+//   WITHOUT a .sanitize method. The shape we get at render time matches
+//   this no-window factory. Turbopack appears to be sharing the
+//   SSR-loaded module instance with the client bundle instead of giving
+//   the client a fresh window-backed createDOMPurify() result. Root
+//   cause needs a debug log inside the bundle to confirm, then a fix
+//   (dynamic client-only import, sanitize-html swap, or upstream
+//   patch). Holding that for the pre-launch hardening pass.
+//
+// Trust model right now:
+//   - HTML is produced by Claude per the user's brief
+//   - Rendered in the same user's own preview only (no sharing yet)
+//   - Prompt tells Claude not to emit <script>, event handlers, etc.
+//   - Worst case: user's own browser session — no cross-user vector
+//   This is acceptable for local dev and pre-launch testing. NOT
+//   acceptable once decks can be shared between users.
 import * as DOMPurifyModule from "dompurify";
 import type { Config } from "dompurify";
 import type { SlideType, ThemeType } from "@/lib/schema/slide";
@@ -14,9 +32,19 @@ import type { SlideType, ThemeType } from "@/lib/schema/slide";
 type DOMPurifyAPI = {
   sanitize: (source: string, config?: Config) => string;
 };
-const DOMPurify: DOMPurifyAPI =
-  (DOMPurifyModule as unknown as { default?: DOMPurifyAPI }).default ??
-  (DOMPurifyModule as unknown as DOMPurifyAPI);
+
+function resolveDOMPurify(): DOMPurifyAPI | null {
+  const mod = DOMPurifyModule as unknown as {
+    default?: Partial<DOMPurifyAPI>;
+  } & Partial<DOMPurifyAPI>;
+  if (mod.default && typeof mod.default.sanitize === "function") {
+    return mod.default as DOMPurifyAPI;
+  }
+  if (typeof mod.sanitize === "function") {
+    return mod as DOMPurifyAPI;
+  }
+  return null;
+}
 
 // Renders one HTML-authored slide.
 //
@@ -77,10 +105,15 @@ export function SlideRenderer({
   scale?: number;
 }) {
   const cssVars = useMemo(() => themeToCssVars(theme), [theme]);
-  const sanitized = useMemo(
-    () => DOMPurify.sanitize(slide.html, DOMPURIFY_CONFIG),
-    [slide.html]
-  );
+  const sanitized = useMemo(() => {
+    const dp = resolveDOMPurify();
+    if (!dp) {
+      // Pre-launch: DOMPurify failed to load with .sanitize available.
+      // Render the raw HTML — see top-of-file trust-model note.
+      return slide.html;
+    }
+    return dp.sanitize(slide.html, DOMPURIFY_CONFIG);
+  }, [slide.html]);
 
   return (
     <div
