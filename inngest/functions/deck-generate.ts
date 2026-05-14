@@ -95,12 +95,13 @@ LAYOUT GOTCHAS (avoid these specific failure modes)
 - For tags / badges / pills with centred text: set \`text-align: center\` AND symmetric padding. Don't rely on one-sided padding to fake centring — the visual width shifts in PowerPoint and the text drifts.
 - When you need an element on a specific visual side regardless of direction (e.g. card numbers always on the LEFT of card text, even in an RTL deck), use absolute positioning with explicit \`left:\` / \`right:\` values rather than relying on flex-direction inversion. Flex containers inherit \`direction\` and flip the row axis silently.
 - Headline + body in the same container: give the headline an explicit \`margin-bottom\` (or use grid \`gap\`). PowerPoint's line metrics differ slightly from the browser's; a tight stack with no margin will overlap.
-- **Visually-distinct text pieces need INDEPENDENT absolutely-positioned elements** — even within a card. The export merges flex/grid children of the same parent into a single PowerPoint text frame, so two distinct labels nested in one flex container come out concatenated into one text box with no separator. This applies to:
+- **Visually-distinct text pieces need INDEPENDENT absolutely-positioned elements** — at every level: cards, rows, columns, badges, chrome, everything. The export walks flex/grid containers as ONE text-bearing block and concatenates every child into a single PowerPoint text frame. The visual separation you set up with \`justify-content: space-between\` or column layouts is lost — the pieces end up stacked or trailing each other on the same line. This applies to:
   - Chrome opposite ends (section breadcrumb on right, brand mark on left of the same top bar).
   - Card multi-label compositions (big number + English subtitle + Arabic title + body): each piece is its own positioned element.
   - Stat blocks (huge numeral + caption underneath).
-  - ANY layout where two pieces of text look like they belong to separate "boxes" in the design.
-  ✓ Right:
+  - **List rows with multiple labels at different x positions** — e.g. an audience list where each row has a number on the right, an Arabic title in the middle, and an English subtitle on the far left. EVERY piece in the row needs its own absolute position inside the row container.
+  - ANY layout where two pieces of text look visually separated in the design.
+  ✓ Right (card):
   \`\`\`
   <div class="card" style="position:relative; width:600px; height:400px;">
     <div style="position:absolute; top:32px; left:32px; font-size:96px; opacity:0.4">01</div>
@@ -109,12 +110,29 @@ LAYOUT GOTCHAS (avoid these specific failure modes)
     <p style="position:absolute; bottom:32px; right:32px; left:32px; font-size:20px">عروض كاملة خلال دقائق...</p>
   </div>
   \`\`\`
-  ✗ Wrong (will merge into one PPT text box):
+  ✗ Wrong, will merge into one PPT text box (card):
   \`\`\`
   <div class="card" style="display:flex; flex-direction:column; gap:16px">
     <div style="display:flex; gap:16px"><span>01</span><span>Fast Creation</span></div>
     <h3>إنشاء سريع</h3>
     <p>عروض كاملة...</p>
+  </div>
+  \`\`\`
+
+  ✓ Right (list row with multi-language labels):
+  \`\`\`
+  <div style="position:relative; height:80px; margin-bottom:24px">
+    <span style="position:absolute; right:0; top:50%; transform:translateY(-50%); font-size:48px; color:var(--primary)">01</span>
+    <h4 style="position:absolute; right:120px; top:50%; transform:translateY(-50%); font-size:28px">الشركات والفرق الداخلية</h4>
+    <span style="position:absolute; left:0; top:50%; transform:translateY(-50%); font-size:18px; color:var(--accent)">Corporate Teams</span>
+  </div>
+  \`\`\`
+  ✗ Wrong, will merge — English ends up trailing the Arabic on the same line:
+  \`\`\`
+  <div style="display:flex; justify-content:space-between; align-items:center">
+    <span>01</span>
+    <h4>الشركات والفرق الداخلية</h4>
+    <span>Corporate Teams</span>
   </div>
   \`\`\`
 - **Decorative shapes must contrast with text**: when an inline <svg> shape sits behind or near a text element, its fill must be visually distinguishable from the text's colour. Don't place a green decorative arc behind a green text label; reach for a different palette token or muted opacity.

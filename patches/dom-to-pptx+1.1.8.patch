@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..1aafcfd 100644
+index 36b1ff9..ac52df7 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -22,7 +22,49 @@ index 36b1ff9..1aafcfd 100644
  
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
-@@ -2489,9 +2497,13 @@ function prepareRenderItem(
+@@ -709,6 +717,32 @@ function getTextStyle(style, scale) {
+  * Determines if a given DOM node is primarily a text container.
+  * Updated to correctly reject Icon elements so they are rendered as images.
+  */
++// Patched (taqreer): strong-RTL Unicode range used by hasUniformScript below.
++// Mirrors lib/export/bidi-postprocess.ts so library + postprocess agree on
++// what counts as RTL.
++const TAQREER_STRONG_RTL = /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﷿ﹰ-﻿]/;
++
++// Patched (taqreer): a container whose children flip script (one Arabic
++// span next to one Latin span, etc.) is NOT a single text paragraph —
++// it's a row of distinct labels that the user positioned independently.
++// Returning false here makes the outer walker recurse into the children
++// and emit each as its own PowerPoint shape with its own bounding rect,
++// so a flex row like
++//   <div><span>01</span><h4>عربي</h4><span>Latin</span></div>
++// doesn't collapse into one text frame with all three pieces trailing
++// each other on the same line.
++function taqreer_hasUniformScript(children) {
++  let firstIsRtl = null;
++  for (const child of children) {
++    const text = child.textContent.trim();
++    if (!text) continue;
++    const isRtl = TAQREER_STRONG_RTL.test(text);
++    if (firstIsRtl === null) firstIsRtl = isRtl;
++    else if (firstIsRtl !== isRtl) return false;
++  }
++  return true;
++}
++
+ function isTextContainer(node) {
+   const hasText = node.textContent.trim().length > 0;
+   if (!hasText) return false;
+@@ -766,7 +800,7 @@ function isTextContainer(node) {
+     return true;
+   };
+ 
+-  return children.every(isSafeInline);
++  return children.every(isSafeInline) && taqreer_hasUniformScript(children);
+ }
+ 
+ function getRotation(transformStr) {
+@@ -2489,9 +2523,13 @@ function prepareRenderItem(
      });
  
      if (textParts.length > 0) {
