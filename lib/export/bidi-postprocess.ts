@@ -39,6 +39,16 @@ const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 const SHAPE_WIDTH_SLACK = 0.1;
 const MAX_SINGLE_LINE_CHARS = 80;
 const SLIDE_WIDTH_EMU = 9144000;
+/**
+ * Cap on which shapes get PASS 3 extension. Shapes wider than this are
+ * almost certainly headlines / body / paragraph containers, NOT badges /
+ * labels / chips. Extending a wide headline 10 % to the left (RTL) makes
+ * its left edge overrun whatever sits beside it (cards, decorative
+ * shapes, body columns) — even though the visual right anchor stays put.
+ * 3 M EMU ≈ 3.3 in ≈ 33 % of the slide width is the cleanest cutoff:
+ * badges and breadcrumbs sit well under it, headlines sit well over it.
+ */
+const PASS3_MAX_CX = 3000000;
 
 
 
@@ -394,6 +404,11 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
 
     const oldCx = parseInt(ext.getAttribute("cx") ?? "0", 10);
     if (!Number.isFinite(oldCx) || oldCx <= 0) continue;
+    // Skip wide shapes — headline / body / paragraph containers. Their
+    // text already wraps inside the container as designed; the 10 %
+    // extension would push the left edge (RTL) or right edge (LTR) over
+    // neighbouring cards and cause visible overlap. See PASS3_MAX_CX.
+    if (oldCx > PASS3_MAX_CX) continue;
     const oldX = off ? parseInt(off.getAttribute("x") ?? "0", 10) : 0;
 
     // Detect alignment from the first paragraph in the shape.

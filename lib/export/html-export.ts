@@ -15,6 +15,71 @@ const STRONG_RTL =
   /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﻿]/;
 const LATIN_LETTERS = /[A-Za-z]/;
 
+// Arabic letter-spacing breaks contextual shaping (the letters that should
+// connect don't, because letter-spacing inserts a horizontal gap between
+// every glyph). Claude is reminded against this in the prompt but still
+// occasionally lets `letter-spacing` cascade through to Arabic descendants.
+// Walk the offscreen tree, find every element whose computed letter-spacing
+// resolves to a non-zero value AND whose direct text contains Arabic
+// glyphs, and override letter-spacing to "normal" inline. Latin siblings
+// keep their tracking; only the Arabic-bearing elements are reset.
+function stripArabicLetterSpacing(root: HTMLElement): void {
+  const elements = Array.from(root.querySelectorAll<HTMLElement>("*"));
+  for (const el of elements) {
+    const ls = window.getComputedStyle(el).letterSpacing;
+    if (!ls || ls === "normal" || ls === "0px") continue;
+    // Only flatten if THIS element directly bears Arabic text. If a child
+    // does, the child's own (likely zero) letter-spacing already applies
+    // to its glyphs; we don't need to flatten the ancestor.
+    let hasDirectArabic = false;
+    for (let i = 0; i < el.childNodes.length; i++) {
+      const n = el.childNodes[i];
+      if (n.nodeType === Node.TEXT_NODE && STRONG_RTL.test(n.textContent ?? "")) {
+        hasDirectArabic = true;
+        break;
+      }
+    }
+    if (!hasDirectArabic) continue;
+    el.style.letterSpacing = "normal";
+  }
+}
+
+// Claude sometimes emits numbers / Latin words flush against Arabic without
+// a separating space ("1إنشاء", "70%faster", "تقريرTAQREER"). The prompt
+// rule says to add a space at every script transition; he doesn't always.
+// Walk every text node in the offscreen tree and insert a space at any
+// adjacency where an Arabic glyph touches a Latin letter or digit (in
+// either direction). The space goes into the offscreen DOM only — the
+// preview the user is looking at on screen is untouched.
+function insertScriptTransitionSpaces(root: HTMLElement): void {
+  // Compiled patterns: pairs that need a space between them.
+  const PATTERNS: Array<[RegExp, string]> = [
+    // Arabic glyph immediately followed by Latin letter
+    [/([֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﻿])([A-Za-z])/g, "$1 $2"],
+    // Latin letter immediately followed by Arabic glyph
+    [/([A-Za-z])([֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﻿])/g, "$1 $2"],
+    // Arabic glyph immediately followed by a digit
+    [/([֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﻿])([0-9])/g, "$1 $2"],
+    // Digit immediately followed by Arabic glyph
+    [/([0-9])([֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﻿])/g, "$1 $2"],
+  ];
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  let n: Node | null;
+  while ((n = walker.nextNode())) textNodes.push(n as Text);
+
+  for (const tn of textNodes) {
+    let text = tn.nodeValue ?? "";
+    if (!text) continue;
+    let next = text;
+    for (const [re, replacement] of PATTERNS) {
+      next = next.replace(re, replacement);
+    }
+    if (next !== text) tn.nodeValue = next;
+  }
+}
+
 function splitMixedScriptFlexChildren(root: HTMLElement): void {
   // querySelectorAll snapshot before mutation so the iteration is stable.
   const elements = Array.from(root.querySelectorAll<HTMLElement>("*"));
@@ -226,6 +291,8 @@ export async function exportManifestAsPptx(
     // paragraph with inline bold, not a row of distinct labels.
     for (const slideNode of slideNodes) {
       splitMixedScriptFlexChildren(slideNode);
+      stripArabicLetterSpacing(slideNode);
+      insertScriptTransitionSpaces(slideNode);
     }
 
     // Diagnostic — log to console so the user can compare against PPT output.

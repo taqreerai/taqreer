@@ -112,7 +112,13 @@ Pick a slide-edge margin (typical: 80–120 px) on slide 1 and reuse it identica
 COLOUR CONTRAST — every text and decorative element must be readable against what's behind it
 - Before placing a text element, check its \`color\` against the slide's \`--brand-bg\` (or the local background — a coloured card has its own background). The pair must hit a clear contrast (think WCAG-ish — light text on dark, dark text on light, never near-equal lightness).
 - For decorative shapes (SVG fills, accent strips, icons), the same rule: a shape that sits in front of a similar-coloured area becomes invisible. If you place \`fill="var(--primary)"\` on a shape over a panel that's also \`var(--primary)\`-tinted, swap the fill to \`var(--brand-text)\` or \`var(--accent)\` for separation.
-- Test mentally for the four common slip-ups: (a) text colour identical to its container background; (b) muted/subtitle text too close to background lightness; (c) decorative SVG matching the slide background and disappearing; (d) gradient text whose darkest stop falls inside the background colour range.
+- **Concrete forbidden combinations** (these are the slip-ups that have actually shown up):
+  - text \`color: var(--brand-bg)\` on a default-background card → text invisible
+  - text \`color\` matching the parent container's background hex even when both are non-default → text invisible
+  - decorative SVG \`fill="var(--brand-bg)"\` or fill matching the slide background → shape invisible
+  - muted/subtitle text whose lightness is within ~10 points of the background's lightness → low contrast, illegible
+  - gradient text where one of the gradient stops equals or nearly equals the background colour → that segment of the text disappears
+  Before emitting any element with a colour, compute the visible contrast against what sits directly behind it and pick a different token if needed. **Every text and shape must be visible on its background — no exceptions.**
 
 LAYOUT GOTCHAS (avoid these specific failure modes)
 - Single-line text containers (badges, breadcrumbs, headlines, chip labels, section labels) MUST use \`width: max-content\` or padding-based sizing, NEVER fixed pixel widths. PowerPoint's glyph widths are slightly wider than the browser's renderer for most fonts, so a snug-fitting fixed-width container that holds one line in preview will wrap to two lines in PPT. If you need the container to be visually wider for design reasons, use \`padding-inline\` on a \`width: max-content\` container — the text never wraps, the container grows.
@@ -285,8 +291,8 @@ function ruleLines(rules: Rules): string[] {
   );
   lines.push(
     rules.pagination
-      ? `- Pagination: REQUIRED on every slide. Follow the PAGINATION section in the system prompt.`
-      : `- Pagination: DISABLED. Do NOT emit any "N / Total" page-number text element on any slide. This overrides the system prompt's PAGINATION requirement entirely.`,
+      ? `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"), positioned as part of the locked chrome (typically bottom-left or bottom-right corner). DO NOT emit additional pagination strings like "الصفحة 02" or "صفحة 02 — العنوان" or "PAGE 02 — TITLE" elsewhere on the slide; one numeric indicator is the entire pagination. Use Latin digits + slash (e.g. "02 / 07") even in an Arabic deck so the indicator reads left-to-right.`
+      : `- Pagination: DISABLED. Do NOT emit any page-number text element on any slide — no "N / Total", no "الصفحة 02", no "PAGE 02 — title". The user opted out of pagination entirely.`,
   );
   if (rules.persistent && rules.persistent.text.trim()) {
     const excludeCover = rules.persistent.exclude.includes("cover");
