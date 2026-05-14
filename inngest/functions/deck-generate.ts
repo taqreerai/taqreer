@@ -22,7 +22,12 @@ CANVAS
 LANGUAGE & DIRECTION
 - Set \`dir="rtl"\` (or \`dir="ltr"\`) on the slide's root element. The export pipeline handles all BiDi metadata downstream — do not insert U+200E/U+200F marks, do not use <bdi>.
 - For text elements whose script doesn't match the slide direction, set explicit \`dir\` on the element matching the script (e.g. \`<p dir="ltr">URL text</p>\` in an RTL deck, or \`<p dir="rtl">Arabic blockquote</p>\` in an LTR deck). This ensures text flows correctly within the element while alignment follows the slide's design.
-- **Adjacent script transitions need a separator**: when an Arabic run meets a Latin run with no punctuation between them, INSERT A SPACE. Write "الشركات CORPORATE TEAMS", never "الشركاتCORPORATE TEAMS". Same for breadcrumbs — spaces around \`·\` or \`|\`: "القسم 01 · تقرير | TAQREER".
+- **Adjacent script transitions need a SPACE between them — no exceptions.** Any place where the script flips (Arabic letter ↔ Latin letter, Arabic letter ↔ digit, digit ↔ Arabic letter) must have a space between the two characters. Examples of right vs. wrong:
+  - ✓ "03 دعم الهوية البصرية Brand Control"  ✗ "03دعم الهوية البصريةBrand Control"
+  - ✓ "الشركات CORPORATE TEAMS"  ✗ "الشركاتCORPORATE TEAMS"
+  - ✓ "نسبة النمو 12% خلال 2026"  (a digit-only run inside Arabic prose is fine with surrounding spaces)
+  - ✓ "القسم 01 · تقرير | TAQREER"  ✗ "القسم 01·تقرير|TAQREER"
+  Run a final pass over every \`<a:t>\`-equivalent text node before emitting and insert any missing inter-script spaces.
 - **NEVER apply \`letter-spacing\` to any element containing Arabic glyphs, even partially.** Arabic letter shaping (connection between letters) breaks with any \`letter-spacing > 0\`. For Arabic emphasis use: font-weight 700, colour, scale (font-size), or Kashida elongation (U+0640 \`ـ\`). \`letter-spacing\` is allowed ONLY on elements containing exclusively Latin characters.
 - Trailing periods on Arabic lines and mixed-script numerals (e.g. "نسبة النمو 12% خلال 2026") render correctly without special handling.
 
@@ -66,11 +71,26 @@ TYPOGRAPHY
 - Text containers need GENEROUS height — PowerPoint's font metrics differ slightly from the browser's, and a container that snug-fits text in preview will visibly overflow in PPT. Budget \`line-height × 1.3\` (or +12-20% on container height) above what looks tight in the browser. If you can, use \`padding\` on text containers rather than fixed heights, so the box grows naturally.
 
 LAYOUT GOTCHAS (avoid these specific failure modes)
-- Single-line text containers (badges, breadcrumbs, headlines, chip labels) must use \`width: max-content\` or padding-based sizing, NEVER fixed pixel widths. PowerPoint's glyph widths differ slightly from the browser's, so a snug-fitting fixed-width container that holds one line in preview frequently wraps to two lines in PPT.
+- Single-line text containers (badges, breadcrumbs, headlines, chip labels, section labels) MUST use \`width: max-content\` or padding-based sizing, NEVER fixed pixel widths. PowerPoint's glyph widths are slightly wider than the browser's renderer for most fonts, so a snug-fitting fixed-width container that holds one line in preview will wrap to two lines in PPT. If you need the container to be visually wider for design reasons, use \`padding-inline\` on a \`width: max-content\` container — the text never wraps, the container grows.
+- Single-line text that is positioned inside a parent with a constrained width (e.g. a card column) needs \`white-space: nowrap\` on the text element. Otherwise the same browser-vs-PowerPoint glyph-width drift causes it to wrap.
 - For tags / badges / pills with centred text: set \`text-align: center\` AND symmetric padding. Don't rely on one-sided padding to fake centring — the visual width shifts in PowerPoint and the text drifts.
 - When you need an element on a specific visual side regardless of direction (e.g. card numbers always on the LEFT of card text, even in an RTL deck), use absolute positioning with explicit \`left:\` / \`right:\` values rather than relying on flex-direction inversion. Flex containers inherit \`direction\` and flip the row axis silently.
 - Headline + body in the same container: give the headline an explicit \`margin-bottom\` (or use grid \`gap\`). PowerPoint's line metrics differ slightly from the browser's; a tight stack with no margin will overlap.
-- **Chrome breadcrumbs are SEPARATE elements**: the eyebrow / section number / page count / brand mark each get their own DOM element positioned independently (typically at opposite ends of the chrome bar). NEVER concatenate them into a single \`<p>\` or \`<div>\` — they end up merged into one PowerPoint text box, lose their spacing, and visually run together (e.g. "الحلTAQREER" with no separator).
+- **Chrome pieces at opposite corners need ABSOLUTE positioning, not flexbox**. When two chrome elements live at opposite ends of the same row (e.g. section breadcrumb on the right, brand mark on the left of the same top bar), each one MUST use \`position: absolute\` at explicit \`top\`+\`left\`/\`right\` coordinates. NEVER use \`display: flex; justify-content: space-between\` for this. The flex approach renders correctly in the browser, but dom-to-pptx treats the flex parent as a single text-bearing block and merges both children into ONE PowerPoint text frame — they end up on the same side with no separator.
+  ✓ Right:
+  \`\`\`
+  <div class="chrome">
+    <div style="position:absolute; top:60px; right:80px">القسم 03 · دعم الهوية البصرية</div>
+    <div style="position:absolute; top:60px; left:80px">Brand Control</div>
+  </div>
+  \`\`\`
+  ✗ Wrong:
+  \`\`\`
+  <div style="display:flex; justify-content:space-between; padding:60px 80px">
+    <div>القسم 03 · دعم الهوية البصرية</div>
+    <div>Brand Control</div>
+  </div>
+  \`\`\`
 - **Decorative shapes must contrast with text**: when an inline <svg> shape sits behind or near a text element, its fill must be visually distinguishable from the text's colour. Don't place a green decorative arc behind a green text label; reach for a different palette token or muted opacity.
 
 CHROME CONSISTENCY
