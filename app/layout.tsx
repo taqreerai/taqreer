@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cairo, Poppins } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const cairo = Cairo({
@@ -57,7 +58,11 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${poppins.variable}`} suppressHydrationWarning>
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0,0&display=swap" rel="stylesheet" />
-        <script dangerouslySetInnerHTML={{ __html: `
+        <Script
+          id="glass-preflight"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
           try {
             var p = localStorage.getItem('taqreer_glass_preset');
             var presets = {
@@ -73,7 +78,9 @@ export default function RootLayout({
             r.style.setProperty('--glass-border-opacity', v[2]);
             r.style.setProperty('--glass-saturation', v[3]);
           } catch(e) {}
-        `}} />
+        `,
+          }}
+        />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
         {children}
