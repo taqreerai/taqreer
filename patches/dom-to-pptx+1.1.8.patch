@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..2f4cd3a 100644
+index 36b1ff9..69e8c88 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -136,6 +136,33 @@ index 36b1ff9..2f4cd3a 100644
            valign: textPayload.valign,
 -          inset: textPayload.inset,
            rotate: rotation,
+-          margin: 0,
++          margin: _paddingPt,
+           wrap: true,
+           autoFit: true,
+           vert: writingModeVert,
+@@ -2700,14 +2768,24 @@ function prepareRenderItem(
+       if (textPayload) {
+         textPayload.text[0].options.fontSize =
+           Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
++        // Patched (taqreer): same fix as the bg-image text path at line
++        // ~2658. PptxGenJS uses `margin` (in pt) for body insets, not
++        // `inset`. Upstream wrote `inset: textPayload.inset, margin: 0`
++        // which threw away the CSS padding. This path fires for text
++        // containers with bgColor / border / shadow / no-bg-but-text —
++        // basically every plain text shape Claude emits, including the
++        // span.text with padding-right:48px that was rendering flush
++        // against the absolutely-positioned "01" badge beside it.
++        const _paddingPt = Array.isArray(textPayload.inset)
++          ? textPayload.inset.map((inch) => inch * 72)
++          : 0;
+         const textOptions = {
+           shape: shapeType,
+           ...shapeOpts,
+           rotate: rotation,
+           align: textPayload.align,
+           valign: textPayload.valign,
+-          inset: textPayload.inset,
 -          margin: 0,
 +          margin: _paddingPt,
            wrap: true,
