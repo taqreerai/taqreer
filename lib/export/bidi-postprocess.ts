@@ -31,12 +31,15 @@ const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 
 /**
- * Short single-line text shapes get wrap="none" on their bodyPr in PASS 3
- * so PowerPoint's slightly-wider glyph metrics don't wrap a one-liner to
- * two lines. See PASS 3 comment for the trade-off (small horizontal
- * overflow vs. visual shape-position shift).
+ * 10 % shape extension applied in PASS 3 to absorb PowerPoint's slightly
+ * wider glyph metrics (vs. browser). The extension is direction-aware:
+ * it grows the shape on the side OPPOSITE the text anchor, so the
+ * anchored side never moves and Claude's slide margins are preserved.
  */
+const SHAPE_WIDTH_SLACK = 0.1;
 const MAX_SINGLE_LINE_CHARS = 80;
+const SLIDE_WIDTH_EMU = 9144000;
+
 
 
 /**
@@ -323,40 +326,45 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
 
   stats.paragraphsModified += modified;
 
-  // PASS 3: set wrap="none" on every <a:bodyPr> belonging to a short
-  // single-line text shape. This prevents PowerPoint from wrapping a
-  // line of text to a second line when its glyph metrics measure
-  // slightly wider than the browser's (dom-to-pptx sized the shape at
-  // browser-measured width). If the overflow is small (a few px),
-  // PowerPoint renders past the shape's nominal boundary but keeps the
-  // text single-line.
+  // PASS 3: direction-aware shape extension. Grow each short single-line
+  // text shape on the side OPPOSITE the text anchor by SHAPE_WIDTH_SLACK.
+  // The anchored side stays fixed (preserving the visual edge Claude
+  // designed against the slide margin); the free side extends toward
+  // the slide interior, giving the text more room to fit on one line
+  // when PowerPoint's glyph metrics measure wider than the browser's.
   //
-  // This replaces an earlier "widen cx by 7%, shift off.x left by 3.5%"
-  // approach. That worked for the wrap issue but shifted shape POSITIONS
-  // visibly — for an RTL deck, every short text shape moved ~3.5% of
-  // its width to the right of its measured position. Cards near a slide
-  // margin ended up nudged past the margin. The wrap="none" approach
-  // preserves positions exactly and accepts the occasional pixel of
-  // text overflow, which in our typical layouts (text inside cards with
-  // surrounding padding/whitespace) is invisible.
+  // Anchor mapping:
+  //   algn="r"  → text anchored right → grow LEFT (off.x decreases, cx grows by same amount)
+  //   algn="l"  / "start" / null → anchored left → grow RIGHT (cx grows, off.x stays)
+  //   algn="ctr" / "just" → grow BOTH sides equally
   //
-  // "Single-line" heuristic is unchanged: no <a:br> in any run, total
-  // <a:t> text length below MAX_SINGLE_LINE_CHARS.
+  // All growth is clamped to slide bounds: shape will never extend past
+  // x=0 (slide left edge) or x=SLIDE_WIDTH_EMU (right edge). For shapes
+  // close to a slide edge the growth becomes partial — better than no
+  // growth at all, and the visible alignment never shifts.
+  //
+  // Earlier attempts:
+  //   - symmetric 7 % slack: text fit on one line but shape positions
+  //     shifted ~3.5 % of width visibly, nudging content past Claude's
+  //     margins.
+  //   - wrap="none" on shapes with ≤80 char text: shape stayed put but
+  //     text overflowed past the shape boundary (and the slide edge for
+  //     RTL anchored content).
+  // This direction-aware version inherits the room-to-grow benefit
+  // without moving the anchored edge.
   const spShapes = doc.getElementsByTagNameNS(NS_P, "sp");
   for (let i = 0; i < spShapes.length; i++) {
     const sp = spShapes[i];
 
+    let spPr: Element | null = null;
     let txBody: Element | null = null;
     for (let j = 0; j < sp.children.length; j++) {
       const c = sp.children[j];
-      if (c.namespaceURI === NS_P && c.localName === "txBody") {
-        txBody = c;
-        break;
-      }
+      if (c.namespaceURI === NS_P && c.localName === "spPr") spPr = c;
+      else if (c.namespaceURI === NS_P && c.localName === "txBody") txBody = c;
     }
-    if (!txBody) continue;
+    if (!spPr || !txBody) continue;
 
-    // Single-line test: zero <a:br> AND short total text length.
     if (txBody.getElementsByTagNameNS(NS_A, "br").length > 0) continue;
     const tNodes = txBody.getElementsByTagNameNS(NS_A, "t");
     let totalChars = 0;
@@ -365,11 +373,65 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     }
     if (totalChars === 0 || totalChars > MAX_SINGLE_LINE_CHARS) continue;
 
-    const bodyPr = txBody.getElementsByTagNameNS(NS_A, "bodyPr")[0];
-    if (!bodyPr) continue;
-    if (bodyPr.getAttribute("wrap") !== "none") {
-      bodyPr.setAttribute("wrap", "none");
-      stats.shapesWidened++; // re-using the existing stat name for noWrap
+    let xfrm: Element | null = null;
+    for (let j = 0; j < spPr.children.length; j++) {
+      const c = spPr.children[j];
+      if (c.namespaceURI === NS_A && c.localName === "xfrm") {
+        xfrm = c;
+        break;
+      }
+    }
+    if (!xfrm) continue;
+
+    let off: Element | null = null;
+    let ext: Element | null = null;
+    for (let j = 0; j < xfrm.children.length; j++) {
+      const c = xfrm.children[j];
+      if (c.namespaceURI === NS_A && c.localName === "off") off = c;
+      else if (c.namespaceURI === NS_A && c.localName === "ext") ext = c;
+    }
+    if (!ext) continue;
+
+    const oldCx = parseInt(ext.getAttribute("cx") ?? "0", 10);
+    if (!Number.isFinite(oldCx) || oldCx <= 0) continue;
+    const oldX = off ? parseInt(off.getAttribute("x") ?? "0", 10) : 0;
+
+    // Detect alignment from the first paragraph in the shape.
+    const firstP = txBody.getElementsByTagNameNS(NS_A, "p")[0];
+    const firstPPr = firstP
+      ? firstP.getElementsByTagNameNS(NS_A, "pPr")[0] ?? null
+      : null;
+    const algn = firstPPr ? firstPPr.getAttribute("algn") : null;
+
+    const desiredGrowth = Math.round(oldCx * SHAPE_WIDTH_SLACK);
+    let newOffX = oldX;
+    let newCx = oldCx;
+
+    if (algn === "r") {
+      // Anchored right; grow LEFT toward slide left edge (clamped to 0).
+      newOffX = Math.max(0, oldX - desiredGrowth);
+      newCx = oldCx + (oldX - newOffX);
+    } else if (algn === "ctr" || algn === "just") {
+      // Centered; grow both sides equally, each clamped to slide bound.
+      const halfGrowth = Math.round(desiredGrowth / 2);
+      newOffX = Math.max(0, oldX - halfGrowth);
+      const leftActualGrowth = oldX - newOffX;
+      const rightAvailable = SLIDE_WIDTH_EMU - (oldX + oldCx);
+      const rightGrowth = Math.max(0, Math.min(halfGrowth, rightAvailable));
+      newCx = oldCx + leftActualGrowth + rightGrowth;
+    } else {
+      // Anchored left (algn=l, start, or unset); grow RIGHT toward slide
+      // right edge (clamped to SLIDE_WIDTH_EMU).
+      const rightAvailable = SLIDE_WIDTH_EMU - (oldX + oldCx);
+      newCx = oldCx + Math.max(0, Math.min(desiredGrowth, rightAvailable));
+    }
+
+    if (newCx !== oldCx) {
+      ext.setAttribute("cx", String(newCx));
+      if (off && newOffX !== oldX) {
+        off.setAttribute("x", String(newOffX));
+      }
+      stats.shapesWidened++;
     }
   }
 
