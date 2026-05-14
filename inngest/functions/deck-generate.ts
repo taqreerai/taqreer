@@ -30,6 +30,7 @@ LANGUAGE & DIRECTION
   Run a final pass over every \`<a:t>\`-equivalent text node before emitting and insert any missing inter-script spaces.
 - **NEVER apply \`letter-spacing\` to any element containing Arabic glyphs, even partially.** Arabic letter shaping (connection between letters) breaks with any \`letter-spacing > 0\`. For Arabic emphasis use: font-weight 700, colour, scale (font-size), or Kashida elongation (U+0640 \`ـ\`). \`letter-spacing\` is allowed ONLY on elements containing exclusively Latin characters.
 - Trailing periods on Arabic lines and mixed-script numerals (e.g. "نسبة النمو 12% خلال 2026") render correctly without special handling.
+- **For RTL bullet lists (<ul>, <ol>): ALWAYS set explicit \`text-align\` on the list and each list item**. Without it, the export defaults bullet items to left-aligned (which puts bullets on the wrong side for default Arabic decks). For standard Arabic bullets on the right: \`<ul style="text-align: right">\`. For an intentional left-aligned design: \`<ul style="text-align: left">\` (export respects your choice).
 
 DESIGN TOKENS
 The renderer injects these CSS variables on the slide root — use them rather than hardcoding hex / font names:
@@ -50,12 +51,30 @@ USE THESE FREELY:
 - Gradient-clipped text: \`background: linear-gradient(...); -webkit-background-clip: text; background-clip: text; color: transparent;\`
 - Solid borders (any thickness, any colour).
 
-ALL DECORATIVE GRAPHICS MUST BE INLINE <svg>:
+ALL DECORATIVE GRAPHICS — AND GRADIENT/STROKED TEXT — MUST BE INLINE <svg>:
 - Decorative shapes (circles, blobs, arcs, ribbons, dividers) → inline <svg> with path/circle/rect/polygon. Set \`fill="var(--primary)"\` etc. so they inherit brand tokens.
 - Background patterns (gridlines, dots, hatching, isometric grids, noise) → inline <svg> covering the slide region. NOT CSS background-image gradients/patterns — those won't survive the export.
 - Icons → inline <svg> paths. **DO NOT** use the Material Icons font, Font Awesome, or any icon-font CSS class — icon fonts don't reliably embed and render as empty boxes or missing glyphs in PowerPoint. For a Material icon: copy its SVG path from material-icons.com and inline it inside a 24-viewBox <svg>; size via CSS width/height.
 - Logos: <img> when the brief provides a URL; inline <svg> when the brand mark is a simple wordmark (so it can be recoloured for contrast).
 - **Conic gradients, radial gradients with alpha, and complex multi-stop colour-to-alpha effects** — do these as inline SVG using \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`; the CSS equivalents don't round-trip.
+- **Gradient-filled text and stroked text MUST be SVG <text>**. CSS \`background-clip: text\` and \`-webkit-text-stroke\` look fine in preview but drop in PowerPoint — gradient text becomes invisible, stroked text fills solid. The SVG pattern:
+  \`\`\`
+  <svg viewBox="0 0 1200 200" style="width:100%">
+    <defs>
+      <linearGradient id="hero-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="var(--primary)"/>
+        <stop offset="100%" stop-color="var(--accent)"/>
+      </linearGradient>
+    </defs>
+    <text x="0" y="160" font-family="Cairo, sans-serif" font-size="180" font-weight="700" fill="url(#hero-grad)">تقرير</text>
+  </svg>
+  \`\`\`
+  This gives you the gradient hero text you want, vector-sharp in PPT.
+
+USE ICONS LIBERALLY TO FILL EMPTY SPACE:
+- When a slide section or card has empty vertical/horizontal space, reach for relevant SVG iconography. A grid of feature cards without icons looks underdesigned; the same cards with one icon each per card feels finished.
+- Icons should reinforce content meaning: chart/graph icons on data slides, person/group icons on team slides, lightbulb/spark on idea slides, layered-papers on document slides, gear/sliders on settings slides, target/bullseye on goal slides.
+- Source SVG paths from material-icons.com (filter by "Outlined" or "Rounded" variants for cleaner look) and inline them. Size 32–80 px depending on card density.
 
 AVOID THESE CSS FEATURES (look great in preview and break in PowerPoint):
 - \`animation\`, \`transition\`, \`:hover\` — static deliverable, no motion.
@@ -76,19 +95,26 @@ LAYOUT GOTCHAS (avoid these specific failure modes)
 - For tags / badges / pills with centred text: set \`text-align: center\` AND symmetric padding. Don't rely on one-sided padding to fake centring — the visual width shifts in PowerPoint and the text drifts.
 - When you need an element on a specific visual side regardless of direction (e.g. card numbers always on the LEFT of card text, even in an RTL deck), use absolute positioning with explicit \`left:\` / \`right:\` values rather than relying on flex-direction inversion. Flex containers inherit \`direction\` and flip the row axis silently.
 - Headline + body in the same container: give the headline an explicit \`margin-bottom\` (or use grid \`gap\`). PowerPoint's line metrics differ slightly from the browser's; a tight stack with no margin will overlap.
-- **Chrome pieces at opposite corners need ABSOLUTE positioning, not flexbox**. When two chrome elements live at opposite ends of the same row (e.g. section breadcrumb on the right, brand mark on the left of the same top bar), each one MUST use \`position: absolute\` at explicit \`top\`+\`left\`/\`right\` coordinates. NEVER use \`display: flex; justify-content: space-between\` for this. The flex approach renders correctly in the browser, but dom-to-pptx treats the flex parent as a single text-bearing block and merges both children into ONE PowerPoint text frame — they end up on the same side with no separator.
+- **Visually-distinct text pieces need INDEPENDENT absolutely-positioned elements** — even within a card. The export merges flex/grid children of the same parent into a single PowerPoint text frame, so two distinct labels nested in one flex container come out concatenated into one text box with no separator. This applies to:
+  - Chrome opposite ends (section breadcrumb on right, brand mark on left of the same top bar).
+  - Card multi-label compositions (big number + English subtitle + Arabic title + body): each piece is its own positioned element.
+  - Stat blocks (huge numeral + caption underneath).
+  - ANY layout where two pieces of text look like they belong to separate "boxes" in the design.
   ✓ Right:
   \`\`\`
-  <div class="chrome">
-    <div style="position:absolute; top:60px; right:80px">القسم 03 · دعم الهوية البصرية</div>
-    <div style="position:absolute; top:60px; left:80px">Brand Control</div>
+  <div class="card" style="position:relative; width:600px; height:400px;">
+    <div style="position:absolute; top:32px; left:32px; font-size:96px; opacity:0.4">01</div>
+    <div style="position:absolute; top:60px; left:140px; font-size:18px; color:var(--accent)">Fast Creation</div>
+    <h3 style="position:absolute; top:200px; right:32px; font-size:48px">إنشاء سريع</h3>
+    <p style="position:absolute; bottom:32px; right:32px; left:32px; font-size:20px">عروض كاملة خلال دقائق...</p>
   </div>
   \`\`\`
-  ✗ Wrong:
+  ✗ Wrong (will merge into one PPT text box):
   \`\`\`
-  <div style="display:flex; justify-content:space-between; padding:60px 80px">
-    <div>القسم 03 · دعم الهوية البصرية</div>
-    <div>Brand Control</div>
+  <div class="card" style="display:flex; flex-direction:column; gap:16px">
+    <div style="display:flex; gap:16px"><span>01</span><span>Fast Creation</span></div>
+    <h3>إنشاء سريع</h3>
+    <p>عروض كاملة...</p>
   </div>
   \`\`\`
 - **Decorative shapes must contrast with text**: when an inline <svg> shape sits behind or near a text element, its fill must be visually distinguishable from the text's colour. Don't place a green decorative arc behind a green text label; reach for a different palette token or muted opacity.

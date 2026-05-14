@@ -263,7 +263,7 @@ export default function SpikePage() {
           )}
           {xmlStats && (
             <pre style={statBlockStyle}>
-              {`XML postprocess — invocations: ${xmlStats.invocations} · slides: ${xmlStats.slidesFixed}/${xmlStats.slidesScanned} · txBody rtlCol→1: ${xmlStats.txBodiesFlipped} · paragraphs: ${xmlStats.paragraphsModified} · runs merged: ${xmlStats.runsMerged} · lang→ar-SA: ${xmlStats.langsRetagged}`}
+              {`XML postprocess — invocations: ${xmlStats.invocations} · slides: ${xmlStats.slidesFixed}/${xmlStats.slidesScanned} · txBody rtlCol→1: ${xmlStats.txBodiesFlipped} · paragraphs: ${xmlStats.paragraphsModified} · runs merged: ${xmlStats.runsMerged} · lang→ar-SA: ${xmlStats.langsRetagged} · LTR forced: ${xmlStats.ltrParagraphsForced} · shapes widened: ${xmlStats.shapesWidened}`}
             </pre>
           )}
           {diag &&
