@@ -225,14 +225,40 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
       pPr.setAttribute("rtl", "1");
       touched = true;
     }
-    // Only fill algn if it's MISSING. Don't override an explicit "l" — the
-    // earlier override stomped on intentional left-aligned RTL designs
-    // (e.g. a deliberately left-anchored bullet list with bullets on the
-    // visual left and text flowing right). dom-to-pptx's hard-coded list
-    // bug (always emitting algn=l for <ul>/<ol>) is now handled at the
-    // prompt level: Claude is told to ALWAYS set explicit text-align on
-    // RTL lists.
-    if (pPr.getAttribute("algn") === null) {
+    // Bullet detection: a paragraph is a "list item" if its pPr carries
+    // an explicit bullet marker (<a:buChar> or <a:buAutoNum>). <a:buNone/>
+    // or no bullet element → it's regular prose (headline / body /
+    // caption).
+    //
+    // dom-to-pptx maps CSS text-align:start → algn=l UNCONDITIONALLY
+    // (its src/index.js:1084 has no direction awareness). That means
+    // every Arabic headline / body that didn't explicitly set
+    // text-align:right comes out with algn=l in OOXML, and PowerPoint
+    // renders it left-aligned in an RTL deck — visibly wrong.
+    //
+    // For LISTS, the same algn=l output may be Claude's deliberate
+    // left-aligned bullet design — we have to respect it, because the
+    // OOXML is identical to the bug case and we can't tell them apart.
+    //
+    // So the override is split by paragraph type:
+    //   - prose (no bullet, or <a:buNone/>): force algn=r when missing
+    //     OR when explicitly "l" (fixes the dom-to-pptx start→l bug)
+    //   - list item (<a:buChar>/<a:buAutoNum>): only fill algn=r when
+    //     missing; respect explicit "l" as Claude's design intent
+    let hasBullet = false;
+    for (let j = 0; j < pPr.children.length; j++) {
+      const c = pPr.children[j];
+      if (
+        c.namespaceURI === NS_A &&
+        (c.localName === "buChar" || c.localName === "buAutoNum")
+      ) {
+        hasBullet = true;
+        break;
+      }
+    }
+    const algn = pPr.getAttribute("algn");
+    const shouldForceR = hasBullet ? algn === null : algn === null || algn === "l";
+    if (shouldForceR) {
       pPr.setAttribute("algn", "r");
       touched = true;
     }
