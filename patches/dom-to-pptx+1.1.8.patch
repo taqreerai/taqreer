@@ -1,0 +1,41 @@
+diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
+index 36b1ff9..1aafcfd 100644
+--- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
++++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
+@@ -304,9 +304,17 @@ function extractTableData(node, scale) {
+       const fill = bg.hex && bg.opacity > 0 ? { color: bg.hex } : null;
+ 
+       // C. Alignment
+-      let align = 'left';
++      // Patched (taqreer): default direction-aware; the upstream library
++      // hard-codes 'left' for `text-align: start` and unset values, which
++      // breaks every RTL paragraph that relies on inherited direction.
++      const _isRtl = style.direction === 'rtl';
++      let align = _isRtl ? 'right' : 'left';
+       if (style.textAlign === 'center') align = 'center';
+-      if (style.textAlign === 'right' || style.textAlign === 'end') align = 'right';
++      if (style.textAlign === 'right') align = 'right';
++      if (style.textAlign === 'left') align = 'left';
++      if (style.textAlign === 'justify') align = 'justify';
++      if (style.textAlign === 'start') align = _isRtl ? 'right' : 'left';
++      if (style.textAlign === 'end') align = _isRtl ? 'left' : 'right';
+ 
+       let valign = 'top';
+       if (style.verticalAlign === 'middle') valign = 'middle';
+@@ -2489,9 +2497,13 @@ function prepareRenderItem(
+     });
+ 
+     if (textParts.length > 0) {
+-      let align = style.textAlign || 'left';
+-      if (align === 'start') align = 'left';
+-      if (align === 'end') align = 'right';
++      // Patched (taqreer): default direction-aware; the upstream library
++      // hard-codes 'left' for unset `text-align`, which breaks every RTL
++      // paragraph that relies on inherited direction.
++      const _isRtl = style.direction === 'rtl';
++      let align = style.textAlign;
++      if (!align || align === 'start') align = _isRtl ? 'right' : 'left';
++      else if (align === 'end') align = _isRtl ? 'left' : 'right';
+       let valign = 'top';
+       if (style.verticalAlign === 'middle') valign = 'middle';
+       if (style.verticalAlign === 'bottom') valign = 'bottom';

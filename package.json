@@ -6,7 +6,8 @@
     "dev": "node scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
@@ -48,6 +49,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "patch-package": "^8.0.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"

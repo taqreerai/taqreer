@@ -40,23 +40,6 @@ const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 const SHAPE_WIDTH_SLACK = 0.07;
 const MAX_SINGLE_LINE_CHARS = 80;
 
-/**
- * "Narrow + short" heuristic for detecting label / badge / faked-bullet
- * paragraphs that should respect Claude's explicit alignment instead of
- * being force-flipped to algn=r.
- *
- * A real headline / body paragraph in an RTL deck typically lives in a
- * wide shape (more than half the slide width: 9144000 EMU ≈ 10 in) and
- * carries long text. A faked-bullet list item or a tag/badge lives in a
- * narrow shape with short text. The dom-to-pptx text-align:start → algn=l
- * bug affects both, but only the long/wide case should be reversed: in
- * the short/narrow case, the author probably chose left alignment
- * deliberately (e.g. text adjacent to a bullet marker on the left).
- *
- * Thresholds: ~half the slide width for "narrow", ~60 chars for "short".
- */
-const NARROW_SHAPE_EMU = 4400000;
-const SHORT_TEXT_CHARS = 60;
 
 /**
  * Canonical signature of an <a:rPr> for grouping adjacent runs.
@@ -173,49 +156,6 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     return null;
   }
 
-  function nearestSp(p: Element): Element | null {
-    let node: Node | null = p.parentNode;
-    while (node) {
-      if (
-        node.nodeType === 1 &&
-        (node as Element).namespaceURI === NS_P &&
-        (node as Element).localName === "sp"
-      ) {
-        return node as Element;
-      }
-      node = node.parentNode;
-    }
-    return null;
-  }
-
-  function shapeWidth(sp: Element): number {
-    let spPr: Element | null = null;
-    for (let i = 0; i < sp.children.length; i++) {
-      const c = sp.children[i];
-      if (c.namespaceURI === NS_P && c.localName === "spPr") {
-        spPr = c;
-        break;
-      }
-    }
-    if (!spPr) return 0;
-    let xfrm: Element | null = null;
-    for (let i = 0; i < spPr.children.length; i++) {
-      const c = spPr.children[i];
-      if (c.namespaceURI === NS_A && c.localName === "xfrm") {
-        xfrm = c;
-        break;
-      }
-    }
-    if (!xfrm) return 0;
-    for (let i = 0; i < xfrm.children.length; i++) {
-      const c = xfrm.children[i];
-      if (c.namespaceURI === NS_A && c.localName === "ext") {
-        const cx = parseInt(c.getAttribute("cx") ?? "0", 10);
-        return Number.isFinite(cx) ? cx : 0;
-      }
-    }
-    return 0;
-  }
 
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
@@ -287,50 +227,13 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
       pPr.setAttribute("rtl", "1");
       touched = true;
     }
-    // dom-to-pptx maps CSS text-align:start → algn=l UNCONDITIONALLY
-    // (its src/index.js:1084 has no direction awareness). That means
-    // every Arabic headline / body that didn't explicitly set
-    // text-align:right comes out with algn=l in OOXML, and PowerPoint
-    // renders it left-aligned in an RTL deck — visibly wrong.
-    //
-    // BUT: an algn=l on an RTL paragraph CAN also be Claude's deliberate
-    // design (e.g. a faked-bullet list with text positioned to the right
-    // of a small bullet shape on the left). We have to keep those.
-    //
-    // Two signals tell us "respect algn=l" instead of forcing r:
-    //   (a) the paragraph has a real bullet marker (<a:buChar> /
-    //       <a:buAutoNum>) — it's a <ul>/<ol> item, alignment is
-    //       Claude's design intent.
-    //   (b) the paragraph lives in a NARROW shape (cx < half-slide) AND
-    //       its text is SHORT (≤ ~60 chars) — heuristic for label /
-    //       badge / faked-bullet text where Claude almost certainly
-    //       chose left explicitly. Real headlines and body paragraphs
-    //       live in wide shapes with long text.
-    // Otherwise (wide + long) → it's prose hit by the dom-to-pptx
-    // start→l bug → flip to r.
-    let hasBullet = false;
-    for (let j = 0; j < pPr.children.length; j++) {
-      const c = pPr.children[j];
-      if (
-        c.namespaceURI === NS_A &&
-        (c.localName === "buChar" || c.localName === "buAutoNum")
-      ) {
-        hasBullet = true;
-        break;
-      }
-    }
-    const containingSp = nearestSp(p);
-    const spCx = containingSp ? shapeWidth(containingSp) : 0;
-    const isNarrowShape = spCx > 0 && spCx < NARROW_SHAPE_EMU;
-    const isShortText = fullText.trim().length <= SHORT_TEXT_CHARS;
-    const isProbablyLabel = isNarrowShape && isShortText;
-
-    const respectExplicitL = hasBullet || isProbablyLabel;
-    const algn = pPr.getAttribute("algn");
-    const shouldForceR = respectExplicitL
-      ? algn === null
-      : algn === null || algn === "l";
-    if (shouldForceR) {
+    // Alignment is now handled UPSTREAM by our patches/dom-to-pptx+1.1.8.patch.
+    // The library reads `style.direction` when mapping CSS `text-align: start`
+    // and unset values, so RTL paragraphs get algn=r by default and Claude's
+    // explicit text-align:left lands as algn=l. The post-processor no longer
+    // touches algn — only fills it in when the OOXML emits no value at all
+    // (defensive; should not happen with the patched library).
+    if (pPr.getAttribute("algn") === null) {
       pPr.setAttribute("algn", "r");
       touched = true;
     }
