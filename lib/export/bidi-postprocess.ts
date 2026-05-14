@@ -157,7 +157,12 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
 
     if (!hasStrongRtl) {
       // LTR-by-content paragraph. If it lives inside an RTL txBody, force
-      // rtl=0 explicitly so PowerPoint doesn't inherit RTL from the body.
+      // rtl=0 explicitly so PowerPoint doesn't inherit RTL from the body
+      // — AND default algn="r" so an English title in an Arabic deck stays
+      // right-aligned (matching slide direction) while still reading LTR
+      // within itself. If Claude set an explicit alignment in his HTML
+      // (text-align: left/center/justify), dom-to-pptx already wrote it to
+      // OOXML and we preserve it.
       if (hasText) {
         const tb = nearestTxBody(p);
         if (tb && rtlTxBodies.has(tb)) {
@@ -176,6 +181,13 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
           if (pPr.getAttribute("rtl") !== "0") {
             pPr.setAttribute("rtl", "0");
             stats.ltrParagraphsForced++;
+          }
+          // Default alignment to "r" when none was emitted by dom-to-pptx.
+          // dom-to-pptx writes algn for elements with an explicit
+          // text-align CSS; a missing algn means "no explicit alignment"
+          // and the slide-direction default is what the user wants.
+          if (pPr.getAttribute("algn") === null) {
+            pPr.setAttribute("algn", "r");
           }
         }
       }

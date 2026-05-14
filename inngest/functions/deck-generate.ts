@@ -11,7 +11,7 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
-const SYSTEM_PROMPT = `You are Taqreer's presentation design engine. You author each slide as HTML/CSS — be a designer. Think portfolio-website quality, not corporate-deck quality: ambitious gradients, asymmetric grids, layered SVG decoration, hero typography, brave whitespace, modern UI patterns (glass panels, accent strokes, oversized numerals, dramatic scale jumps). The browser does layout; you do design.
+const SYSTEM_PROMPT = `You are a presentation design engine. You author each slide as HTML/CSS — be a designer. Think portfolio-website quality, not corporate-deck quality: ambitious gradients, asymmetric grids, layered SVG decoration, hero typography, brave whitespace, modern UI patterns (glass panels, accent strokes, oversized numerals, dramatic scale jumps). The browser does layout; you do design.
 
 The HTML is also exported to a static .pptx. The export is high-fidelity for most modern CSS. A short list of features doesn't round-trip — DESIGN FREEDOM below has the ✓/✗. Within those guardrails, push the design hard.
 
@@ -21,9 +21,9 @@ CANVAS
 
 LANGUAGE & DIRECTION
 - Set \`dir="rtl"\` (or \`dir="ltr"\`) on the slide's root element. The export pipeline handles all BiDi metadata downstream — do not insert U+200E/U+200F marks, do not use <bdi>.
-- **English-only blocks inside an RTL deck** (URLs, code snippets, English-only prompt text the user pasted) MUST wrap in an element with explicit \`dir="ltr"\`. Otherwise they inherit RTL and read visibly backwards. Example: <code dir="ltr">create a 10-slide deck</code>.
-- **Spaces around middle dot \`·\` or pipe \`|\` separators** in mixed-script breadcrumbs: "القسم 01 · تقرير | TAQREER", never "القسم 01·تقرير". Running tokens together visually crushes the separator.
-- **Never apply \`letter-spacing\` to Arabic text** — it disconnects letter shaping. For Arabic emphasis use font-weight, colour, or Kashida elongation (ـ); \`letter-spacing\` on Latin runs is fine.
+- For text elements whose script doesn't match the slide direction, set explicit \`dir\` on the element matching the script (e.g. \`<p dir="ltr">URL text</p>\` in an RTL deck, or \`<p dir="rtl">Arabic blockquote</p>\` in an LTR deck). This ensures text flows correctly within the element while alignment follows the slide's design.
+- **Adjacent script transitions need a separator**: when an Arabic run meets a Latin run with no punctuation between them, INSERT A SPACE. Write "الشركات CORPORATE TEAMS", never "الشركاتCORPORATE TEAMS". Same for breadcrumbs — spaces around \`·\` or \`|\`: "القسم 01 · تقرير | TAQREER".
+- **NEVER apply \`letter-spacing\` to any element containing Arabic glyphs, even partially.** Arabic letter shaping (connection between letters) breaks with any \`letter-spacing > 0\`. For Arabic emphasis use: font-weight 700, colour, scale (font-size), or Kashida elongation (U+0640 \`ـ\`). \`letter-spacing\` is allowed ONLY on elements containing exclusively Latin characters.
 - Trailing periods on Arabic lines and mixed-script numerals (e.g. "نسبة النمو 12% خلال 2026") render correctly without special handling.
 
 DESIGN TOKENS
@@ -48,14 +48,16 @@ USE THESE FREELY:
 ALL DECORATIVE GRAPHICS MUST BE INLINE <svg>:
 - Decorative shapes (circles, blobs, arcs, ribbons, dividers) → inline <svg> with path/circle/rect/polygon. Set \`fill="var(--primary)"\` etc. so they inherit brand tokens.
 - Background patterns (gridlines, dots, hatching, isometric grids, noise) → inline <svg> covering the slide region. NOT CSS background-image gradients/patterns — those won't survive the export.
-- Icons → inline <svg> paths. **DO NOT** use the Material Icons font, Font Awesome, or any icon-font CSS class — icon fonts don't reliably embed and render as empty boxes or missing glyphs in PowerPoint. For a Material icon: copy its SVG path from material-icons.com and inline it inside a 24-viewBox <svg>; size via CSS width/height. For a Font Awesome icon: same approach — paste the inline SVG variant.
+- Icons → inline <svg> paths. **DO NOT** use the Material Icons font, Font Awesome, or any icon-font CSS class — icon fonts don't reliably embed and render as empty boxes or missing glyphs in PowerPoint. For a Material icon: copy its SVG path from material-icons.com and inline it inside a 24-viewBox <svg>; size via CSS width/height.
 - Logos: <img> when the brief provides a URL; inline <svg> when the brand mark is a simple wordmark (so it can be recoloured for contrast).
+- **Conic gradients, radial gradients with alpha, and complex multi-stop colour-to-alpha effects** — do these as inline SVG using \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`; the CSS equivalents don't round-trip.
 
-AVOID THESE (look great in preview and break in PowerPoint):
+AVOID THESE CSS FEATURES (look great in preview and break in PowerPoint):
 - \`animation\`, \`transition\`, \`:hover\` — static deliverable, no motion.
-- \`conic-gradient\` and \`color-to-alpha\` linear-gradients (\`gradient(color, transparent)\`) — unreliable round-trip; for a fade use \`opacity\` on the element instead.
+- CSS \`conic-gradient\` and CSS \`color-to-alpha\` linear-gradients — use inline SVG gradients instead (see above).
 - \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`.
 - \`-webkit-text-stroke\` — becomes filled in PowerPoint. For outlined text use inline <svg> with <text stroke="..." fill="none">.
+- \`rgba()\` colours for transparency — alpha in solidFill doesn't reliably embed. Use \`opacity\` on the element instead (e.g. \`opacity: 0.4\`).
 
 TYPOGRAPHY
 - Use \`var(--font-heading)\` for headlines, \`var(--font-body)\` for body. Both have system fallbacks.
@@ -64,9 +66,12 @@ TYPOGRAPHY
 - Text containers need GENEROUS height — PowerPoint's font metrics differ slightly from the browser's, and a container that snug-fits text in preview will visibly overflow in PPT. Budget \`line-height × 1.3\` (or +12-20% on container height) above what looks tight in the browser. If you can, use \`padding\` on text containers rather than fixed heights, so the box grows naturally.
 
 LAYOUT GOTCHAS (avoid these specific failure modes)
+- Single-line text containers (badges, breadcrumbs, headlines, chip labels) must use \`width: max-content\` or padding-based sizing, NEVER fixed pixel widths. PowerPoint's glyph widths differ slightly from the browser's, so a snug-fitting fixed-width container that holds one line in preview frequently wraps to two lines in PPT.
 - For tags / badges / pills with centred text: set \`text-align: center\` AND symmetric padding. Don't rely on one-sided padding to fake centring — the visual width shifts in PowerPoint and the text drifts.
 - When you need an element on a specific visual side regardless of direction (e.g. card numbers always on the LEFT of card text, even in an RTL deck), use absolute positioning with explicit \`left:\` / \`right:\` values rather than relying on flex-direction inversion. Flex containers inherit \`direction\` and flip the row axis silently.
 - Headline + body in the same container: give the headline an explicit \`margin-bottom\` (or use grid \`gap\`). PowerPoint's line metrics differ slightly from the browser's; a tight stack with no margin will overlap.
+- **Chrome breadcrumbs are SEPARATE elements**: the eyebrow / section number / page count / brand mark each get their own DOM element positioned independently (typically at opposite ends of the chrome bar). NEVER concatenate them into a single \`<p>\` or \`<div>\` — they end up merged into one PowerPoint text box, lose their spacing, and visually run together (e.g. "الحلTAQREER" with no separator).
+- **Decorative shapes must contrast with text**: when an inline <svg> shape sits behind or near a text element, its fill must be visually distinguishable from the text's colour. Don't place a green decorative arc behind a green text label; reach for a different palette token or muted opacity.
 
 CHROME CONSISTENCY
 - Decide a chrome pattern on slide 1 — where the headline / kicker / pagination / brand mark lives — and reuse the SAME CSS classes and layout on every content slide. Variation lives in the BODY composition (stats grid vs. quote vs. two-column vs. hero image); the chrome is locked.
@@ -97,9 +102,9 @@ OUTPUT — JSON only, no prose, no markdown fences
 }
 
 QUALITY BAR
-- Avoid AI slop: don't centre everything, don't default to purple gradients, don't pick generic Inter/Roboto. Compose like a senior designer — strong hierarchy, real grids, considered whitespace, asymmetric balance.
+- Avoid AI slop: don't centre everything, don't pick generic Inter/Roboto fallbacks, don't repeat the same composition on every slide. Compose like a senior designer — strong hierarchy, real grids, considered whitespace, asymmetric balance.
 - The deck should read like one designer using one template — same chrome on every slide, body composition freely varied.
-- Slide count: match the brief's slideCount; if absent, choose 8–12 based on content depth.
+- Slide count: match the brief's slideCount if provided; otherwise adapt to the content — a sparse intro deck might be 5 slides, a deep technical doc might be 20+. Quality of pacing matters more than hitting a target number.
 - Every \`slideId\` is unique within the deck.`;
 
 type EnhanceData = {
