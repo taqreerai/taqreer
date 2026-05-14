@@ -1919,6 +1919,78 @@ wsl coderabbit review --base origin/main --agent</code></pre>
                 </ul>
             </section>
 
+            <section id="html-pivot-status">
+                <h2>20. HTML Pivot — what shipped (2026-05-14)</h2>
+                <p class="lead">
+                    The §18 pivot is implemented end-to-end on branch <code>html-pivot</code>. Preview ↔ PPT export parity is ~99% on real Arabic decks. What's below documents the OOXML patch set, the export pipeline, and the few items still left for prompt tuning. If you're reading this fresh and want to understand WHY each fix exists, read each card with the symptom in mind — every patch is reactive to a specific bug we hit while iterating.
+                </p>
+
+                <h3>The pipeline (browser → PPT)</h3>
+                <div class="diagram">
+                    <pre><code>1. Claude emits {slideId, role, html} per slide
+2. Preview: SlideRenderer + DOMPurify + theme CSS vars (graceful fallback when DOMPurify's SSR singleton lacks .sanitize)
+3. Export click: html-export.ts
+   ├─ Mount slides offscreen at 1920×1080, full opacity, no scale transform
+   ├─ DOM preprocess (3 passes):
+   │   • splitMixedScriptFlexChildren — wrap direct text nodes when sibling has explicit dir or parent is flex/grid
+   │   • stripArabicLetterSpacing — kill inherited letter-spacing on Arabic-bearing elements
+   │   • insertScriptTransitionSpaces — insert space at any Arabic↔Latin / Arabic↔digit adjacency inside text nodes
+   ├─ exportToPptx(slides, {skipDownload:true, svgAsVector:true})  ← patched dom-to-pptx
+   ├─ bidi-postprocess.ts fixBiDiInPptxBlob (PASS 1 + PASS 2 + PASS 3 on every slide XML)
+   └─ downloadBlob(fixedBlob)</code></pre>
+                </div>
+
+                <h3>dom-to-pptx patches (patches/dom-to-pptx+1.1.8.patch, auto-applied via postinstall)</h3>
+                <div class="cards">
+                    <div class="card">
+                        <h4>1. Direction-blind <code>text-align</code> mapping (two sites)</h4>
+                        <p>Upstream hard-coded <code>text-align: start</code> → <code>algn="l"</code> regardless of <code>direction</code>. Every Arabic headline / body relying on inherited RTL came out left-aligned in PPT. Patch reads <code>style.direction</code> and routes <code>start</code> / <code>end</code> / unset to the correct value (<code>algn="r"</code> for RTL, <code>algn="l"</code> for LTR).</p>
+                    </div>
+                    <div class="card">
+                        <h4>2. <code>isTextContainer</code> script-uniformity check</h4>
+                        <p>A row with mixed-script sibling element children (<code>&lt;span&gt;01&lt;/span&gt;&lt;span&gt;Arabic&lt;/span&gt;&lt;em&gt;Latin&lt;/em&gt;</code>) used to collapse into one text frame — all pieces concatenated, visual separation lost. Patch adds <code>taqreer_hasUniformScript(children)</code>: returns <code>false</code> if children have different scripts, which makes <code>isTextContainer</code> return <code>false</code>, which makes the walker recurse and emit one PowerPoint shape per child at its own bounding rect.</p>
+                    </div>
+                    <div class="card">
+                        <h4>3. <code>isSafeInline</code> — bordered / rounded elements are styled boxes</h4>
+                        <p>Upstream check only excluded EMPTY bordered/backgrounded elements (decorative dots). Bordered text pills slipped through as "inline emphasis", got merged into the parent text frame, and rendered as plain text with no border in PPT. Patch: any element with a border OR (background + border-radius) returns <code>false</code> — pills, badges, chips, cards stay as their own shapes with their styling intact.</p>
+                    </div>
+                    <div class="card">
+                        <h4>4. CSS <code>padding</code> as <code>margin</code> (two sites)</h4>
+                        <p>The deepest bug. Upstream read CSS padding via <code>getPadding()</code>, stored it as <code>inset:</code>, then passed it to PptxGenJS while ALSO hardcoding <code>margin: 0</code>. PptxGenJS uses <code>margin</code> (in pt) for body insets — not <code>inset</code>. Every text shape's CSS padding was silently discarded; <code>&lt;a:bodyPr&gt;</code> always emitted with <code>lIns="0" rIns="0" tIns="0" bIns="0"</code>. Two text-emission code paths needed the same fix (bg-image branch + bgColor/border/textPayload branch): convert <code>textPayload.inset</code> (inches array) to pt and pass as <code>margin: _paddingPt</code>. Cards' internal padding, badges' breathing room, headlines' line-height insets — all of it finally reaches PPT.</p>
+                    </div>
+                </div>
+
+                <h3>OOXML post-processor (<code>lib/export/bidi-postprocess.ts</code>)</h3>
+                <p>Runs once per slide XML inside the final <code>.pptx</code> blob:</p>
+                <ul>
+                    <li><strong>PASS 1</strong> — walk every <code>&lt;a:txBody&gt;</code>; if any descendant paragraph has strong-RTL text, flip <code>&lt;a:bodyPr rtlCol="1"&gt;</code>. PptxGenJS's <code>rtlCol="0"</code> default overrides paragraph-level <code>pPr rtl="1"</code> on PowerPoint, so this had to flip first.</li>
+                    <li><strong>PASS 2</strong> — for each paragraph:
+                        <ul>
+                            <li>Arabic content → <code>pPr rtl="1"</code>, fill <code>algn="r"</code> only when missing (don't fight explicit author choices)</li>
+                            <li>Smart-merge runs with identical <code>rPr</code> signature (script-split runs collapse cleanly; inline-coloured spans stay separate)</li>
+                            <li>Retag run <code>lang</code> and <code>endParaRPr</code> <code>lang</code> to <code>"ar-SA"</code> so PowerPoint uses the Arabic BiDi resolver per run</li>
+                            <li>LTR-content paragraphs inside an RTL <code>txBody</code> get explicit <code>rtl="0"</code> + default <code>algn="r"</code> (English titles in Arabic decks stay right-aligned but read LTR)</li>
+                        </ul>
+                    </li>
+                    <li><strong>PASS 3</strong> — direction-aware shape extension. For short (≤80 chars) text shapes UNDER 3 M EMU wide (≈33% slide width — excludes headlines), grow <code>cx</code> by 10% on the side OPPOSITE the text anchor; clamp to slide bounds. Absorbs PowerPoint's slightly-wider glyph metrics so single-line text doesn't wrap to two. Anchored side never moves → margins preserved.</li>
+                </ul>
+
+                <h3>The DOMPurify story (pre-launch TODO)</h3>
+                <p>dompurify@3.4.3's <code>createDOMPurify()</code> runs at module load. With no <code>window</code> (the SSR pass under Turbopack), it early-returns a factory function without <code>.sanitize</code>. Turbopack appears to share that SSR-loaded instance with the client bundle, so <code>DOMPurify.sanitize</code> is <code>undefined</code> at render time. Current state: graceful fallback in <code>components/slides/SlideRenderer.tsx</code> — try DOMPurify, fall back to raw HTML if <code>.sanitize</code> isn't available. Acceptable for local dev / single-user / no sharing; trust model is documented at the top of the file. <strong>Before launch with sharing/templates: reintroduce sanitization SERVER-SIDE in <code>inngest/functions/deck-generate.ts</code></strong>, before the HTML is written to the DB. Three implementation options for the proper fix when we revisit: (a) server-side <code>sanitize-html</code> in deck-generate, (b) switch the client to a SSR-safe sanitizer, (c) investigate the Turbopack module-sharing root cause and force a client-only DOMPurify load.</p>
+
+                <h3>What's left — purely prompt work</h3>
+                <ul>
+                    <li><strong>Gradient text</strong> — Claude still emits CSS <code>background-clip: text</code> instead of inline <code>&lt;svg&gt;&lt;text fill="url(#g)"&gt;</code>. The prompt covers it but Claude doesn't always follow. User has a solution in mind for the next round.</li>
+                    <li><strong>Same-colour-as-background</strong> — Claude occasionally picks a text/shape colour that matches its container. The prompt has concrete forbidden combinations; Claude still slips occasionally. Hard to safely enforce in code (would need theme-aware contrast compositor).</li>
+                </ul>
+
+                <h3>Spike — kept as regression harness</h3>
+                <p><code>app/spike/page.tsx</code> stays in the repo: four hand-crafted RTL test slides, an "Export with BiDi fix" button, and a side-by-side <code>slide1.xml</code> before/after diagnostic. Re-run it after any <code>dom-to-pptx</code> upgrade or BiDi-related regression to catch breakage early.</p>
+
+                <h3>Branch + push state at handoff</h3>
+                <p>All work lives on <code>origin/html-pivot</code>. <code>origin/dev</code> still produces decks via the old PptxGenJS pipeline as a safety net. Cutover via <code>EXPORT_PIPELINE=html</code> flag is the planned path; the old pipeline can be deleted in a follow-up once html-pivot has shipped real decks.</p>
+            </section>
+
             <section id="mac-migration">
                 <h2>19. Mac Migration</h2>
                 <p class="lead">

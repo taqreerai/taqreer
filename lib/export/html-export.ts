@@ -70,7 +70,7 @@ function insertScriptTransitionSpaces(root: HTMLElement): void {
   while ((n = walker.nextNode())) textNodes.push(n as Text);
 
   for (const tn of textNodes) {
-    let text = tn.nodeValue ?? "";
+    const text = tn.nodeValue ?? "";
     if (!text) continue;
     let next = text;
     for (const [re, replacement] of PATTERNS) {
