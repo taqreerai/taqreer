@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..ac52df7 100644
+index 36b1ff9..23e6ca8 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -55,7 +55,37 @@ index 36b1ff9..ac52df7 100644
  function isTextContainer(node) {
    const hasText = node.textContent.trim().length > 0;
    if (!hasText) return false;
-@@ -766,7 +800,7 @@ function isTextContainer(node) {
+@@ -756,17 +790,36 @@ function isTextContainer(node) {
+     const hasVisibleBg = bgColor.hex && bgColor.opacity > 0;
+     const hasBorder =
+       parseFloat(style.borderWidth) > 0 && parseColor(style.borderColor).opacity > 0;
++    const hasBorderRadius = parseFloat(style.borderRadius) > 0;
++
++    // Patched (taqreer): a styled BOX (pill / badge / chip / button / card)
++    // is a UI element that must keep its own PowerPoint shape with its
++    // own background+border, NOT get merged into the parent text frame
++    // and have its styling dropped. The upstream check only excluded
++    // EMPTY styled elements (decorative dots), which let bordered text
++    // pills slip through as "inline emphasis" — Claude's
++    // `<div class="pill" style="border:...">Riyadh</div>` ended up as
++    // bare inline text "Riyadh Dubai London" in the same text frame.
++    //
++    // A border (any width, any colour) is the most reliable signal of
++    // "this is a styled box, not inline text". Backgrounds alone are
++    // kept as safe-inline so <mark>highlight</mark> and similar inline
++    // emphasis still flow naturally. Background + border-radius (a
++    // pill without a border) is also a styled-box signal.
++    if (hasBorder || (hasVisibleBg && hasBorderRadius)) {
++      return false;
++    }
+ 
+     // 4. Check for empty shapes (visual objects without text, like dots)
+     const hasContent = el.textContent.trim().length > 0;
+-    if (!hasContent && (hasVisibleBg || hasBorder)) {
++    if (!hasContent && hasVisibleBg) {
+       return false;
+     }
+ 
      return true;
    };
  
@@ -64,7 +94,7 @@ index 36b1ff9..ac52df7 100644
  }
  
  function getRotation(transformStr) {
-@@ -2489,9 +2523,13 @@ function prepareRenderItem(
+@@ -2489,9 +2542,13 @@ function prepareRenderItem(
      });
  
      if (textParts.length > 0) {

@@ -85,9 +85,19 @@ AVOID THESE CSS FEATURES (look great in preview and break in PowerPoint):
 
 TYPOGRAPHY
 - Use \`var(--font-heading)\` for headlines, \`var(--font-body)\` for body. Both have system fallbacks.
-- **USE AT MOST TWO FONT WEIGHTS across the deck**: bold (700) for headlines and emphasis, regular (400) for body. **DO NOT** reach for 900 / Black / ExtraBlack — they render too heavy in PowerPoint, distort glyph shaping (especially for Arabic), and visually overpower the body. If you need more contrast than bold provides, use scale, colour, or letter-spacing on Latin, not weight beyond 700.
+- **ONLY TWO font-weight values are allowed across the deck**: \`400\` (regular) and \`700\` (bold). Do not use 500, 600, 800, 900, or named weights like "black" or "extra-bold". Reason: Arabic fonts (Cairo, Tajawal, Almarai) render heavier in PowerPoint than in the browser — even at 700 the Arabic glyphs visibly thicken, and 800+ produces unreadable ink-bombed text that overpowers the body. If a headline needs more emphasis than 700 gives, scale up the \`font-size\` or change the colour; do not push the weight.
 - For Arabic content the heading font you reference must support Arabic shaping — name an Arabic-capable Google Font (Cairo, Tajawal, Almarai, Noto Sans Arabic) in \`theme.fontHeading.name\`. The renderer + dom-to-pptx auto-embed it from the URL in the manifest.
 - Text containers need GENEROUS height — PowerPoint's font metrics differ slightly from the browser's, and a container that snug-fits text in preview will visibly overflow in PPT. Budget \`line-height × 1.3\` (or +12-20% on container height) above what looks tight in the browser. If you can, use \`padding\` on text containers rather than fixed heights, so the box grows naturally.
+
+SLIDE-LEVEL MARGINS — every element respects the same inner margin
+- Pick a slide-edge margin (typical: 80–120 px) on slide 1 and reuse it on EVERY slide. Cards, headlines, body paragraphs, lists, chrome — nothing touches the slide edge, everything sits inside the margin.
+- When a card or container hosts text, the card itself respects the slide margin, AND the text inside the card respects the card's own padding (typical: 24–48 px inside cards). Two layers of margin: slide-margin → card → card-padding → text.
+- Don't let one element (a big background panel, a section divider, a hero shape) ignore the slide margin while neighbouring elements respect it. Inconsistent edges read as a layout bug.
+
+COLOUR CONTRAST — every text and decorative element must be readable against what's behind it
+- Before placing a text element, check its \`color\` against the slide's \`--brand-bg\` (or the local background — a coloured card has its own background). The pair must hit a clear contrast (think WCAG-ish — light text on dark, dark text on light, never near-equal lightness).
+- For decorative shapes (SVG fills, accent strips, icons), the same rule: a shape that sits in front of a similar-coloured area becomes invisible. If you place \`fill="var(--primary)"\` on a shape over a panel that's also \`var(--primary)\`-tinted, swap the fill to \`var(--brand-text)\` or \`var(--accent)\` for separation.
+- Test mentally for the four common slip-ups: (a) text colour identical to its container background; (b) muted/subtitle text too close to background lightness; (c) decorative SVG matching the slide background and disappearing; (d) gradient text whose darkest stop falls inside the background colour range.
 
 LAYOUT GOTCHAS (avoid these specific failure modes)
 - Single-line text containers (badges, breadcrumbs, headlines, chip labels, section labels) MUST use \`width: max-content\` or padding-based sizing, NEVER fixed pixel widths. PowerPoint's glyph widths are slightly wider than the browser's renderer for most fonts, so a snug-fitting fixed-width container that holds one line in preview will wrap to two lines in PPT. If you need the container to be visually wider for design reasons, use \`padding-inline\` on a \`width: max-content\` container — the text never wraps, the container grows.
