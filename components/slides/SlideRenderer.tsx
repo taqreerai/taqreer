@@ -1,8 +1,22 @@
 "use client";
 
 import { useMemo } from "react";
-import DOMPurify, { type Config } from "dompurify";
+// DOMPurify's ESM build exports `purify` as default. Turbopack's CJS-
+// interop sometimes hands us the module namespace instead of unwrapping
+// the default — `DOMPurify.sanitize` then lands on `namespace.sanitize`
+// (undefined) instead of `namespace.default.sanitize`. The
+// `* as Mod` + `Mod.default ?? Mod` pattern works under both interop
+// shapes.
+import * as DOMPurifyModule from "dompurify";
+import type { Config } from "dompurify";
 import type { SlideType, ThemeType } from "@/lib/schema/slide";
+
+type DOMPurifyAPI = {
+  sanitize: (source: string, config?: Config) => string;
+};
+const DOMPurify: DOMPurifyAPI =
+  (DOMPurifyModule as unknown as { default?: DOMPurifyAPI }).default ??
+  (DOMPurifyModule as unknown as DOMPurifyAPI);
 
 // Renders one HTML-authored slide.
 //

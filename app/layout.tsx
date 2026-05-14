@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Cairo, Poppins } from "next/font/google";
-import Script from "next/script";
+import { GlassPreflight } from "@/components/glass-preflight";
 import "./globals.css";
 
 const cairo = Cairo({
@@ -58,13 +58,9 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${poppins.variable}`} suppressHydrationWarning>
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0,0&display=swap" rel="stylesheet" />
-        <Script
-          id="glass-preflight"
-          src="/glass-preflight.js"
-          strategy="beforeInteractive"
-        />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
+        <GlassPreflight />
         {children}
       </body>
     </html>
