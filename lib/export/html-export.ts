@@ -148,6 +148,11 @@ export async function exportManifestAsPptx(
     const rawBlob = (await exportToPptx(slideNodes, {
       fileName,
       skipDownload: true,
+      // Keep inline <svg> as native OOXML vectors (editable in PowerPoint,
+      // recolourable, infinite zoom). Without this, dom-to-pptx rasterises
+      // every SVG to a PNG, including Material icons and decorative shapes —
+      // they end up tiny / pixelated / missing depending on viewBox.
+      svgAsVector: true,
     } as unknown as { fileName: string })) as unknown as Blob;
 
     if (!(rawBlob instanceof Blob)) {

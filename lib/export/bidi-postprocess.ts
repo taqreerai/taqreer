@@ -68,6 +68,7 @@ export type BiDiPostprocessStats = {
   runsMerged: number;
   txBodiesFlipped: number;
   langsRetagged: number;
+  ltrParagraphsForced: number;
 };
 
 function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
@@ -112,10 +113,35 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     }
   }
 
-  // PASS 2: walk every <a:p>; if it contains strong-RTL text, set pPr
-  // rtl/algn, merge runs, retag run + endParaRPr lang to ar-SA.
+  // PASS 2: walk every <a:p> inside the txBodies we flipped in PASS 1.
+  // For each paragraph:
+  //   - strong-RTL text → set pPr rtl=1/algn=r, smart-merge runs, retag lang
+  //   - LTR text in an RTL txBody → set pPr rtl=0 EXPLICITLY (so the
+  //     paragraph doesn't inherit RTL from the txBody's rtlCol). Without
+  //     this, English-only paragraphs inside an Arabic slide render
+  //     visibly reversed.
   const paragraphs = doc.getElementsByTagNameNS(NS_A, "p");
   let modified = 0;
+
+  // Build a set of <a:txBody> elements we marked rtlCol=1 in PASS 1, so we
+  // know which paragraphs need the LTR override and which can be left alone.
+  const rtlTxBodies = new Set<Element>();
+  for (let i = 0; i < txBodies.length; i++) {
+    if (txBodies[i].getElementsByTagNameNS(NS_A, "bodyPr")[0]?.getAttribute("rtlCol") === "1") {
+      rtlTxBodies.add(txBodies[i]);
+    }
+  }
+
+  function nearestTxBody(p: Element): Element | null {
+    let node: Node | null = p.parentNode;
+    while (node) {
+      if (node.nodeType === 1 && (node as Element).localName === "txBody") {
+        return node as Element;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
 
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
@@ -126,7 +152,35 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     for (let j = 0; j < texts.length; j++) {
       fullText += texts[j].textContent ?? "";
     }
-    if (!STRONG_RTL.test(fullText)) continue;
+    const hasStrongRtl = STRONG_RTL.test(fullText);
+    const hasText = fullText.trim().length > 0;
+
+    if (!hasStrongRtl) {
+      // LTR-by-content paragraph. If it lives inside an RTL txBody, force
+      // rtl=0 explicitly so PowerPoint doesn't inherit RTL from the body.
+      if (hasText) {
+        const tb = nearestTxBody(p);
+        if (tb && rtlTxBodies.has(tb)) {
+          let pPr: Element | null = null;
+          for (let j = 0; j < p.childNodes.length; j++) {
+            const node = p.childNodes[j];
+            if (node.nodeType === 1 && (node as Element).localName === "pPr") {
+              pPr = node as Element;
+              break;
+            }
+          }
+          if (!pPr) {
+            pPr = doc.createElementNS(NS_A, "a:pPr");
+            p.insertBefore(pPr, p.firstChild);
+          }
+          if (pPr.getAttribute("rtl") !== "0") {
+            pPr.setAttribute("rtl", "0");
+            stats.ltrParagraphsForced++;
+          }
+        }
+      }
+      continue;
+    }
 
     // pPr (paragraph properties) must be the first child of <a:p> per OOXML.
     let pPr: Element | null = null;
@@ -301,5 +355,6 @@ export function makeStats(): BiDiPostprocessStats {
     runsMerged: 0,
     txBodiesFlipped: 0,
     langsRetagged: 0,
+    ltrParagraphsForced: 0,
   };
 }

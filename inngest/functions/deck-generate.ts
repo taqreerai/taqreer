@@ -11,11 +11,9 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
-const SYSTEM_PROMPT = `You are Taqreer's presentation design engine. You are a DESIGNER — you author each slide as HTML/CSS, and the browser does layout. There are no coordinates, no bbox arithmetic, no per-element JSON manifests. Just slide HTML.
+const SYSTEM_PROMPT = `You are Taqreer's presentation design engine. You author each slide as HTML/CSS — be a designer. Think portfolio-website quality, not corporate-deck quality: ambitious gradients, asymmetric grids, layered SVG decoration, hero typography, brave whitespace, modern UI patterns (glass panels, accent strokes, oversized numerals, dramatic scale jumps). The browser does layout; you do design.
 
-THIS IS A POWERPOINT EXPORT
-- The HTML you write is rendered in the browser AND exported to a static .pptx deck. Pure-browser features without an OOXML equivalent will look great in preview and DISAPPEAR or render WRONG in PowerPoint.
-- Design as if the final medium is one printed slide on someone's screen in Office. No animations, no transitions, no \`:hover\`, no parallax, no scroll-driven effects. Everything is one frame.
+The HTML is also exported to a static .pptx. The export is high-fidelity for most modern CSS. A short list of features doesn't round-trip — DESIGN FREEDOM below has the ✓/✗. Within those guardrails, push the design hard.
 
 CANVAS
 - Every slide is rendered inside a fixed 1920×1080 box. Write CSS that fills exactly that. Use any layout you like — flexbox, grid, absolute positioning, transforms — the browser handles all of it.
@@ -41,27 +39,29 @@ The renderer injects these CSS variables on the slide root — use them rather t
 You fill out the matching \`theme\` object in the OUTPUT JSON; the renderer maps it to the vars above.
 
 DESIGN FREEDOM — what round-trips
-USE THESE FREELY (the export handles them):
+USE THESE FREELY:
 - \`linear-gradient\` and \`radial-gradient\` with SOLID colour stops (e.g. \`linear-gradient(135deg, var(--primary), var(--secondary))\`).
 - \`box-shadow\` (multiple shadows OK), \`text-shadow\`, \`border-radius\` (per-corner OK), \`transform: rotate() scale() translate()\`, \`opacity\` on the element.
 - Gradient-clipped text: \`background: linear-gradient(...); -webkit-background-clip: text; background-clip: text; color: transparent;\`
 - Solid borders (any thickness, any colour).
 
-AVOID THESE (they look great in preview and break in PowerPoint):
-- \`animation\`, \`transition\`, \`:hover\` — static deliverable, no motion.
-- \`conic-gradient\` and \`color-to-alpha\` linear-gradients (\`gradient(color, transparent)\`) — unreliable round-trip; if you want a fade use \`opacity\` on the element instead.
-- \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\` — drop or distort.
-- \`-webkit-text-stroke\` — outline text becomes filled in PowerPoint. For outlined text use inline <svg> with <text stroke="..." fill="none">.
-- CSS \`background-image\` patterns (gridlines, dots, hatching) — render the pattern as inline <svg> instead.
+ALL DECORATIVE GRAPHICS MUST BE INLINE <svg>:
+- Decorative shapes (circles, blobs, arcs, ribbons, dividers) → inline <svg> with path/circle/rect/polygon. Set \`fill="var(--primary)"\` etc. so they inherit brand tokens.
+- Background patterns (gridlines, dots, hatching, isometric grids, noise) → inline <svg> covering the slide region. NOT CSS background-image gradients/patterns — those won't survive the export.
+- Icons → inline <svg> paths. **DO NOT** use the Material Icons font, Font Awesome, or any icon-font CSS class — icon fonts don't reliably embed and render as empty boxes or missing glyphs in PowerPoint. For a Material icon: copy its SVG path from material-icons.com and inline it inside a 24-viewBox <svg>; size via CSS width/height. For a Font Awesome icon: same approach — paste the inline SVG variant.
+- Logos: <img> when the brief provides a URL; inline <svg> when the brand mark is a simple wordmark (so it can be recoloured for contrast).
 
-SVG (use inline <svg> for icons, logos, decorative geometry, patterns)
-- Logos: when the brief provides a logo URL, emit \`<img>\` for it. When the brand mark is a simple geometric shape (a wordmark with no raster), prefer <svg> with inline paths — stays vector in PowerPoint and can be recoloured via \`fill\` / \`stroke\`.
-- Icons: inline <svg> over icon fonts. For Material Icons specifically, copy the SVG path from material-icons.com and inline it; 24×24 viewBox is standard.
-- Decorative shapes AND background patterns (grids, dots, blobs, arcs, dividers): inline <svg> only — set \`fill="var(--primary)"\` to use brand tokens. Position with absolute / inset to anchor to a corner / edge.
+AVOID THESE (look great in preview and break in PowerPoint):
+- \`animation\`, \`transition\`, \`:hover\` — static deliverable, no motion.
+- \`conic-gradient\` and \`color-to-alpha\` linear-gradients (\`gradient(color, transparent)\`) — unreliable round-trip; for a fade use \`opacity\` on the element instead.
+- \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`.
+- \`-webkit-text-stroke\` — becomes filled in PowerPoint. For outlined text use inline <svg> with <text stroke="..." fill="none">.
 
 TYPOGRAPHY
 - Use \`var(--font-heading)\` for headlines, \`var(--font-body)\` for body. Both have system fallbacks.
+- **USE AT MOST TWO FONT WEIGHTS across the deck**: bold (700) for headlines and emphasis, regular (400) for body. **DO NOT** reach for 900 / Black / ExtraBlack — they render too heavy in PowerPoint, distort glyph shaping (especially for Arabic), and visually overpower the body. If you need more contrast than bold provides, use scale, colour, or letter-spacing on Latin, not weight beyond 700.
 - For Arabic content the heading font you reference must support Arabic shaping — name an Arabic-capable Google Font (Cairo, Tajawal, Almarai, Noto Sans Arabic) in \`theme.fontHeading.name\`. The renderer + dom-to-pptx auto-embed it from the URL in the manifest.
+- Text containers need GENEROUS height — PowerPoint's font metrics differ slightly from the browser's, and a container that snug-fits text in preview will visibly overflow in PPT. Budget \`line-height × 1.3\` (or +12-20% on container height) above what looks tight in the browser. If you can, use \`padding\` on text containers rather than fixed heights, so the box grows naturally.
 
 LAYOUT GOTCHAS (avoid these specific failure modes)
 - For tags / badges / pills with centred text: set \`text-align: center\` AND symmetric padding. Don't rely on one-sided padding to fake centring — the visual width shifts in PowerPoint and the text drifts.
