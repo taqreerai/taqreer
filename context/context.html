@@ -1935,8 +1935,9 @@ wsl coderabbit review --base origin/main --agent</code></pre>
    │   • splitMixedScriptFlexChildren — wrap direct text nodes when sibling has explicit dir or parent is flex/grid
    │   • stripArabicLetterSpacing — kill inherited letter-spacing on Arabic-bearing elements
    │   • insertScriptTransitionSpaces — insert space at any Arabic↔Latin / Arabic↔digit adjacency inside text nodes
+   ├─ extractGradientIntents — find every element with `background-clip: text` + linear/radial gradient, replace its CSS with a sentinel hex (#FExxxx), stash the recipe
    ├─ exportToPptx(slides, {skipDownload:true, svgAsVector:true})  ← patched dom-to-pptx
-   ├─ bidi-postprocess.ts fixBiDiInPptxBlob (PASS 1 + PASS 2 + PASS 3 on every slide XML)
+   ├─ bidi-postprocess.ts fixBiDiInPptxBlob (PASS 1 + PASS 2 + PASS 3 + PASS 4 on every slide XML)
    └─ downloadBlob(fixedBlob)</code></pre>
                 </div>
 
@@ -1973,15 +1974,21 @@ wsl coderabbit review --base origin/main --agent</code></pre>
                         </ul>
                     </li>
                     <li><strong>PASS 3</strong> — direction-aware shape extension. For short (≤80 chars) text shapes UNDER 3 M EMU wide (≈33% slide width — excludes headlines), grow <code>cx</code> by 10% on the side OPPOSITE the text anchor; clamp to slide bounds. Absorbs PowerPoint's slightly-wider glyph metrics so single-line text doesn't wrap to two. Anchored side never moves → margins preserved.</li>
+                    <li><strong>PASS 4</strong> — gradient-text sentinel swap. For every <code>&lt;a:rPr&gt;</code> whose <code>&lt;a:srgbClr val="FExxxx"/&gt;</code> matches a sentinel allocated by <code>extractGradientIntents</code>, drop the <code>&lt;a:solidFill&gt;</code> and insert a real <code>&lt;a:gradFill&gt;</code> built from the stashed recipe — linear gets <code>&lt;a:lin ang="..." scaled="1"/&gt;</code>; radial gets <code>&lt;a:path path="circle"&gt;&lt;a:fillToRect l=t=r=b=50000/&gt;&lt;/a:path&gt;</code>. Bridges CSS <code>background-clip: text</code> + gradient → vector-sharp PowerPoint gradient on the text run, no SVG wrapper needed. Implemented in <code>lib/export/gradient-text.ts</code> (parser + sentinel allocator) and PASS 4 in <code>bidi-postprocess.ts</code> (OOXML mutation). Caveat: PowerPoint bounds run-level <code>gradFill</code> to the parent shape's box, so two inline gradient spans inside the same flex/grid container will read as one continuous gradient across the shape — author each gradient text element as its own block-level element to get independent per-element gradients.</li>
                 </ul>
 
                 <h3>The DOMPurify story (pre-launch TODO)</h3>
                 <p>dompurify@3.4.3's <code>createDOMPurify()</code> runs at module load. With no <code>window</code> (the SSR pass under Turbopack), it early-returns a factory function without <code>.sanitize</code>. Turbopack appears to share that SSR-loaded instance with the client bundle, so <code>DOMPurify.sanitize</code> is <code>undefined</code> at render time. Current state: graceful fallback in <code>components/slides/SlideRenderer.tsx</code> — try DOMPurify, fall back to raw HTML if <code>.sanitize</code> isn't available. Acceptable for local dev / single-user / no sharing; trust model is documented at the top of the file. <strong>Before launch with sharing/templates: reintroduce sanitization SERVER-SIDE in <code>inngest/functions/deck-generate.ts</code></strong>, before the HTML is written to the DB. Three implementation options for the proper fix when we revisit: (a) server-side <code>sanitize-html</code> in deck-generate, (b) switch the client to a SSR-safe sanitizer, (c) investigate the Turbopack module-sharing root cause and force a client-only DOMPurify load.</p>
 
-                <h3>What's left — purely prompt work</h3>
+                <h3>What's left</h3>
                 <ul>
-                    <li><strong>Gradient text</strong> — Claude still emits CSS <code>background-clip: text</code> instead of inline <code>&lt;svg&gt;&lt;text fill="url(#g)"&gt;</code>. The prompt covers it but Claude doesn't always follow. User has a solution in mind for the next round.</li>
+                    <li><strong>Logo support (user-end implementation)</strong> — next step. The brand-input flow needs a logo upload / URL field so user logos surface in decks. Decision: how the logo reaches Claude (manifest field? brand kit object?), where it renders (chrome row, hero, footer), and recolour rules for light/dark slides. Design + UX scoped to the user; engineering hooks land after that.</li>
                     <li><strong>Same-colour-as-background</strong> — Claude occasionally picks a text/shape colour that matches its container. The prompt has concrete forbidden combinations; Claude still slips occasionally. Hard to safely enforce in code (would need theme-aware contrast compositor).</li>
+                </ul>
+
+                <h3>What shipped this round (2026-05-15)</h3>
+                <ul>
+                    <li><strong>Gradient text — fully handled in code, no prompt constraints.</strong> Sentinel-hex bridge in <code>lib/export/gradient-text.ts</code> + PASS 4 in <code>bidi-postprocess.ts</code> turns any CSS <code>background-clip: text</code> + linear/radial gradient into a real PowerPoint gradient on the text run. Multi-stop, explicit percentages, multi-layer backgrounds, radial — all caught; conic / repeating-gradient are skipped gracefully. The "must use SVG <code>&lt;text fill="url(#g)"&gt;</code>" rule was removed from the system prompt — Claude can now author gradient text any way that works in the browser.</li>
                 </ul>
 
                 <h3>Spike — kept as regression harness</h3>

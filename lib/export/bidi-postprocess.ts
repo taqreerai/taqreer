@@ -24,6 +24,7 @@
 // set on the second pass.
 
 import type JSZipType from "jszip";
+import type { GradientIntents } from "./gradient-text";
 
 const STRONG_RTL =
   /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﷿ﹰ-﻿]/;
@@ -93,9 +94,55 @@ export type BiDiPostprocessStats = {
   langsRetagged: number;
   ltrParagraphsForced: number;
   shapesWidened: number;
+  gradientFillsApplied: number;
 };
 
-function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
+/**
+ * Build an <a:gradFill> XML string from a GradientSpec.
+ *
+ * Common parts:
+ *   - Stops are sorted by position. PowerPoint tolerates unordered gsLst,
+ *     Keynote does not.
+ *   - `rotWithShape="1"` so the gradient rotates with the parent shape.
+ *
+ * Linear gradients add <a:lin ang="..." scaled="1"/>, where `scaled="1"`
+ * means the angle scales with the shape's aspect ratio (45° still reads
+ * as 45° regardless of how narrow the word is).
+ *
+ * Radial gradients add <a:path path="circle"><a:fillToRect ...></a:path>.
+ * fillToRect is the focus rectangle in 1000ths of a percent: collapsing
+ * it to a single center point (l=t=r=b=50000) gives a center-radiating
+ * gradient.
+ */
+function buildGradFillXml(spec: {
+  kind: "linear" | "radial";
+  angle?: number;
+  stops: Array<{ pos: number; hex: string }>;
+}): string {
+  const stops = [...spec.stops].sort((a, b) => a.pos - b.pos);
+  const gsLst = stops
+    .map(
+      (s) =>
+        `<a:gs pos="${s.pos}"><a:srgbClr val="${s.hex}"/></a:gs>`
+    )
+    .join("");
+  const shadeXml =
+    spec.kind === "radial"
+      ? `<a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path>`
+      : `<a:lin ang="${spec.angle ?? 0}" scaled="1"/>`;
+  return (
+    `<a:gradFill rotWithShape="1">` +
+    `<a:gsLst>${gsLst}</a:gsLst>` +
+    shadeXml +
+    `</a:gradFill>`
+  );
+}
+
+function injectBiDiMarkers(
+  xml: string,
+  stats: BiDiPostprocessStats,
+  gradientIntents?: GradientIntents
+): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, "application/xml");
 
@@ -450,13 +497,76 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     }
   }
 
+  // PASS 4: gradient-text sentinel swap.
+  //
+  // gradient-text.ts replaced each gradient-text element with a sentinel
+  // solid color (#FE00xx range). dom-to-pptx + PptxGenJS emit that as
+  //   <a:rPr ...><a:solidFill><a:srgbClr val="FExxxx"/></a:solidFill></a:rPr>
+  // (or sometimes with the solidFill omitted and color on rPr via
+  // <a:srgbClr> direct child — both shapes occur depending on context).
+  //
+  // For every rPr whose color matches a known sentinel, we drop the
+  // existing fill child(ren) and insert the real <a:gradFill> built from
+  // the recipe. We do this AFTER PASS 2's run-merge, so identical
+  // sentinels in adjacent runs have already collapsed into one run.
+  if (gradientIntents && gradientIntents.size > 0) {
+    const rPrs = doc.getElementsByTagNameNS(NS_A, "rPr");
+    for (let i = 0; i < rPrs.length; i++) {
+      const rPr = rPrs[i];
+
+      // Find the run's color: either inside a <a:solidFill><a:srgbClr/> or
+      // a direct <a:srgbClr/> child. We accept both shapes defensively.
+      let colorHex: string | null = null;
+      let fillToRemove: Element | null = null;
+      const solidFills = rPr.getElementsByTagNameNS(NS_A, "solidFill");
+      if (solidFills.length > 0) {
+        const sf = solidFills[0];
+        const srgb = sf.getElementsByTagNameNS(NS_A, "srgbClr")[0];
+        if (srgb) {
+          colorHex = (srgb.getAttribute("val") || "").toUpperCase();
+          fillToRemove = sf;
+        }
+      } else {
+        // Direct srgbClr child of rPr (no solidFill wrapper).
+        for (let j = 0; j < rPr.children.length; j++) {
+          const child = rPr.children[j];
+          if (child.namespaceURI === NS_A && child.localName === "srgbClr") {
+            colorHex = (child.getAttribute("val") || "").toUpperCase();
+            fillToRemove = child;
+            break;
+          }
+        }
+      }
+
+      if (!colorHex || !fillToRemove) continue;
+      const spec = gradientIntents.get(colorHex);
+      if (!spec) continue;
+
+      // Parse the gradFill XML and insert in the same position as the
+      // removed fill. (Inserting raw XML via setAttribute won't parse —
+      // we round-trip through a DOMParser to get real nodes.)
+      const fillXml = buildGradFillXml(spec);
+      const wrapper = new DOMParser().parseFromString(
+        `<w xmlns:a="${NS_A}">${fillXml}</w>`,
+        "application/xml"
+      );
+      const gradFillNode = wrapper.getElementsByTagNameNS(NS_A, "gradFill")[0];
+      if (!gradFillNode) continue;
+      const imported = doc.importNode(gradFillNode, true);
+      rPr.insertBefore(imported, fillToRemove);
+      rPr.removeChild(fillToRemove);
+      stats.gradientFillsApplied++;
+    }
+  }
+
   return new XMLSerializer().serializeToString(doc);
 }
 
 export async function fixBiDiInPptxBlob(
   blob: Blob,
   JSZip: typeof JSZipType,
-  stats: BiDiPostprocessStats
+  stats: BiDiPostprocessStats,
+  gradientIntents?: GradientIntents
 ): Promise<Blob> {
   stats.invocations++;
 
@@ -472,7 +582,7 @@ export async function fixBiDiInPptxBlob(
     if (!file) continue;
     stats.slidesScanned++;
     const xml = await file.async("text");
-    const fixed = injectBiDiMarkers(xml, stats);
+    const fixed = injectBiDiMarkers(xml, stats, gradientIntents);
     if (fixed !== xml) {
       stats.slidesFixed++;
       zip.file(path, fixed);
@@ -512,5 +622,6 @@ export function makeStats(): BiDiPostprocessStats {
     langsRetagged: 0,
     ltrParagraphsForced: 0,
     shapesWidened: 0,
+    gradientFillsApplied: 0,
   };
 }

@@ -51,25 +51,12 @@ USE THESE FREELY:
 - Gradient-clipped text: \`background: linear-gradient(...); -webkit-background-clip: text; background-clip: text; color: transparent;\`
 - Solid borders (any thickness, any colour).
 
-ALL DECORATIVE GRAPHICS — AND GRADIENT/STROKED TEXT — MUST BE INLINE <svg>:
+ALL DECORATIVE GRAPHICS MUST BE INLINE <svg>:
 - Decorative shapes (circles, blobs, arcs, ribbons, dividers) → inline <svg> with path/circle/rect/polygon. Set \`fill="var(--primary)"\` etc. so they inherit brand tokens.
 - Background patterns (gridlines, dots, hatching, isometric grids, noise) → inline <svg> covering the slide region. NOT CSS background-image gradients/patterns — those won't survive the export.
 - Icons → inline <svg> paths. **DO NOT** use the Material Icons font, Font Awesome, or any icon-font CSS class — icon fonts don't reliably embed and render as empty boxes or missing glyphs in PowerPoint. For a Material icon: copy its SVG path from material-icons.com and inline it inside a 24-viewBox <svg>; size via CSS width/height.
 - Logos: <img> when the brief provides a URL; inline <svg> when the brand mark is a simple wordmark (so it can be recoloured for contrast).
-- **Conic gradients, radial gradients with alpha, and complex multi-stop colour-to-alpha effects** — do these as inline SVG using \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`; the CSS equivalents don't round-trip.
-- **Gradient-filled text and stroked text MUST be SVG <text>**. CSS \`background-clip: text\` and \`-webkit-text-stroke\` look fine in preview but drop in PowerPoint — gradient text becomes invisible, stroked text fills solid. The SVG pattern:
-  \`\`\`
-  <svg viewBox="0 0 1200 200" style="width:100%">
-    <defs>
-      <linearGradient id="hero-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="var(--primary)"/>
-        <stop offset="100%" stop-color="var(--accent)"/>
-      </linearGradient>
-    </defs>
-    <text x="0" y="160" font-family="Cairo, sans-serif" font-size="180" font-weight="700" fill="url(#hero-grad)">تقرير</text>
-  </svg>
-  \`\`\`
-  This gives you the gradient hero text you want, vector-sharp in PPT.
+- **Radial gradients with alpha and complex multi-stop colour-to-alpha effects** — do these as inline SVG using \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`; the CSS equivalents don't round-trip.
 
 USE ICONS LIBERALLY TO FILL EMPTY SPACE:
 - When a slide section or card has empty vertical/horizontal space, reach for relevant SVG iconography. A grid of feature cards without icons looks underdesigned; the same cards with one icon each per card feels finished.

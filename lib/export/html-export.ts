@@ -10,6 +10,7 @@ import {
   makeStats,
   type BiDiPostprocessStats,
 } from "@/lib/export/bidi-postprocess";
+import { extractGradientIntents } from "@/lib/export/gradient-text";
 
 const STRONG_RTL =
   /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﻿]/;
@@ -295,6 +296,14 @@ export async function exportManifestAsPptx(
       insertScriptTransitionSpaces(slideNode);
     }
 
+    // Walk the offscreen slides for any element using CSS `background-clip:
+    // text` + linear/radial gradient. Each match is mutated in-place to a
+    // solid sentinel hex (#FExxxx), and the recipe is stashed in `intents`.
+    // dom-to-pptx then emits a normal solidFill on that run with the sentinel
+    // colour; PASS 4 of fixBiDiInPptxBlob swaps the solidFill for a real
+    // <a:gradFill> built from the recipe.
+    const intents = extractGradientIntents(slideNodes);
+
     // Diagnostic — log to console so the user can compare against PPT output.
     if (typeof console !== "undefined") {
       const firstRect = slideNodes[0].getBoundingClientRect();
@@ -327,8 +336,13 @@ export async function exportManifestAsPptx(
     }
 
     const stats = makeStats();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fixedBlob = await fixBiDiInPptxBlob(rawBlob, JSZip as any, stats);
+    const fixedBlob = await fixBiDiInPptxBlob(
+      rawBlob,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      JSZip as any,
+      stats,
+      intents
+    );
 
     downloadBlob(fixedBlob, fileName);
 
