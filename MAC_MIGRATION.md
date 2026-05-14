@@ -180,6 +180,11 @@ docker compose up -d                # starts postgres + redis detached
 docker ps                           # confirm both containers are Up
 
 # first run only — apply the Prisma migrations to the empty DB
+# preflight: refuse to migrate against anything other than localhost,
+# in case .env.local was copied from another machine and DATABASE_URL
+# still points at a remote / shared DB.
+grep -E '^DATABASE_URL=' .env.local | grep -qE '@(localhost|127\.0\.0\.1):5432/' \
+  || { echo "Refusing migration: DATABASE_URL in .env.local is not local"; exit 1; }
 npx prisma migrate deploy
 ```
 

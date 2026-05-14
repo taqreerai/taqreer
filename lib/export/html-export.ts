@@ -319,15 +319,15 @@ export async function exportManifestAsPptx(
     const JSZip =
       (JSZipImport as { default?: unknown }).default ?? JSZipImport;
 
-    const rawBlob = (await exportToPptx(slideNodes, {
+    // svgAsVector keeps inline <svg> as native OOXML vectors (editable in
+    // PowerPoint, recolourable, infinite zoom). Without it, dom-to-pptx
+    // rasterises every SVG to a PNG — Material icons and decorative shapes
+    // end up tiny / pixelated / missing depending on viewBox.
+    const rawBlob = await exportToPptx(slideNodes, {
       fileName,
       skipDownload: true,
-      // Keep inline <svg> as native OOXML vectors (editable in PowerPoint,
-      // recolourable, infinite zoom). Without this, dom-to-pptx rasterises
-      // every SVG to a PNG, including Material icons and decorative shapes —
-      // they end up tiny / pixelated / missing depending on viewBox.
       svgAsVector: true,
-    } as unknown as { fileName: string })) as unknown as Blob;
+    } as const);
 
     if (!(rawBlob instanceof Blob)) {
       throw new Error(
