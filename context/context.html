@@ -1998,6 +1998,51 @@ wsl coderabbit review --base origin/main --agent</code></pre>
                 <p>All work lives on <code>origin/html-pivot</code>. <code>origin/dev</code> still produces decks via the old PptxGenJS pipeline as a safety net. Cutover via <code>EXPORT_PIPELINE=html</code> flag is the planned path; the old pipeline can be deleted in a follow-up once html-pivot has shipped real decks.</p>
             </section>
 
+            <section id="htmltoppt-project">
+                <h2>21. HTMLtoPPT Project — patch index</h2>
+                <p class="lead">
+                    Single source of truth for every code-level enhancement that makes the HTML&nbsp;→&nbsp;PPT pipeline work. §20 has the full prose; this section is the compact ledger — what we patched, where it lives, and what it solves. Anything we add to the pipeline in future iterations should land here too.
+                </p>
+
+                <h3>A. <code>dom-to-pptx</code> library patches — <code>patches/dom-to-pptx+1.1.8.patch</code> (auto-applied via <code>postinstall</code>)</h3>
+                <ol>
+                    <li><strong>Direction-aware <code>text-align</code> mapping</strong> — <code>dist/dom-to-pptx.mjs</code> ≈L307 + ≈L2545. Upstream maps <code>text-align: start</code> and unset to OOXML <code>algn="l"</code> regardless of <code>style.direction</code>. Patched to read <code>direction</code> and route <code>start</code>/<code>end</code>/unset to the correct value (<code>algn=r</code> for RTL, <code>algn=l</code> for LTR). Two emission sites; both must stay patched together.</li>
+                    <li><strong><code>taqreer_hasUniformScript</code> in <code>isTextContainer</code></strong> — ≈L720-725. Helper that returns <code>false</code> when a container's element children mix scripts (Arabic + Latin). Lets the walker recurse into mixed-script flex/grid rows instead of collapsing them into one PowerPoint text frame.</li>
+                    <li><strong><code>isSafeInline</code> excludes bordered / rounded elements</strong> — ≈L795. Upstream inlined small text-like elements into the parent text frame when "safe", which collapsed pills / chips / badges (border or visible-bg + border-radius) into bare inline text and dropped their styling. Patched to return <code>false</code> for those cases — each becomes its own PowerPoint shape with its border / fill / radius intact.</li>
+                    <li><strong>CSS padding emitted as PptxGenJS <code>margin</code></strong> — ≈L2646 (bg-image / gradient / softEdge branch) + ≈L2771 (bgColor / border / textPayload branch). Upstream stuffed the computed padding into <code>inset:</code> while hardcoding <code>margin: 0</code>; PptxGenJS only honours <code>margin</code>, so all CSS padding was silently dropped (<code>&lt;a:bodyPr lIns=tIns=rIns=bIns=0/&gt;</code>). Patched to convert <code>textPayload.inset</code> (inches) to a 4-tuple of points and pass as <code>margin: _paddingPt</code>. Two emission sites; both must stay patched together.</li>
+                </ol>
+                <p><em>Total: 7 <code>Patched (taqreer)</code> markers in the patch file, all auto-reapplied on <code>npm install</code>. Table-cell emission (~L325) was already correct upstream — no patch needed there.</em></p>
+
+                <h3>B. OOXML BiDi + gradient post-processor — <code>lib/export/bidi-postprocess.ts</code></h3>
+                <ol start="5">
+                    <li><strong>PASS 1 — <code>&lt;a:bodyPr rtlCol="1"&gt;</code> flip.</strong> PptxGenJS emits <code>rtlCol="0"</code> by default; PowerPoint treats it as a hard LTR-column hint that overrides paragraph-level <code>rtl="1"</code>. We flip every <code>txBody</code> whose paragraphs contain strong-RTL text. This was the missing piece that kept slide 4 broken in the spike even after pPr fixes were correct.</li>
+                    <li><strong>PASS 2 — paragraph-level RTL + smart run-merge + lang retag.</strong> For each paragraph: set <code>&lt;a:pPr rtl="1" algn="r"&gt;</code> when missing; merge adjacent <code>&lt;a:r&gt;</code> runs sharing an <code>rPr</code> signature (excluding <code>lang</code>) so PowerPoint can apply UAX-9 across script-split runs (eliminates the "%12 خلال" jumble); retag every surviving run + <code>endParaRPr</code> <code>lang</code> to <code>"ar-SA"</code>. LTR-content paragraphs inside an RTL <code>txBody</code> get explicit <code>rtl="0"</code> + default <code>algn="r"</code> so English titles in Arabic decks read LTR but stay right-anchored.</li>
+                    <li><strong>PASS 3 — direction-aware shape extension.</strong> Short (≤80 chars) text shapes under 3 M EMU wide grow <code>cx</code> by 10% on the side OPPOSITE the text anchor; clamped to slide bounds. Absorbs PowerPoint's slightly-wider glyph metrics so single-line text doesn't wrap. Anchored side never moves → Claude's slide margins are preserved.</li>
+                    <li><strong>PASS 4 — gradient-text sentinel swap.</strong> For every <code>&lt;a:rPr&gt;</code> whose <code>&lt;a:srgbClr val="FExxxx"/&gt;</code> matches a sentinel allocated by <code>extractGradientIntents</code>, drop the <code>&lt;a:solidFill&gt;</code> and insert a real <code>&lt;a:gradFill&gt;</code> built from the recipe (linear → <code>&lt;a:lin&gt;</code>; radial → <code>&lt;a:path path="circle"&gt;</code> + center-degenerate <code>fillToRect</code>).</li>
+                </ol>
+
+                <h3>C. DOM preprocess + gradient extractor — <code>lib/export/html-export.ts</code> + <code>lib/export/gradient-text.ts</code></h3>
+                <ol start="9">
+                    <li><strong><code>splitMixedScriptFlexChildren</code></strong> (<code>html-export.ts</code>). Wrap direct text nodes in a <code>&lt;span&gt;</code> when the parent is a flex/grid container with mixed-script siblings, OR when an element child has explicit <code>dir</code>. Lets the patched <code>isTextContainer</code> see non-uniform script element children and recurse → one shape per child at its measured position.</li>
+                    <li><strong><code>stripArabicLetterSpacing</code></strong> (<code>html-export.ts</code>). Kill inherited <code>letter-spacing</code> on any element directly bearing Arabic text. CSS <code>letter-spacing</code> breaks Arabic contextual shaping (the connecting glyphs decouple).</li>
+                    <li><strong><code>insertScriptTransitionSpaces</code></strong> (<code>html-export.ts</code>). Insert a space at every Arabic↔Latin / Arabic↔digit adjacency inside text nodes so PowerPoint's BiDi resolver doesn't glue them into the wrong script run.</li>
+                    <li><strong><code>extractGradientIntents</code> + sentinel-hex bridge</strong> (<code>gradient-text.ts</code>). Walk the offscreen DOM, find every element using <code>background-clip: text</code> + linear/radial gradient, replace its CSS with a unique sentinel hex (<code>#FExxxx</code>), stash the recipe in a <code>Map</code>. PASS 4 then swaps each sentinel <code>solidFill</code> for the real <code>gradFill</code>. Multi-stop, explicit percentages, multi-layer backgrounds, radial — all covered; conic + repeating-* skip cleanly. <code>parseColorToHex</code> front-gates on <code>CSS.supports('color', input)</code> so non-color keywords like <code>circle</code> can't slip through canvas <code>fillStyle</code>'s "keep previous on invalid" behaviour. Per-element sentinels (no recipe dedup) keep separate gradient elements as separate runs so PASS 2's run-merge doesn't collapse them.</li>
+                </ol>
+
+                <h3>D. SlideRenderer — <code>components/slides/SlideRenderer.tsx</code></h3>
+                <ol start="13">
+                    <li><strong>DOMPurify graceful fallback.</strong> <code>dompurify@3.4.3</code>'s <code>createDOMPurify()</code> returns a factory without <code>.sanitize</code> when <code>window</code> is missing at module load (Turbopack SSR pass), and Turbopack appears to share that SSR singleton with the client bundle. Renderer tries <code>DOMPurify.sanitize</code> and falls back to raw HTML when it's unavailable. <strong>Pre-launch TODO:</strong> reintroduce server-side sanitization in <code>inngest/functions/deck-generate.ts</code> before sharing / templates ship.</li>
+                </ol>
+
+                <h3>Caveats and known limits worth tracking</h3>
+                <ul>
+                    <li><strong>Run-level <code>gradFill</code> bounds to the parent shape, not the run.</strong> Two inline gradient spans inside the same flex/grid container will read as one continuous gradient stretched across the shape — this is an OOXML semantic limit, not a bug we can fix in the post-processor. Author each gradient text element as its own block-level node to get independent per-element fills.</li>
+                    <li><strong>Run-merge collapses per-run formatting in RTL paragraphs.</strong> PASS 2's smart-merge keeps the first run's <code>rPr</code> when collapsing script-split runs. Acceptable today (uniform-style paragraphs); needs a "merge by compatible <code>rPr</code>" pass when inline-styled spans inside one paragraph become a real use case.</li>
+                    <li><strong>Alpha in gradient stops is dropped.</strong> Our <code>parseColorToHex</code> ignores alpha channels — colour-to-alpha gradients (e.g. <code>radial-gradient(rgba(0,0,0,0), rgba(0,0,0,0.5))</code>) round-trip as opaque. Keep the prompt rule that pushes those to inline SVG with <code>stop-opacity</code>.</li>
+                    <li><strong>Conic and repeating gradients are skipped, not rendered.</strong> The extractor returns <code>null</code> for them; dom-to-pptx falls back to whatever it does for unrecognised CSS (usually a flat colour). Prompt rule already forbids them.</li>
+                </ul>
+            </section>
+
             <section id="mac-migration">
                 <h2>19. Mac Migration</h2>
                 <p class="lead">
