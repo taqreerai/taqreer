@@ -90,9 +90,24 @@ TYPOGRAPHY
 - Text containers need GENEROUS height — PowerPoint's font metrics differ slightly from the browser's, and a container that snug-fits text in preview will visibly overflow in PPT. Budget \`line-height × 1.3\` (or +12-20% on container height) above what looks tight in the browser. If you can, use \`padding\` on text containers rather than fixed heights, so the box grows naturally.
 
 SLIDE-LEVEL MARGINS — every element respects the same inner margin
-- Pick a slide-edge margin (typical: 80–120 px) on slide 1 and reuse it on EVERY slide. Cards, headlines, body paragraphs, lists, chrome — nothing touches the slide edge, everything sits inside the margin.
-- When a card or container hosts text, the card itself respects the slide margin, AND the text inside the card respects the card's own padding (typical: 24–48 px inside cards). Two layers of margin: slide-margin → card → card-padding → text.
-- Don't let one element (a big background panel, a section divider, a hero shape) ignore the slide margin while neighbouring elements respect it. Inconsistent edges read as a layout bug.
+Pick a slide-edge margin (typical: 80–120 px) on slide 1 and reuse it identically on EVERY slide. **Use this two-layer pattern**: a full-bleed background layer for things that can touch the slide edge (gradient backgrounds, decorative blobs, hero shapes), and a content layer at fixed inset that hosts EVERY content element (cards, headlines, body, lists, chrome breadcrumbs, pagination).
+\`\`\`
+<div class="slide" dir="rtl" style="position:relative; width:1920px; height:1080px; background:var(--brand-bg); overflow:hidden;">
+  <!-- Background layer: can extend to slide edges -->
+  <div style="position:absolute; inset:0; pointer-events:none;">
+    <svg width="100%" height="100%" viewBox="0 0 1920 1080" preserveAspectRatio="none">
+      <circle cx="1700" cy="200" r="400" fill="var(--primary)" opacity="0.15"/>
+    </svg>
+  </div>
+  <!-- Content layer: every text/card/element lives INSIDE this -->
+  <div style="position:absolute; inset:96px;">
+    <!-- chrome, headline, body, cards, etc. — all positioned relative to this layer -->
+  </div>
+</div>
+\`\`\`
+- Once you've set \`inset:96px\` (or whatever value), nothing in the content layer is allowed to extend past it. A card with \`width:100%\` inside this layer is 1728 px wide and sits 96 px from the slide edge on all sides — DON'T let cards/sections set \`position:absolute; left:0; right:0\` directly on the slide root, that bypasses the margin.
+- When a card hosts text, the card's own padding (24–48 px) creates a second layer inside it: slide-margin → card → card-padding → text. Three nested edges, all consistent.
+- Inconsistent right/left edges between slides read as a layout bug. Reuse the SAME inset value across every slide.
 
 COLOUR CONTRAST — every text and decorative element must be readable against what's behind it
 - Before placing a text element, check its \`color\` against the slide's \`--brand-bg\` (or the local background — a coloured card has its own background). The pair must hit a clear contrast (think WCAG-ish — light text on dark, dark text on light, never near-equal lightness).
@@ -102,7 +117,13 @@ COLOUR CONTRAST — every text and decorative element must be readable against w
 LAYOUT GOTCHAS (avoid these specific failure modes)
 - Single-line text containers (badges, breadcrumbs, headlines, chip labels, section labels) MUST use \`width: max-content\` or padding-based sizing, NEVER fixed pixel widths. PowerPoint's glyph widths are slightly wider than the browser's renderer for most fonts, so a snug-fitting fixed-width container that holds one line in preview will wrap to two lines in PPT. If you need the container to be visually wider for design reasons, use \`padding-inline\` on a \`width: max-content\` container — the text never wraps, the container grows.
 - Single-line text that is positioned inside a parent with a constrained width (e.g. a card column) needs \`white-space: nowrap\` on the text element. Otherwise the same browser-vs-PowerPoint glyph-width drift causes it to wrap.
-- For tags / badges / pills with centred text: set \`text-align: center\` AND symmetric padding. Don't rely on one-sided padding to fake centring — the visual width shifts in PowerPoint and the text drifts.
+- For tags / badges / pills / chips with centred text, ALWAYS set BOTH \`text-align: center\` on the element AND symmetric horizontal padding. Don't rely on flex \`justify-content: center\` to centre text — the export treats each pill as its own PowerPoint shape, and PowerPoint reads the paragraph's text-align, not the flex container's. The exact pattern:
+\`\`\`
+<span style="display:inline-block; padding:8px 20px; border:1px solid var(--primary); border-radius:9999px; text-align:center; font-size:18px;">
+  Riyadh
+</span>
+\`\`\`
+Without \`text-align:center\` on the pill itself, the text comes out left-aligned in PPT even though it looks centred in the browser.
 - When you need an element on a specific visual side regardless of direction (e.g. card numbers always on the LEFT of card text, even in an RTL deck), use absolute positioning with explicit \`left:\` / \`right:\` values rather than relying on flex-direction inversion. Flex containers inherit \`direction\` and flip the row axis silently.
 - Headline + body in the same container: give the headline an explicit \`margin-bottom\` (or use grid \`gap\`). PowerPoint's line metrics differ slightly from the browser's; a tight stack with no margin will overlap.
 - **Visually-distinct text pieces need INDEPENDENT absolutely-positioned elements** — at every level: cards, rows, columns, badges, chrome, everything. The export walks flex/grid containers as ONE text-bearing block and concatenates every child into a single PowerPoint text frame. The visual separation you set up with \`justify-content: space-between\` or column layouts is lost — the pieces end up stacked or trailing each other on the same line. This applies to:
