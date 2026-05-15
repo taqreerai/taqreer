@@ -23,6 +23,43 @@ async function signBrandAssetUrl(path: string): Promise<string | null> {
   return data?.signedUrl ?? null;
 }
 
+// Fetch the logo SVG content via the admin storage client (bucket is private)
+// and return sanitised markup. Sanitisation here is a defence-in-depth pass —
+// the upload route already restricts the brand-assets/logos folder to SVG, but
+// a malformed / hostile file could carry <script>, event handlers, or
+// `javascript:` URIs that would survive the static .pptx export. We strip the
+// known dangerous patterns before the markup ever reaches Claude or the
+// renderer.
+//
+// Returns null on any failure (file missing, fetch failure, non-SVG content,
+// parse error). The caller falls back to the URL-only logo block in that case.
+async function readLogoSvgMarkup(path: string): Promise<string | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+  try {
+    const admin = createSupabaseAdminClient(url, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await admin.storage
+      .from("brand-assets")
+      .download(path);
+    if (error || !data) return null;
+    const text = await data.text();
+    if (!text.includes("<svg")) return null;
+    // Sanitise — strip script tags, event handlers, javascript: URIs.
+    // Not a full SVG sanitiser; pre-launch we'd swap in `sanitize-html`
+    // or `dompurify` with jsdom. For dev / single-user this is adequate.
+    return text
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+      .replace(/javascript:/gi, "");
+  } catch {
+    return null;
+  }
+}
+
 type CreateProjectPayload = {
   type?: "create" | "enhance";
   content?: {
@@ -134,7 +171,18 @@ export async function POST(request: Request) {
     const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
     const bodyFontUrl = incomingFonts?.body?.storageUrl || null;
     const logoPath = payload.brand?.logo?.storageUrl ?? null;
-    const logoSignedUrl = logoPath ? await signBrandAssetUrl(logoPath) : null;
+    // Fetch sign URL + SVG markup in parallel — both hit Supabase Storage so
+    // pipelining saves a round trip. svgMarkup is the Option B addition:
+    // Claude inlines the SVG directly per slide and overrides `fill` for
+    // per-slide contrast instead of using <img src="..."> with a runtime
+    // fetch / recolour step. See `inngest/functions/deck-generate.ts` for
+    // how the markup is presented to Claude.
+    const [logoSignedUrl, logoSvgMarkup] = logoPath
+      ? await Promise.all([
+          signBrandAssetUrl(logoPath),
+          readLogoSvgMarkup(logoPath),
+        ])
+      : [null, null];
     const claudeBrand = payload.brand
       ? {
           ...payload.brand,
@@ -146,9 +194,15 @@ export async function POST(request: Request) {
             ? {
                 name: payload.brand.logo.name,
                 storageUrl: payload.brand.logo.storageUrl,
-                // Signed HTTPS URL for the renderer + PPTX export; falls back
-                // to the storage path so the brief is never missing the field.
+                // Signed HTTPS URL — fallback when svgMarkup is missing
+                // (caller renders an <img> instead of inline SVG).
                 url: logoSignedUrl ?? payload.brand.logo.storageUrl,
+                // Inline SVG markup. When present, Claude inlines this
+                // directly per slide and sets `fill="#hex"` on the <svg>
+                // root for per-slide contrast. When null (fetch failed
+                // or non-SVG), buildUserMessage emits the URL-only block
+                // and Claude falls back to <img src="...">.
+                svgMarkup: logoSvgMarkup,
                 position: payload.brand.logo.position ?? "top-right",
                 exclude: payload.brand.logo.exclude ?? [],
               }

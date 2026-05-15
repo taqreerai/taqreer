@@ -15,11 +15,37 @@ import { z } from "zod";
 const HexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3,4}){1,2}$/);
 const Direction = z.enum(["rtl", "ltr"]);
 
+// Allowlist of webfont hosts the renderer + html-document export will
+// actually inject as <link rel="stylesheet">. Any other host is rejected
+// at validation time so the manifest can't claim a font URL the runtime
+// will silently ignore (which would silently downgrade to system fonts
+// in both preview and PPT). Add new providers here AND in the prompt
+// when we extend support.
+const ALLOWED_FONT_HOSTS = new Set([
+  "fonts.googleapis.com",
+  "fonts.gstatic.com",
+]);
+
 const FontDefinition = z.object({
   name: z.string().min(1),
   // System fonts (Arial, Cairo if pre-installed) don't need a webfont URL.
   // The renderer + dom-to-pptx fall back to the system font when absent.
-  url: z.string().url().optional(),
+  url: z
+    .string()
+    .url()
+    .refine(
+      (url) => {
+        try {
+          return ALLOWED_FONT_HOSTS.has(new URL(url).hostname);
+        } catch {
+          return false;
+        }
+      },
+      {
+        message: `font URL host must be one of: ${Array.from(ALLOWED_FONT_HOSTS).join(", ")}`,
+      }
+    )
+    .optional(),
 });
 
 const Theme = z.object({
@@ -44,6 +70,21 @@ const Slide = z.object({
   // CSS vars and the document direction set on the root.
   // <style>, <svg>, <link>, <img> tags are allowed; <script>, event
   // handlers, javascript: URIs are stripped by DOMPurify in the renderer.
+  //
+  // PERMISSIVE BY DESIGN. The schema validates SHAPE (presence + length),
+  // not the markup vocabulary. This is a deliberate trade we made on the
+  // 2026-05-13 HTML pivot — the previous element-JSON schema (per-element
+  // discriminated unions × deep nesting × many enums) hit Anthropic's
+  // "compiled grammar too large" limit AND burned 10 min/deck in
+  // self-healing retries when Claude drifted from the vocabulary. The
+  // browser is now the layout engine; HTML/CSS is enforced at THREE
+  // layers downstream of validation:
+  //   - DOMPurify in `lib/export/sanitize.ts` strips dangerous markup
+  //   - The renderer's own bounding box enforces 1920×1080
+  //   - dom-to-pptx + bidi-postprocess.ts handle export quirks
+  // See `context/context.md` §07 for the full reasoning. If you find
+  // yourself wanting to tighten this with a per-element schema, re-read
+  // §18 first.
   html: z.string().min(1),
 });
 

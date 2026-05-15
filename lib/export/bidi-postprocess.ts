@@ -32,24 +32,47 @@ const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 
 /**
- * 10 % shape extension applied in PASS 3 to absorb PowerPoint's slightly
+ * Shape extension applied in PASS 3 to absorb PowerPoint's slightly
  * wider glyph metrics (vs. browser). The extension is direction-aware:
  * it grows the shape on the side OPPOSITE the text anchor, so the
  * anchored side never moves and Claude's slide margins are preserved.
+ *
+ * Latin glyph drift is ~10 % wider in PowerPoint than the browser; Arabic
+ * (especially Cairo / Tajawal) is closer to ~15 %. We keep two slacks so
+ * Latin shapes don't get over-extended.
  */
-const SHAPE_WIDTH_SLACK = 0.1;
+// Latin slack now matches Arabic at 14 % — the original 10 % under-extended
+// Latin/numeric runs that happen to be set in an Arabic-targeted font (Cairo,
+// Tajawal, etc.). Real example: a "2025" pill set in Cairo wrapped to "202"
+// + "5" because Cairo's digit metrics are wider than the browser measured,
+// and 10 % growth wasn't enough to keep all four digits on one line. The
+// font determines the drift, not the script — so the right value is the
+// font-aware one. We use 14 % across the board until we add proper
+// font-aware detection.
+const SHAPE_WIDTH_SLACK_LATIN = 0.14;
+const SHAPE_WIDTH_SLACK_ARABIC = 0.14;
+// Absolute minimum growth applied to any short single-line shape. Percentage
+// slack alone is useless for tiny pills — a 600 k EMU pill at 14 % grows by
+// ~6 px, which doesn't cover the cumulative per-glyph drift across 3-4 chars.
+// 100 k EMU ≈ 10.5 px ≈ 1.5 char widths at typical pill sizes — enough to
+// keep "الحل" (3 chars) and "2025" (4 chars) on one line. Larger shapes
+// already exceed this floor via the percentage so behaviour there is
+// unchanged.
+const SHAPE_WIDTH_SLACK_MIN_EMU = 100000;
 const MAX_SINGLE_LINE_CHARS = 80;
 const SLIDE_WIDTH_EMU = 9144000;
 /**
- * Cap on which shapes get PASS 3 extension. Shapes wider than this are
- * almost certainly headlines / body / paragraph containers, NOT badges /
- * labels / chips. Extending a wide headline 10 % to the left (RTL) makes
- * its left edge overrun whatever sits beside it (cards, decorative
- * shapes, body columns) — even though the visual right anchor stays put.
- * 3 M EMU ≈ 3.3 in ≈ 33 % of the slide width is the cleanest cutoff:
- * badges and breadcrumbs sit well under it, headlines sit well over it.
+ * Cap on which shapes get PASS 3 extension. Originally set to 3 M EMU
+ * (~33 % slide width) on the assumption only badges / breadcrumbs / chips
+ * needed the bump and "wide" shapes were body containers that handle
+ * wrapping. That left full-width Arabic headlines (50–70 % slide width)
+ * unhelped — they wrap to a second line in PowerPoint because the glyph
+ * drift adds up across a long line. Bumped to 7 M EMU (~76 % slide width)
+ * to cover headlines too. Anything wider than 76 % is genuinely full-bleed
+ * (e.g. a hero quote spanning the slide); no extension needed and the
+ * per-side clamp to slide bounds prevents overrun anyway.
  */
-const PASS3_MAX_CX = 3000000;
+const PASS3_MAX_CX = 7000000;
 
 
 
@@ -384,7 +407,9 @@ function injectBiDiMarkers(
   stats.paragraphsModified += modified;
 
   // PASS 3: direction-aware shape extension. Grow each short single-line
-  // text shape on the side OPPOSITE the text anchor by SHAPE_WIDTH_SLACK.
+  // text shape on the side OPPOSITE the text anchor by SHAPE_WIDTH_SLACK_LATIN
+  // or SHAPE_WIDTH_SLACK_ARABIC depending on whether the shape's text
+  // contains strong-RTL characters (Arabic glyph drift is wider).
   // The anchored side stays fixed (preserving the visual edge Claude
   // designed against the slide margin); the free side extends toward
   // the slide interior, giving the text more room to fit on one line
@@ -409,7 +434,104 @@ function injectBiDiMarkers(
   //     RTL anchored content).
   // This direction-aware version inherits the room-to-grow benefit
   // without moving the anchored edge.
+  //
+  // CONTAINMENT GUARD: dom-to-pptx emits a bordered/backgrounded <div>
+  // with text inside as a separate outer rect + inner text shape. The
+  // inner text shape's cx is the card's INTERIOR width — already wider
+  // than the text actually needs. Growing it by 14 % pushes it past the
+  // card's visible boundary. So we pre-collect all "container" shapes
+  // (visible bg or border, rect / roundRect, reasonable card size) and
+  // skip PASS 3 on any text shape strictly enclosed by one. Nested text
+  // doesn't need the slack because its container already provides the
+  // padding budget; growing it would overflow the card.
+  type ContainerBox = { x: number; y: number; cx: number; cy: number };
+  const containers: ContainerBox[] = [];
   const spShapes = doc.getElementsByTagNameNS(NS_P, "sp");
+  for (let i = 0; i < spShapes.length; i++) {
+    const sp = spShapes[i];
+    let spPrEl: Element | null = null;
+    for (let j = 0; j < sp.children.length; j++) {
+      if (sp.children[j].namespaceURI === NS_P && sp.children[j].localName === "spPr") {
+        spPrEl = sp.children[j];
+        break;
+      }
+    }
+    if (!spPrEl) continue;
+    let xfrm: Element | null = null;
+    let prstGeom: Element | null = null;
+    let solidFillEl: Element | null = null;
+    let lnEl: Element | null = null;
+    for (let j = 0; j < spPrEl.children.length; j++) {
+      const c = spPrEl.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "xfrm") xfrm = c;
+      else if (c.localName === "prstGeom") prstGeom = c;
+      else if (c.localName === "solidFill") solidFillEl = c;
+      else if (c.localName === "ln") lnEl = c;
+    }
+    if (!xfrm) continue;
+    let offEl: Element | null = null;
+    let extEl: Element | null = null;
+    for (let j = 0; j < xfrm.children.length; j++) {
+      const c = xfrm.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "off") offEl = c;
+      else if (c.localName === "ext") extEl = c;
+    }
+    if (!extEl) continue;
+    const x = offEl ? parseInt(offEl.getAttribute("x") ?? "0", 10) : 0;
+    const y = offEl ? parseInt(offEl.getAttribute("y") ?? "0", 10) : 0;
+    const cx = parseInt(extEl.getAttribute("cx") ?? "0", 10);
+    const cy = parseInt(extEl.getAttribute("cy") ?? "0", 10);
+    if (!Number.isFinite(cx) || !Number.isFinite(cy) || cx <= 0 || cy <= 0) continue;
+    const prst = prstGeom?.getAttribute("prst") ?? "";
+    const hasFill = !!solidFillEl;
+    const hasBorder = !!lnEl && (lnEl.getAttribute("w") ?? "0") !== "0";
+    const isRectish = prst === "rect" || prst === "roundRect";
+    // Card-like size: not full-bleed (excludes slide background panel) and
+    // big enough to plausibly contain other shapes.
+    const isCardSize =
+      cx > 500000 &&
+      cy > 200000 &&
+      cx <= Math.round(SLIDE_WIDTH_EMU * 0.85) &&
+      cy <= 5_500_000;
+    if (isRectish && (hasFill || hasBorder) && isCardSize) {
+      containers.push({ x, y, cx, cy });
+    }
+  }
+
+  // Find the smallest container (by area) that strictly encloses the
+  // given text-shape bounds. Returns null when no container is found
+  // (i.e. the text shape sits directly on the slide). A small edge
+  // tolerance absorbs tiny rounding differences in shape positioning.
+  const NEST_TOLERANCE = 10000; // ~1 px slack
+  function findSmallestEnclosingContainer(
+    x: number,
+    y: number,
+    cx: number,
+    cy: number
+  ): ContainerBox | null {
+    let best: ContainerBox | null = null;
+    let bestArea = Infinity;
+    for (const c of containers) {
+      // Skip the shape that IS this exact container (same bounds).
+      if (c.x === x && c.y === y && c.cx === cx && c.cy === cy) continue;
+      if (
+        c.x - NEST_TOLERANCE <= x &&
+        c.x + c.cx + NEST_TOLERANCE >= x + cx &&
+        c.y - NEST_TOLERANCE <= y &&
+        c.y + c.cy + NEST_TOLERANCE >= y + cy
+      ) {
+        const area = c.cx * c.cy;
+        if (area < bestArea) {
+          bestArea = area;
+          best = c;
+        }
+      }
+    }
+    return best;
+  }
+
   for (let i = 0; i < spShapes.length; i++) {
     const sp = spShapes[i];
 
@@ -422,13 +544,36 @@ function injectBiDiMarkers(
     }
     if (!spPr || !txBody) continue;
 
+    // Single-line guard. PowerPoint represents line breaks two ways:
+    //   (a) <a:br/> inside one <a:p>  — soft break, single paragraph
+    //   (b) multiple non-empty <a:p>  — separate paragraphs (most common
+    //       for two-line badges / stacked labels). Without checking (b),
+    //       a two-line badge sails through the (a) check and gets widened
+    //       on the assumption it's single-line — visibly off-margin.
     if (txBody.getElementsByTagNameNS(NS_A, "br").length > 0) continue;
+    const pNodes = txBody.getElementsByTagNameNS(NS_A, "p");
+    let nonEmptyParagraphs = 0;
+    for (let j = 0; j < pNodes.length; j++) {
+      if ((pNodes[j].textContent ?? "").trim().length > 0) {
+        nonEmptyParagraphs++;
+        if (nonEmptyParagraphs > 1) break;
+      }
+    }
+    if (nonEmptyParagraphs > 1) continue;
     const tNodes = txBody.getElementsByTagNameNS(NS_A, "t");
     let totalChars = 0;
+    let shapeText = "";
     for (let j = 0; j < tNodes.length; j++) {
-      totalChars += (tNodes[j].textContent ?? "").length;
+      const txt = tNodes[j].textContent ?? "";
+      totalChars += txt.length;
+      shapeText += txt;
     }
     if (totalChars === 0 || totalChars > MAX_SINGLE_LINE_CHARS) continue;
+    // Per-shape slack — Arabic glyph drift is wider than Latin, so
+    // Arabic-bearing single-line shapes need ~15% extension instead of ~10%.
+    const slack = STRONG_RTL.test(shapeText)
+      ? SHAPE_WIDTH_SLACK_ARABIC
+      : SHAPE_WIDTH_SLACK_LATIN;
 
     let xfrm: Element | null = null;
     for (let j = 0; j < spPr.children.length; j++) {
@@ -457,6 +602,24 @@ function injectBiDiMarkers(
     // neighbouring cards and cause visible overlap. See PASS3_MAX_CX.
     if (oldCx > PASS3_MAX_CX) continue;
     const oldX = off ? parseInt(off.getAttribute("x") ?? "0", 10) : 0;
+    const oldY = off ? parseInt(off.getAttribute("y") ?? "0", 10) : 0;
+    const oldCy = parseInt(ext.getAttribute("cy") ?? "0", 10);
+
+    // Containment-aware clamp: if this text shape is enclosed by a
+    // container (card with visible bg/border), the growth on each side
+    // is capped at the gap between the text shape's edge and the
+    // container's interior edge — i.e. the CSS padding of the card on
+    // that side. Reaching that limit means the shape grew right up to
+    // the visible border without overshooting it. Without this, PASS 3
+    // would widen a text shape that already fills a card's interior past
+    // the card's bounds (the "Create a 10-slide investor deck..." case).
+    // For top-level text (no container), the limit collapses to the
+    // slide bounds — preserving the original behaviour.
+    const enclosing = findSmallestEnclosingContainer(oldX, oldY, oldCx, oldCy);
+    const leftLimit = enclosing ? enclosing.x : 0;
+    const rightLimit = enclosing ? enclosing.x + enclosing.cx : SLIDE_WIDTH_EMU;
+    const availableLeft = Math.max(0, oldX - leftLimit);
+    const availableRight = Math.max(0, rightLimit - (oldX + oldCx));
 
     // Detect alignment from the first paragraph in the shape.
     const firstP = txBody.getElementsByTagNameNS(NS_A, "p")[0];
@@ -465,27 +628,29 @@ function injectBiDiMarkers(
       : null;
     const algn = firstPPr ? firstPPr.getAttribute("algn") : null;
 
-    const desiredGrowth = Math.round(oldCx * SHAPE_WIDTH_SLACK);
+    const desiredGrowth = Math.max(
+      Math.round(oldCx * slack),
+      SHAPE_WIDTH_SLACK_MIN_EMU
+    );
     let newOffX = oldX;
     let newCx = oldCx;
 
     if (algn === "r") {
-      // Anchored right; grow LEFT toward slide left edge (clamped to 0).
-      newOffX = Math.max(0, oldX - desiredGrowth);
-      newCx = oldCx + (oldX - newOffX);
+      // Anchored right; grow LEFT toward containing edge (clamped).
+      const leftGrowth = Math.min(desiredGrowth, availableLeft);
+      newOffX = oldX - leftGrowth;
+      newCx = oldCx + leftGrowth;
     } else if (algn === "ctr" || algn === "just") {
-      // Centered; grow both sides equally, each clamped to slide bound.
+      // Centered; grow both sides equally up to each side's room.
       const halfGrowth = Math.round(desiredGrowth / 2);
-      newOffX = Math.max(0, oldX - halfGrowth);
-      const leftActualGrowth = oldX - newOffX;
-      const rightAvailable = SLIDE_WIDTH_EMU - (oldX + oldCx);
-      const rightGrowth = Math.max(0, Math.min(halfGrowth, rightAvailable));
-      newCx = oldCx + leftActualGrowth + rightGrowth;
+      const leftGrowth = Math.min(halfGrowth, availableLeft);
+      const rightGrowth = Math.min(halfGrowth, availableRight);
+      newOffX = oldX - leftGrowth;
+      newCx = oldCx + leftGrowth + rightGrowth;
     } else {
-      // Anchored left (algn=l, start, or unset); grow RIGHT toward slide
-      // right edge (clamped to SLIDE_WIDTH_EMU).
-      const rightAvailable = SLIDE_WIDTH_EMU - (oldX + oldCx);
-      newCx = oldCx + Math.max(0, Math.min(desiredGrowth, rightAvailable));
+      // Anchored left (algn=l, start, or unset); grow RIGHT.
+      const rightGrowth = Math.min(desiredGrowth, availableRight);
+      newCx = oldCx + rightGrowth;
     }
 
     if (newCx !== oldCx) {

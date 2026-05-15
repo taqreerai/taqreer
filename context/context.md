@@ -50,6 +50,7 @@ User provides content + brand assets. Claude generates every slide as a string o
 | **2. Enhance (تحسين)** | Upload an existing PPT. Claude extracts the original theme/palette/fonts and redesigns the layout while preserving brand identity. |
 | **3. Mimic (محاكاة)** | Upload your content + a reference deck whose style you admire. Claude rebuilds your content in the reference style. Iterative review loop. |
 | **4. From Template (إنشاء من قالب)** | Pick a template, add content. The template supplies the design system; Claude maps your content into it. |
+| **5. From Data (إنشاء من بيانات)** | Upload an Excel/CSV, pick brand. Claude reads the file directly and composes a data-presentation deck (charts as inline SVG, KPI cards, comparisons). No server-side parsing, no sheet editor — auto-pilot. ⏳ Standby — un-stubs after Flow 2 (Enhance) ships. |
 
 > **Core product rule:** every journey ends inside the Preview Window. Preview is review-only — browse slides, regenerate, export to PPTX/PDF, save as a template. No manual editor; visual changes go through Claude.
 
@@ -83,6 +84,19 @@ Dashboard tile 3 → `/mimic`. Two uploads + iterative review. ⏳ entire flow p
 ### Flow 4 — From Template (إنشاء من قالب)
 
 Dashboard tile 4 → `/templates`. 🟡 templates page is a shell; `/templates/[id]/content` not built.
+
+### Flow 5 — From Data (إنشاء من بيانات) — auto-pilot
+
+Dashboard tile 5 → `/datasheet`. ⏳ scaffolded as "قريباً" stub. Un-stubs after Flow 2 ships.
+
+**MVP shape (per 2026-05-15 product call):**
+
+1. **Upload** — `.xlsx` / `.xls` / `.csv` to Supabase Storage (same path as Flow 1's content step).
+2. **Brand** — same wizard as Flow 1, OR pick a saved BrandKit.
+3. **Generate** — fires `deck.generate.requested` with `type: "data"` and the file attached. Claude reads the file directly (Anthropic Files API or attachment); no server-side parser.
+4. **Render** — same `/preview/[projectId]`. Claude composes data slides with inline `<svg>` charts (round-trip to OOXML vectors via `svgAsVector: true`). No sheet editor; the deck is the deliverable.
+
+**Pieces still to build when un-stubbed:** XLSX → Anthropic file-upload glue in `/api/projects` route, `type: "data"` branch in `inngest/functions/deck-generate.ts`, "DATA DECK MODE" prompt section telling Claude how to compose data slides + emit SVG charts.
 
 ---
 
@@ -202,6 +216,9 @@ app/
 
   mimic/                                Flow 3 — محاكاة
     content, reference, review          ⏳  entire flow
+
+  datasheet/                            Flow 5 — إنشاء من بيانات
+    page.tsx                            ⏳  stub only ("قريباً") — un-stubs after Flow 2
 
   spike/page.tsx                        ✅  BiDi regression harness — don't delete
 ```
@@ -444,8 +461,9 @@ Status as of 2026-05-15.
 | 6 | **Templates Library + Flow 4** — `/templates` grid + filters, "Create from this template" CTA → `/templates/[id]/content` | ⏳ pending |
 | 7 | **Enhance Flow** — upload page shipped; review page needs Claude vision extraction + per-asset overrides | 🟡 partial |
 | 8 | **Mimic Flow** — content + reference upload, iterative review | ⏳ pending |
-| 9 | **Logo support (next step)** — user-end implementation. Brand input flow needs logo upload / URL field, decisions on where it renders + recolour rules | ⏳ pending |
-| 10 | **Billing + quotas enforcement** — Stripe webhooks → Subscription rows → quota checks at job creation → quota meter UI | ⏳ pending |
+| 9 | **From Data Flow** — upload Excel/CSV, Claude reads it directly, composes data deck with inline SVG charts. Stub at `/datasheet` is in place; full build kicks off after Phase 7 (Enhance) ships | ⏳ pending (stubbed) |
+| 10 | **Logo support** — Stage 1 ✅ shipped (2026-05-15): SVG-only enforcement on `/create/brand` + server-side at `/api/storage/upload`; prompt updated with logo-color/contrast rule (Claude inspects logo dominant ink, designs background to contrast). Stage 2 ⏳ pending: server-side SVG monochrome detection + `currentColor` rewrite so Claude can recolour monochrome wordmarks per slide via CSS instead of relying on prompt-only handling. | 🟡 partial |
+| 11 | **Billing + quotas enforcement** — Stripe webhooks → Subscription rows → quota checks at job creation → quota meter UI | ⏳ pending |
 
 ---
 

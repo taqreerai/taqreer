@@ -157,6 +157,20 @@ export function DeckView({
   const [fakeIdx, setFakeIdx] = useState(0);
   const [fakeVisible, setFakeVisible] = useState(true);
 
+  // Stuck-detection state. We track when the generating state started and when
+  // progress.currentSlide last advanced. Two thresholds:
+  //   - SLOW (6 min total)              → soft "taking longer than usual" hint
+  //   - STUCK (12 min total OR 3 min    → action banner with a retry button
+  //     since slide last advanced)
+  // `nowTick` increments every 10 s so the derived elapsed / stale times
+  // recompute even when the polling effect doesn't fire (e.g. progress stops
+  // changing). All times are wall-clock ms — `useState(() => Date.now())` so
+  // the initial value isn't `Date.now()` on every re-render.
+  const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
+  const [lastProgressAt, setLastProgressAt] = useState<number | null>(null);
+  const [lastSlideSeen, setLastSlideSeen] = useState(0);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
     : manifest && isCompleted(projectStatus, versionStatus)
@@ -280,6 +294,59 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
+  // Start the generation clock when we first enter `generating`. Don't reset
+  // on subsequent renders — only on the transition INTO generating.
+  // setState-in-effect is intentional: we're deriving a client-only wall-clock
+  // timestamp that can't be computed during render (would re-run each render)
+  // or SSR (no Date.now() parity with the client).
+  useEffect(() => {
+    if (status !== "generating") return;
+    if (genStartedAt !== null) return;
+    const now = Date.now();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setGenStartedAt(now);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLastProgressAt(now);
+  }, [status, genStartedAt]);
+
+  // Advance lastProgressAt whenever the streamed slide number ticks up.
+  // Same reasoning — wall-clock derived from streamed prop changes.
+  useEffect(() => {
+    if (status !== "generating") return;
+    const slide = progress?.currentSlide ?? 0;
+    if (slide > lastSlideSeen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLastSlideSeen(slide);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLastProgressAt(Date.now());
+    }
+  }, [progress, status, lastSlideSeen]);
+
+  // Re-render every 10 s so the elapsed / stale times stay current even when
+  // no other state changes (i.e. when the generation actually IS stuck and
+  // polling brings back identical progress responses).
+  useEffect(() => {
+    if (status !== "generating") return;
+    const id = window.setInterval(() => setNowTick(Date.now()), 10_000);
+    return () => window.clearInterval(id);
+  }, [status]);
+
+  // Stuck thresholds. SLOW just nudges copy; STUCK surfaces a retry CTA.
+  const SLOW_WARN_MS = 6 * 60 * 1000;
+  const STUCK_TOTAL_MS = 12 * 60 * 1000;
+  const STUCK_STALE_MS = 3 * 60 * 1000;
+  const elapsedMs = genStartedAt ? nowTick - genStartedAt : 0;
+  const staleMs = lastProgressAt ? nowTick - lastProgressAt : 0;
+  const isStuck =
+    status === "generating" &&
+    !!genStartedAt &&
+    (elapsedMs > STUCK_TOTAL_MS || staleMs > STUCK_STALE_MS);
+  const isSlow =
+    status === "generating" &&
+    !!genStartedAt &&
+    !isStuck &&
+    elapsedMs > SLOW_WARN_MS;
+
   const handleRetry = useCallback(async () => {
     setRetrying(true);
     setRetryError("");
@@ -303,9 +370,13 @@ export function DeckView({
 
   const fontLinks = useMemo(() => {
     if (!manifest) return [] as string[];
+    // Schema validates the host allowlist (lib/schema/slide.ts —
+    // ALLOWED_FONT_HOSTS), so any URL we see here has already passed that
+    // check. Just dedupe and emit; matches html-document.ts's behaviour for
+    // preview ↔ exported-HTML parity.
     return [manifest.theme.fontHeading.url, manifest.theme.fontBody.url].filter(
       (url, idx, all): url is string =>
-        !!url && url.includes("fonts.googleapis.com") && all.indexOf(url) === idx,
+        typeof url === "string" && all.indexOf(url) === idx,
     );
   }, [manifest]);
 
@@ -380,6 +451,45 @@ export function DeckView({
             </div>
             <p className="text-muted mt-2 text-xs">{percent}%</p>
           </div>
+
+          {isSlow && (
+            <p className="text-muted mt-4 text-xs">
+              يستغرق هذا وقتًا أطول من المعتاد. لا داعي للقلق — يحدث أحيانًا مع المحتوى الطويل.
+            </p>
+          )}
+
+          {isStuck && (
+            <div
+              role="alert"
+              className="mx-auto mt-5 max-w-md rounded-xl border border-orange-500/40 bg-orange-500/10 p-4 text-right"
+            >
+              <p className="mb-3 text-sm font-semibold text-orange-200">
+                يبدو أن عملية التصميم متوقفة.
+              </p>
+              <p className="text-muted mb-4 text-xs leading-relaxed">
+                {staleMs > STUCK_STALE_MS && elapsedMs <= STUCK_TOTAL_MS
+                  ? "لم يحدث أي تقدم منذ أكثر من 3 دقائق."
+                  : "العملية تستغرق وقتًا أطول من المعتاد بكثير."}
+                {" "}يمكنك إعادة المحاولة أو الانتظار قليلًا.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="btn-gradient inline-flex items-center justify-center gap-2 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {retrying ? (
+                    <span className="spinner h-3 w-3 rounded-full border-2 border-white/20 border-t-white" />
+                  ) : null}
+                  حاول مرة أخرى
+                </button>
+              </div>
+              {retryError && (
+                <p className="status-error mt-3 text-xs">{retryError}</p>
+              )}
+            </div>
+          )}
         </header>
 
         <div className="grid grid-cols-1 justify-center gap-5 md:grid-cols-2">

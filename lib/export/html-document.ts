@@ -1,4 +1,5 @@
 import type { SlideManifest } from "@/lib/schema/slide";
+import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 
 /**
  * Builds a single self-contained HTML document containing every slide of the
@@ -7,9 +8,18 @@ import type { SlideManifest } from "@/lib/schema/slide";
  * screenshot each slide cleanly without dom-to-pptx in the picture.
  *
  * The document mirrors what the in-app preview renders: the same theme CSS
- * vars on each slide root, the same font <link>s, the same dir/lang. Slide
- * HTML is concatenated verbatim — we don't sanitise here because the slide
- * is already DOMPurified upstream when stored / rendered in the app.
+ * vars on each slide root, the same font <link>s, the same dir/lang.
+ *
+ * Each slide's HTML is sanitised via the same DOMPurify config the preview
+ * uses (`lib/export/sanitize.ts`). Without this, opening the downloaded file
+ * would execute any <script>/event-handler/javascript: URI Claude emitted —
+ * a real XSS vector in the export-as-HTML path. Pre-launch hardening will
+ * move sanitisation upstream to `inngest/functions/deck-generate.ts`; until
+ * then this client-side pass is the only line of defence on this code path.
+ *
+ * Must be called from a browser context only — `sanitizeSlideHtml` calls the
+ * DOMPurify factory with the live `window`. `downloadHtmlDocument` below is
+ * the only intended caller and is browser-triggered.
  */
 export function buildHtmlDocument(manifest: SlideManifest): string {
   const fontLinks = [manifest.theme.fontHeading.url, manifest.theme.fontBody.url]
@@ -42,7 +52,9 @@ export function buildHtmlDocument(manifest: SlideManifest): string {
       (s) =>
         `<div class="hx-slide" dir="${manifest.direction}" lang="${
           manifest.language
-        }" data-slide-id="${escapeAttr(s.slideId)}">\n${s.html}\n</div>`
+        }" data-slide-id="${escapeAttr(s.slideId)}">\n${sanitizeSlideHtml(
+          s.html
+        )}\n</div>`
     )
     .join("\n\n");
 

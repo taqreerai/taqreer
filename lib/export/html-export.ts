@@ -81,6 +81,93 @@ function insertScriptTransitionSpaces(root: HTMLElement): void {
   }
 }
 
+// Replace every <img src="*.svg"> in the offscreen tree with the actual
+// inline <svg> markup fetched from the src URL. dom-to-pptx's svgAsVector
+// path only emits OOXML vectors for INLINE <svg> elements — when the
+// source is an <img> pointing at an SVG file, dom-to-pptx fetches the
+// image and rasterises it to PNG (loses vector fidelity AND blocks
+// per-slide recolouring). Inlining the markup before dom-to-pptx walks
+// the DOM gives us vector output and an authoring hook for recolouring.
+//
+// Per-slide recolouring contract:
+//   Claude marks an <img> with `data-fill="#hex"` when it wants the logo
+//   recoloured for contrast on that slide. The inliner then walks the
+//   parsed SVG and overwrites every `fill=` / `stroke=` attribute (except
+//   `none`) with that hex. Polychrome logos that should NOT be recoloured
+//   simply omit `data-fill` — the SVG inlines with its original fills.
+async function inlineSvgImages(root: HTMLElement): Promise<void> {
+  // Find <img> tags whose src looks like an SVG file (with or without
+  // query string — Supabase Storage signed URLs append a ?token=...).
+  const imgs = Array.from(
+    root.querySelectorAll<HTMLImageElement>(
+      "img[src$='.svg'], img[src*='.svg?']"
+    )
+  );
+  if (imgs.length === 0) return;
+
+  await Promise.all(
+    imgs.map(async (img) => {
+      try {
+        const res = await fetch(img.src);
+        if (!res.ok) return;
+        const svgText = await res.text();
+        const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
+        if (parsed.getElementsByTagName("parsererror").length > 0) return;
+        const svg = parsed.querySelector("svg");
+        if (!svg) return;
+
+        // Recolour pass — if Claude tagged the img with data-fill="#hex",
+        // overwrite every fill / stroke attribute inside the SVG (except
+        // "none", which is intentional negative space). Also stamp a root
+        // `fill` attribute so SVGs that rely on CSS / inherited fill get
+        // the colour applied. Hex is validated cheaply to avoid CSS
+        // injection if the data-fill ever comes from untrusted input.
+        const requestedFill = img.getAttribute("data-fill");
+        const fillHex = requestedFill && /^#[0-9A-Fa-f]{3,8}$/.test(requestedFill)
+          ? requestedFill
+          : null;
+        if (fillHex) {
+          svg.querySelectorAll("[fill]").forEach((el) => {
+            const f = el.getAttribute("fill");
+            if (f && f !== "none") el.setAttribute("fill", fillHex);
+          });
+          svg.querySelectorAll("[stroke]").forEach((el) => {
+            const s = el.getAttribute("stroke");
+            if (s && s !== "none") el.setAttribute("stroke", fillHex);
+          });
+          if (!svg.hasAttribute("fill")) svg.setAttribute("fill", fillHex);
+        }
+
+        // Carry the <img>'s sizing onto the <svg> so geometry is preserved.
+        // The <img> may have set width/height via attributes, inline style,
+        // or external CSS. Read computed style first for the source of truth.
+        const computed = window.getComputedStyle(img);
+        const w = parseFloat(computed.width);
+        const h = parseFloat(computed.height);
+        if (Number.isFinite(w) && w > 0) svg.setAttribute("width", String(w));
+        if (Number.isFinite(h) && h > 0) svg.setAttribute("height", String(h));
+        // Preserve inline style — dom-to-pptx reads it for position/transform
+        // pass-through. We drop conflicting width/height inline rules since
+        // they're now on the SVG attributes.
+        const imgStyle = img.getAttribute("style");
+        if (imgStyle) {
+          const cleaned = imgStyle
+            .split(";")
+            .map((s) => s.trim())
+            .filter((s) => s && !/^(width|height)\s*:/i.test(s))
+            .join("; ");
+          if (cleaned) svg.setAttribute("style", cleaned);
+        }
+
+        img.replaceWith(svg);
+      } catch {
+        // Network / parse failure: leave the <img> in place so the export
+        // at least has the raster fallback (better than a blank).
+      }
+    })
+  );
+}
+
 function splitMixedScriptFlexChildren(root: HTMLElement): void {
   // querySelectorAll snapshot before mutation so the iteration is stable.
   const elements = Array.from(root.querySelectorAll<HTMLElement>("*"));
@@ -111,31 +198,29 @@ function splitMixedScriptFlexChildren(root: HTMLElement): void {
     }
     if (scripts.size <= 1) continue;
 
-    // Two signals tell us this is intentional language separation rather
-    // than inline emphasis:
-    //   (a) any element child has an explicit `dir` attribute — Claude
-    //       writes <em dir="ltr">English</em> to mark the language island.
-    //       This is the semantic HTML signal; matches the spec intent of
-    //       the `dir` attribute.
-    //   (b) parent uses a flex/grid display — Claude used the container
-    //       as a visual separator (e.g. justify-content: space-between).
-    // Either signal alone triggers the wrap. Together they cover the
-    // dir-with-flex case and dir-without-flex case (e.g. a block parent
-    // with an explicitly LTR child).
+    // Only fire when the parent is a flex / grid container — that's the
+    // unambiguous "visual layout intent" signal: Claude used the container
+    // as a row of distinct labels (e.g. justify-content: space-between).
     //
-    // Crucially, this skips ordinary inline emphasis like
-    //   <p>عربي <strong>bold</strong> نص</p>
-    // — no dir on <strong>, p is display:block → neither signal → merge
-    // stays, paragraph stays intact, BiDi post-processor handles the
-    // multi-script run via lang retag + run merge.
-    const hasExplicitDir = elementChildren.some((c) => c.hasAttribute("dir"));
+    // Earlier versions also fired on any child with an explicit `dir`
+    // attribute, on the theory that Claude marks language islands with
+    // `<span dir="ltr">English</span>` and wants those split out. That was
+    // wrong: <span dir="ltr"> inside an Arabic block-level <p> or <div>
+    // is INLINE PROSE, not a separated label — splitting it puts the
+    // English on its own shape and breaks the sentence visually
+    // (especially when the final period ends up alone too). The author
+    // signal for "split" is the LAYOUT (flex/grid), not the `dir`.
+    //
+    // Skipped: ordinary inline emphasis (<p>عربي <strong>bold</strong> نص</p>),
+    // inline language islands (<p>قوالب لـ <span dir="ltr">modern</span>.</p>),
+    // and any other block-level container with mixed-script inline children.
     const display = window.getComputedStyle(el).display || "";
     const isLayoutContainer =
       display === "flex" ||
       display === "inline-flex" ||
       display === "grid" ||
       display === "inline-grid";
-    if (!hasExplicitDir && !isLayoutContainer) continue;
+    if (!isLayoutContainer) continue;
 
     // Wrap each non-empty direct text node in a span at its current slot.
     // The wrapped text now becomes an element child, so patched
@@ -222,10 +307,49 @@ export async function exportManifestAsPptx(
       )
     );
 
+    // SlideRenderer sanitises slide HTML inside `useEffect` (client-only,
+    // fail-closed). The first commit renders empty containers; useEffect
+    // fires after that commit, calls setState, schedules the second
+    // commit. A `setTimeout(0)` here flushes the pending microtasks +
+    // queues a macrotask, by which point useEffect has run and the
+    // re-render has been scheduled. The double-rAF below then settles
+    // the second commit's paint.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
     // Wait for React commit + a settled paint frame.
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     );
+
+    // Wait for any slide-local <link rel="stylesheet"> to finish loading.
+    // The export path allows arbitrary stylesheet links inside slide HTML,
+    // and DOMPurify keeps them. dom-to-pptx reads computed styles from the
+    // offscreen DOM, so a stylesheet that hasn't applied its rules yet
+    // would be measured against the unstyled fallback layout. Same
+    // pattern as the <img> + fonts.ready waits below.
+    const stylesheets = Array.from(
+      container.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
+    );
+    if (stylesheets.length > 0) {
+      await Promise.all(
+        stylesheets.map(
+          (link) =>
+            new Promise<void>((resolve) => {
+              if (link.sheet) {
+                resolve();
+                return;
+              }
+              const done = () => {
+                link.removeEventListener("load", done);
+                link.removeEventListener("error", done);
+                resolve();
+              };
+              link.addEventListener("load", done);
+              link.addEventListener("error", done);
+            })
+        )
+      );
+    }
 
     // Wait for any webfonts referenced in the manifest to be ready, so
     // dom-to-pptx measures the right glyph metrics.
@@ -290,6 +414,12 @@ export async function exportManifestAsPptx(
     // Gated on flex/grid specifically so regular prose with inline emphasis
     // (`<p>عربي <strong>bold</strong> نص</p>`) is left alone — that's one
     // paragraph with inline bold, not a row of distinct labels.
+    // Inline any <img src="*.svg"> as actual <svg> markup, applying the
+    // optional data-fill recolour. Done BEFORE the sync preprocess passes
+    // so the rest of the pipeline walks the inlined SVG (not the img).
+    // Runs in parallel across slides — each slide's fetches are independent.
+    await Promise.all(slideNodes.map((s) => inlineSvgImages(s)));
+
     for (const slideNode of slideNodes) {
       splitMixedScriptFlexChildren(slideNode);
       stripArabicLetterSpacing(slideNode);

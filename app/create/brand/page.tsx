@@ -501,10 +501,27 @@ export default function CreateBrandPage() {
   });
 
   const [logo, setLogo] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
   const [logoPosition, setLogoPosition] = useState<LogoPosition>("top-right");
   const [logoExcludeCover, setLogoExcludeCover] = useState(false);
   const [logoExcludeClosing, setLogoExcludeClosing] = useState(false);
+
+  // SVG-only logo policy (2026-05-15). Raster formats (PNG/JPG) are rejected
+  // because we can't recolor them per slide for contrast — see context.md
+  // Phase 9. Polychrome SVGs are accepted but can't be recolored either;
+  // Claude is told in the prompt to design backgrounds compatible with
+  // the logo's colors when it's not a monochrome SVG.
+  const acceptLogo = (next: File) => {
+    const isSvgMime = next.type === "image/svg+xml";
+    const isSvgExt = next.name.toLowerCase().endsWith(".svg");
+    if (!isSvgMime && !isSvgExt) {
+      setLogoError("الشعار يجب أن يكون بصيغة SVG فقط — لضمان جودة الألوان والتباين على كل شريحة.");
+      return;
+    }
+    setLogoError(null);
+    setLogo(next);
+  };
 
   // ─── Left column state ──────────────────────────────────────────────────
   // Generation rules — moved here from /create/summary so the summary step
@@ -1100,12 +1117,19 @@ export default function CreateBrandPage() {
           {/* Logo */}
           <div className="glass-card rounded-xl p-6 space-y-4">
             <h2 className="font-semibold text-white">الشعار</h2>
+            <p className="text-[12px] text-muted leading-relaxed">
+              صيغة SVG فقط. الشعارات بصيغة SVG تحتفظ بجودتها على أي حجم وتتيح
+              تغيير لون الشعار حسب لون الشريحة لضمان التباين.
+            </p>
             <CompactUploadZone
-              label="ارفع الشعار"
-              accept=".svg,.png,.jpg,.jpeg"
+              label="ارفع الشعار (SVG فقط)"
+              accept=".svg,image/svg+xml"
               file={logo}
-              onSelect={setLogo}
+              onSelect={acceptLogo}
             />
+            {logoError && (
+              <p className="status-error text-[12px]">{logoError}</p>
+            )}
             {logo ? (
               <>
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">

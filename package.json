@@ -6,7 +6,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
     "postinstall": "patch-package"
   },
   "dependencies": {

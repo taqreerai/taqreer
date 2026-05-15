@@ -81,11 +81,19 @@ export function Sidebar({
     router.refresh();
   };
 
-  const actionButtons = [
+  const actionButtons: Array<{
+    label: string;
+    icon: string;
+    color: string;
+    glow: string;
+    path: string;
+    comingSoon?: boolean;
+  }> = [
     { label: 'إنشاء', icon: 'add_circle', color: '#370BF4', glow: 'rgba(55,11,244,0.4)', path: '/create' },
     { label: 'تحسين', icon: 'auto_fix_high', color: '#E036B8', glow: 'rgba(224,54,184,0.4)', path: '/enhance' },
     { label: 'محاكاة', icon: 'content_copy', color: '#9326C9', glow: 'rgba(147,38,201,0.4)', path: '/mimic' },
     { label: 'من قالب', icon: 'grid_view', color: '#7D2DFF', glow: 'rgba(125,45,255,0.4)', path: '/templates' },
+    { label: 'من بيانات', icon: 'dataset', color: '#36B8E0', glow: 'rgba(54,184,224,0.4)', path: '/datasheet', comingSoon: true },
   ];
 
   const navLinks = [
@@ -207,8 +215,13 @@ export function Sidebar({
                   } ${isActive ? 'text-white' : 'text-white'}`}>
                     {btn.label}
                   </span>
+                  {btn.comingSoon && !isCollapsed && (
+                    <span className="ml-auto mr-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#9A94A8]">
+                      قريباً
+                    </span>
+                  )}
                 </Link>
-                <Tooltip isCollapsed={isCollapsed} text={btn.label} />
+                <Tooltip isCollapsed={isCollapsed} text={btn.comingSoon ? `${btn.label} (قريباً)` : btn.label} />
               </div>
             );
           })}

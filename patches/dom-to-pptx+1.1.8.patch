@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..69e8c88 100644
+index 36b1ff9..3656668 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -22,7 +22,20 @@ index 36b1ff9..69e8c88 100644
  
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
-@@ -709,6 +717,32 @@ function getTextStyle(style, scale) {
+@@ -690,6 +698,12 @@ function getTextStyle(style, scale) {
+     bold: parseInt(style.fontWeight) >= 600,
+     italic: style.fontStyle === 'italic',
+     underline: style.textDecoration.includes('underline'),
++    // Patched (taqreer): map CSS `text-decoration: line-through` to PPTX
++    // strike. Upstream only handled underline, so line-through was dropped
++    // silently — Claude couldn't author crossed-out text. Strike colour
++    // can't be set independently in OOXML (the line uses the run's font
++    // colour); CSS `text-decoration-color` is ignored on this path.
++    strike: style.textDecoration.includes('line-through'),
+     // Only add if we have a valid value
+     ...(lineSpacing && { lineSpacing }),
+     ...(paraSpaceBefore > 0 && { paraSpaceBefore }),
+@@ -709,6 +723,72 @@ function getTextStyle(style, scale) {
   * Determines if a given DOM node is primarily a text container.
   * Updated to correctly reject Icon elements so they are rendered as images.
   */
@@ -31,35 +44,85 @@ index 36b1ff9..69e8c88 100644
 +// what counts as RTL.
 +const TAQREER_STRONG_RTL = /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﷿ﹰ-﻿]/;
 +
-+// Patched (taqreer): a container whose children flip script (one Arabic
-+// span next to one Latin span, etc.) is NOT a single text paragraph —
-+// it's a row of distinct labels that the user positioned independently.
-+// Returning false here makes the outer walker recurse into the children
-+// and emit each as its own PowerPoint shape with its own bounding rect,
-+// so a flex row like
-+//   <div><span>01</span><h4>عربي</h4><span>Latin</span></div>
-+// doesn't collapse into one text frame with all three pieces trailing
-+// each other on the same line.
-+function taqreer_hasUniformScript(children) {
++// Patched (taqreer): controls whether a container with inline children gets
++// SPLIT into one PPT shape per child (return false) or MERGED into one
++// text container with the children as inline runs (return true).
++//
++// **The discriminator is layout intent, not script.** Originally this
++// function returned false on any script mismatch among children — meant
++// for flex rows like
++//   <div style="display:flex"><span>01</span><h4>عربي</h4><span>Latin</span></div>
++// where each piece should become its own PowerPoint shape. But the rule
++// was too aggressive: it ALSO fired on inline prose with mixed-script
++// emphasis spans
++//   <div>أن تصبح <span>تقرير</span> منصة ... <span dir="ltr">workflow</span>.</div>
++// where Arabic and Latin emphasis spans should stay inline within the
++// surrounding text. Splitting them strands the Arabic prose between two
++// separately-placed shapes.
++//
++// The fix: ANY split signal (mixed script OR 2+ explicit-dir children)
++// only fires when the parent is a flex / grid container. Block-level
++// parents (regular <div>, <p>) always return true and stay merged —
++// inline language emphasis flows through as inline runs in one
++// PowerPoint text frame.
++//
++// Cases that stay MERGED (return true):
++// - `<p>عربي <strong>bold</strong> نص</p>` — regular inline emphasis
++// - `<div>عربي لـ <span dir="ltr">modern</span>.</div>` — single language island
++// - `<p>منصة... <span dir="ltr">5 minutes</span>... <span dir="ltr">3 hours</span></p>`
++//   — multiple language islands in block-level prose
++// - `<div>أن تصبح <span>تقرير</span>... <span dir="ltr">workflow</span></div>`
++//   — mixed-script inline emphasis spans in block-level prose
++//
++// Cases that SPLIT (return false):
++// - `<div style="display:flex"><span>عربي</span><span>English</span></div>`
++//   — mixed-script in a flex row → distinct labels
++// - `<div style="display:flex"><span dir="ltr">07/08</span><span dir="ltr">taqreer.ai</span></div>`
++//   — same script but 2+ explicit dir in a flex row → distinct labels
++//
++// The function takes the PARENT node so it can read getComputedStyle.
++function taqreer_hasUniformScript(node) {
++  const display = (window.getComputedStyle(node).display || '');
++  const isLayoutContainer =
++    display.includes('flex') || display.includes('grid');
++  // Block-level prose: always merge. Inline children are language emphasis,
++  // not separated labels.
++  if (!isLayoutContainer) return true;
++  // Flex / grid: apply the original split signals (mixed script OR 2+
++  // explicit-dir children).
++  const children = Array.from(node.children);
 +  let firstIsRtl = null;
++  let explicitDirCount = 0;
 +  for (const child of children) {
++    if (child.hasAttribute && child.hasAttribute('dir')) explicitDirCount++;
 +    const text = child.textContent.trim();
 +    if (!text) continue;
 +    const isRtl = TAQREER_STRONG_RTL.test(text);
 +    if (firstIsRtl === null) firstIsRtl = isRtl;
 +    else if (firstIsRtl !== isRtl) return false;
 +  }
++  if (explicitDirCount >= 2) return false;
 +  return true;
 +}
 +
  function isTextContainer(node) {
    const hasText = node.textContent.trim().length > 0;
    if (!hasText) return false;
-@@ -756,17 +790,36 @@ function isTextContainer(node) {
+@@ -756,17 +836,50 @@ function isTextContainer(node) {
      const hasVisibleBg = bgColor.hex && bgColor.opacity > 0;
      const hasBorder =
        parseFloat(style.borderWidth) > 0 && parseColor(style.borderColor).opacity > 0;
-+    const hasBorderRadius = parseFloat(style.borderRadius) > 0;
++    // Patched (taqreer): style.borderRadius is a shorthand whose
++    // serialised value is the FIRST corner only when the four corners
++    // differ. `0px 24px 24px 0px` reads as 0, so a corner-rounded badge
++    // (e.g. an RTL leading pill) would slip past this guard and get
++    // collapsed into the parent text frame. Read each corner explicitly.
++    const hasBorderRadius = [
++      style.borderTopLeftRadius,
++      style.borderTopRightRadius,
++      style.borderBottomRightRadius,
++      style.borderBottomLeftRadius,
++    ].some((r) => parseFloat(r) > 0);
 +
 +    // Patched (taqreer): a styled BOX (pill / badge / chip / button / card)
 +    // is a UI element that must keep its own PowerPoint shape with its
@@ -90,11 +153,15 @@ index 36b1ff9..69e8c88 100644
    };
  
 -  return children.every(isSafeInline);
-+  return children.every(isSafeInline) && taqreer_hasUniformScript(children);
++  // Patched (taqreer 2026-05-15): pass the parent `node` to
++  // taqreer_hasUniformScript so it can check the parent's computed display
++  // before splitting on the dir-attribute signal — the rule should only
++  // fire for flex/grid containers, not inline prose with language islands.
++  return children.every(isSafeInline) && taqreer_hasUniformScript(node);
  }
  
  function getRotation(transformStr) {
-@@ -2489,9 +2542,13 @@ function prepareRenderItem(
+@@ -2489,9 +2602,13 @@ function prepareRenderItem(
      });
  
      if (textParts.length > 0) {
@@ -111,7 +178,7 @@ index 36b1ff9..69e8c88 100644
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
        if (style.verticalAlign === 'bottom') valign = 'bottom';
-@@ -2586,6 +2643,18 @@ function prepareRenderItem(
+@@ -2586,6 +2703,32 @@ function prepareRenderItem(
      if (textPayload) {
        textPayload.text[0].options.fontSize =
          Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
@@ -124,13 +191,27 @@ index 36b1ff9..69e8c88 100644
 +      // at the shape's right edge instead of 48px inside. The table-cell
 +      // code path at line 329 already does this conversion correctly;
 +      // this mirrors that pattern for general text shapes.
++      //
++      // Patched (taqreer 2026-05-15): array order swap. `getPadding()`
++      // returns [top, right, bottom, left] (CSS order), but PptxGenJS reads
++      // `margin` as [lIns, rIns, bIns, tIns] (left, right, bottom, top —
++      // see pptxgen.cjs.js L5388-5392). Without the swap, top↔left were
++      // crossed → asymmetric-padded shapes (pills, badges, anything where
++      // top ≠ left padding) ended up with text shifted off-centre. The
++      // bug was invisible for symmetric padding (padding: 16px) because
++      // top == left so the swap was a no-op.
 +      const _paddingPt = Array.isArray(textPayload.inset)
-+        ? textPayload.inset.map((inch) => inch * 72)
++        ? [
++            textPayload.inset[3] * 72, // left   → margin[0] = lIns
++            textPayload.inset[1] * 72, // right  → margin[1] = rIns
++            textPayload.inset[2] * 72, // bottom → margin[2] = bIns
++            textPayload.inset[0] * 72, // top    → margin[3] = tIns
++          ]
 +        : 0;
        items.push({
          type: 'text',
          zIndex: zIndex + 1,
-@@ -2598,9 +2667,8 @@ function prepareRenderItem(
+@@ -2598,9 +2741,8 @@ function prepareRenderItem(
            h,
            align: textPayload.align,
            valign: textPayload.valign,
@@ -141,7 +222,7 @@ index 36b1ff9..69e8c88 100644
            wrap: true,
            autoFit: true,
            vert: writingModeVert,
-@@ -2700,14 +2768,24 @@ function prepareRenderItem(
+@@ -2700,14 +2842,37 @@ function prepareRenderItem(
        if (textPayload) {
          textPayload.text[0].options.fontSize =
            Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
@@ -153,8 +234,21 @@ index 36b1ff9..69e8c88 100644
 +        // basically every plain text shape Claude emits, including the
 +        // span.text with padding-right:48px that was rendering flush
 +        // against the absolutely-positioned "01" badge beside it.
++        //
++        // Patched (taqreer 2026-05-15): array order swap. `getPadding()`
++        // returns [top, right, bottom, left] (CSS order); PptxGenJS reads
++        // `margin` as [lIns, rIns, bIns, tIns]. Without the swap, top↔left
++        // were crossed → asymmetric-padded shapes (pills with `padding: 0
++        // 10px`, headlines with `padding: 32px 0`, etc.) had their text
++        // shifted off-centre because lIns and tIns received the wrong
++        // values. Symmetric padding (`padding: 16px`) hid the bug.
 +        const _paddingPt = Array.isArray(textPayload.inset)
-+          ? textPayload.inset.map((inch) => inch * 72)
++          ? [
++              textPayload.inset[3] * 72, // left   → margin[0] = lIns
++              textPayload.inset[1] * 72, // right  → margin[1] = rIns
++              textPayload.inset[2] * 72, // bottom → margin[2] = bIns
++              textPayload.inset[0] * 72, // top    → margin[3] = tIns
++            ]
 +          : 0;
          const textOptions = {
            shape: shapeType,
