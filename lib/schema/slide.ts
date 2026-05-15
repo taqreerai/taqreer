@@ -112,11 +112,20 @@ export const SlideManifestSchema = z.object({
   slides: z.array(Slide).min(1),
   // Streaming progress, written during generation and removed once final.
   // Optional so the schema validates both transient and final states.
+  //
+  // `genStartedAt` is an ISO timestamp captured ONCE on the first write
+  // tick of the Inngest job. Persisting it server-side (instead of just
+  // setting it on DeckView mount) means the elapsed-time + stuck-detection
+  // clock survives a tab reload mid-generation. Without this, refreshing
+  // a long-running deck resets the local timer to 0 and we'd never
+  // surface the STUCK banner. ISO string rather than number so the JSON
+  // blob round-trips cleanly through Prisma's Json column.
   progress: z
     .object({
       stage: z.string(),
       currentSlide: z.number(),
       estimatedTotal: z.number(),
+      genStartedAt: z.string().optional(),
     })
     .optional(),
 });

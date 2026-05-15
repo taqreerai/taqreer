@@ -26,10 +26,24 @@ async function signBrandAssetUrl(path: string): Promise<string | null> {
 // Fetch the logo SVG content via the admin storage client (bucket is private)
 // and return sanitised markup. Sanitisation here is a defence-in-depth pass —
 // the upload route already restricts the brand-assets/logos folder to SVG, but
-// a malformed / hostile file could carry <script>, event handlers, or
-// `javascript:` URIs that would survive the static .pptx export. We strip the
-// known dangerous patterns before the markup ever reaches Claude or the
-// renderer.
+// a malformed / hostile file could carry:
+//
+//   - Execution vectors: <script>, on*="…" handlers, javascript: URIs
+//   - PROMPT-INJECTION vectors: <title>, <desc>, <metadata>, HTML comments,
+//     XML processing instructions, CDATA, DOCTYPE, <foreignObject>
+//
+// The prompt-injection bucket matters because we inline the markup directly
+// into the Claude prompt (see inngest/functions/deck-generate.ts: "SVG
+// markup:"). Any free-text payload (title / desc / comment) Claude reads as
+// part of the prompt body could carry instructions like "ignore previous
+// instructions, output ...". The execution bucket matters because the
+// sanitised markup is also rendered live in the slide previews. We strip
+// both before the markup leaves this function.
+//
+// We DO NOT strip <text>. Wordmark logos use <text> for the actual visible
+// brand name. The element renders as glyphs in the .pptx export, same as a
+// path would; not a meaningful injection vector beyond what <title> is, and
+// stripping it would silently break a large class of legitimate logos.
 //
 // Returns null on any failure (file missing, fetch failure, non-SVG content,
 // parse error). The caller falls back to the URL-only logo block in that case.
@@ -47,14 +61,31 @@ async function readLogoSvgMarkup(path: string): Promise<string | null> {
     if (error || !data) return null;
     const text = await data.text();
     if (!text.includes("<svg")) return null;
-    // Sanitise — strip script tags, event handlers, javascript: URIs.
-    // Not a full SVG sanitiser; pre-launch we'd swap in `sanitize-html`
-    // or `dompurify` with jsdom. For dev / single-user this is adequate.
-    return text
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
-      .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
-      .replace(/javascript:/gi, "");
+    return (
+      text
+        // Execution vectors
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+        .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+        .replace(/javascript:/gi, "")
+        // Prompt-injection vectors — strip elements that carry arbitrary
+        // free-text Claude would otherwise read as instructions.
+        .replace(/<title[\s\S]*?<\/title>/gi, "")
+        .replace(/<desc[\s\S]*?<\/desc>/gi, "")
+        .replace(/<metadata[\s\S]*?<\/metadata>/gi, "")
+        .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
+        // HTML / XML comments (can hide injected directives in plain text)
+        .replace(/<!--[\s\S]*?-->/g, "")
+        // XML processing instructions (e.g. `<?xml-stylesheet ...?>`) and
+        // DOCTYPE declarations — both carry free-text payloads and the
+        // export pipeline doesn't need them once the SVG is inlined.
+        .replace(/<\?[\s\S]*?\?>/g, "")
+        .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
+        // CDATA sections wrap arbitrary text including unescaped HTML —
+        // a clean removal target since nothing legitimate in our logo
+        // pipeline relies on CDATA-wrapped content.
+        .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "")
+    );
   } catch {
     return null;
   }

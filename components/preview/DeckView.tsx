@@ -26,6 +26,10 @@ type Progress = {
   stage: ProgressStage;
   currentSlide: number;
   estimatedTotal: number;
+  // ISO timestamp captured server-side at job start. Optional because
+  // older in-flight runs (pre-deploy) won't have it; in that case the
+  // client falls back to mount-time `Date.now()` as before.
+  genStartedAt?: string;
 };
 
 function isProgress(value: unknown): value is Progress {
@@ -295,20 +299,24 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
-  // Start the generation clock when we first enter `generating`. Don't reset
-  // on subsequent renders — only on the transition INTO generating.
-  // setState-in-effect is intentional: we're deriving a client-only wall-clock
-  // timestamp that can't be computed during render (would re-run each render)
-  // or SSR (no Date.now() parity with the client).
+  // Start the generation clock when we first enter `generating`. Prefer the
+  // server-persisted `progress.genStartedAt` (ISO from the Inngest job) over
+  // local mount time so a mid-generation tab reload doesn't reset the clock
+  // to 0 — without this, refreshing a stuck deck would silently re-arm the
+  // stuck-detection thresholds and the user would never see the banner.
+  // Fall back to Date.now() for older in-flight runs that didn't write the
+  // timestamp yet. setState-in-effect is intentional (client-only wall clock).
   useEffect(() => {
     if (status !== "generating") return;
     if (genStartedAt !== null) return;
-    const now = Date.now();
+    const serverStartIso = progress?.genStartedAt;
+    const serverStartMs = serverStartIso ? Date.parse(serverStartIso) : NaN;
+    const start = Number.isFinite(serverStartMs) ? serverStartMs : Date.now();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setGenStartedAt(now);
+    setGenStartedAt(start);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLastProgressAt(now);
-  }, [status, genStartedAt]);
+    setLastProgressAt(Date.now());
+  }, [status, genStartedAt, progress]);
 
   // Advance lastProgressAt whenever the streamed slide number ticks up OR
   // the pipeline stage changes (e.g. `content` → `validating` → `saving`).
