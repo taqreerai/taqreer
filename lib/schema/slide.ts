@@ -12,16 +12,23 @@ import { z } from "zod";
 // to stop fighting Claude with rigid Zod retries that burn 10 minutes
 // generating a single deck. Validate the SHAPE, not the content.
 
-const HexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3,4}){1,2}$/);
+// 3- or 6-digit hex only — alpha hex (#RGBA / #RRGGBBAA) is rejected.
+// The export pipeline (PptxGenJS / OOXML) treats colors as opaque RGB and
+// silently drops the alpha channel, so accepting alpha hex creates a
+// preview ↔ export mismatch (translucent in the browser, solid in the
+// .pptx). For translucent fills, slide HTML uses rgba()/opacity which
+// the renderer and post-processor both handle explicitly.
+const HexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
 const Direction = z.enum(["rtl", "ltr"]);
 
 // Allowlist of webfont hosts the renderer + html-document export will
 // actually inject as <link rel="stylesheet">. Any other host is rejected
 // at validation time so the manifest can't claim a font URL the runtime
 // will silently ignore (which would silently downgrade to system fonts
-// in both preview and PPT). Add new providers here AND in the prompt
-// when we extend support.
-const ALLOWED_FONT_HOSTS = new Set([
+// in both preview and PPT). Also consumed by lib/export/sanitize.ts to
+// scrub stray <link> tags whose href isn't on this list. Add new
+// providers here AND in the prompt when we extend support.
+export const ALLOWED_FONT_HOSTS = new Set([
   "fonts.googleapis.com",
   "fonts.gstatic.com",
 ]);
@@ -50,8 +57,12 @@ const FontDefinition = z.object({
 
 const Theme = z.object({
   // Brand accent palette (3–8 hex). Exposed as CSS vars
-  // --brand-1, --brand-2, ... by the renderer.
-  palette: z.array(HexColor).min(2).max(8),
+  // --brand-1, --brand-2, … --brand-N by the renderer. Minimum 3 because
+  // the renderer wires `--primary` / `--accent` / `--secondary` to
+  // `palette[0..2]` for the slide templates; a 2-color palette would
+  // leave `var(--accent)` undefined and slides referencing it would
+  // render with the browser's fallback (transparent / inherit).
+  palette: z.array(HexColor).min(3).max(8),
   // Heading + body fonts. Exposed as --font-heading, --font-body.
   fontHeading: FontDefinition,
   fontBody: FontDefinition,

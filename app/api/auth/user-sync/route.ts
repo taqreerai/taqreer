@@ -31,7 +31,12 @@ export async function POST() {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[user-sync] failed:", err);
+    // Log only the message to avoid surfacing PII (Supabase user object,
+    // email, headers) into server logs. The stack trace stays on the Error
+    // instance for the runtime's own error tracking; we just don't print
+    // the whole `err` shape.
+    const message = err instanceof Error ? err.message : "unknown error";
+    console.error("[user-sync] failed:", message);
     return NextResponse.json({ error: "User sync failed" }, { status: 500 });
   }
 }

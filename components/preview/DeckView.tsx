@@ -169,6 +169,7 @@ export function DeckView({
   const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
   const [lastProgressAt, setLastProgressAt] = useState<number | null>(null);
   const [lastSlideSeen, setLastSlideSeen] = useState(0);
+  const [lastStageSeen, setLastStageSeen] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
@@ -309,18 +310,30 @@ export function DeckView({
     setLastProgressAt(now);
   }, [status, genStartedAt]);
 
-  // Advance lastProgressAt whenever the streamed slide number ticks up.
-  // Same reasoning — wall-clock derived from streamed prop changes.
+  // Advance lastProgressAt whenever the streamed slide number ticks up OR
+  // the pipeline stage changes (e.g. `content` → `validating` → `saving`).
+  // Without the stage check, the validating/saving phases — which can take
+  // 30–60s with no slide-number movement — falsely trip STUCK_STALE_MS.
+  // Same setState-in-effect reasoning: wall-clock derived from streamed prop.
   useEffect(() => {
     if (status !== "generating") return;
     const slide = progress?.currentSlide ?? 0;
-    if (slide > lastSlideSeen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLastSlideSeen(slide);
+    const stage = progress?.stage ?? null;
+    const slideAdvanced = slide > lastSlideSeen;
+    const stageChanged = stage !== null && stage !== lastStageSeen;
+    if (slideAdvanced || stageChanged) {
+      if (slideAdvanced) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLastSlideSeen(slide);
+      }
+      if (stageChanged) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLastStageSeen(stage);
+      }
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLastProgressAt(Date.now());
     }
-  }, [progress, status, lastSlideSeen]);
+  }, [progress, status, lastSlideSeen, lastStageSeen]);
 
   // Re-render every 10 s so the elapsed / stale times stay current even when
   // no other state changes (i.e. when the generation actually IS stuck and

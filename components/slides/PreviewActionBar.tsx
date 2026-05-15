@@ -113,7 +113,11 @@ export function PreviewActionBar({
     if (exportPptx.status === "running") return;
     setExportPptx({ status: "running", message: "جارٍ التصدير..." });
     try {
-      const fileName = `${baseFileName(projectTitle)}.pptx`;
+      // Prefer the manifest's title — it's the freshly regenerated value
+      // (cover headline + dashboard label). `projectTitle` is the cached
+      // server-side prop captured at SSR; if the user has just regenerated
+      // and changed direction/topic, the manifest title is more current.
+      const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
       await exportManifestAsPptx(manifest, fileName);
       setExportPptx({ status: "success", message: "تم التحميل" });
     } catch (error) {
@@ -131,7 +135,7 @@ export function PreviewActionBar({
     if (exportHtml.status === "running") return;
     setExportHtml({ status: "running", message: "جارٍ التحميل..." });
     try {
-      const fileName = `${baseFileName(projectTitle)}.html`;
+      const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
       downloadHtmlDocument(manifest, fileName);
       setExportHtml({ status: "success", message: "تم التحميل" });
     } catch (error) {
