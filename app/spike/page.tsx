@@ -1,5 +1,10 @@
 "use client";
 
+// Intentional Tailwind deviation: this is a 1920×1080 BiDi regression
+// harness — pixel-exact inline styles preserve test fidelity across PPT
+// roundtrips. Don't refactor to Tailwind classes; the dimensions are part
+// of the test contract.
+
 import { useState } from "react";
 import {
   downloadBlob,
@@ -148,10 +153,10 @@ export default function SpikePage() {
       // skipDownload: true → the library does ALL its work (including font
       // embedding) and hands us back the final Blob without auto-downloading.
       // We run BiDi fix on that Blob and trigger our own download.
-      const rawBlob = (await exportToPptx(slides as HTMLElement[], {
+      const rawBlob = await exportToPptx(slides as HTMLElement[], {
         fileName,
         skipDownload: true,
-      } as unknown as { fileName: string })) as unknown as Blob;
+      } as const);
 
       if (!(rawBlob instanceof Blob)) {
         throw new Error(
@@ -263,7 +268,7 @@ export default function SpikePage() {
           )}
           {xmlStats && (
             <pre style={statBlockStyle}>
-              {`XML postprocess — invocations: ${xmlStats.invocations} · slides: ${xmlStats.slidesFixed}/${xmlStats.slidesScanned} · txBody rtlCol→1: ${xmlStats.txBodiesFlipped} · paragraphs: ${xmlStats.paragraphsModified} · runs merged: ${xmlStats.runsMerged} · lang→ar-SA: ${xmlStats.langsRetagged}`}
+              {`XML postprocess — invocations: ${xmlStats.invocations} · slides: ${xmlStats.slidesFixed}/${xmlStats.slidesScanned} · txBody rtlCol→1: ${xmlStats.txBodiesFlipped} · paragraphs: ${xmlStats.paragraphsModified} · runs merged: ${xmlStats.runsMerged} · lang→ar-SA: ${xmlStats.langsRetagged} · LTR forced: ${xmlStats.ltrParagraphsForced} · shapes widened: ${xmlStats.shapesWidened}`}
             </pre>
           )}
           {diag &&

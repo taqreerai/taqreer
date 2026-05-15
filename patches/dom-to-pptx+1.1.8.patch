@@ -1,0 +1,170 @@
+diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
+index 36b1ff9..69e8c88 100644
+--- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
++++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
+@@ -304,9 +304,17 @@ function extractTableData(node, scale) {
+       const fill = bg.hex && bg.opacity > 0 ? { color: bg.hex } : null;
+ 
+       // C. Alignment
+-      let align = 'left';
++      // Patched (taqreer): default direction-aware; the upstream library
++      // hard-codes 'left' for `text-align: start` and unset values, which
++      // breaks every RTL paragraph that relies on inherited direction.
++      const _isRtl = style.direction === 'rtl';
++      let align = _isRtl ? 'right' : 'left';
+       if (style.textAlign === 'center') align = 'center';
+-      if (style.textAlign === 'right' || style.textAlign === 'end') align = 'right';
++      if (style.textAlign === 'right') align = 'right';
++      if (style.textAlign === 'left') align = 'left';
++      if (style.textAlign === 'justify') align = 'justify';
++      if (style.textAlign === 'start') align = _isRtl ? 'right' : 'left';
++      if (style.textAlign === 'end') align = _isRtl ? 'left' : 'right';
+ 
+       let valign = 'top';
+       if (style.verticalAlign === 'middle') valign = 'middle';
+@@ -709,6 +717,32 @@ function getTextStyle(style, scale) {
+  * Determines if a given DOM node is primarily a text container.
+  * Updated to correctly reject Icon elements so they are rendered as images.
+  */
++// Patched (taqreer): strong-RTL Unicode range used by hasUniformScript below.
++// Mirrors lib/export/bidi-postprocess.ts so library + postprocess agree on
++// what counts as RTL.
++const TAQREER_STRONG_RTL = /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﷿ﹰ-﻿]/;
++
++// Patched (taqreer): a container whose children flip script (one Arabic
++// span next to one Latin span, etc.) is NOT a single text paragraph —
++// it's a row of distinct labels that the user positioned independently.
++// Returning false here makes the outer walker recurse into the children
++// and emit each as its own PowerPoint shape with its own bounding rect,
++// so a flex row like
++//   <div><span>01</span><h4>عربي</h4><span>Latin</span></div>
++// doesn't collapse into one text frame with all three pieces trailing
++// each other on the same line.
++function taqreer_hasUniformScript(children) {
++  let firstIsRtl = null;
++  for (const child of children) {
++    const text = child.textContent.trim();
++    if (!text) continue;
++    const isRtl = TAQREER_STRONG_RTL.test(text);
++    if (firstIsRtl === null) firstIsRtl = isRtl;
++    else if (firstIsRtl !== isRtl) return false;
++  }
++  return true;
++}
++
+ function isTextContainer(node) {
+   const hasText = node.textContent.trim().length > 0;
+   if (!hasText) return false;
+@@ -756,17 +790,36 @@ function isTextContainer(node) {
+     const hasVisibleBg = bgColor.hex && bgColor.opacity > 0;
+     const hasBorder =
+       parseFloat(style.borderWidth) > 0 && parseColor(style.borderColor).opacity > 0;
++    const hasBorderRadius = parseFloat(style.borderRadius) > 0;
++
++    // Patched (taqreer): a styled BOX (pill / badge / chip / button / card)
++    // is a UI element that must keep its own PowerPoint shape with its
++    // own background+border, NOT get merged into the parent text frame
++    // and have its styling dropped. The upstream check only excluded
++    // EMPTY styled elements (decorative dots), which let bordered text
++    // pills slip through as "inline emphasis" — Claude's
++    // `<div class="pill" style="border:...">Riyadh</div>` ended up as
++    // bare inline text "Riyadh Dubai London" in the same text frame.
++    //
++    // A border (any width, any colour) is the most reliable signal of
++    // "this is a styled box, not inline text". Backgrounds alone are
++    // kept as safe-inline so <mark>highlight</mark> and similar inline
++    // emphasis still flow naturally. Background + border-radius (a
++    // pill without a border) is also a styled-box signal.
++    if (hasBorder || (hasVisibleBg && hasBorderRadius)) {
++      return false;
++    }
+ 
+     // 4. Check for empty shapes (visual objects without text, like dots)
+     const hasContent = el.textContent.trim().length > 0;
+-    if (!hasContent && (hasVisibleBg || hasBorder)) {
++    if (!hasContent && hasVisibleBg) {
+       return false;
+     }
+ 
+     return true;
+   };
+ 
+-  return children.every(isSafeInline);
++  return children.every(isSafeInline) && taqreer_hasUniformScript(children);
+ }
+ 
+ function getRotation(transformStr) {
+@@ -2489,9 +2542,13 @@ function prepareRenderItem(
+     });
+ 
+     if (textParts.length > 0) {
+-      let align = style.textAlign || 'left';
+-      if (align === 'start') align = 'left';
+-      if (align === 'end') align = 'right';
++      // Patched (taqreer): default direction-aware; the upstream library
++      // hard-codes 'left' for unset `text-align`, which breaks every RTL
++      // paragraph that relies on inherited direction.
++      const _isRtl = style.direction === 'rtl';
++      let align = style.textAlign;
++      if (!align || align === 'start') align = _isRtl ? 'right' : 'left';
++      else if (align === 'end') align = _isRtl ? 'left' : 'right';
+       let valign = 'top';
+       if (style.verticalAlign === 'middle') valign = 'middle';
+       if (style.verticalAlign === 'bottom') valign = 'bottom';
+@@ -2586,6 +2643,18 @@ function prepareRenderItem(
+     if (textPayload) {
+       textPayload.text[0].options.fontSize =
+         Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
++      // Patched (taqreer): convert the CSS-padding inset (inches) into the
++      // pt margin tuple PptxGenJS actually reads. Upstream wrote
++      // `inset: textPayload.inset` (which PptxGenJS doesn't recognise) and
++      // then hard-coded `margin: 0` — silently throwing away every text
++      // shape's CSS padding. Result: a span with padding-right:48px ended
++      // up with <a:bodyPr rIns="0"> in OOXML, and the text rendered flush
++      // at the shape's right edge instead of 48px inside. The table-cell
++      // code path at line 329 already does this conversion correctly;
++      // this mirrors that pattern for general text shapes.
++      const _paddingPt = Array.isArray(textPayload.inset)
++        ? textPayload.inset.map((inch) => inch * 72)
++        : 0;
+       items.push({
+         type: 'text',
+         zIndex: zIndex + 1,
+@@ -2598,9 +2667,8 @@ function prepareRenderItem(
+           h,
+           align: textPayload.align,
+           valign: textPayload.valign,
+-          inset: textPayload.inset,
+           rotate: rotation,
+-          margin: 0,
++          margin: _paddingPt,
+           wrap: true,
+           autoFit: true,
+           vert: writingModeVert,
+@@ -2700,14 +2768,24 @@ function prepareRenderItem(
+       if (textPayload) {
+         textPayload.text[0].options.fontSize =
+           Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
++        // Patched (taqreer): same fix as the bg-image text path at line
++        // ~2658. PptxGenJS uses `margin` (in pt) for body insets, not
++        // `inset`. Upstream wrote `inset: textPayload.inset, margin: 0`
++        // which threw away the CSS padding. This path fires for text
++        // containers with bgColor / border / shadow / no-bg-but-text —
++        // basically every plain text shape Claude emits, including the
++        // span.text with padding-right:48px that was rendering flush
++        // against the absolutely-positioned "01" badge beside it.
++        const _paddingPt = Array.isArray(textPayload.inset)
++          ? textPayload.inset.map((inch) => inch * 72)
++          : 0;
+         const textOptions = {
+           shape: shapeType,
+           ...shapeOpts,
+           rotate: rotation,
+           align: textPayload.align,
+           valign: textPayload.valign,
+-          inset: textPayload.inset,
+-          margin: 0,
++          margin: _paddingPt,
+           wrap: true,
+           autoFit: true,
+           vert: writingModeVert,

@@ -303,7 +303,7 @@ export function DeckView({
 
   const fontLinks = useMemo(() => {
     if (!manifest) return [] as string[];
-    return [manifest.fonts.heading.url, manifest.fonts.body.url].filter(
+    return [manifest.theme.fontHeading.url, manifest.theme.fontBody.url].filter(
       (url, idx, all): url is string =>
         !!url && url.includes("fonts.googleapis.com") && all.indexOf(url) === idx,
     );
@@ -447,14 +447,25 @@ export function DeckView({
         className="fixed z-30"
         style={{ left: "16px", top: "50%" }}
       >
-        <PreviewActionBar projectId={projectId} projectTitle={projectTitle} />
+        <PreviewActionBar
+          projectId={projectId}
+          projectTitle={projectTitle}
+          manifest={manifest!}
+        />
       </motion.div>
 
       <motion.div
         variants={slideListVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 justify-center gap-5 md:grid-cols-2"
+        className="grid justify-center gap-5"
+        style={{
+          // Auto-wrap: 2+ columns when the viewport can fit 576px cells side
+          // by side (so the page-container at typical desktop width shows 2),
+          // single column on narrower screens. No fixed Tailwind breakpoint
+          // because page-container is width:100% and SLIDE_CELL_W is fixed.
+          gridTemplateColumns: `repeat(auto-fit, minmax(${SLIDE_CELL_W}px, 1fr))`,
+        }}
       >
         {manifest!.slides.map((slide) => (
           <motion.div
@@ -463,7 +474,13 @@ export function DeckView({
             style={{ width: SLIDE_CELL_W, height: SLIDE_CELL_H }}
             className="glass-card mx-auto overflow-hidden rounded-xl"
           >
-            <SlideRenderer slide={slide} scale={SLIDE_SCALE} />
+            <SlideRenderer
+              slide={slide}
+              theme={manifest!.theme}
+              direction={manifest!.direction}
+              language={manifest!.language}
+              scale={SLIDE_SCALE}
+            />
           </motion.div>
         ))}
       </motion.div>

@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { SlideManifest } from "@/lib/schema/slide";
+import { exportManifestAsPptx } from "@/lib/export/html-export";
+import { downloadHtmlDocument } from "@/lib/export/html-document";
 
-type ExportFormat = "pptx" | "pdf";
 type Status = "idle" | "running" | "success" | "error";
+
+function baseFileName(title: string): string {
+  return (
+    title.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").slice(0, 80) ||
+    "presentation"
+  );
+}
 
 type ButtonState = {
   status: Status;
@@ -63,28 +72,20 @@ function ToolButton({
 export function PreviewActionBar({
   projectId,
   projectTitle,
+  manifest,
 }: {
   projectId: string;
   projectTitle: string;
+  manifest: SlideManifest;
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
   const [exportPptx, setExportPptx] = useState<ButtonState>({ status: "idle" });
+  const [exportHtml, setExportHtml] = useState<ButtonState>({ status: "idle" });
   const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
 
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [templateTitle, setTemplateTitle] = useState(projectTitle);
-  const [exportJobId, setExportJobId] = useState<string | null>(null);
-  const pollRef = useRef<number | null>(null);
-  const pollAttemptsRef = useRef(0);
-  const MAX_POLL_ATTEMPTS = 60; // ~2 minutes at 2 s intervals
-
-  useEffect(
-    () => () => {
-      if (pollRef.current !== null) window.clearInterval(pollRef.current);
-    },
-    [],
-  );
 
   const handleRegenerate = async () => {
     if (regen.status === "running") return;
@@ -105,23 +106,16 @@ export function PreviewActionBar({
     }
   };
 
-  const handleExport = async (format: ExportFormat) => {
-    if (format === "pdf") return;
+  // Client-side export via dom-to-pptx + our BiDi post-processor. Runs
+  // entirely in the browser — no Inngest job, no Supabase upload, no
+  // polling. Replaces the previous server-side PptxGenJS pipeline.
+  const handleExport = async () => {
     if (exportPptx.status === "running") return;
     setExportPptx({ status: "running", message: "جارٍ التصدير..." });
-
     try {
-      const response = await fetch(`/api/projects/${projectId}/export`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format }),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Export failed");
-      }
-      const { jobId } = (await response.json()) as { jobId: string };
-      setExportJobId(jobId);
+      const fileName = `${baseFileName(projectTitle)}.pptx`;
+      await exportManifestAsPptx(manifest, fileName);
+      setExportPptx({ status: "success", message: "تم التحميل" });
     } catch (error) {
       setExportPptx({
         status: "error",
@@ -130,56 +124,23 @@ export function PreviewActionBar({
     }
   };
 
-  // Poll for export completion (bounded — gives up after MAX_POLL_ATTEMPTS).
-  useEffect(() => {
-    if (!exportJobId) return;
-    pollAttemptsRef.current = 0;
-    const poll = async () => {
-      pollAttemptsRef.current += 1;
-      if (pollAttemptsRef.current > MAX_POLL_ATTEMPTS) {
-        setExportPptx({
-          status: "error",
-          message: "انتهت مهلة التصدير — حاول مرة أخرى",
-        });
-        setExportJobId(null);
-        return;
-      }
-      try {
-        const response = await fetch(`/api/projects/${projectId}/export/${exportJobId}`);
-        if (!response.ok) {
-          console.warn(
-            `Export poll failed: ${response.status} ${response.statusText}`,
-          );
-          return;
-        }
-        const data = (await response.json()) as {
-          status: string;
-          signedUrl: string | null;
-          error: string | null;
-        };
-        if (data.status === "succeeded" && data.signedUrl) {
-          window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-          setExportPptx({ status: "success", message: "تم — جارٍ التحميل" });
-          setExportJobId(null);
-        } else if (data.status === "failed") {
-          setExportPptx({
-            status: "error",
-            message: data.error ?? "فشل التصدير",
-          });
-          setExportJobId(null);
-        }
-      } catch (err) {
-        // network blip; keep polling (counts toward MAX_POLL_ATTEMPTS).
-        console.warn("Export poll network error:", err);
-      }
-    };
-    void poll();
-    pollRef.current = window.setInterval(poll, 2000);
-    return () => {
-      if (pollRef.current !== null) window.clearInterval(pollRef.current);
-      pollRef.current = null;
-    };
-  }, [exportJobId, projectId]);
+  // HTML download — bundles all slides into one standalone .html file at
+  // full 1920×1080 so the user can open it in a browser and screenshot.
+  // No dom-to-pptx, no BiDi post-process; this is the raw rendered preview.
+  const handleDownloadHtml = () => {
+    if (exportHtml.status === "running") return;
+    setExportHtml({ status: "running", message: "جارٍ التحميل..." });
+    try {
+      const fileName = `${baseFileName(projectTitle)}.html`;
+      downloadHtmlDocument(manifest, fileName);
+      setExportHtml({ status: "success", message: "تم التحميل" });
+    } catch (error) {
+      setExportHtml({
+        status: "error",
+        message: error instanceof Error ? error.message : "تعذر التحميل",
+      });
+    }
+  };
 
   const handleSaveAsTemplate = async () => {
     if (saveTpl.status === "running") return;
@@ -215,11 +176,14 @@ export function PreviewActionBar({
   const visibleMessage =
     regen.status === "error" ? { text: regen.message, kind: "error" as const } :
     exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :
+    exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
     saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
     exportPptx.status === "running" ? { text: exportPptx.message, kind: "info" as const } :
+    exportHtml.status === "running" ? { text: exportHtml.message, kind: "info" as const } :
     saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
     regen.status === "running" ? { text: regen.message, kind: "info" as const } :
     exportPptx.status === "success" ? { text: exportPptx.message, kind: "success" as const } :
+    exportHtml.status === "success" ? { text: exportHtml.message, kind: "success" as const } :
     saveTpl.status === "success" ? { text: saveTpl.message, kind: "success" as const } :
     null;
 
@@ -244,7 +208,13 @@ export function PreviewActionBar({
           icon="download"
           label="تصدير PPTX"
           running={exportPptx.status === "running"}
-          onClick={() => handleExport("pptx")}
+          onClick={handleExport}
+        />
+        <ToolButton
+          icon="code"
+          label="تنزيل HTML"
+          running={exportHtml.status === "running"}
+          onClick={handleDownloadHtml}
         />
         <ToolButton
           icon="picture_as_pdf"

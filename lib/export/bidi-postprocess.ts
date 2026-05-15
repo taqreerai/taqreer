@@ -24,10 +24,65 @@
 // set on the second pass.
 
 import type JSZipType from "jszip";
+import type { GradientIntents } from "./gradient-text";
 
 const STRONG_RTL =
   /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﷿ﹰ-﻿]/;
 const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
+
+/**
+ * 10 % shape extension applied in PASS 3 to absorb PowerPoint's slightly
+ * wider glyph metrics (vs. browser). The extension is direction-aware:
+ * it grows the shape on the side OPPOSITE the text anchor, so the
+ * anchored side never moves and Claude's slide margins are preserved.
+ */
+const SHAPE_WIDTH_SLACK = 0.1;
+const MAX_SINGLE_LINE_CHARS = 80;
+const SLIDE_WIDTH_EMU = 9144000;
+/**
+ * Cap on which shapes get PASS 3 extension. Shapes wider than this are
+ * almost certainly headlines / body / paragraph containers, NOT badges /
+ * labels / chips. Extending a wide headline 10 % to the left (RTL) makes
+ * its left edge overrun whatever sits beside it (cards, decorative
+ * shapes, body columns) — even though the visual right anchor stays put.
+ * 3 M EMU ≈ 3.3 in ≈ 33 % of the slide width is the cleanest cutoff:
+ * badges and breadcrumbs sit well under it, headlines sit well over it.
+ */
+const PASS3_MAX_CX = 3000000;
+
+
+
+/**
+ * Canonical signature of an <a:rPr> for grouping adjacent runs.
+ *
+ * Compatibility rule: same signature → same visual formatting → safe to
+ * concatenate text into a single run. Different signature → inline style
+ * boundary the user authored → keep separate so per-run formatting is
+ * preserved.
+ *
+ * lang is excluded from the signature because we override it to "ar-SA"
+ * on every surviving run in RTL paragraphs anyway. dom-to-pptx emits
+ * different langs across script-segmented runs that otherwise share the
+ * same color/font/size — those SHOULD merge, the lang difference is
+ * incidental.
+ */
+function rPrSignature(rPr: Element | null): string {
+  if (!rPr) return "";
+  const attrs: Array<[string, string]> = [];
+  for (let i = 0; i < rPr.attributes.length; i++) {
+    const a = rPr.attributes[i];
+    if (a.name === "lang") continue;
+    attrs.push([a.name, a.value]);
+  }
+  attrs.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const attrStr = attrs.map(([k, v]) => `${k}=${v}`).join("|");
+  const childStrs: string[] = [];
+  for (let i = 0; i < rPr.children.length; i++) {
+    childStrs.push(rPr.children[i].outerHTML);
+  }
+  return `${attrStr}#${childStrs.join("|")}`;
+}
 
 export type BiDiPostprocessStats = {
   invocations: number;
@@ -37,9 +92,57 @@ export type BiDiPostprocessStats = {
   runsMerged: number;
   txBodiesFlipped: number;
   langsRetagged: number;
+  ltrParagraphsForced: number;
+  shapesWidened: number;
+  gradientFillsApplied: number;
 };
 
-function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
+/**
+ * Build an <a:gradFill> XML string from a GradientSpec.
+ *
+ * Common parts:
+ *   - Stops are sorted by position. PowerPoint tolerates unordered gsLst,
+ *     Keynote does not.
+ *   - `rotWithShape="1"` so the gradient rotates with the parent shape.
+ *
+ * Linear gradients add <a:lin ang="..." scaled="1"/>, where `scaled="1"`
+ * means the angle scales with the shape's aspect ratio (45° still reads
+ * as 45° regardless of how narrow the word is).
+ *
+ * Radial gradients add <a:path path="circle"><a:fillToRect ...></a:path>.
+ * fillToRect is the focus rectangle in 1000ths of a percent: collapsing
+ * it to a single center point (l=t=r=b=50000) gives a center-radiating
+ * gradient.
+ */
+function buildGradFillXml(spec: {
+  kind: "linear" | "radial";
+  angle?: number;
+  stops: Array<{ pos: number; hex: string }>;
+}): string {
+  const stops = [...spec.stops].sort((a, b) => a.pos - b.pos);
+  const gsLst = stops
+    .map(
+      (s) =>
+        `<a:gs pos="${s.pos}"><a:srgbClr val="${s.hex}"/></a:gs>`
+    )
+    .join("");
+  const shadeXml =
+    spec.kind === "radial"
+      ? `<a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path>`
+      : `<a:lin ang="${spec.angle ?? 0}" scaled="1"/>`;
+  return (
+    `<a:gradFill rotWithShape="1">` +
+    `<a:gsLst>${gsLst}</a:gsLst>` +
+    shadeXml +
+    `</a:gradFill>`
+  );
+}
+
+function injectBiDiMarkers(
+  xml: string,
+  stats: BiDiPostprocessStats,
+  gradientIntents?: GradientIntents
+): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, "application/xml");
 
@@ -81,10 +184,36 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     }
   }
 
-  // PASS 2: walk every <a:p>; if it contains strong-RTL text, set pPr
-  // rtl/algn, merge runs, retag run + endParaRPr lang to ar-SA.
+  // PASS 2: walk every <a:p> inside the txBodies we flipped in PASS 1.
+  // For each paragraph:
+  //   - strong-RTL text → set pPr rtl=1/algn=r, smart-merge runs, retag lang
+  //   - LTR text in an RTL txBody → set pPr rtl=0 EXPLICITLY (so the
+  //     paragraph doesn't inherit RTL from the txBody's rtlCol). Without
+  //     this, English-only paragraphs inside an Arabic slide render
+  //     visibly reversed.
   const paragraphs = doc.getElementsByTagNameNS(NS_A, "p");
   let modified = 0;
+
+  // Build a set of <a:txBody> elements we marked rtlCol=1 in PASS 1, so we
+  // know which paragraphs need the LTR override and which can be left alone.
+  const rtlTxBodies = new Set<Element>();
+  for (let i = 0; i < txBodies.length; i++) {
+    if (txBodies[i].getElementsByTagNameNS(NS_A, "bodyPr")[0]?.getAttribute("rtlCol") === "1") {
+      rtlTxBodies.add(txBodies[i]);
+    }
+  }
+
+  function nearestTxBody(p: Element): Element | null {
+    let node: Node | null = p.parentNode;
+    while (node) {
+      if (node.nodeType === 1 && (node as Element).localName === "txBody") {
+        return node as Element;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
+
 
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
@@ -95,7 +224,47 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
     for (let j = 0; j < texts.length; j++) {
       fullText += texts[j].textContent ?? "";
     }
-    if (!STRONG_RTL.test(fullText)) continue;
+    const hasStrongRtl = STRONG_RTL.test(fullText);
+    const hasText = fullText.trim().length > 0;
+
+    if (!hasStrongRtl) {
+      // LTR-by-content paragraph. If it lives inside an RTL txBody, force
+      // rtl=0 explicitly so PowerPoint doesn't inherit RTL from the body
+      // — AND default algn="r" so an English title in an Arabic deck stays
+      // right-aligned (matching slide direction) while still reading LTR
+      // within itself. If Claude set an explicit alignment in his HTML
+      // (text-align: left/center/justify), dom-to-pptx already wrote it to
+      // OOXML and we preserve it.
+      if (hasText) {
+        const tb = nearestTxBody(p);
+        if (tb && rtlTxBodies.has(tb)) {
+          let pPr: Element | null = null;
+          for (let j = 0; j < p.childNodes.length; j++) {
+            const node = p.childNodes[j];
+            if (node.nodeType === 1 && (node as Element).localName === "pPr") {
+              pPr = node as Element;
+              break;
+            }
+          }
+          if (!pPr) {
+            pPr = doc.createElementNS(NS_A, "a:pPr");
+            p.insertBefore(pPr, p.firstChild);
+          }
+          if (pPr.getAttribute("rtl") !== "0") {
+            pPr.setAttribute("rtl", "0");
+            stats.ltrParagraphsForced++;
+          }
+          // Default alignment to "r" when none was emitted by dom-to-pptx.
+          // dom-to-pptx writes algn for elements with an explicit
+          // text-align CSS; a missing algn means "no explicit alignment"
+          // and the slide-direction default is what the user wants.
+          if (pPr.getAttribute("algn") === null) {
+            pPr.setAttribute("algn", "r");
+          }
+        }
+      }
+      continue;
+    }
 
     // pPr (paragraph properties) must be the first child of <a:p> per OOXML.
     let pPr: Element | null = null;
@@ -116,59 +285,76 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
       pPr.setAttribute("rtl", "1");
       touched = true;
     }
-    const algn = pPr.getAttribute("algn");
-    // "l" is dom-to-pptx's hard-coded list bug; flip to "r". Leave "ctr" /
-    // "just" alone — those are deliberate centering/justification.
-    if (algn === null || algn === "l") {
+    // Alignment is now handled UPSTREAM by our patches/dom-to-pptx+1.1.8.patch.
+    // The library reads `style.direction` when mapping CSS `text-align: start`
+    // and unset values, so RTL paragraphs get algn=r by default and Claude's
+    // explicit text-align:left lands as algn=l. The post-processor no longer
+    // touches algn — only fills it in when the OOXML emits no value at all
+    // (defensive; should not happen with the patched library).
+    if (pPr.getAttribute("algn") === null) {
       pPr.setAttribute("algn", "r");
       touched = true;
     }
     if (touched) modified++;
 
-    // Merge all <a:r> runs in this paragraph into a single run.
+    // Smart-merge <a:r> runs in this paragraph: group adjacent runs by
+    // rPr signature (excluding lang), merge each group into one run.
     //
     // Why: dom-to-pptx splits mixed-script content into multiple text runs
     // at every script transition. PowerPoint applies BiDi per run, so
     // neutral characters (·, %, .) resolve against the run boundary instead
-    // of their logical neighbor — e.g. "12%" becomes "%12" visually because
-    // the % is a separate run that PowerPoint can't merge with the digits.
-    // A single run + pPr rtl="1" lets PowerPoint apply UAX-9 across the
-    // entire paragraph, which correctly glues neutrals to their logical
-    // neighbor and produces the right visual ordering.
+    // of their logical neighbor — e.g. "12%" becomes "%12" visually. The
+    // script-split runs share the same color/font/size — only lang differs.
+    // Merging them lets PowerPoint apply UAX-9 across the merged span and
+    // produces the right visual ordering.
     //
-    // Tradeoff: we inherit the first run's <a:rPr>, so per-run color/bold/
-    // font formatting inside an RTL paragraph is collapsed. Acceptable for
-    // our content shape today (Claude emits uniform-style paragraphs); will
-    // need a smarter "merge by compatible rPr" pass if that changes.
-    const runs: Element[] = [];
+    // But: when Claude authors inline-coloured spans for emphasis
+    // (e.g. <span style="color:var(--accent)">5 minutes</span>), those
+    // produce runs with DIFFERENT solidFill children — same lang, different
+    // colour. Those must stay separate so the emphasis colour survives. The
+    // signature comparison captures this: same colour/font → merge,
+    // different colour → keep separate.
+    const allRuns: Element[] = [];
     for (let j = 0; j < p.childNodes.length; j++) {
       const node = p.childNodes[j];
       if (node.nodeType === 1 && (node as Element).localName === "r") {
-        runs.push(node as Element);
+        allRuns.push(node as Element);
       }
     }
-    if (runs.length > 1) {
-      let mergedText = "";
-      for (const r of runs) {
-        const ts = r.getElementsByTagNameNS(NS_A, "t");
-        for (let k = 0; k < ts.length; k++) {
-          mergedText += ts[k].textContent ?? "";
+    let cursor = 0;
+    while (cursor < allRuns.length) {
+      const first = allRuns[cursor];
+      const sig = rPrSignature(
+        first.getElementsByTagNameNS(NS_A, "rPr")[0] ?? null
+      );
+      let groupEnd = cursor + 1;
+      while (groupEnd < allRuns.length) {
+        const nextSig = rPrSignature(
+          allRuns[groupEnd].getElementsByTagNameNS(NS_A, "rPr")[0] ?? null
+        );
+        if (nextSig !== sig) break;
+        groupEnd++;
+      }
+      if (groupEnd - cursor > 1) {
+        let mergedText = "";
+        for (let k = cursor; k < groupEnd; k++) {
+          const ts = allRuns[k].getElementsByTagNameNS(NS_A, "t");
+          for (let m = 0; m < ts.length; m++) {
+            mergedText += ts[m].textContent ?? "";
+          }
         }
+        let firstT = first.getElementsByTagNameNS(NS_A, "t")[0];
+        if (!firstT) {
+          firstT = doc.createElementNS(NS_A, "a:t");
+          first.appendChild(firstT);
+        }
+        firstT.textContent = mergedText;
+        for (let k = groupEnd - 1; k > cursor; k--) {
+          allRuns[k].parentNode?.removeChild(allRuns[k]);
+        }
+        stats.runsMerged += groupEnd - cursor - 1;
       }
-      const firstRun = runs[0];
-      // Replace the first run's <a:t> content with the merged text. If the
-      // first run has no <a:t> (shouldn't happen for text content), create one.
-      let firstT = firstRun.getElementsByTagNameNS(NS_A, "t")[0];
-      if (!firstT) {
-        firstT = doc.createElementNS(NS_A, "a:t");
-        firstRun.appendChild(firstT);
-      }
-      firstT.textContent = mergedText;
-      // Drop the now-merged tail runs.
-      for (let j = runs.length - 1; j >= 1; j--) {
-        runs[j].parentNode?.removeChild(runs[j]);
-      }
-      stats.runsMerged += runs.length - 1;
+      cursor = groupEnd;
     }
 
     // Retag every surviving run's lang to ar-SA. PowerPoint uses lang to
@@ -196,13 +382,191 @@ function injectBiDiMarkers(xml: string, stats: BiDiPostprocessStats): string {
   }
 
   stats.paragraphsModified += modified;
+
+  // PASS 3: direction-aware shape extension. Grow each short single-line
+  // text shape on the side OPPOSITE the text anchor by SHAPE_WIDTH_SLACK.
+  // The anchored side stays fixed (preserving the visual edge Claude
+  // designed against the slide margin); the free side extends toward
+  // the slide interior, giving the text more room to fit on one line
+  // when PowerPoint's glyph metrics measure wider than the browser's.
+  //
+  // Anchor mapping:
+  //   algn="r"  → text anchored right → grow LEFT (off.x decreases, cx grows by same amount)
+  //   algn="l"  / "start" / null → anchored left → grow RIGHT (cx grows, off.x stays)
+  //   algn="ctr" / "just" → grow BOTH sides equally
+  //
+  // All growth is clamped to slide bounds: shape will never extend past
+  // x=0 (slide left edge) or x=SLIDE_WIDTH_EMU (right edge). For shapes
+  // close to a slide edge the growth becomes partial — better than no
+  // growth at all, and the visible alignment never shifts.
+  //
+  // Earlier attempts:
+  //   - symmetric 7 % slack: text fit on one line but shape positions
+  //     shifted ~3.5 % of width visibly, nudging content past Claude's
+  //     margins.
+  //   - wrap="none" on shapes with ≤80 char text: shape stayed put but
+  //     text overflowed past the shape boundary (and the slide edge for
+  //     RTL anchored content).
+  // This direction-aware version inherits the room-to-grow benefit
+  // without moving the anchored edge.
+  const spShapes = doc.getElementsByTagNameNS(NS_P, "sp");
+  for (let i = 0; i < spShapes.length; i++) {
+    const sp = spShapes[i];
+
+    let spPr: Element | null = null;
+    let txBody: Element | null = null;
+    for (let j = 0; j < sp.children.length; j++) {
+      const c = sp.children[j];
+      if (c.namespaceURI === NS_P && c.localName === "spPr") spPr = c;
+      else if (c.namespaceURI === NS_P && c.localName === "txBody") txBody = c;
+    }
+    if (!spPr || !txBody) continue;
+
+    if (txBody.getElementsByTagNameNS(NS_A, "br").length > 0) continue;
+    const tNodes = txBody.getElementsByTagNameNS(NS_A, "t");
+    let totalChars = 0;
+    for (let j = 0; j < tNodes.length; j++) {
+      totalChars += (tNodes[j].textContent ?? "").length;
+    }
+    if (totalChars === 0 || totalChars > MAX_SINGLE_LINE_CHARS) continue;
+
+    let xfrm: Element | null = null;
+    for (let j = 0; j < spPr.children.length; j++) {
+      const c = spPr.children[j];
+      if (c.namespaceURI === NS_A && c.localName === "xfrm") {
+        xfrm = c;
+        break;
+      }
+    }
+    if (!xfrm) continue;
+
+    let off: Element | null = null;
+    let ext: Element | null = null;
+    for (let j = 0; j < xfrm.children.length; j++) {
+      const c = xfrm.children[j];
+      if (c.namespaceURI === NS_A && c.localName === "off") off = c;
+      else if (c.namespaceURI === NS_A && c.localName === "ext") ext = c;
+    }
+    if (!ext) continue;
+
+    const oldCx = parseInt(ext.getAttribute("cx") ?? "0", 10);
+    if (!Number.isFinite(oldCx) || oldCx <= 0) continue;
+    // Skip wide shapes — headline / body / paragraph containers. Their
+    // text already wraps inside the container as designed; the 10 %
+    // extension would push the left edge (RTL) or right edge (LTR) over
+    // neighbouring cards and cause visible overlap. See PASS3_MAX_CX.
+    if (oldCx > PASS3_MAX_CX) continue;
+    const oldX = off ? parseInt(off.getAttribute("x") ?? "0", 10) : 0;
+
+    // Detect alignment from the first paragraph in the shape.
+    const firstP = txBody.getElementsByTagNameNS(NS_A, "p")[0];
+    const firstPPr = firstP
+      ? firstP.getElementsByTagNameNS(NS_A, "pPr")[0] ?? null
+      : null;
+    const algn = firstPPr ? firstPPr.getAttribute("algn") : null;
+
+    const desiredGrowth = Math.round(oldCx * SHAPE_WIDTH_SLACK);
+    let newOffX = oldX;
+    let newCx = oldCx;
+
+    if (algn === "r") {
+      // Anchored right; grow LEFT toward slide left edge (clamped to 0).
+      newOffX = Math.max(0, oldX - desiredGrowth);
+      newCx = oldCx + (oldX - newOffX);
+    } else if (algn === "ctr" || algn === "just") {
+      // Centered; grow both sides equally, each clamped to slide bound.
+      const halfGrowth = Math.round(desiredGrowth / 2);
+      newOffX = Math.max(0, oldX - halfGrowth);
+      const leftActualGrowth = oldX - newOffX;
+      const rightAvailable = SLIDE_WIDTH_EMU - (oldX + oldCx);
+      const rightGrowth = Math.max(0, Math.min(halfGrowth, rightAvailable));
+      newCx = oldCx + leftActualGrowth + rightGrowth;
+    } else {
+      // Anchored left (algn=l, start, or unset); grow RIGHT toward slide
+      // right edge (clamped to SLIDE_WIDTH_EMU).
+      const rightAvailable = SLIDE_WIDTH_EMU - (oldX + oldCx);
+      newCx = oldCx + Math.max(0, Math.min(desiredGrowth, rightAvailable));
+    }
+
+    if (newCx !== oldCx) {
+      ext.setAttribute("cx", String(newCx));
+      if (off && newOffX !== oldX) {
+        off.setAttribute("x", String(newOffX));
+      }
+      stats.shapesWidened++;
+    }
+  }
+
+  // PASS 4: gradient-text sentinel swap.
+  //
+  // gradient-text.ts replaced each gradient-text element with a sentinel
+  // solid color (#FE00xx range). dom-to-pptx + PptxGenJS emit that as
+  //   <a:rPr ...><a:solidFill><a:srgbClr val="FExxxx"/></a:solidFill></a:rPr>
+  // (or sometimes with the solidFill omitted and color on rPr via
+  // <a:srgbClr> direct child — both shapes occur depending on context).
+  //
+  // For every rPr whose color matches a known sentinel, we drop the
+  // existing fill child(ren) and insert the real <a:gradFill> built from
+  // the recipe. We do this AFTER PASS 2's run-merge, so identical
+  // sentinels in adjacent runs have already collapsed into one run.
+  if (gradientIntents && gradientIntents.size > 0) {
+    const rPrs = doc.getElementsByTagNameNS(NS_A, "rPr");
+    for (let i = 0; i < rPrs.length; i++) {
+      const rPr = rPrs[i];
+
+      // Find the run's color: either inside a <a:solidFill><a:srgbClr/> or
+      // a direct <a:srgbClr/> child. We accept both shapes defensively.
+      let colorHex: string | null = null;
+      let fillToRemove: Element | null = null;
+      const solidFills = rPr.getElementsByTagNameNS(NS_A, "solidFill");
+      if (solidFills.length > 0) {
+        const sf = solidFills[0];
+        const srgb = sf.getElementsByTagNameNS(NS_A, "srgbClr")[0];
+        if (srgb) {
+          colorHex = (srgb.getAttribute("val") || "").toUpperCase();
+          fillToRemove = sf;
+        }
+      } else {
+        // Direct srgbClr child of rPr (no solidFill wrapper).
+        for (let j = 0; j < rPr.children.length; j++) {
+          const child = rPr.children[j];
+          if (child.namespaceURI === NS_A && child.localName === "srgbClr") {
+            colorHex = (child.getAttribute("val") || "").toUpperCase();
+            fillToRemove = child;
+            break;
+          }
+        }
+      }
+
+      if (!colorHex || !fillToRemove) continue;
+      const spec = gradientIntents.get(colorHex);
+      if (!spec) continue;
+
+      // Parse the gradFill XML and insert in the same position as the
+      // removed fill. (Inserting raw XML via setAttribute won't parse —
+      // we round-trip through a DOMParser to get real nodes.)
+      const fillXml = buildGradFillXml(spec);
+      const wrapper = new DOMParser().parseFromString(
+        `<w xmlns:a="${NS_A}">${fillXml}</w>`,
+        "application/xml"
+      );
+      const gradFillNode = wrapper.getElementsByTagNameNS(NS_A, "gradFill")[0];
+      if (!gradFillNode) continue;
+      const imported = doc.importNode(gradFillNode, true);
+      rPr.insertBefore(imported, fillToRemove);
+      rPr.removeChild(fillToRemove);
+      stats.gradientFillsApplied++;
+    }
+  }
+
   return new XMLSerializer().serializeToString(doc);
 }
 
 export async function fixBiDiInPptxBlob(
   blob: Blob,
   JSZip: typeof JSZipType,
-  stats: BiDiPostprocessStats
+  stats: BiDiPostprocessStats,
+  gradientIntents?: GradientIntents
 ): Promise<Blob> {
   stats.invocations++;
 
@@ -218,7 +582,7 @@ export async function fixBiDiInPptxBlob(
     if (!file) continue;
     stats.slidesScanned++;
     const xml = await file.async("text");
-    const fixed = injectBiDiMarkers(xml, stats);
+    const fixed = injectBiDiMarkers(xml, stats, gradientIntents);
     if (fixed !== xml) {
       stats.slidesFixed++;
       zip.file(path, fixed);
@@ -256,5 +620,8 @@ export function makeStats(): BiDiPostprocessStats {
     runsMerged: 0,
     txBodiesFlipped: 0,
     langsRetagged: 0,
+    ltrParagraphsForced: 0,
+    shapesWidened: 0,
+    gradientFillsApplied: 0,
   };
 }
