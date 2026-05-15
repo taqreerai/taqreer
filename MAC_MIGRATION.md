@@ -165,7 +165,29 @@ this repo via `.coderabbit.yaml`:
 
 ## 6. Run the stack
 
-Two processes, each in its own tab:
+### Local services first (Postgres + Redis via Docker)
+
+The repo ships a `docker-compose.yml` with Postgres 16 (the Prisma target)
+and Redis 7. `.env.local`'s `DATABASE_URL` points at `localhost:5432` —
+nothing in the app works until that container is up.
+
+Install **Docker Desktop** (`brew install --cask docker`, then launch it
+once so the daemon is running), then:
+
+```bash
+# from the repo root, after .env.local is in place
+docker compose up -d                # starts postgres + redis detached
+docker ps                           # confirm both containers are Up
+
+# first run only — apply the Prisma migrations to the empty DB
+npx prisma migrate deploy
+```
+
+This creates 15 PascalCase tables (`User`, `Project`, `Presentation`, …)
+in `public`. The volume `taqreer_postgres` persists data across restarts;
+`docker compose down -v` wipes it.
+
+### Two long-running dev processes
 
 ```bash
 # Tab 1 — Next.js dev server
