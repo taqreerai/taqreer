@@ -58,6 +58,7 @@ export async function GET(
             orderBy: { versionNumber: "desc" },
             take: 1,
             select: {
+              id: true,
               status: true,
               slideJson: true,
             },
@@ -89,5 +90,11 @@ export async function GET(
     status: inferredStatus,
     slideCount,
     progress,
+    // Latest version id + its own status. DeckView's partial-regen polling
+    // uses this to distinguish "applying is done" (versionId == the new
+    // version's id AND status=completed) from "you're still looking at the
+    // pre-apply version" (versionId == source).
+    versionId: latestVersion?.id ?? null,
+    versionStatus: latestVersion?.status ?? null,
   });
 }

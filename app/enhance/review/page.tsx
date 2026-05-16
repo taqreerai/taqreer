@@ -273,7 +273,7 @@ export default function EnhanceReviewPage() {
           type="button"
           onClick={handleGenerate}
           disabled={loading}
-          className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:cursor-not-allowed disabled:opacity-60"
+          className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:opacity-60"
         >
           {loading ? <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" /> : null}
           إنشاء التحسين ✦

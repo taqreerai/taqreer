@@ -23,6 +23,74 @@ async function signBrandAssetUrl(path: string): Promise<string | null> {
   return data?.signedUrl ?? null;
 }
 
+// Fetch the logo SVG content via the admin storage client (bucket is private)
+// and return sanitised markup. Sanitisation here is a defence-in-depth pass —
+// the upload route already restricts the brand-assets/logos folder to SVG, but
+// a malformed / hostile file could carry:
+//
+//   - Execution vectors: <script>, on*="…" handlers, javascript: URIs
+//   - PROMPT-INJECTION vectors: <title>, <desc>, <metadata>, HTML comments,
+//     XML processing instructions, CDATA, DOCTYPE, <foreignObject>
+//
+// The prompt-injection bucket matters because we inline the markup directly
+// into the Claude prompt (see inngest/functions/deck-generate.ts: "SVG
+// markup:"). Any free-text payload (title / desc / comment) Claude reads as
+// part of the prompt body could carry instructions like "ignore previous
+// instructions, output ...". The execution bucket matters because the
+// sanitised markup is also rendered live in the slide previews. We strip
+// both before the markup leaves this function.
+//
+// We DO NOT strip <text>. Wordmark logos use <text> for the actual visible
+// brand name. The element renders as glyphs in the .pptx export, same as a
+// path would; not a meaningful injection vector beyond what <title> is, and
+// stripping it would silently break a large class of legitimate logos.
+//
+// Returns null on any failure (file missing, fetch failure, non-SVG content,
+// parse error). The caller falls back to the URL-only logo block in that case.
+async function readLogoSvgMarkup(path: string): Promise<string | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+  try {
+    const admin = createSupabaseAdminClient(url, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await admin.storage
+      .from("brand-assets")
+      .download(path);
+    if (error || !data) return null;
+    const text = await data.text();
+    if (!text.includes("<svg")) return null;
+    return (
+      text
+        // Execution vectors
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+        .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+        .replace(/javascript:/gi, "")
+        // Prompt-injection vectors — strip elements that carry arbitrary
+        // free-text Claude would otherwise read as instructions.
+        .replace(/<title[\s\S]*?<\/title>/gi, "")
+        .replace(/<desc[\s\S]*?<\/desc>/gi, "")
+        .replace(/<metadata[\s\S]*?<\/metadata>/gi, "")
+        .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
+        // HTML / XML comments (can hide injected directives in plain text)
+        .replace(/<!--[\s\S]*?-->/g, "")
+        // XML processing instructions (e.g. `<?xml-stylesheet ...?>`) and
+        // DOCTYPE declarations — both carry free-text payloads and the
+        // export pipeline doesn't need them once the SVG is inlined.
+        .replace(/<\?[\s\S]*?\?>/g, "")
+        .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
+        // CDATA sections wrap arbitrary text including unescaped HTML —
+        // a clean removal target since nothing legitimate in our logo
+        // pipeline relies on CDATA-wrapped content.
+        .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "")
+    );
+  } catch {
+    return null;
+  }
+}
+
 type CreateProjectPayload = {
   type?: "create" | "enhance";
   content?: {
@@ -134,7 +202,18 @@ export async function POST(request: Request) {
     const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
     const bodyFontUrl = incomingFonts?.body?.storageUrl || null;
     const logoPath = payload.brand?.logo?.storageUrl ?? null;
-    const logoSignedUrl = logoPath ? await signBrandAssetUrl(logoPath) : null;
+    // Fetch sign URL + SVG markup in parallel — both hit Supabase Storage so
+    // pipelining saves a round trip. svgMarkup is the Option B addition:
+    // Claude inlines the SVG directly per slide and overrides `fill` for
+    // per-slide contrast instead of using <img src="..."> with a runtime
+    // fetch / recolour step. See `inngest/functions/deck-generate.ts` for
+    // how the markup is presented to Claude.
+    const [logoSignedUrl, logoSvgMarkup] = logoPath
+      ? await Promise.all([
+          signBrandAssetUrl(logoPath),
+          readLogoSvgMarkup(logoPath),
+        ])
+      : [null, null];
     const claudeBrand = payload.brand
       ? {
           ...payload.brand,
@@ -146,9 +225,15 @@ export async function POST(request: Request) {
             ? {
                 name: payload.brand.logo.name,
                 storageUrl: payload.brand.logo.storageUrl,
-                // Signed HTTPS URL for the renderer + PPTX export; falls back
-                // to the storage path so the brief is never missing the field.
+                // Signed HTTPS URL — fallback when svgMarkup is missing
+                // (caller renders an <img> instead of inline SVG).
                 url: logoSignedUrl ?? payload.brand.logo.storageUrl,
+                // Inline SVG markup. When present, Claude inlines this
+                // directly per slide and sets `fill="#hex"` on the <svg>
+                // root for per-slide contrast. When null (fetch failed
+                // or non-SVG), buildUserMessage emits the URL-only block
+                // and Claude falls back to <img src="...">.
+                svgMarkup: logoSvgMarkup,
                 position: payload.brand.logo.position ?? "top-right",
                 exclude: payload.brand.logo.exclude ?? [],
               }

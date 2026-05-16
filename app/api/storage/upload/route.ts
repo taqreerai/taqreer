@@ -38,6 +38,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
+    // Folder-level format gating. The brand-assets/logos path is the logo
+    // upload pipeline; per the 2026-05-15 product call we only accept SVG
+    // logos so we can recolor per slide for contrast (raster logos can't
+    // be recolored without lossy operations). The client-side picker
+    // already restricts the file dialog, but a determined caller can
+    // bypass the picker — re-enforce here.
+    if (bucket === "brand-assets" && folder === "logos") {
+      const isSvgMime = file.type === "image/svg+xml";
+      const isSvgExt = file.name.toLowerCase().endsWith(".svg");
+      if (!isSvgMime && !isSvgExt) {
+        return NextResponse.json(
+          { error: "Logo must be an SVG file (image/svg+xml)." },
+          { status: 400 }
+        );
+      }
+    }
+
     const admin = createSupabaseAdminClient(
       supabaseUrl,
       serviceRoleKey,

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 
 type PaletteMode = "manual" | "screenshot";
 type SlideCountMode = "match" | "auto" | "custom";
@@ -38,6 +39,50 @@ type FontSlotState = {
   // Google Fonts mode
   googleFamily: string | null;
 };
+
+// Shape of a saved BrandKit's font slot (what POST /api/brand-kits stores
+// + what GET returns). Used by hydrateFromBrandKit to rebuild the page's
+// FontSlotState. Both modes may have a `name` field but the meaningful
+// data lives in either googleFamily (mode=google) or storageUrl
+// (mode=upload).
+type SavedFontSlot = {
+  mode?: "google" | "upload";
+  name?: string | null;
+  googleFamily?: string | null;
+  url?: string | null;
+  storageUrl?: string | null;
+  family?: string | null;
+};
+
+type SavedLogo = {
+  storageUrl?: string | null;
+  previewDataUrl?: string | null;
+  position?: CornerPosition;
+  exclude?: ("cover" | "closing")[];
+};
+
+// Reconstruct a FontSlotState from a saved kit's slot data. Defaults to
+// the upload mode with empty fields if neither mode's data is present.
+function fontSlotFromSaved(saved: SavedFontSlot): FontSlotState {
+  if (saved.mode === "google" || saved.googleFamily) {
+    return {
+      mode: "google",
+      uploadFile: null,
+      uploadName: null,
+      uploadStorageUrl: null,
+      uploadFamily: "",
+      googleFamily: saved.googleFamily ?? saved.name ?? null,
+    };
+  }
+  return {
+    mode: "upload",
+    uploadFile: null,
+    uploadName: saved.name ?? null,
+    uploadStorageUrl: saved.storageUrl ?? null,
+    uploadFamily: saved.family ?? "",
+    googleFamily: null,
+  };
+}
 
 const DEFAULT_COLORS = ["#370BF4", "#E036B8", "#7D2DFF"];
 const MIN_COLORS = 3;
@@ -501,10 +546,27 @@ export default function CreateBrandPage() {
   });
 
   const [logo, setLogo] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
   const [logoPosition, setLogoPosition] = useState<LogoPosition>("top-right");
   const [logoExcludeCover, setLogoExcludeCover] = useState(false);
   const [logoExcludeClosing, setLogoExcludeClosing] = useState(false);
+
+  // SVG-only logo policy (2026-05-15). Raster formats (PNG/JPG) are rejected
+  // because we can't recolor them per slide for contrast — see context.md
+  // Phase 9. Polychrome SVGs are accepted but can't be recolored either;
+  // Claude is told in the prompt to design backgrounds compatible with
+  // the logo's colors when it's not a monochrome SVG.
+  const acceptLogo = (next: File) => {
+    const isSvgMime = next.type === "image/svg+xml";
+    const isSvgExt = next.name.toLowerCase().endsWith(".svg");
+    if (!isSvgMime && !isSvgExt) {
+      setLogoError("الشعار يجب أن يكون بصيغة SVG فقط — لضمان جودة الألوان والتباين على كل شريحة.");
+      return;
+    }
+    setLogoError(null);
+    setLogo(next);
+  };
 
   // ─── Left column state ──────────────────────────────────────────────────
   // Generation rules — moved here from /create/summary so the summary step
@@ -545,6 +607,43 @@ export default function CreateBrandPage() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Save-as-brand state machine: idle → saving → saved. The "saved" state
+  // persists across forward/back navigation via a sessionStorage snapshot
+  // of the saveable brand data (colours + font names). On mount we compare
+  // the current state to the snapshot; an edit that breaks the match
+  // resets to idle so the user can save again.
+  const [saveBrandState, setSaveBrandState] = useState<"idle" | "saving" | "saved">("idle");
+  // SSR / hydration guard. Many useState initialisers above lazy-read
+  // sessionStorage; on SSR window is undefined so they return defaults,
+  // on client they return stored values — different markup → hydration
+  // mismatch. We gate the post-hydration-only conditional renders on
+  // `mounted` so the first client render mirrors the SSR output, and
+  // the populated UI swaps in on the next paint.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+
+  // Logo metadata loaded from a BrandKit. When the user hasn't picked a
+  // new logo file but a saved kit had one, we still want to propagate the
+  // existing storage URL to the summary page (and to a re-save) so Claude
+  // sees the logo on slides. `logo` (File) stays null because we don't
+  // have the bytes; this holds the equivalent storage-side reference.
+  const [loadedLogoMeta, setLoadedLogoMeta] = useState<{
+    storageUrl: string;
+    name: string;
+    previewDataUrl: string | null;
+  } | null>(null);
+
+  // Constants + helpers hoisted above hydrateFromBrandKit so they're
+  // accessible (the original declarations sat farther down the component
+  // and triggered the "accessed before declared" TDZ lint error).
+  const BRAND_SAVED_SNAPSHOT_KEY = "taqreer:create:brand:savedSnapshot";
+  const fontName = (slot: FontSlotState): string | null =>
+    slot.mode === "google"
+      ? slot.googleFamily ?? null
+      : slot.uploadFamily || slot.uploadName || null;
 
   // Track injected @font-face <style> tags (upload mode) and <link> tags
   // (Google mode) so we can revoke / remove them cleanly across switches.
@@ -557,9 +656,115 @@ export default function CreateBrandPage() {
     body: null,
   });
 
+  // Rehydrate brand-page state from a saved BrandKit row + side effects:
+  //   - Inject Google font <link>s so the typography preview actually loads
+  //     (state alone doesn't trigger the font; that's done in
+  //     onSelectGoogleFont normally).
+  //   - Stash logo storage metadata in `loadedLogoMeta` so handleNext /
+  //     handleSaveAsBrand can pass the URL through even though we never
+  //     reconstruct the original File from bytes.
+  //   - Compute the fingerprint manually + write the saved-snapshot key,
+  //     then flip the save button to "saved" so the UI reflects that the
+  //     current state matches the persisted kit. Without this the button
+  //     would stay "idle" on every fresh session.
+  const hydrateFromBrandKit = (kit: {
+    logo: string | null;
+    colors: unknown;
+    fonts: unknown;
+    assetUrls: unknown;
+  }) => {
+    let nextColors: string[] | null = null;
+    if (Array.isArray(kit.colors)) {
+      const valid = (kit.colors as unknown[]).filter(
+        (c): c is string => typeof c === "string",
+      );
+      if (valid.length >= MIN_COLORS) {
+        nextColors = valid.slice(0, MAX_COLORS);
+        setColors(nextColors);
+      }
+    }
+
+    const fonts = kit.fonts as
+      | { heading?: SavedFontSlot | null; body?: SavedFontSlot | null }
+      | null;
+    let nextHeading: FontSlotState | null = null;
+    let nextBody: FontSlotState | null = null;
+    // Inline the Google-font <link> injection (the proper helper
+    // `injectGoogleFont` is defined later in the component; calling it
+    // here would TDZ-error). We do the same thing the helper does: drop
+    // any previous link for this target and append a fresh one.
+    const injectGoogleLink = (family: string, target: FontTarget) => {
+      const prevLink = googleLinkRef.current[target];
+      if (prevLink && prevLink.parentNode) {
+        prevLink.parentNode.removeChild(prevLink);
+      }
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = googleFontUrl(family);
+      document.head.appendChild(link);
+      googleLinkRef.current[target] = link;
+    };
+    if (fonts?.heading) {
+      nextHeading = fontSlotFromSaved(fonts.heading);
+      setHeadingFontSlot(nextHeading);
+      if (nextHeading.mode === "google" && nextHeading.googleFamily) {
+        injectGoogleLink(nextHeading.googleFamily, "heading");
+      }
+    }
+    if (fonts?.body) {
+      nextBody = fontSlotFromSaved(fonts.body);
+      setBodyFontSlot(nextBody);
+      if (nextBody.mode === "google" && nextBody.googleFamily) {
+        injectGoogleLink(nextBody.googleFamily, "body");
+      }
+    }
+
+    const assetUrls = kit.assetUrls as { logo?: SavedLogo | null } | null;
+    const savedLogo = assetUrls?.logo;
+    if (savedLogo?.storageUrl) {
+      setLogoPreview(savedLogo.previewDataUrl || savedLogo.storageUrl);
+      setLoadedLogoMeta({
+        storageUrl: savedLogo.storageUrl,
+        name: (savedLogo as { name?: string }).name ?? "logo",
+        previewDataUrl: savedLogo.previewDataUrl ?? null,
+      });
+      if (savedLogo.position) setLogoPosition(savedLogo.position);
+      if (Array.isArray(savedLogo.exclude)) {
+        setLogoExcludeCover(savedLogo.exclude.includes("cover"));
+        setLogoExcludeClosing(savedLogo.exclude.includes("closing"));
+      }
+    }
+
+    // Compute the fingerprint over the values we just set and persist it
+    // as the saved snapshot. Has to be computed manually here (not via
+    // brandFingerprint) because React state setters above are async and
+    // brandFingerprint still reflects the pre-hydrate render.
+    const headingName =
+      nextHeading?.mode === "google"
+        ? nextHeading.googleFamily
+        : (nextHeading?.uploadFamily || nextHeading?.uploadName) ?? null;
+    const bodyName =
+      nextBody?.mode === "google"
+        ? nextBody.googleFamily
+        : (nextBody?.uploadFamily || nextBody?.uploadName) ?? null;
+    const fingerprint = JSON.stringify({
+      colors: nextColors ?? colors,
+      headingFont: headingName ?? fontName(headingFontSlot),
+      bodyFont: bodyName ?? fontName(bodyFontSlot),
+    });
+    try {
+      sessionStorage.setItem(BRAND_SAVED_SNAPSHOT_KEY, fingerprint);
+    } catch {
+      /* quota — best effort */
+    }
+    setSaveBrandState("saved");
+  };
+
   // ─── Initial load ───────────────────────────────────────────────────────
   // Brand state restoration happens in the useState lazy initializers above;
-  // this effect only handles the content navigation guard.
+  // this effect handles content navigation guard + auto-loading the most
+  // recent saved BrandKit when there's no sessionStorage brand data (i.e.
+  // user is starting a fresh create flow).
   useEffect(() => {
     const rawContent = sessionStorage.getItem("taqreer:create:content");
     if (!rawContent) {
@@ -569,6 +774,41 @@ export default function CreateBrandPage() {
     queueMicrotask(() => {
       setContent(JSON.parse(rawContent) as StoredContent);
     });
+
+    // Auto-load most recent BrandKit when sessionStorage brand is empty.
+    // If the user came back here via "رجوع" from summary, the lazy
+    // initializers already rehydrated state from sessionStorage; we don't
+    // override that.
+    const rawBrand = sessionStorage.getItem("taqreer:create:brand");
+    if (rawBrand) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/brand-kits");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          kits?: Array<{
+            id: string;
+            name: string;
+            logo: string | null;
+            colors: unknown;
+            fonts: unknown;
+            assetUrls: unknown;
+          }>;
+        };
+        const kit = data.kits?.[0];
+        if (!kit || cancelled) return;
+        hydrateFromBrandKit(kit);
+      } catch {
+        /* offline / network — silently fall back to defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // hydrateFromBrandKit is component-scoped and we only want this
+    // effect to fire on mount (driven by router).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   // Live preview for logo
@@ -702,6 +942,146 @@ export default function CreateBrandPage() {
     else setBodyFontSlot(update);
   };
 
+  // Fingerprint over the SAVEABLE brand data — used to detect whether the
+  // current state matches the last-saved snapshot. Only includes what
+  // /api/brand-kits actually persists (colours + font names); changes to
+  // logo / position / etc. don't reset the saved state because they
+  // wouldn't have ended up in the BrandKit row anyway. `fontName` +
+  // `BRAND_SAVED_SNAPSHOT_KEY` are hoisted above hydrateFromBrandKit.
+  const brandFingerprint = JSON.stringify({
+    colors,
+    headingFont: fontName(headingFontSlot),
+    bodyFont: fontName(bodyFontSlot),
+  });
+
+  // On mount: if a snapshot from a previous save matches the current
+  // state, show the saved (check) state. setState-in-effect intentional —
+  // initial state can't read sessionStorage during SSR.
+  useEffect(() => {
+    const snapshot = sessionStorage.getItem(BRAND_SAVED_SNAPSHOT_KEY);
+    if (snapshot && snapshot === brandFingerprint) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSaveBrandState("saved");
+    }
+    // Only on mount — subsequent comparisons run via the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // If the user edits the brand AFTER saving, the fingerprint diverges
+  // from the snapshot — reset to idle so they can save the new state.
+  useEffect(() => {
+    if (saveBrandState !== "saved") return;
+    const snapshot = sessionStorage.getItem(BRAND_SAVED_SNAPSHOT_KEY);
+    if (snapshot !== brandFingerprint) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSaveBrandState("idle");
+    }
+  }, [brandFingerprint, saveBrandState]);
+
+  // Save the current brand as a reusable BrandKit — colours + fonts +
+  // logo. Uploads the logo (and any uploaded font files) to storage at
+  // save time so the kit holds storage URLs ready for the load flow to
+  // rehydrate. The button morphs save → check via framer-motion; on
+  // error we revert.
+  const handleSaveAsBrand = async () => {
+    if (saveBrandState !== "idle") return;
+    setError("");
+    setSaveBrandState("saving");
+    try {
+      // Upload any pending File-typed assets so the kit holds permanent
+      // URLs. Logo + per-slot uploaded fonts run in parallel. Each
+      // upload is a no-op if the file is null. If a kit was previously
+      // loaded (no new File picked), `loadedLogoMeta` carries the
+      // existing storage URL so re-saving doesn't drop the logo.
+      const [logoAsset, headingFontAsset, bodyFontAsset, freshLogoPreview] =
+        await Promise.all([
+          uploadAsset("brand-assets", "logos", logo),
+          headingFontSlot.mode === "upload"
+            ? uploadAsset("brand-assets", "fonts", headingFontSlot.uploadFile)
+            : Promise.resolve(null),
+          bodyFontSlot.mode === "upload"
+            ? uploadAsset("brand-assets", "fonts", bodyFontSlot.uploadFile)
+            : Promise.resolve(null),
+          readFileAsDataUrl(logo),
+        ]);
+      // Fall back to the loaded kit's logo metadata when the user didn't
+      // pick a new file.
+      const effectiveLogo = logoAsset
+        ? {
+            name: logoAsset.name,
+            storageUrl: logoAsset.storageUrl,
+            previewDataUrl: freshLogoPreview,
+          }
+        : loadedLogoMeta
+          ? {
+              name: loadedLogoMeta.name,
+              storageUrl: loadedLogoMeta.storageUrl,
+              previewDataUrl: loadedLogoMeta.previewDataUrl,
+            }
+          : null;
+
+      const resolveFontSlot = (slot: FontSlotState, asset: UploadedAsset) => {
+        if (slot.mode === "google" && slot.googleFamily) {
+          return {
+            mode: "google" as const,
+            name: slot.googleFamily,
+            googleFamily: slot.googleFamily,
+            url: googleFontUrl(slot.googleFamily),
+            storageUrl: null,
+            family: slot.googleFamily,
+          };
+        }
+        return {
+          mode: "upload" as const,
+          name: asset?.name ?? slot.uploadName ?? null,
+          googleFamily: null,
+          url: null,
+          storageUrl: asset?.storageUrl ?? slot.uploadStorageUrl ?? null,
+          family: slot.uploadFamily || null,
+        };
+      };
+
+      const logoExclude = [
+        logoExcludeCover ? "cover" : null,
+        logoExcludeClosing ? "closing" : null,
+      ].filter((value): value is "cover" | "closing" => value !== null);
+
+      const res = await fetch("/api/brand-kits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          colors,
+          fonts: {
+            heading: resolveFontSlot(headingFontSlot, headingFontAsset),
+            body: resolveFontSlot(bodyFontSlot, bodyFontAsset),
+          },
+          logo: effectiveLogo
+            ? {
+                name: effectiveLogo.name,
+                storageUrl: effectiveLogo.storageUrl,
+                previewDataUrl: effectiveLogo.previewDataUrl,
+                position: logoPosition,
+                exclude: logoExclude,
+              }
+            : null,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "تعذر حفظ الهوية البصرية");
+      }
+      // Remember THIS fingerprint as the last-saved one. Next mount of
+      // the brand page (e.g. after navigating to summary and back) will
+      // see the snapshot, compare against current state, and show
+      // "saved" if unchanged.
+      sessionStorage.setItem(BRAND_SAVED_SNAPSHOT_KEY, brandFingerprint);
+      setSaveBrandState("saved");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حفظ الهوية البصرية");
+      setSaveBrandState("idle");
+    }
+  };
+
   // ─── Submit ─────────────────────────────────────────────────────────────
   const handleNext = async () => {
     setError("");
@@ -773,7 +1153,21 @@ export default function CreateBrandPage() {
                   logoExcludeClosing ? "closing" : null,
                 ].filter((value): value is "cover" | "closing" => value !== null),
               }
-            : null,
+            : loadedLogoMeta
+              ? {
+                  // Brand-kit was auto-loaded; user didn't re-pick a file.
+                  // Forward the saved storage URL + metadata so Claude sees
+                  // the logo on slides.
+                  name: loadedLogoMeta.name,
+                  storageUrl: loadedLogoMeta.storageUrl,
+                  previewDataUrl: loadedLogoMeta.previewDataUrl,
+                  position: logoPosition,
+                  exclude: [
+                    logoExcludeCover ? "cover" : null,
+                    logoExcludeClosing ? "closing" : null,
+                  ].filter((value): value is "cover" | "closing" => value !== null),
+                }
+              : null,
           slideSize,
           slideCount: {
             mode: slideCountMode,
@@ -853,7 +1247,7 @@ export default function CreateBrandPage() {
                 placeholder="مثل: التاريخ، الموقع الإلكتروني"
                 className="input-dark"
               />
-              {persistentText.trim() ? (
+              {mounted && persistentText.trim() ? (
                 <div className="space-y-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4">
                   <div>
                     <p className="mb-2 text-xs text-muted">الموقع</p>
@@ -1100,13 +1494,20 @@ export default function CreateBrandPage() {
           {/* Logo */}
           <div className="glass-card rounded-xl p-6 space-y-4">
             <h2 className="font-semibold text-white">الشعار</h2>
+            <p className="text-[12px] text-muted leading-relaxed">
+              صيغة SVG فقط. الشعارات بصيغة SVG تحتفظ بجودتها على أي حجم وتتيح
+              تغيير لون الشعار حسب لون الشريحة لضمان التباين.
+            </p>
             <CompactUploadZone
-              label="ارفع الشعار"
-              accept=".svg,.png,.jpg,.jpeg"
+              label="ارفع الشعار (SVG فقط)"
+              accept=".svg,image/svg+xml"
               file={logo}
-              onSelect={setLogo}
+              onSelect={acceptLogo}
             />
-            {logo ? (
+            {logoError && (
+              <p className="status-error text-[12px]">{logoError}</p>
+            )}
+            {logo || loadedLogoMeta ? (
               <>
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
                   {logoPreview ? (
@@ -1121,7 +1522,11 @@ export default function CreateBrandPage() {
                   )}
                   <button
                     type="button"
-                    onClick={() => setLogo(null)}
+                    onClick={() => {
+                      setLogo(null);
+                      setLoadedLogoMeta(null);
+                      setLogoPreview("");
+                    }}
                     className="badge-purple flex items-center gap-1"
                   >
                     <span className="text-base leading-none">×</span>
@@ -1163,14 +1568,88 @@ export default function CreateBrandPage() {
         <button className="btn-outline-dark px-6 py-3" onClick={() => router.back()}>
           → رجوع
         </button>
-        <button
-          className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:cursor-not-allowed disabled:opacity-60"
-          onClick={handleNext}
-          disabled={loading}
-        >
-          {loading ? <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" /> : null}
-          التالي ←
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Save-as-brand — glass icon button. Save icon morphs to a
+              check on success via a one-shot 360° rotation + cross-fade
+              (same recipe as the sidebar burger ↔ close morph). Disabled
+              while saving; stays as check once saved. */}
+          <button
+            type="button"
+            onClick={handleSaveAsBrand}
+            disabled={saveBrandState !== "idle"}
+            aria-label={
+              saveBrandState === "saved"
+                ? "تم الحفظ كهوية بصرية"
+                : "حفظ كهوية بصرية"
+            }
+            style={{
+              background: "rgba(255, 255, 255, var(--glass-opacity))",
+              backdropFilter:
+                "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+              WebkitBackdropFilter:
+                "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+            }}
+            className={`group relative inline-flex h-12 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors ${
+              saveBrandState === "saved"
+                ? "border-white/40 text-white cursor-default"
+                : saveBrandState === "saving"
+                  ? "border-white/30 text-white/80 cursor-wait"
+                  : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
+            }`}
+          >
+            <motion.div
+              animate={{ rotate: saveBrandState === "saved" ? 360 : 0 }}
+              transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
+              className="flex h-[22px] w-[22px] items-center justify-center"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {saveBrandState === "saved" ? (
+                  <motion.span
+                    key="check"
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ duration: 0.25 }}
+                    className="material-symbols-outlined text-[20px]"
+                  >
+                    check
+                  </motion.span>
+                ) : saveBrandState === "saving" ? (
+                  <motion.span
+                    key="saving"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white"
+                  />
+                ) : (
+                  <motion.span
+                    key="save"
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ duration: 0.25 }}
+                    className="material-symbols-outlined text-[20px]"
+                  >
+                    save
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.div>
+            <span>
+              {saveBrandState === "saved" ? "محفوظ كهوية بصرية" : "حفظ كهوية بصرية"}
+            </span>
+          </button>
+          <button
+            className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:opacity-60"
+            onClick={handleNext}
+            disabled={loading}
+          >
+            {loading ? <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" /> : null}
+            التالي ←
+          </button>
+        </div>
       </div>
     </section>
   );

@@ -16,16 +16,24 @@ reviews:
   path_instructions:
     - path: "app/**"
       instructions: |
-        Next.js 16 App Router, RTL-first, Arabic UI. Always use Tailwind utility classes — no raw CSS in inline styles. Use globals.css semantic classes. All app pages must use page-container class.
+        Next.js 16 App Router, RTL-first, Arabic UI. Prefer Tailwind utility classes and globals.css semantic classes over raw inline styles for application chrome. App pages should use the page-container class.
+
+        IMPORTANT — does NOT apply to slide-rendering routes (preview, export, regenerate). Those render Claude-authored HTML strings verbatim through SlideRenderer; the slide HTML carries its own inline `<style>` and direct CSS because the dom-to-pptx exporter measures actual computed styles. Tailwind classes inside slide HTML aren't exported. Don't flag inline styles inside slide HTML / slide manifests / lib/export pipeline.
     - path: "components/**"
       instructions: |
-        RTL-first React components. Cairo font for Arabic, Poppins for English. No hardcoded colors — use design tokens from globals.css.
+        RTL-first React components for the application chrome (sidebar, dashboard, editor toolbars, modals, etc.).
+
+        The application chrome uses Cairo (Arabic) / Poppins (English) and design tokens from globals.css. Hardcoded colors are flagged here.
+
+        EXCEPTION — components/slides/* and components/preview/* render Claude-authored HTML. The slide-generation system prompt (inngest/functions/deck-generate.ts) explicitly does NOT lock fonts to Cairo/Poppins — Claude picks brand-appropriate webfonts per deck via an anti-slop typography policy. Do NOT flag font choices, palette literals, or inline styles inside slide-rendering components or slide HTML. See context/context.md §07 (HTML-pivot rationale) and §11 (anti-slop typography).
     - path: "lib/schema/**"
       instructions: |
-        Zod schemas are the single source of truth for slide JSON. Never allow properties outside the Taqreer design vocabulary. Every element must have a stable ID field.
+        Zod schemas are the single source of truth for slide JSON. Validate the SHAPE (presence + length + enum membership), not the markup vocabulary.
+
+        IMPORTANT — slide.ts is intentionally permissive. It validates `html: z.string().min(1)` with NO per-element discriminated union and NO per-element stable ID requirement. This is the deliberate trade-off of the 2026-05-13 HTML-first pivot: the previous element-JSON schema (per-element discriminated unions × deep nesting × many enums) hit Anthropic's "compiled grammar too large" limit AND burned ~10 min/deck in Zod self-healing retries when Claude drifted from the vocabulary. Stable IDs now live INSIDE the rendered DOM (data-* attributes Claude emits per slide) and are consumed by the comments feature + dom-to-pptx, not by the manifest schema. Do NOT recommend per-element schemas, per-element ID fields, or "tighten the html string into a structured tree" — those are explicitly rejected. See context/context.md §07 + §18 for the full reasoning.
     - path: "inngest/**"
       instructions: |
-        All AI generation jobs. Must handle retries and failures. Never write Claude output to DB without Zod validation first.
+        All AI generation jobs. Must handle retries and failures. Never write Claude output to DB without Zod validation first. The system prompt lives in deck-generate.ts; treat its rules as a coordinate system Claude operates within rather than a place to layer additional taste opinions.
 
 chat:
   auto_reply: true

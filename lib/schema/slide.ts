@@ -1,168 +1,135 @@
 import { z } from "zod";
 
-// ─── Primitives ───────────────────────────────────────────────────────────────
+// HTML-first deck schema (v2 — the dom-to-pptx pivot).
+//
+// Claude emits a JSON manifest where each slide is a string of HTML/CSS.
+// The browser does layout; `dom-to-pptx` measures the rendered DOM; our
+// `bidi-postprocess` fixes the OOXML BiDi metadata. No coordinate math,
+// no bbox arithmetic, no per-element discriminated union — Claude is a
+// designer, not a layout engine.
+//
+// CRITICAL: keep this schema permissive. The whole point of the pivot is
+// to stop fighting Claude with rigid Zod retries that burn 10 minutes
+// generating a single deck. Validate the SHAPE, not the content.
 
-const HexColor = z
-  .string()
-  .regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Must be a hex color e.g. #FF0000");
+// 3- or 6-digit hex only — alpha hex (#RGBA / #RRGGBBAA) is rejected.
+// The export pipeline (PptxGenJS / OOXML) treats colors as opaque RGB and
+// silently drops the alpha channel, so accepting alpha hex creates a
+// preview ↔ export mismatch (translucent in the browser, solid in the
+// .pptx). For translucent fills, slide HTML uses rgba()/opacity which
+// the renderer and post-processor both handle explicitly.
+const HexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+const Direction = z.enum(["rtl", "ltr"]);
 
-const FontWeight = z.union([
-  z.literal(100), z.literal(200), z.literal(300), z.literal(400),
-  z.literal(500), z.literal(600), z.literal(700), z.literal(800), z.literal(900),
+// Allowlist of webfont hosts the renderer + html-document export will
+// actually inject as <link rel="stylesheet">. Any other host is rejected
+// at validation time so the manifest can't claim a font URL the runtime
+// will silently ignore (which would silently downgrade to system fonts
+// in both preview and PPT). Also consumed by lib/export/sanitize.ts to
+// scrub stray <link> tags whose href isn't on this list. Add new
+// providers here AND in the prompt when we extend support.
+export const ALLOWED_FONT_HOSTS = new Set([
+  "fonts.googleapis.com",
+  "fonts.gstatic.com",
 ]);
 
-const TextAlign = z.enum(["left", "right", "center"]);
-const Direction = z.enum(["ltr", "rtl"]);
-
-// ─── Gradient ─────────────────────────────────────────────────────────────────
-
-const LinearGradient = z.object({
-  type: z.literal("linear"),
-  angle: z.number().min(0).max(360),
-  stops: z.tuple([
-    z.object({ color: HexColor, position: z.number().min(0).max(100) }),
-    z.object({ color: HexColor, position: z.number().min(0).max(100) }),
-  ]),
+const FontDefinition = z.object({
+  name: z.string().min(1),
+  // System fonts (Arial, Cairo if pre-installed) don't need a webfont URL.
+  // The renderer + dom-to-pptx fall back to the system font when absent.
+  url: z
+    .string()
+    .url()
+    .refine(
+      (url) => {
+        try {
+          return ALLOWED_FONT_HOSTS.has(new URL(url).hostname);
+        } catch {
+          return false;
+        }
+      },
+      {
+        message: `font URL host must be one of: ${Array.from(ALLOWED_FONT_HOSTS).join(", ")}`,
+      }
+    )
+    .optional(),
 });
 
-const SolidBackground = z.object({
-  type: z.literal("color"),
-  value: HexColor,
+const Theme = z.object({
+  // Brand accent palette (3–8 hex). Exposed as CSS vars
+  // --brand-1, --brand-2, … --brand-N by the renderer. Minimum 3 because
+  // the renderer wires `--primary` / `--accent` / `--secondary` to
+  // `palette[0..2]` for the slide templates; a 2-color palette would
+  // leave `var(--accent)` undefined and slides referencing it would
+  // render with the browser's fallback (transparent / inherit).
+  palette: z.array(HexColor).min(3).max(8),
+  // Heading + body fonts. Exposed as --font-heading, --font-body.
+  fontHeading: FontDefinition,
+  fontBody: FontDefinition,
+  // Background + text colors for the chrome. Claude picks these.
+  background: HexColor,
+  text: HexColor,
 });
-
-const GradientBackground = z.object({
-  type: z.literal("gradient"),
-  gradient: LinearGradient,
-});
-
-const Background = z.discriminatedUnion("type", [SolidBackground, GradientBackground]);
-
-// ─── Shadow ───────────────────────────────────────────────────────────────────
-
-const Shadow = z.object({
-  color: HexColor,
-  blur: z.number().min(0).max(50),
-  offsetX: z.number(),
-  offsetY: z.number(),
-});
-
-// ─── Border ───────────────────────────────────────────────────────────────────
-
-const Border = z.object({
-  color: HexColor,
-  width: z.number().min(0).max(20),
-  style: z.enum(["solid", "dashed", "dotted"]),
-  radius: z.number().min(0).max(100).optional(),
-});
-
-// ─── Elements ─────────────────────────────────────────────────────────────────
-
-const BaseElement = z.object({
-  id: z.string().min(1),
-  x: z.number(),
-  y: z.number(),
-  width: z.number().positive(),
-  height: z.number().positive(),
-  rotation: z.number().min(-360).max(360).optional().default(0),
-  opacity: z.number().min(0).max(1).optional().default(1),
-  shadow: Shadow.optional(),
-  border: Border.optional(),
-});
-
-const TextElement = BaseElement.extend({
-  type: z.literal("text"),
-  role: z.enum(["headline", "subheading", "body", "caption", "label"]).optional(),
-  content: z.string(),
-  fontFamily: z.string(),
-  fontSize: z.number().min(6).max(300),
-  fontWeight: FontWeight.optional().default(400),
-  color: HexColor,
-  textAlign: TextAlign,
-  direction: Direction,
-  lineHeight: z.number().min(1).max(3).optional().default(1.5),
-  italic: z.boolean().optional().default(false),
-  underline: z.boolean().optional().default(false),
-  background: HexColor.optional(),
-});
-
-const ImageElement = BaseElement.extend({
-  type: z.literal("image"),
-  role: z.enum(["logo", "hero", "icon", "decoration"]).optional(),
-  src: z.string().url(),
-  objectFit: z.enum(["contain", "cover", "fill"]).optional().default("contain"),
-});
-
-const ShapeElement = BaseElement.extend({
-  type: z.literal("shape"),
-  role: z.enum(["background", "accent", "divider", "decoration"]).optional(),
-  kind: z.enum(["rectangle", "circle", "ellipse", "triangle", "line"]),
-  fill: z.union([SolidBackground, GradientBackground]).optional(),
-});
-
-const SlideElement = z.discriminatedUnion("type", [
-  TextElement,
-  ImageElement,
-  ShapeElement,
-]);
-
-// ─── Slide ────────────────────────────────────────────────────────────────────
 
 const Slide = z.object({
   slideId: z.string().min(1),
-  role: z.enum(["cover", "agenda", "content", "stats", "quote", "image", "closing"]).optional(),
-  background: Background,
-  elements: z.array(SlideElement),
+  role: z
+    .enum(["cover", "section", "content", "stats", "quote", "image", "closing"])
+    .optional(),
+  // Body HTML — no <!DOCTYPE>, <html>, <head>, <body> wrapper. The
+  // renderer wraps each slide in a 1920×1080 container with the theme
+  // CSS vars and the document direction set on the root.
+  // <style>, <svg>, <link>, <img> tags are allowed; <script>, event
+  // handlers, javascript: URIs are stripped by DOMPurify in the renderer.
+  //
+  // PERMISSIVE BY DESIGN. The schema validates SHAPE (presence + length),
+  // not the markup vocabulary. This is a deliberate trade we made on the
+  // 2026-05-13 HTML pivot — the previous element-JSON schema (per-element
+  // discriminated unions × deep nesting × many enums) hit Anthropic's
+  // "compiled grammar too large" limit AND burned 10 min/deck in
+  // self-healing retries when Claude drifted from the vocabulary. The
+  // browser is now the layout engine; HTML/CSS is enforced at THREE
+  // layers downstream of validation:
+  //   - DOMPurify in `lib/export/sanitize.ts` strips dangerous markup
+  //   - The renderer's own bounding box enforces 1920×1080
+  //   - dom-to-pptx + bidi-postprocess.ts handle export quirks
+  // See `context/context.md` §07 for the full reasoning. If you find
+  // yourself wanting to tighten this with a per-element schema, re-read
+  // §18 first.
+  html: z.string().min(1),
 });
-
-// ─── Fonts ────────────────────────────────────────────────────────────────────
-
-const FontDefinition = z.object({
-  name: z.string(),
-  // System fonts (Arial, etc.) don't need a webfont URL — only custom-uploaded
-  // or Google-hosted fonts do. Renderer/export both fall back to the system
-  // font when url is absent.
-  url: z.string().url().optional(),
-});
-
-// ─── Palette ──────────────────────────────────────────────────────────────────
-
-const Palette = z.object({
-  primary: HexColor,
-  secondary: HexColor,
-  background: HexColor,
-  text: HexColor,
-  muted: HexColor,
-});
-
-// ─── Root Manifest ────────────────────────────────────────────────────────────
 
 export const SlideManifestSchema = z.object({
-  version: z.literal("1.0"),
+  version: z.literal("2.0"),
   presentationId: z.string().min(1),
-  // 3–8 word presentation title generated by Claude. Becomes the Project's
-  // dashboard title and the export filename.
-  title: z
-    .string()
-    .trim()
-    .max(160)
-    .regex(/^(?:\S+\s+){2,7}\S+$/, "Title must be 3–8 words"),
+  // 3–8 word presentation title — becomes dashboard title + export
+  // filename. Generic "عرض تقديمي" is rejected by the prompt rather
+  // than the schema; the schema just guards length.
+  title: z.string().trim().min(1).max(160),
   language: z.enum(["ar", "en"]),
   direction: Direction,
-  canvas: z.object({
-    width: z.literal(1920),
-    height: z.literal(1080),
-  }),
-  fonts: z.object({
-    heading: FontDefinition,
-    body: FontDefinition,
-  }),
-  palette: Palette,
+  theme: Theme,
   slides: z.array(Slide).min(1),
+  // Streaming progress, written during generation and removed once final.
+  // Optional so the schema validates both transient and final states.
+  //
+  // `genStartedAt` is an ISO timestamp captured ONCE on the first write
+  // tick of the Inngest job. Persisting it server-side (instead of just
+  // setting it on DeckView mount) means the elapsed-time + stuck-detection
+  // clock survives a tab reload mid-generation. Without this, refreshing
+  // a long-running deck resets the local timer to 0 and we'd never
+  // surface the STUCK banner. ISO string rather than number so the JSON
+  // blob round-trips cleanly through Prisma's Json column.
+  progress: z
+    .object({
+      stage: z.string(),
+      currentSlide: z.number(),
+      estimatedTotal: z.number(),
+      genStartedAt: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type SlideManifest = z.infer<typeof SlideManifestSchema>;
 export type SlideType = z.infer<typeof Slide>;
-export type SlideElementType = z.infer<typeof SlideElement>;
-export type TextElementType = z.infer<typeof TextElement>;
-export type ImageElementType = z.infer<typeof ImageElement>;
-export type ShapeElementType = z.infer<typeof ShapeElement>;
+export type ThemeType = z.infer<typeof Theme>;
