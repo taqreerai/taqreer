@@ -548,7 +548,17 @@ export function DeckView({
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/status`);
+        // Pin the poll to the EXACT target version once known. Two close
+        // partial regens otherwise let the status route return the newer
+        // version's row, leaving this poller stuck. Pre-apply (sentinel
+        // versionId), fall back to default (latest version).
+        const versionParam =
+          applying.versionId && applying.versionId !== "__pending__"
+            ? `?versionId=${encodeURIComponent(applying.versionId)}`
+            : "";
+        const res = await fetch(
+          `/api/projects/${projectId}/status${versionParam}`,
+        );
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as {
           status: string;
@@ -681,6 +691,10 @@ export function DeckView({
     } catch (err) {
       console.error(err);
       setApplying(null);
+      // Disarm so the regen button drops the check icon and the user can
+      // retry (re-arm via Apply, fire again). Without this the button is
+      // stuck showing a check that does nothing.
+      setCommentsArmed(false);
     }
   }, [applying, comments, projectId]);
 

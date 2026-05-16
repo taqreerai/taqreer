@@ -943,15 +943,24 @@ export default function CreateBrandPage() {
   };
 
   // Fingerprint over the SAVEABLE brand data — used to detect whether the
-  // current state matches the last-saved snapshot. Only includes what
-  // /api/brand-kits actually persists (colours + font names); changes to
-  // logo / position / etc. don't reset the saved state because they
-  // wouldn't have ended up in the BrandKit row anyway. `fontName` +
-  // `BRAND_SAVED_SNAPSHOT_KEY` are hoisted above hydrateFromBrandKit.
+  // current state matches the last-saved snapshot. Includes everything
+  // /api/brand-kits persists (colours, font names, logo identity +
+  // position + excludes) so editing logo state correctly re-arms the save
+  // button. Logo identity uses (name, size, lastModified) for a fresh
+  // File or the loaded kit's storageUrl when no new File was picked.
+  // `fontName` + `BRAND_SAVED_SNAPSHOT_KEY` are hoisted above
+  // hydrateFromBrandKit.
+  const logoFingerprint = logo
+    ? `${logo.name}:${logo.size}:${logo.lastModified}`
+    : (loadedLogoMeta?.storageUrl ?? null);
   const brandFingerprint = JSON.stringify({
     colors,
     headingFont: fontName(headingFontSlot),
     bodyFont: fontName(bodyFontSlot),
+    logo: logoFingerprint,
+    logoPosition,
+    logoExcludeCover,
+    logoExcludeClosing,
   });
 
   // On mount: if a snapshot from a previous save matches the current

@@ -610,6 +610,13 @@ body {
   transform-origin: center top;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .panel-closing {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 .btn-pill {
   display: inline-flex;
   align-items: center;

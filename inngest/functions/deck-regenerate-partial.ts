@@ -158,6 +158,26 @@ export const deckRegeneratePartial = inngest.createFunction(
     name: "Regenerate Selected Slides with Comments",
     retries: 2,
     triggers: [{ event: "deck.regenerate.partial.requested" }],
+    // Terminal failure path — runs once after every retry is exhausted.
+    // Marks the queued target version `failed` so the UI's status poller
+    // stops spinning and the user can surface the error. Project status
+    // is left alone (the previous version is still visible).
+    onFailure: async ({ event, error }) => {
+      const original = (event.data.event?.data ?? {}) as Partial<RegenPartialEvent>;
+      if (!original.versionId) return;
+      const { prisma } = await import("@/lib/prisma");
+      await prisma.presentationVersion
+        .update({
+          where: { id: original.versionId },
+          data: { status: "failed" },
+        })
+        .catch((e) => {
+          // Last-ditch — the version row may have been deleted; nothing
+          // further to do beyond logging the failure (the surrounding
+          // Inngest run already records the original error).
+          console.error("partial-regen onFailure: status write failed", e, error);
+        });
+    },
   },
   async ({ event, step, logger }) => {
     const data = event.data as RegenPartialEvent;
@@ -239,7 +259,7 @@ export const deckRegeneratePartial = inngest.createFunction(
         if (!update) return s;
         return { ...s, html: update.html };
       });
-      const newManifest: SlideManifest = {
+      const candidate: SlideManifest = {
         version: source.version,
         presentationId: source.presentationId,
         title: source.title,
@@ -248,23 +268,44 @@ export const deckRegeneratePartial = inngest.createFunction(
         theme: source.theme,
         slides,
       };
-      await prisma.presentationVersion.update({
-        where: { id: versionId },
-        data: {
-          slideJson: newManifest as never,
-          status: "completed",
-        },
-      });
-      // Promote the new version to currentVersionId so DeckView surfaces it.
-      await prisma.presentation
-        .update({
+      // Validate Claude output before persisting — per inngest/** coding
+      // guideline, never write model output to DB without Zod-checking
+      // it first. Catches malformed splices (e.g. empty html after
+      // sanitisation) before the manifest reaches downstream consumers.
+      const parsed = SlideManifestSchema.safeParse(candidate);
+      if (!parsed.success) {
+        throw new Error(
+          `Regenerated manifest failed schema validation: ${JSON.stringify(parsed.error.issues).slice(0, 600)}`,
+        );
+      }
+      const newManifest = parsed.data;
+
+      // Atomic promotion — write the version, flip the currentVersionId
+      // pointer, and mark the project completed in a single transaction.
+      // Previously the pointer + project status updates were
+      // .catch(() => undefined) best-effort, which could leave
+      // PresentationVersion.status="completed" but
+      // Presentation.currentVersionId still pointing at the old version.
+      // If the transaction throws, Inngest retries the step; if all
+      // retries exhaust, `onFailure` (above) marks the target version
+      // `failed` as a terminal status.
+      await prisma.$transaction([
+        prisma.presentationVersion.update({
+          where: { id: versionId },
+          data: {
+            slideJson: newManifest as never,
+            status: "completed",
+          },
+        }),
+        prisma.presentation.update({
           where: { id: data.presentationId },
           data: { currentVersionId: versionId },
-        })
-        .catch(() => undefined);
-      await prisma.project
-        .update({ where: { id: projectId }, data: { status: "completed" } })
-        .catch(() => undefined);
+        }),
+        prisma.project.update({
+          where: { id: projectId },
+          data: { status: "completed" },
+        }),
+      ]);
     });
 
     return { success: true, regenerated: regenResults.length };

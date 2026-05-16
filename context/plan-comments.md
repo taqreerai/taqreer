@@ -34,7 +34,7 @@ User's open question: *"What if the user wants a comment applied to all slides? 
 | Original | Suggested | Why |
 |---|---|---|
 | Click → point comment | **Drag-box → region comment** | Single point leaves "title vs icon vs body?" ambiguity for Claude. A box gives explicit spatial scope. |
-| Regenerate icon flips to checkmark | **Comment toggle turns orange; separate "Apply Comments (N)" button appears next to it; regenerate icon stays put, just disabled** | Distinct actions deserve distinct buttons. Lets user exit comment mode without applying. |
+| Regenerate icon flips to checkmark | **Comment toggle turns orange; separate "Apply Comments (N)" button arms the state; the regenerate icon morphs into a check icon and BECOMES the fire button** ("arm then fire") | Distinct actions deserve distinct controls, but the user expected the regen button to "fire" the change. Apply now arms only — lets the user iterate on the draft before committing — and the morphed check on the regen button is what actually hits Claude. Matches what shipped (see `log.md` 2026-05-16 entry). |
 | (not mentioned) | **0-comment slides visibly dim in comment mode**; "locked" indicator | User needs to see what's about to NOT change. |
 | (not mentioned) | **Quick-action chips above the textarea** — "اجعل النص أكبر", "غيّر اللون", "احذف", "بسّط", etc. | Saves ~70% of clicks on common edits. |
 | One batched Claude call | **Per-slide Claude calls in parallel (`Promise.all`)** | Faster; one slide's failure doesn't take the rest down. |

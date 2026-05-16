@@ -62,10 +62,13 @@ export async function GET(
   const url = new URL(request.url);
   const requestedVersionId = url.searchParams.get("versionId") ?? ctx.versionId;
 
+  // Drafts only — applied comments are immutable history (the prompt
+  // that was actually sent to Claude) and shouldn't surface to the editor.
   const comments = await prisma.comment.findMany({
     where: {
       presentationId: ctx.presentationId,
       versionId: requestedVersionId,
+      status: "draft",
     },
     orderBy: { createdAt: "asc" },
   });

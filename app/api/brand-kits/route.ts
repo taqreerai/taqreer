@@ -37,7 +37,13 @@ export async function POST(request: Request) {
     name?: string;
     colors?: unknown;
     fonts?: unknown;
-    logo?: { storageUrl?: string | null } | null;
+    logo?: {
+      name?: string | null;
+      storageUrl?: string | null;
+      previewDataUrl?: string | null;
+      position?: string | null;
+      exclude?: unknown;
+    } | null;
   } | null;
   if (!body) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
@@ -46,16 +52,42 @@ export async function POST(request: Request) {
   const fallbackName = `هوية بصرية — ${new Date().toLocaleDateString("ar")}`;
   const name = (body.name?.trim() || fallbackName).slice(0, 120);
 
+  // Allowlist the persisted logo shape — `previewDataUrl` can be a base64
+  // image that bloats the row (and every GET /api/brand-kits response, up
+  // to 20 kits). Hydration falls back to `storageUrl` for the preview, so
+  // dropping the data URL costs one image fetch on load and nothing else.
+  const safeLogo = body.logo
+    ? {
+        name: typeof body.logo.name === "string" ? body.logo.name.slice(0, 200) : null,
+        storageUrl:
+          typeof body.logo.storageUrl === "string"
+            ? body.logo.storageUrl.slice(0, 2000)
+            : null,
+        position:
+          typeof body.logo.position === "string"
+            ? body.logo.position.slice(0, 32)
+            : null,
+        exclude: Array.isArray(body.logo.exclude)
+          ? body.logo.exclude.filter(
+              (v): v is "cover" | "closing" => v === "cover" || v === "closing",
+            )
+          : [],
+      }
+    : null;
+
   const kit = await prisma.brandKit.create({
     data: {
       userId: ctx.userId,
       name,
-      logo: body.logo?.storageUrl ?? null,
+      logo: safeLogo?.storageUrl ?? null,
       colors: toJson(body.colors ?? null),
       fonts: toJson(body.fonts ?? null),
-      // assetUrls carries the FULL nested logo blob (storageUrl, position,
+      // assetUrls carries the BOUNDED logo shape (storageUrl + position +
       // exclude) so the load flow can rehydrate the brand page exactly.
-      assetUrls: toJson({ logo: body.logo ?? null }),
+      // `previewDataUrl` is intentionally NOT persisted — it's a base64
+      // blob that would balloon rows + list responses. Hydration falls
+      // back to storageUrl for the preview image.
+      assetUrls: toJson({ logo: safeLogo }),
     },
   });
 
