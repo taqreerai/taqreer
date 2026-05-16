@@ -3,6 +3,7 @@
 import { createRoot } from "react-dom/client";
 import { createElement } from "react";
 import type { SlideManifest } from "@/lib/schema/slide";
+import { dimensionsForFormat } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import {
   downloadBlob,
@@ -260,6 +261,14 @@ export async function exportManifestAsPptx(
   manifest: SlideManifest,
   fileName: string
 ): Promise<{ stats: BiDiPostprocessStats; slideCount: number }> {
+  // Slide canvas dimensions from the manifest's format (16:9 → 1920×1080;
+  // 9:16 → 1080×1920). Used for the offscreen render container, each
+  // slide's inline width/height, dom-to-pptx's PPT layout, and the BiDi
+  // post-processor's bounds checks. Falls back to 16:9 for legacy
+  // manifests written before the field existed.
+  const { width: canvasW, height: canvasH } = dimensionsForFormat(manifest.format);
+  const slideFormat = manifest.format === "9:16" ? "9:16" : "16:9";
+
   const container = document.createElement("div");
   container.setAttribute("data-html-export", "true");
   Object.assign(container.style, {
@@ -271,7 +280,7 @@ export async function exportManifestAsPptx(
     // trade: not visible to the user, but fully rendered + measurable.
     left: "-99999px",
     top: "0px",
-    width: "1920px",
+    width: `${canvasW}px`,
     pointerEvents: "none",
     // Keep opacity:1 + visibility:visible explicitly in case parent styles
     // (e.g. a transition or animation) try to inherit something different.
@@ -293,13 +302,15 @@ export async function exportManifestAsPptx(
             {
               key: slide.slideId,
               className: "hx-slide",
-              style: { width: 1920, height: 1080, marginBottom: 20 },
+              style: { width: canvasW, height: canvasH, marginBottom: 20 },
             },
             createElement(SlideRenderer, {
               slide,
               theme: manifest.theme,
               direction: manifest.direction,
               language: manifest.language,
+              width: canvasW,
+              height: canvasH,
               scale: 1,
             })
           )
@@ -453,10 +464,21 @@ export async function exportManifestAsPptx(
     // PowerPoint, recolourable, infinite zoom). Without it, dom-to-pptx
     // rasterises every SVG to a PNG — Material icons and decorative shapes
     // end up tiny / pixelated / missing depending on viewBox.
+    //
+    // width / height (in inches) drives dom-to-pptx's `pptx.defineLayout`
+    // call so the resulting PPT has the correct page size:
+    //   16:9 → 10″ × 5.625″
+    //   9:16 → 5.625″ × 10″
+    // Without these, the lib defaults to LAYOUT_16x9 and a vertical 9:16
+    // deck would render as a landscape PPT with shapes outside the page.
+    const slideWidthIn = canvasW / 192; // 1920px → 10″, 1080px → 5.625″
+    const slideHeightIn = canvasH / 192;
     const rawBlob = await exportToPptx(slideNodes, {
       fileName,
       skipDownload: true,
       svgAsVector: true,
+      width: slideWidthIn,
+      height: slideHeightIn,
     } as const);
 
     if (!(rawBlob instanceof Blob)) {
@@ -471,7 +493,8 @@ export async function exportManifestAsPptx(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       JSZip as any,
       stats,
-      intents
+      intents,
+      slideFormat
     );
 
     downloadBlob(fixedBlob, fileName);

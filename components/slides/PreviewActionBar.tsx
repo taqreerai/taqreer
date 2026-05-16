@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import type { SlideManifest } from "@/lib/schema/slide";
+import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { exportManifestAsPptx } from "@/lib/export/html-export";
 import { downloadHtmlDocument } from "@/lib/export/html-document";
 
@@ -49,12 +49,14 @@ function ToolButton({
   // provided. Used by the regen button so we can render an AnimatePresence
   // icon morph (autorenew ↔ check with continuous rotation) instead of a
   // static glyph.
+  // Optional custom icon node — overrides the material-symbols icon
+  // when provided. Reserved for future use; the morph that used it
+  // was removed in step 2b.
   iconNode?: React.ReactNode;
   label: string;
   badge?: string;
   // Small numeric badge in the top-end corner. Used for the comment toggle
-  // to show how many draft comments live across the deck. Coloured blue
-  // (--tq-blue) so it reads as "info / count" rather than "alert / warn".
+  // to show how many draft comments live across the deck.
   countBadge?: number;
   onClick?: () => void;
   disabled?: boolean;
@@ -117,13 +119,12 @@ function ToolButton({
         ) : (
           <span className="material-symbols-outlined text-[22px]">{icon}</span>
         )}
-        {/* Count badge — top-end corner. Blue chip; the ONLY brand colour
-            in the toolbar (info, not state). */}
+        {/* Count badge — top-end corner. Clear sky blue (Tailwind
+            blue-500) so it reads as an unmistakable "info" indicator.
+            Brand `--tq-blue` is violet-leaning and was repeatedly
+            flagged as not reading as blue at this badge size. */}
         {countBadge && countBadge > 0 ? (
-          <span
-            className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none text-white shadow"
-            style={{ background: "var(--tq-blue)" }}
-          >
+          <span className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
             {countBadge}
           </span>
         ) : null}
@@ -147,35 +148,34 @@ export function PreviewActionBar({
   commentMode,
   onToggleCommentMode,
   draftCommentCount,
-  onApplyComments,
   commentsArmed,
   onFirePartialRegen,
   applying,
+  formatFallback,
 }: {
   projectId: string;
   projectTitle: string;
   manifest: SlideManifest;
-  // Comment-mode state machine, all owned by DeckView:
-  //   commentMode       — user toggled the comment tool
-  //   draftCommentCount — # of "draft" comments saved in the DB
-  //   commentsArmed     — user clicked Apply: drafts are locked, regen
-  //                       button is primed to FIRE the partial regen
-  //   applying          — partial regen is in flight (versionId queued
-  //                       until Inngest finishes)
-  //
-  // Click handlers:
-  //   onToggleCommentMode  — turn comment mode on/off
-  //   onApplyComments      — Apply: arm (no Claude call yet)
-  //   onFirePartialRegen   — used by the regen button when ARMED → fires
-  //                          the partial regen (the only path that hits
-  //                          Claude for slide-level changes)
+  // Comment-mode state — owned by DeckView. Apply lives inside the
+  // CommentsPanel footer and just exits commentMode (drafts persist
+  // as drafts). When drafts exist + commentMode is off, the regen
+  // button morphs to the AI icon and fires the partial regen.
   commentMode: boolean;
   onToggleCommentMode: () => void;
   draftCommentCount: number;
-  onApplyComments: () => void;
+  // True when there are unsent drafts ready to be fired. Drives the
+  // autorenew → auto_awesome icon morph + swaps the click handler
+  // from full regen to partial regen.
   commentsArmed: boolean;
   onFirePartialRegen: () => void;
+  // Partial regen in flight. Locks the toolbar buttons so the user
+  // can't kick off a second job while one is running.
   applying: boolean;
+  // Format fallback when `manifest.format` is missing — used by export
+  // helpers so legacy 9:16 manifests (saved before deck-generate.ts
+  // started stamping `format`) export at the correct aspect ratio.
+  // DeckView passes the project-level `Project.format` here.
+  formatFallback?: SlideFormat;
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
@@ -217,7 +217,15 @@ export function PreviewActionBar({
       // server-side prop captured at SSR; if the user has just regenerated
       // and changed direction/topic, the manifest title is more current.
       const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
-      await exportManifestAsPptx(manifest, fileName);
+      // Back-fill format from the project-level fallback for legacy
+      // manifests whose `format` field wasn't stamped at generation
+      // time. Without this, exportManifestAsPptx falls through to the
+      // 16:9 default and a 9:16 deck exports as a landscape PPT.
+      const exportManifest = {
+        ...manifest,
+        format: manifest.format ?? formatFallback ?? "16:9",
+      };
+      await exportManifestAsPptx(exportManifest, fileName);
       setExportPptx({ status: "idle" });
     } catch (error) {
       setExportPptx({
@@ -228,14 +236,19 @@ export function PreviewActionBar({
   };
 
   // HTML download — bundles all slides into one standalone .html file at
-  // full 1920×1080 so the user can open it in a browser and screenshot.
-  // No dom-to-pptx, no BiDi post-process; this is the raw rendered preview.
+  // the manifest's canvas dimensions (1920×1080 for 16:9, 1080×1920 for
+  // 9:16) so the user can open it in a browser and screenshot. No
+  // dom-to-pptx, no BiDi post-process; this is the raw rendered preview.
   const handleDownloadHtml = () => {
     if (exportHtml.status === "running") return;
     setExportHtml({ status: "running", message: "جارٍ التحميل..." });
     try {
       const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
-      downloadHtmlDocument(manifest, fileName);
+      const exportManifest = {
+        ...manifest,
+        format: manifest.format ?? formatFallback ?? "16:9",
+      };
+      downloadHtmlDocument(exportManifest, fileName);
       setExportHtml({ status: "idle" });
     } catch (error) {
       setExportHtml({
@@ -290,106 +303,42 @@ export function PreviewActionBar({
 
   return (
     <div dir="ltr" className="flex flex-col items-center gap-3">
-      {/* Apply Comments — detached glass cell that appears ABOVE the main
-          toolbar when there are drafts AND the user hasn't armed yet.
-          Hidden the moment `commentsArmed` flips true (after user clicks
-          Apply): the regen button in the toolbar morphs to a check and
-          becomes the trigger that actually fires the partial regen. */}
-      <AnimatePresence initial={false}>
-        {commentMode && draftCommentCount > 0 && !commentsArmed && !applying ? (
-          <motion.div
-            key="apply-cell-wrapper"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            // Tween with ease-out-quart: fast at the start, smooth slow at
-            // the end, NO spring tail / wobble. Same curve on enter + exit
-            // so the toolbar settling animation feels equally crisp both
-            // directions.
-            transition={{
-              height: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-              opacity: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
-            }}
-            style={{ overflow: "hidden" }}
-          >
-            <motion.div
-              // Pop-in via scale + fade only — no slide-from-bottom (the
-              // toolbar's glass-card clipped the slide, made it look cut).
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.6, opacity: 0 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="glass-card flex items-center justify-center rounded-2xl p-2"
-            >
-              <ToolButton
-                icon="check"
-                label={`تطبيق التعليقات (${draftCommentCount})`}
-                active
-                running={applying}
-                onClick={onApplyComments}
-                disabled={applying}
-              />
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
       {/* Toolbar column — Photoshop-style icon stack. All buttons share
           one neutral glass surface. */}
       <div
         className="glass-card flex flex-col items-center gap-1.5 rounded-2xl p-2"
       >
-        {/* Regen button — gradient mesh visual. Two roles depending on
-            state:
-              - NOT armed: full-deck regenerate (autorenew icon, calls
-                /regenerate). Disabled while in comment mode.
-              - ARMED (apply was clicked): fires the partial regen for
-                the drafted slides (check icon, calls /regenerate-partial).
-            Icon morphs via a one-shot 360° rotation during the swap —
-            sits still after. */}
+        {/* Regen button — two roles depending on state:
+              • Idle / no drafts: full-deck regenerate (autorenew).
+              • Armed (drafts exist + commentMode off): partial regen
+                on drafted slides (auto_awesome — the AI sparkles).
+            Disabled while in comment mode (user is still authoring)
+            and while a partial regen is already in flight. Icon
+            morphs via a 360° rotation + crossfade on the same axis. */}
         <ToolButton
-          icon="autorenew"
+          icon={commentsArmed ? "auto_awesome" : "autorenew"}
           label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد التصميم"}
           gradient
           running={regen.status === "running"}
           onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
-          // Comment mode disables full regen so we don't lose drafts to a
-          // full-deck regen. While applying, the button itself is locked
-          // (the slide-level overlay already signals "in flight").
-          disabled={applying || (commentMode && !commentsArmed)}
+          disabled={applying || commentMode}
           iconNode={
-            // Rotation only during the icon swap (~0.5s). After the swap,
-            // the icon sits still. Same direction both ways so the morph
-            // reads as one continuous motion (sidebar burger ↔ close).
             <motion.div
               animate={{ rotate: commentsArmed ? 360 : 0 }}
               transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
               className="flex h-[22px] w-[22px] items-center justify-center"
             >
               <AnimatePresence mode="wait" initial={false}>
-                {commentsArmed ? (
-                  <motion.span
-                    key="check"
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{ duration: 0.25 }}
-                    className="material-symbols-outlined text-[22px]"
-                  >
-                    check
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="autorenew"
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{ duration: 0.25 }}
-                    className="material-symbols-outlined text-[22px]"
-                  >
-                    autorenew
-                  </motion.span>
-                )}
+                <motion.span
+                  key={commentsArmed ? "armed" : "idle"}
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={{ duration: 0.25 }}
+                  className="material-symbols-outlined text-[22px]"
+                >
+                  {commentsArmed ? "auto_awesome" : "autorenew"}
+                </motion.span>
               </AnimatePresence>
             </motion.div>
           }

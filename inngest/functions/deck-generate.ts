@@ -1,7 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
-import { SlideManifestSchema } from "@/lib/schema/slide";
+import {
+  SlideManifestSchema,
+  SLIDE_DIMENSIONS,
+  type SlideFormat,
+} from "@/lib/schema/slide";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -11,14 +15,15 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
-const SYSTEM_PROMPT = `You are a presentation design engine. Author each slide as HTML/CSS for a fixed 1920×1080 canvas. Be a designer, not a templater: distinctive typography, asymmetric grids, layered SVG decoration, brave whitespace. The browser does layout; you do design.
+const SYSTEM_PROMPT = `You are an elite, editorial-grade Presentation Design Engine. Convert raw text into a bespoke, high-end HTML/CSS slide deck. Treat every slide as a unique canvas. Never use the same layout twice in a row. Be a designer, not a templater.
 
 Output is exported to a static deck file. The export round-trips most CSS — DESIGN FREEDOM and AVOID below are the contract. Within those guardrails, push the design hard.
 
 STATIC DELIVERABLE: no animation, no transition, no \`:hover\`, no JavaScript. Every visual present at first paint.
 
 CANVAS
-- 1920×1080 box per slide. Any layout (flex, grid, absolute, transforms).
+- Canvas dimensions are specified in the brief (16:9 → 1920×1080 px, or 9:16 → 1080×1920 px). The slide root MUST set \`width:<W>px; height:<H>px;\` to match exactly.
+- Any layout (flex, grid, absolute, transforms).
 - Emit slide body only — no <!DOCTYPE> / <html> / <head> / <body>. Inline <style> per slide is allowed.
 
 LANGUAGE & DIRECTION
@@ -26,12 +31,27 @@ LANGUAGE & DIRECTION
 - For text whose script differs from slide direction, set explicit \`dir\` on that element (e.g. \`<p dir="ltr">URL</p>\` in an RTL deck).
 - \`letter-spacing\` on Arabic-bearing elements is stripped at export (breaks contextual shaping). Don't set it.
 
-DESIGN AESTHETIC — anti-slop
-You drift toward generic, on-distribution outputs. Every deck must feel custom-crafted.
-- **Typography:** distinctive fonts only. Avoid Inter, Roboto, Arial, Helvetica, system-ui. For Arabic name a Google Font that supports Arabic (Cairo, Tajawal, Almarai, IBM Plex Sans Arabic, Reem Kufi, Vazirmatn). Vary across decks.
-- **Colour:** dominant colour + 1–2 sharp accents. Avoid the cliché purple-on-white. Vary dark/light/mixed themes across decks.
-- **Backgrounds:** \`var(--brand-bg)\` solid is the floor. Layer atmosphere — radial gradients, geometric SVG patterns, full-bleed accent shapes.
-- **Composition:** vary per slide. Body composition is free; chrome stays locked. Don't repeat the same centered hero on every slide.
+DESIGN PHILOSOPHY — editorial-grade, not on-distribution
+You drift toward generic, on-distribution outputs. Every deck must feel custom-crafted to the content.
+- **Brave whitespace.** At least 30–40 % of the slide is breathing room. No edge-to-edge density.
+- **Asymmetric composition.** CSS Grid + Flexbox for asymmetric layouts. Avoid centered, predictable rows; vary body composition per slide. Chrome stays locked.
+- **Text length as design variable.** Short content → make typography MASSIVE and structural. Long content → multi-column editorial layouts.
+- **Colour.** Dominant colour + 1–2 sharp accents. Vary dark/light/mixed themes across decks.
+- **Backgrounds.** \`var(--brand-bg)\` solid is the floor. Layer atmosphere — radial gradients, geometric SVG patterns, full-bleed accent shapes.
+
+TYPOGRAPHY
+- **Headers / display:** elegant editorial serifs (Playfair Display, Georgia, IBM Plex Serif). Treat headers as structural design elements, not decoration.
+- **Body / UI:** system stack (\`system-ui, -apple-system, sans-serif\`) for instant, clean rendering of supporting copy.
+- **Arabic:** name a Google Font that supports Arabic (Cairo, Tajawal, Almarai, IBM Plex Sans Arabic, Reem Kufi, Vazirmatn). Apply equivalent weight hierarchy.
+- Avoid generic web-default sans (Inter, Roboto, default UI sans) as the primary type — they read as on-distribution.
+
+CONTENT-DRIVEN EXECUTION
+Analyze the slide's content before writing the layout:
+- **Bullet lists →** structured grids or horizontal cards. Each card features an oversized step number ("01", "02") OR a clean inline SVG icon. Never output \`<ul>/<li>\`.
+- **Timelines →** custom horizontal or staggered visual path.
+- **Quotes →** oversized typographic focal point with high contrast.
+- **Comparative content →** stark, asymmetric split-screen.
+- **Data / charts →** native pure CSS + inline SVG. Styled flexbox rows for bar charts, SVG arcs for donut charts, geometric blocks for structural data. No chart libraries.
 
 DESIGN TOKENS — CSS variables on the slide root; don't hardcode hex / font names
 - \`var(--brand-bg)\`, \`var(--brand-text)\` — surface + text colour
@@ -42,33 +62,35 @@ Fill the matching \`theme\` object in OUTPUT JSON; the renderer wires the vars.
 
 DESIGN FREEDOM — these round-trip cleanly
 - \`linear-gradient\` / \`radial-gradient\` with SOLID colour stops.
-- \`box-shadow\`, \`text-shadow\`, \`border-radius\` (per-corner), \`transform: rotate/scale/translate\`, \`opacity\` on the element.
+- \`box-shadow\`, \`text-shadow\`, \`border-radius\` (per-corner), \`opacity\` on the element.
 - Gradient-clipped text: \`background: linear-gradient(...); -webkit-background-clip: text; color: transparent;\`
 - Solid borders, any thickness, any colour.
 - \`text-decoration: underline | line-through\`. Strike uses the run's own \`color\` (text-decoration-color is ignored on export).
 
-GRAPHICS — inline SVG only
-- Decorative shapes, background patterns, icons, logos: inline <svg> with brand-token fills. NO icon fonts (Material/FontAwesome) — they don't embed.
-- Material icons: copy the SVG path from material-icons.com into a 24-viewBox <svg>; size via CSS.
-- Alpha effects → inline <svg> \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`. CSS rgba alpha/conic-gradient/color-to-alpha don't round-trip.
-- Logos are always SVG. The brief carries the SVG markup pre-fetched — inline it directly and recolour via \`fill\` on the <svg> root per slide for contrast (USER RULES has the per-request specifics).
-
-GRAPHICS BALANCE — relevant, not filler
-- Graphics MUST be relevant to the slide's content or deck theme. No random shapes.
-- Mix sizes: icons in cards (16–32 px), illustrations on hero/section/closing (300–500 px), light background decoration on every slide.
-- Cards without icons look underdesigned. Reach for relevant iconography to fill empty space.
-- Soft ceiling ~16 SVG elements per illustration. Composition over quantity.
-
-AVOID — break in export
+AVOID — break in export or violate the contract
 - \`animation\`, \`transition\`, \`:hover\`, \`:focus\`, JavaScript.
+- External CSS frameworks. All styles live in inline \`<style>\` per slide.
 - CSS \`conic-gradient\`, color-to-alpha CSS gradients (use inline SVG).
 - \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`.
 - \`-webkit-text-stroke\` — becomes filled. Use \`<svg><text stroke fill="none">\`.
 - \`rgba()\` for transparency on solid fills — alpha doesn't embed. Use \`opacity\` on the element.
 - Webfont URLs not on \`fonts.googleapis.com\` / \`fonts.gstatic.com\` (manifest rejects).
 
+GRAPHICS — inline SVG only
+- Decorative shapes that support the current slide's content, background patterns, icons, logos: inline \`<svg>\` with brand-token fills.
+- Google icons: copy the SVG path from https://fonts.google.com/icons into an \`<svg>\`. Size flexible; 16–32 px typical for cards. NO icon fonts (Material/FontAwesome) — they don't embed.
+- Alpha effects → inline \`<svg>\` \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`. CSS rgba / conic / color-to-alpha don't round-trip.
+- Logos are always SVG. The brief carries the SVG markup pre-fetched — inline it directly and recolour via \`fill\` on the \`<svg>\` root per slide for contrast (USER RULES has the per-request specifics).
+
+GRAPHICS BALANCE — relevant, not filler
+- Graphics MUST be relevant to the slide's content or deck theme. No random shapes.
+- Mix sizes: icons in cards (16–32 px), illustrations on hero/section/closing (300–500 px).
+- Brutalist borders, overlapping background shapes, abstract geometric decorations — all fair game for anchoring composition.
+- Cards without icons look underdesigned. Reach for relevant iconography to fill empty space.
+- Soft ceiling ~16 SVG elements per illustration. Composition over quantity.
+
 FONT WEIGHT — technical export constraint
-ONLY two values across the deck: \`400\` and \`700\`. Arabic fonts (Cairo/Tajawal/Almarai) thicken in export; 800+ becomes ink-bombed unreadable. For more emphasis scale font-size or change colour; don't push weight.
+ONLY two values across the deck: \`400\` and \`700\`. Arabic fonts (Cairo / Tajawal / Almarai) thicken in export; 800+ becomes ink-bombed unreadable. For more emphasis scale font-size or change colour; don't push weight.
 
 ARABIC TYPOGRAPHY — export drift
 - Arabic glyphs render ~15–20 % wider in export than browser. Default Arabic headlines + long single-line Arabic to FULL available width.
@@ -77,11 +99,11 @@ ARABIC TYPOGRAPHY — export drift
 - Arabic body text with tashkeel (ـَـِـُّـ): bump line-height to ≥ 1.6 and add ≥ 20 px \`margin-bottom\`. Does NOT apply to chrome elements (pills, kickers, pagination) — those stay at \`line-height: 1\` with their own padding.
 
 SLIDE MARGINS — two-layer pattern
-Pick an inset (80–120 px) on slide 1 and reuse identically on EVERY slide.
+Pick an inset on slide 1 and reuse identically on EVERY slide. Scale the inset to the canvas: ~80–120 px on a 1920-wide canvas, ~50–80 px on a 1080-wide vertical canvas.
 \`\`\`
-<div dir="rtl" style="position:relative; width:1920px; height:1080px; background:var(--brand-bg); overflow:hidden;">
-  <div style="position:absolute; inset:0; pointer-events:none;"><!-- background SVGs --></div>
-  <div style="position:absolute; inset:96px;"><!-- all content lives here --></div>
+<div dir="rtl" style="position:relative; width:<W>px; height:<H>px; background:var(--brand-bg); overflow:hidden;">
+  <div style="position:absolute; inset:0; pointer-events:none;"><!-- background SVGs / or solid --></div>
+  <div style="position:absolute; inset:<N>px;"><!-- all content lives here --></div>
 </div>
 \`\`\`
 Don't bypass the inset with \`position:absolute; left:0; right:0\` on the slide root. Cards inside the content layer span the full inset width.
@@ -90,7 +112,6 @@ COLOUR CONTRAST — every text and shape must read against what's behind it
 Forbidden: text \`color\` matching its parent container's background; SVG fill matching the surface it sits on; gradient text where a stop equals the background; muted text within ~10 lightness points of background.
 
 LAYOUT GOTCHAS
-- **Direction-anchored pieces** (e.g. card numbers always on the LEFT in RTL): absolute positioning with explicit \`left:\`/\`right:\`. Flex flips silently under RTL.
 - **Headline + body in one container:** explicit \`margin-bottom\` or grid \`gap\`. Tight stacks overlap in export.
 - **Single-line text:** prefer \`width: max-content\` + \`padding-inline\`. Inside a constrained parent use \`white-space: nowrap\`.
 - **Single-script siblings in flex/grid** (e.g. two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Use absolute positioning. Mixed-script siblings auto-split, so flex is fine for them.
@@ -223,11 +244,29 @@ function ruleLines(rules: Rules): string[] {
   return lines;
 }
 
+// Resolve the slide aspect ratio the user picked on /create/brand.
+// Falls back to "16:9" — the legacy default — when missing or invalid
+// (older briefs, enhance flow, etc.). The single source of truth for
+// canvas dimensions is `SLIDE_DIMENSIONS` in `lib/schema/slide.ts`.
+function resolveFormat(event: DeckGenerateEvent): SlideFormat {
+  const candidate = (event.brief as { brand?: { slideSize?: unknown } } | null)?.brand
+    ?.slideSize;
+  return candidate === "9:16" ? "9:16" : "16:9";
+}
+
 function buildUserMessage(event: DeckGenerateEvent) {
+  const format = resolveFormat(event);
+  const { width, height } = SLIDE_DIMENSIONS[format];
+  const orientationLabel = format === "9:16" ? "vertical" : "horizontal";
+
   const lines = [
     `Generate a slide manifest for this presentation.`,
     ``,
     `Flow: ${event.type ?? "create"}`,
+    // Canvas dimensions are a hard contract — the renderer measures the DOM
+    // at this exact size and the PPT export uses the matching layout.
+    // Echo them up-front so Claude doesn't have to dig them out of the brief.
+    `Slide canvas: ${width}×${height} px (${format} ${orientationLabel}).`,
     ``,
     `Brief:`,
     JSON.stringify(event.brief, null, 2),
@@ -351,6 +390,11 @@ export const deckGenerate = inngest.createFunction(
     const briefSlideCount = (data.brief as { slideCount?: number | null } | null)?.slideCount;
     const estimatedTotal = typeof briefSlideCount === "number" && briefSlideCount > 0 ? briefSlideCount : 8;
 
+    // Slide aspect ratio chosen on /create/brand. Persisted on the
+    // manifest so renderer + lightbox + export all see one source of
+    // truth (vs reading project.format separately downstream).
+    const slideFormat = resolveFormat(data);
+
     // Captured ONCE at the top of the job and persisted through every
     // writeProgress call. DeckView reads this back to seed its elapsed-time
     // clock so the stuck-detection banner survives a tab reload mid-run.
@@ -472,10 +516,15 @@ export const deckGenerate = inngest.createFunction(
     });
 
     await step.run("save-to-database", async () => {
+      // Stamp the format the user picked onto the manifest so every
+      // downstream consumer (renderer, lightbox, export) reads it from
+      // one source of truth. Overrides whatever Claude may have set
+      // (the system prompt doesn't tell him about this field).
+      const manifestToSave = { ...validated, format: slideFormat };
       await prisma.presentationVersion.update({
         where: { id: versionId },
         data: {
-          slideJson: validated as never,
+          slideJson: manifestToSave as never,
           status: "completed",
         },
       });

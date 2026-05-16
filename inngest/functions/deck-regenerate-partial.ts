@@ -265,6 +265,12 @@ export const deckRegeneratePartial = inngest.createFunction(
         title: source.title,
         language: source.language,
         direction: source.direction,
+        // Inherit the source manifest's format (16:9 / 9:16). Without
+        // this, the rebuilt manifest has `format: undefined` and every
+        // downstream consumer (lightbox, renderer, export) falls back
+        // to the 16:9 default — visibly resetting a 9:16 deck back to
+        // landscape after a partial regen.
+        format: source.format,
         theme: source.theme,
         slides,
       };

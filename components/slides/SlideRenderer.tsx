@@ -96,11 +96,22 @@ export function SlideRenderer({
           ...cssVars,
           width,
           height,
+          // `position: absolute` + `left: 0; top: 0` pins the scaled
+          // child to the outer wrapper's top-left corner regardless
+          // of any ancestor's direction. Without this, an unscaled
+          // box that is wider than its outer wrapper (always true:
+          // 1080px content scaled to ~100px thumbnail) sits at
+          // overflow's start edge — which is `right` in RTL flow
+          // and `left` in LTR — so the matching `transform-origin`
+          // would have to flip too. Pinning to top-left lets us use
+          // a single `transform-origin: top left` everywhere.
+          position: "absolute",
+          left: 0,
+          top: 0,
           transform: `scale(${scale})`,
-          transformOrigin: direction === "rtl" ? "top right" : "top left",
+          transformOrigin: "top left",
           color: theme.text,
           fontFamily: `var(--font-body)`,
-          position: "relative",
           overflow: "hidden",
         }}
         dangerouslySetInnerHTML={{ __html: sanitized }}

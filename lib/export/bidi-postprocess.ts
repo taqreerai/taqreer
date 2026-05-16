@@ -60,7 +60,15 @@ const SHAPE_WIDTH_SLACK_ARABIC = 0.14;
 // unchanged.
 const SHAPE_WIDTH_SLACK_MIN_EMU = 100000;
 const MAX_SINGLE_LINE_CHARS = 80;
-const SLIDE_WIDTH_EMU = 9144000;
+// Slide width in EMU per format. dom-to-pptx defines the PPT layout with
+// these exact dimensions (10″ × 5.625″ for 16:9; 5.625″ × 10″ for 9:16),
+// so the post-processor's bounds checks must match.
+const SLIDE_WIDTH_EMU_BY_FORMAT = {
+  "16:9": 9144000,
+  "9:16": 5143500,
+} as const;
+const DEFAULT_SLIDE_WIDTH_EMU = SLIDE_WIDTH_EMU_BY_FORMAT["16:9"];
+type PostprocessFormat = keyof typeof SLIDE_WIDTH_EMU_BY_FORMAT;
 /**
  * Cap on which shapes get PASS 3 extension. Originally set to 3 M EMU
  * (~33 % slide width) on the assumption only badges / breadcrumbs / chips
@@ -164,8 +172,10 @@ function buildGradFillXml(spec: {
 function injectBiDiMarkers(
   xml: string,
   stats: BiDiPostprocessStats,
-  gradientIntents?: GradientIntents
+  gradientIntents?: GradientIntents,
+  slideWidthEmu: number = DEFAULT_SLIDE_WIDTH_EMU,
 ): string {
+  const SLIDE_WIDTH_EMU = slideWidthEmu;
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, "application/xml");
 
@@ -975,7 +985,8 @@ export async function fixBiDiInPptxBlob(
   blob: Blob,
   JSZip: typeof JSZipType,
   stats: BiDiPostprocessStats,
-  gradientIntents?: GradientIntents
+  gradientIntents?: GradientIntents,
+  format: PostprocessFormat = "16:9",
 ): Promise<Blob> {
   stats.invocations++;
 
@@ -986,12 +997,17 @@ export async function fixBiDiInPptxBlob(
     /^ppt\/slides\/slide\d+\.xml$/.test(p)
   );
 
+  // Match dom-to-pptx's PPT layout dimensions for this format so all
+  // bounds checks (PASS 3 max-cx clamp, PASS 3.5 row position anchor)
+  // see the actual slide right edge.
+  const slideWidthEmu = SLIDE_WIDTH_EMU_BY_FORMAT[format];
+
   for (const path of slidePaths) {
     const file = zip.file(path);
     if (!file) continue;
     stats.slidesScanned++;
     const xml = await file.async("text");
-    const fixed = injectBiDiMarkers(xml, stats, gradientIntents);
+    const fixed = injectBiDiMarkers(xml, stats, gradientIntents, slideWidthEmu);
     if (fixed !== xml) {
       stats.slidesFixed++;
       zip.file(path, fixed);

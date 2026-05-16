@@ -99,6 +99,27 @@ const Slide = z.object({
   html: z.string().min(1),
 });
 
+// Slide aspect ratio. 16:9 is the legacy default (landscape PPT, what we
+// shipped at). 9:16 is the vertical / mobile-first alternative the user
+// can pick on /create/brand. Authored at:
+//   16:9 → 1920×1080 px in the browser → 10″ × 5.625″ in PPT (16:9 wide)
+//   9:16 → 1080×1920 px in the browser → 5.625″ × 10″ in PPT (vertical)
+// dom-to-pptx accepts custom layout via { width, height } in inches.
+export const SLIDE_FORMATS = ["16:9", "9:16"] as const;
+export type SlideFormat = (typeof SLIDE_FORMATS)[number];
+
+// Canonical pixel dimensions Claude authors against for each format.
+// Same constants exported for the renderer, lightbox, and export
+// pipeline so there's one source of truth.
+export const SLIDE_DIMENSIONS = {
+  "16:9": { width: 1920, height: 1080 },
+  "9:16": { width: 1080, height: 1920 },
+} as const;
+
+export function dimensionsForFormat(format: SlideFormat | undefined) {
+  return SLIDE_DIMENSIONS[format ?? "16:9"];
+}
+
 export const SlideManifestSchema = z.object({
   version: z.literal("2.0"),
   presentationId: z.string().min(1),
@@ -108,6 +129,10 @@ export const SlideManifestSchema = z.object({
   title: z.string().trim().min(1).max(160),
   language: z.enum(["ar", "en"]),
   direction: Direction,
+  // Slide aspect ratio chosen by the user on /create/brand. Optional
+  // for backwards-compat with manifests written before this field
+  // existed — consumers fall back to "16:9" via `dimensionsForFormat`.
+  format: z.enum(SLIDE_FORMATS).optional(),
   theme: Theme,
   slides: z.array(Slide).min(1),
   // Streaming progress, written during generation and removed once final.

@@ -589,6 +589,80 @@ body {
   .btn-gradient-anim { animation: none; }
 }
 
+/* ─── Canvas gradient border ──────────────────────────────────────────
+   Same animated mesh-gradient ring concept as `.btn-gradient-anim`, but:
+     • Thicker padding (3 px) for visibility at canvas scale.
+     • Uses `::after` so the ring paints OVER child content (the
+       SlideRenderer's scaled slide sits in the same box).
+     • Drift is ~2.5x slower than the button — a calm pulse rather
+       than the urgent CTA hum (canvas is the whole slide; the button
+       is a 44 px target).
+     • Visibility is `data-active`-driven so toggling it actually
+       fades the ring in / out over 1 s. The class itself stays on
+       the hero permanently; `data-active="true"` reveals the ring.
+   Drop on the hero canvas; flip `data-active` when comment mode
+   turns on / off.                                                      */
+.canvas-gradient-border {
+  position: relative;
+  isolation: isolate;
+  animation:
+    mx1 2.5s ease-in-out infinite alternate,
+    my1 4.0s ease-in-out infinite alternate,
+    mx2 4.8s ease-in-out infinite alternate,
+    my2 3.3s ease-in-out infinite alternate,
+    mx3 6.2s ease-in-out infinite alternate,
+    my3 1.8s ease-in-out infinite alternate,
+    mx4 3.0s ease-in-out infinite alternate,
+    my4 4.5s ease-in-out infinite alternate,
+    mx5 2.3s ease-in-out infinite alternate,
+    my5 3.8s ease-in-out infinite alternate,
+    mx6 5.0s ease-in-out infinite alternate,
+    my6 5.8s ease-in-out infinite alternate;
+}
+
+.canvas-gradient-border::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* 3 px ring — bumped from the button's 2 px so the gradient reads
+     clearly at canvas-scale. Tweak to 4 px if 3 still feels thin. */
+  padding: 3px;
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
+    rgba(255, 255, 255, var(--glass-border-opacity));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  /* Above the SlideRenderer (auto-stacked at z:auto). */
+  z-index: 2;
+  /* Default hidden — fade in when data-active flips on, fade out
+     when it flips off. 1 s ease so both transitions feel matched. */
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+.canvas-gradient-border[data-active="true"]::after {
+  opacity: 1;
+}
+
+/* Pause the drift while the ring is invisible — no point burning
+   composite cycles on a 0-opacity overlay. The fade transition
+   isn't affected (transition is on opacity, not animation). */
+.canvas-gradient-border:not([data-active="true"]) {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-gradient-border { animation: none; }
+}
+
 /* ─── Standard secondary pill ─────────────────────────────────────────
    The default style for all non-CTA buttons across the dashboard:
    glass surface, dim border + muted text idle, bright border + white

@@ -4,11 +4,13 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
+// Same envelope as POST — 1920 on both axes covers 16:9 (1920×1080) and
+// 9:16 (1080×1920). Format-specific tightening is the lightbox's job.
 const BoundsSchema = z.object({
   x: z.number().min(0).max(1920),
-  y: z.number().min(0).max(1080),
+  y: z.number().min(0).max(1920),
   w: z.number().min(1).max(1920),
-  h: z.number().min(1).max(1080),
+  h: z.number().min(1).max(1920),
 });
 
 const PatchCommentSchema = z

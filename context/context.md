@@ -292,6 +292,7 @@ The schema lives in [`lib/schema/slide.ts`](../lib/schema/slide.ts). Each slide 
     "background": "#0D0B1F",                   // exposed as --brand-bg
     "text":       "#FFFFFF"                    // exposed as --brand-text
   },
+  "format": "16:9" | "9:16",                // slide aspect ratio (16:9 → 1920×1080 px, 9:16 → 1080×1920 px). Optional; consumers fall back to 16:9 via `dimensionsForFormat`.
   "slides": [
     { "slideId": "s1", "role": "cover", "html": "<div style=...>...</div>" },
     { "slideId": "s2", "role": "content", "html": "..." }
@@ -306,6 +307,7 @@ The schema lives in [`lib/schema/slide.ts`](../lib/schema/slide.ts). Each slide 
 - No `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` wrapper. Slide body content only.
 - Set `dir="rtl"` or `dir="ltr"` on the slide root. The export pipeline handles all BiDi metadata downstream — no `<bdi>`, no U+200E/U+200F marks.
 - Inline `<style>`, `<svg>`, `<link>`, `<img>` allowed; `<script>`, event handlers, `javascript:` URIs are stripped at render by DOMPurify (graceful fallback when SSR singleton is missing — see §15).
+- Slide roots set `width:<W>px; height:<H>px` matching the manifest's `format` — 1920×1080 for 16:9, 1080×1920 for 9:16. The renderer / lightbox / export all derive dimensions from one source: `dimensionsForFormat(manifest.format)` in `lib/schema/slide.ts`.
 - Slide roles: `cover · section · content · stats · quote · image · closing` (optional).
 
 The pre-pivot schema was a JSON manifest with per-element `{type, x, y, width, height, style.fontSize, …}`. Claude was doing layout math. That schema was deleted in §18.

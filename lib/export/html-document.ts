@@ -1,4 +1,5 @@
 import type { SlideManifest } from "@/lib/schema/slide";
+import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 
 /**
@@ -22,6 +23,7 @@ import { sanitizeSlideHtml } from "@/lib/export/sanitize";
  * the only intended caller and is browser-triggered.
  */
 export function buildHtmlDocument(manifest: SlideManifest): string {
+  const { width: canvasW, height: canvasH } = dimensionsForFormat(manifest.format);
   const fontLinks = [manifest.theme.fontHeading.url, manifest.theme.fontBody.url]
     .filter(
       (url, i, arr): url is string =>
@@ -76,8 +78,8 @@ ${cssVars}
     color: var(--brand-text);
   }
   .hx-slide {
-    width: 1920px;
-    height: 1080px;
+    width: ${canvasW}px;
+    height: ${canvasH}px;
     margin: 0 auto 24px;
     background: var(--brand-bg);
     position: relative;
