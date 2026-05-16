@@ -605,6 +605,20 @@ function injectBiDiMarkers(
     const oldY = off ? parseInt(off.getAttribute("y") ?? "0", 10) : 0;
     const oldCy = parseInt(ext.getAttribute("cy") ?? "0", 10);
 
+    // ASPECT-RATIO GUARD: near-square shapes are numbered badges /
+    // avatars / icon containers / single-glyph chips. They have full
+    // border-radius and render as visual circles. PASS 3 only grows
+    // cx (never cy), so applying slack here turns the circle into an
+    // oval. Skip them entirely — drift on 1-2 character content is
+    // tiny in absolute terms and these shapes are already sized
+    // comfortably for what they hold. The 0.85..1.18 window covers
+    // natural circle shapes with a small tolerance for rounding noise
+    // out of dom-to-pptx.
+    if (oldCy > 0) {
+      const aspectRatio = oldCx / oldCy;
+      if (aspectRatio > 0.85 && aspectRatio < 1.18) continue;
+    }
+
     // Containment-aware clamp: if this text shape is enclosed by a
     // container (card with visible bg/border), the growth on each side
     // is capped at the gap between the text shape's edge and the
@@ -659,6 +673,236 @@ function injectBiDiMarkers(
         off.setAttribute("x", String(newOffX));
       }
       stats.shapesWidened++;
+    }
+  }
+
+  // PASS 3.5: pill-row overlap resolution + direction-aware anchor.
+  //
+  // After PASS 3 widens pills (~14 % each), pills in a flex row may
+  // overlap visibly because the CSS gap (typically 16 px) is smaller
+  // than the combined growth. PASS 3 already produced the correct
+  // widths to fit text on one line — we just need to shift overlapping
+  // pills apart so they don't touch.
+  //
+  // Strategy:
+  //   1. Detect rows of pill-like shapes via vertical-overlap clustering.
+  //   2. Determine each row's ANCHOR by majority-voting on per-pill algn:
+  //      "r" → preserve rightmost pill's right edge (Claude's RTL
+  //      design anchor); "l" → preserve leftmost left edge; "ctr"
+  //      → preserve original row center.
+  //   3. Walk left-to-right and push overlapping pills rightward to
+  //      maintain a small visible gap.
+  //   4. Shift the entire row so the post-resolve anchor position
+  //      matches the pre-resolve anchor position — without this, the
+  //      row drifts past Claude's designed slide margin.
+  //   5. Final clamp to slide bounds with a small buffer to catch
+  //      truly egregious rows.
+  // Widths are NEVER changed here — only positions. Solo pills are
+  // untouched.
+  {
+    const PILL_MIN_GAP_EMU = 40000; // ~8 px visible gap after shift
+    const SLIDE_EDGE_MARGIN_EMU = 285000; // ~60 px buffer from slide edges
+    const PILL_MAX_HEIGHT_EMU = 600000; // exclude cards / heroes (>~126 px)
+    // A row's distance from the slide edge (in EMU). If the rightmost
+    // pill's right edge is within this many EMU of the slide's right
+    // edge, the row is treated as right-anchored (Claude designed it
+    // flush with the right margin). Same for left. 1.2 M EMU ≈ 250 px
+    // ≈ comfortable headroom past typical 80-120 px slide margins.
+    const PILL_ROW_MARGIN_PROXIMITY_EMU = 1200000;
+
+    type RowShape = {
+      off: Element | null;
+      x: number;
+      y: number;
+      cx: number;
+      cy: number;
+    };
+
+    // Collect pill-like shapes. A pill = bordered or filled box with
+    // small height and wider-than-tall aspect (excludes circles).
+    const pillShapes: RowShape[] = [];
+    for (let i = 0; i < spShapes.length; i++) {
+      const sp = spShapes[i];
+      let spPrEl: Element | null = null;
+      let hasTxBody = false;
+      for (let j = 0; j < sp.children.length; j++) {
+        const c = sp.children[j];
+        if (c.namespaceURI === NS_P && c.localName === "spPr") spPrEl = c;
+        else if (c.namespaceURI === NS_P && c.localName === "txBody")
+          hasTxBody = true;
+      }
+      if (!spPrEl || !hasTxBody) continue;
+
+      let xfrmEl: Element | null = null;
+      let solidFillEl: Element | null = null;
+      let lnEl: Element | null = null;
+      for (let j = 0; j < spPrEl.children.length; j++) {
+        const c = spPrEl.children[j];
+        if (c.namespaceURI !== NS_A) continue;
+        if (c.localName === "xfrm") xfrmEl = c;
+        else if (c.localName === "solidFill") solidFillEl = c;
+        else if (c.localName === "ln") lnEl = c;
+      }
+      if (!xfrmEl) continue;
+
+      let offEl: Element | null = null;
+      let extEl: Element | null = null;
+      for (let j = 0; j < xfrmEl.children.length; j++) {
+        const c = xfrmEl.children[j];
+        if (c.namespaceURI !== NS_A) continue;
+        if (c.localName === "off") offEl = c;
+        else if (c.localName === "ext") extEl = c;
+      }
+      if (!extEl) continue;
+
+      const xR = offEl ? parseInt(offEl.getAttribute("x") ?? "0", 10) : 0;
+      const yR = offEl ? parseInt(offEl.getAttribute("y") ?? "0", 10) : 0;
+      const cxR = parseInt(extEl.getAttribute("cx") ?? "0", 10);
+      const cyR = parseInt(extEl.getAttribute("cy") ?? "0", 10);
+      if (
+        !Number.isFinite(cxR) ||
+        cxR <= 0 ||
+        !Number.isFinite(cyR) ||
+        cyR <= 0
+      )
+        continue;
+
+      // Pill filter: short height, has visible fill OR border, wider
+      // than tall (skip circles / numbered badges).
+      if (cyR > PILL_MAX_HEIGHT_EMU) continue;
+      if (cxR / cyR < 1.15) continue;
+      const hasFill = !!solidFillEl;
+      const hasBorder = !!lnEl && (lnEl.getAttribute("w") ?? "0") !== "0";
+      if (!hasFill && !hasBorder) continue;
+
+      pillShapes.push({ off: offEl, x: xR, y: yR, cx: cxR, cy: cyR });
+    }
+
+    // Cluster into rows by vertical overlap (>50 % of the shorter pill).
+    // Iterate to a fixed point so a chain of pills connects transitively.
+    const visited = new Set<number>();
+    const rows: RowShape[][] = [];
+    for (let i = 0; i < pillShapes.length; i++) {
+      if (visited.has(i)) continue;
+      const row: RowShape[] = [pillShapes[i]];
+      visited.add(i);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (let j = 0; j < pillShapes.length; j++) {
+          if (visited.has(j)) continue;
+          const cand = pillShapes[j];
+          let inRow = false;
+          for (const member of row) {
+            const vOverlap =
+              Math.min(member.y + member.cy, cand.y + cand.cy) -
+              Math.max(member.y, cand.y);
+            const minCy = Math.min(member.cy, cand.cy);
+            if (vOverlap >= minCy * 0.5) {
+              inRow = true;
+              break;
+            }
+          }
+          if (inRow) {
+            row.push(cand);
+            visited.add(j);
+            grew = true;
+          }
+        }
+      }
+      if (row.length >= 2) {
+        row.sort((a, b) => a.x - b.x);
+        rows.push(row);
+      }
+    }
+
+    // Resolve overlaps, restore the row's design anchor, then clamp to
+    // slide bounds.
+    //
+    // Anchor is determined by the ROW'S PRE-RESOLVE POSITION on the
+    // slide, not by per-pill text-align. If the row sits near the right
+    // edge, Claude designed it flush against the right margin — we
+    // preserve the rightmost pill's right edge. Mirror for left. If
+    // the row is far from BOTH edges (centered or free-floating), we
+    // preserve the row's original midpoint.
+    for (const row of rows) {
+      const preLeft = row[0].x;
+      const preRight = row[row.length - 1].x + row[row.length - 1].cx;
+      const preCenter = (preLeft + preRight) / 2;
+
+      const distFromLeftEdge = preLeft;
+      const distFromRightEdge = SLIDE_WIDTH_EMU - preRight;
+      let anchor: "left" | "right" | "center";
+      if (
+        distFromRightEdge < PILL_ROW_MARGIN_PROXIMITY_EMU &&
+        distFromRightEdge <= distFromLeftEdge
+      ) {
+        anchor = "right";
+      } else if (
+        distFromLeftEdge < PILL_ROW_MARGIN_PROXIMITY_EMU &&
+        distFromLeftEdge < distFromRightEdge
+      ) {
+        anchor = "left";
+      } else {
+        anchor = "center";
+      }
+
+      // Walk left-to-right: each pill must start at >= prev.right + MIN_GAP.
+      for (let k = 1; k < row.length; k++) {
+        const prev = row[k - 1];
+        const cur = row[k];
+        const minLeftX = prev.x + prev.cx + PILL_MIN_GAP_EMU;
+        if (cur.x < minLeftX) cur.x = minLeftX;
+      }
+
+      // Restore anchor: shift the entire row so the anchored edge
+      // (or center) returns to its original position. This is what
+      // keeps Claude's designed slide margin intact — the overlap
+      // resolver inevitably pushes pills outward, so without the
+      // restore the row drifts (typically right, since we walk
+      // left-to-right). Mirrored when the row was designed flush
+      // left.
+      const postLeft = row[0].x;
+      const postRight = row[row.length - 1].x + row[row.length - 1].cx;
+      const postCenter = (postLeft + postRight) / 2;
+      let shift = 0;
+      if (anchor === "right") shift = postRight - preRight;
+      else if (anchor === "left") shift = postLeft - preLeft;
+      else shift = postCenter - preCenter;
+      if (shift !== 0) {
+        for (const pill of row) pill.x -= shift;
+      }
+
+      // Final safety clamp against slide bounds. After the anchor
+      // restore, the row should be back near where Claude designed
+      // it — this just catches pathological cases (e.g. a row whose
+      // original bounds were already overflowing the slide).
+      const last = row[row.length - 1];
+      const first = row[0];
+      const slideRightLimit = SLIDE_WIDTH_EMU - SLIDE_EDGE_MARGIN_EMU;
+      const rightOverflow = last.x + last.cx - slideRightLimit;
+      if (rightOverflow > 0) {
+        const maxLeftShift = Math.max(0, first.x - SLIDE_EDGE_MARGIN_EMU);
+        const actualShift = Math.min(rightOverflow, maxLeftShift);
+        for (const pill of row) pill.x -= actualShift;
+      } else {
+        const leftOverflow = SLIDE_EDGE_MARGIN_EMU - first.x;
+        if (leftOverflow > 0) {
+          const maxRightShift = Math.max(
+            0,
+            slideRightLimit - (last.x + last.cx),
+          );
+          const actualShift = Math.min(leftOverflow, maxRightShift);
+          for (const pill of row) pill.x += actualShift;
+        }
+      }
+
+      // Write back x positions.
+      for (const pill of row) {
+        if (pill.off) {
+          pill.off.setAttribute("x", String(Math.round(pill.x)));
+        }
+      }
     }
   }
 

@@ -218,7 +218,7 @@ export function PreviewActionBar({
       // and changed direction/topic, the manifest title is more current.
       const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
       await exportManifestAsPptx(manifest, fileName);
-      setExportPptx({ status: "success", message: "تم التحميل" });
+      setExportPptx({ status: "idle" });
     } catch (error) {
       setExportPptx({
         status: "error",
@@ -236,7 +236,7 @@ export function PreviewActionBar({
     try {
       const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
       downloadHtmlDocument(manifest, fileName);
-      setExportHtml({ status: "success", message: "تم التحميل" });
+      setExportHtml({ status: "idle" });
     } catch (error) {
       setExportHtml({
         status: "error",
@@ -273,10 +273,11 @@ export function PreviewActionBar({
     }
   };
 
-  // Status toast under the toolbar. Download progress / "تم التحميل" are
-  // intentionally NOT surfaced — the browser's own download UI is enough
-  // signal that an export is in flight. Only ERRORS (for any action) and
-  // the regen / save-template running + success states make it through.
+  // Status toast under the toolbar. Export download progress + success
+  // are intentionally NOT surfaced — the browser's own download UI is
+  // enough signal that an export is in flight, and exports settle back
+  // to "idle" once the file is dispatched. Only ERRORS (for any action)
+  // and the regen / save-template running + success states make it through.
   const visibleMessage =
     regen.status === "error" ? { text: regen.message, kind: "error" as const } :
     exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :

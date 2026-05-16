@@ -771,9 +771,7 @@ export default function CreateBrandPage() {
       router.replace("/create/content");
       return;
     }
-    queueMicrotask(() => {
-      setContent(JSON.parse(rawContent) as StoredContent);
-    });
+    setContent(JSON.parse(rawContent) as StoredContent);
 
     // Auto-load most recent BrandKit when sessionStorage brand is empty.
     // If the user came back here via "رجوع" from summary, the lazy
@@ -814,11 +812,11 @@ export default function CreateBrandPage() {
   // Live preview for logo
   useEffect(() => {
     if (!logo) {
-      queueMicrotask(() => setLogoPreview(""));
+      setLogoPreview("");
       return;
     }
     const url = URL.createObjectURL(logo);
-    queueMicrotask(() => setLogoPreview(url));
+    setLogoPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [logo]);
 

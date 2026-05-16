@@ -52,10 +52,8 @@ export default function CreateSummaryPage() {
       return;
     }
 
-    queueMicrotask(() => {
-      setContent(JSON.parse(rawContent) as ContentState);
-      setBrand(JSON.parse(rawBrand) as StoredBrand);
-    });
+    setContent(JSON.parse(rawContent) as ContentState);
+    setBrand(JSON.parse(rawBrand) as StoredBrand);
   }, [router]);
 
   const startEditContent = () => {

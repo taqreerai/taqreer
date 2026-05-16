@@ -592,6 +592,31 @@ export function DeckView({
     };
   }, [applying, projectId, router]);
 
+  // Translate API failure status codes to Arabic UI messages. Caller
+  // (SlideLightbox) just shows `err.message` — no further mapping
+  // needed. 409 is the realistic real-world failure: comment was
+  // promoted to "applied" between the user opening the editor and
+  // submitting (single-tab: Apply Comments fired meanwhile; multi-tab:
+  // another window did it). 401 happens after long idle sessions.
+  const throwApiError = (
+    status: number,
+    fallback: string,
+  ): never => {
+    let message: string;
+    if (status === 409) {
+      message = "تم تطبيق التعليقات. لم يعد قابلاً للتعديل.";
+    } else if (status === 401) {
+      message = "انتهت الجلسة، أعد تسجيل الدخول.";
+    } else if (status === 404) {
+      message = "التعليق غير موجود.";
+    } else {
+      message = fallback;
+    }
+    const err = new Error(message) as Error & { status?: number };
+    err.status = status;
+    throw err;
+  };
+
   const handleCreateComment = useCallback(
     async (input: { slideId: string; bounds: CommentBounds; content: string }) => {
       const res = await fetch(`/api/projects/${projectId}/comments`, {
@@ -603,7 +628,7 @@ export function DeckView({
           content: input.content,
         }),
       });
-      if (!res.ok) throw new Error("Failed to save comment");
+      if (!res.ok) throwApiError(res.status, "تعذر حفظ التعليق.");
       const data = (await res.json()) as { comment: CommentRow };
       setComments((prev) => [...prev, data.comment]);
     },
@@ -627,7 +652,7 @@ export function DeckView({
           body: JSON.stringify(body),
         },
       );
-      if (!res.ok) throw new Error("Failed to update comment");
+      if (!res.ok) throwApiError(res.status, "تعذر تحديث التعليق.");
       const data = (await res.json()) as { comment: CommentRow };
       setComments((prev) =>
         prev.map((c) => (c.id === input.commentId ? data.comment : c)),
@@ -642,7 +667,7 @@ export function DeckView({
         `/api/projects/${projectId}/comments/${commentId}`,
         { method: "DELETE" },
       );
-      if (!res.ok) throw new Error("Failed to delete comment");
+      if (!res.ok) throwApiError(res.status, "تعذر حذف التعليق.");
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     },
     [projectId],

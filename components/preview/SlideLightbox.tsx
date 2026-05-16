@@ -105,6 +105,11 @@ export function SlideLightbox({
   const [scale, setScale] = useState(0.5);
   const [drag, setDrag] = useState<DragState>(null);
   const [editor, setEditor] = useState<EditorState>(null);
+  // Inline error banner inside the editor popover. Set from save/update/
+  // delete catch blocks; cleared when the user starts editing again. The
+  // most common real failure is 409 (comment promoted to "applied" while
+  // editing) — DeckView surfaces it as a Arabic-localized message.
+  const [editorError, setEditorError] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
   const open = index !== null;
@@ -163,6 +168,7 @@ export function SlideLightbox({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDrag(null);
     setEditor(null);
+    setEditorError(null);
   }, [index, mode]);
 
   const goPrev = useCallback(() => {
@@ -274,12 +280,15 @@ export function SlideLightbox({
   };
 
   // Save handlers wired to the parent's API helpers. Local state updates
-  // happen in the parent (DeckView) when the helpers resolve, so we just
-  // wait and close the editor on success.
+  // happen in the parent (DeckView) when the helpers resolve. On failure,
+  // DeckView throws an Error with an Arabic-localized message — we
+  // surface it as an inline banner inside the editor, keeping the editor
+  // open so the user can copy their draft text out if they want.
   const handleSave = async () => {
     if (!editor || !slide) return;
     const trimmed = editor.content.trim();
     if (!trimmed) return;
+    setEditorError(null);
     try {
       if (editor.kind === "new") {
         await onCreateComment({
@@ -295,18 +304,23 @@ export function SlideLightbox({
         });
       }
       setEditor(null);
-    } catch {
-      /* swallow — the parent surfaces toast / error UI */
+    } catch (err) {
+      setEditorError(
+        err instanceof Error ? err.message : "تعذر حفظ التعليق.",
+      );
     }
   };
 
   const handleDelete = async () => {
     if (!editor || editor.kind !== "existing") return;
+    setEditorError(null);
     try {
       await onDeleteComment(editor.commentId);
       setEditor(null);
-    } catch {
-      /* swallow */
+    } catch (err) {
+      setEditorError(
+        err instanceof Error ? err.message : "تعذر حذف التعليق.",
+      );
     }
   };
 
@@ -447,11 +461,18 @@ export function SlideLightbox({
                 editor={editor}
                 scale={scale}
                 direction={manifest.direction}
-                onContentChange={(content) =>
-                  setEditor((prev) => (prev ? { ...prev, content } : prev))
-                }
+                error={editorError}
+                onContentChange={(content) => {
+                  // Editing clears the error banner — the user has
+                  // acknowledged the previous failure and is trying again.
+                  if (editorError) setEditorError(null);
+                  setEditor((prev) => (prev ? { ...prev, content } : prev));
+                }}
                 onSave={handleSave}
-                onCancel={() => setEditor(null)}
+                onCancel={() => {
+                  setEditor(null);
+                  setEditorError(null);
+                }}
                 onDelete={editor.kind === "existing" ? handleDelete : undefined}
               />
             ) : null}
@@ -600,6 +621,7 @@ function CommentEditor({
   onSave,
   onCancel,
   onDelete,
+  error,
 }: {
   editor: NonNullable<EditorState>;
   scale: number;
@@ -608,6 +630,7 @@ function CommentEditor({
   onSave: () => void;
   onCancel: () => void;
   onDelete?: () => void;
+  error: string | null;
 }) {
   const POPOVER_W = 360;
   const POPOVER_GAP = 8;
@@ -652,6 +675,14 @@ function CommentEditor({
       className="glass-modal backdrop-blur-glass backdrop-saturate-150 pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
       style={{ left, top, width: POPOVER_W }}
     >
+      {error ? (
+        <div
+          role="alert"
+          className="mb-2 rounded-lg border border-orange-400/40 bg-orange-400/10 px-3 py-2 text-xs text-orange-200"
+        >
+          {error}
+        </div>
+      ) : null}
       <div className="mb-2 flex flex-wrap gap-1.5">
         {QUICK_CHIPS.map((chip) => (
           <button

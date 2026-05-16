@@ -90,10 +90,6 @@ COLOUR CONTRAST — every text and shape must read against what's behind it
 Forbidden: text \`color\` matching its parent container's background; SVG fill matching the surface it sits on; gradient text where a stop equals the background; muted text within ~10 lightness points of background.
 
 LAYOUT GOTCHAS
-- **Pills/badges/chips:** \`inline-flex\` + \`align-items: center\` + \`justify-content: center\` + \`line-height: 1\` + explicit \`height\`. Padding alone makes Arabic text top-anchor.
-\`\`\`
-<span style="display:inline-flex; align-items:center; justify-content:center; padding:0 22px; height:40px; line-height:1; border:1px solid var(--primary); border-radius:9999px;">رؤيتنا</span>
-\`\`\`
 - **Direction-anchored pieces** (e.g. card numbers always on the LEFT in RTL): absolute positioning with explicit \`left:\`/\`right:\`. Flex flips silently under RTL.
 - **Headline + body in one container:** explicit \`margin-bottom\` or grid \`gap\`. Tight stacks overlap in export.
 - **Single-line text:** prefer \`width: max-content\` + \`padding-inline\`. Inside a constrained parent use \`white-space: nowrap\`.
