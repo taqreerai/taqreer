@@ -10,6 +10,7 @@ type InitialState = {
   presentationId: string | null;
   initialProjectStatus: string;
   initialVersionStatus: string | null;
+  initialVersionId: string | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
 };
@@ -32,6 +33,15 @@ function readSlideCountHint(aiPrompt: string | null): number | null {
 }
 
 async function loadProject(projectId: string): Promise<InitialState | null> {
+  // Read the version pointed to by `presentation.currentVersionId` (not the
+  // numerically-latest version). During partial regen we deliberately leave
+  // currentVersionId on the previous completed version so the deck stays
+  // VISIBLE while a subset of slides regenerates — only the Inngest handler
+  // flips currentVersionId once the new version is complete. For full regen
+  // currentVersionId IS flipped to the queued version at API time, so the
+  // generating UI surfaces normally. Fall back to the numerically-latest
+  // version when currentVersionId is null (first generation, before the
+  // create-project flow has set it).
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -39,20 +49,23 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
       status: true,
       aiPrompt: true,
       presentation: {
-        select: {
-          id: true,
-          versions: {
-            orderBy: { versionNumber: "desc" },
-            take: 1,
-            select: { status: true, slideJson: true },
-          },
-        },
+        select: { id: true, currentVersionId: true },
       },
     },
   });
   if (!project) return null;
 
-  const version = project.presentation?.versions[0] ?? null;
+  const currentVersionId = project.presentation?.currentVersionId ?? null;
+  const version = currentVersionId
+    ? await prisma.presentationVersion.findUnique({
+        where: { id: currentVersionId },
+        select: { id: true, status: true, slideJson: true },
+      })
+    : await prisma.presentationVersion.findFirst({
+        where: { presentationId: project.presentation?.id ?? "" },
+        orderBy: { versionNumber: "desc" },
+        select: { id: true, status: true, slideJson: true },
+      });
 
   let manifest: SlideManifest | null = null;
   if (version?.slideJson && version.status === "completed") {
@@ -73,6 +86,7 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
     presentationId: project.presentation?.id ?? null,
     initialProjectStatus: project.status,
     initialVersionStatus: version?.status ?? null,
+    initialVersionId: version?.id ?? null,
     initialManifest: manifest,
     initialSlideCount,
   };
@@ -86,9 +100,11 @@ export default async function PreviewPage({
   const { projectId } = await params;
   const data = await loadProject(projectId);
   if (!data) notFound();
-  // Key DeckView on the server-observed status so a generating→completed (or
-  // completed→generating after regenerate) transition remounts the component
-  // and reseeds state from the new props — no in-effect prop-to-state sync.
-  const deckKey = `${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
+  // Key DeckView on the version id + status so partial-regen completion
+  // (currentVersionId flips from v_n → v_n+1) remounts the component and
+  // reseeds from the new manifest. Without the version id in the key, a
+  // completed→completed transition leaves the key unchanged and DeckView
+  // keeps its prior `manifest` state (initialised lazily from old props).
+  const deckKey = `${data.initialVersionId ?? "none"}:${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
   return <DeckView key={deckKey} projectId={projectId} {...data} />;
 }

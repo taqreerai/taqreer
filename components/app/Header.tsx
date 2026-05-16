@@ -1,9 +1,11 @@
 "use client";
 
+import { BellDropdown } from "@/components/app/BellDropdown";
+
 export function Header({ isCollapsed }: { isCollapsed?: boolean }) {
   return (
     <header
-      className={`header-bg backdrop-blur-md fixed top-0 left-0 z-40 h-20 flex items-center px-8 transition-all duration-300 ease-in-out ${
+      className={`header-bg backdrop-blur-glass backdrop-saturate-150 fixed top-0 left-0 z-40 h-20 flex items-center px-8 transition-all duration-300 ease-in-out ${
         isCollapsed ? "right-[80px]" : "right-[260px]"
       }`}
     >
@@ -29,10 +31,8 @@ export function Header({ isCollapsed }: { isCollapsed?: boolean }) {
         </div>
 
         {/* Left: Actions */}
-        <div className="flex items-center space-x-reverse space-x-4">
-          <button className="btn-icon p-2" aria-label="الإشعارات">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
+        <div className="flex items-center gap-4">
+          <BellDropdown />
           <button className="btn-gradient px-6 py-2.5 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm">add</span>
             مشروع جديد

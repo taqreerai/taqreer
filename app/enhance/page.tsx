@@ -215,7 +215,7 @@ export default function EnhancePage() {
             type="button"
             onClick={handleNext}
             disabled={loading}
-            className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:opacity-60"
           >
             التالي ←
           </button>

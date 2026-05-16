@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import type { SlideManifest } from "@/lib/schema/slide";
 import { exportManifestAsPptx } from "@/lib/export/html-export";
 import { downloadHtmlDocument } from "@/lib/export/html-document";
@@ -20,24 +21,66 @@ type ButtonState = {
   message?: string;
 };
 
+// All toolbar buttons share ONE neutral glass visual language. No solid
+// fills, no gradients, no brand-coloured tints. Idle / active / hover
+// differ only by glass intensity — active raises bg opacity ~3× and border
+// opacity ~2×, hover bumps brightness slightly. Reads like the dashboard's
+// `.glass` system on the bootcamp / sidebar pages.
+//
+// Why no colours: at scale the toolbar accumulates many actions; brand
+// colours per-button creates visual noise. Context identifies CTAs (the
+// detached Apply cell only appears when there are drafts; the Save button
+// only inside the editor). The badge on the comment icon is the only
+// coloured element — that's INFO, not button state.
 function ToolButton({
   icon,
+  iconNode,
   label,
   badge,
+  countBadge,
   onClick,
   disabled,
   running,
-  primary,
+  active,
+  gradient,
 }: {
   icon: string;
+  // Optional custom icon node — overrides the material-symbols icon when
+  // provided. Used by the regen button so we can render an AnimatePresence
+  // icon morph (autorenew ↔ check with continuous rotation) instead of a
+  // static glyph.
+  iconNode?: React.ReactNode;
   label: string;
   badge?: string;
+  // Small numeric badge in the top-end corner. Used for the comment toggle
+  // to show how many draft comments live across the deck. Coloured blue
+  // (--tq-blue) so it reads as "info / count" rather than "alert / warn".
+  countBadge?: number;
   onClick?: () => void;
   disabled?: boolean;
   running?: boolean;
-  primary?: boolean;
+  active?: boolean;
+  // Animated brand-gradient variant (`.btn-gradient-anim` in globals.css).
+  // Used ONLY on the regen button so the deck's primary CTA stands out
+  // against the otherwise-neutral glass toolbar.
+  gradient?: boolean;
 }) {
   const isDisabled = disabled || running;
+  // Two coordinated visual transitions on hover:
+  //   - icon: muted (white/60) → white
+  //   - border: dim (white/15) → bright (white/40)
+  // Active = always at the bright end (white icon + brighter border + raised
+  // glass background). Inline-style is only used for the bg (which depends
+  // on --glass-opacity CSS var); border + text colours are pure Tailwind so
+  // :hover transitions work without state plumbing. Gradient variant
+  // bypasses the glass system entirely — its visuals come from
+  // `.btn-gradient-anim` (animated linear gradient + brand glow).
+  const baseBg = active
+    ? "rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6))"
+    : "rgba(255, 255, 255, var(--glass-opacity))";
+  const colorClasses = active
+    ? "border-white/40 text-white"
+    : "border-white/15 text-white/60 hover:border-white/40 hover:text-white";
   return (
     <div className="group relative">
       <button
@@ -45,17 +88,45 @@ function ToolButton({
         onClick={onClick}
         disabled={isDisabled}
         aria-label={label}
-        className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all ${
-          primary && !isDisabled
-            ? "btn-gradient text-white"
-            : "text-white/80 hover:bg-white/10 hover:text-white"
-        } ${isDisabled ? "cursor-not-allowed opacity-40" : ""}`}
+        aria-pressed={active}
+        style={
+          gradient
+            ? undefined
+            : {
+                background: baseBg,
+                backdropFilter:
+                  "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+                WebkitBackdropFilter:
+                  "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+              }
+        }
+        className={
+          gradient
+            ? `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-xl transition-shadow ${
+                isDisabled ? "" : "hover:scale-[1.02]"
+              }`
+            : `relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${colorClasses} ${
+                isDisabled ? "opacity-40" : ""
+              }`
+        }
       >
-        {running ? (
+        {iconNode ? (
+          iconNode
+        ) : running ? (
           <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
         ) : (
           <span className="material-symbols-outlined text-[22px]">{icon}</span>
         )}
+        {/* Count badge — top-end corner. Blue chip; the ONLY brand colour
+            in the toolbar (info, not state). */}
+        {countBadge && countBadge > 0 ? (
+          <span
+            className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none text-white shadow"
+            style={{ background: "var(--tq-blue)" }}
+          >
+            {countBadge}
+          </span>
+        ) : null}
       </button>
       {/* Tooltip — appears to the right of the toolbar (toward content) */}
       <div
@@ -73,10 +144,38 @@ export function PreviewActionBar({
   projectId,
   projectTitle,
   manifest,
+  commentMode,
+  onToggleCommentMode,
+  draftCommentCount,
+  onApplyComments,
+  commentsArmed,
+  onFirePartialRegen,
+  applying,
 }: {
   projectId: string;
   projectTitle: string;
   manifest: SlideManifest;
+  // Comment-mode state machine, all owned by DeckView:
+  //   commentMode       — user toggled the comment tool
+  //   draftCommentCount — # of "draft" comments saved in the DB
+  //   commentsArmed     — user clicked Apply: drafts are locked, regen
+  //                       button is primed to FIRE the partial regen
+  //   applying          — partial regen is in flight (versionId queued
+  //                       until Inngest finishes)
+  //
+  // Click handlers:
+  //   onToggleCommentMode  — turn comment mode on/off
+  //   onApplyComments      — Apply: arm (no Claude call yet)
+  //   onFirePartialRegen   — used by the regen button when ARMED → fires
+  //                          the partial regen (the only path that hits
+  //                          Claude for slide-level changes)
+  commentMode: boolean;
+  onToggleCommentMode: () => void;
+  draftCommentCount: number;
+  onApplyComments: () => void;
+  commentsArmed: boolean;
+  onFirePartialRegen: () => void;
+  applying: boolean;
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
@@ -174,51 +273,147 @@ export function PreviewActionBar({
     }
   };
 
-  // Status messages are surfaced as a short toast under the toolbar. We pick
-  // whichever button most recently changed status — first error, then running,
-  // then success.
+  // Status toast under the toolbar. Download progress / "تم التحميل" are
+  // intentionally NOT surfaced — the browser's own download UI is enough
+  // signal that an export is in flight. Only ERRORS (for any action) and
+  // the regen / save-template running + success states make it through.
   const visibleMessage =
     regen.status === "error" ? { text: regen.message, kind: "error" as const } :
     exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :
     exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
     saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
-    exportPptx.status === "running" ? { text: exportPptx.message, kind: "info" as const } :
-    exportHtml.status === "running" ? { text: exportHtml.message, kind: "info" as const } :
     saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
     regen.status === "running" ? { text: regen.message, kind: "info" as const } :
-    exportPptx.status === "success" ? { text: exportPptx.message, kind: "success" as const } :
-    exportHtml.status === "success" ? { text: exportHtml.message, kind: "success" as const } :
     saveTpl.status === "success" ? { text: saveTpl.message, kind: "success" as const } :
     null;
 
   return (
     <div dir="ltr" className="flex flex-col items-center gap-3">
-      {/* Toolbar column — Photoshop-style icon stack */}
-      <div className="glass-card flex flex-col items-center gap-1.5 rounded-2xl p-2">
+      {/* Apply Comments — detached glass cell that appears ABOVE the main
+          toolbar when there are drafts AND the user hasn't armed yet.
+          Hidden the moment `commentsArmed` flips true (after user clicks
+          Apply): the regen button in the toolbar morphs to a check and
+          becomes the trigger that actually fires the partial regen. */}
+      <AnimatePresence initial={false}>
+        {commentMode && draftCommentCount > 0 && !commentsArmed && !applying ? (
+          <motion.div
+            key="apply-cell-wrapper"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            // Tween with ease-out-quart: fast at the start, smooth slow at
+            // the end, NO spring tail / wobble. Same curve on enter + exit
+            // so the toolbar settling animation feels equally crisp both
+            // directions.
+            transition={{
+              height: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+              opacity: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+            }}
+            style={{ overflow: "hidden" }}
+          >
+            <motion.div
+              // Pop-in via scale + fade only — no slide-from-bottom (the
+              // toolbar's glass-card clipped the slide, made it look cut).
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.6, opacity: 0 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="glass-card flex items-center justify-center rounded-2xl p-2"
+            >
+              <ToolButton
+                icon="check"
+                label={`تطبيق التعليقات (${draftCommentCount})`}
+                active
+                running={applying}
+                onClick={onApplyComments}
+                disabled={applying}
+              />
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Toolbar column — Photoshop-style icon stack. All buttons share
+          one neutral glass surface. */}
+      <div
+        className="glass-card flex flex-col items-center gap-1.5 rounded-2xl p-2"
+      >
+        {/* Regen button — gradient mesh visual. Two roles depending on
+            state:
+              - NOT armed: full-deck regenerate (autorenew icon, calls
+                /regenerate). Disabled while in comment mode.
+              - ARMED (apply was clicked): fires the partial regen for
+                the drafted slides (check icon, calls /regenerate-partial).
+            Icon morphs via a one-shot 360° rotation during the swap —
+            sits still after. */}
         <ToolButton
           icon="autorenew"
-          label="أعد التصميم"
-          primary
+          label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد التصميم"}
+          gradient
           running={regen.status === "running"}
-          onClick={handleRegenerate}
+          onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
+          // Comment mode disables full regen so we don't lose drafts to a
+          // full-deck regen. While applying, the button itself is locked
+          // (the slide-level overlay already signals "in flight").
+          disabled={applying || (commentMode && !commentsArmed)}
+          iconNode={
+            // Rotation only during the icon swap (~0.5s). After the swap,
+            // the icon sits still. Same direction both ways so the morph
+            // reads as one continuous motion (sidebar burger ↔ close).
+            <motion.div
+              animate={{ rotate: commentsArmed ? 360 : 0 }}
+              transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
+              className="flex h-[22px] w-[22px] items-center justify-center"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {commentsArmed ? (
+                  <motion.span
+                    key="check"
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ duration: 0.25 }}
+                    className="material-symbols-outlined text-[22px]"
+                  >
+                    check
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="autorenew"
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ duration: 0.25 }}
+                    className="material-symbols-outlined text-[22px]"
+                  >
+                    autorenew
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          }
         />
         <ToolButton
           icon="comment"
-          label="إضافة تعليق"
-          badge="قريباً"
-          disabled
+          label={commentMode ? "إنهاء وضع التعليقات" : "إضافة تعليق"}
+          onClick={onToggleCommentMode}
+          active={commentMode}
+          disabled={applying}
+          countBadge={draftCommentCount}
         />
         <ToolButton
           icon="download"
           label="تصدير PPTX"
           running={exportPptx.status === "running"}
           onClick={handleExport}
+          disabled={applying}
         />
         <ToolButton
           icon="code"
           label="تنزيل HTML"
           running={exportHtml.status === "running"}
           onClick={handleDownloadHtml}
+          disabled={applying}
         />
         <ToolButton
           icon="picture_as_pdf"
@@ -231,6 +426,7 @@ export function PreviewActionBar({
           label="حفظ كقالب"
           running={saveTpl.status === "running"}
           onClick={() => setShowSaveForm((v) => !v)}
+          disabled={applying}
         />
       </div>
 
@@ -267,7 +463,7 @@ export function PreviewActionBar({
             type="button"
             onClick={handleSaveAsTemplate}
             disabled={saveTpl.status === "running"}
-            className="btn-gradient px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-gradient px-4 py-2 text-sm disabled:opacity-60"
           >
             {saveTpl.status === "running" ? "..." : "حفظ"}
           </button>

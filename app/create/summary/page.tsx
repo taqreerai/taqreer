@@ -40,7 +40,7 @@ export default function CreateSummaryPage() {
   const [brand, setBrand] = useState<StoredBrand>(null);
   const [editingContent, setEditingContent] = useState(false);
   const [contentDraft, setContentDraft] = useState("");
-  const [loadingMode, setLoadingMode] = useState<"create" | "save" | null>(null);
+  const [loadingMode, setLoadingMode] = useState<"create" | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -90,10 +90,13 @@ export default function CreateSummaryPage() {
   // Brand step stores rules inside the brand blob — extract for the API.
   const rules = (brand?.rules ?? null) as Record<string, unknown> | null;
 
-  const handleGenerate = async (saveBrandKit: boolean) => {
+  // Single "generate" path — brand-kit saving moved to the brand page's
+  // "save as brand" button (POST /api/brand-kits). This page only kicks
+  // off the project generation; saveBrandKit is always false here.
+  const handleGenerate = async () => {
     if (!content || !brand) return;
     setError("");
-    setLoadingMode(saveBrandKit ? "save" : "create");
+    setLoadingMode("create");
 
     try {
       const response = await fetch("/api/projects", {
@@ -103,7 +106,7 @@ export default function CreateSummaryPage() {
           content,
           brand,
           rules,
-          saveBrandKit,
+          saveBrandKit: false,
           slideCount: resolvedSlideCount,
         }),
       });
@@ -114,6 +117,12 @@ export default function CreateSummaryPage() {
       }
 
       const data = (await response.json()) as { projectId: string };
+      // The create-flow is now done — clear sessionStorage so the next
+      // "create new" starts fresh. Otherwise stale brand/content data
+      // would block the /create/brand auto-load of the saved BrandKit.
+      sessionStorage.removeItem("taqreer:create:content");
+      sessionStorage.removeItem("taqreer:create:brand");
+      sessionStorage.removeItem("taqreer:create:brand:savedSnapshot");
       router.push(`/preview/${data.projectId}`);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "تعذر بدء الإنشاء. حاول مرة أخرى.");
@@ -133,17 +142,37 @@ export default function CreateSummaryPage() {
       <div className="glass-card rounded-xl p-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-[22px] font-bold text-white">محتوى العرض</h2>
-          {content?.type === "text" && !editingContent ? (
+          <div className="flex items-center gap-2">
+            {/* Edit + Generate share the same shape: h-9, px-4, text-sm,
+                gap-1.5, material-symbol at text-[16px]. Edit uses a glass
+                outline; Generate carries the mesh-gradient CTA treatment. */}
+            {content?.type === "text" && !editingContent ? (
+              <button
+                type="button"
+                onClick={startEditContent}
+                aria-label="تعديل المحتوى"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 px-4 text-sm text-white transition-colors hover:bg-white/5"
+              >
+                <span className="material-symbols-outlined text-[16px]">edit</span>
+                تعديل
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={startEditContent}
-              aria-label="تعديل المحتوى"
-              className="inline-flex items-center gap-1 rounded-lg border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 px-3 py-1.5 text-sm text-white transition-colors hover:bg-white/5"
+              onClick={handleGenerate}
+              disabled={loadingMode !== null}
+              className="btn-gradient-anim inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold disabled:opacity-60"
             >
-              <span className="material-symbols-outlined text-base">edit</span>
-              تعديل
+              {loadingMode === "create" ? (
+                <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
+              ) : (
+                <span className="material-symbols-outlined text-[16px]">
+                  auto_awesome
+                </span>
+              )}
+              {loadingMode === "create" ? "جارٍ الإنشاء..." : "إنشاء"}
             </button>
-          ) : null}
+          </div>
         </div>
 
         <div className="mb-5 space-y-3">
@@ -193,36 +222,13 @@ export default function CreateSummaryPage() {
         <p className="text-sm text-muted">عدد الشرائح: {displaySlideCount}</p>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
         <button
           className="btn-outline-dark inline-flex items-center justify-center gap-2 px-6 py-3"
           onClick={() => router.push("/create/brand")}
         >
           → رجوع لتعديل الهوية البصرية
         </button>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <button
-            className="btn-outline-dark inline-flex items-center justify-center gap-2 px-8 py-3 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => handleGenerate(false)}
-            disabled={loadingMode !== null}
-          >
-            {loadingMode === "create" ? (
-              <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-            ) : null}
-            {loadingMode === "create" ? "جارٍ الإنشاء..." : "إنشاء"}
-          </button>
-          <button
-            className="btn-gradient inline-flex items-center justify-center gap-2 px-8 py-3 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => handleGenerate(true)}
-            disabled={loadingMode !== null}
-          >
-            {loadingMode === "save" ? (
-              <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-            ) : null}
-            {loadingMode === "save" ? "جارٍ الإنشاء..." : "إنشاء وحفظ كهوية بصرية ✦"}
-          </button>
-        </div>
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}

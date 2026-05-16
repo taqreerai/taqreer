@@ -215,6 +215,22 @@ button, a, [role="button"] {
   background: rgba(239, 68, 68, 0.2);
 }
 
+/* Preset-linked backdrop-blur token. Tailwind v4 generates a utility
+   `backdrop-blur-glass` from this token; the utility sets
+   `--tw-backdrop-blur: blur(var(--backdrop-blur-glass))` which composes
+   into the standard Tailwind backdrop-filter. Because the value
+   references `--glass-blur` via calc, the utility responds to the
+   user's preset at runtime (no rebuild needed).
+
+   Why a custom token: setting `backdrop-filter` directly in a CSS class
+   gets out-competed by Tailwind v4's compositional backdrop-filter rule
+   on any element that has ANY backdrop-* utility (or even via a
+   universal reset that initialises the --tw-backdrop-* variables). The
+   reliable path is to participate in the composition. */
+@theme {
+  --backdrop-blur-glass: calc(var(--glass-blur) * 2.5);
+}
+
 @theme inline {
   --color-brand-purple-400: #C084FC;
   --color-brand-purple-500: #A855F7;
@@ -337,11 +353,54 @@ body {
   background: rgba(255, 255, 255, var(--glass-opacity));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  /* No CSS `border` at all — the idle ring is drawn by ::before, the
+     hover mesh ring by ::after. Two pseudo-elements that cross-fade,
+     nothing else underneath that could bleed through the mesh's
+     transparent gaps. */
   border-radius: 14px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  /* Same animated mesh used on the regen button — paused when not hovered
+     so a row of QuickAction cards isn't constantly animating 6 radials
+     each. Reuses the @property + keyframes registered for
+     `.btn-gradient-anim` below (mx1..my6). */
+  animation:
+    mx1 1.0s ease-in-out infinite alternate,
+    my1 1.6s ease-in-out infinite alternate,
+    mx2 1.9s ease-in-out infinite alternate,
+    my2 1.3s ease-in-out infinite alternate,
+    mx3 2.5s ease-in-out infinite alternate,
+    my3 0.7s ease-in-out infinite alternate,
+    mx4 1.2s ease-in-out infinite alternate,
+    my4 1.8s ease-in-out infinite alternate,
+    mx5 0.9s ease-in-out infinite alternate,
+    my5 1.5s ease-in-out infinite alternate,
+    mx6 2.0s ease-in-out infinite alternate,
+    my6 2.3s ease-in-out infinite alternate;
+  animation-play-state: paused;
 }
+
+/* Idle 1px white-glass border ring — rendered via ::before with the same
+   mask-composite trick as ::after so it cross-fades cleanly with the mesh
+   on hover. No actual CSS `border-color` involved, so nothing bleeds. */
+.qa-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  padding: 1px;
+  background: rgba(255, 255, 255, var(--glass-border-opacity));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.qa-card:hover::before { opacity: 0; }
 
 .qa-card::after {
   content: '';
@@ -349,7 +408,17 @@ body {
   inset: 0;
   border-radius: 14px;
   padding: 1px;
-  background: var(--tq-gradient-full);
+  /* Same recipe as the regen button's border ring: bright blobs on top
+     of a solid base that equals the idle/neutral glass border colour.
+     The ring never dips below the normal-state tone, so the page
+     background can never bleed through. */
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
+    rgba(255, 255, 255, var(--glass-border-opacity));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -359,8 +428,16 @@ body {
   pointer-events: none;
 }
 
+.qa-card:hover {
+  animation-play-state: running;
+}
+
 .qa-card:hover::after {
   opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qa-card { animation: none; }
 }
 
 /* ─── Buttons ─── */
@@ -375,6 +452,190 @@ body {
 
 .btn-gradient:hover {
   box-shadow: var(--tq-shadow-brand-strong);
+}
+
+/* ─── Animated Mesh-Gradient Button ─────────────────────────────────
+   Multiple radial-gradient colour blobs (the full brand palette: blue,
+   purple, magenta, plus a softened deep-blue) drift around the button.
+   Where they overlap they blend, producing the "Photoshop diamond / iOS
+   wallpaper" look — all colours feel mixed into one continuous surface.
+
+   IDLE: animated mesh is rendered ONLY on the 1px border ring (mask
+   trick — the ::before fill is excluded from its content-box, leaving
+   only the padding edge visible). Body stays neutral glass.
+
+   HOVER: ::before fades out; the button's body becomes the same mesh
+   gradient (full fill) + raised brand glow + sped-up drift.
+
+   "Random" feel: each blob's X and Y oscillate on their own keyframe
+   with a different prime-ish duration (7 / 11 / 13 / 17 s etc.). They
+   never sync — the full pattern's LCM is many minutes — so the eye
+   reads it as never-repeating drift.
+
+   Registered custom properties (@property, `inherits: true`) let the
+   pseudo-element see the parent's animated values + interpolate
+   smoothly between keyframes.
+
+   Used ONLY on the regenerate icon (the deck's primary CTA) so it
+   stands out against the otherwise-neutral glass toolbar.            */
+/* Six blobs covering the full brand palette + white. Each blob's X and Y
+   oscillate independently — prime-ish durations push the LCM into minutes
+   so the eye reads it as never-repeating. */
+@property --mesh-x1 { syntax: '<percentage>'; initial-value: 15%; inherits: true; }
+@property --mesh-y1 { syntax: '<percentage>'; initial-value: 30%; inherits: true; }
+@property --mesh-x2 { syntax: '<percentage>'; initial-value: 80%; inherits: true; }
+@property --mesh-y2 { syntax: '<percentage>'; initial-value: 25%; inherits: true; }
+@property --mesh-x3 { syntax: '<percentage>'; initial-value: 50%; inherits: true; }
+@property --mesh-y3 { syntax: '<percentage>'; initial-value: 80%; inherits: true; }
+@property --mesh-x4 { syntax: '<percentage>'; initial-value: 30%; inherits: true; }
+@property --mesh-y4 { syntax: '<percentage>'; initial-value: 60%; inherits: true; }
+@property --mesh-x5 { syntax: '<percentage>'; initial-value: 70%; inherits: true; }
+@property --mesh-y5 { syntax: '<percentage>'; initial-value: 90%; inherits: true; }
+@property --mesh-x6 { syntax: '<percentage>'; initial-value: 10%; inherits: true; }
+@property --mesh-y6 { syntax: '<percentage>'; initial-value: 70%; inherits: true; }
+
+@keyframes mx1 { from { --mesh-x1: 10%; } to { --mesh-x1: 90%; } }
+@keyframes my1 { from { --mesh-y1: 20%; } to { --mesh-y1: 85%; } }
+@keyframes mx2 { from { --mesh-x2: 85%; } to { --mesh-x2: 15%; } }
+@keyframes my2 { from { --mesh-y2: 30%; } to { --mesh-y2: 80%; } }
+@keyframes mx3 { from { --mesh-x3: 55%; } to { --mesh-x3: 25%; } }
+@keyframes my3 { from { --mesh-y3: 70%; } to { --mesh-y3: 15%; } }
+@keyframes mx4 { from { --mesh-x4: 30%; } to { --mesh-x4: 75%; } }
+@keyframes my4 { from { --mesh-y4: 65%; } to { --mesh-y4: 20%; } }
+@keyframes mx5 { from { --mesh-x5: 70%; } to { --mesh-x5: 20%; } }
+@keyframes my5 { from { --mesh-y5: 85%; } to { --mesh-y5: 35%; } }
+@keyframes mx6 { from { --mesh-x6: 15%; } to { --mesh-x6: 65%; } }
+@keyframes my6 { from { --mesh-y6: 70%; } to { --mesh-y6: 25%; } }
+
+.btn-gradient-anim {
+  position: relative;
+  isolation: isolate;
+  background: rgba(255, 255, 255, var(--glass-opacity));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  color: white;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+  animation:
+    mx1 1.0s ease-in-out infinite alternate,
+    my1 1.6s ease-in-out infinite alternate,
+    mx2 1.9s ease-in-out infinite alternate,
+    my2 1.3s ease-in-out infinite alternate,
+    mx3 2.5s ease-in-out infinite alternate,
+    my3 0.7s ease-in-out infinite alternate,
+    mx4 1.2s ease-in-out infinite alternate,
+    my4 1.8s ease-in-out infinite alternate,
+    mx5 0.9s ease-in-out infinite alternate,
+    my5 1.5s ease-in-out infinite alternate,
+    mx6 2.0s ease-in-out infinite alternate,
+    my6 2.3s ease-in-out infinite alternate;
+}
+
+/* The mesh on the border ring. Mask-composite subtracts the content area
+   from the gradient layer, leaving only the 2px padding edge visible.
+   Wider blob fade (transparent at 70%) ensures consistent ring coverage
+   even when a blob's centre sits well inside the button. White as one of
+   the blob colours adds crispness against the dark UI backdrop. */
+.btn-gradient-anim::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  /* Solid base = the idle/neutral glass border colour. Bright blobs sit
+     on top as moving highlights, so the ring never dips below the
+     normal-state border tone. */
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
+    rgba(255, 255, 255, var(--glass-border-opacity));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+/* Hover: full mesh fill + raised brand glow. Animation speed matches
+   idle — the drift continues uninterrupted, only the visual surface
+   transitions from "ring-only" to "full fill". */
+.btn-gradient-anim:hover {
+  /* Dark #27074C blob + solid base dropped — bright blobs over the
+     deepest brand colour (#3300FF) for the CTA backdrop. */
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 35%),
+    #3300FF;
+  box-shadow: var(--tq-shadow-brand-strong);
+}
+
+.btn-gradient-anim:hover::before { opacity: 0; }
+
+.btn-gradient-anim:disabled {
+  animation-play-state: paused;
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-gradient-anim { animation: none; }
+}
+
+/* ─── Standard secondary pill ─────────────────────────────────────────
+   The default style for all non-CTA buttons across the dashboard:
+   glass surface, dim border + muted text idle, bright border + white
+   text on hover. Same shape and behaviour as the comment editor's
+   quick-action chips. Use `.btn-gradient` / `.btn-gradient-anim` for
+   CTAs (primary actions); everything else is `.btn-pill`. */
+/* Final beat of the "clear all" sequence — after staggered item exits,
+   the modal panel scales down + fades. Applied via a `closing` flag in
+   AllNotificationsModal. The brief transform here is acceptable: the
+   user is about to see the modal disappear anyway, so the backdrop-
+   filter trapping during the animation isn't noticeable. */
+@keyframes panel-collapse-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.94); }
+}
+
+.panel-closing {
+  animation: panel-collapse-out 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center top;
+}
+
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background: rgba(255, 255, 255, var(--glass-opacity));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 9999px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-pill:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: white;
+}
+
+.btn-pill:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .btn-outline-dark {
@@ -397,7 +658,6 @@ body {
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border-color: rgba(255, 255, 255, var(--glass-border-opacity));
-  box-shadow: -4px 0 40px rgba(55, 11, 244, 0.12);
 }
 
 .nav-active {
@@ -418,11 +678,14 @@ body {
 }
 
 /* ─── Header ─── */
+/* Header glass — bg + border only. Blur via Tailwind `backdrop-blur-glass`
+   utility on the <header> element (see `components/app/Header.tsx`) so
+   the header participates in the same compositional backdrop-filter as
+   the popover / modal panels. Keeps all elevated surfaces in lock-step
+   under the user's glass-preset. */
 .header-bg {
   background: rgba(3, 3, 13, 0.6);
   border-bottom: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 /* ─── Toggle Switch (on state) ─── */
@@ -752,19 +1015,33 @@ body {
   flex-shrink: 0;
 }
 
-/* ─── Glass Overlays (dark glass, not preset-responsive) ─── */
+/* ─── Glass Overlays (elevated surfaces — one consistent blur level) ──
+   The header, dropdowns, modals, and popovers all share ONE multiplier
+   on the user's `--glass-blur` preset so the dashboard reads consistent:
+   pick a preset in Settings → every elevated surface responds in lock-
+   step. Cards (`.glass-card` family) stay at 1× for a subtler effect.
+   The dark base fill differs per role so visual hierarchy comes from
+   tint, not blur. */
 .glass-dropdown {
   background: var(--tq-surface-overlay);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--tq-border-glass);
 }
 
+/* `.glass-modal` and `.glass-popover` only handle the background tint +
+   border now — the blur comes from Tailwind utilities (`backdrop-blur-glass
+   backdrop-saturate-[var(--glass-saturation)]`) applied on the element.
+   That's the only way to participate in Tailwind v4's compositional
+   `backdrop-filter` rule, which otherwise out-competes a directly-set
+   `backdrop-filter`. The custom `--backdrop-blur-glass` theme token above
+   keeps the blur preset-linked. */
 .glass-modal {
   background: var(--tq-surface-modal);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--tq-border-glass);
+}
+
+.glass-popover {
+  background: rgba(10, 10, 20, calc(0.4 + var(--glass-opacity) * 4));
+  border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
 }
 
 /* ─── Card Danger Variant ─── */

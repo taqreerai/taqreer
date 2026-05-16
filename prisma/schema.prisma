@@ -126,10 +126,13 @@ model Comment {
   boundsJson     Json?
   screenshotUrl  String?
   content        String
-  status         String               @default("pending")
+  status         String               @default("draft")
   createdAt      DateTime             @default(now())
   presentation   Presentation         @relation(fields: [presentationId], references: [id], onDelete: Cascade)
   version        PresentationVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([presentationId, versionId, status])
+  @@index([slideId])
 }
 
 model Job {

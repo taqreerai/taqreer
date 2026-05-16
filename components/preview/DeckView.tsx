@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
 import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
+import { SlideLightbox } from "@/components/preview/SlideLightbox";
 import { createClient } from "@/lib/supabase/client";
+import type { CommentRow, CommentBounds } from "@/lib/types/comment";
+import { notificationStore } from "@/lib/notifications/store";
 
 type Props = {
   projectId: string;
@@ -15,6 +19,10 @@ type Props = {
   presentationId: string | null;
   initialProjectStatus: string;
   initialVersionStatus: string | null;
+  // Used by the parent page only — included here so the `{...data}` spread
+  // doesn't trigger an extra-prop TS error. DeckView itself doesn't read
+  // this prop; remount on version change is driven by the parent's `key`.
+  initialVersionId?: string | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
 };
@@ -79,14 +87,14 @@ function progressPercent(progress: Progress | null): number {
   }
 }
 
-// Slides render at 0.3× of the 1920×1080 canvas → 576×324 cell. Sized so
-// two cells fit side-by-side inside the dashboard's max-w-[1280px] wrap
-// (with px-8 padding and a 20 px gap). Placeholder cards reuse the same
-// dimensions so the cascade fades into the exact slots the shimmer just
-// left.
-const SLIDE_SCALE = 0.3;
-const SLIDE_CELL_W = 576;
-const SLIDE_CELL_H = 324;
+// Slides + placeholders use a responsive grid: 1 col on mobile, 2 on
+// small, 3 on medium, 4 on wide. Each cell is `aspect-ratio: 16/9` so it
+// never overlaps a neighbour when the column shrinks. The internal
+// SlideRenderer scale tracks the cell's actual width via a ResizeObserver.
+const SLIDE_W = 1920;
+// Fallback scale used while ResizeObserver is wiring up + for the
+// non-responsive placeholder fallback.
+const FALLBACK_SCALE = 0.18;
 
 function isCompleted(projectStatus: string, versionStatus: string | null): boolean {
   return (
@@ -121,18 +129,36 @@ const slideCardVariants: Variants = {
   },
 };
 
-// y: "-50%" keeps the toolbar vertically centered against `top: 50%` — Framer
-// owns the transform, so we can't rely on a separate `translateY(-50%)` CSS
-// rule (it would be overwritten by the motion x/y animation).
-const actionBarVariants: Variants = {
-  hidden: { opacity: 0, x: -100, y: "-50%" },
-  visible: {
-    opacity: 1,
-    x: 0,
-    y: "-50%",
-    transition: { duration: 0.5, ease: "easeOut", delay: 1.0 },
-  },
+// Slide-card hover overlay — dim fades in, zoom-in icon pops up. Driven
+// via parent's whileHover so all child motion.divs sync on enter/leave.
+const slideHoverVariants: Variants = {
+  rest: { opacity: 0, backgroundColor: "rgba(0,0,0,0)" },
+  hover: { opacity: 1, backgroundColor: "rgba(0,0,0,0.35)" },
 };
+const slideHoverIconVariants: Variants = {
+  rest: { scale: 0.8, opacity: 0 },
+  hover: { scale: 1, opacity: 1 },
+};
+
+// Toolbar physics. The outer wrapper springs between page-edge (left: 16)
+// and lightbox position (computed from viewport size) — this is the
+// horizontal "slide from page to slide-right" morph. The inner motion
+// remounts via `key` flip on every state change, firing the scale pulse
+// (0.88 → 1) that gives the "lift off, land" 3d feel.
+const TOOLBAR_POSITION_SPRING = { type: "spring" as const, stiffness: 180, damping: 24 };
+const TOOLBAR_SCALE_SPRING = { type: "spring" as const, stiffness: 280, damping: 14 };
+
+// Must match SlideLightbox's stage width clamp `min(calc(90vw - 220px), …)`
+// so the toolbar lands exactly at the stage's left edge minus a gap. The
+// 220px stage reservation is split evenly on both sides because the stage
+// is centered in the viewport — plenty of room for the toolbar at ~80px
+// wide plus the 24px gap on either side.
+const TOOLBAR_RESERVE_PX = 220;
+const TOOLBAR_STAGE_GAP_PX = 24;
+// Approximate physical width of <PreviewActionBar> — 44px button column +
+// 2 × 8px glass-card padding + 1px borders = ~62px, rounded up so the
+// toolbar always lands clear of the stage edge.
+const TOOLBAR_WIDTH_PX = 80;
 
 export function DeckView({
   projectId,
@@ -175,6 +201,101 @@ export function DeckView({
   const [lastSlideSeen, setLastSlideSeen] = useState(0);
   const [lastStageSeen, setLastStageSeen] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+
+  // Lightbox — null when closed, otherwise the slide index being shown.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // Responsive slide grid — Tailwind `grid-cols-1/2/3/4` at breakpoints.
+  // Each cell uses `aspect-ratio: 16/9` + `w-full` so columns shrink to
+  // fit the viewport without overlap. SlideRenderer renders at a 1920-wide
+  // canvas internally; we feed it a `scale` derived from the actual cell
+  // width so the slide content fills the cell at any breakpoint. One
+  // ResizeObserver on the grid container measures, then computes the
+  // resolved column count + gap from getComputedStyle.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [gridScale, setGridScale] = useState(FALLBACK_SCALE);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const recompute = () => {
+      const styles = getComputedStyle(el);
+      const cols = styles.gridTemplateColumns.split(" ").filter(Boolean).length;
+      const gapPx = parseFloat(styles.columnGap) || 0;
+      const w = el.clientWidth;
+      if (w <= 0 || cols <= 0) return;
+      const cellW = (w - (cols - 1) * gapPx) / cols;
+      if (cellW > 0) {
+        setGridScale(cellW / SLIDE_W);
+      }
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [manifest]);
+
+  // Comment-feature state (Steps 2-4 of context/plan-comments.md).
+  //
+  //   commentMode: drives the toolbar toggle + the dim-0-comment-slides
+  //                affordance in the grid + the drag-box overlay in the
+  //                lightbox.
+  //   comments:    DRAFT comments for the current version. Fetched on
+  //                first render in `completed` state. Server keeps the
+  //                authoritative list; we keep an optimistic local copy.
+  //   applying:    set when POST /regenerate-partial is in flight or the
+  //                new version is queued and not yet `completed`. While
+  //                set, the targetSlideIds get a per-slide "regenerating"
+  //                overlay and toolbar buttons disable.
+  const [commentMode, setCommentMode] = useState(false);
+  const [comments, setComments] = useState<CommentRow[]>([]);
+  // `commentsArmed` is a CLIENT-ONLY UX flag: the user clicked "Apply"
+  // (locked in the drafts), but Claude hasn't been called yet. While
+  // armed, the apply cell is hidden and the regen icon shows a check —
+  // clicking the regen button is what actually fires the partial regen.
+  // Resets to false when applying completes (or fails).
+  const [commentsArmed, setCommentsArmed] = useState(false);
+  const [applying, setApplying] = useState<{
+    versionId: string;
+    targetSlideIds: string[];
+  } | null>(null);
+
+  // Viewport size — needed to compute the toolbar's lightbox-position
+  // landing point (left edge of stage minus gap). Updated on resize so
+  // the toolbar tracks viewport changes (rotate, sidebar toggle, etc.).
+  // SSR default = a desktop-ish 1440×900 so the first render produces a
+  // sensible toolbarLightboxLeft; replaced on mount before any interaction.
+  const [viewport, setViewport] = useState({ w: 1440, h: 900 });
+  useEffect(() => {
+    const sync = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+
+  // Toolbar is portal'd to document.body so its z-[1050] is in the same
+  // stacking context as the lightbox portal (z-[1000]). Without this,
+  // any ancestor of <section> that creates a stacking context (transform,
+  // filter, isolation, opacity != 1, etc.) traps the toolbar's z-index
+  // beneath the body-level lightbox. `bodyMounted` gates the createPortal
+  // call so we don't touch document during SSR.
+  const [bodyMounted, setBodyMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBodyMounted(true);
+  }, []);
+
+  // Stage width formula must mirror SlideLightbox's CSS clamp:
+  //   `min(calc(90vw - TOOLBAR_RESERVE_PX), calc((100vh - 160) * 16/9))`
+  // — the same min() of width-based and height-based candidates. The
+  // toolbar lands just to the LEFT of the stage: its right edge sits at
+  // `stage_left - gap`, so its `left` is `stage_left - gap - width`.
+  const stageW = Math.min(
+    viewport.w * 0.9 - TOOLBAR_RESERVE_PX,
+    ((viewport.h - 160) * 16) / 9
+  );
+  const stageLeftEdge = (viewport.w - stageW) / 2;
+  const toolbarLightboxLeft =
+    stageLeftEdge - TOOLBAR_STAGE_GAP_PX - TOOLBAR_WIDTH_PX;
 
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
@@ -314,7 +435,6 @@ export function DeckView({
     const start = Number.isFinite(serverStartMs) ? serverStartMs : Date.now();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGenStartedAt(start);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLastProgressAt(Date.now());
   }, [status, genStartedAt, progress]);
 
@@ -334,11 +454,7 @@ export function DeckView({
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setLastSlideSeen(slide);
       }
-      if (stageChanged) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setLastStageSeen(stage);
-      }
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (stageChanged) setLastStageSeen(stage);
       setLastProgressAt(Date.now());
     }
   }, [progress, status, lastSlideSeen, lastStageSeen]);
@@ -367,6 +483,248 @@ export function DeckView({
     !!genStartedAt &&
     !isStuck &&
     elapsedMs > SLOW_WARN_MS;
+
+  // Surface a single "stuck" notification to the bell when the deck first
+  // crosses the STUCK threshold. We push exactly once per stuck-window via
+  // a ref-tracked latch so the user doesn't see the same alert repeated
+  // every 10 s (the nowTick interval re-evaluates isStuck constantly).
+  // The notification carries the project's preview href so clicking
+  // returns the user here.
+  const stuckNotifiedRef = useRef(false);
+  useEffect(() => {
+    if (!isStuck) {
+      // Reset the latch when stuck clears (retry succeeded, etc.) so a
+      // future stuck window will fire a fresh notification.
+      stuckNotifiedRef.current = false;
+      return;
+    }
+    if (stuckNotifiedRef.current) return;
+    stuckNotifiedRef.current = true;
+    notificationStore.push({
+      kind: "warning",
+      title: "تصميم العرض متوقف",
+      desc: `${projectTitle} — يبدو أن العملية متوقفة. جرّب إعادة المحاولة.`,
+      // Route to the summary page so the user lands on the "Generate"
+      // CTA — their content + brand data is preserved in sessionStorage
+      // from the create flow, so a single click re-fires generation.
+      href: `/create/summary`,
+    });
+  }, [isStuck, projectId, projectTitle]);
+
+  // Fetch draft comments once on completed mount. The server filters by the
+  // presentation's currentVersionId, so refetching on manifest swap (after
+  // a partial regen completes) brings up the new version's drafts (zero,
+  // since drafts get applied during regen and the new version starts clean).
+  useEffect(() => {
+    if (status !== "completed") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/comments`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { comments: CommentRow[] };
+        if (!cancelled && Array.isArray(data.comments)) {
+          // Only DRAFT comments are actionable in the UI — applied ones
+          // are historical and shouldn't pile pins onto the new version.
+          setComments(data.comments.filter((c) => c.status === "draft"));
+        }
+      } catch {
+        /* network blip — comments stay empty */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, status, manifest?.presentationId]);
+
+  // While applying, poll project status. Apply is "done" only when the
+  // LATEST version's id matches the applying state's versionId AND its
+  // status is "completed" — otherwise we'd false-positive immediately on
+  // the source version (still "completed" at apply-time before the new
+  // version is allocated). Once done: clear applying state, drop applied
+  // drafts from local state, exit comment mode, refresh server-render.
+  useEffect(() => {
+    if (!applying) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/status`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          status: string;
+          versionId: string | null;
+          versionStatus: string | null;
+        };
+        // Optimistic mode: applying.versionId starts as "__pending__".
+        // Until the apply POST returns and we replace it with the real
+        // versionId, no completion can be declared (real id can never
+        // equal the sentinel).
+        if (
+          data.versionId &&
+          data.versionId === applying.versionId &&
+          data.versionStatus === "completed"
+        ) {
+          setApplying(null);
+          setComments([]);
+          setCommentMode(false);
+          setCommentsArmed(false);
+          router.refresh();
+        }
+      } catch {
+        /* network blip */
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [applying, projectId, router]);
+
+  const handleCreateComment = useCallback(
+    async (input: { slideId: string; bounds: CommentBounds; content: string }) => {
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slideId: input.slideId,
+          boundsJson: input.bounds,
+          content: input.content,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save comment");
+      const data = (await res.json()) as { comment: CommentRow };
+      setComments((prev) => [...prev, data.comment]);
+    },
+    [projectId],
+  );
+
+  const handleUpdateComment = useCallback(
+    async (input: {
+      commentId: string;
+      content?: string;
+      bounds?: CommentBounds;
+    }) => {
+      const body: Record<string, unknown> = {};
+      if (input.content !== undefined) body.content = input.content;
+      if (input.bounds !== undefined) body.boundsJson = input.bounds;
+      const res = await fetch(
+        `/api/projects/${projectId}/comments/${input.commentId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!res.ok) throw new Error("Failed to update comment");
+      const data = (await res.json()) as { comment: CommentRow };
+      setComments((prev) =>
+        prev.map((c) => (c.id === input.commentId ? data.comment : c)),
+      );
+    },
+    [projectId],
+  );
+
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      const res = await fetch(
+        `/api/projects/${projectId}/comments/${commentId}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error("Failed to delete comment");
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    },
+    [projectId],
+  );
+
+  // Apply button = "lock in the drafts and prep the regen button to fire".
+  // This handler is INTENTIONALLY local-only: no fetch, no Claude call.
+  // Drafts stay as `status="draft"` in the DB. The regen button is what
+  // actually fires the partial regen (see handleFirePartialRegen below).
+  const handleApplyComments = useCallback(() => {
+    if (comments.length === 0) return;
+    if (applying) return;
+    setCommentsArmed(true);
+  }, [comments.length, applying]);
+
+  // Triggered by the regen button when it's in its "armed" (check-icon)
+  // state. THIS is the call that hits Claude — POST to /regenerate-partial
+  // dispatches the Inngest job. Optimistic applying state surfaces the
+  // per-slide overlay within one frame; authoritative versionId arrives
+  // when the API resolves. Lightbox closes so the user watches the grid.
+  const handleFirePartialRegen = useCallback(async () => {
+    if (applying) return;
+    if (comments.length === 0) return;
+    const optimisticTargetIds = Array.from(
+      new Set(comments.map((c) => c.slideId)),
+    );
+    setLightboxIndex(null);
+    setApplying({ versionId: "__pending__", targetSlideIds: optimisticTargetIds });
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/regenerate-partial`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Failed to fire partial regen");
+      }
+      const data = (await res.json()) as {
+        versionId: string;
+        targetSlideIds: string[];
+      };
+      setApplying({
+        versionId: data.versionId,
+        targetSlideIds: data.targetSlideIds,
+      });
+    } catch (err) {
+      console.error(err);
+      setApplying(null);
+    }
+  }, [applying, comments, projectId]);
+
+  const handleToggleCommentMode = useCallback(() => {
+    setCommentMode((v) => !v);
+  }, []);
+
+  // Esc handler — when comment mode is on AND the lightbox is closed, Esc
+  // exits comment mode. (When the lightbox is open, the lightbox's own Esc
+  // handler runs first: 1st press closes the editor or the lightbox; this
+  // DeckView-level handler picks up the 2nd press to exit comment mode.)
+  useEffect(() => {
+    if (!commentMode || lightboxIndex !== null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setCommentMode(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [commentMode, lightboxIndex]);
+
+  // Auto-disarm if the user deletes all drafts while armed — armed without
+  // any comments makes no sense (the regen button as check would fire an
+  // empty regen). setState-in-effect is intentional (derived state).
+  useEffect(() => {
+    if (commentsArmed && comments.length === 0 && !applying) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCommentsArmed(false);
+    }
+  }, [commentsArmed, comments.length, applying]);
+
+  // Per-slide draft comment counts. Drives the dim affordance in the grid
+  // and the Apply button badge.
+  const commentsBySlideId = useMemo(() => {
+    const map = new Map<string, CommentRow[]>();
+    for (const c of comments) {
+      const arr = map.get(c.slideId) ?? [];
+      arr.push(c);
+      map.set(c.slideId, arr);
+    }
+    return map;
+  }, [comments]);
 
   const handleRetry = useCallback(async () => {
     setRetrying(true);
@@ -418,7 +776,7 @@ export function DeckView({
               type="button"
               onClick={handleRetry}
               disabled={retrying}
-              className="btn-gradient inline-flex items-center justify-center gap-2 px-6 py-3 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-gradient inline-flex items-center justify-center gap-2 px-6 py-3 disabled:opacity-60"
             >
               {retrying ? (
                 <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
@@ -473,54 +831,23 @@ export function DeckView({
             <p className="text-muted mt-2 text-xs">{percent}%</p>
           </div>
 
-          {isSlow && (
-            <p className="text-muted mt-4 text-xs">
-              يستغرق هذا وقتًا أطول من المعتاد. لا داعي للقلق — يحدث أحيانًا مع المحتوى الطويل.
-            </p>
-          )}
-
-          {isStuck && (
-            <div
-              role="alert"
-              className="mx-auto mt-5 max-w-md rounded-xl border border-orange-500/40 bg-orange-500/10 p-4 text-right"
-            >
-              <p className="mb-3 text-sm font-semibold text-orange-200">
-                يبدو أن عملية التصميم متوقفة.
-              </p>
-              <p className="text-muted mb-4 text-xs leading-relaxed">
-                {staleMs > STUCK_STALE_MS && elapsedMs <= STUCK_TOTAL_MS
-                  ? "لم يحدث أي تقدم منذ أكثر من 3 دقائق."
-                  : "العملية تستغرق وقتًا أطول من المعتاد بكثير."}
-                {" "}يمكنك إعادة المحاولة أو الانتظار قليلًا.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  disabled={retrying}
-                  className="btn-gradient inline-flex items-center justify-center gap-2 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {retrying ? (
-                    <span className="spinner h-3 w-3 rounded-full border-2 border-white/20 border-t-white" />
-                  ) : null}
-                  حاول مرة أخرى
-                </button>
-              </div>
-              {retryError && (
-                <p className="status-error mt-3 text-xs">{retryError}</p>
-              )}
-            </div>
-          )}
+          {/* SLOW notice lives on the active slide card (see the
+              `state === "current"` branch below). The STUCK signal is
+              surfaced via the bell notification — DeckView pushes it
+              when `isStuck` first flips true. No on-page banner: the
+              bell is the single source of "something's wrong, look
+              here". When the job actually fails, the failure card
+              (top of this component) shows the retry affordance. */}
         </header>
 
-        <div className="grid grid-cols-1 justify-center gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {placeholders.map((_, idx) => {
             const state = cardStatus(idx);
             return (
               <div
                 key={idx}
-                style={{ width: SLIDE_CELL_W, height: SLIDE_CELL_H }}
-                className={`glass-card relative mx-auto overflow-hidden rounded-xl ${
+                style={{ aspectRatio: "16 / 9" }}
+                className={`glass-card relative w-full overflow-hidden rounded-xl ${
                   state === "pending" || state === "current" ? "animate-pulse" : ""
                 }`}
                 aria-label={`الشريحة ${idx + 1} — ${
@@ -540,11 +867,21 @@ export function DeckView({
                   </div>
                 ) : null}
                 {state === "current" ? (
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-white">
                     <span className="spinner h-6 w-6 rounded-full border-2 border-white/20 border-t-white" />
                     <span className="text-sm" dir="rtl">
                       جارٍ تصميم الشريحة {idx + 1} من {total}
                     </span>
+                    {/* SLOW notice surfaces here on the active slide card —
+                        not as a global header line — so it reads as "this
+                        specific slide is taking longer". Wording switched
+                        from "long content" to "server pressure" per the
+                        product brief. */}
+                    {isSlow && (
+                      <span className="text-[11px] leading-relaxed text-white/60" dir="rtl">
+                        الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي
+                      </span>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -559,7 +896,6 @@ export function DeckView({
   return (
     <section dir={manifest!.direction} className="page-container space-y-6">
       {fontLinks.map((url) => (
-        // eslint-disable-next-line @next/next/no-css-tags
         <link key={url} rel="stylesheet" href={url} />
       ))}
 
@@ -570,51 +906,177 @@ export function DeckView({
         <h1 className="mt-2 text-3xl font-bold text-white">{manifest!.title}</h1>
       </header>
 
-      {/* Fixed vertical toolbar — slides in from the left after the cascade */}
-      <motion.div
-        variants={actionBarVariants}
-        initial="hidden"
-        animate="visible"
-        className="fixed z-30"
-        style={{ left: "16px", top: "50%" }}
-      >
-        <PreviewActionBar
-          projectId={projectId}
-          projectTitle={projectTitle}
-          manifest={manifest!}
-        />
-      </motion.div>
+      {/* Universal toolbar. Single PreviewActionBar instance that lives
+          at the page root (portal'd to body so its z-index isn't trapped
+          by an ancestor stacking context) and animates its `left` between
+          the page edge (16px) and a position just to the LEFT of the
+          lightbox stage when the user enlarges a slide. The inner motion
+          remounts via `key` flip on every state change, firing the scale
+          pulse (0.88 → 1) that gives the "lift off, land" 3d feel.
+          z-[1050] keeps it above the z-[1000] lightbox backdrop in body's
+          stacking context. pointer-events-none on the outer wrapper so
+          the full-height fixed strip never intercepts clicks outside the
+          toolbar's actual buttons. */}
+      {bodyMounted
+        ? createPortal(
+            <motion.div
+              className="pointer-events-none fixed inset-y-0 z-[1050] flex items-center"
+              initial={{ left: -150, opacity: 0 }}
+              animate={{
+                left: lightboxIndex !== null ? toolbarLightboxLeft : 16,
+                opacity: 1,
+              }}
+              transition={{
+                left: TOOLBAR_POSITION_SPRING,
+                opacity: { duration: 0.5, ease: "easeOut" },
+              }}
+            >
+              <motion.div
+                key={lightboxIndex !== null ? "open" : "closed"}
+                initial={{ scale: 0.88 }}
+                animate={{ scale: 1 }}
+                transition={TOOLBAR_SCALE_SPRING}
+                className="pointer-events-auto"
+              >
+                <PreviewActionBar
+                  projectId={projectId}
+                  projectTitle={projectTitle}
+                  manifest={manifest!}
+                  commentMode={commentMode}
+                  onToggleCommentMode={handleToggleCommentMode}
+                  draftCommentCount={comments.length}
+                  onApplyComments={handleApplyComments}
+                  commentsArmed={commentsArmed}
+                  onFirePartialRegen={handleFirePartialRegen}
+                  applying={!!applying}
+                />
+              </motion.div>
+            </motion.div>,
+            document.body
+          )
+        : null}
 
       <motion.div
+        ref={gridRef}
         variants={slideListVariants}
         initial="hidden"
         animate="visible"
-        className="grid justify-center gap-5"
-        style={{
-          // Auto-wrap: 2+ columns when the viewport can fit 576px cells side
-          // by side (so the page-container at typical desktop width shows 2),
-          // single column on narrower screens. No fixed Tailwind breakpoint
-          // because page-container is width:100% and SLIDE_CELL_W is fixed.
-          gridTemplateColumns: `repeat(auto-fit, minmax(${SLIDE_CELL_W}px, 1fr))`,
-        }}
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
       >
-        {manifest!.slides.map((slide) => (
-          <motion.div
-            key={slide.slideId}
-            variants={slideCardVariants}
-            style={{ width: SLIDE_CELL_W, height: SLIDE_CELL_H }}
-            className="glass-card mx-auto overflow-hidden rounded-xl"
-          >
-            <SlideRenderer
-              slide={slide}
-              theme={manifest!.theme}
-              direction={manifest!.direction}
-              language={manifest!.language}
-              scale={SLIDE_SCALE}
-            />
-          </motion.div>
-        ))}
+        {manifest!.slides.map((slide, idx) => {
+          const slideCommentCount = commentsBySlideId.get(slide.slideId)?.length ?? 0;
+          const isRegenerating = !!applying?.targetSlideIds.includes(slide.slideId);
+          // In comment mode, slides with 0 comments dim so the user can see
+          // at a glance which slides are queued for partial regen. Slides
+          // with comments stay bright. During applying, the targeted slides
+          // get a spinner overlay AND non-targeted slides stay bright.
+          const dimmed = commentMode && slideCommentCount === 0 && !isRegenerating;
+          return (
+            <motion.button
+              type="button"
+              key={slide.slideId}
+              variants={slideCardVariants}
+              whileHover="hover"
+              initial="rest"
+              animate="rest"
+              onClick={() => setLightboxIndex(idx)}
+              aria-label={`فتح الشريحة ${idx + 1} بحجم أكبر`}
+              style={{ aspectRatio: "16 / 9" }}
+              // During applying, ALL slides are non-interactive — clicking
+              // a non-target shouldn't open the lightbox or otherwise let
+              // the user mess with state that's mid-transition. The target
+              // slide carries its own blur+spinner overlay; non-targets stay
+              // dimmed but locked. Once Inngest completes and the manifest
+              // swaps in, clicks restore.
+              className={`glass-card relative w-full overflow-hidden rounded-xl p-0 text-start outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-white/60 ${
+                applying ? "pointer-events-none cursor-default" : "cursor-zoom-in"
+              } ${dimmed && !applying ? "opacity-40 hover:opacity-100" : ""}`}
+            >
+              {/* Slide content. Heavily blurred while THIS slide is being
+                  regenerated (no opacity dim — full brightness, the blur
+                  alone signals "processing"). The regenerating overlay
+                  sits on top in sharp focus. Non-target slides render
+                  normally so the deck stays legible. */}
+              <div
+                className="h-full w-full transition-[filter] duration-300"
+                style={isRegenerating ? { filter: "blur(20px)" } : undefined}
+              >
+                <SlideRenderer
+                  slide={slide}
+                  theme={manifest!.theme}
+                  direction={manifest!.direction}
+                  language={manifest!.language}
+                  scale={gridScale}
+                />
+              </div>
+              {/* Hover overlay — only enabled when NOT in comment mode so
+                  the dim affordance reads clearly. */}
+              {!commentMode ? (
+                <motion.div
+                  aria-hidden
+                  variants={slideHoverVariants}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  <motion.div
+                    variants={slideHoverIconVariants}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="glass-card flex h-12 w-12 items-center justify-center rounded-full text-white"
+                  >
+                    <span className="material-symbols-outlined">zoom_in</span>
+                  </motion.div>
+                </motion.div>
+              ) : null}
+              {/* Comment-count badge — top-end (left in RTL). Only shows in
+                  comment mode when the slide has drafts. Hidden while the
+                  slide is being regenerated (the regen overlay is taking
+                  the user's attention; the badge would be redundant /
+                  distracting). Brand-blue chip with a compact comment
+                  glyph; sized smaller than before so it doesn't crowd
+                  the slide thumbnail. */}
+              {commentMode && slideCommentCount > 0 && !isRegenerating ? (
+                <div
+                  className="absolute end-2 top-2 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow"
+                  style={{ background: "var(--tq-blue)" }}
+                >
+                  <span className="material-symbols-outlined text-[11px]">
+                    comment
+                  </span>
+                  {slideCommentCount}
+                </div>
+              ) : null}
+              {/* Regenerating overlay — spinner + label sitting directly on
+                  the blurred slide. No glass-card surround; the heavy blur
+                  underneath already gives enough separation. */}
+              {isRegenerating ? (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
+                    <span className="text-xs font-medium">جارٍ إعادة التصميم...</span>
+                  </div>
+                </div>
+              ) : null}
+            </motion.button>
+          );
+        })}
       </motion.div>
+
+      {/* Lightbox — full-viewport modal. Mounted unconditionally so the
+          AnimatePresence inside can play exit animations on close. The
+          toolbar lives at DeckView root and animates into a position
+          alongside the lightbox stage; the lightbox itself just reserves
+          a gap on its right via the TOOLBAR_RESERVE_PX clamp. */}
+      <SlideLightbox
+        manifest={manifest!}
+        index={lightboxIndex}
+        mode={commentMode ? "comment" : "idle"}
+        comments={comments}
+        onClose={() => setLightboxIndex(null)}
+        onNav={(next) => setLightboxIndex(next)}
+        onCreateComment={handleCreateComment}
+        onUpdateComment={handleUpdateComment}
+        onDeleteComment={handleDeleteComment}
+      />
     </section>
   );
 }
