@@ -1289,6 +1289,9 @@ export default function CreateBrandPage() {
               </span>
               <h2 className="text-sm font-semibold text-white">ألوان العلامة التجارية</h2>
             </header>
+            <p className="text-xs text-muted">
+              من ١ إلى ٥ ألوان. كلود يختار لون الخلفية والنص تلقائياً لتناسب ألوانك.
+            </p>
 
             {/* Palette mode chooser — same Pill primitive as the font
                 mode toggle below, so the two cards share one button
@@ -1308,14 +1311,14 @@ export default function CreateBrandPage() {
               </Pill>
             </div>
 
-            {/* Fixed height on the mode-switching slot so the colours
-                card doesn't shrink/expand when the user toggles
-                between اختيار يدوي (swatch grid) and رفع لقطة شاشة
-                (taller dropzone). 116 px matches the screenshot
-                zone's natural height (icon hierarchy + p-4); the
-                shorter manual content centers vertically in this
-                band. */}
-            <div className="flex" style={{ height: 116 }}>
+            {/* Fixed-height mode slot so the colours card doesn't
+                shrink/expand when the user toggles between اختيار
+                يدوي (swatch grid) and رفع لقطة شاشة (taller dropzone).
+                Block layout (not flex) so child elements naturally
+                stretch to the full card width — the previous flex
+                wrapper was sizing the screenshot zone to content
+                width instead of card width. */}
+            <div className="w-full" style={{ minHeight: 116 }}>
             {paletteMode === "screenshot" ? (
               <CompactUploadZone
                 label="ارفع لقطة شاشة"
@@ -1324,10 +1327,10 @@ export default function CreateBrandPage() {
                 onSelect={setPaletteScreenshot}
               />
             ) : (
-              // 5-column grid: at MAX_COLORS (5) the row holds every
-              // swatch on a single line. At MIN (1) → swatch + dashed
-              // add-tile + three implicit empty cells = single row.
-              <div className="grid w-full grid-cols-5 items-center gap-2">
+              // 3-column grid: at MAX_COLORS (5) the layout is 3+2
+              // = 2 rows. At MIN (1) → swatch + dashed add-tile sits
+              // on row 1 only, still bounded by the wrapper height.
+              <div className="grid grid-cols-3 gap-2">
                 {colors.map((color, index) => (
                   <BrandColorRow
                     key={index}
@@ -1369,6 +1372,9 @@ export default function CreateBrandPage() {
               </span>
               <h2 className="text-sm font-semibold text-white">الشعار</h2>
             </header>
+            <p className="text-xs text-muted">
+              يُقبل بصيغة SVG فقط — كلود يعيد تلوينه ليتناسب مع خلفية كل شريحة ويضمن التباين.
+            </p>
             <CompactUploadZone
               label="ارفع الشعار (SVG فقط)"
               accept=".svg,image/svg+xml"
