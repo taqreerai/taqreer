@@ -218,6 +218,39 @@ type Rules = {
   } | null;
 } | null;
 
+// Build physical CSS for a corner. `verticalPx` lets pagination use a
+// slightly higher inset (38 px) than logo / persistent text (80 px)
+// so the page number sits below the line of body content but above
+// the very edge of the canvas.
+function cornerToCss(corner: CornerPosition, verticalPx = 80): string {
+  const vertical = corner.startsWith("top")
+    ? `top:${verticalPx}px`
+    : `bottom:${verticalPx}px`;
+  if (corner.endsWith("-center")) {
+    return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
+  }
+  const side = corner.endsWith("-left") ? "left" : "right";
+  return `position:absolute; ${side}:80px; ${vertical};`;
+}
+
+// Pick a corner for pagination that doesn't collide with chrome the
+// user has already pinned (logo + persistent text). Preference order:
+// bottom-left → bottom-right → bottom-center → top-left → top-right
+// → top-center (extreme fallback — never reached in practice unless
+// the user occupied 5 of 6 corners).
+function pickPaginationCorner(occupied: Set<CornerPosition>): CornerPosition {
+  const priority: CornerPosition[] = [
+    "bottom-left",
+    "bottom-right",
+    "bottom-center",
+    "top-left",
+    "top-right",
+    "top-center",
+  ];
+  for (const c of priority) if (!occupied.has(c)) return c;
+  return "bottom-left";
+}
+
 // Design-style directives — each style cracks open the layout pattern
 // otherwise enforced by DESIGN-SYSTEM LOCK. Chrome stays locked across the
 // deck; the style determines WHAT chrome and body compositions look like.
@@ -238,7 +271,7 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "Classic: centered hierarchy, traditional book-cover style on cover, balanced compositions, restrained accents. Timeless rather than trendy.",
 };
 
-function ruleLines(rules: Rules): string[] {
+function ruleLines(rules: Rules, logoPos: CornerPosition | null): string[] {
   if (!rules) return [];
   const lines = ["", "Generation rules (user-specified, OVERRIDE matching defaults):"];
   if (rules.designStyle) {
@@ -254,30 +287,42 @@ function ruleLines(rules: Rules): string[] {
       ? `- Fix typos: correct spelling and grammar errors in the source content silently while preserving meaning.`
       : `- Preserve user text verbatim: do NOT auto-correct spelling or grammar — keep the source content as-written.`,
   );
+
+  // Chrome corners already taken by user picks. Pagination will be
+  // auto-routed to the highest-priority FREE corner from this set's
+  // complement (see pickPaginationCorner). If the user puts logo +
+  // persistent text on the same corner that's their decision — we
+  // pass both through and let Claude render them stacked.
+  const persistentPos =
+    rules.persistent && rules.persistent.text.trim()
+      ? rules.persistent.position
+      : null;
+  const occupied = new Set<CornerPosition>();
+  if (logoPos) occupied.add(logoPos);
+  if (persistentPos) occupied.add(persistentPos);
+
   if (rules.pagination) {
-    const logoBrief = (event.brief as { brand?: { logo?: { position?: CornerPosition } | null } } | null)?.brand?.logo ?? null;
-    const logoPos = logoBrief?.position ?? null;
-    // Pagination goes on the OPPOSITE bottom corner from the logo.
-    // If the user picked a bottom corner for the logo, force the
-    // opposite. Otherwise default to bottom-left.
-    const paginationCorner: "bottom-left" | "bottom-right" =
-      logoPos === "bottom-right" ? "bottom-left" :
-      logoPos === "bottom-left" ? "bottom-right" :
-      "bottom-left";
-    const paginationCss = paginationCorner === "bottom-right"
-      ? "position:absolute; right:80px; bottom:38px;"
-      : "position:absolute; left:80px; bottom:38px;";
+    const paginationCorner = pickPaginationCorner(occupied);
+    const paginationCss = cornerToCss(paginationCorner, 38);
+    const reservedDesc =
+      Array.from(occupied)
+        .map((c) => `- ${c} (chrome)`)
+        .concat([`- ${paginationCorner} (pagination)`])
+        .join("\n  ") || "(none)";
     lines.push(
-      `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"). Use Latin digits + slash (e.g. "02 / 07") even in an Arabic deck so the indicator reads left-to-right.`,
-      `- Pagination anchor (chrome — keeps the same VISUAL corner regardless of slide direction): wrap the page number in an element that carries BOTH a \`data-anchor\` attribute AND \`dir="ltr"\`, with this EXACT inline style: \`${paginationCss}\`. Example: \`<div data-anchor dir="ltr" style="${paginationCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;font-weight:700;">02 / 07</div>\`. The \`data-anchor\` flag tells the renderer to leave these physical \`right:\` / \`left:\` values untouched (chrome stays put across LTR/RTL); without it the renderer mirrors physical L/R props into logical ones, which would flip chrome to the wrong corner.`,
+      `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"). Use Latin digits + slash even in an Arabic deck so the indicator reads left-to-right.`,
+      `- Pagination anchor — wrap the page number in an element with BOTH a \`data-anchor\` attribute AND \`dir="ltr"\`, with this EXACT inline style: \`${paginationCss}\`. Example: \`<div data-anchor dir="ltr" style="${paginationCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;font-weight:700;">02 / 07</div>\`. \`data-anchor\` flags this element as a fixed chrome corner — the renderer leaves the physical \`right:\` / \`left:\` values untouched so it stays put in any direction.`,
+      `- Pagination corner was auto-chosen to AVOID the logo's corner and the persistent-text corner. Do NOT override it.`,
       `- Do NOT emit additional pagination strings like "الصفحة 02" or "صفحة 02 — العنوان" or "PAGE 02 — TITLE" elsewhere on the slide; one numeric indicator is the entire pagination.`,
+      `- Reserved chrome corners (DO NOT place body content / cards / illustrations in these — they're already taken by chrome elements):`,
+      `  ${reservedDesc}`,
     );
   } else {
     lines.push(
       `- Pagination: DISABLED. Do NOT emit any page-number text element on any slide — no "N / Total", no "الصفحة 02", no "PAGE 02 — title". The user opted out of pagination entirely.`,
     );
   }
-  if (rules.persistent && rules.persistent.text.trim()) {
+  if (rules.persistent && rules.persistent.text.trim() && persistentPos) {
     const excludeCover = rules.persistent.exclude.includes("cover");
     const excludeClosing = rules.persistent.exclude.includes("closing");
     const exclusions = [
@@ -287,8 +332,10 @@ function ruleLines(rules: Rules): string[] {
     const scope = exclusions.length === 0
       ? "EVERY slide including cover and closing"
       : `every slide EXCEPT ${exclusions.join(" and ")}`;
+    const persistentCss = cornerToCss(persistentPos);
     lines.push(
-      `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}, at the ${rules.persistent.position} corner. Use the EXACT same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock — see DESIGN-SYSTEM LOCK).`,
+      `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}.`,
+      `- Persistent overlay anchor — wrap the text in an element with the \`data-anchor\` attribute and this EXACT inline style: \`${persistentCss}\`. Example: \`<div data-anchor style="${persistentCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;">${rules.persistent.text}</div>\`. Same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock). \`data-anchor\` flags this element as a fixed chrome corner so the renderer leaves physical \`right:\` / \`left:\` values untouched in any direction.`,
     );
   }
   return lines;
@@ -346,7 +393,12 @@ function buildUserMessage(event: DeckGenerateEvent) {
   }
 
   const rules = (event.brief as { rules?: Rules } | null)?.rules ?? null;
-  lines.push(...ruleLines(rules));
+  // Extract logo corner once — ruleLines needs it to allocate a free
+  // pagination corner that doesn't collide with the user's logo pick.
+  const briefLogoPos =
+    (event.brief as { brand?: { logo?: { position?: CornerPosition } | null } } | null)
+      ?.brand?.logo?.position ?? null;
+  lines.push(...ruleLines(rules, briefLogoPos));
 
   // Logo placement — brand logo, if provided, is up to Claude to compose
   // into the chrome. We tell him *where* the user wants it and *whether*
