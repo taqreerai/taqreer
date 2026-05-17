@@ -250,6 +250,9 @@ export function ColorPickerPopover({
           className="absolute top-full z-30 mt-2"
           style={{ ...positionStyle, width: 240 }}
         >
+        {/* Solid-ish backdrop tint (not just glass-opacity) so the
+            SV gradient stays readable over busy backgrounds. Border
+            still uses the user's glass-border preset for cohesion. */}
         <motion.div
           ref={wrapperRef}
           initial={{ opacity: 0, scale: 0.9, y: -6 }}
@@ -258,9 +261,6 @@ export function ColorPickerPopover({
           transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
           className="backdrop-blur-glass rounded-2xl border p-3 shadow-2xl"
-          // Solid-ish backdrop tint (not just glass-opacity) so the
-          // SV gradient stays readable over busy backgrounds. Border
-          // still uses the user's glass-border preset for cohesion.
           style={{
             background: "rgba(15, 11, 30, 0.92)",
             borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",

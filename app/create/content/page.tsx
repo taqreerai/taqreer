@@ -6,12 +6,28 @@
 // other dims to half opacity so it's obvious only one will submit.
 // Verbatim toggle lives on the text card (only meaningful for text).
 
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
 import { Toggle } from "@/components/create/controls";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
+
+// sessionStorage key for the content blob. Same key used by the
+// stepper to detect "step 1 done" + by the brand page's navigation
+// guard. Hoisted to a constant so auto-save / hydrate / handleNext
+// all reference the same value.
+const CONTENT_KEY = "taqreer:create:content";
+
+type StoredContent =
+  | { type: "text"; text: string; keepVerbatim?: boolean }
+  | {
+      type: "file";
+      fileName: string;
+      fileSize: number;
+      storageUrl: string;
+      keepVerbatim?: boolean;
+    };
 
 type Tab = "file" | "text";
 
@@ -47,12 +63,122 @@ export default function CreateContentPage() {
   // headings or grouping). When the user flips this on, we let
   // Claude reorganize freely.
   const [letUsHandle, setLetUsHandle] = useState(false);
+  // Restored file metadata — when the user uploaded a file on a
+  // previous visit and clicked Next, we get back the fileName +
+  // storageUrl from sessionStorage. The File object itself can't
+  // be serialised, so this is the equivalent storage-side
+  // reference. Mirrors brand-page's `loadedLogoMeta` pattern.
+  const [loadedFileMeta, setLoadedFileMeta] = useState<{
+    fileName: string;
+    fileSize: number;
+    storageUrl: string;
+  } | null>(null);
+  // Hydration guard — `mounted=true` AFTER the useLayoutEffect that
+  // restores state. Until then we suppress the auto-save effect so
+  // an initial default-value render doesn't blow away the saved
+  // blob between Render 1 and Render 2.
+  const [mounted, setMounted] = useState(false);
+
+  // Hydrate from sessionStorage post-render but BEFORE paint, so
+  // the user never sees an empty textarea flash if they're coming
+  // back to the page with content in storage.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem(CONTENT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as StoredContent;
+        if (parsed.type === "text") {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setText(parsed.text ?? "");
+          if (parsed.text?.trim()) setTab("text");
+        } else if (parsed.type === "file") {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setLoadedFileMeta({
+            fileName: parsed.fileName,
+            fileSize: parsed.fileSize,
+            storageUrl: parsed.storageUrl,
+          });
+          setTab("file");
+        }
+        if (parsed.keepVerbatim != null) {
+          // `letUsHandle` is the inverse of `keepVerbatim` (toggle
+          // ON = let us reorganise = NOT verbatim).
+          setLetUsHandle(!parsed.keepVerbatim);
+        }
+      }
+    } catch {
+      /* corrupt blob — leave defaults */
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+
+  // Auto-save text drafts as the user types. Skips when not yet
+  // mounted (avoid clobbering during hydration) and when typing into
+  // an empty textarea (don't overwrite an existing file blob with an
+  // empty text blob — leaves the saved file in place until the user
+  // actually starts typing).
+  useEffect(() => {
+    if (!mounted) return;
+    if (typeof window === "undefined") return;
+    if (!text.trim()) {
+      // If the user clears the textarea AND there's a saved text
+      // blob (not a file), strip it so coming back lands on the
+      // default empty state instead of restoring stale text.
+      const existing = window.sessionStorage.getItem(CONTENT_KEY);
+      if (existing) {
+        try {
+          const parsed = JSON.parse(existing) as StoredContent;
+          if (parsed.type === "text") {
+            window.sessionStorage.removeItem(CONTENT_KEY);
+            notifyCreateStateChange();
+          }
+        } catch {
+          /* corrupt blob — leave */
+        }
+      }
+      return;
+    }
+    window.sessionStorage.setItem(
+      CONTENT_KEY,
+      JSON.stringify({
+        type: "text",
+        text,
+        keepVerbatim: !letUsHandle,
+      }),
+    );
+    notifyCreateStateChange();
+  }, [text, letUsHandle, mounted]);
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
     setFile(nextFile);
+    // A fresh File supersedes any previously-uploaded one — the user
+    // explicitly re-picked, so drop the loaded-meta and re-upload on
+    // Next.
+    setLoadedFileMeta(null);
     setTab("file");
     setError("");
+  };
+
+  const removeFile = () => {
+    setFile(null);
+    setLoadedFileMeta(null);
+    if (typeof window !== "undefined") {
+      const existing = window.sessionStorage.getItem(CONTENT_KEY);
+      if (existing) {
+        try {
+          const parsed = JSON.parse(existing) as StoredContent;
+          if (parsed.type === "file") {
+            window.sessionStorage.removeItem(CONTENT_KEY);
+            notifyCreateStateChange();
+          }
+        } catch {
+          /* corrupt — leave */
+        }
+      }
+    }
   };
 
   const onTextChange = (next: string) => {
@@ -63,10 +189,11 @@ export default function CreateContentPage() {
 
   const handleNext = async () => {
     setError("");
-    const hasFile = tab === "file" && file;
+    const hasFreshFile = tab === "file" && file;
+    const hasLoadedFile = tab === "file" && !file && loadedFileMeta;
     const hasText = tab === "text" && text.trim().length > 0;
 
-    if (!hasFile && !hasText) {
+    if (!hasFreshFile && !hasLoadedFile && !hasText) {
       setError("اختر ملفاً أو أدخل نصاً للمتابعة.");
       return;
     }
@@ -96,7 +223,7 @@ export default function CreateContentPage() {
         const uploaded = (await uploadResponse.json()) as { storageUrl: string };
 
         sessionStorage.setItem(
-          "taqreer:create:content",
+          CONTENT_KEY,
           JSON.stringify({
             type: "file",
             fileName: readableFileName(file.name),
@@ -105,9 +232,22 @@ export default function CreateContentPage() {
             keepVerbatim: !letUsHandle,
           }),
         );
+      } else if (loadedFileMeta && tab === "file") {
+        // Previously-uploaded file, no fresh File picked — forward
+        // the same storage URL + metadata. No re-upload.
+        sessionStorage.setItem(
+          CONTENT_KEY,
+          JSON.stringify({
+            type: "file",
+            fileName: loadedFileMeta.fileName,
+            fileSize: loadedFileMeta.fileSize,
+            storageUrl: loadedFileMeta.storageUrl,
+            keepVerbatim: !letUsHandle,
+          }),
+        );
       } else {
         sessionStorage.setItem(
-          "taqreer:create:content",
+          CONTENT_KEY,
           JSON.stringify({
             type: "text",
             text: text.trim(),
@@ -146,7 +286,7 @@ export default function CreateContentPage() {
             in DOM order and the row inherits dir="rtl". */}
         <div
           className={`glass-card flex flex-col gap-3 rounded-2xl p-5 transition-opacity ${
-            !file && text.trim().length > 0 ? "opacity-60" : ""
+            !file && !loadedFileMeta && text.trim().length > 0 ? "opacity-60" : ""
           }`}
         >
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
@@ -206,7 +346,9 @@ export default function CreateContentPage() {
             <p className="text-[10px] text-white/40">ندعم صيغ PPTX, PDF, DOCX</p>
           </button>
 
-          {file ? (
+          {/* Chip shows EITHER the freshly-picked File OR the
+              previously-uploaded loadedFileMeta — never both. */}
+          {file || loadedFileMeta ? (
             <div
               className="flex items-center justify-between gap-3 rounded-xl border p-3"
               style={{
@@ -216,13 +358,19 @@ export default function CreateContentPage() {
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-white">
-                  {readableFileName(file.name)}
+                  {file
+                    ? readableFileName(file.name)
+                    : (loadedFileMeta?.fileName ?? "")}
                 </p>
-                <p className="text-xs text-white/50">{formatFileSize(file.size)}</p>
+                <p className="text-xs text-white/50">
+                  {formatFileSize(
+                    file ? file.size : (loadedFileMeta?.fileSize ?? 0),
+                  )}
+                </p>
               </div>
               <button
                 type="button"
-                onClick={() => setFile(null)}
+                onClick={removeFile}
                 aria-label="إزالة الملف"
                 className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
               >
@@ -269,7 +417,7 @@ export default function CreateContentPage() {
         {/* Free-text card */}
         <div
           className={`glass-card flex flex-col gap-3 rounded-2xl p-5 transition-opacity ${
-            file && text.trim().length === 0 ? "opacity-60" : ""
+            (file || loadedFileMeta) && text.trim().length === 0 ? "opacity-60" : ""
           }`}
         >
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">

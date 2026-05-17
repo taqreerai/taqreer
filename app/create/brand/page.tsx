@@ -163,6 +163,16 @@ function readFileAsDataUrl(file: File | null) {
   });
 }
 
+// Reverse of readFileAsDataUrl — used when handleNext has only a
+// saved-draft previewDataUrl (user picked a logo, navigated away
+// before clicking Next, came back). We need a File object to feed
+// the storage upload API.
+async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], fileName, { type: blob.type || "image/svg+xml" });
+}
+
 function CompactUploadZone({
   label,
   accept,
@@ -637,7 +647,12 @@ export default function CreateBrandPage() {
   // Phase 9. Polychrome SVGs are accepted but can't be recolored either;
   // Claude is told in the prompt to design backgrounds compatible with
   // the logo's colors when it's not a monochrome SVG.
-  const acceptLogo = (next: File) => {
+  //
+  // Auto-save: also write the preview data URL to sessionStorage on
+  // pick, so the preview survives navigating to the dashboard before
+  // clicking Next. handleNext later reconstructs a File from the data
+  // URL when no fresh File is in state.
+  const acceptLogo = async (next: File) => {
     const isSvgMime = next.type === "image/svg+xml";
     const isSvgExt = next.name.toLowerCase().endsWith(".svg");
     if (!isSvgMime && !isSvgExt) {
@@ -646,6 +661,28 @@ export default function CreateBrandPage() {
     }
     setLogoError(null);
     setLogo(next);
+    // Best-effort persist — failure leaves state in-memory only,
+    // matching the pre-auto-save behaviour.
+    try {
+      const previewDataUrl = await readFileAsDataUrl(next);
+      if (typeof window !== "undefined") {
+        const raw = window.sessionStorage.getItem("taqreer:create:brand");
+        const blob = raw ? JSON.parse(raw) : {};
+        blob.logo = {
+          name: next.name,
+          previewDataUrl,
+          // storageUrl intentionally left empty — set on Next.
+          storageUrl: null,
+        };
+        window.sessionStorage.setItem(
+          "taqreer:create:brand",
+          JSON.stringify(blob),
+        );
+        notifyCreateStateChange();
+      }
+    } catch {
+      /* persistence is best-effort */
+    }
   };
 
   const [error, setError] = useState("");
@@ -674,24 +711,30 @@ export default function CreateBrandPage() {
   // sees the logo on slides. `logo` (File) stays null because we don't
   // have the bytes; this holds the equivalent storage-side reference.
   const [loadedLogoMeta, setLoadedLogoMeta] = useState<{
-    storageUrl: string;
+    // `null` storageUrl = the user picked a logo but hasn't clicked
+    // Next yet (auto-save draft from `acceptLogo`). handleNext sees
+    // the missing storageUrl and reconstructs a File from
+    // previewDataUrl to do the actual storage upload at that point.
+    storageUrl: string | null;
     name: string;
     previewDataUrl: string | null;
   } | null>(null);
 
-  // Restore logo from sessionStorage post-hydration. The original
-  // File object can't survive a navigation round-trip, but the
-  // previous "Next" click already uploaded the file and wrote
-  // { name, storageUrl, previewDataUrl } into the brand blob.
-  // useLayoutEffect (not useEffect) so the preview chip is in place
-  // before the user sees the page — no flash of empty upload zone
-  // when they hit "السابق" from /create/output.
+  // Restore logo from sessionStorage post-hydration. Two paths:
+  //   1. Full save (storageUrl + previewDataUrl) — after a previous
+  //      Next click. handleNext can forward storageUrl directly.
+  //   2. Draft (previewDataUrl only) — user picked a logo via the
+  //      auto-save path and navigated away before clicking Next.
+  //      handleNext reconstructs a File from previewDataUrl and
+  //      uploads then.
+  // Either way the preview chip appears immediately — no flash of
+  // empty upload zone.
   useLayoutEffect(() => {
     const s = readStoredBrand();
-    if (s?.logo?.storageUrl) {
+    if (s?.logo?.previewDataUrl || s?.logo?.storageUrl) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadedLogoMeta({
-        storageUrl: s.logo.storageUrl,
+        storageUrl: s.logo.storageUrl ?? null,
         name: s.logo.name ?? "logo",
         previewDataUrl: s.logo.previewDataUrl ?? null,
       });
@@ -1077,26 +1120,52 @@ export default function CreateBrandPage() {
   // save time so the kit holds storage URLs ready for the load flow to
   // rehydrate. The button morphs save → check via framer-motion; on
   // error we revert.
+  // Resolve the File object we should upload for the logo. Three cases:
+  //   1. Fresh File in state → use it directly.
+  //   2. Auto-save draft only (loadedLogoMeta with previewDataUrl,
+  //      no storageUrl) → reconstruct a File from the data URL.
+  //   3. Already-uploaded logo (storageUrl present) → no File needed;
+  //      caller falls back to `loadedLogoMeta` to forward the URL.
+  const resolveLogoFileForUpload = async (): Promise<File | null> => {
+    if (logo) return logo;
+    if (
+      loadedLogoMeta &&
+      !loadedLogoMeta.storageUrl &&
+      loadedLogoMeta.previewDataUrl
+    ) {
+      try {
+        return await dataUrlToFile(
+          loadedLogoMeta.previewDataUrl,
+          loadedLogoMeta.name || "logo.svg",
+        );
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
   const handleSaveAsBrand = async () => {
     if (saveBrandState !== "idle") return;
     setError("");
     setSaveBrandState("saving");
     try {
+      const logoFile = await resolveLogoFileForUpload();
       // Upload any pending File-typed assets so the kit holds permanent
       // URLs. Logo + per-slot uploaded fonts run in parallel. Each
       // upload is a no-op if the file is null. If a kit was previously
-      // loaded (no new File picked), `loadedLogoMeta` carries the
-      // existing storage URL so re-saving doesn't drop the logo.
+      // loaded with a real storageUrl, `loadedLogoMeta` carries it so
+      // re-saving doesn't drop the logo.
       const [logoAsset, headingFontAsset, bodyFontAsset, freshLogoPreview] =
         await Promise.all([
-          uploadAsset("brand-assets", "logos", logo),
+          uploadAsset("brand-assets", "logos", logoFile),
           headingFontSlot.mode === "upload"
             ? uploadAsset("brand-assets", "fonts", headingFontSlot.uploadFile)
             : Promise.resolve(null),
           bodyFontSlot.mode === "upload"
             ? uploadAsset("brand-assets", "fonts", bodyFontSlot.uploadFile)
             : Promise.resolve(null),
-          readFileAsDataUrl(logo),
+          readFileAsDataUrl(logoFile),
         ]);
       // Fall back to the loaded kit's logo metadata when the user didn't
       // pick a new file.
@@ -1182,6 +1251,7 @@ export default function CreateBrandPage() {
     setLoading(true);
 
     try {
+      const logoFile = await resolveLogoFileForUpload();
       const [paletteScreenshotAsset, headingFontAsset, bodyFontAsset, logoAsset, logoPreviewDataUrl] =
         await Promise.all([
           paletteMode === "screenshot"
@@ -1189,8 +1259,8 @@ export default function CreateBrandPage() {
             : Promise.resolve(null),
           uploadAsset("brand-assets", "fonts", headingFontSlot.uploadFile),
           uploadAsset("brand-assets", "fonts", bodyFontSlot.uploadFile),
-          uploadAsset("brand-assets", "logos", logo),
-          readFileAsDataUrl(logo),
+          uploadAsset("brand-assets", "logos", logoFile),
+          readFileAsDataUrl(logoFile),
         ]);
 
       // Resolve each font slot to the API-facing shape: { name, storageUrl,
