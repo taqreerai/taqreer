@@ -386,21 +386,26 @@ export default function CreateSummaryPage() {
 
         {/* Generate split-button — left half fires generation with
             the current preset, right half toggles a dropdown menu
-            for picking a different preset. Same `.btn-gradient-anim`
-            animated mesh-gradient on both halves so they read as one
-            pill with a divider. `dir="ltr"` on the wrapper forces a
-            deterministic visual order regardless of any RTL
-            inheritance from CreateShell — main button on the visual
-            left, arrow on the visual right (matching what the user
-            asked for). */}
+            for picking a different preset. The animated mesh-
+            gradient ring wraps the WHOLE wrapper (one continuous
+            ring around both halves), and a single 1 px muted line
+            divides the two clickable areas. Inner buttons carry no
+            background of their own. `dir="ltr"` on the wrapper
+            forces a deterministic visual order regardless of any
+            RTL inheritance from CreateShell — main on the visual
+            left, arrow on the visual right. */}
         <div ref={splitButtonRef} className="relative">
-          <div dir="ltr" className="flex items-stretch">
+          <div
+            dir="ltr"
+            className="btn-gradient-anim flex h-11 items-stretch transition-shadow"
+            style={{ borderRadius: 9999 }}
+          >
             <button
               type="button"
               onClick={handleGenerate}
               disabled={loading}
               aria-label="إنشاء"
-              className="btn-gradient-anim relative inline-flex h-11 items-center justify-center gap-2 px-6 text-sm font-medium transition-shadow disabled:cursor-not-allowed"
+              className="relative inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{ borderRadius: "9999px 0 0 9999px" }}
             >
               {loading ? (
@@ -415,13 +420,13 @@ export default function CreateSummaryPage() {
               )}
               <span>{loading ? "جارٍ الإنشاء..." : "إنشاء"}</span>
             </button>
-            {/* Divider line between the two halves so they read as a
-                single split-button, not two separate pills. Uses the
-                glass-border opacity token so it tracks the user's
-                settings preset — no hardcoded alpha. */}
+            {/* Single 1 px divider between the two clickable areas.
+                Muted via the glass-border opacity token so it reads
+                like part of the same glass surface, not a separate
+                stroke. */}
             <span
               aria-hidden
-              className="w-px self-stretch"
+              className="my-2 w-px"
               style={{
                 background: "rgba(255, 255, 255, var(--glass-border-opacity))",
               }}
@@ -432,7 +437,7 @@ export default function CreateSummaryPage() {
               disabled={loading}
               aria-label={presetMenuOpen ? "إغلاق قائمة الجودة" : "اختيار جودة"}
               aria-expanded={presetMenuOpen}
-              className="btn-gradient-anim relative inline-flex h-11 w-10 items-center justify-center transition-shadow disabled:cursor-not-allowed"
+              className="relative inline-flex w-10 items-center justify-center bg-transparent text-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{ borderRadius: "0 9999px 9999px 0" }}
             >
               <span
@@ -463,11 +468,18 @@ export default function CreateSummaryPage() {
                   duration: 0.25,
                 }}
                 dir="rtl"
-                // glass-popover + backdrop-blur-glass: same preset-
-                // linked surface used by the bell dropdown. Both the
-                // background tint and the border alpha track the
-                // user's settings preset — no hardcoded rgba.
-                className="glass-popover backdrop-blur-glass absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl shadow-2xl"
+                // Same glass recipe as `.glass-card` straight from
+                // the top of globals.css: white bg at glass-opacity
+                // alpha, white border at glass-border-opacity alpha,
+                // blur via the Tailwind `backdrop-blur-glass` utility
+                // (which composes the `--backdrop-blur-glass` theme
+                // token = `glass-blur * 2.5`). Zero hardcoded alpha.
+                className="backdrop-blur-glass absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl border shadow-2xl"
+                style={{
+                  background: "rgba(255, 255, 255, var(--glass-opacity))",
+                  borderColor:
+                    "rgba(255, 255, 255, var(--glass-border-opacity))",
+                }}
               >
                 <div className="px-3 py-2 text-[11px] text-white/40">
                   جودة التوليد
