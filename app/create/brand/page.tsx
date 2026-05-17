@@ -79,7 +79,7 @@ function fontSlotFromSaved(saved: SavedFontSlot): FontSlotState {
 }
 
 const DEFAULT_COLORS = ["#370BF4", "#E036B8", "#7D2DFF"];
-const MIN_COLORS = 3;
+const MIN_COLORS = 1;
 const MAX_COLORS = 5;
 
 // Curated list — Arabic-capable + popular Latin. Avoids the full Google Fonts
@@ -191,11 +191,31 @@ function CompactUploadZone({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="flex max-h-[120px] min-h-[100px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#370BF4]/60 bg-[#03030D]/40 p-4 text-center transition-colors hover:border-[#7D2DFF] hover:bg-[#7D2DFF]/10"
+        // Tall dropzone for logo + colour-from-screenshot uploads —
+        // these are user-attention features (one-tap of the brand
+        // identity), so they keep room to breathe. White/15 dashed
+        // border matches the step 1 + font upload vocabulary; glass-
+        // circle icon hierarchy mirrors رفع ملفات السياق.
+        className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 p-4 text-center transition-colors hover:border-white/30"
+        style={{ minHeight: 100 }}
       >
-        <span className="material-symbols-outlined mb-2 text-[28px] text-[#7D2DFF]">upload</span>
-        <span className="font-semibold text-white">{label}</span>
-        {file ? <span className="mt-2 max-w-full truncate text-sm text-[#9A94A8]">{file.name}</span> : null}
+        <span
+          className="flex h-10 w-10 items-center justify-center rounded-full"
+          style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+        >
+          <span
+            className="material-symbols-outlined text-white/80"
+            style={{ fontSize: 22 }}
+          >
+            upload
+          </span>
+        </span>
+        <span className="text-sm font-semibold text-white">{label}</span>
+        {file ? (
+          <span className="max-w-full truncate text-xs text-white/60">
+            {file.name}
+          </span>
+        ) : null}
       </button>
     </div>
   );
@@ -361,11 +381,13 @@ function GoogleFontSlot({
             setQuery(event.target.value);
             if (!open) setOpen(true);
           }}
-          // Inline padding overrides `.input-dark`'s default 12 16
-          // padding to make room for the chevron on the start edge
-          // (RTL → left).
+          // Inline padding + height pin so the combobox matches the
+          // FontUploadSlot button at 44 px EXACTLY — switching between
+          // "رفع ملف" and "Google Fonts" produces zero card height
+          // change. Padding override also makes room for the chevron
+          // on the start edge (RTL → left).
           className="input-dark text-right text-sm"
-          style={{ padding: "10px 16px 10px 40px" }}
+          style={{ height: 44, padding: "0 16px 0 40px" }}
         />
         <button
           type="button"
@@ -416,12 +438,24 @@ function GoogleFontSlot({
                     setOpen(false);
                     setQuery("");
                   }}
-                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+                  // Active row uses the same vocabulary as the Pill
+                  // primitive: white-stroke + white text on the glass
+                  // surface (no purple gradient). Idle row is muted
+                  // text with a faint hover lift.
+                  className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
                     isActive
-                      ? "btn-gradient text-white"
-                      : "text-white hover:bg-white/5"
+                      ? "text-white"
+                      : "border-transparent text-white/70 hover:bg-white/5"
                   }`}
-                  style={isActive ? { borderRadius: 8 } : undefined}
+                  style={
+                    isActive
+                      ? {
+                          borderColor: "rgba(255, 255, 255, 1)",
+                          background:
+                            "rgba(255, 255, 255, var(--glass-opacity))",
+                        }
+                      : undefined
+                  }
                 >
                   <span className="flex items-center gap-2">
                     <span>{font.family}</span>
@@ -1274,6 +1308,14 @@ export default function CreateBrandPage() {
               </Pill>
             </div>
 
+            {/* Fixed height on the mode-switching slot so the colours
+                card doesn't shrink/expand when the user toggles
+                between اختيار يدوي (swatch grid) and رفع لقطة شاشة
+                (taller dropzone). 116 px matches the screenshot
+                zone's natural height (icon hierarchy + p-4); the
+                shorter manual content centers vertically in this
+                band. */}
+            <div className="flex" style={{ height: 116 }}>
             {paletteMode === "screenshot" ? (
               <CompactUploadZone
                 label="ارفع لقطة شاشة"
@@ -1282,10 +1324,10 @@ export default function CreateBrandPage() {
                 onSelect={setPaletteScreenshot}
               />
             ) : (
-              // 3-column grid: at MAX_COLORS (5) the row is 3 + 2.
-              // At MIN (3) the row is 3 swatches + dashed add-tile
-              // = 4 cells = 1 row + 1 cell on row 2. Always ≤ 2 rows.
-              <div className="grid grid-cols-3 gap-2">
+              // 5-column grid: at MAX_COLORS (5) the row holds every
+              // swatch on a single line. At MIN (1) → swatch + dashed
+              // add-tile + three implicit empty cells = single row.
+              <div className="grid w-full grid-cols-5 items-center gap-2">
                 {colors.map((color, index) => (
                   <BrandColorRow
                     key={index}
@@ -1310,6 +1352,7 @@ export default function CreateBrandPage() {
                 ) : null}
               </div>
             )}
+            </div>
           </div>
 
           {/* Logo card — promoted into row 1 next to colours so the

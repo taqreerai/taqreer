@@ -26,11 +26,14 @@ const CORNER_OPTIONS: { value: CornerPosition; icon: string; label: string }[] =
   { value: "bottom-right", icon: "south_east", label: "أسفل يمين" },
 ];
 
-// Gradient pill — primary "on" state of a chooser group (design
-// style, palette-mode, exclude flags, etc.). Glass-card surface
-// when off so it tracks the user's glass preset. `.btn-gradient`
-// in globals.css sets `border-radius: 10px`, so the active state
-// forces 9999 inline (same trick as PillButton primary).
+// Pill — shared chooser primitive. Two states:
+//   • idle   — matches the dashboard bell button: glass surface,
+//              border-white/15, text-white/60 → border-white/40 +
+//              text-white on hover.
+//   • active — same glass surface (no purple gradient), but the
+//              stroke turns full white and the text turns full white.
+//              Reads as "selected" without competing with the brand
+//              CTA gradient elsewhere on the page.
 export function Pill({
   active,
   onClick,
@@ -47,19 +50,17 @@ export function Pill({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-full px-3 py-1.5 text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+      className={`backdrop-blur-glass rounded-full border px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         active
-          ? "btn-gradient text-white"
-          : "backdrop-blur-glass border text-white hover:opacity-90"
+          ? "text-white"
+          : "text-white/60 hover:text-white"
       }`}
-      style={
-        active
-          ? { borderRadius: 9999 }
-          : {
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-              borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-            }
-      }
+      style={{
+        background: "rgba(255, 255, 255, var(--glass-opacity))",
+        borderColor: active
+          ? "rgba(255, 255, 255, 1)"
+          : "rgba(255, 255, 255, var(--glass-border-opacity))",
+      }}
     >
       {children}
     </button>
@@ -92,22 +93,18 @@ export function PositionPicker({
             onClick={() => onChange(option.value)}
             aria-label={option.label}
             title={option.label}
-            className={`flex h-11 items-center justify-center rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              active
-                ? "btn-gradient text-white"
-                : "backdrop-blur-glass border text-white hover:opacity-90"
+            // Same idle/active vocabulary as `Pill`: glass surface
+            // always, stroke + text bump to full-white when active
+            // (no purple gradient).
+            className={`backdrop-blur-glass flex h-11 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              active ? "text-white" : "text-white/60 hover:text-white"
             }`}
-            // Lock the rounded-xl shape for the active state — `.btn-gradient`'s
-            // 10px wins otherwise (corners look softer than the inactive 12 px
-            // siblings). Inactive state uses Tailwind's `rounded-xl` directly.
-            style={
-              active
-                ? { borderRadius: 12 }
-                : {
-                    background: "rgba(255, 255, 255, var(--glass-opacity))",
-                    borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-                  }
-            }
+            style={{
+              background: "rgba(255, 255, 255, var(--glass-opacity))",
+              borderColor: active
+                ? "rgba(255, 255, 255, 1)"
+                : "rgba(255, 255, 255, var(--glass-border-opacity))",
+            }}
           >
             <span
               className="material-symbols-outlined leading-none"

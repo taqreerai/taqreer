@@ -536,21 +536,24 @@ function SizeChoice({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex h-11 items-center justify-between gap-3 rounded-xl border px-3 transition-colors ${
-        active ? "btn-gradient" : "backdrop-blur-glass hover:opacity-90"
-      }`}
-      style={
-        active
-          ? { borderRadius: 12 }
-          : {
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-              borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-            }
-      }
+      // Same idle/active vocabulary as the Pill primitive — glass
+      // surface always, white stroke + white text on selection (no
+      // brand-gradient fill).
+      className="backdrop-blur-glass flex h-11 items-center justify-between gap-3 rounded-xl border px-3 transition-colors"
+      style={{
+        background: "rgba(255, 255, 255, var(--glass-opacity))",
+        borderColor: active
+          ? "rgba(255, 255, 255, 1)"
+          : "rgba(255, 255, 255, var(--glass-border-opacity))",
+      }}
     >
       <span className="flex flex-col items-start leading-tight">
-        <span className="text-xs font-semibold text-white">{label}</span>
-        <span className={`text-[10px] ${active ? "text-white/80" : "text-white/50"}`}>
+        <span
+          className={`text-xs font-semibold ${active ? "text-white" : "text-white/70"}`}
+        >
+          {label}
+        </span>
+        <span className={`text-[10px] ${active ? "text-white/70" : "text-white/40"}`}>
           {sub}
         </span>
       </span>
