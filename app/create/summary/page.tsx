@@ -352,29 +352,45 @@ export default function CreateSummaryPage() {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      {/* Quality preset — four pills mapping to model + thinking +
-          effort combos in deck-generate.ts. Right-aligned to sit
-          visually adjacent to the إنشاء button below it. Each pill
-          shows a muted "~N د" estimate for the user's current slide
-          count (or 8 if "auto"). */}
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
+      {/* Quality preset — four tier cards stacked label-on-top,
+          ETA-below. Single-line pills with inline ETA broke under
+          RTL/LTR mixing (the Arabic label + LTR "~5 د" atom merged
+          into one unreadable run); splitting onto two lines per card
+          lets the bidi engine handle each line independently and
+          gives the ETA visual breathing room. Cards are roughly the
+          same height as a pill row + a caption underneath, so the
+          summary page layout doesn't shift much. */}
+      <div className="flex flex-wrap justify-end gap-2">
         {QUALITY_PRESETS.map((preset) => {
           const slideCount =
             output?.slideCount?.value && output.slideCount.value > 0
               ? output.slideCount.value
               : 8;
           const eta = estimateMinutes(preset.key, slideCount);
+          const active = quality === preset.key;
           return (
-            <Pill
+            <button
               key={preset.key}
-              active={quality === preset.key}
+              type="button"
               onClick={() => setQuality(preset.key)}
+              aria-pressed={active}
+              className={`backdrop-blur-glass flex min-w-[88px] flex-col items-center gap-0.5 rounded-xl border px-3 py-2 transition-colors ${
+                active ? "text-white" : "text-white/60 hover:text-white"
+              }`}
+              style={{
+                background: "rgba(255, 255, 255, var(--glass-opacity))",
+                borderColor: active
+                  ? "rgba(255, 255, 255, 1)"
+                  : "rgba(255, 255, 255, var(--glass-border-opacity))",
+              }}
             >
-              <span>{preset.label}</span>
-              <span className="ms-1.5 text-white/40" dir="ltr">
+              <span className="text-sm font-medium leading-tight">
+                {preset.label}
+              </span>
+              <span className="text-[10px] text-white/40 leading-tight" dir="ltr">
                 ~{eta} د
               </span>
-            </Pill>
+            </button>
           );
         })}
       </div>
