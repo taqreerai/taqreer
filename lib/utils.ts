@@ -6,7 +6,10 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: Date | string): string {
-  return new Intl.DateTimeFormat("ar-SA", {
+  // `ar-SA-u-nu-latn` keeps Arabic month names + word order but
+  // forces Latin digits (0-9). The whole dashboard standardises on
+  // Latin numerals for readability across mixed Arabic / English UI.
+  return new Intl.DateTimeFormat("ar-SA-u-nu-latn", {
     dateStyle: "long",
   }).format(new Date(date));
 }

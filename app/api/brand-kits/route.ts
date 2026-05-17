@@ -50,7 +50,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const fallbackName = `هوية بصرية — ${new Date().toLocaleDateString("ar")}`;
+  // `ar-u-nu-latn` keeps Arabic month names but forces Latin digits
+  // — matches the dashboard's "every number is 0-9" standard.
+  const fallbackName = `هوية بصرية — ${new Date().toLocaleDateString("ar-u-nu-latn")}`;
   const name = (body.name?.trim() || fallbackName).slice(0, 120);
 
   // Allowlist the persisted logo shape — `previewDataUrl` can be a base64

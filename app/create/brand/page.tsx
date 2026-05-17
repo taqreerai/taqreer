@@ -1290,7 +1290,7 @@ export default function CreateBrandPage() {
               <h2 className="text-sm font-semibold text-white">ألوان العلامة التجارية</h2>
             </header>
             <p className="text-xs text-muted">
-              من ١ إلى ٥ ألوان. كلود يختار لون الخلفية والنص تلقائياً لتناسب ألوانك.
+              من 1 إلى 5 ألوان. نختار الخلفية والنص تلقائياً.
             </p>
 
             {/* Palette mode chooser — same Pill primitive as the font
@@ -1373,17 +1373,12 @@ export default function CreateBrandPage() {
               <h2 className="text-sm font-semibold text-white">الشعار</h2>
             </header>
             <p className="text-xs text-muted">
-              يُقبل بصيغة SVG فقط — كلود يعيد تلوينه ليتناسب مع خلفية كل شريحة ويضمن التباين.
+              يُقبل SVG لإعادة تلوينه على كل شريحة.
             </p>
-            <CompactUploadZone
-              label="ارفع الشعار (SVG فقط)"
-              accept=".svg,image/svg+xml"
-              file={logo}
-              onSelect={acceptLogo}
-            />
-            {logoError && (
-              <p className="status-error text-[12px]">{logoError}</p>
-            )}
+            {/* Upload zone OR preview chip — never both. Once a
+                logo is in place the dropzone is redundant; the user
+                removes via the × on the preview, which restores the
+                dropzone for re-upload. */}
             {logo || loadedLogoMeta ? (
               <div
                 className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
@@ -1415,7 +1410,17 @@ export default function CreateBrandPage() {
                   إزالة
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <CompactUploadZone
+                label="ارفع الشعار (SVG فقط)"
+                accept=".svg,image/svg+xml"
+                file={logo}
+                onSelect={acceptLogo}
+              />
+            )}
+            {logoError && (
+              <p className="status-error text-[12px]">{logoError}</p>
+            )}
           </div>
         </div>
         {/* /Row 1 — colours + logo. Row 2 — fonts full width below. */}
