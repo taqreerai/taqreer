@@ -416,11 +416,15 @@ export default function CreateSummaryPage() {
               <span>{loading ? "جارٍ الإنشاء..." : "إنشاء"}</span>
             </button>
             {/* Divider line between the two halves so they read as a
-                single split-button, not two separate pills. Sits over
-                both halves' animated gradients via opacity. */}
+                single split-button, not two separate pills. Uses the
+                glass-border opacity token so it tracks the user's
+                settings preset — no hardcoded alpha. */}
             <span
               aria-hidden
-              className="w-px self-stretch bg-white/30"
+              className="w-px self-stretch"
+              style={{
+                background: "rgba(255, 255, 255, var(--glass-border-opacity))",
+              }}
             />
             <button
               type="button"
@@ -459,11 +463,11 @@ export default function CreateSummaryPage() {
                   duration: 0.25,
                 }}
                 dir="rtl"
-                className="absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-glass"
-                style={{
-                  background: "rgba(15, 11, 30, 0.92)",
-                  borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-                }}
+                // glass-popover + backdrop-blur-glass: same preset-
+                // linked surface used by the bell dropdown. Both the
+                // background tint and the border alpha track the
+                // user's settings preset — no hardcoded rgba.
+                className="glass-popover backdrop-blur-glass absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl shadow-2xl"
               >
                 <div className="px-3 py-2 text-[11px] text-white/40">
                   جودة التوليد
