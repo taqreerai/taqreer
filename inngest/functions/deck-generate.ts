@@ -47,7 +47,7 @@ TYPOGRAPHY
 
 CONTENT-DRIVEN EXECUTION
 Analyze the slide's content before writing the layout:
-- **Bullet lists →** structured grids or horizontal cards. Each card features an oversized step number ("01", "02") OR a clean inline SVG icon. Never output \`<ul>/<li>\`.
+- **Bullet lists →** structured grids or horizontal cards. EVERY card MUST carry a relevant inline-SVG icon (from the ICON LIBRARY below) that names the card's idea — \`users\` icon for a people stat, \`shield\` for security, \`zap\` for speed, \`trending-up\` for growth, \`target\` for goals, etc. An oversized step number ("01", "02") can sit alongside the icon for sequence, but is NOT a substitute for the icon. Cards without a concept icon read as underdesigned. Never output \`<ul>/<li>\`.
 - **Timelines →** custom horizontal or staggered visual path.
 - **Quotes →** oversized typographic focal point with high contrast.
 - **Comparative content →** stark, asymmetric split-screen.
@@ -77,19 +77,36 @@ AVOID — break in export or violate the contract
 - Webfont URLs not on \`fonts.googleapis.com\` / \`fonts.gstatic.com\` (manifest rejects).
 
 GRAPHICS — inline SVG only
-- Decorative shapes that support the current slide's content, background patterns, icons, logos: inline \`<svg>\` with brand-token fills.
-- **Icons: use Lucide's stroke-based icon set** — https://lucide.dev/icons (open-source, 1000+ pictograms). Reproduce the icon as inline \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\` with the path data from lucide.dev. Inherit colour via \`stroke="currentColor"\` so a parent \`color\` controls the icon hue. 16–32 px typical inside cards; up to 48 px for hero accents. Every concept-bearing slide should ship at least one relevant icon (cards without icons read as underdesigned).
-- Material icons (https://fonts.google.com/icons) are an acceptable fallback when Lucide lacks a glyph, but prefer Lucide for visual consistency across the deck.
-- NO icon fonts (Material font, FontAwesome) — they don't embed in the export.
+- Decorative shapes, atmosphere, background patterns, icons, illustrations, logos: inline \`<svg>\` with brand-token fills. NO icon fonts (Material font, FontAwesome) — they don't embed in the export.
 - Alpha effects → inline \`<svg>\` \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`. CSS rgba / conic / color-to-alpha don't round-trip.
+- Every graphic must mean something. If you can't name what the shape represents in one phrase, cut it. Mix sizes: icons in cards (16–32 px), illustrations on hero/section/closing (300–500 px). Soft ceiling ~16 SVG elements per illustration.
 - Logos are always SVG. The brief carries the SVG markup pre-fetched — inline it directly and recolour via \`fill\` on the \`<svg>\` root per slide for contrast (USER RULES has the per-request specifics).
 
-GRAPHICS BALANCE — relevant, not filler
-- **Every graphic must mean something.** Skip generic blobs, random circles, vague "decorative shapes" that don't connect to the slide's idea. If you can't name what the shape represents in one phrase, cut it.
-- Icons must match the concept on the card: a stat card about users gets a \`users\` icon, a security card gets a \`shield\` icon, a speed card gets a \`zap\` icon. Don't pick a random Lucide glyph because the card looks empty — pick one that names the idea.
-- Mix sizes: icons in cards (16–32 px), illustrations on hero/section/closing (300–500 px).
+ICON LIBRARY — Lucide paths, ready to copy-paste
+Wrap any of the path/circle/polyline data below in this exact envelope (replace \`SIZE\` and \`COLOR\`):
+\`<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="COLOR" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">…paths…</svg>\`
+\`stroke="currentColor"\` is also fine — the parent \`color\` then drives the icon hue, which keeps card chrome consistent.
+
+Common pictograms (use the closest match to the card's idea — DO NOT invent paths):
+- users (people, audience):              \`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>\`
+- shield (security, trust):              \`<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>\`
+- zap (speed, energy, performance):      \`<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>\`
+- trending-up (growth, KPIs):            \`<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>\`
+- target (goals, focus):                  \`<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>\`
+- briefcase (business, work):            \`<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>\`
+- globe (international, reach):          \`<circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>\`
+- lightbulb (idea, innovation):          \`<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>\`
+- check-circle (achievement, complete):  \`<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>\`
+- arrow-up-right (forward, opportunity): \`<line x1="7" x2="17" y1="17" y2="7"/><polyline points="7 7 17 7 17 17"/>\`
+- star (excellence, premium):            \`<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>\`
+- chart-bar (data, stats):               \`<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>\`
+- coins (revenue, money):                \`<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>\`
+- rocket (launch, scale-up):             \`<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>\`
+
+If you genuinely need a glyph not listed here, name it AND emit a Lucide-style stroke icon at 24×24 with stroke-width 2, stroke-linecap round. Do not invent overly-complex paths.
+
+GRAPHICS BALANCE
 - Brutalist borders, overlapping background shapes, abstract geometric decorations are fair game ONLY when they support the composition (anchor a corner, frame the headline, separate sections). No floating abstract elements that "fill space".
-- Soft ceiling ~16 SVG elements per illustration. Composition over quantity.
 
 FONT WEIGHT — technical export constraint
 ONLY two values across the deck: \`400\` and \`700\`. Arabic fonts (Cairo / Tajawal / Almarai) thicken in export; 800+ becomes ink-bombed unreadable. For more emphasis scale font-size or change colour; don't push weight.
