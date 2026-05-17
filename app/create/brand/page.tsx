@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
 import { Pill } from "@/components/create/controls";
+import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
 import type { CornerPosition } from "@/components/create/controls";
 
@@ -499,38 +500,28 @@ function BrandColorRow({
   removable,
   onChange,
   onRemove,
+  pickerAlign,
 }: {
   value: string;
   index: number;
   removable: boolean;
   onChange: (next: string) => void;
   onRemove: () => void;
+  pickerAlign: "start" | "center" | "end";
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Hex-input dropped — the colour itself communicates the value,
-  // and the user can still pick a precise shade via the OS colour
-  // picker (clicking the swatch opens it). Removing the input gives
-  // us much more horizontal room so 5 swatches fit in 2 rows on a
-  // 3-column grid (3 + 2 swatches, last cell = add button).
-  //
+  // Swatch → opens the custom ColorPickerPopover (replaces the OS
+  // `<input type="color">` so the picker honours our glass chrome).
   // The remove (×) is overlaid on the swatch corner so the row is
   // just one element — no separate icon slot competing for width.
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={() => setPickerOpen((v) => !v)}
         className="block h-12 w-full rounded-xl border border-white/15 transition-shadow hover:shadow-lg"
         style={{ backgroundColor: value }}
         aria-label={`اللون ${index + 1}`}
-      />
-      <input
-        ref={inputRef}
-        type="color"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="hidden"
       />
       <button
         type="button"
@@ -547,6 +538,13 @@ function BrandColorRow({
           close
         </span>
       </button>
+      <ColorPickerPopover
+        open={pickerOpen}
+        value={value}
+        onChange={onChange}
+        onClose={() => setPickerOpen(false)}
+        align={pickerAlign}
+      />
     </div>
   );
 }
@@ -1331,16 +1329,26 @@ export default function CreateBrandPage() {
               // = 2 rows. At MIN (1) → swatch + dashed add-tile sits
               // on row 1 only, still bounded by the wrapper height.
               <div className="grid grid-cols-3 gap-2">
-                {colors.map((color, index) => (
-                  <BrandColorRow
-                    key={index}
-                    value={color}
-                    index={index}
-                    removable={colors.length > MIN_COLORS}
-                    onChange={(next) => updateColor(index, next)}
-                    onRemove={() => removeColor(index)}
-                  />
-                ))}
+                {colors.map((color, index) => {
+                  // 3-col grid: col 0 → "start" (popover extends to
+                  // the end side), col 2 → "end" (extends to start
+                  // side), col 1 → centered. RTL → "start" = right
+                  // edge, "end" = left edge.
+                  const col = index % 3;
+                  const align: "start" | "center" | "end" =
+                    col === 0 ? "start" : col === 2 ? "end" : "center";
+                  return (
+                    <BrandColorRow
+                      key={index}
+                      value={color}
+                      index={index}
+                      removable={colors.length > MIN_COLORS}
+                      onChange={(next) => updateColor(index, next)}
+                      onRemove={() => removeColor(index)}
+                      pickerAlign={align}
+                    />
+                  );
+                })}
                 {colors.length < MAX_COLORS ? (
                   <button
                     type="button"
