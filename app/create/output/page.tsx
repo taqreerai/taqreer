@@ -1,20 +1,25 @@
 "use client";
 
-// Step 3 — Output settings. 2×2 grid of glass cards covering slide
-// size, slide count, logo placement, and generation rules. Each
-// field originally lived on `/create/brand`; moved here per the
-// 4-step refactor (`context/plan-create-flow.md`).
+// Step 3 — Output settings. Two side-by-side glass cards covering
+// every output-shaping field. Each field originally lived on
+// `/create/brand`; moved here per the 4-step refactor
+// (`context/plan-create-flow.md`).
 //
-// State strategy:
-//   1. Read `taqreer:create:output` first — the canonical source.
-//   2. If that's empty, fall back to `taqreer:create:brand` (legacy
-//      shape that mixed brand + output) so users mid-flow on the
-//      old layout keep their settings.
-//   3. Write `taqreer:create:output` on submit and re-write the
-//      slimmed `taqreer:create:brand` (without size/count/rules/
-//      logo-placement) for backward-compat with downstream code.
+// Layout (2 cards, no scroll at 1280×720):
+//   • RIGHT card — Slide canvas:
+//       - slide size (16:9 ↔ 9:16)
+//       - persistent overlay text + corner position + excludes
+//   • LEFT card — Output content:
+//       - slide count (auto / match-file / custom 1-20)
+//       - logo placement (corner picker + cover/closing excludes)
+//       - generation rules (designStyle + fixTypos + pagination)
+//
+// State strategy: read `taqreer:create:output` first; fall back to
+// the legacy `taqreer:create:brand` shape so users mid-flow on the
+// old layout keep their settings. Write `taqreer:create:output` on
+// submit.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
@@ -66,10 +71,7 @@ type StoredOutput = {
   };
 };
 
-// Legacy brand-page shape — includes the fields we now own here.
 type LegacyBrand = StoredOutput & {
-  // Brand-only fields we DON'T touch here (just preserve when
-  // round-tripping the legacy key on submit).
   colors?: unknown;
   paletteMode?: unknown;
   paletteScreenshotUrl?: unknown;
@@ -87,13 +89,9 @@ function readStoredOutput(): StoredOutput | null {
   try {
     const v = window.sessionStorage.getItem(OUTPUT_KEY);
     if (v) return JSON.parse(v) as StoredOutput;
-    // Fall back to legacy brand key for users mid-flow.
     const legacy = window.sessionStorage.getItem(BRAND_KEY);
     if (!legacy) return null;
     const parsed = JSON.parse(legacy) as LegacyBrand;
-    // Pull out only the fields we own. Logo placement was nested as
-    // { position, exclude: ["cover","closing"] } in the legacy
-    // shape; normalise it.
     const exclude = Array.isArray(parsed.logo?.exclude)
       ? parsed.logo!.exclude!
       : [];
@@ -126,9 +124,6 @@ function readContentType(): "file" | "text" | null {
   }
 }
 
-// Detect whether the brand page has a logo upload to enable the
-// logo-placement card. Without a logo, the placement controls are
-// disabled (no point picking a corner for nothing).
 function readHasLogo(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -146,60 +141,71 @@ export default function CreateOutputPage() {
   const [hasLogo, setHasLogo] = useState(false);
   const [contentType, setContentType] = useState<"file" | "text" | null>(null);
 
-  const stored = useMemo(() => readStoredOutput(), []);
-
-  const [slideSize, setSlideSize] = useState<SlideSize>(stored?.slideSize ?? "16:9");
-  const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>(
-    stored?.slideCount?.mode ?? "auto",
-  );
-  const [slideCountValue, setSlideCountValue] = useState<number>(
-    stored?.slideCount?.value ?? 10,
-  );
-
-  const [logoPosition, setLogoPosition] = useState<LogoPosition>(
-    stored?.logo?.position ?? "top-right",
-  );
-  const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(
-    stored?.logo?.excludeCover ?? false,
-  );
-  const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(
-    stored?.logo?.excludeClosing ?? false,
-  );
-
-  const [designStyle, setDesignStyle] = useState<string | null>(
-    stored?.rules?.designStyle ?? null,
-  );
-  const [fixTypos, setFixTypos] = useState<boolean>(
-    stored?.rules?.fixTypos ?? false,
-  );
-  const [pagination, setPagination] = useState<boolean>(
-    stored?.rules?.pagination !== false,
-  );
-  const [persistentText, setPersistentText] = useState<string>(
-    stored?.rules?.persistent?.text ?? "",
-  );
+  // Defaults match the server render exactly; the post-hydration
+  // useEffect below pulls real values from sessionStorage if any.
+  const [slideSize, setSlideSize] = useState<SlideSize>("16:9");
+  const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
+  const [slideCountValue, setSlideCountValue] = useState<number>(10);
+  const [logoPosition, setLogoPosition] = useState<LogoPosition>("top-right");
+  const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(false);
+  const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
+  const [designStyle, setDesignStyle] = useState<string | null>(null);
+  const [fixTypos, setFixTypos] = useState<boolean>(false);
+  const [pagination, setPagination] = useState<boolean>(true);
+  const [persistentText, setPersistentText] = useState<string>("");
   const [persistentPosition, setPersistentPosition] = useState<PersistentPosition>(
-    stored?.rules?.persistent?.position ?? "bottom-center",
+    "bottom-center",
   );
-  const [excludeCover, setExcludeCover] = useState<boolean>(
-    stored?.rules?.persistent?.excludeCover ?? false,
-  );
-  const [excludeClosing, setExcludeClosing] = useState<boolean>(
-    stored?.rules?.persistent?.excludeClosing ?? false,
-  );
+  const [persistentExcludeCover, setPersistentExcludeCover] = useState<boolean>(false);
+  const [persistentExcludeClosing, setPersistentExcludeClosing] = useState<boolean>(false);
 
-  // Hydrate logo-presence + content-type on mount (sessionStorage
-  // is client-only). Both inform UI affordances but neither
-  // contributes to the page's own form state.
+  // Hydrate from sessionStorage post-mount. Default-state render
+  // matches server output, so the swap here happens before paint
+  // without a hydration warning.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const stored = readStoredOutput();
+    if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (stored.slideSize) setSlideSize(stored.slideSize);
+      if (stored.slideCount?.mode) setSlideCountMode(stored.slideCount.mode);
+      if (typeof stored.slideCount?.value === "number") {
+        setSlideCountValue(stored.slideCount.value);
+      }
+      if (stored.logo?.position) setLogoPosition(stored.logo.position);
+      if (typeof stored.logo?.excludeCover === "boolean") {
+        setLogoExcludeCover(stored.logo.excludeCover);
+      }
+      if (typeof stored.logo?.excludeClosing === "boolean") {
+        setLogoExcludeClosing(stored.logo.excludeClosing);
+      }
+      if (stored.rules?.designStyle !== undefined) {
+        setDesignStyle(stored.rules.designStyle);
+      }
+      if (typeof stored.rules?.fixTypos === "boolean") {
+        setFixTypos(stored.rules.fixTypos);
+      }
+      if (typeof stored.rules?.pagination === "boolean") {
+        setPagination(stored.rules.pagination);
+      }
+      if (stored.rules?.persistent?.text) {
+        setPersistentText(stored.rules.persistent.text);
+      }
+      if (stored.rules?.persistent?.position) {
+        setPersistentPosition(stored.rules.persistent.position);
+      }
+      if (typeof stored.rules?.persistent?.excludeCover === "boolean") {
+        setPersistentExcludeCover(stored.rules.persistent.excludeCover);
+      }
+      if (typeof stored.rules?.persistent?.excludeClosing === "boolean") {
+        setPersistentExcludeClosing(stored.rules.persistent.excludeClosing);
+      }
+    }
     setHasLogo(readHasLogo());
     setContentType(readContentType());
   }, []);
 
-  // If the brief is a free-text paste, "match file pages" is
-  // meaningless — fall back to "auto" so the saved mode doesn't
-  // strand the user on an option they can't actually use.
+  // If the brief is free-text, "match file pages" is meaningless —
+  // fall back to "auto" so the saved mode doesn't strand the user.
   useEffect(() => {
     if (contentType === "text" && slideCountMode === "match") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -230,8 +236,8 @@ export default function CreateOutputPage() {
           ? {
               text: persistentText.trim(),
               position: persistentPosition,
-              excludeCover,
-              excludeClosing,
+              excludeCover: persistentExcludeCover,
+              excludeClosing: persistentExcludeClosing,
             }
           : null,
       },
@@ -253,42 +259,40 @@ export default function CreateOutputPage() {
       title="إعدادات الإخراج"
       subtitle="حدد حجم الشريحة وعددها، وكذلك موقع الشعار والقواعد المخصصة للتوليد."
     >
-      {/* 2×2 grid — top row: size + count, bottom row: logo + rules.
-          `auto-rows-fr` keeps both rows the same height so the cards
-          line up visually even when content lengths differ. */}
-      <div className="grid grid-cols-1 gap-5 auto-rows-fr lg:grid-cols-2">
-        <SizeCard value={slideSize} onChange={setSlideSize} />
-        <SlideCountCard
-          mode={slideCountMode}
-          value={slideCountValue}
-          onModeChange={setSlideCountMode}
-          onValueChange={setSlideCountValue}
+      {/* 2 cards side by side. Each card stacks its sections
+          vertically. Designed to fit 1280×720 without scroll. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <CanvasCard
+          slideSize={slideSize}
+          onSlideSize={setSlideSize}
+          persistentText={persistentText}
+          persistentPosition={persistentPosition}
+          persistentExcludeCover={persistentExcludeCover}
+          persistentExcludeClosing={persistentExcludeClosing}
+          onPersistentText={setPersistentText}
+          onPersistentPosition={setPersistentPosition}
+          onPersistentExcludeCover={setPersistentExcludeCover}
+          onPersistentExcludeClosing={setPersistentExcludeClosing}
+        />
+        <ContentCard
+          slideCountMode={slideCountMode}
+          slideCountValue={slideCountValue}
           contentType={contentType}
-        />
-        <LogoPlacementCard
-          enabled={hasLogo}
-          position={logoPosition}
-          excludeCover={logoExcludeCover}
-          excludeClosing={logoExcludeClosing}
-          onPositionChange={setLogoPosition}
-          onExcludeCover={setLogoExcludeCover}
-          onExcludeClosing={setLogoExcludeClosing}
-        />
-        <RulesCard
+          hasLogo={hasLogo}
+          logoPosition={logoPosition}
+          logoExcludeCover={logoExcludeCover}
+          logoExcludeClosing={logoExcludeClosing}
           designStyle={designStyle}
           fixTypos={fixTypos}
           pagination={pagination}
-          persistentText={persistentText}
-          persistentPosition={persistentPosition}
-          excludeCover={excludeCover}
-          excludeClosing={excludeClosing}
+          onSlideCountMode={setSlideCountMode}
+          onSlideCountValue={setSlideCountValue}
+          onLogoPosition={setLogoPosition}
+          onLogoExcludeCover={setLogoExcludeCover}
+          onLogoExcludeClosing={setLogoExcludeClosing}
           onDesignStyle={setDesignStyle}
           onFixTypos={setFixTypos}
           onPagination={setPagination}
-          onPersistentText={setPersistentText}
-          onPersistentPosition={setPersistentPosition}
-          onExcludeCover={setExcludeCover}
-          onExcludeClosing={setExcludeClosing}
         />
       </div>
 
@@ -304,7 +308,7 @@ export default function CreateOutputPage() {
   );
 }
 
-// ─── Card components ──────────────────────────────────────────────
+// ─── Card primitives ──────────────────────────────────────────────
 
 function CardShell({
   title,
@@ -331,30 +335,102 @@ function CardShell({
   );
 }
 
-function SizeCard({
-  value,
-  onChange,
+function SectionLabel({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <p className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
+      <span
+        className="material-symbols-outlined text-white/50"
+        style={{ fontSize: "14px" }}
+      >
+        {icon}
+      </span>
+      {children}
+    </p>
+  );
+}
+
+// ─── RIGHT card — Canvas (size + persistent overlay) ────────────
+
+function CanvasCard({
+  slideSize,
+  onSlideSize,
+  persistentText,
+  persistentPosition,
+  persistentExcludeCover,
+  persistentExcludeClosing,
+  onPersistentText,
+  onPersistentPosition,
+  onPersistentExcludeCover,
+  onPersistentExcludeClosing,
 }: {
-  value: SlideSize;
-  onChange: (v: SlideSize) => void;
+  slideSize: SlideSize;
+  onSlideSize: (v: SlideSize) => void;
+  persistentText: string;
+  persistentPosition: PersistentPosition;
+  persistentExcludeCover: boolean;
+  persistentExcludeClosing: boolean;
+  onPersistentText: (s: string) => void;
+  onPersistentPosition: (p: PersistentPosition) => void;
+  onPersistentExcludeCover: (b: boolean) => void;
+  onPersistentExcludeClosing: (b: boolean) => void;
 }) {
   return (
-    <CardShell title="حجم الشريحة" icon="aspect_ratio">
-      <div className="grid grid-cols-2 gap-3">
-        <SizeChoice
-          active={value === "16:9"}
-          onClick={() => onChange("16:9")}
-          label="16:9"
-          sub="أفقي"
-          ratio="16 / 9"
+    <CardShell title="الشريحة" icon="aspect_ratio">
+      <div className="space-y-2">
+        <SectionLabel icon="crop_landscape">حجم الشريحة</SectionLabel>
+        <div className="grid grid-cols-2 gap-2">
+          <SizeChoice
+            active={slideSize === "16:9"}
+            onClick={() => onSlideSize("16:9")}
+            label="16:9"
+            sub="أفقي"
+            ratio="16 / 9"
+          />
+          <SizeChoice
+            active={slideSize === "9:16"}
+            onClick={() => onSlideSize("9:16")}
+            label="9:16"
+            sub="عمودي"
+            ratio="9 / 16"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t border-white/[0.06] pt-3">
+        <SectionLabel icon="layers">عنصر ثابت على كل الشرائح</SectionLabel>
+        <input
+          type="text"
+          value={persistentText}
+          onChange={(e) => onPersistentText(e.target.value)}
+          placeholder="مثل: التاريخ، الموقع الإلكتروني"
+          className="input-dark"
         />
-        <SizeChoice
-          active={value === "9:16"}
-          onClick={() => onChange("9:16")}
-          label="9:16"
-          sub="عمودي"
-          ratio="9 / 16"
-        />
+        {persistentText.trim() ? (
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            {/* Position picker on the start side, excludes on the end
+                side — keeps the persistent block compact rather than
+                stacking + double-widthing into a full-row position
+                picker that pushes the card height past the viewport. */}
+            <PositionPicker
+              value={persistentPosition}
+              onChange={onPersistentPosition}
+            />
+            <div className="flex flex-col gap-1.5">
+              <Pill
+                active={persistentExcludeCover}
+                onClick={() => onPersistentExcludeCover(!persistentExcludeCover)}
+              >
+                استثناء الغلاف
+              </Pill>
+              <Pill
+                active={persistentExcludeClosing}
+                onClick={() => onPersistentExcludeClosing(!persistentExcludeClosing)}
+              >
+                استثناء الشكر
+              </Pill>
+            </div>
+          </div>
+        ) : null}
       </div>
     </CardShell>
   );
@@ -378,7 +454,7 @@ function SizeChoice({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-colors ${
+      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 transition-colors ${
         active ? "btn-gradient" : "backdrop-blur-glass hover:opacity-90"
       }`}
       style={
@@ -392,167 +468,124 @@ function SizeChoice({
     >
       <span
         className="rounded-md border border-white/20 bg-white/5"
-        style={{ width: 48, aspectRatio: ratio }}
+        style={{ width: 36, aspectRatio: ratio }}
       />
-      <span className="text-sm font-semibold text-white">{label}</span>
-      <span className={`text-xs ${active ? "text-white/80" : "text-white/50"}`}>
+      <span className="text-xs font-semibold text-white">{label}</span>
+      <span className={`text-[10px] ${active ? "text-white/80" : "text-white/50"}`}>
         {sub}
       </span>
     </button>
   );
 }
 
-function SlideCountCard({
-  mode,
-  value,
-  onModeChange,
-  onValueChange,
+// ─── LEFT card — Content (count + logo + rules) ─────────────────
+
+function ContentCard({
+  slideCountMode,
+  slideCountValue,
   contentType,
-}: {
-  mode: SlideCountMode;
-  value: number;
-  onModeChange: (m: SlideCountMode) => void;
-  onValueChange: (n: number) => void;
-  contentType: "file" | "text" | null;
-}) {
-  const fileSourced = contentType === "file";
-  return (
-    <CardShell title="عدد الشرائح" icon="format_list_numbered">
-      <div className="flex flex-wrap gap-2">
-        <Pill
-          active={mode === "auto"}
-          onClick={() => onModeChange("auto")}
-        >
-          اتركها لنا
-        </Pill>
-        <Pill
-          active={mode === "match"}
-          onClick={() => onModeChange("match")}
-          disabled={!fileSourced}
-        >
-          طابق عدد صفحات الملف
-        </Pill>
-        <Pill
-          active={mode === "custom"}
-          onClick={() => onModeChange("custom")}
-        >
-          حدد عدداً
-        </Pill>
-      </div>
-      {mode === "custom" ? (
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={value}
-            onChange={(e) => onValueChange(Number(e.target.value))}
-            className="input-dark max-w-28"
-          />
-          <span className="text-xs text-muted">شريحة (١–٢٠)</span>
-        </div>
-      ) : (
-        <p className="text-xs text-muted">
-          {mode === "auto"
-            ? "سنقرر العدد المناسب بناءً على المحتوى."
-            : "سيتم اختيار عدد الشرائح ليطابق عدد صفحات الملف المرفوع."}
-        </p>
-      )}
-    </CardShell>
-  );
-}
-
-function LogoPlacementCard({
-  enabled,
-  position,
-  excludeCover,
-  excludeClosing,
-  onPositionChange,
-  onExcludeCover,
-  onExcludeClosing,
-}: {
-  enabled: boolean;
-  position: LogoPosition;
-  excludeCover: boolean;
-  excludeClosing: boolean;
-  onPositionChange: (p: LogoPosition) => void;
-  onExcludeCover: (b: boolean) => void;
-  onExcludeClosing: (b: boolean) => void;
-}) {
-  return (
-    <CardShell title="موقع الشعار" icon="my_location">
-      {!enabled ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-          <span
-            className="material-symbols-outlined text-white/30"
-            style={{ fontSize: "28px" }}
-          >
-            image_not_supported
-          </span>
-          <p className="text-xs text-white/50">لم يتم رفع شعار في الخطوة السابقة</p>
-          <p className="text-[10px] leading-relaxed text-white/30">
-            ارفع شعاراً من «الهوية البصرية» لتفعيل خيارات الموقع
-          </p>
-        </div>
-      ) : (
-        <>
-          <PositionPicker value={position} onChange={onPositionChange} />
-          <div className="space-y-2">
-            <p className="text-xs text-muted">استثناء من</p>
-            <div className="flex flex-wrap gap-2">
-              <Pill active={excludeCover} onClick={() => onExcludeCover(!excludeCover)}>
-                صفحة الغلاف
-              </Pill>
-              <Pill
-                active={excludeClosing}
-                onClick={() => onExcludeClosing(!excludeClosing)}
-              >
-                صفحة الشكر
-              </Pill>
-            </div>
-          </div>
-        </>
-      )}
-    </CardShell>
-  );
-}
-
-function RulesCard({
+  hasLogo,
+  logoPosition,
+  logoExcludeCover,
+  logoExcludeClosing,
   designStyle,
   fixTypos,
   pagination,
-  persistentText,
-  persistentPosition,
-  excludeCover,
-  excludeClosing,
+  onSlideCountMode,
+  onSlideCountValue,
+  onLogoPosition,
+  onLogoExcludeCover,
+  onLogoExcludeClosing,
   onDesignStyle,
   onFixTypos,
   onPagination,
-  onPersistentText,
-  onPersistentPosition,
-  onExcludeCover,
-  onExcludeClosing,
 }: {
+  slideCountMode: SlideCountMode;
+  slideCountValue: number;
+  contentType: "file" | "text" | null;
+  hasLogo: boolean;
+  logoPosition: LogoPosition;
+  logoExcludeCover: boolean;
+  logoExcludeClosing: boolean;
   designStyle: string | null;
   fixTypos: boolean;
   pagination: boolean;
-  persistentText: string;
-  persistentPosition: PersistentPosition;
-  excludeCover: boolean;
-  excludeClosing: boolean;
+  onSlideCountMode: (m: SlideCountMode) => void;
+  onSlideCountValue: (n: number) => void;
+  onLogoPosition: (p: LogoPosition) => void;
+  onLogoExcludeCover: (b: boolean) => void;
+  onLogoExcludeClosing: (b: boolean) => void;
   onDesignStyle: (s: string | null) => void;
   onFixTypos: (b: boolean) => void;
   onPagination: (b: boolean) => void;
-  onPersistentText: (s: string) => void;
-  onPersistentPosition: (p: PersistentPosition) => void;
-  onExcludeCover: (b: boolean) => void;
-  onExcludeClosing: (b: boolean) => void;
 }) {
   return (
-    <CardShell title="قواعد التوليد" icon="rule">
+    <CardShell title="المحتوى" icon="tune">
+      {/* Slide count */}
       <div className="space-y-2">
-        <p className="text-xs text-muted">نمط التصميم</p>
-        <div className="flex flex-wrap gap-2">
+        <SectionLabel icon="format_list_numbered">عدد الشرائح</SectionLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill active={slideCountMode === "auto"} onClick={() => onSlideCountMode("auto")}>
+            تلقائي
+          </Pill>
+          <Pill
+            active={slideCountMode === "match"}
+            onClick={() => onSlideCountMode("match")}
+            disabled={contentType !== "file"}
+          >
+            طابق الملف
+          </Pill>
+          <Pill
+            active={slideCountMode === "custom"}
+            onClick={() => onSlideCountMode("custom")}
+          >
+            مخصص
+          </Pill>
+          {slideCountMode === "custom" ? (
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={slideCountValue}
+              onChange={(e) => onSlideCountValue(Number(e.target.value))}
+              className="input-dark w-20"
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {/* Logo placement */}
+      <div className="space-y-2 border-t border-white/[0.06] pt-3">
+        <SectionLabel icon="my_location">موقع الشعار</SectionLabel>
+        {!hasLogo ? (
+          <p className="text-[11px] text-white/40">
+            لم يتم رفع شعار في الخطوة السابقة
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <PositionPicker value={logoPosition} onChange={onLogoPosition} />
+            <div className="flex flex-col gap-1.5">
+              <Pill
+                active={logoExcludeCover}
+                onClick={() => onLogoExcludeCover(!logoExcludeCover)}
+              >
+                استثناء الغلاف
+              </Pill>
+              <Pill
+                active={logoExcludeClosing}
+                onClick={() => onLogoExcludeClosing(!logoExcludeClosing)}
+              >
+                استثناء الشكر
+              </Pill>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Generation rules */}
+      <div className="space-y-2 border-t border-white/[0.06] pt-3">
+        <SectionLabel icon="rule">قواعد التوليد</SectionLabel>
+        <div className="flex flex-wrap gap-1.5">
           {DESIGN_STYLE_OPTIONS.map((option) => (
             <Pill
               key={option}
@@ -563,45 +596,10 @@ function RulesCard({
             </Pill>
           ))}
         </div>
-      </div>
-
-      <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-3">
-        <Toggle label="تصحيح الأخطاء الإملائية" value={fixTypos} onChange={onFixTypos} />
-        <Toggle
-          label="ترقيم الشرائح"
-          value={pagination}
-          onChange={onPagination}
-        />
-      </div>
-
-      <div className="space-y-2 border-t border-white/[0.06] pt-3">
-        <p className="text-xs text-muted">عنصر ثابت على كل الشرائح</p>
-        <input
-          type="text"
-          value={persistentText}
-          onChange={(e) => onPersistentText(e.target.value)}
-          placeholder="مثل: التاريخ، الموقع الإلكتروني"
-          className="input-dark"
-        />
-        {persistentText.trim() ? (
-          <div className="space-y-2 pt-1">
-            <PositionPicker
-              value={persistentPosition}
-              onChange={onPersistentPosition}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Pill active={excludeCover} onClick={() => onExcludeCover(!excludeCover)}>
-                استثناء الغلاف
-              </Pill>
-              <Pill
-                active={excludeClosing}
-                onClick={() => onExcludeClosing(!excludeClosing)}
-              >
-                استثناء الشكر
-              </Pill>
-            </div>
-          </div>
-        ) : null}
+        <div className="flex flex-col gap-1.5 pt-1">
+          <Toggle label="تصحيح الأخطاء" value={fixTypos} onChange={onFixTypos} />
+          <Toggle label="ترقيم الشرائح" value={pagination} onChange={onPagination} />
+        </div>
       </div>
     </CardShell>
   );

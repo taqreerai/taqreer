@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreateShell } from "@/components/create/CreateShell";
@@ -408,16 +408,30 @@ export default function CreateBrandPage() {
   // ─── Right column state ─────────────────────────────────────────────────
   // Brand colors — 3 default slots, expandable up to 5. No background/text
   // color inputs; Claude picks the surface colors based on contrast.
-  // Lazy initializers restore from sessionStorage when the user comes back
-  // via the summary's "رجوع" button (no in-effect prop sync needed).
-  const [colors, setColors] = useState<string[]>(() => {
+  //
+  // Initial value MUST match server render exactly to avoid hydration
+  // mismatches — sessionStorage is client-only so the previous
+  // `useState(() => readStoredBrand()?.colors)` pattern silently
+  // changed value on the first client render. Default seed renders
+  // on the server; the `useLayoutEffect` below restores the user's
+  // saved colours before paint (no flash).
+  const [colors, setColors] = useState<string[]>(DEFAULT_COLORS);
+  // Restore colours from sessionStorage post-hydration. useLayoutEffect
+  // (not useEffect) so the swap happens BEFORE the browser paints —
+  // user never sees the default-palette flash if they're returning
+  // from a later step with their picked palette in storage.
+  useLayoutEffect(() => {
     const s = readStoredBrand();
     if (s && Array.isArray(s.colors)) {
-      const valid = (s.colors as unknown[]).filter((c): c is string => typeof c === "string");
-      if (valid.length >= MIN_COLORS) return valid.slice(0, MAX_COLORS);
+      const valid = (s.colors as unknown[]).filter(
+        (c): c is string => typeof c === "string",
+      );
+      if (valid.length >= MIN_COLORS) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setColors(valid.slice(0, MAX_COLORS));
+      }
     }
-    return DEFAULT_COLORS;
-  });
+  }, []);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("manual");
   const [paletteScreenshot, setPaletteScreenshot] = useState<File | null>(null);
 
@@ -1048,9 +1062,12 @@ export default function CreateBrandPage() {
       title="إعداد الهوية البصرية"
       subtitle="اختر الألوان والخطوط وارفع الشعار الخاص بك ليتناسب مع علامتك التجارية."
     >
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* LEFT — fonts + logo (filled in below). RIGHT — colours. */}
-        <div className="space-y-6">
+      <div className="space-y-6">
+        {/* Row 1 — colours (start side) + fonts (end side). Row 2 —
+            logo full width. The brand page used to nest these inside
+            a single grid column, which made `lg:grid-cols-2` render
+            as one column because there was only one child. */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Brand colors */}
           <div className="glass-card rounded-xl p-6 space-y-5">
             <div>
@@ -1199,10 +1216,13 @@ export default function CreateBrandPage() {
               </div>
             </div>
           </div>
+        </div>
+        {/* /Row 1 — colours + fonts. Below: logo card spans the
+            full row of the parent space-y-6 wrapper. */}
 
-          {/* Logo */}
-          <div className="glass-card rounded-xl p-6 space-y-4">
-            <h2 className="font-semibold text-white">الشعار</h2>
+        {/* Logo */}
+        <div className="glass-card rounded-xl p-6 space-y-4">
+          <h2 className="font-semibold text-white">الشعار</h2>
             <p className="text-[12px] text-muted leading-relaxed">
               صيغة SVG فقط. الشعارات بصيغة SVG تحتفظ بجودتها على أي حجم وتتيح
               تغيير لون الشعار حسب لون الشريحة لضمان التباين.
@@ -1248,7 +1268,6 @@ export default function CreateBrandPage() {
                     next step. */}
               </>
             ) : null}
-          </div>
         </div>
       </div>
 

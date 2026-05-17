@@ -53,15 +53,18 @@ export function PillButton({
       : "h-11 px-6 text-sm gap-2";
 
   // Variant chrome — primary wraps `.btn-gradient`; secondary +
-  // ghost wrap `.btn-pill` for the glass surface and just override
-  // a couple of properties. Keeping the canonical CSS classes means
-  // the visual still tracks the user's glass-preset setting.
+  // ghost wrap `.btn-pill` for the glass surface. `.btn-gradient`
+  // in globals.css ships with `border-radius: 10px`, so for the
+  // pill shape we set it inline (style wins over both the class
+  // rule and any Tailwind utility regardless of source-order).
   const variantClasses =
     variant === "primary"
-      ? "btn-gradient rounded-full text-white"
+      ? "btn-gradient text-white"
       : variant === "secondary"
         ? "btn-pill text-white"
         : "btn-pill text-white/60 border-transparent hover:border-white/15 hover:text-white";
+  const variantStyle =
+    variant === "primary" ? { borderRadius: 9999 } : undefined;
 
   const iconPx = size === "sm" ? 16 : 18;
 
@@ -70,6 +73,7 @@ export function PillButton({
       type={type}
       disabled={disabled || loading}
       {...rest}
+      style={variantStyle}
       className={`relative inline-flex items-center justify-center font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${sizeClasses} ${variantClasses}`}
     >
       {loading ? (
