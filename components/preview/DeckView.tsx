@@ -56,10 +56,6 @@ type Progress = {
   // older in-flight runs (pre-deploy) won't have it; in that case the
   // client falls back to mount-time `Date.now()` as before.
   genStartedAt?: string;
-  // Most-recent caption from Claude's adaptive-thinking stream.
-  // Replaces the old FAKE_FEEDBACK rotation. Optional — first ~200 ms
-  // of generation may not have any thinking text yet.
-  latestThought?: string | null;
 };
 
 function isProgress(value: unknown): value is Progress {
@@ -72,11 +68,20 @@ function isProgress(value: unknown): value is Progress {
   );
 }
 
-// Fallback caption shown for the first ~200 ms before Claude's
-// adaptive-thinking stream produces its first sentence. After that
-// the live caption comes from `progress.latestThought` and reflects
-// what Claude is actually working on right now.
-const THINKING_FALLBACK = "جارٍ تجهيز التصميم...";
+// Cosmetic rotating captions for the generating screen. They rotate
+// independently of the real per-slide progress (which now lives on the
+// current placeholder card), giving the user a sense of momentum even when
+// Claude pauses between slides.
+const FAKE_FEEDBACK = [
+  "إعداد نظام الألوان...",
+  "البحث في تصاميم التخطيط...",
+  "تحسين بنية العرض...",
+  "تنسيق المحتوى مع الهوية البصرية...",
+  "اختيار الخطوط المناسبة...",
+  "ضبط التباين والحدود...",
+  "ترتيب العناصر على الشبكة...",
+  "تجهيز الشرائح...",
+];
 
 // Map the streaming progress to a 0..100 % bar. Thinking gets a small head
 // start so the bar never sits at 0 while Claude warms up. Designing fills the
@@ -168,14 +173,11 @@ export function DeckView({
   const [retryError, setRetryError] = useState("");
   // Polling sets this when it sees a failed status arrive after mount.
   const [polledFailure, setPolledFailure] = useState(false);
-  // Live caption shown under the page title while generating. Now
-  // sourced from Claude's adaptive-thinking stream (`progress.latestThought`).
-  // We hold the LAST shown caption in local state so a brief
-  // `latestThought: null` poll doesn't blank the line; the caption
-  // only changes when a new non-null thought arrives. `captionVisible`
-  // drives a 300 ms opacity crossfade between consecutive thoughts.
-  const [captionText, setCaptionText] = useState(THINKING_FALLBACK);
-  const [captionVisible, setCaptionVisible] = useState(true);
+  // Rotating fake-feedback caption shown under the page title while
+  // generating. `fakeIdx` advances on a 2.5 s timer; `fakeVisible` drives a
+  // 300 ms opacity crossfade between messages.
+  const [fakeIdx, setFakeIdx] = useState(0);
+  const [fakeVisible, setFakeVisible] = useState(true);
 
   // Stuck-detection state. We track when the generating state started and when
   // progress.currentSlide last advanced. Two thresholds:
@@ -414,23 +416,20 @@ export function DeckView({
     };
   }, [projectId, status, router]);
 
-  // Drive the live caption while generating. When Claude's adaptive
-  // thinking stream produces a new sentence, fade the old one out
-  // (300 ms), swap the text, fade the new one in. If polling returns
-  // a null/empty thought we keep the previous caption — Claude is
-  // mid-block and the next snapshot will land in <800 ms anyway.
+  // Drive the rotating fake-feedback caption while generating. Each cycle
+  // fades the current message out (300 ms), swaps the index, and fades the
+  // next one in.
   useEffect(() => {
     if (status !== "generating") return;
-    const next = progress?.latestThought?.trim();
-    if (!next) return;
-    if (next === captionText) return;
-    setCaptionVisible(false);
-    const t = window.setTimeout(() => {
-      setCaptionText(next);
-      setCaptionVisible(true);
-    }, 300);
-    return () => window.clearTimeout(t);
-  }, [status, progress?.latestThought, captionText]);
+    const id = window.setInterval(() => {
+      setFakeVisible(false);
+      window.setTimeout(() => {
+        setFakeIdx((current) => (current + 1) % FAKE_FEEDBACK.length);
+        setFakeVisible(true);
+      }, 300);
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [status]);
 
   // Start the generation clock when we first enter `generating`. Prefer the
   // server-persisted `progress.genStartedAt` (ISO from the Inngest job) over
@@ -1004,9 +1003,9 @@ export function DeckView({
               <div className="text-muted flex items-center justify-center gap-3 text-sm">
                 <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
                 <span
-                  className={`transition-opacity duration-300 ${captionVisible ? "opacity-100" : "opacity-0"}`}
+                  className={`transition-opacity duration-300 ${fakeVisible ? "opacity-100" : "opacity-0"}`}
                 >
-                  {captionText}
+                  {FAKE_FEEDBACK[fakeIdx]}
                 </span>
               </div>
               <div className="w-full max-w-md">

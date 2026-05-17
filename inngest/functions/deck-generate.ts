@@ -27,7 +27,6 @@ CANVAS
 - Emit slide body only — no <!DOCTYPE> / <html> / <head> / <body>. Inline <style> per slide is allowed.
 
 LANGUAGE & DIRECTION
-- When the deck content is Arabic, prefer to do your adaptive thinking in concise Arabic phrases. Short sentences are best — your thinking text is surfaced to the user as a live caption during generation, so it doubles as progress narration for them. English thinking is acceptable when it helps you reason; don't force Arabic at the cost of accuracy.
 - Set \`dir="rtl"\` or \`dir="ltr"\` on the slide root. The export pipeline handles all BiDi metadata downstream — do not insert U+200E/U+200F marks, use <bdi>, force text-align on RTL lists, or add inter-script spaces.
 - For text whose script differs from slide direction, set explicit \`dir\` on that element (e.g. \`<p dir="ltr">URL</p>\` in an RTL deck).
 - \`letter-spacing\` on Arabic-bearing elements is stripped at export (breaks contextual shaping). Don't set it.
@@ -181,26 +180,6 @@ function extractJson(text: string): string {
   const end = text.lastIndexOf("}");
   if (start >= 0 && end > start) return text.slice(start, end + 1);
   return text.trim();
-}
-
-// Surfaces a short caption from Claude's thinking-snapshot text. We
-// scan backwards for the last sentence terminator (`.`, `؟`, `!`, `\n`)
-// inside the final 240 chars, then trim. Length-capped at 120 chars
-// so the caption fits the DeckView slot without truncation.
-function extractLastSentence(snapshot: string): string | null {
-  const trimmed = snapshot.trim();
-  if (!trimmed) return null;
-  // Look at the tail (last ~240 chars) — earlier text already shipped
-  // as a previous caption, no point re-surfacing it.
-  const tail = trimmed.slice(-240);
-  // Sentence terminators: ASCII `.`/`!`/`?`, Arabic `؟`, and newlines.
-  // Capture text AFTER the last terminator → the in-progress sentence.
-  const matches = tail.match(/[.!?؟\n][^.!?؟\n]*$/);
-  const candidate = (matches ? matches[0].replace(/^[.!?؟\n]+/, "") : tail).trim();
-  if (!candidate) return null;
-  // Hard length cap — long thinking sentences get truncated to first
-  // 120 chars + ellipsis so the caption stays one short line.
-  return candidate.length > 120 ? `${candidate.slice(0, 117).trim()}…` : candidate;
 }
 
 type CornerPosition =
@@ -448,12 +427,6 @@ export const deckGenerate = inngest.createFunction(
       // per-attempt counter.
       let maxSlideSeen = 0;
 
-      // Most-recent short thinking label surfaced to the user as the live
-      // caption. Updated by the `stream.on("thinking")` listener (see
-      // below) and threaded through every writeProgress call so the
-      // status endpoint always returns the freshest value.
-      let latestThought: string | null = null;
-
       // Persists a transient progress payload to the version's slideJson.
       // Best-effort — failed writes don't block generation. The client polls
       // /api/projects/[id]/status to surface these into <DeckView>.
@@ -469,10 +442,6 @@ export const deckGenerate = inngest.createFunction(
                   currentSlide,
                   estimatedTotal: Math.max(total, currentSlide),
                   genStartedAt,
-                  // `latestThought` may be null on the first writes (before
-                  // Claude emits any thinking text). DeckView falls back to
-                  // a neutral placeholder when missing.
-                  latestThought,
                 },
                 slides: [],
               } as never,
@@ -489,12 +458,7 @@ export const deckGenerate = inngest.createFunction(
         await writeProgress("thinking", maxSlideSeen, estimatedTotal);
 
         const stream = client.messages.stream({
-          // Sonnet 4.6: ~40% cheaper than Opus, "Fast" vs "Moderate"
-          // latency, supports adaptive thinking, 64k max output (we use
-          // 48k). The big-deck quality bar for slide design isn't where
-          // Opus's marginal IQ shows up, so the trade is worth taking
-          // for the speed win.
-          model: "claude-sonnet-4-6",
+          model: "claude-opus-4-7",
           max_tokens: 48000,
           thinking: { type: "adaptive" },
           system: [
@@ -504,12 +468,7 @@ export const deckGenerate = inngest.createFunction(
               cache_control: { type: "ephemeral" },
             },
           ],
-          // Dropped from "high" → "medium". "high" effort spends much
-          // more time on internal reasoning before producing output —
-          // for slide design that doesn't translate to better output
-          // proportionally, just slower turnaround. "medium" cuts a
-          // noticeable chunk of latency.
-          output_config: { effort: "medium" },
+          output_config: { effort: "high" },
           messages: [{ role: "user", content: userMessage }],
         });
 
@@ -530,23 +489,6 @@ export const deckGenerate = inngest.createFunction(
             lastPushedSlide = maxSlideSeen;
             lastWriteAt = now;
             void writeProgress("designing", maxSlideSeen, estimatedTotal);
-          }
-        });
-
-        // Surface Claude's adaptive-thinking output as the live caption
-        // shown to the user instead of the old FAKE_FEEDBACK rotation.
-        // Each block_stop snapshot is the full thinking text for that
-        // block; we extract the last complete sentence (≤ 120 chars) as
-        // a short label and throttle writes to one per 800 ms.
-        let lastThoughtWriteAt = 0;
-        stream.on("thinking", (_delta, snapshot) => {
-          const label = extractLastSentence(snapshot);
-          if (!label || label === latestThought) return;
-          latestThought = label;
-          const now = Date.now();
-          if (now - lastThoughtWriteAt > 800) {
-            lastThoughtWriteAt = now;
-            void writeProgress("thinking", maxSlideSeen, estimatedTotal);
           }
         });
 
