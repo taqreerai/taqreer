@@ -174,11 +174,13 @@ function rewriteStyleAttr(style: string): string {
         const lead = decl.slice(0, decl.toLowerCase().indexOf(prop));
         return `${lead}${logicalProp}:${value}`;
       }
-      if (prop === "text-align") {
-        const v = value.trim().toLowerCase();
-        if (v === "left") return decl.replace(/left/i, "start");
-        if (v === "right") return decl.replace(/right/i, "end");
-      }
+      // `text-align` intentionally NOT rewritten. It controls how the
+      // text sits inside its OWN box, not the box's position on the
+      // slide — `text-align: left` on a box that lives on the visual
+      // left edge should keep aligning to the box's left edge in any
+      // direction. Flipping it to `start` causes RTL slides to flush
+      // that text to the box's right, which is the wrong corner for
+      // anything Claude intentionally pinned to a physical side.
       if (prop === "float") {
         const v = value.trim().toLowerCase();
         if (v === "left") return decl.replace(/left/i, "inline-start");
