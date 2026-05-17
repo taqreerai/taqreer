@@ -179,23 +179,17 @@ export function DeckView({
   const [fakeIdx, setFakeIdx] = useState(0);
   const [fakeVisible, setFakeVisible] = useState(true);
 
-  // Stuck-detection state. We track when the generating state started and when
-  // progress.currentSlide last advanced. Two thresholds:
-  //   - SLOW (6 min total)              → soft "taking longer than usual" hint
-  //   - STUCK (18 min total AND 10 min  → bell notification with a retry CTA
-  //     since slide/stage last advanced)
-  // BOTH stuck conditions must be true — a long quiet window alone or a long
-  // total alone is not enough confidence; many legitimate slow phases sit
-  // silent for several minutes. Two-agree gate avoids wasting the user's
-  // tokens on a retry that wasn't actually needed.
-  // `nowTick` increments every 10 s so the derived elapsed / stale times
-  // recompute even when the polling effect doesn't fire (e.g. progress stops
-  // changing). All times are wall-clock ms — `useState(() => Date.now())` so
-  // the initial value isn't `Date.now()` on every re-render.
+  // Generation-clock state. SLOW threshold (6 min) flips an in-page
+  // caption ("الخادم تحت ضغط عالٍ حالياً") so the user sees the run
+  // is just running long, not silently dead. The old "STUCK" bell
+  // notification was removed — it kept misfiring on legitimately
+  // slow phases.
+  //
+  // `nowTick` increments every 10 s so the derived `elapsedMs` stays
+  // current even when the polling effect doesn't fire (Claude is
+  // silent between slides). useState(() => Date.now()) so the seed
+  // isn't re-evaluated on every re-render.
   const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
-  const [lastProgressAt, setLastProgressAt] = useState<number | null>(null);
-  const [lastSlideSeen, setLastSlideSeen] = useState(0);
-  const [lastStageSeen, setLastStageSeen] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   // Slide aspect ratio. During generation `manifest` is null, so we fall
@@ -431,13 +425,12 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
-  // Start the generation clock when we first enter `generating`. Prefer the
-  // server-persisted `progress.genStartedAt` (ISO from the Inngest job) over
-  // local mount time so a mid-generation tab reload doesn't reset the clock
-  // to 0 — without this, refreshing a stuck deck would silently re-arm the
-  // stuck-detection thresholds and the user would never see the banner.
-  // Fall back to Date.now() for older in-flight runs that didn't write the
-  // timestamp yet. setState-in-effect is intentional (client-only wall clock).
+  // Start the generation clock when we first enter `generating`. Prefer
+  // the server-persisted `progress.genStartedAt` (ISO from the Inngest
+  // job) over local mount time so a mid-generation tab reload doesn't
+  // reset the clock to 0. Fall back to Date.now() for older in-flight
+  // runs that didn't write the timestamp yet. setState-in-effect is
+  // intentional (client-only wall clock).
   useEffect(() => {
     if (status !== "generating") return;
     if (genStartedAt !== null) return;
@@ -446,29 +439,7 @@ export function DeckView({
     const start = Number.isFinite(serverStartMs) ? serverStartMs : Date.now();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGenStartedAt(start);
-    setLastProgressAt(Date.now());
   }, [status, genStartedAt, progress]);
-
-  // Advance lastProgressAt whenever the streamed slide number ticks up OR
-  // the pipeline stage changes (e.g. `content` → `validating` → `saving`).
-  // Without the stage check, the validating/saving phases — which can take
-  // 30–60s with no slide-number movement — falsely trip STUCK_STALE_MS.
-  // Same setState-in-effect reasoning: wall-clock derived from streamed prop.
-  useEffect(() => {
-    if (status !== "generating") return;
-    const slide = progress?.currentSlide ?? 0;
-    const stage = progress?.stage ?? null;
-    const slideAdvanced = slide > lastSlideSeen;
-    const stageChanged = stage !== null && stage !== lastStageSeen;
-    if (slideAdvanced || stageChanged) {
-      if (slideAdvanced) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setLastSlideSeen(slide);
-      }
-      if (stageChanged) setLastStageSeen(stage);
-      setLastProgressAt(Date.now());
-    }
-  }, [progress, status, lastSlideSeen, lastStageSeen]);
 
   // Re-render every 10 s so the elapsed / stale times stay current even when
   // no other state changes (i.e. when the generation actually IS stuck and
@@ -479,57 +450,19 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
-  // Stuck thresholds. SLOW just nudges copy; STUCK pushes a bell
-  // notification with a retry CTA. Tightened 2026-05-17 — the old
-  // 3-min stale threshold was false-positive-prone (validating /
-  // saving phases can sit silent that long), pushing a "generation
-  // suspended" alert while the run was still alive. Now we require
-  // BOTH conditions: a long total elapsed AND a long quiet window,
-  // so the alert only fires when both signals agree the run is
-  // genuinely dead — no more spurious notifications that waste the
-  // user's tokens on an unnecessary retry.
+  // SLOW just nudges in-page copy ("الخادم تحت ضغط عالٍ حالياً").
+  // The stuck-detection bell notification was removed entirely
+  // (was producing false positives even with tightened thresholds —
+  // notifications persist in localStorage so any old alert kept
+  // re-surfacing). If a run actually hangs, the user closes the tab
+  // or hits retry from the preview — no need for the bell channel
+  // to second-guess.
   const SLOW_WARN_MS = 6 * 60 * 1000;
-  const STUCK_TOTAL_MS = 18 * 60 * 1000;
-  const STUCK_STALE_MS = 10 * 60 * 1000;
   const elapsedMs = genStartedAt ? nowTick - genStartedAt : 0;
-  const staleMs = lastProgressAt ? nowTick - lastProgressAt : 0;
-  const isStuck =
-    status === "generating" &&
-    !!genStartedAt &&
-    elapsedMs > STUCK_TOTAL_MS &&
-    staleMs > STUCK_STALE_MS;
   const isSlow =
     status === "generating" &&
     !!genStartedAt &&
-    !isStuck &&
     elapsedMs > SLOW_WARN_MS;
-
-  // Surface a single "stuck" notification to the bell when the deck first
-  // crosses the STUCK threshold. We push exactly once per stuck-window via
-  // a ref-tracked latch so the user doesn't see the same alert repeated
-  // every 10 s (the nowTick interval re-evaluates isStuck constantly).
-  // The notification carries the project's preview href so clicking
-  // returns the user here.
-  const stuckNotifiedRef = useRef(false);
-  useEffect(() => {
-    if (!isStuck) {
-      // Reset the latch when stuck clears (retry succeeded, etc.) so a
-      // future stuck window will fire a fresh notification.
-      stuckNotifiedRef.current = false;
-      return;
-    }
-    if (stuckNotifiedRef.current) return;
-    stuckNotifiedRef.current = true;
-    notificationStore.push({
-      kind: "warning",
-      title: "تصميم العرض متوقف",
-      desc: `${projectTitle} — يبدو أن العملية متوقفة. جرّب إعادة المحاولة.`,
-      // Route to the summary page so the user lands on the "Generate"
-      // CTA — their content + brand data is preserved in sessionStorage
-      // from the create flow, so a single click re-fires generation.
-      href: `/create/summary`,
-    });
-  }, [isStuck, projectId, projectTitle]);
 
   // Fetch draft comments once on completed mount. The server filters by the
   // presentation's currentVersionId, so refetching on manifest swap (after
