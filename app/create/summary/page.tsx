@@ -8,11 +8,11 @@
 // count + rules + logo placement), so this page reads brand +
 // output and stitches them at submit.
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
-import { Pill } from "@/components/create/controls";
 import {
   DEFAULT_QUALITY,
   QUALITY_PRESETS,
@@ -121,6 +121,29 @@ export default function CreateSummaryPage() {
       /* quota — best-effort persistence */
     }
   };
+
+  // Split-button preset menu open/close + outside-click + ESC close.
+  // mousedown (not click) so the menu dismisses on focus-shift before
+  // any other handler fires; matches the color-picker popover pattern.
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const splitButtonRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!presetMenuOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (!splitButtonRef.current?.contains(event.target as Node)) {
+        setPresetMenuOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPresetMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [presetMenuOpen]);
 
   useEffect(() => {
     const rawContent = sessionStorage.getItem("taqreer:create:content");
@@ -352,49 +375,6 @@ export default function CreateSummaryPage() {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      {/* Quality preset — four tier cards stacked label-on-top,
-          ETA-below. Single-line pills with inline ETA broke under
-          RTL/LTR mixing (the Arabic label + LTR "~5 د" atom merged
-          into one unreadable run); splitting onto two lines per card
-          lets the bidi engine handle each line independently and
-          gives the ETA visual breathing room. Cards are roughly the
-          same height as a pill row + a caption underneath, so the
-          summary page layout doesn't shift much. */}
-      <div className="flex flex-wrap justify-end gap-2">
-        {QUALITY_PRESETS.map((preset) => {
-          const slideCount =
-            output?.slideCount?.value && output.slideCount.value > 0
-              ? output.slideCount.value
-              : 8;
-          const eta = estimateMinutes(preset.key, slideCount);
-          const active = quality === preset.key;
-          return (
-            <button
-              key={preset.key}
-              type="button"
-              onClick={() => setQuality(preset.key)}
-              aria-pressed={active}
-              className={`backdrop-blur-glass flex min-w-[88px] flex-col items-center gap-0.5 rounded-xl border px-3 py-2 transition-colors ${
-                active ? "text-white" : "text-white/60 hover:text-white"
-              }`}
-              style={{
-                background: "rgba(255, 255, 255, var(--glass-opacity))",
-                borderColor: active
-                  ? "rgba(255, 255, 255, 1)"
-                  : "rgba(255, 255, 255, var(--glass-border-opacity))",
-              }}
-            >
-              <span className="text-sm font-medium leading-tight">
-                {preset.label}
-              </span>
-              <span className="text-[10px] text-white/40 leading-tight" dir="ltr">
-                ~{eta} د
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
       <div className="flex items-center justify-between pt-2">
         <PillButton
           variant="secondary"
@@ -403,32 +383,134 @@ export default function CreateSummaryPage() {
         >
           السابق
         </PillButton>
-        {/* Generate CTA — reuses `.btn-gradient-anim` (the animated
-            mesh-gradient ring + full-fill on hover used by the deck's
-            regen button in the slide-preview toolbar). Pill shape via
-            inline `borderRadius: 9999` since `.btn-gradient-anim`
-            ships with no border-radius rule and inheriting from the
-            class would tie the shape to the regen square. */}
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={loading}
-          aria-label="إنشاء"
-          className="btn-gradient-anim relative inline-flex h-11 items-center justify-center gap-2 px-6 text-sm font-medium transition-shadow disabled:cursor-not-allowed"
-          style={{ borderRadius: 9999 }}
-        >
-          {loading ? (
-            <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
-          ) : (
-            <span
-              className="material-symbols-outlined leading-none"
-              style={{ fontSize: 18 }}
+
+        {/* Generate split-button — left half fires generation with
+            the current preset, right half toggles a dropdown menu
+            for picking a different preset. Same `.btn-gradient-anim`
+            animated mesh-gradient on both halves so they read as one
+            pill with a divider. `dir="ltr"` on the wrapper forces a
+            deterministic visual order regardless of any RTL
+            inheritance from CreateShell — main button on the visual
+            left, arrow on the visual right (matching what the user
+            asked for). */}
+        <div ref={splitButtonRef} className="relative">
+          <div dir="ltr" className="flex items-stretch">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={loading}
+              aria-label="إنشاء"
+              className="btn-gradient-anim relative inline-flex h-11 items-center justify-center gap-2 px-6 text-sm font-medium transition-shadow disabled:cursor-not-allowed"
+              style={{ borderRadius: "9999px 0 0 9999px" }}
             >
-              auto_awesome
-            </span>
-          )}
-          <span>{loading ? "جارٍ الإنشاء..." : "إنشاء"}</span>
-        </button>
+              {loading ? (
+                <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
+              ) : (
+                <span
+                  className="material-symbols-outlined leading-none"
+                  style={{ fontSize: 18 }}
+                >
+                  auto_awesome
+                </span>
+              )}
+              <span>{loading ? "جارٍ الإنشاء..." : "إنشاء"}</span>
+            </button>
+            {/* Divider line between the two halves so they read as a
+                single split-button, not two separate pills. Sits over
+                both halves' animated gradients via opacity. */}
+            <span
+              aria-hidden
+              className="w-px self-stretch bg-white/30"
+            />
+            <button
+              type="button"
+              onClick={() => setPresetMenuOpen((v) => !v)}
+              disabled={loading}
+              aria-label={presetMenuOpen ? "إغلاق قائمة الجودة" : "اختيار جودة"}
+              aria-expanded={presetMenuOpen}
+              className="btn-gradient-anim relative inline-flex h-11 w-10 items-center justify-center transition-shadow disabled:cursor-not-allowed"
+              style={{ borderRadius: "0 9999px 9999px 0" }}
+            >
+              <span
+                className={`material-symbols-outlined leading-none transition-transform ${
+                  presetMenuOpen ? "rotate-180" : ""
+                }`}
+                style={{ fontSize: 18 }}
+              >
+                expand_more
+              </span>
+            </button>
+          </div>
+
+          {/* Preset menu — pops below the split-button when the
+              arrow is clicked. Anchored to the visual right (where
+              the arrow lives in LTR mode) so it doesn't drift off
+              screen. Same glass surface as the rest of the popovers
+              in the create flow. */}
+          <AnimatePresence>
+            {presetMenuOpen ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                transition={{
+                  type: "spring",
+                  bounce: 0.25,
+                  duration: 0.25,
+                }}
+                dir="rtl"
+                className="absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-glass"
+                style={{
+                  background: "rgba(15, 11, 30, 0.92)",
+                  borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+                }}
+              >
+                <div className="px-3 py-2 text-[11px] text-white/40">
+                  جودة التوليد
+                </div>
+                {QUALITY_PRESETS.map((preset) => {
+                  const slideCount =
+                    output?.slideCount?.value && output.slideCount.value > 0
+                      ? output.slideCount.value
+                      : 8;
+                  const eta = estimateMinutes(preset.key, slideCount);
+                  const active = quality === preset.key;
+                  return (
+                    <button
+                      key={preset.key}
+                      type="button"
+                      onClick={() => {
+                        setQuality(preset.key);
+                        setPresetMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start text-sm transition-colors ${
+                        active
+                          ? "bg-white/[0.06] text-white"
+                          : "text-white/70 hover:bg-white/[0.04] hover:text-white"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="material-symbols-outlined leading-none"
+                          style={{
+                            fontSize: 16,
+                            opacity: active ? 1 : 0,
+                          }}
+                        >
+                          check
+                        </span>
+                        <span>{preset.label}</span>
+                      </span>
+                      <span className="text-[11px] text-white/40" dir="ltr">
+                        ~{eta} د
+                      </span>
+                    </button>
+                  );
+                })}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
       </div>
     </CreateShell>
   );
