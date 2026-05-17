@@ -110,13 +110,112 @@ export function getClientDOMPurify(): DOMPurifyAPI {
  * sanitize threw) returns an empty string and logs a console error. **Never
  * returns the raw input** — fail-closed by design so a sanitiser bug can't
  * become an XSS vector.
+ *
+ * Post-sanitise pass converts physical CSS L/R properties (`left`, `right`,
+ * `padding-left`, …) into their logical equivalents (`inset-inline-start`,
+ * `padding-inline-end`, …). See `rewritePhysicalToLogical` below for the why.
  */
 export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
-    return dp.sanitize(html, DOMPURIFY_CONFIG);
+    const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
+    return rewritePhysicalToLogical(clean);
   } catch (err) {
     console.error("[sanitize] sanitiseSlideHtml failed:", err);
     return "";
+  }
+}
+
+// Inline-style CSS prop name (exact match, lower-cased) → logical
+// equivalent. Logical properties resolve to physical based on the
+// containing block's writing direction:
+//   • LTR  →  inline-start = left,  inline-end = right
+//   • RTL  →  inline-start = right, inline-end = left
+// Claude generates slide CSS as if it were LTR (calling sides
+// "left" / "right" literally). When the slide is rendered with
+// `dir="rtl"`, those physical values stay anchored to the visual
+// left / right — so a decorative box Claude placed at `right: 0` to
+// sit on the start side ends up clashing with the RTL-flowed text.
+// Rewriting to logical equivalents makes the WHOLE slide mirror as
+// a unit in RTL while leaving LTR slides byte-identical.
+const PHYSICAL_TO_LOGICAL: Record<string, string> = {
+  left: "inset-inline-start",
+  right: "inset-inline-end",
+  "padding-left": "padding-inline-start",
+  "padding-right": "padding-inline-end",
+  "margin-left": "margin-inline-start",
+  "margin-right": "margin-inline-end",
+  "border-left": "border-inline-start",
+  "border-right": "border-inline-end",
+  "border-left-width": "border-inline-start-width",
+  "border-right-width": "border-inline-end-width",
+  "border-left-color": "border-inline-start-color",
+  "border-right-color": "border-inline-end-color",
+  "border-left-style": "border-inline-start-style",
+  "border-right-style": "border-inline-end-style",
+};
+
+function rewriteStyleAttr(style: string): string {
+  // Split on `;`, transform each `prop:value` pair individually.
+  // Whitespace + casing preserved on the value half so colours, urls,
+  // etc. round-trip unchanged.
+  return style
+    .split(";")
+    .map((decl) => {
+      const colonIdx = decl.indexOf(":");
+      if (colonIdx === -1) return decl;
+      const prop = decl.slice(0, colonIdx).trim().toLowerCase();
+      const value = decl.slice(colonIdx + 1);
+      const logicalProp = PHYSICAL_TO_LOGICAL[prop];
+      if (logicalProp) {
+        // Preserve the original leading whitespace on the declaration
+        // (e.g. `" padding-left"` → `" padding-inline-start"`) so the
+        // serialised style attr stays tidy.
+        const lead = decl.slice(0, decl.toLowerCase().indexOf(prop));
+        return `${lead}${logicalProp}:${value}`;
+      }
+      if (prop === "text-align") {
+        const v = value.trim().toLowerCase();
+        if (v === "left") return decl.replace(/left/i, "start");
+        if (v === "right") return decl.replace(/right/i, "end");
+      }
+      if (prop === "float") {
+        const v = value.trim().toLowerCase();
+        if (v === "left") return decl.replace(/left/i, "inline-start");
+        if (v === "right") return decl.replace(/right/i, "inline-end");
+      }
+      return decl;
+    })
+    .join(";");
+}
+
+// Walk the sanitised slide markup and rewrite every inline `style` attr.
+// `<style>` blocks intentionally NOT touched — Claude rarely emits them
+// and the regex-on-CSS-text risk (false positives in selectors / urls /
+// keyframe % values) outweighs the benefit at the volume we see.
+function rewritePhysicalToLogical(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    const els = root.querySelectorAll("[style]");
+    let changed = false;
+    els.forEach((el) => {
+      const original = el.getAttribute("style") ?? "";
+      const rewritten = rewriteStyleAttr(original);
+      if (rewritten !== original) {
+        el.setAttribute("style", rewritten);
+        changed = true;
+      }
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    // DOMParser failure is unexpected in a browser context; return the
+    // unmodified sanitised HTML rather than swallowing the slide.
+    return html;
   }
 }
