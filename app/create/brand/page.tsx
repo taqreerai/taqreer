@@ -282,41 +282,39 @@ function GoogleFontSlot({
   sampleSizeClass: string;
   onSelect: (family: string | null) => void;
 }) {
+  // Native select keeps the fonts card the same height as the colours
+  // card (two compact rows + one big sample). `.input-dark` provides
+  // the glass surface; appearance:none kills the OS chrome, and a
+  // material-symbols chevron is overlaid on the end side.
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 p-3">
-        {/* `label` is already shown as the slot title ("خط العناوين" /
-            "خط النص") above this component — the previous sub-title
-            "{label} — اختر من Google Fonts" duplicated that and added
-            visual noise. Mode is also clear from the toggle pill,
-            so no caption needed here. */}
-        <div className="max-h-[180px] space-y-1 overflow-y-auto pr-1">
-          {GOOGLE_FONTS.map((font) => {
-            const isActive = selected === font.family;
-            return (
-              <button
-                key={font.family}
-                type="button"
-                onClick={() => onSelect(isActive ? null : font.family)}
-                // Family name kept in the site default font so the list stays
-                // visually uniform; the live preview at the bottom is the
-                // single place where the selected face renders.
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? "bg-[#370BF4]/20 text-white"
-                    : "text-white hover:bg-white/5"
-                }`}
-              >
-                <span>{font.family}</span>
-                {font.arabic ? (
-                  <span className="text-[10px] text-[#9A94A8]">عربي + لاتيني</span>
-                ) : (
-                  <span className="text-[10px] text-[#9A94A8]">لاتيني</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      <div className="relative">
+        <select
+          aria-label={label}
+          value={selected ?? ""}
+          onChange={(event) => {
+            const next = event.target.value;
+            onSelect(next === "" ? null : next);
+          }}
+          className="input-dark appearance-none pr-10 text-right text-sm"
+          style={{ paddingTop: 10, paddingBottom: 10 }}
+        >
+          <option value="">— اختر خط Google —</option>
+          {GOOGLE_FONTS.map((font) => (
+            <option key={font.family} value={font.family}>
+              {font.family} {font.arabic ? "— عربي + لاتيني" : "— لاتيني"}
+            </option>
+          ))}
+        </select>
+        {/* Chevron sits on the left edge (RTL) so it doesn't collide
+            with the right-aligned option label. `pointer-events-none`
+            keeps the underlying select clickable through the icon. */}
+        <span
+          className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/60"
+          style={{ fontSize: 18 }}
+        >
+          expand_more
+        </span>
       </div>
       <p
         // Force right-align on the sample preview; some Google fonts
@@ -383,18 +381,22 @@ function BrandColorRow({
         className="input-dark min-w-0 flex-1 px-2 py-1 font-mono text-xs"
         spellCheck={false}
       />
-      {removable ? (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label="إزالة اللون"
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-            close
-          </span>
-        </button>
-      ) : null}
+      {/* Delete icon ALWAYS rendered so the row layout stays stable
+          (when one row's icon disappears, its hex input expands by
+          24 px and overflows). When at the MIN_COLORS floor the
+          button is faded + disabled so the user sees why they can't
+          remove the colour. */}
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={!removable}
+        aria-label="إزالة اللون"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-white/50"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+          close
+        </span>
+      </button>
     </div>
   );
 }

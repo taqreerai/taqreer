@@ -21,6 +21,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
 import {
@@ -309,6 +310,10 @@ export default function CreateOutputPage() {
 
 // ─── Card primitives ──────────────────────────────────────────────
 
+// `layout` on motion.div animates the card's height when its
+// contents change size (e.g. custom-input toggle, logo placement
+// appearing/disappearing). 250 ms ease-out matches the rest of the
+// flow's hover/active timings; no spring tail.
 function CardShell({
   title,
   icon,
@@ -319,7 +324,11 @@ function CardShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }}
+      className="glass-card flex flex-col gap-4 rounded-2xl p-5"
+    >
       <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
         <span
           className="material-symbols-outlined text-white/70"
@@ -329,8 +338,10 @@ function CardShell({
         </span>
         <h2 className="text-sm font-semibold text-white">{title}</h2>
       </header>
-      <div className="flex flex-1 flex-col gap-4">{children}</div>
-    </div>
+      <motion.div layout className="flex flex-1 flex-col gap-4">
+        {children}
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -404,32 +415,33 @@ function CanvasCard({
           placeholder="مثل: التاريخ، الموقع الإلكتروني"
           className="input-dark"
         />
-        {persistentText.trim() ? (
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            {/* Position picker on the start side, excludes on the end
-                side — keeps the persistent block compact rather than
-                stacking + double-widthing into a full-row position
-                picker that pushes the card height past the viewport. */}
-            <PositionPicker
-              value={persistentPosition}
-              onChange={onPersistentPosition}
-            />
-            <div className="flex flex-col gap-1.5">
-              <Pill
-                active={persistentExcludeCover}
-                onClick={() => onPersistentExcludeCover(!persistentExcludeCover)}
-              >
-                استثناء الغلاف
-              </Pill>
-              <Pill
-                active={persistentExcludeClosing}
-                onClick={() => onPersistentExcludeClosing(!persistentExcludeClosing)}
-              >
-                استثناء الشكر
-              </Pill>
-            </div>
+        {/* Position picker is ALWAYS rendered so the card height
+            doesn't jump when the user starts typing. Controls are
+            disabled (faded) until there's text — same affordance
+            as the toolbar's disabled-but-visible chips. */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <PositionPicker
+            value={persistentPosition}
+            onChange={onPersistentPosition}
+            disabled={!persistentText.trim()}
+          />
+          <div className="flex flex-col gap-1.5">
+            <Pill
+              active={persistentExcludeCover}
+              onClick={() => onPersistentExcludeCover(!persistentExcludeCover)}
+              disabled={!persistentText.trim()}
+            >
+              استثناء الغلاف
+            </Pill>
+            <Pill
+              active={persistentExcludeClosing}
+              onClick={() => onPersistentExcludeClosing(!persistentExcludeClosing)}
+              disabled={!persistentText.trim()}
+            >
+              استثناء الشكر
+            </Pill>
           </div>
-        ) : null}
+        </div>
       </div>
     </CardShell>
   );
@@ -527,11 +539,14 @@ function ContentCard({
   return (
     <CardShell title="المحتوى" icon="tune">
       {/* Slide count — "طابق الملف" pill renders ONLY when the
-          source content was a file upload (text-only briefs have
-          no page count to match). */}
+          source content was a file upload. Custom input sits INLINE
+          on the same row as the pills (was previously wrapping to
+          the next line when the row exceeded card width); tight
+          `gap-1.5` + compact `w-14` input keeps everything on one
+          row at the card's ~280 px content width. */}
       <div className="space-y-2">
         <SectionLabel icon="format_list_numbered">عدد الشرائح</SectionLabel>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Pill active={slideCountMode === "auto"} onClick={() => onSlideCountMode("auto")}>
             تلقائي
           </Pill>
@@ -550,13 +565,19 @@ function ContentCard({
             مخصص
           </Pill>
           {slideCountMode === "custom" ? (
+            // `.input-dark` ships with `width: 100%` which overrides
+            // Tailwind's `w-14` utility (same specificity, later
+            // source order). Inline `width: 56px` is the reliable
+            // way to pin the compact size so the input fits on the
+            // same row as the pills.
             <input
               type="number"
               min={1}
               max={20}
               value={slideCountValue}
               onChange={(e) => onSlideCountValue(Number(e.target.value))}
-              className="input-dark w-20"
+              className="input-dark px-2 py-1 text-sm"
+              style={{ width: 56 }}
             />
           ) : null}
         </div>

@@ -185,6 +185,10 @@ button, a, [role="button"] {
   width: 100%;
   outline: none;
   transition: border-color 0.2s ease, background 0.2s ease;
+  /* `color-scheme: dark` makes native popups (e.g. <select> dropdown
+     options, calendar pickers) render with dark chrome on macOS so
+     they match the rest of the glass surface. */
+  color-scheme: dark;
 }
 
 .input-dark:focus {
