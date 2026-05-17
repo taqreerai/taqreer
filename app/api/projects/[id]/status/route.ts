@@ -6,6 +6,10 @@ type Progress = {
   stage: "thinking" | "designing" | "validating" | "saving";
   currentSlide: number;
   estimatedTotal: number;
+  // Most-recent short caption pulled from Claude's adaptive-thinking
+  // stream. Replaces the static FAKE_FEEDBACK rotation in DeckView.
+  // null on the first few hundred ms before any thinking text lands.
+  latestThought?: string | null;
 };
 
 type SlideJson = {
