@@ -123,7 +123,7 @@ Pick top/side insets on slide 1 and reuse identically on EVERY slide. Scale to t
 <div dir="rtl" style="position:relative; width:<W>px; height:<H>px; background:var(--brand-bg); overflow:hidden;">
   <div style="position:absolute; inset:0; pointer-events:none;"><!-- background SVGs / or solid --></div>
   <div style="position:absolute; top:<N>px; left:<N>px; right:<N>px; bottom:140px;"><!-- all content lives here --></div>
-  <!-- chrome (logo / pagination / persistent text) sit on top of the slide root with their own `position:absolute` per USER RULES. Body content stops above this 140 px footer strip. -->
+  <!-- chrome (logo / pagination / persistent text) sit on top of the slide root with their own \`position:absolute\` per USER RULES. Body content stops above this 140 px footer strip. -->
 </div>
 \`\`\`
 Don't bypass with \`position:absolute; left:0; right:0; bottom:0\` on the slide root or on a "full bleed" wrapper — bottom must always land at or above the 140 px footer band so chrome doesn't overlap the slide's body.
