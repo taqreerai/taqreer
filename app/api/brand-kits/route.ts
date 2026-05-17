@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
-import { signBrandAssetUrl } from "@/lib/storage/sign";
+import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -10,6 +10,9 @@ function toJson(value: unknown): Prisma.InputJsonValue {
 
 // Resolve the authed user → internal DB user id. Returns null on either
 // "no session" or "user not yet synced" (treat both as 401/404).
+// `supabaseUserId` is exposed for downstream authorization checks (e.g.
+// validating that a posted `storageUrl` lives in the caller's upload
+// namespace).
 async function resolveUser() {
   const supabase = await createClient();
   const {
@@ -21,7 +24,7 @@ async function resolveUser() {
     select: { id: true },
   });
   if (!dbUser) return { error: "User not found" as const, status: 404 };
-  return { userId: dbUser.id };
+  return { userId: dbUser.id, supabaseUserId: user.id };
 }
 
 // Save the brand-page state as a BrandKit. Now stores the FULL state —
@@ -54,6 +57,24 @@ export async function POST(request: Request) {
   // — matches the dashboard's "every number is 0-9" standard.
   const fallbackName = `هوية بصرية — ${new Date().toLocaleDateString("ar-u-nu-latn")}`;
   const name = (body.name?.trim() || fallbackName).slice(0, 120);
+
+  // AUTHORIZE the storage path before we persist it. The brand-assets
+  // bucket is private and `GET /api/brand-kits` later re-signs whatever
+  // we store with service-role privileges — accepting an arbitrary path
+  // would let any authed user mint signed URLs for any object whose key
+  // they can guess. Path always starts with the uploader's supabase
+  // user id (see app/api/storage/upload/route.ts), so a startsWith()
+  // check covers ownership without needing a separate asset record.
+  if (
+    body.logo &&
+    typeof body.logo.storageUrl === "string" &&
+    !isOwnedBrandAssetPath(body.logo.storageUrl, ctx.supabaseUserId)
+  ) {
+    return NextResponse.json(
+      { error: "Logo storageUrl is not owned by the current user" },
+      { status: 403 },
+    );
+  }
 
   // Allowlist the persisted logo shape — `previewDataUrl` can be a base64
   // image that bloats the row (and every GET /api/brand-kits response, up

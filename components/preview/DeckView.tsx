@@ -56,6 +56,14 @@ type Progress = {
   // older in-flight runs (pre-deploy) won't have it; in that case the
   // client falls back to mount-time `Date.now()` as before.
   genStartedAt?: string;
+  // Live thinking-phase telemetry — populated by deck-generate's
+  // `stream.on("thinking", …)` handler. Both optional because older
+  // in-flight runs / the fast tier (thinking disabled) won't carry
+  // them. We surface "thinkingTokens / thinkingBudget" in the
+  // caption so the user sees forward motion during the silent
+  // pre-output thinking phase.
+  thinkingTokens?: number;
+  thinkingBudget?: number;
 };
 
 function isProgress(value: unknown): value is Progress {
@@ -68,20 +76,16 @@ function isProgress(value: unknown): value is Progress {
   );
 }
 
-// Cosmetic rotating captions for the generating screen. They rotate
-// independently of the real per-slide progress (which now lives on the
-// current placeholder card), giving the user a sense of momentum even when
-// Claude pauses between slides.
-const FAKE_FEEDBACK = [
-  "إعداد نظام الألوان...",
-  "البحث في تصاميم التخطيط...",
-  "تحسين بنية العرض...",
-  "تنسيق المحتوى مع الهوية البصرية...",
-  "اختيار الخطوط المناسبة...",
-  "ضبط التباين والحدود...",
-  "ترتيب العناصر على الشبكة...",
-  "تجهيز الشرائح...",
-];
+// Compact human-readable token count. Sub-thousand: bare integer.
+// Mid-range (1k–10k): one decimal place (e.g. 3.2k). 10k+: rounded
+// integer (e.g. 12k). Keeps the caption short and readable while the
+// budget grows during the thinking phase.
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "0";
+  if (n < 1000) return `${Math.round(n)}`;
+  if (n >= 10000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1000).toFixed(1)}k`;
+}
 
 // Map the streaming progress to a 0..100 % bar. Thinking gets a small head
 // start so the bar never sits at 0 while Claude warms up. Designing fills the
@@ -173,11 +177,6 @@ export function DeckView({
   const [retryError, setRetryError] = useState("");
   // Polling sets this when it sees a failed status arrive after mount.
   const [polledFailure, setPolledFailure] = useState(false);
-  // Rotating fake-feedback caption shown under the page title while
-  // generating. `fakeIdx` advances on a 2.5 s timer; `fakeVisible` drives a
-  // 300 ms opacity crossfade between messages.
-  const [fakeIdx, setFakeIdx] = useState(0);
-  const [fakeVisible, setFakeVisible] = useState(true);
 
   // Generation-clock state. SLOW threshold (6 min) flips an in-page
   // caption ("الخادم تحت ضغط عالٍ حالياً") so the user sees the run
@@ -409,21 +408,6 @@ export function DeckView({
       window.clearInterval(interval);
     };
   }, [projectId, status, router]);
-
-  // Drive the rotating fake-feedback caption while generating. Each cycle
-  // fades the current message out (300 ms), swaps the index, and fades the
-  // next one in.
-  useEffect(() => {
-    if (status !== "generating") return;
-    const id = window.setInterval(() => {
-      setFakeVisible(false);
-      window.setTimeout(() => {
-        setFakeIdx((current) => (current + 1) % FAKE_FEEDBACK.length);
-        setFakeVisible(true);
-      }, 300);
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [status]);
 
   // Start the generation clock when we first enter `generating`. Prefer
   // the server-persisted `progress.genStartedAt` (ISO from the Inngest
@@ -933,12 +917,27 @@ export function DeckView({
               <h1 className="font-headline-lg text-[28px] font-bold">
                 جارٍ تصميم عرضك...
               </h1>
+              {/* Live progress caption. Was a rotating set of cosmetic
+                  captions — now derived from the real stage signal:
+                  thinking-token counter during the silent thinking
+                  phase, slide-being-designed during the streaming
+                  phase, validating / saving on the tail. The spinner
+                  spins for as long as the run is generating; the
+                  caption text changes in place. */}
               <div className="text-muted flex items-center justify-center gap-3 text-sm">
                 <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-                <span
-                  className={`transition-opacity duration-300 ${fakeVisible ? "opacity-100" : "opacity-0"}`}
-                >
-                  {FAKE_FEEDBACK[fakeIdx]}
+                <span>
+                  {progress?.stage === "thinking" && progress.thinkingBudget
+                    ? `التفكير: ${formatTokens(progress.thinkingTokens ?? 0)} / ${formatTokens(progress.thinkingBudget)} رمز`
+                    : progress?.stage === "thinking"
+                      ? "بدء التفكير..."
+                      : progress?.stage === "validating"
+                        ? "التحقق من المخرجات..."
+                        : progress?.stage === "saving"
+                          ? "حفظ العرض..."
+                          : progress?.currentSlide
+                            ? `جارٍ تصميم الشريحة ${progress.currentSlide} من ${total}`
+                            : "بدء التصميم..."}
                 </span>
               </div>
               <div className="w-full max-w-md">
@@ -955,11 +954,6 @@ export function DeckView({
                   {percent}% · {progress?.currentSlide ?? 0} / {total}
                 </p>
               </div>
-              <span className="text-xs text-white/70">
-                {progress?.currentSlide
-                  ? `جارٍ تصميم الشريحة ${progress.currentSlide} من ${total}`
-                  : "بدء التصميم..."}
-              </span>
               {isSlow && (
                 <span className="text-[11px] leading-relaxed text-white/60">
                   الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي

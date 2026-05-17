@@ -165,6 +165,11 @@ export default function CreateContentPage() {
   const removeFile = () => {
     setFile(null);
     setLoadedFileMeta(null);
+    // Reset the native input so re-selecting the SAME file fires onChange
+    // again. Without this, the input's `value` still points at the removed
+    // file and the browser de-dupes — the user clicks "select" again,
+    // picks the same file, and nothing happens.
+    if (inputRef.current) inputRef.current.value = "";
     if (typeof window !== "undefined") {
       const existing = window.sessionStorage.getItem(CONTENT_KEY);
       if (existing) {

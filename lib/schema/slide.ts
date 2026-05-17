@@ -164,7 +164,9 @@ export const SlideManifestSchema = z.object({
       // shape and any other ISO-ish format `Date.parse` understands.
       genStartedAt: z
         .string()
-        .refine((s) => !s || !Number.isNaN(Date.parse(s)), {
+        .trim()
+        .min(1)
+        .refine((s) => !Number.isNaN(Date.parse(s)), {
           message: "genStartedAt must be a parseable ISO timestamp",
         })
         .optional(),

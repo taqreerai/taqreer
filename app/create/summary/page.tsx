@@ -341,6 +341,15 @@ export default function CreateSummaryPage() {
                 }}
                 aria-label="الشعار"
               />
+            ) : brand?.logo?.storageUrl ? (
+              // Brand kits restored from /api/brand-kits hydrate with a
+              // signed `storageUrl` but no inline `previewDataUrl` (we
+              // dropped the base64 preview to keep rows small — see
+              // brand-kits POST). The kit DOES carry a logo; we just
+              // don't have a base64 thumbnail to render here. Show a
+              // confirmation label so the user doesn't think the logo
+              // was lost between the brand page and summary.
+              <span className="text-xs text-white/60">تم إرفاق شعار</span>
             ) : (
               <span className="text-xs text-white/40">بدون شعار</span>
             )}

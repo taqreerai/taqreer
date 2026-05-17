@@ -563,6 +563,27 @@ function BrandColorRow({
 // fires once per mount per call site.
 type StoredBrandShape = {
   colors?: unknown;
+  // Persisted font selections (heading + body) — written by the
+  // brand page on `handleNext`. Each slot mirrors what's sent to
+  // /api/projects: `name`, `storageUrl`, `url`, `family`. The
+  // uploaded File itself can't round-trip through sessionStorage,
+  // but everything else (Google family name, uploaded storageUrl,
+  // typed family) can — restoring them keeps the selectors populated
+  // when the user navigates back from a later step.
+  fonts?: {
+    heading?: {
+      name?: string | null;
+      storageUrl?: string | null;
+      url?: string | null;
+      family?: string | null;
+    } | null;
+    body?: {
+      name?: string | null;
+      storageUrl?: string | null;
+      url?: string | null;
+      family?: string | null;
+    } | null;
+  } | null;
   logo?: {
     name?: string;
     storageUrl?: string;
@@ -599,13 +620,20 @@ export default function CreateBrandPage() {
   // on the server; the `useLayoutEffect` below restores the user's
   // saved colours before paint (no flash).
   const [colors, setColors] = useState<string[]>(DEFAULT_COLORS);
-  // Restore colours from sessionStorage post-hydration. useLayoutEffect
-  // (not useEffect) so the swap happens BEFORE the browser paints —
-  // user never sees the default-palette flash if they're returning
-  // from a later step with their picked palette in storage.
+  // Restore colours + font selections from sessionStorage post-hydration.
+  // useLayoutEffect (not useEffect) so the swap happens BEFORE the browser
+  // paints — user never sees the default-palette / empty-font-selectors
+  // flash if they're returning from a later step with their picks already
+  // saved. The uploaded File itself can't be reconstructed (binary blobs
+  // don't round-trip through sessionStorage), so for slots that were in
+  // upload mode we restore the metadata (name + storageUrl + family) but
+  // leave `uploadFile: null` — the slot displays as "filled" via the
+  // stored name/url, and the user can re-pick only if they want to
+  // replace it.
   useLayoutEffect(() => {
     const s = readStoredBrand();
-    if (s && Array.isArray(s.colors)) {
+    if (!s) return;
+    if (Array.isArray(s.colors)) {
       const valid = (s.colors as unknown[]).filter(
         (c): c is string => typeof c === "string",
       );
@@ -613,6 +641,51 @@ export default function CreateBrandPage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setColors(valid.slice(0, MAX_COLORS));
       }
+    }
+    const restoreSlot = (
+      saved:
+        | { name?: string | null; storageUrl?: string | null; url?: string | null; family?: string | null }
+        | null
+        | undefined,
+    ): FontSlotState | null => {
+      if (!saved) return null;
+      // Google-family slot: `url` is set (Google CSS link) and
+      // `storageUrl` is null. Stored `name`/`family` matches the
+      // Google family.
+      if (saved.url && !saved.storageUrl) {
+        return {
+          mode: "google",
+          uploadFile: null,
+          uploadName: null,
+          uploadStorageUrl: null,
+          uploadFamily: "",
+          googleFamily: saved.family || saved.name || null,
+        };
+      }
+      // Upload slot: `storageUrl` is set (Supabase path), `name` is
+      // the original filename. The File blob is gone — slot still
+      // reads as filled via name + storageUrl.
+      if (saved.storageUrl) {
+        return {
+          mode: "upload",
+          uploadFile: null,
+          uploadName: saved.name ?? null,
+          uploadStorageUrl: saved.storageUrl,
+          uploadFamily: saved.family ?? "",
+          googleFamily: null,
+        };
+      }
+      return null;
+    };
+    const heading = restoreSlot(s.fonts?.heading);
+    if (heading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHeadingFontSlot(heading);
+    }
+    const body = restoreSlot(s.fonts?.body);
+    if (body) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBodyFontSlot(body);
     }
   }, []);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("manual");
@@ -1470,6 +1543,28 @@ export default function CreateBrandPage() {
                     setLogo(null);
                     setLoadedLogoMeta(null);
                     setLogoPreview("");
+                    // Clear the draft logo from sessionStorage too — the
+                    // accept path auto-saves into `taqreer:create:brand`,
+                    // so without this a refresh / nav-away-and-back would
+                    // resurrect the deleted logo. Best-effort: if storage
+                    // is blocked (private mode etc.) we still clear
+                    // in-memory state above.
+                    if (typeof window !== "undefined") {
+                      try {
+                        const raw = window.sessionStorage.getItem("taqreer:create:brand");
+                        if (raw) {
+                          const blob = JSON.parse(raw) as Record<string, unknown>;
+                          blob.logo = null;
+                          window.sessionStorage.setItem(
+                            "taqreer:create:brand",
+                            JSON.stringify(blob),
+                          );
+                          notifyCreateStateChange();
+                        }
+                      } catch {
+                        /* best effort — storage may be blocked */
+                      }
+                    }
                   }}
                   className="badge-purple flex items-center gap-1"
                 >

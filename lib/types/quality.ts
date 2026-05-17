@@ -44,3 +44,40 @@ export function estimateMinutes(quality: Quality, slideCount: number): number {
   const totalSecs = preset.baseOverheadSecs + preset.secsPerSlide * slideCount;
   return Math.max(1, Math.round(totalSecs / 60));
 }
+
+// Auto slide-count from raw input text. Used when the user opts out of
+// picking an explicit count (`slideCountMode: "auto"` on /create/summary)
+// — instead of letting Claude pick "somewhere in 8–12" the brief carries
+// an exact count derived from the input length.
+//
+// Formula:
+//   words      = whitespace-tokenized count, with stray punctuation
+//                stripped so "x." and "y!" don't inflate the count
+//   per_slide  = 100 words is a comfortable editorial slide density
+//                (room for a headline + 2–3 short paragraphs or a
+//                stat block). Lower density reads padded; higher
+//                density overflows on RTL.
+//   content    = ceil(words / per_slide), floored at 3 so we always
+//                have a real middle even on tiny inputs
+//   total      = content + 2 — one slide reserved for the cover,
+//                one for the closing / thank-you frame
+//   clamp      = [5, 20] so we never go below "cover + 3 body +
+//                closing" and never balloon past a sensible upper
+//                bound (Sonnet starts dropping quality past ~20)
+//
+// Returns null when the text is empty / whitespace-only — caller
+// should fall back to its own default (typically 8).
+export function estimateSlideCountFromText(text: string | null | undefined): number | null {
+  if (!text || typeof text !== "string") return null;
+  const cleaned = text
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length === 0) return null;
+  const words = cleaned.split(" ").filter(Boolean).length;
+  if (words === 0) return null;
+  const PER_SLIDE = 100;
+  const contentSlides = Math.max(3, Math.ceil(words / PER_SLIDE));
+  const total = contentSlides + 2;
+  return Math.max(5, Math.min(20, total));
+}

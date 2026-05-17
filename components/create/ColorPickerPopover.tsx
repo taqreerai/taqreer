@@ -173,10 +173,28 @@ export function ColorPickerPopover({
     hsvRef.current = hsv;
   }, [hsv]);
 
+  // Stash the currently-active drag's `pointerup` handler so we can
+  // run it on unmount / popover-close. Without this, closing the
+  // popover (or unmounting the parent) MID-DRAG leaves the
+  // `pointermove` / `pointerup` listeners attached to `window` —
+  // they keep firing against a dead React tree until the page
+  // reloads. The handler removes BOTH listeners and itself.
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+      dragCleanupRef.current = null;
+    };
+  }, []);
+
   const dragSv = (event: React.PointerEvent) => {
     event.preventDefault();
     const rect = svRef.current?.getBoundingClientRect();
     if (!rect) return;
+    // If a previous drag is somehow still active (shouldn't happen
+    // for the same gesture, but defensive), tear it down before
+    // starting the next.
+    dragCleanupRef.current?.();
     const apply = (clientX: number, clientY: number) => {
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
       const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
@@ -196,15 +214,18 @@ export function ColorPickerPopover({
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      dragCleanupRef.current = null;
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    dragCleanupRef.current = onUp;
   };
 
   const dragHue = (event: React.PointerEvent) => {
     event.preventDefault();
     const rect = hueRef.current?.getBoundingClientRect();
     if (!rect) return;
+    dragCleanupRef.current?.();
     const apply = (clientX: number) => {
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
       const h = (x / rect.width) * 360;
@@ -221,9 +242,11 @@ export function ColorPickerPopover({
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      dragCleanupRef.current = null;
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    dragCleanupRef.current = onUp;
   };
 
   const onHexChange = (next: string) => {

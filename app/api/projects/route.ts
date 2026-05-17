@@ -4,8 +4,13 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
-import { signBrandAssetUrl } from "@/lib/storage/sign";
-import { DEFAULT_QUALITY, isQuality, type Quality } from "@/lib/types/quality";
+import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
+import {
+  DEFAULT_QUALITY,
+  estimateSlideCountFromText,
+  isQuality,
+  type Quality,
+} from "@/lib/types/quality";
 
 // Fetch the logo SVG content via the admin storage client (bucket is private)
 // and return sanitised markup. Sanitisation here is a defence-in-depth pass —
@@ -205,6 +210,18 @@ export async function POST(request: Request) {
     const bodyFontStorageUrl = incomingFonts?.body?.storageUrl || null;
     const bodyFontUrl = incomingFonts?.body?.url || null;
     const logoPath = payload.brand?.logo?.storageUrl ?? null;
+    // AUTHORIZE the logo path before we touch Supabase. The helpers below
+    // both run with service-role credentials (signed URL → embedded in
+    // brief; SVG markup → inlined into the Claude prompt and every
+    // slide), so an unowned path would leak any object whose key the
+    // attacker can guess. Match by the upload namespace prefix (the
+    // upload route writes `${supabaseUserId}/create/...` paths).
+    if (logoPath && !isOwnedBrandAssetPath(logoPath, user.id)) {
+      return NextResponse.json(
+        { error: "Logo storageUrl is not owned by the current user" },
+        { status: 403 },
+      );
+    }
     // Fetch sign URL + SVG markup in parallel — both hit Supabase Storage so
     // pipelining saves a round trip. svgMarkup is the Option B addition:
     // Claude inlines the SVG directly per slide and overrides `fill` for
@@ -256,6 +273,17 @@ export async function POST(request: Request) {
         }
       : payload.brand;
 
+    // Auto slide-count when the user defers ("auto" mode on /create/summary):
+    // estimate from the input text (cover + content slides distributed at
+    // ~100 words/slide + closing). For file uploads we don't have the text
+    // in-hand, so fall back to null and let the prompt's "8–12 if unset"
+    // guidance stand. See estimateSlideCountFromText for the formula.
+    const resolvedSlideCount =
+      payload.slideCount ??
+      (payload.content?.type === "text"
+        ? estimateSlideCountFromText(payload.content.text)
+        : null);
+
     const brief = {
       title,
       language: "ar",
@@ -263,7 +291,7 @@ export async function POST(request: Request) {
       content: payload.content,
       brand: claudeBrand,
       rules: payload.rules ?? null,
-      slideCount: payload.slideCount,
+      slideCount: resolvedSlideCount,
     };
     // Quality preset — user-picked on /create/summary. Validated
     // here so a malformed value can't drive the Claude call params.
@@ -330,7 +358,7 @@ export async function POST(request: Request) {
             brand: payload.brand,
             enhance: payload.enhance,
             rules: payload.rules,
-            slideCount: payload.slideCount,
+            slideCount: resolvedSlideCount,
           }),
         },
       });

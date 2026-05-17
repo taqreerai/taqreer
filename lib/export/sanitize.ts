@@ -119,7 +119,7 @@ export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
     const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
-    return flipRtlBackgroundLayers(rewritePhysicalToLogical(clean));
+    return rewritePhysicalToLogical(clean);
   } catch (err) {
     console.error("[sanitize] sanitiseSlideHtml failed:", err);
     return "";
@@ -155,46 +155,24 @@ const PHYSICAL_TO_LOGICAL: Record<string, string> = {
   "border-right-style": "border-inline-end-style",
 };
 
-function rewriteStyleAttr(style: string): string {
-  // Split on `;`, transform each `prop:value` pair individually.
-  // Whitespace + casing preserved on the value half so colours, urls,
-  // etc. round-trip unchanged.
-  return style
-    .split(";")
-    .map((decl) => {
-      const colonIdx = decl.indexOf(":");
-      if (colonIdx === -1) return decl;
-      const prop = decl.slice(0, colonIdx).trim().toLowerCase();
-      const value = decl.slice(colonIdx + 1);
-      const logicalProp = PHYSICAL_TO_LOGICAL[prop];
-      if (logicalProp) {
-        // Preserve the original leading whitespace on the declaration
-        // (e.g. `" padding-left"` → `" padding-inline-start"`) so the
-        // serialised style attr stays tidy.
-        const lead = decl.slice(0, decl.toLowerCase().indexOf(prop));
-        return `${lead}${logicalProp}:${value}`;
-      }
-      // `text-align` intentionally NOT rewritten. It controls how the
-      // text sits inside its OWN box, not the box's position on the
-      // slide — `text-align: left` on a box that lives on the visual
-      // left edge should keep aligning to the box's left edge in any
-      // direction. Flipping it to `start` causes RTL slides to flush
-      // that text to the box's right, which is the wrong corner for
-      // anything Claude intentionally pinned to a physical side.
-      if (prop === "float") {
-        const v = value.trim().toLowerCase();
-        if (v === "left") return decl.replace(/left/i, "inline-start");
-        if (v === "right") return decl.replace(/right/i, "inline-end");
-      }
-      return decl;
-    })
-    .join(";");
-}
-
 // Walk the sanitised slide markup and rewrite every inline `style` attr.
 // `<style>` blocks intentionally NOT touched — Claude rarely emits them
 // and the regex-on-CSS-text risk (false positives in selectors / urls /
 // keyframe % values) outweighs the benefit at the volume we see.
+//
+// Operates on each element's live `CSSStyleDeclaration` rather than
+// string-splitting on `;` — a naive split would corrupt values that
+// legitimately carry semicolons inside parens (e.g. `background-image:
+// url(data:image/svg+xml;base64,…)`) by treating the inner `;` as a
+// declaration boundary.
+//
+// `text-align` intentionally NOT rewritten. It controls how the text
+// sits inside its OWN box, not the box's position on the slide —
+// `text-align: left` on a box that lives on the visual left edge
+// should keep aligning to the box's left edge in any direction.
+// Flipping it to `start` causes RTL slides to flush that text to the
+// box's right, which is the wrong corner for anything Claude
+// intentionally pinned to a physical side.
 //
 // Opt-out: elements carrying `data-anchor` are skipped. Used by chrome
 // (logo, pagination) where the position is a physical corner the user
@@ -210,85 +188,37 @@ function rewritePhysicalToLogical(html: string): string {
     );
     const root = doc.body.firstElementChild;
     if (!root) return html;
-    const els = root.querySelectorAll("[style]:not([data-anchor]):not([data-anchor] *)");
+    const els = root.querySelectorAll<HTMLElement>(
+      "[style]:not([data-anchor]):not([data-anchor] *)",
+    );
     let changed = false;
     els.forEach((el) => {
-      const original = el.getAttribute("style") ?? "";
-      const rewritten = rewriteStyleAttr(original);
-      if (rewritten !== original) {
-        el.setAttribute("style", rewritten);
-        changed = true;
+      const before = el.style.cssText;
+      for (const [physical, logical] of Object.entries(PHYSICAL_TO_LOGICAL)) {
+        const value = el.style.getPropertyValue(physical);
+        if (!value) continue;
+        const priority = el.style.getPropertyPriority(physical);
+        el.style.removeProperty(physical);
+        el.style.setProperty(logical, value, priority);
       }
+      const floatValue = el.style
+        .getPropertyValue("float")
+        .trim()
+        .toLowerCase();
+      if (floatValue === "left" || floatValue === "right") {
+        const priority = el.style.getPropertyPriority("float");
+        el.style.setProperty(
+          "float",
+          floatValue === "left" ? "inline-start" : "inline-end",
+          priority,
+        );
+      }
+      if (el.style.cssText !== before) changed = true;
     });
     return changed ? root.innerHTML : html;
   } catch {
     // DOMParser failure is unexpected in a browser context; return the
     // unmodified sanitised HTML rather than swallowing the slide.
-    return html;
-  }
-}
-
-// Claude often emits a single full-canvas background SVG with shapes
-// at hardcoded coordinates (`circle cx="1600"`, `rect x="0"`, etc.).
-// He designs LTR-style — a glow on the "title side" lands at x=1600
-// (the visual right of the 1920 canvas). In an RTL slide that's the
-// OPPOSITE side from where the Arabic text actually flows, so the
-// composition reads broken.
-//
-// We can't rewrite SVG inner coordinates safely (path data, transform
-// matrices, etc.). The clean fix is to mirror the WHOLE background
-// layer horizontally — `transform: scaleX(-1)` on the wrapper. All
-// shape positions, gradient directions, and decorations flip as one
-// unit.
-//
-// Skip if the SVG contains a `<text>` element — flipping would
-// mirror the letters too and render them backwards. Decorative big-
-// number features ("2030" watermark) live there sometimes; we trade
-// the slight asymmetry for legibility.
-//
-// Skip if the wrapper carries `data-no-flip` — escape hatch for
-// future cases where Claude intentionally designs a bg that should
-// stay un-mirrored.
-function flipRtlBackgroundLayers(html: string): string {
-  if (typeof window === "undefined") return html;
-  try {
-    const doc = new DOMParser().parseFromString(
-      `<!DOCTYPE html><div>${html}</div>`,
-      "text/html",
-    );
-    const root = doc.body.firstElementChild;
-    if (!root) return html;
-    // Find the slide root — first <div dir="rtl">. LTR slides skip
-    // this whole pass since their physical coordinates already match
-    // visual intent.
-    const slideRoot = root.querySelector('div[dir="rtl"]');
-    if (!slideRoot) return html;
-    // Background-layer pattern: position:absolute + inset:0 + an SVG
-    // child. Whitespace inside the style attribute is normalised so
-    // both `inset:0` and `inset: 0` match.
-    const candidates = Array.from(slideRoot.children).filter((el) => {
-      if (!(el instanceof HTMLElement)) return false;
-      if (el.tagName.toLowerCase() !== "div") return false;
-      if (el.hasAttribute("data-no-flip")) return false;
-      const style = (el.getAttribute("style") ?? "").replace(/\s+/g, "");
-      if (!/position:absolute/i.test(style)) return false;
-      if (!/inset:0/i.test(style)) return false;
-      if (!el.querySelector("svg")) return false;
-      // Bail if SVG content includes text — mirroring letters would
-      // render them backwards.
-      if (el.querySelector("text")) return false;
-      return true;
-    });
-    if (candidates.length === 0) return html;
-    candidates.forEach((el) => {
-      const style = el.getAttribute("style") ?? "";
-      // Already flipped (idempotent).
-      if (/scaleX\(-1\)|scale\(-1\b/i.test(style)) return;
-      const sep = style.length > 0 && !style.trim().endsWith(";") ? ";" : "";
-      el.setAttribute("style", `${style}${sep}transform:scaleX(-1);`);
-    });
-    return root.innerHTML;
-  } catch {
     return html;
   }
 }
