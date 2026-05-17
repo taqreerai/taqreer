@@ -232,9 +232,11 @@ export function ColorPickerPopover({
     onChange(preset);
   };
 
-  // Anchor mode → absolute-position class. "center" uses
-  // `left: 50%; translateX(-50%)`; the other two just stick to the
-  // matching edge.
+  // Anchor wrapper handles positioning; the motion.div inside owns
+  // animation transforms. Framer Motion's `scale` / `y` apply via
+  // CSS `transform`, which would clobber `translateX(-50%)` if both
+  // lived on the same element — split into two wrappers to keep
+  // the centering math out of Framer's hands.
   const positionStyle: React.CSSProperties = (() => {
     if (align === "start") return { left: 0 };
     if (align === "end") return { right: 0 };
@@ -244,6 +246,10 @@ export function ColorPickerPopover({
   return (
     <AnimatePresence>
       {open ? (
+        <div
+          className="absolute top-full z-30 mt-2"
+          style={{ ...positionStyle, width: 240 }}
+        >
         <motion.div
           ref={wrapperRef}
           initial={{ opacity: 0, scale: 0.9, y: -6 }}
@@ -251,15 +257,13 @@ export function ColorPickerPopover({
           exit={{ opacity: 0, scale: 0.9, y: -6 }}
           transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
-          className="backdrop-blur-glass absolute top-full z-30 mt-2 rounded-2xl border p-3 shadow-2xl"
+          className="backdrop-blur-glass rounded-2xl border p-3 shadow-2xl"
           // Solid-ish backdrop tint (not just glass-opacity) so the
           // SV gradient stays readable over busy backgrounds. Border
           // still uses the user's glass-border preset for cohesion.
           style={{
-            ...positionStyle,
             background: "rgba(15, 11, 30, 0.92)",
             borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-            width: 240,
           }}
         >
           {/* SV plane — saturation on X, value on Y. The base layer
@@ -337,6 +341,7 @@ export function ColorPickerPopover({
             ))}
           </div>
         </motion.div>
+        </div>
       ) : null}
     </AnimatePresence>
   );

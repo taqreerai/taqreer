@@ -500,19 +500,19 @@ function BrandColorRow({
   removable,
   onChange,
   onRemove,
-  pickerAlign,
 }: {
   value: string;
   index: number;
   removable: boolean;
   onChange: (next: string) => void;
   onRemove: () => void;
-  pickerAlign: "start" | "center" | "end";
 }) {
   // Swatch → opens the custom ColorPickerPopover (replaces the OS
   // `<input type="color">` so the picker honours our glass chrome).
-  // The remove (×) is overlaid on the swatch corner so the row is
-  // just one element — no separate icon slot competing for width.
+  // Popover always centers on the swatch — `align` is omitted so
+  // the component falls back to its "center" default. Edge swatches
+  // may extend the popover past the card boundary; that's fine,
+  // overlapping siblings is normal popover behaviour.
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <div className="relative">
@@ -543,7 +543,6 @@ function BrandColorRow({
         value={value}
         onChange={onChange}
         onClose={() => setPickerOpen(false)}
-        align={pickerAlign}
       />
     </div>
   );
@@ -1329,26 +1328,16 @@ export default function CreateBrandPage() {
               // = 2 rows. At MIN (1) → swatch + dashed add-tile sits
               // on row 1 only, still bounded by the wrapper height.
               <div className="grid grid-cols-3 gap-2">
-                {colors.map((color, index) => {
-                  // 3-col grid: col 0 → "start" (popover extends to
-                  // the end side), col 2 → "end" (extends to start
-                  // side), col 1 → centered. RTL → "start" = right
-                  // edge, "end" = left edge.
-                  const col = index % 3;
-                  const align: "start" | "center" | "end" =
-                    col === 0 ? "start" : col === 2 ? "end" : "center";
-                  return (
-                    <BrandColorRow
-                      key={index}
-                      value={color}
-                      index={index}
-                      removable={colors.length > MIN_COLORS}
-                      onChange={(next) => updateColor(index, next)}
-                      onRemove={() => removeColor(index)}
-                      pickerAlign={align}
-                    />
-                  );
-                })}
+                {colors.map((color, index) => (
+                  <BrandColorRow
+                    key={index}
+                    value={color}
+                    index={index}
+                    removable={colors.length > MIN_COLORS}
+                    onChange={(next) => updateColor(index, next)}
+                    onRemove={() => removeColor(index)}
+                  />
+                ))}
                 {colors.length < MAX_COLORS ? (
                   <button
                     type="button"
