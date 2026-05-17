@@ -119,7 +119,7 @@ export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
     const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
-    return rewritePhysicalToLogical(clean);
+    return flipRtlBackgroundLayers(rewritePhysicalToLogical(clean));
   } catch (err) {
     console.error("[sanitize] sanitiseSlideHtml failed:", err);
     return "";
@@ -224,6 +224,71 @@ function rewritePhysicalToLogical(html: string): string {
   } catch {
     // DOMParser failure is unexpected in a browser context; return the
     // unmodified sanitised HTML rather than swallowing the slide.
+    return html;
+  }
+}
+
+// Claude often emits a single full-canvas background SVG with shapes
+// at hardcoded coordinates (`circle cx="1600"`, `rect x="0"`, etc.).
+// He designs LTR-style — a glow on the "title side" lands at x=1600
+// (the visual right of the 1920 canvas). In an RTL slide that's the
+// OPPOSITE side from where the Arabic text actually flows, so the
+// composition reads broken.
+//
+// We can't rewrite SVG inner coordinates safely (path data, transform
+// matrices, etc.). The clean fix is to mirror the WHOLE background
+// layer horizontally — `transform: scaleX(-1)` on the wrapper. All
+// shape positions, gradient directions, and decorations flip as one
+// unit.
+//
+// Skip if the SVG contains a `<text>` element — flipping would
+// mirror the letters too and render them backwards. Decorative big-
+// number features ("2030" watermark) live there sometimes; we trade
+// the slight asymmetry for legibility.
+//
+// Skip if the wrapper carries `data-no-flip` — escape hatch for
+// future cases where Claude intentionally designs a bg that should
+// stay un-mirrored.
+function flipRtlBackgroundLayers(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    // Find the slide root — first <div dir="rtl">. LTR slides skip
+    // this whole pass since their physical coordinates already match
+    // visual intent.
+    const slideRoot = root.querySelector('div[dir="rtl"]');
+    if (!slideRoot) return html;
+    // Background-layer pattern: position:absolute + inset:0 + an SVG
+    // child. Whitespace inside the style attribute is normalised so
+    // both `inset:0` and `inset: 0` match.
+    const candidates = Array.from(slideRoot.children).filter((el) => {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.tagName.toLowerCase() !== "div") return false;
+      if (el.hasAttribute("data-no-flip")) return false;
+      const style = (el.getAttribute("style") ?? "").replace(/\s+/g, "");
+      if (!/position:absolute/i.test(style)) return false;
+      if (!/inset:0/i.test(style)) return false;
+      if (!el.querySelector("svg")) return false;
+      // Bail if SVG content includes text — mirroring letters would
+      // render them backwards.
+      if (el.querySelector("text")) return false;
+      return true;
+    });
+    if (candidates.length === 0) return html;
+    candidates.forEach((el) => {
+      const style = el.getAttribute("style") ?? "";
+      // Already flipped (idempotent).
+      if (/scaleX\(-1\)|scale\(-1\b/i.test(style)) return;
+      const sep = style.length > 0 && !style.trim().endsWith(";") ? ";" : "";
+      el.setAttribute("style", `${style}${sep}transform:scaleX(-1);`);
+    });
+    return root.innerHTML;
+  } catch {
     return html;
   }
 }
