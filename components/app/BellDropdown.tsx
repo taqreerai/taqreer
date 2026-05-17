@@ -490,10 +490,17 @@ function BellToast({
   );
 }
 
-// Single row used by the dropdown and (with `compact={false}`) by the
-// modal. Layout is RTL-friendly: icon on the start side, text in the
-// middle, timestamp on the end. Renders as a button when the
-// notification carries an href so the row is keyboard-focusable.
+// Single row used by the dropdown, toast (compact=false + showTime=false),
+// and the modal (showDelete=true). Layout is RTL-friendly: icon on the
+// start side, text in the middle, timestamp + expand chevron stacked
+// on the end. Renders as a button when the notification carries an
+// href so the row is keyboard-focusable.
+//
+// Expand: each row owns an `expanded` state that toggles full-text vs
+// truncated. The chevron in the end column rotates 180° when open. We
+// stop-propagation on the toggle so it doesn't also fire the row's
+// onClick (which would navigate via href). Same toggle surface across
+// toast / dropdown / modal so the gesture is one and the same.
 export function NotificationRow({
   n,
   onClick,
@@ -509,6 +516,7 @@ export function NotificationRow({
 }) {
   const visual = KIND_VISUAL[n.kind];
   const clickable = !!n.href || !!onClick;
+  const [expanded, setExpanded] = useState(false);
 
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
@@ -517,6 +525,11 @@ export function NotificationRow({
     },
     [n.id],
   );
+
+  const handleToggleExpand = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded((v) => !v);
+  }, []);
 
   // Outer is a <div> (not <button>) so the inner delete <button> isn't
   // a nested-button hydration error. Keyboard a11y comes via
@@ -536,6 +549,13 @@ export function NotificationRow({
   // Read items mute their content (~50 % opacity) so the eye is drawn
   // to unread items first. Icon stays white for all rows (no kind-tinted
   // colours per the brand rule — kind comes through the glyph only).
+  //
+  // Animation: pure CSS — same vocabulary as the sidebar collapse
+  // (`transition-all duration-300 ease-in-out`). The title + desc
+  // each wrap in a `max-h` container that grows from one line-height
+  // to a generous 200 px when the row toggles open. Framer's
+  // `layout` was producing a `scaleY` transform that distorted the
+  // text mid-animation — CSS max-height keeps the glyphs crisp.
   return (
     <div
       role={clickable ? "button" : undefined}
@@ -558,28 +578,59 @@ export function NotificationRow({
               aria-hidden
             />
           ) : null}
-          <p className="truncate text-[13px] font-medium leading-snug text-white">
+          <p
+            className={`overflow-hidden text-[13px] font-medium leading-snug text-white transition-[max-height] duration-300 ease-in-out ${
+              expanded ? "break-words" : "truncate"
+            }`}
+            style={{ maxHeight: expanded ? 200 : 20 }}
+          >
             {n.title}
           </p>
         </div>
         {n.desc ? (
-          <p className={`mt-1 truncate text-[11px] leading-relaxed text-white/55 ${compact ? "max-w-[220px]" : ""}`}>
+          <p
+            className={`mt-1 overflow-hidden text-[11px] leading-relaxed text-white/55 transition-[max-height] duration-300 ease-in-out ${
+              expanded
+                ? "break-words"
+                : `truncate ${compact ? "max-w-[220px]" : ""}`
+            }`}
+            style={{ maxHeight: expanded ? 200 : 18 }}
+          >
             {n.desc}
           </p>
         ) : null}
       </div>
-      <div className="flex flex-shrink-0 items-center gap-1">
+      {/* End column — time on top, chevron toggle below, delete (if
+          enabled) below that. Flex-col so the chevron always sits
+          under the time when both are shown; for the toast (no time)
+          the chevron sits flush with the close × in the parent. */}
+      <div className="flex flex-shrink-0 flex-col items-end gap-1">
         {showTime ? (
           <span className="text-[10px] text-white/40" dir="ltr">
             {formatNotificationTime(n.createdAt)}
           </span>
         ) : null}
+        <button
+          type="button"
+          onClick={handleToggleExpand}
+          aria-label={expanded ? "طي" : "عرض النص الكامل"}
+          aria-expanded={expanded}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <span
+            className={`material-symbols-outlined text-[16px] transition-transform ${
+              expanded ? "rotate-180" : ""
+            }`}
+          >
+            expand_more
+          </span>
+        </button>
         {showDelete ? (
           <button
             type="button"
             onClick={handleDelete}
             aria-label="حذف"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-white/40 opacity-0 transition-all hover:bg-white/10 hover:text-white group-hover:opacity-100"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 opacity-0 transition-all hover:bg-white/10 hover:text-white group-hover:opacity-100"
           >
             <span className="material-symbols-outlined text-[16px]">close</span>
           </button>
