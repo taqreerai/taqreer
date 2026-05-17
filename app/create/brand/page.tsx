@@ -3,31 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { CreateShell } from "@/components/create/CreateShell";
+import { PillButton } from "@/components/create/PillButton";
+import { Pill } from "@/components/create/controls";
+import { notifyCreateStateChange } from "@/components/create/CreateStepper";
+import type { CornerPosition } from "@/components/create/controls";
+
+// Brand page (step 2 of 4) — colours, fonts (Google + upload), and
+// LOGO UPLOAD (just the file; placement + excludes moved to
+// `/create/output` step 3). Output-side fields (slide size, slide
+// count, generation rules, logo placement) were stripped on
+// 2026-05-18 per `context/plan-create-flow.md`.
 
 type PaletteMode = "manual" | "screenshot";
-type SlideCountMode = "match" | "auto" | "custom";
-type CornerPosition =
-  | "top-left"
-  | "top-center"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right";
-type LogoPosition = CornerPosition;
-type PersistentPosition = CornerPosition;
 type FontMode = "upload" | "google";
 type FontTarget = "heading" | "body";
-
-// 6-button position picker: 3 top + 3 bottom, with directional arrow icons.
-// Default to top-right (RTL convention for chrome marks).
-const CORNER_OPTIONS: { value: CornerPosition; icon: string; label: string }[] = [
-  { value: "top-left", icon: "north_west", label: "أعلى يسار" },
-  { value: "top-center", icon: "north", label: "أعلى الوسط" },
-  { value: "top-right", icon: "north_east", label: "أعلى يمين" },
-  { value: "bottom-left", icon: "south_west", label: "أسفل يسار" },
-  { value: "bottom-center", icon: "south", label: "أسفل الوسط" },
-  { value: "bottom-right", icon: "south_east", label: "أسفل يمين" },
-];
 
 type FontSlotState = {
   mode: FontMode;
@@ -334,102 +324,9 @@ function GoogleFontSlot({
   );
 }
 
-function Pill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
-        active
-          ? "btn-gradient text-white"
-          : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// 6-button position picker: 3 top + 3 bottom, each button shows a directional
-// arrow (north_west, north, north_east, south_west, south, south_east). Used
-// for both the logo position and the persistent-overlay position.
-// `dir="ltr"` is intentional: it locks the grid so the visually-rightmost
-// button always maps to the *right* side of the canvas, regardless of the
-// page's RTL context. Without this, the array's first entry (top-left) ends
-// up on the visual right under RTL — which would silently flip the mapping.
-function PositionPicker({
-  value,
-  onChange,
-}: {
-  value: CornerPosition;
-  onChange: (next: CornerPosition) => void;
-}) {
-  return (
-    <div className="grid grid-cols-3 gap-2" dir="ltr">
-      {CORNER_OPTIONS.map((option) => {
-        const active = value === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            aria-label={option.label}
-            title={option.label}
-            className={`flex h-12 items-center justify-center rounded-xl transition-colors ${
-              active
-                ? "btn-gradient text-white"
-                : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px]">{option.icon}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Toggle({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-white">{label}</span>
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        role="switch"
-        aria-checked={value}
-        aria-label={label}
-        className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
-          value ? "tq-switch-on" : "bg-white/10"
-        }`}
-      >
-        {/* RTL: knob anchored to the right edge by default (OFF), slides to
-            the left edge when ON. */}
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            value ? "right-[22px]" : "right-0.5"
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
+// (Pill, PositionPicker, Toggle moved to `components/create/controls.tsx`
+// and are now imported above. The remaining inline component below —
+// BrandColorRow — is brand-page-specific and stays here.)
 
 function BrandColorRow({
   value,
@@ -488,16 +385,11 @@ function BrandColorRow({
 // fires once per mount per call site.
 type StoredBrandShape = {
   colors?: unknown;
-  slideSize?: unknown;
-  slideCount?: { mode?: SlideCountMode; value?: number | null };
-  rules?: {
-    designStyle?: string | null;
-    fixTypos?: boolean;
-    pagination?: boolean;
-    persistent?:
-      | { text?: string; position?: PersistentPosition; exclude?: ("cover" | "closing")[] }
-      | null;
-  };
+  // Output-side fields (slideSize, slideCount, rules) used to live
+  // in this blob too; they moved to `taqreer:create:output` in the
+  // 4-step refactor (2026-05-18). Keep the legacy keys readable in
+  // case the user is mid-flow with old session data — `/create/output`
+  // migrates them on its own hydrate.
 };
 function readStoredBrand(): StoredBrandShape | null {
   if (typeof window === "undefined") return null;
@@ -552,9 +444,6 @@ export default function CreateBrandPage() {
   const [logo, setLogo] = useState<File | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
-  const [logoPosition, setLogoPosition] = useState<LogoPosition>("top-right");
-  const [logoExcludeCover, setLogoExcludeCover] = useState(false);
-  const [logoExcludeClosing, setLogoExcludeClosing] = useState(false);
 
   // SVG-only logo policy (2026-05-15). Raster formats (PNG/JPG) are rejected
   // because we can't recolor them per slide for contrast — see context.md
@@ -571,43 +460,6 @@ export default function CreateBrandPage() {
     setLogoError(null);
     setLogo(next);
   };
-
-  // ─── Left column state ──────────────────────────────────────────────────
-  // Generation rules — moved here from /create/summary so the summary step
-  // is content-only. Tone removed (will live on /enhance later).
-  const [designStyle, setDesignStyle] = useState<string | null>(() => {
-    return readStoredBrand()?.rules?.designStyle ?? null;
-  });
-  const [fixTypos, setFixTypos] = useState<boolean>(() => {
-    return Boolean(readStoredBrand()?.rules?.fixTypos);
-  });
-  const [pagination, setPagination] = useState<boolean>(() => {
-    return readStoredBrand()?.rules?.pagination !== false;
-  });
-  const [persistentText, setPersistentText] = useState<string>(() => {
-    return readStoredBrand()?.rules?.persistent?.text ?? "";
-  });
-  const [persistentPosition, setPersistentPosition] = useState<PersistentPosition>(() => {
-    return readStoredBrand()?.rules?.persistent?.position ?? "top-right";
-  });
-  const [excludeCover, setExcludeCover] = useState<boolean>(() => {
-    return readStoredBrand()?.rules?.persistent?.exclude?.includes("cover") ?? false;
-  });
-  const [excludeClosing, setExcludeClosing] = useState<boolean>(() => {
-    return readStoredBrand()?.rules?.persistent?.exclude?.includes("closing") ?? false;
-  });
-  const [slideSize, setSlideSize] = useState<"16:9" | "9:16">(() => {
-    const ss = readStoredBrand()?.slideSize;
-    return ss === "9:16" ? "9:16" : "16:9";
-  });
-  const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>(() => {
-    const m = readStoredBrand()?.slideCount?.mode;
-    return m === "match" || m === "custom" ? m : "auto";
-  });
-  const [slideCountValue, setSlideCountValue] = useState<number>(() => {
-    const sc = readStoredBrand()?.slideCount;
-    return sc?.mode === "custom" && typeof sc.value === "number" ? sc.value : 8;
-  });
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -741,11 +593,8 @@ export default function CreateBrandPage() {
         name: (savedLogo as { name?: string }).name ?? "logo",
         previewDataUrl: savedLogo.previewDataUrl ?? null,
       });
-      if (savedLogo.position) setLogoPosition(savedLogo.position);
-      if (Array.isArray(savedLogo.exclude)) {
-        setLogoExcludeCover(savedLogo.exclude.includes("cover"));
-        setLogoExcludeClosing(savedLogo.exclude.includes("closing"));
-      }
+      // Logo position + excludes now live on /create/output; the
+      // brand-page no longer reads or sets them.
     }
 
     // Compute the fingerprint over the values we just set and persist it
@@ -767,18 +616,15 @@ export default function CreateBrandPage() {
         ? nextBody.googleFamily
         : (nextBody?.uploadFamily || nextBody?.uploadName) ?? null;
     const savedLogoForFingerprint = assetUrls?.logo ?? null;
+    // Brand-page fingerprint covers ONLY brand-side data now:
+    // colours, font names, and logo presence (by storageUrl). Logo
+    // position + excludes live on /create/output, so they don't
+    // affect whether the user has unsaved brand changes here.
     const fingerprint = JSON.stringify({
       colors: nextColors ?? colors,
       headingFont: headingName ?? fontName(headingFontSlot),
       bodyFont: bodyName ?? fontName(bodyFontSlot),
       logo: savedLogoForFingerprint?.storageUrl ?? null,
-      logoPosition: savedLogoForFingerprint?.position ?? "top-right",
-      logoExcludeCover:
-        Array.isArray(savedLogoForFingerprint?.exclude) &&
-        savedLogoForFingerprint!.exclude!.includes("cover"),
-      logoExcludeClosing:
-        Array.isArray(savedLogoForFingerprint?.exclude) &&
-        savedLogoForFingerprint!.exclude!.includes("closing"),
     });
     try {
       sessionStorage.setItem(BRAND_SAVED_SNAPSHOT_KEY, fingerprint);
@@ -968,14 +814,12 @@ export default function CreateBrandPage() {
     else setBodyFontSlot(update);
   };
 
-  // Fingerprint over the SAVEABLE brand data — used to detect whether the
-  // current state matches the last-saved snapshot. Includes everything
-  // /api/brand-kits persists (colours, font names, logo identity +
-  // position + excludes) so editing logo state correctly re-arms the save
-  // button. Logo identity uses (name, size, lastModified) for a fresh
-  // File or the loaded kit's storageUrl when no new File was picked.
-  // `fontName` + `BRAND_SAVED_SNAPSHOT_KEY` are hoisted above
-  // hydrateFromBrandKit.
+  // Fingerprint over the SAVEABLE brand data — colours, font names,
+  // and logo identity (File or kit storageUrl). MUST stay in sync
+  // with the hydrate-fingerprint above (line ~628); see
+  // `feedback_*` memory if you ever see the Save button stuck idle
+  // after a clean hydration. Logo position + excludes intentionally
+  // omitted — those live on the new `/create/output` step.
   const logoFingerprint = logo
     ? `${logo.name}:${logo.size}:${logo.lastModified}`
     : (loadedLogoMeta?.storageUrl ?? null);
@@ -984,9 +828,6 @@ export default function CreateBrandPage() {
     headingFont: fontName(headingFontSlot),
     bodyFont: fontName(bodyFontSlot),
     logo: logoFingerprint,
-    logoPosition,
-    logoExcludeCover,
-    logoExcludeClosing,
   });
 
   // On mount: if a snapshot from a previous save matches the current
@@ -1076,11 +917,13 @@ export default function CreateBrandPage() {
         };
       };
 
-      const logoExclude = [
-        logoExcludeCover ? "cover" : null,
-        logoExcludeClosing ? "closing" : null,
-      ].filter((value): value is "cover" | "closing" => value !== null);
-
+      // Logo placement + excludes used to be saved alongside the
+      // logo file here, but they're now owned by `/create/output`.
+      // The brand-kit row keeps `position` / `exclude` from the
+      // previous schema (so existing kits load correctly), it just
+      // doesn't receive new values from this page. The next time
+      // the user reaches `/create/output`, that page reads its own
+      // sessionStorage and persists position there.
       const res = await fetch("/api/brand-kits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1095,8 +938,6 @@ export default function CreateBrandPage() {
                 name: effectiveLogo.name,
                 storageUrl: effectiveLogo.storageUrl,
                 previewDataUrl: effectiveLogo.previewDataUrl,
-                position: logoPosition,
-                exclude: logoExclude,
               }
             : null,
         }),
@@ -1153,20 +994,10 @@ export default function CreateBrandPage() {
         };
       };
 
-      const trimmedPersistent = persistentText.trim();
-      const exclude = [
-        excludeCover ? "cover" : null,
-        excludeClosing ? "closing" : null,
-      ].filter((value): value is "cover" | "closing" => value !== null);
-      const rules = {
-        designStyle,
-        fixTypos,
-        pagination,
-        persistent: trimmedPersistent
-          ? { text: trimmedPersistent, position: persistentPosition, exclude }
-          : null,
-      };
-
+      // Brand-page payload — colours, fonts, logo upload metadata.
+      // Output-side fields (slideSize, slideCount, rules, logo
+      // placement) write to `taqreer:create:output` from the next
+      // step, not from here.
       sessionStorage.setItem(
         "taqreer:create:brand",
         JSON.stringify({
@@ -1182,37 +1013,23 @@ export default function CreateBrandPage() {
                 name: logoAsset.name,
                 storageUrl: logoAsset.storageUrl,
                 previewDataUrl: logoPreviewDataUrl,
-                position: logoPosition,
-                exclude: [
-                  logoExcludeCover ? "cover" : null,
-                  logoExcludeClosing ? "closing" : null,
-                ].filter((value): value is "cover" | "closing" => value !== null),
               }
             : loadedLogoMeta
               ? {
                   // Brand-kit was auto-loaded; user didn't re-pick a file.
-                  // Forward the saved storage URL + metadata so Claude sees
-                  // the logo on slides.
+                  // Forward the saved storage URL + metadata so the
+                  // /create/output step can decide whether to show the
+                  // logo-placement card as enabled.
                   name: loadedLogoMeta.name,
                   storageUrl: loadedLogoMeta.storageUrl,
                   previewDataUrl: loadedLogoMeta.previewDataUrl,
-                  position: logoPosition,
-                  exclude: [
-                    logoExcludeCover ? "cover" : null,
-                    logoExcludeClosing ? "closing" : null,
-                  ].filter((value): value is "cover" | "closing" => value !== null),
                 }
               : null,
-          slideSize,
-          slideCount: {
-            mode: slideCountMode,
-            value: slideCountMode === "custom" ? slideCountValue : null,
-          },
-          rules,
         }),
       );
+      notifyCreateStateChange();
 
-      router.push("/create/summary");
+      router.push("/create/output");
     } catch (caughtError) {
       console.error("Create brand upload error:", caughtError);
       setError(
@@ -1226,156 +1043,13 @@ export default function CreateBrandPage() {
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <section dir="rtl" className="space-y-6">
-      <div>
-        <h1 className="font-headline-lg text-[36px] font-bold text-white">الهوية البصرية</h1>
-        <p className="mt-2 text-[#9A94A8]">
-          ألوان علامتك، خطوطها، شعار، وقواعد التوليد — كل ذلك قبل المراجعة النهائية
-        </p>
-      </div>
-
+    <CreateShell
+      currentStep="brand"
+      title="إعداد الهوية البصرية"
+      subtitle="اختر الألوان والخطوط وارفع الشعار الخاص بك ليتناسب مع علامتك التجارية."
+    >
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* ─── LEFT COLUMN ─────────────────────────────────────────────── */}
-        <div className="space-y-6">
-          {/* Generation rules */}
-          <div className="glass-card rounded-xl p-6 space-y-6">
-            <h2 className="font-semibold text-white">قواعد التوليد</h2>
-
-            <div>
-              <p className="mb-2 text-sm text-white">نمط التصميم</p>
-              <div className="flex flex-wrap gap-2">
-                {DESIGN_STYLE_OPTIONS.map((option) => (
-                  <Pill
-                    key={option}
-                    active={designStyle === option}
-                    onClick={() => setDesignStyle(designStyle === option ? null : option)}
-                  >
-                    {option}
-                  </Pill>
-                ))}
-              </div>
-              {designStyle ? (
-                <p className="mt-2 text-xs text-muted">سيُصمَّم العرض بأسلوب «{designStyle}».</p>
-              ) : (
-                <p className="mt-2 text-xs text-muted">اتركها فارغة ليختار كلود الأسلوب المناسب.</p>
-              )}
-            </div>
-
-            <Toggle
-              label="تصحيح الأخطاء الإملائية والنحوية"
-              value={fixTypos}
-              onChange={setFixTypos}
-            />
-
-            <Toggle
-              label="ترقيم الشرائح (مثل: 1 / 10)"
-              value={pagination}
-              onChange={setPagination}
-            />
-
-            <div className="space-y-3">
-              <p className="text-sm text-white">عنصر ثابت على كل الشرائح</p>
-              <input
-                type="text"
-                value={persistentText}
-                onChange={(event) => setPersistentText(event.target.value)}
-                placeholder="مثل: التاريخ، الموقع الإلكتروني"
-                className="input-dark"
-              />
-              {mounted && persistentText.trim() ? (
-                <div className="space-y-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4">
-                  <div>
-                    <p className="mb-2 text-xs text-muted">الموقع</p>
-                    <PositionPicker
-                      value={persistentPosition}
-                      onChange={setPersistentPosition}
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs text-muted">استثناء</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Pill
-                        active={excludeCover}
-                        onClick={() => setExcludeCover((current) => !current)}
-                      >
-                        صفحة الغلاف
-                      </Pill>
-                      <Pill
-                        active={excludeClosing}
-                        onClick={() => setExcludeClosing((current) => !current)}
-                      >
-                        صفحة الشكر
-                      </Pill>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Slide size */}
-          <div className="glass-card rounded-xl p-6 space-y-4">
-            <h2 className="font-semibold text-white">حجم الشريحة</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setSlideSize("16:9")}
-                className={`cursor-pointer rounded-xl p-4 text-right transition-colors ${selectedClass(slideSize === "16:9")}`}
-              >
-                <span className="font-semibold text-white">16:9 — أفقي</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSlideSize("9:16")}
-                className={`cursor-pointer rounded-xl p-4 text-right transition-colors ${selectedClass(slideSize === "9:16")}`}
-              >
-                <span className="font-semibold text-white">9:16 — عمودي</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Slide count */}
-          <div className="glass-card rounded-xl p-6 space-y-4">
-            <h2 className="font-semibold text-white">عدد الشرائح</h2>
-            <div className="space-y-3">
-              {content?.type === "file" ? (
-                <button
-                  type="button"
-                  onClick={() => setSlideCountMode("match")}
-                  className={`w-full cursor-pointer rounded-xl p-3 text-right transition-colors ${selectedClass(slideCountMode === "match")}`}
-                >
-                  طابق عدد صفحات الملف المرفوع
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setSlideCountMode("auto")}
-                className={`w-full cursor-pointer rounded-xl p-3 text-right transition-colors ${selectedClass(slideCountMode === "auto")}`}
-              >
-                اتركها لنا — سنقرر بناءً على المحتوى
-              </button>
-              <button
-                type="button"
-                onClick={() => setSlideCountMode("custom")}
-                className={`w-full cursor-pointer rounded-xl p-3 text-right transition-colors ${selectedClass(slideCountMode === "custom")}`}
-              >
-                حدد عدداً
-              </button>
-              {slideCountMode === "custom" ? (
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={slideCountValue}
-                  onChange={(event) => setSlideCountValue(Number(event.target.value))}
-                  className="input-dark max-w-32"
-                />
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        {/* ─── RIGHT COLUMN ────────────────────────────────────────────── */}
+        {/* LEFT — fonts + logo (filled in below). RIGHT — colours. */}
         <div className="space-y-6">
           {/* Brand colors */}
           <div className="glass-card rounded-xl p-6 space-y-5">
@@ -1568,29 +1242,10 @@ export default function CreateBrandPage() {
                     إزالة
                   </button>
                 </div>
-
-                <div className="space-y-3">
-                  <p className="text-sm text-white">موقع الشعار</p>
-                  <PositionPicker value={logoPosition} onChange={setLogoPosition} />
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-sm text-white">استثناء الشعار من</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Pill
-                      active={logoExcludeCover}
-                      onClick={() => setLogoExcludeCover((current) => !current)}
-                    >
-                      صفحة الغلاف
-                    </Pill>
-                    <Pill
-                      active={logoExcludeClosing}
-                      onClick={() => setLogoExcludeClosing((current) => !current)}
-                    >
-                      صفحة الشكر
-                    </Pill>
-                  </div>
-                </div>
+                {/* Logo placement (corner + cover/closing excludes)
+                    lives on /create/output now — once the user picks
+                    a file here, they choose where it sits on the
+                    next step. */}
               </>
             ) : null}
           </div>
@@ -1600,9 +1255,9 @@ export default function CreateBrandPage() {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
       <div className="flex items-center justify-between">
-        <button className="btn-outline-dark px-6 py-3" onClick={() => router.back()}>
-          → رجوع
-        </button>
+        <PillButton variant="secondary" onClick={() => router.back()} icon="arrow_forward">
+          السابق
+        </PillButton>
         <div className="flex items-center gap-3">
           {/* Save-as-brand — glass icon button. Save icon morphs to a
               check on success via a one-shot 360° rotation + cross-fade
@@ -1676,16 +1331,17 @@ export default function CreateBrandPage() {
               {saveBrandState === "saved" ? "محفوظ كهوية بصرية" : "حفظ كهوية بصرية"}
             </span>
           </button>
-          <button
-            className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:opacity-60"
+          <PillButton
+            variant="primary"
             onClick={handleNext}
             disabled={loading}
+            loading={loading}
+            icon="arrow_back"
           >
-            {loading ? <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" /> : null}
-            التالي ←
-          </button>
+            الخطوة التالية
+          </PillButton>
         </div>
       </div>
-    </section>
+    </CreateShell>
   );
 }

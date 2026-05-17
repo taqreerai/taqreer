@@ -1,7 +1,17 @@
 "use client";
 
+// Step 4 — Summary. Three stacked cards, one per previous step,
+// each with an Edit button that jumps back to that step (state
+// preserved via sessionStorage). The "Generate" CTA POSTs every
+// piece into `/api/projects` — that endpoint expects ONE merged
+// brand payload (colours + fonts + logo + slide size + slide
+// count + rules + logo placement), so this page reads brand +
+// output and stitches them at submit.
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CreateShell } from "@/components/create/CreateShell";
+import { PillButton } from "@/components/create/PillButton";
 
 type ContentState = {
   type: "file" | "text";
@@ -12,10 +22,41 @@ type ContentState = {
   keepVerbatim?: boolean;
 };
 
-// The brand step now stores everything we need for /api/projects, including
-// the generation rules. This page just lets the user verify the content,
-// edit it inline, and submit.
-type StoredBrand = Record<string, unknown> | null;
+type StoredBrand = {
+  colors?: string[];
+  paletteMode?: string;
+  paletteScreenshotUrl?: string | null;
+  fonts?: {
+    heading?: { name?: string | null; url?: string | null; storageUrl?: string | null };
+    body?: { name?: string | null; url?: string | null; storageUrl?: string | null };
+  };
+  logo?: {
+    name?: string | null;
+    storageUrl?: string | null;
+    previewDataUrl?: string | null;
+  } | null;
+};
+
+type StoredOutput = {
+  slideSize?: "16:9" | "9:16";
+  slideCount?: { mode?: "match" | "auto" | "custom"; value?: number | null };
+  logo?: {
+    position?: string;
+    excludeCover?: boolean;
+    excludeClosing?: boolean;
+  };
+  rules?: {
+    designStyle?: string | null;
+    fixTypos?: boolean;
+    pagination?: boolean;
+    persistent?: {
+      text?: string;
+      position?: string;
+      excludeCover?: boolean;
+      excludeClosing?: boolean;
+    } | null;
+  };
+};
 
 function formatFileSize(size?: number) {
   if (!size) return "";
@@ -23,7 +64,6 @@ function formatFileSize(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
 }
 
-// Some file pickers hand back URL-percent-encoded names. Decode for display.
 function readableFileName(raw: string | undefined): string {
   if (!raw) return "";
   if (!/%[0-9A-Fa-f]{2}/.test(raw)) return raw;
@@ -34,75 +74,104 @@ function readableFileName(raw: string | undefined): string {
   }
 }
 
+const POSITION_LABELS: Record<string, string> = {
+  "top-left": "أعلى يسار",
+  "top-center": "أعلى الوسط",
+  "top-right": "أعلى يمين",
+  "bottom-left": "أسفل يسار",
+  "bottom-center": "أسفل الوسط",
+  "bottom-right": "أسفل يمين",
+};
+
 export default function CreateSummaryPage() {
   const router = useRouter();
   const [content, setContent] = useState<ContentState | null>(null);
-  const [brand, setBrand] = useState<StoredBrand>(null);
-  const [editingContent, setEditingContent] = useState(false);
-  const [contentDraft, setContentDraft] = useState("");
-  const [loadingMode, setLoadingMode] = useState<"create" | null>(null);
+  const [brand, setBrand] = useState<StoredBrand | null>(null);
+  const [output, setOutput] = useState<StoredOutput | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const rawContent = sessionStorage.getItem("taqreer:create:content");
     const rawBrand = sessionStorage.getItem("taqreer:create:brand");
-
+    const rawOutput = sessionStorage.getItem("taqreer:create:output");
     if (!rawContent || !rawBrand) {
       router.replace("/create/content");
       return;
     }
-
     setContent(JSON.parse(rawContent) as ContentState);
     setBrand(JSON.parse(rawBrand) as StoredBrand);
+    if (rawOutput) setOutput(JSON.parse(rawOutput) as StoredOutput);
   }, [router]);
 
-  const startEditContent = () => {
-    setContentDraft(content?.text ?? "");
-    setEditingContent(true);
-  };
-
-  const saveEditContent = () => {
-    if (!content) return;
-    const next: ContentState = { ...content, text: contentDraft };
-    setContent(next);
-    sessionStorage.setItem("taqreer:create:content", JSON.stringify(next));
-    setEditingContent(false);
-  };
-
-  const cancelEditContent = () => {
-    setEditingContent(false);
-    setContentDraft("");
-  };
-
-  // Mirror the brand step's slide-count interpretation for display.
-  const slideCount = (brand?.slideCount ?? null) as { mode?: string; value?: number | null } | null;
-  const displaySlideCount =
-    slideCount?.mode === "custom" && slideCount?.value
-      ? String(slideCount.value)
-      : slideCount?.mode === "match"
-        ? "يطابق الملف"
-        : "تلقائي";
-  const resolvedSlideCount =
-    slideCount?.mode === "custom" && slideCount?.value ? slideCount.value : null;
-
-  // Brand step stores rules inside the brand blob — extract for the API.
-  const rules = (brand?.rules ?? null) as Record<string, unknown> | null;
-
-  // Single "generate" path — brand-kit saving moved to the brand page's
-  // "save as brand" button (POST /api/brand-kits). This page only kicks
-  // off the project generation; saveBrandKit is always false here.
   const handleGenerate = async () => {
     if (!content || !brand) return;
     setError("");
-    setLoadingMode("create");
-
+    setLoading(true);
     try {
+      // Stitch brand + output into the legacy "brand" payload Claude
+      // expects: logo carries position + exclude as the API has
+      // always seen it; slide size, slide count, and rules live at
+      // the brand root (where /api/projects + the inngest brief
+      // builder already look). Future cleanup could split these into
+      // their own top-level fields in the request body; for now we
+      // keep wire compatibility.
+      const logoExclude = output?.logo
+        ? [
+            output.logo.excludeCover ? "cover" : null,
+            output.logo.excludeClosing ? "closing" : null,
+          ].filter((v): v is "cover" | "closing" => v !== null)
+        : [];
+      const persistent = output?.rules?.persistent;
+      const persistentExclude = persistent
+        ? [
+            persistent.excludeCover ? "cover" : null,
+            persistent.excludeClosing ? "closing" : null,
+          ].filter((v): v is "cover" | "closing" => v !== null)
+        : [];
+
+      const mergedBrand = {
+        colors: brand.colors,
+        paletteMode: brand.paletteMode,
+        paletteScreenshotUrl: brand.paletteScreenshotUrl,
+        fonts: brand.fonts,
+        logo: brand.logo
+          ? {
+              ...brand.logo,
+              position: output?.logo?.position ?? "top-right",
+              exclude: logoExclude,
+            }
+          : null,
+        slideSize: output?.slideSize ?? "16:9",
+        slideCount: output?.slideCount ?? { mode: "auto", value: null },
+      };
+
+      const rules = output?.rules
+        ? {
+            designStyle: output.rules.designStyle ?? null,
+            fixTypos: Boolean(output.rules.fixTypos),
+            pagination: output.rules.pagination !== false,
+            persistent: persistent?.text
+              ? {
+                  text: persistent.text,
+                  position: persistent.position ?? "bottom-center",
+                  exclude: persistentExclude,
+                }
+              : null,
+          }
+        : null;
+
+      const resolvedSlideCount =
+        output?.slideCount?.mode === "custom" && output.slideCount.value
+          ? output.slideCount.value
+          : null;
+
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content,
-          brand,
+          brand: mergedBrand,
           rules,
           saveBrandKit: false,
           slideCount: resolvedSlideCount,
@@ -115,121 +184,203 @@ export default function CreateSummaryPage() {
       }
 
       const data = (await response.json()) as { projectId: string };
-      // The create-flow is now done — clear sessionStorage so the next
-      // "create new" starts fresh. Otherwise stale brand/content data
-      // would block the /create/brand auto-load of the saved BrandKit.
+      // Clear sessionStorage so the next "create new" starts fresh.
       sessionStorage.removeItem("taqreer:create:content");
       sessionStorage.removeItem("taqreer:create:brand");
       sessionStorage.removeItem("taqreer:create:brand:savedSnapshot");
+      sessionStorage.removeItem("taqreer:create:output");
       router.push(`/preview/${data.projectId}`);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "تعذر بدء الإنشاء. حاول مرة أخرى.");
-      setLoadingMode(null);
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "تعذر بدء الإنشاء. حاول مرة أخرى.",
+      );
+      setLoading(false);
     }
   };
 
+  // Pre-compute display strings so the cards don't ternary their
+  // way through three layers of undefined.
+  const slideSizeLabel =
+    output?.slideSize === "9:16" ? "9:16 — عمودي" : "16:9 — أفقي";
+  const slideCountLabel =
+    output?.slideCount?.mode === "custom" && output.slideCount.value
+      ? `${output.slideCount.value} شريحة`
+      : output?.slideCount?.mode === "match"
+        ? "يطابق الملف"
+        : "تلقائي";
+  const logoPositionLabel =
+    output?.logo?.position && POSITION_LABELS[output.logo.position]
+      ? POSITION_LABELS[output.logo.position]
+      : "غير محدد";
+
   return (
-    <section dir="rtl" className="space-y-6">
-      <div>
-        <h1 className="font-headline-lg text-[36px] font-bold text-white">راجع محتواك</h1>
-        <p className="mt-2 text-[#9A94A8]">
-          هذه هي آخر مراجعة قبل بدء التصميم — عدّل النص إن احتجت، أو ارجع لتغيير الألوان والخطوط.
-        </p>
-      </div>
-
-      <div className="glass-card rounded-xl p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <h2 className="text-[22px] font-bold text-white">محتوى العرض</h2>
-          <div className="flex items-center gap-2">
-            {/* Edit + Generate share the same shape: h-9, px-4, text-sm,
-                gap-1.5, material-symbol at text-[16px]. Edit uses a glass
-                outline; Generate carries the mesh-gradient CTA treatment. */}
-            {content?.type === "text" && !editingContent ? (
-              <button
-                type="button"
-                onClick={startEditContent}
-                aria-label="تعديل المحتوى"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 px-4 text-sm text-white transition-colors hover:bg-white/5"
-              >
-                <span className="material-symbols-outlined text-[16px]">edit</span>
-                تعديل
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={loadingMode !== null}
-              className="btn-gradient-anim inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold disabled:opacity-60"
-            >
-              {loadingMode === "create" ? (
-                <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
-              ) : (
-                <span className="material-symbols-outlined text-[16px]">
-                  auto_awesome
-                </span>
-              )}
-              {loadingMode === "create" ? "جارٍ الإنشاء..." : "إنشاء"}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-5 space-y-3">
+    <CreateShell
+      currentStep="summary"
+      title="كل شيء جاهز للإنشاء"
+      subtitle="لقد قمنا بجمع البيانات المطلوبة. راجع الملخص أدناه قبل البدء."
+    >
+      <div className="flex flex-col gap-4">
+        <SummaryCard
+          title="المحتوى المدخل"
+          icon="description"
+          onEdit={() => router.push("/create/content")}
+        >
           {content?.type === "file" ? (
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-[#7D2DFF]">description</span>
-              <div>
-                <p className="font-semibold text-white">{readableFileName(content.fileName)}</p>
-                <p className="text-sm text-muted">{formatFileSize(content.fileSize)}</p>
-              </div>
+            <div>
+              <p className="text-sm font-semibold text-white">
+                {readableFileName(content.fileName)}
+              </p>
+              <p className="text-xs text-white/50">
+                {formatFileSize(content.fileSize)}
+                {content.keepVerbatim === false ? " · سيُعاد تنظيمه" : ""}
+              </p>
             </div>
-          ) : editingContent ? (
-            <>
-              <textarea
-                value={contentDraft}
-                onChange={(event) => setContentDraft(event.target.value)}
-                rows={14}
-                className="input-dark w-full resize-y leading-7"
-                dir="rtl"
-                placeholder="اكتب أو الصق محتوى عرضك هنا..."
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={saveEditContent}
-                  className="btn-gradient inline-flex items-center gap-1 px-4 py-2 text-sm"
-                >
-                  <span className="material-symbols-outlined text-base">check</span>
-                  حفظ
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEditContent}
-                  className="btn-outline-dark px-4 py-2 text-sm"
-                >
-                  إلغاء
-                </button>
-              </div>
-            </>
           ) : (
-            <div className="max-h-[480px] overflow-y-auto whitespace-pre-wrap rounded-lg border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4 text-sm leading-7 text-white">
-              {content?.text || <span className="text-muted">لا يوجد محتوى</span>}
+            <div>
+              <p className="line-clamp-2 text-sm text-white/80 leading-relaxed">
+                {content?.text || "لا يوجد محتوى"}
+              </p>
+              <p className="mt-1 text-xs text-white/50">
+                {content?.text ? `${content.text.trim().split(/\s+/).filter(Boolean).length} كلمة` : ""}
+                {content?.keepVerbatim === false ? " · سيُعاد تنظيمه" : ""}
+              </p>
             </div>
           )}
-        </div>
+        </SummaryCard>
 
-        <p className="text-sm text-muted">عدد الشرائح: {displaySlideCount}</p>
-      </div>
-
-      <div>
-        <button
-          className="btn-outline-dark inline-flex items-center justify-center gap-2 px-6 py-3"
-          onClick={() => router.push("/create/brand")}
+        <SummaryCard
+          title="الهوية البصرية"
+          icon="palette"
+          onEdit={() => router.push("/create/brand")}
         >
-          → رجوع لتعديل الهوية البصرية
-        </button>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-1 flex-col gap-2 min-w-0">
+              {brand?.colors && brand.colors.length > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  {brand.colors.map((c, i) => (
+                    <span
+                      key={i}
+                      className="h-5 w-5 rounded-md border border-white/10"
+                      style={{ background: c }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <p className="text-xs text-white/60">
+                {brand?.fonts?.heading?.name ?? "خط افتراضي"}
+                {" · "}
+                {brand?.fonts?.body?.name ?? "خط افتراضي"}
+              </p>
+            </div>
+            {brand?.logo?.previewDataUrl ? (
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-lg border border-white/10 bg-white/5"
+                style={{
+                  backgroundImage: `url(${brand.logo.previewDataUrl})`,
+                  backgroundSize: "contain",
+                  backgroundPosition: "center",
+                  backgroundRepeat: "no-repeat",
+                }}
+                aria-label="الشعار"
+              />
+            ) : (
+              <span className="text-xs text-white/40">بدون شعار</span>
+            )}
+          </div>
+        </SummaryCard>
+
+        <SummaryCard
+          title="إعدادات الإخراج"
+          icon="tune"
+          onEdit={() => router.push("/create/output")}
+        >
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+            <SummaryStat label="حجم الشريحة" value={slideSizeLabel} />
+            <SummaryStat label="عدد الشرائح" value={slideCountLabel} />
+            <SummaryStat
+              label="موقع الشعار"
+              value={brand?.logo ? logoPositionLabel : "بدون شعار"}
+            />
+            <SummaryStat
+              label="نمط التصميم"
+              value={output?.rules?.designStyle ?? "تلقائي"}
+            />
+            {output?.rules?.persistent?.text ? (
+              <div className="col-span-2 pt-1">
+                <span className="text-white/40">عنصر ثابت: </span>
+                <span className="text-white/80">{output.rules.persistent.text}</span>
+              </div>
+            ) : null}
+          </div>
+        </SummaryCard>
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-    </section>
+
+      <div className="flex items-center justify-between pt-2">
+        <PillButton
+          variant="secondary"
+          onClick={() => router.push("/create/output")}
+          icon="arrow_forward"
+        >
+          السابق
+        </PillButton>
+        <PillButton
+          variant="primary"
+          onClick={handleGenerate}
+          disabled={loading}
+          loading={loading}
+          icon="auto_awesome"
+        >
+          {loading ? "جارٍ الإنشاء..." : "إنشاء بذكاء"}
+        </PillButton>
+      </div>
+    </CreateShell>
+  );
+}
+
+// One row of the summary stack. Header has the step title + an Edit
+// button on the end side. Body is whatever the page passes in.
+function SummaryCard({
+  title,
+  icon,
+  onEdit,
+  children,
+}: {
+  title: string;
+  icon: string;
+  onEdit: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="glass-card flex flex-col gap-3 rounded-2xl p-5">
+      <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <span
+            className="material-symbols-outlined text-white/70"
+            style={{ fontSize: "18px" }}
+          >
+            {icon}
+          </span>
+          {title}
+        </h2>
+        <PillButton variant="ghost" size="sm" onClick={onEdit} icon="edit">
+          تعديل
+        </PillButton>
+      </header>
+      <div className="text-sm text-white/80">{children}</div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-white/40">{label}:</span>
+      <span className="text-white/90">{value}</span>
+    </div>
   );
 }
