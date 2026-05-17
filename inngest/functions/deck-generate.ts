@@ -558,25 +558,25 @@ export const deckGenerate = inngest.createFunction(
 
         await writeProgress("thinking", maxSlideSeen, estimatedTotal);
 
-        // SPEED MODE — everything knobbed down for the fastest possible
-        // generation run, for benchmarking. Two changes from the
-        // baseline:
-        //   1. Sonnet 4.6 instead of Opus 4.7. Docs label Sonnet as
-        //      "Fast" vs Opus "Moderate"; ~40% cheaper; same 1M
-        //      context; supports adaptive thinking AND disabled.
-        //   2. `thinking: { type: "disabled" }`. Per Anthropic docs:
-        //      "When you don't need extended thinking and want the
-        //      lowest latency." Strips the long upfront reasoning
-        //      phase entirely — Claude streams the deck JSON without
-        //      a multi-minute warmup. `output_config.effort` is
-        //      dropped too since it only applies to thinking modes.
-        // If output quality is unacceptable we step UP from here
-        // (Sonnet+adaptive low, then Opus+disabled, then full Opus
-        // baseline).
+        // Sonnet 4.6 + adaptive thinking at "low" effort. One notch
+        // above pure speed mode (thinking: disabled): Claude is now
+        // allowed to think, but the "low" effort cap means it
+        // minimises thinking and SKIPS it entirely on simple slides.
+        // The trade is a small quality lift (Claude can reason about
+        // composition on the slides that actually benefit) for a
+        // modest latency increase (only the slides that need it pay).
+        //
+        // Knob ladder for later tuning, lowest → highest quality:
+        //   Sonnet + thinking disabled                  (raw speed)
+        //   Sonnet + thinking adaptive, effort "low"    ← CURRENT
+        //   Sonnet + thinking adaptive, effort "medium"
+        //   Opus   + thinking disabled
+        //   Opus   + thinking adaptive, effort "low"
+        //   …  up to Opus + adaptive + "high" (full baseline)
         const stream = client.messages.stream({
           model: "claude-sonnet-4-6",
           max_tokens: 48000,
-          thinking: { type: "disabled" },
+          thinking: { type: "adaptive" },
           system: [
             {
               type: "text",
@@ -584,6 +584,7 @@ export const deckGenerate = inngest.createFunction(
               cache_control: { type: "ephemeral" },
             },
           ],
+          output_config: { effort: "low" },
           messages: [{ role: "user", content: userMessage }],
         });
 
