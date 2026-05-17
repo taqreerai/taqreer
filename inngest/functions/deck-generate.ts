@@ -558,10 +558,25 @@ export const deckGenerate = inngest.createFunction(
 
         await writeProgress("thinking", maxSlideSeen, estimatedTotal);
 
+        // SPEED MODE — everything knobbed down for the fastest possible
+        // generation run, for benchmarking. Two changes from the
+        // baseline:
+        //   1. Sonnet 4.6 instead of Opus 4.7. Docs label Sonnet as
+        //      "Fast" vs Opus "Moderate"; ~40% cheaper; same 1M
+        //      context; supports adaptive thinking AND disabled.
+        //   2. `thinking: { type: "disabled" }`. Per Anthropic docs:
+        //      "When you don't need extended thinking and want the
+        //      lowest latency." Strips the long upfront reasoning
+        //      phase entirely — Claude streams the deck JSON without
+        //      a multi-minute warmup. `output_config.effort` is
+        //      dropped too since it only applies to thinking modes.
+        // If output quality is unacceptable we step UP from here
+        // (Sonnet+adaptive low, then Opus+disabled, then full Opus
+        // baseline).
         const stream = client.messages.stream({
-          model: "claude-opus-4-7",
+          model: "claude-sonnet-4-6",
           max_tokens: 48000,
-          thinking: { type: "adaptive" },
+          thinking: { type: "disabled" },
           system: [
             {
               type: "text",
@@ -569,7 +584,6 @@ export const deckGenerate = inngest.createFunction(
               cache_control: { type: "ephemeral" },
             },
           ],
-          output_config: { effort: "high" },
           messages: [{ role: "user", content: userMessage }],
         });
 
