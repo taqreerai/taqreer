@@ -270,7 +270,6 @@ function FontUploadSlot({
 }
 
 function GoogleFontSlot({
-  label,
   selected,
   sampleText,
   sampleSizeClass,
@@ -282,44 +281,61 @@ function GoogleFontSlot({
   sampleSizeClass: string;
   onSelect: (family: string | null) => void;
 }) {
-  // Native select keeps the fonts card the same height as the colours
-  // card (two compact rows + one big sample). `.input-dark` provides
-  // the glass surface; appearance:none kills the OS chrome, and a
-  // material-symbols chevron is overlaid on the end side.
+  // Scrollable list inside a glass-styled box so the inactive state
+  // of every font row reads as part of the surrounding chrome (no
+  // raw `#03030D` rectangle). The list height is pinned so the slot
+  // matches the FontUploadSlot exactly — that's what keeps the card
+  // height stable when the user switches between "upload" / "google"
+  // on either of the two font roles.
+  //
+  // Each row previews its own family in the trailing chip ("Aa")
+  // — the family name itself stays in the default UI face for
+  // alignment, but the chip shows the actual glyphs so the user
+  // can scan styles without committing.
+  // Fixed list height matches the FontUploadSlot's 120 px upload
+  // zone EXACTLY (no surrounding padding/border). Keeps the fonts
+  // card total height constant regardless of which mode is active,
+  // so the colours card next door doesn't resize via the grid row's
+  // stretch alignment.
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <select
-          aria-label={label}
-          value={selected ?? ""}
-          onChange={(event) => {
-            const next = event.target.value;
-            onSelect(next === "" ? null : next);
-          }}
-          className="input-dark appearance-none pr-10 text-right text-sm"
-          style={{ paddingTop: 10, paddingBottom: 10 }}
-        >
-          <option value="">— اختر خط Google —</option>
-          {GOOGLE_FONTS.map((font) => (
-            <option key={font.family} value={font.family}>
-              {font.family} {font.arabic ? "— عربي + لاتيني" : "— لاتيني"}
-            </option>
-          ))}
-        </select>
-        {/* Chevron sits on the left edge (RTL) so it doesn't collide
-            with the right-aligned option label. `pointer-events-none`
-            keeps the underlying select clickable through the icon. */}
-        <span
-          className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/60"
-          style={{ fontSize: 18 }}
-        >
-          expand_more
-        </span>
+      <div
+        className="space-y-1 overflow-y-auto pr-1"
+        style={{ height: 120 }}
+      >
+          {GOOGLE_FONTS.map((font) => {
+            const isActive = selected === font.family;
+            return (
+              <button
+                key={font.family}
+                type="button"
+                onClick={() => onSelect(isActive ? null : font.family)}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+                  isActive
+                    ? "btn-gradient text-white"
+                    : "text-white hover:bg-white/5"
+                }`}
+                style={isActive ? { borderRadius: 8 } : undefined}
+              >
+                <span className="flex items-center gap-2">
+                  <span>{font.family}</span>
+                  <span
+                    className={`text-[10px] ${isActive ? "text-white/80" : "text-white/40"}`}
+                  >
+                    {font.arabic ? "عربي + لاتيني" : "لاتيني"}
+                  </span>
+                </span>
+                <span
+                  className="text-base"
+                  style={{ fontFamily: `"${font.family}", system-ui, sans-serif` }}
+                >
+                  Aa
+                </span>
+              </button>
+            );
+          })}
       </div>
       <p
-        // Force right-align on the sample preview; some Google fonts
-        // include mixed-direction sample text and inherit text-align
-        // unreliably across nested flex/grid parents.
         className={`${sampleSizeClass} text-right text-white`}
         style={selected ? { fontFamily: `"${selected}", system-ui, sans-serif` } : undefined}
       >
@@ -1089,30 +1105,40 @@ export default function CreateBrandPage() {
             a single grid column, which made `lg:grid-cols-2` render
             as one column because there was only one child. */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Brand colors */}
-          <div className="glass-card rounded-xl p-6 space-y-5">
-            <div>
-              <h2 className="font-semibold text-white">ألوان العلامة التجارية</h2>
-              <p className="mt-1 text-xs text-muted">
-                ٣ ألوان على الأقل، حتى ٥. كلود يختار لون الخلفية ولون النص تلقائياً ليطابق ألوانك.
-              </p>
-            </div>
+          {/* Brand colors — header pattern matches step 1 + step 3
+              (icon + title above a hairline separator). Inner body is
+              gap-driven instead of `space-y-*` so the layout follows
+              the same vocabulary as the other steps. */}
+          <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+            <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+              <span
+                className="material-symbols-outlined text-[#7D2DFF]"
+                style={{ fontSize: "18px" }}
+              >
+                palette
+              </span>
+              <h2 className="text-sm font-semibold text-white">ألوان العلامة التجارية</h2>
+            </header>
+            <p className="text-xs text-muted">
+              ٣ ألوان على الأقل، حتى ٥. كلود يختار لون الخلفية ولون النص تلقائياً ليطابق ألوانك.
+            </p>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
+            {/* Palette mode chooser — same Pill primitive as the font
+                mode toggle below, so the two cards share one button
+                vocabulary instead of two parallel implementations. */}
+            <div className="flex flex-wrap gap-2">
+              <Pill
+                active={paletteMode === "manual"}
                 onClick={() => setPaletteMode("manual")}
-                className={`cursor-pointer rounded-xl p-3 text-right text-sm transition-colors ${selectedClass(paletteMode === "manual")}`}
               >
-                <span className="font-semibold text-white">اختيار يدوي</span>
-              </button>
-              <button
-                type="button"
+                اختيار يدوي
+              </Pill>
+              <Pill
+                active={paletteMode === "screenshot"}
                 onClick={() => setPaletteMode("screenshot")}
-                className={`cursor-pointer rounded-xl p-3 text-right text-sm transition-colors ${selectedClass(paletteMode === "screenshot")}`}
               >
-                <span className="font-semibold text-white">رفع لقطة شاشة</span>
-              </button>
+                رفع لقطة شاشة
+              </Pill>
             </div>
 
             {paletteMode === "screenshot" ? (
@@ -1148,14 +1174,20 @@ export default function CreateBrandPage() {
             )}
           </div>
 
-          {/* Fonts */}
-          <div className="glass-card rounded-xl p-6 space-y-5">
-            <div>
-              <h2 className="font-semibold text-white">الخطوط</h2>
-              <p className="mt-1 text-xs text-muted">
-                ارفع خطوطك الخاصة أو اختر من Google Fonts. اتركها فارغة لاستخدام Arial.
-              </p>
-            </div>
+          {/* Fonts — same header vocabulary as the colours card */}
+          <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+            <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+              <span
+                className="material-symbols-outlined text-[#7D2DFF]"
+                style={{ fontSize: "18px" }}
+              >
+                text_fields
+              </span>
+              <h2 className="text-sm font-semibold text-white">الخطوط</h2>
+            </header>
+            <p className="text-xs text-muted">
+              ارفع خطوطك الخاصة أو اختر من Google Fonts. اتركها فارغة لاستخدام Arial.
+            </p>
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {/* Heading font */}
@@ -1239,10 +1271,18 @@ export default function CreateBrandPage() {
         {/* /Row 1 — colours + fonts. Below: logo card spans the
             full row of the parent space-y-6 wrapper. */}
 
-        {/* Logo */}
-        <div className="glass-card rounded-xl p-6 space-y-4">
-          <h2 className="font-semibold text-white">الشعار</h2>
-            <p className="text-[12px] text-muted leading-relaxed">
+        {/* Logo — header pattern matches colours + fonts cards */}
+        <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+          <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+            <span
+              className="material-symbols-outlined text-[#7D2DFF]"
+              style={{ fontSize: "18px" }}
+            >
+              image
+            </span>
+            <h2 className="text-sm font-semibold text-white">الشعار</h2>
+          </header>
+            <p className="text-xs text-muted leading-relaxed">
               صيغة SVG فقط. الشعارات بصيغة SVG تحتفظ بجودتها على أي حجم وتتيح
               تغيير لون الشعار حسب لون الشريحة لضمان التباين.
             </p>
@@ -1293,7 +1333,15 @@ export default function CreateBrandPage() {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
       <div className="flex items-center justify-between">
-        <PillButton variant="secondary" onClick={() => router.back()} icon="arrow_forward">
+        {/* Explicit route — `router.back()` would land on /create/output
+            when the user reached this page via the stepper from step 3,
+            which broke the linear "previous = one step earlier" mental
+            model. */}
+        <PillButton
+          variant="secondary"
+          onClick={() => router.push("/create/content")}
+          icon="arrow_forward"
+        >
           السابق
         </PillButton>
         <div className="flex items-center gap-3">
@@ -1310,14 +1358,19 @@ export default function CreateBrandPage() {
                 ? "تم الحفظ كهوية بصرية"
                 : "حفظ كهوية بصرية"
             }
+            // Pill height + radius to match the PillButton secondary
+            // variant used by السابق / الخطوة التالية — keeps the
+            // bottom-bar visually one row of pills instead of one
+            // rounded-rect + two pills.
             style={{
               background: "rgba(255, 255, 255, var(--glass-opacity))",
               backdropFilter:
                 "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
               WebkitBackdropFilter:
                 "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+              borderRadius: 9999,
             }}
-            className={`group relative inline-flex h-12 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors ${
+            className={`group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
               saveBrandState === "saved"
                 ? "border-white/40 text-white cursor-default"
                 : saveBrandState === "saving"

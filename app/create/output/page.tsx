@@ -331,7 +331,7 @@ function CardShell({
     >
       <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
         <span
-          className="material-symbols-outlined text-white/70"
+          className="material-symbols-outlined text-[#7D2DFF]"
           style={{ fontSize: "18px" }}
         >
           {icon}
@@ -345,17 +345,78 @@ function CardShell({
   );
 }
 
-function SectionLabel({ icon, children }: { icon: string; children: React.ReactNode }) {
+// Sub-section heading inside a card. Icon-free per the design pass
+// — only the card-level header carries a glyph; sub-sections rely on
+// the white/80 weight + spacing to read as a heading.
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
-      <span
-        className="material-symbols-outlined text-white/50"
-        style={{ fontSize: "14px" }}
+    <p className="text-xs font-semibold text-white/80">{children}</p>
+  );
+}
+
+// Number stepper for the custom slide-count input. Native number
+// arrows look glued-on against the glass chrome; this replaces them
+// with two `−` / `+` pill buttons flanking a centered, full-width
+// input. Native spinners are hidden via the `.no-spinner` rule in
+// globals.css so the input renders as a clean numeric field.
+function SlideCountStepper({
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  min: number;
+  max: number;
+}) {
+  const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  return (
+    <div className="flex items-stretch gap-2">
+      <button
+        type="button"
+        onClick={() => onChange(clamp(value - 1))}
+        disabled={value <= min}
+        aria-label="إنقاص"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+        style={{
+          background: "rgba(255, 255, 255, var(--glass-opacity))",
+          borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+        }}
       >
-        {icon}
-      </span>
-      {children}
-    </p>
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+          remove
+        </span>
+      </button>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => {
+          const n = Number(event.target.value);
+          onChange(Number.isFinite(n) ? clamp(n) : min);
+        }}
+        className="input-dark no-spinner flex-1 text-center text-sm"
+        style={{ paddingTop: 6, paddingBottom: 6 }}
+      />
+      <button
+        type="button"
+        onClick={() => onChange(clamp(value + 1))}
+        disabled={value >= max}
+        aria-label="زيادة"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+        style={{
+          background: "rgba(255, 255, 255, var(--glass-opacity))",
+          borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+        }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+          add
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -387,7 +448,7 @@ function CanvasCard({
   return (
     <CardShell title="الشريحة" icon="aspect_ratio">
       <div className="space-y-2">
-        <SectionLabel icon="crop_landscape">حجم الشريحة</SectionLabel>
+        <SectionLabel>حجم الشريحة</SectionLabel>
         <div className="grid grid-cols-2 gap-2">
           <SizeChoice
             active={slideSize === "16:9"}
@@ -407,7 +468,7 @@ function CanvasCard({
       </div>
 
       <div className="space-y-2 border-t border-white/[0.06] pt-3">
-        <SectionLabel icon="layers">عنصر ثابت على كل الشرائح</SectionLabel>
+        <SectionLabel>عنصر ثابت على كل الشرائح</SectionLabel>
         <input
           type="text"
           value={persistentText}
@@ -538,14 +599,14 @@ function ContentCard({
 }) {
   return (
     <CardShell title="المحتوى" icon="tune">
-      {/* Slide count — "طابق الملف" pill renders ONLY when the
-          source content was a file upload. Custom input sits INLINE
-          on the same row as the pills (was previously wrapping to
-          the next line when the row exceeded card width); tight
-          `gap-1.5` + compact `w-14` input keeps everything on one
-          row at the card's ~280 px content width. */}
+      {/* Slide count — pill row stays stable; the custom number input
+          appears as its own full-width row underneath when "مخصص" is
+          active, with `−` / `+` step buttons replacing the native
+          arrows (which never match our chrome). The pill row no
+          longer shifts vertically because no taller sibling slides
+          into it. */}
       <div className="space-y-2">
-        <SectionLabel icon="format_list_numbered">عدد الشرائح</SectionLabel>
+        <SectionLabel>عدد الشرائح</SectionLabel>
         <div className="flex items-center gap-1.5">
           <Pill active={slideCountMode === "auto"} onClick={() => onSlideCountMode("auto")}>
             تلقائي
@@ -564,23 +625,15 @@ function ContentCard({
           >
             مخصص
           </Pill>
-          {slideCountMode === "custom" ? (
-            // `.input-dark` ships with `width: 100%` which overrides
-            // Tailwind's `w-14` utility (same specificity, later
-            // source order). Inline `width: 56px` is the reliable
-            // way to pin the compact size so the input fits on the
-            // same row as the pills.
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={slideCountValue}
-              onChange={(e) => onSlideCountValue(Number(e.target.value))}
-              className="input-dark px-2 py-1 text-sm"
-              style={{ width: 56 }}
-            />
-          ) : null}
         </div>
+        {slideCountMode === "custom" ? (
+          <SlideCountStepper
+            value={slideCountValue}
+            onChange={onSlideCountValue}
+            min={1}
+            max={20}
+          />
+        ) : null}
       </div>
 
       {/* Logo placement — entire section hidden when no logo was
@@ -589,7 +642,7 @@ function ContentCard({
           upload; reminding them here adds noise). */}
       {hasLogo ? (
         <div className="space-y-2 border-t border-white/[0.06] pt-3">
-          <SectionLabel icon="my_location">موقع الشعار</SectionLabel>
+          <SectionLabel>موقع الشعار</SectionLabel>
           <div className="grid grid-cols-2 gap-3">
             <PositionPicker value={logoPosition} onChange={onLogoPosition} />
             <div className="flex flex-col gap-1.5">
@@ -612,7 +665,7 @@ function ContentCard({
 
       {/* Generation rules */}
       <div className="space-y-2 border-t border-white/[0.06] pt-3">
-        <SectionLabel icon="rule">قواعد التوليد</SectionLabel>
+        <SectionLabel>قواعد التوليد</SectionLabel>
         <div className="flex flex-wrap gap-1.5">
           {DESIGN_STYLE_OPTIONS.map((option) => (
             <Pill

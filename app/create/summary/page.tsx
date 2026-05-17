@@ -328,15 +328,32 @@ export default function CreateSummaryPage() {
         >
           السابق
         </PillButton>
-        <PillButton
-          variant="primary"
+        {/* Generate CTA — reuses `.btn-gradient-anim` (the animated
+            mesh-gradient ring + full-fill on hover used by the deck's
+            regen button in the slide-preview toolbar). Pill shape via
+            inline `borderRadius: 9999` since `.btn-gradient-anim`
+            ships with no border-radius rule and inheriting from the
+            class would tie the shape to the regen square. */}
+        <button
+          type="button"
           onClick={handleGenerate}
           disabled={loading}
-          loading={loading}
-          icon="auto_awesome"
+          aria-label="إنشاء"
+          className="btn-gradient-anim relative inline-flex h-11 items-center justify-center gap-2 px-6 text-sm font-medium transition-shadow disabled:cursor-not-allowed"
+          style={{ borderRadius: 9999 }}
         >
-          {loading ? "جارٍ الإنشاء..." : "إنشاء بذكاء"}
-        </PillButton>
+          {loading ? (
+            <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
+          ) : (
+            <span
+              className="material-symbols-outlined leading-none"
+              style={{ fontSize: 18 }}
+            >
+              auto_awesome
+            </span>
+          )}
+          <span>{loading ? "جارٍ الإنشاء..." : "إنشاء"}</span>
+        </button>
       </div>
     </CreateShell>
   );
@@ -360,7 +377,7 @@ function SummaryCard({
       <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
           <span
-            className="material-symbols-outlined text-white/70"
+            className="material-symbols-outlined text-[#7D2DFF]"
             style={{ fontSize: "18px" }}
           >
             {icon}
