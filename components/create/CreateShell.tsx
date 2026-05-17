@@ -3,10 +3,12 @@
 // Shared layout shell for the 4-step create flow. Each create page
 // renders its own content inside <CreateShell currentStep="...">.
 // The shell handles:
-//   • Top strip — page title, progress bar + "الخطوة N من 4", and a
-//     "إلغاء والعودة" exit that returns to /dashboard (clears any
-//     in-progress sessionStorage).
-//   • Left rail — <CreateStepper /> (clickable on done steps).
+//   • Top strip — single "إلغاء والعودة" exit that returns to
+//     /dashboard (clears any in-progress sessionStorage). The
+//     progress bar + counter were dropped — the left-rail stepper
+//     already shows the same information without competing for the
+//     top of the page.
+//   • Left rail — <CreateStepper /> (visual progress, not clickable).
 //   • Content slot — children render in the remaining column.
 //
 // Pages are responsible for their OWN bottom row (Next / Previous /
@@ -14,12 +16,8 @@
 // specific. The shell just provides the surrounding chrome.
 
 import Link from "next/link";
-import { CreateStepper, CREATE_STEPPER_WIDTH } from "./CreateStepper";
-import {
-  CREATE_STEPS,
-  getCreateStep,
-  type CreateStepId,
-} from "./createSteps";
+import { CreateStepper } from "./CreateStepper";
+import { type CreateStepId } from "./createSteps";
 
 // Storage keys to clear on "exit + cancel" — every key the create
 // flow writes. Keeping the list here means future steps that add a
@@ -44,17 +42,9 @@ export function CreateShell({
   subtitle?: string;
   children: React.ReactNode;
 }) {
-  const step = getCreateStep(currentStep);
-  const totalSteps = CREATE_STEPS.length;
-  const percent = Math.round((step.number / totalSteps) * 100);
-
   return (
-    <section dir="rtl" className="flex flex-col gap-6">
-      <CreateProgressStrip
-        stepNumber={step.number}
-        total={totalSteps}
-        percent={percent}
-      />
+    <section dir="rtl" className="flex flex-col gap-4">
+      <CancelLink />
 
       <div className="flex flex-row-reverse gap-6">
         {/* Left rail (visually-right in RTL since the row uses
@@ -81,25 +71,15 @@ export function CreateShell({
   );
 }
 
-// Top-of-page strip — gradient progress bar + step counter on the
-// start side (right in RTL), "إلغاء والعودة" on the end side.
-function CreateProgressStrip({
-  stepNumber,
-  total,
-  percent,
-}: {
-  stepNumber: number;
-  total: number;
-  percent: number;
-}) {
+// Cancel + return — clears every create-flow sessionStorage key so
+// the next session starts clean. Plain anchor so the browser handles
+// the navigation (no router.push race with sessionStorage.clear).
+// Sits on the start side (RTL → right) of the page above the stepper.
+function CancelLink() {
   return (
-    <div className="flex items-center justify-between gap-6">
+    <div className="flex items-center justify-start">
       <Link
         href="/dashboard"
-        // Cancel + return — clears every create-flow sessionStorage
-        // key so the next session starts clean. Plain anchor so the
-        // browser handles the navigation (no router.push race with
-        // sessionStorage.clear).
         onClick={() => {
           if (typeof window === "undefined") return;
           for (const key of CREATE_STORAGE_KEYS) {
@@ -112,30 +92,11 @@ function CreateProgressStrip({
         }}
         className="inline-flex items-center gap-1.5 text-sm text-white/60 transition-colors hover:text-white"
       >
-        <span
-          className="material-symbols-outlined"
-          style={{ fontSize: "18px" }}
-        >
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
           arrow_forward
         </span>
         إلغاء والعودة
       </Link>
-
-      <div className="flex flex-1 items-center gap-4 justify-self-end">
-        <div className="progress-track flex-1" role="progressbar"
-             aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-          <div className="progress-bar" style={{ width: `${percent}%` }} />
-        </div>
-        <span className="whitespace-nowrap text-sm text-white/60">
-          الخطوة {toArabicNumeral(stepNumber)} من {toArabicNumeral(total)}
-        </span>
-      </div>
     </div>
   );
-}
-
-// Replace ASCII digits with Arabic-Indic ones so the step counter
-// matches the rest of the create flow's Arabic numerals.
-function toArabicNumeral(n: number): string {
-  return String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 }

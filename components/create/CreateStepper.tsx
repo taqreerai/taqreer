@@ -3,16 +3,17 @@
 // Left-rail stepper for the 4-step create flow.
 //
 // Glass-card panel docked on the start side (right in RTL) of every
-// create page. Each step has three visual states driven by data:
-//   • done       — the step's sessionStorage key has a non-empty
-//                   payload AND it's not the currently-rendered step.
-//                   Renders a filled check disc + "مكتمل" pill.
-//                   CLICKABLE — navigates to that step's route.
-//   • current    — the page we're rendering. Filled brand-tinted disc
-//                   + "قيد الإجراء" pill. Non-clickable (already
-//                   here).
-//   • pending    — neither current nor done. Hollow disc + "قادم"
-//                   pill. Non-clickable.
+// create page. PURELY VISUAL — no click navigation; the only way
+// between steps is the Next / Previous CTAs at the bottom of each
+// page. The stepper just communicates where the user is in the flow.
+//
+// Each step has three visual states driven by data:
+//   • done    — the step's sessionStorage key has a non-empty payload
+//                AND it's not the currently-rendered step.
+//                Renders a filled check disc + "مكتمل" pill.
+//   • current — the page we're rendering. Filled brand-tinted disc
+//                + "قيد الإجراء" pill.
+//   • pending — neither current nor done. Hollow disc + "قادم" pill.
 //
 // State is read directly from `sessionStorage` on mount and re-read
 // on every "create-flow:state" custom event so the stepper updates
@@ -23,7 +24,6 @@
 // app's right-rail visual rhythm stays consistent across screens.
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { CREATE_STEPS, type CreateStep, type CreateStepId } from "./createSteps";
 
 export const CREATE_STEPPER_WIDTH = 260;
@@ -55,7 +55,6 @@ export function notifyCreateStateChange() {
 }
 
 export function CreateStepper({ currentStep }: { currentStep: CreateStepId }) {
-  const router = useRouter();
   const [doneSet, setDoneSet] = useState<Set<CreateStepId>>(() => new Set());
 
   // Hydrate on mount (sessionStorage is client-only). Also listen for
@@ -107,24 +106,9 @@ export function CreateStepper({ currentStep }: { currentStep: CreateStepId }) {
 
         {CREATE_STEPS.map((step) => {
           const state = stateOf(step);
-          const clickable = state === "done";
-          const Tag = clickable ? "button" : "div";
           return (
             <li key={step.id} className="relative">
-              <Tag
-                {...(clickable
-                  ? {
-                      type: "button" as const,
-                      onClick: () => router.push(step.route),
-                      "aria-label": `العودة إلى ${step.label}`,
-                    }
-                  : {})}
-                className={`flex w-full items-center gap-3 rounded-lg text-start transition-opacity ${
-                  clickable
-                    ? "cursor-pointer hover:opacity-90"
-                    : "cursor-default"
-                }`}
-              >
+              <div className="flex w-full items-center gap-3 rounded-lg text-start">
                 <StepDot state={state} />
                 <div className="flex flex-1 flex-col gap-1">
                   <span
@@ -136,7 +120,7 @@ export function CreateStepper({ currentStep }: { currentStep: CreateStepId }) {
                   </span>
                   <StepPill state={state} />
                 </div>
-              </Tag>
+              </div>
             </li>
           );
         })}

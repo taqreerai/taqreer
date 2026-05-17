@@ -235,16 +235,20 @@ function FontUploadSlot({
       />
       {file ? (
         <div
-          className="flex items-center justify-between gap-2 rounded-xl border px-4 py-3"
+          className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2"
           style={{
             background: "rgba(255, 255, 255, var(--glass-opacity))",
             borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-            minHeight: 160,
           }}
         >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="material-symbols-outlined text-white/80">font_download</span>
-            <span className="truncate font-semibold text-white">{file.name}</span>
+            <span
+              className="material-symbols-outlined text-white/80"
+              style={{ fontSize: 16 }}
+            >
+              font_download
+            </span>
+            <span className="truncate text-xs font-semibold text-white">{file.name}</span>
           </div>
           <button
             type="button"
@@ -253,37 +257,32 @@ function FontUploadSlot({
               onRemove();
             }}
             aria-label={`إزالة ${label}`}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+              close
+            </span>
           </button>
         </div>
       ) : (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          // Mirrors the رفع ملفات السياق dropzone on step 1 — same
-          // dashed border colour, same glass-circle icon, same
-          // typography hierarchy. min-h shrunk to 160 so two slots
-          // sit side-by-side inside the full-width fonts card.
-          className="flex min-h-[160px] w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-white/15 bg-black/20 p-6 text-center transition-colors hover:border-white/30"
+          // Compact dropzone — horizontal layout (icon + label inline)
+          // so the slot stays the same height as the Google-fonts
+          // combobox input. Same dashed white/15 surface as step 1
+          // (just shorter), so the design vocabulary stays consistent.
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 px-3 py-2 text-center transition-colors hover:border-white/30"
+          style={{ height: 44 }}
         >
           <span
-            className="flex h-12 w-12 items-center justify-center rounded-full"
-            style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+            className="material-symbols-outlined text-white/70"
+            style={{ fontSize: 18 }}
           >
-            <span
-              className="material-symbols-outlined text-white/80"
-              style={{ fontSize: 24 }}
-            >
-              font_download
-            </span>
+            font_download
           </span>
-          <div>
-            <p className="text-sm font-semibold text-white">{label}</p>
-            <p className="mt-1 text-xs text-white/60">اختياري — Arial افتراضياً</p>
-          </div>
-          <p className="text-[10px] text-white/40">صيغ WOFF2, WOFF, TTF, OTF</p>
+          <span className="text-xs font-semibold text-white">{label}</span>
+          <span className="text-[10px] text-white/40">— WOFF / TTF / OTF</span>
         </button>
       )}
       <p className={`${sampleSizeClass} text-right text-white${family ? ` ${family}` : ""}`}>
@@ -475,22 +474,20 @@ function BrandColorRow({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Compact 2-per-row layout: swatch + hex input + remove-x in a
-  // single 44 px row. Smaller swatch (32 px) + tighter padding
-  // (p-2) so two rows fit the colours card width without forcing
-  // the hex input to wrap.
+  // Hex-input dropped — the colour itself communicates the value,
+  // and the user can still pick a precise shade via the OS colour
+  // picker (clicking the swatch opens it). Removing the input gives
+  // us much more horizontal room so 5 swatches fit in 2 rows on a
+  // 3-column grid (3 + 2 swatches, last cell = add button).
+  //
+  // The remove (×) is overlaid on the swatch corner so the row is
+  // just one element — no separate icon slot competing for width.
   return (
-    <div
-      className="flex h-11 items-center gap-2 rounded-xl border p-2"
-      style={{
-        background: "rgba(255, 255, 255, var(--glass-opacity))",
-        borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-      }}
-    >
+    <div className="relative">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="h-7 w-7 shrink-0 rounded-md border border-white/15"
+        className="block h-12 w-full rounded-xl border border-white/15 transition-shadow hover:shadow-lg"
         style={{ backgroundColor: value }}
         aria-label={`اللون ${index + 1}`}
       />
@@ -501,26 +498,18 @@ function BrandColorRow({
         onChange={(event) => onChange(event.target.value)}
         className="hidden"
       />
-      <input
-        type="text"
-        value={value.toUpperCase()}
-        onChange={(event) => onChange(event.target.value)}
-        className="input-dark min-w-0 flex-1 px-2 py-1 font-mono text-xs"
-        spellCheck={false}
-      />
-      {/* Delete icon ALWAYS rendered so the row layout stays stable
-          (when one row's icon disappears, its hex input expands by
-          24 px and overflows). When at the MIN_COLORS floor the
-          button is faded + disabled so the user sees why they can't
-          remove the colour. */}
       <button
         type="button"
         onClick={onRemove}
         disabled={!removable}
         aria-label="إزالة اللون"
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-white/50"
+        // Overlay × in the inline-start corner (RTL → top-right).
+        // White-on-black chip so it's visible on any swatch colour.
+        // Always rendered; disabled at MIN so the column doesn't
+        // jump when the user is at the floor.
+        className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white transition-opacity hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-0"
       >
-        <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
           close
         </span>
       </button>
@@ -533,6 +522,11 @@ function BrandColorRow({
 // fires once per mount per call site.
 type StoredBrandShape = {
   colors?: unknown;
+  logo?: {
+    name?: string;
+    storageUrl?: string;
+    previewDataUrl?: string | null;
+  } | null;
   // Output-side fields (slideSize, slideCount, rules) used to live
   // in this blob too; they moved to `taqreer:create:output` in the
   // 4-step refactor (2026-05-18). Keep the legacy keys readable in
@@ -653,6 +647,29 @@ export default function CreateBrandPage() {
     name: string;
     previewDataUrl: string | null;
   } | null>(null);
+
+  // Restore logo from sessionStorage post-hydration. The original
+  // File object can't survive a navigation round-trip, but the
+  // previous "Next" click already uploaded the file and wrote
+  // { name, storageUrl, previewDataUrl } into the brand blob.
+  // useLayoutEffect (not useEffect) so the preview chip is in place
+  // before the user sees the page — no flash of empty upload zone
+  // when they hit "السابق" from /create/output.
+  useLayoutEffect(() => {
+    const s = readStoredBrand();
+    if (s?.logo?.storageUrl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoadedLogoMeta({
+        storageUrl: s.logo.storageUrl,
+        name: s.logo.name ?? "logo",
+        previewDataUrl: s.logo.previewDataUrl ?? null,
+      });
+      if (s.logo.previewDataUrl) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLogoPreview(s.logo.previewDataUrl);
+      }
+    }
+  }, []);
 
   // Constants + helpers hoisted above hydrateFromBrandKit so they're
   // accessible (the original declarations sat farther down the component
@@ -845,12 +862,20 @@ export default function CreateBrandPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  // Live preview for logo
+  // Live preview for logo. When the user picks a fresh File via the
+  // upload zone we build an Object URL. When `logo` is null we only
+  // clear the preview if there's no `loadedLogoMeta` either — that
+  // way a session-restored logo (no File, only previewDataUrl) keeps
+  // its preview, but an explicit "Remove" (which nulls both `logo`
+  // and `loadedLogoMeta`) still wipes the chip.
+  // Live preview for a newly-picked logo File. We DON'T clear
+  // `logoPreview` when `logo` is null — explicit removal already
+  // clears it via the in-card "إزالة" button, and a session-restored
+  // logo (no File, only previewDataUrl) needs the preview to survive
+  // until the user removes it. The cleanup callback revokes the
+  // object URL when the File is replaced or unmounted.
   useEffect(() => {
-    if (!logo) {
-      setLogoPreview("");
-      return;
-    }
+    if (!logo) return;
     const url = URL.createObjectURL(logo);
     setLogoPreview(url);
     return () => URL.revokeObjectURL(url);
@@ -1230,9 +1255,6 @@ export default function CreateBrandPage() {
               </span>
               <h2 className="text-sm font-semibold text-white">ألوان العلامة التجارية</h2>
             </header>
-            <p className="text-xs text-muted">
-              ٣ ألوان على الأقل، حتى ٥. كلود يختار لون الخلفية ولون النص تلقائياً ليطابق ألوانك.
-            </p>
 
             {/* Palette mode chooser — same Pill primitive as the font
                 mode toggle below, so the two cards share one button
@@ -1260,7 +1282,10 @@ export default function CreateBrandPage() {
                 onSelect={setPaletteScreenshot}
               />
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              // 3-column grid: at MAX_COLORS (5) the row is 3 + 2.
+              // At MIN (3) the row is 3 swatches + dashed add-tile
+              // = 4 cells = 1 row + 1 cell on row 2. Always ≤ 2 rows.
+              <div className="grid grid-cols-3 gap-2">
                 {colors.map((color, index) => (
                   <BrandColorRow
                     key={index}
@@ -1275,10 +1300,12 @@ export default function CreateBrandPage() {
                   <button
                     type="button"
                     onClick={addColor}
-                    className="flex h-full min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#370BF4]/60 px-3 py-2 text-xs text-white transition-colors hover:bg-[#7D2DFF]/10"
+                    aria-label="إضافة لون"
+                    className="flex h-12 w-full items-center justify-center rounded-xl border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                   >
-                    <span className="material-symbols-outlined text-base">add</span>
-                    إضافة لون
+                    <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+                      add
+                    </span>
                   </button>
                 ) : null}
               </div>
@@ -1299,10 +1326,6 @@ export default function CreateBrandPage() {
               </span>
               <h2 className="text-sm font-semibold text-white">الشعار</h2>
             </header>
-            <p className="text-xs text-muted leading-relaxed">
-              صيغة SVG فقط. الشعارات بصيغة SVG تحتفظ بجودتها على أي حجم وتتيح
-              تغيير لون الشعار حسب لون الشريحة لضمان التباين.
-            </p>
             <CompactUploadZone
               label="ارفع الشعار (SVG فقط)"
               accept=".svg,image/svg+xml"
@@ -1361,9 +1384,6 @@ export default function CreateBrandPage() {
             </span>
             <h2 className="text-sm font-semibold text-white">الخطوط</h2>
           </header>
-          <p className="text-xs text-muted">
-            ارفع خطوطك الخاصة أو اختر من Google Fonts. اتركها فارغة لاستخدام Arial.
-          </p>
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {/* Heading font */}
