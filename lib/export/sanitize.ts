@@ -111,114 +111,22 @@ export function getClientDOMPurify(): DOMPurifyAPI {
  * returns the raw input** — fail-closed by design so a sanitiser bug can't
  * become an XSS vector.
  *
- * Post-sanitise pass converts physical CSS L/R properties (`left`, `right`,
- * `padding-left`, …) into their logical equivalents (`inset-inline-start`,
- * `padding-inline-end`, …). See `rewritePhysicalToLogical` below for the why.
+ * There used to be a physical→logical CSS rewrite here (converting
+ * `right:N` → `inset-inline-end:N`, etc.) that ran on every element. It
+ * was designed for an earlier prompt that asked Claude to lay slides out
+ * LTR-style and rely on the rewrite to mirror them for RTL decks. The
+ * current SYSTEM_PROMPT instructs Claude to compose natively for the
+ * slide's `dir` — physical CSS now means exactly what it says, so the
+ * rewrite was actively breaking RTL placement (e.g. an Arabic title
+ * Claude pinned with `right:100px` was getting flipped to the visual
+ * left). The rewrite is gone; sanitisation is pure DOMPurify.
  */
 export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
-    const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
-    return rewritePhysicalToLogical(clean);
+    return dp.sanitize(html, DOMPURIFY_CONFIG);
   } catch (err) {
     console.error("[sanitize] sanitiseSlideHtml failed:", err);
     return "";
-  }
-}
-
-// Inline-style CSS prop name (exact match, lower-cased) → logical
-// equivalent. Logical properties resolve to physical based on the
-// containing block's writing direction:
-//   • LTR  →  inline-start = left,  inline-end = right
-//   • RTL  →  inline-start = right, inline-end = left
-// Claude generates slide CSS as if it were LTR (calling sides
-// "left" / "right" literally). When the slide is rendered with
-// `dir="rtl"`, those physical values stay anchored to the visual
-// left / right — so a decorative box Claude placed at `right: 0` to
-// sit on the start side ends up clashing with the RTL-flowed text.
-// Rewriting to logical equivalents makes the WHOLE slide mirror as
-// a unit in RTL while leaving LTR slides byte-identical.
-const PHYSICAL_TO_LOGICAL: Record<string, string> = {
-  left: "inset-inline-start",
-  right: "inset-inline-end",
-  "padding-left": "padding-inline-start",
-  "padding-right": "padding-inline-end",
-  "margin-left": "margin-inline-start",
-  "margin-right": "margin-inline-end",
-  "border-left": "border-inline-start",
-  "border-right": "border-inline-end",
-  "border-left-width": "border-inline-start-width",
-  "border-right-width": "border-inline-end-width",
-  "border-left-color": "border-inline-start-color",
-  "border-right-color": "border-inline-end-color",
-  "border-left-style": "border-inline-start-style",
-  "border-right-style": "border-inline-end-style",
-};
-
-// Walk the sanitised slide markup and rewrite every inline `style` attr.
-// `<style>` blocks intentionally NOT touched — Claude rarely emits them
-// and the regex-on-CSS-text risk (false positives in selectors / urls /
-// keyframe % values) outweighs the benefit at the volume we see.
-//
-// Operates on each element's live `CSSStyleDeclaration` rather than
-// string-splitting on `;` — a naive split would corrupt values that
-// legitimately carry semicolons inside parens (e.g. `background-image:
-// url(data:image/svg+xml;base64,…)`) by treating the inner `;` as a
-// declaration boundary.
-//
-// `text-align` intentionally NOT rewritten. It controls how the text
-// sits inside its OWN box, not the box's position on the slide —
-// `text-align: left` on a box that lives on the visual left edge
-// should keep aligning to the box's left edge in any direction.
-// Flipping it to `start` causes RTL slides to flush that text to the
-// box's right, which is the wrong corner for anything Claude
-// intentionally pinned to a physical side.
-//
-// Opt-out: elements carrying `data-anchor` are skipped. Used by chrome
-// (logo, pagination) where the position is a physical corner the user
-// explicitly picked — those should stay anchored to the SAME visual
-// corner regardless of slide direction. The prompt tells Claude to
-// stamp `data-anchor` on those elements with physical CSS values.
-function rewritePhysicalToLogical(html: string): string {
-  if (typeof window === "undefined") return html;
-  try {
-    const doc = new DOMParser().parseFromString(
-      `<!DOCTYPE html><div>${html}</div>`,
-      "text/html",
-    );
-    const root = doc.body.firstElementChild;
-    if (!root) return html;
-    const els = root.querySelectorAll<HTMLElement>(
-      "[style]:not([data-anchor]):not([data-anchor] *)",
-    );
-    let changed = false;
-    els.forEach((el) => {
-      const before = el.style.cssText;
-      for (const [physical, logical] of Object.entries(PHYSICAL_TO_LOGICAL)) {
-        const value = el.style.getPropertyValue(physical);
-        if (!value) continue;
-        const priority = el.style.getPropertyPriority(physical);
-        el.style.removeProperty(physical);
-        el.style.setProperty(logical, value, priority);
-      }
-      const floatValue = el.style
-        .getPropertyValue("float")
-        .trim()
-        .toLowerCase();
-      if (floatValue === "left" || floatValue === "right") {
-        const priority = el.style.getPropertyPriority("float");
-        el.style.setProperty(
-          "float",
-          floatValue === "left" ? "inline-start" : "inline-end",
-          priority,
-        );
-      }
-      if (el.style.cssText !== before) changed = true;
-    });
-    return changed ? root.innerHTML : html;
-  } catch {
-    // DOMParser failure is unexpected in a browser context; return the
-    // unmodified sanitised HTML rather than swallowing the slide.
-    return html;
   }
 }

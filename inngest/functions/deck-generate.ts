@@ -22,23 +22,16 @@ CANVAS
 - Any layout primitive (flex, grid, absolute, transforms). Slide body only — no <!DOCTYPE>/<html>/<head>/<body>. Inline <style> per slide is allowed.
 
 LANGUAGE & DIRECTION
-- Set \`dir="rtl"\` (Arabic) or \`dir="ltr"\` (Latin) on the slide root. For text whose script differs, set explicit \`dir\` on that element.
+- Set \`dir="rtl"\` (Arabic) or \`dir="ltr"\` (Latin) on the slide ROOT.
+- DO NOT set \`dir\` on a child block (\`<div>\`, \`<p>\`, \`<h1>\`–\`<h6>\`) that contains Latin letters. The block's own \`text-align: start\` would then resolve LEFT inside an RTL slide and push English headings / subtitles / labels to the visual left — wrong side. Unicode BiDi already renders contiguous Latin letters correctly inside an RTL parent without any \`dir\` attribute on the container.
+- For INLINE mixed-script runs (an Arabic line that embeds an English word, URL, email, version number, or any string with neutrals like \`@\` \`.\` \`/\` \`©\` digits), wrap the English run in a \`<span dir="ltr">\` so neutrals resolve to the correct side.
+- Digit-only chrome blocks (pagination "01 / 07", dates "26.08.2026", phone numbers) — \`dir="ltr"\` on the block IS fine, because the digits would otherwise reorder under the RTL paragraph direction.
 - \`letter-spacing\` on Arabic-bearing elements is stripped at export.
 
 COMPOSITION DIRECTION — design natively, NO mirror pipeline downstream
-Every coordinate, every SVG viewBox-x, every \`left\`/\`right\` value renders exactly as written. This is the #1 rule violated by lazy generations — read it twice.
+Every coordinate renders as written. Background graphics (gradients, decorative shapes, ring sets, atmospheric blobs, illustrations, recognizable objects) anchor on the OPPOSITE half of the canvas from the text content, so they complement instead of overlap. In RTL slides the text sits on the RIGHT (reading start), so all decoration anchors on the LEFT half (focal center-x < 960 on a 1920 canvas). LTR slides invert — text on LEFT, decoration on RIGHT.
 
-\`dir="rtl"\` (Arabic — title and reading flow start visually RIGHT):
-- Background focal mass (hero gradients, decorative shapes, ring sets, atmospheric blobs) MUST overlap the RIGHT half of the viewBox. On 1920 wide, the dominant element's center-x is > 960. Faint trailing decoration goes LEFT.
-- Sweeping curves, diagonals, gradient sweeps originate from RIGHT (near x=1920) and exit LEFT — the eye travels WITH the reading.
-- Recognizable objects (controllers, phones, devices, characters, hands, branded marks) — natural orientation only. NEVER use \`transform: scaleX(-1)\` to "face" the headline. If you want it facing the reading flow, redraw the object facing left.
-
-Anti-examples (these are BUGS, redraw):
-- RTL slide with hero glow at \`cx="320"\` → wrong (LTR thinking). Move to \`cx="1600"\`.
-- RTL slide with a curve originating at \`x="0"\` → wrong. Originate at \`x="1920"\`.
-- A controller drawn with \`transform="scaleX(-1)"\` to face right → wrong. Redraw the controller naturally facing left.
-
-\`dir="ltr"\` (Latin): invert all — focal mass on LEFT half, curves sweep LEFT→RIGHT, Western object orientation.
+Recognizable objects (controllers, phones, characters, hands, marks) keep their natural orientation. NEVER use \`transform: scaleX(-1)\` to face them — pose is in the source path data, not a CSS transform.
 
 DESIGN PHILOSOPHY
 - 30–40 % of every slide is whitespace.
@@ -126,6 +119,7 @@ LAYOUT GOTCHAS
 - Headline + body in one container: explicit \`margin-bottom\` or grid \`gap\` (tight stacks overlap in export).
 - Single-line text: \`width: max-content\` + \`padding-inline\`; inside constrained parent use \`white-space: nowrap\`.
 - Single-script siblings in flex (two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Use absolute positioning. Mixed-script siblings auto-split.
+- RTL flex columns flip cross-axis alignment. \`align-items: flex-end\` on a \`flex-direction: column\` container lands items on the VISUAL LEFT in an RTL slide (the cross axis is inline-reversed). To right-align column items in RTL, use \`align-items: flex-start\` — or drop \`align-items\` entirely and let \`text-align: right\` on the container do the work with full-width block children.
 
 OUTPUT — JSON only, no prose, no markdown fences
 {
@@ -478,13 +472,17 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // the literal string so he doesn't have to interpret "top-right"
     // through RTL/LTR mental gymnastics — which is what was producing
     // the wrong-corner placement before this fix.
+    // 40 px from each edge matches cornerToCss (used for pagination
+    // + persistent text) so all chrome shares one horizontal baseline
+    // along the bottom (or top) edge — previously the logo sat at
+    // 80 px while siblings sat at 40 px, breaking the chrome row.
     const cornerCss = (() => {
-      const vertical = pos.startsWith("top") ? "top:80px" : "bottom:80px";
+      const vertical = pos.startsWith("top") ? "top:40px" : "bottom:40px";
       if (pos.endsWith("-center")) {
         return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
       }
       const side = pos.endsWith("-left") ? "left" : "right";
-      return `position:absolute; ${side}:80px; ${vertical};`;
+      return `position:absolute; ${side}:40px; ${vertical};`;
     })();
     if (logo.svgMarkup) {
       // Inline-markup path: brief carries the SVG bytes server-side
