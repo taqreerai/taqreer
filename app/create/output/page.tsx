@@ -43,7 +43,6 @@ const DESIGN_STYLE_OPTIONS = [
   "مرح",
   "صحفي",
   "جريء",
-  "كلاسيكي",
 ];
 
 const OUTPUT_KEY = "taqreer:create:output";
@@ -436,6 +435,10 @@ function CanvasCard({
   );
 }
 
+// Compact horizontal size choice — title + subtitle on the start
+// side (right in RTL), aspect-ratio preview icon on the end side.
+// Original layout had everything centered with a huge preview tile
+// which made the buttons read as banners rather than options.
 function SizeChoice({
   active,
   onClick,
@@ -454,26 +457,28 @@ function SizeChoice({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 transition-colors ${
+      className={`flex h-11 items-center justify-between gap-3 rounded-xl border px-3 transition-colors ${
         active ? "btn-gradient" : "backdrop-blur-glass hover:opacity-90"
       }`}
       style={
         active
-          ? undefined
+          ? { borderRadius: 12 }
           : {
               background: "rgba(255, 255, 255, var(--glass-opacity))",
               borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
             }
       }
     >
-      <span
-        className="rounded-md border border-white/20 bg-white/5"
-        style={{ width: 36, aspectRatio: ratio }}
-      />
-      <span className="text-xs font-semibold text-white">{label}</span>
-      <span className={`text-[10px] ${active ? "text-white/80" : "text-white/50"}`}>
-        {sub}
+      <span className="flex flex-col items-start leading-tight">
+        <span className="text-xs font-semibold text-white">{label}</span>
+        <span className={`text-[10px] ${active ? "text-white/80" : "text-white/50"}`}>
+          {sub}
+        </span>
       </span>
+      <span
+        className="rounded-sm border border-white/30 bg-white/10"
+        style={{ height: 18, aspectRatio: ratio }}
+      />
     </button>
   );
 }
@@ -521,20 +526,23 @@ function ContentCard({
 }) {
   return (
     <CardShell title="المحتوى" icon="tune">
-      {/* Slide count */}
+      {/* Slide count — "طابق الملف" pill renders ONLY when the
+          source content was a file upload (text-only briefs have
+          no page count to match). */}
       <div className="space-y-2">
         <SectionLabel icon="format_list_numbered">عدد الشرائح</SectionLabel>
         <div className="flex flex-wrap items-center gap-2">
           <Pill active={slideCountMode === "auto"} onClick={() => onSlideCountMode("auto")}>
             تلقائي
           </Pill>
-          <Pill
-            active={slideCountMode === "match"}
-            onClick={() => onSlideCountMode("match")}
-            disabled={contentType !== "file"}
-          >
-            طابق الملف
-          </Pill>
+          {contentType === "file" ? (
+            <Pill
+              active={slideCountMode === "match"}
+              onClick={() => onSlideCountMode("match")}
+            >
+              طابق الملف
+            </Pill>
+          ) : null}
           <Pill
             active={slideCountMode === "custom"}
             onClick={() => onSlideCountMode("custom")}
@@ -554,14 +562,13 @@ function ContentCard({
         </div>
       </div>
 
-      {/* Logo placement */}
-      <div className="space-y-2 border-t border-white/[0.06] pt-3">
-        <SectionLabel icon="my_location">موقع الشعار</SectionLabel>
-        {!hasLogo ? (
-          <p className="text-[11px] text-white/40">
-            لم يتم رفع شعار في الخطوة السابقة
-          </p>
-        ) : (
+      {/* Logo placement — entire section hidden when no logo was
+          uploaded. Avoids the "لم يتم رفع شعار..." placeholder which
+          served no purpose (the user already knows they skipped logo
+          upload; reminding them here adds noise). */}
+      {hasLogo ? (
+        <div className="space-y-2 border-t border-white/[0.06] pt-3">
+          <SectionLabel icon="my_location">موقع الشعار</SectionLabel>
           <div className="grid grid-cols-2 gap-3">
             <PositionPicker value={logoPosition} onChange={onLogoPosition} />
             <div className="flex flex-col gap-1.5">
@@ -579,8 +586,8 @@ function ContentCard({
               </Pill>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {/* Generation rules */}
       <div className="space-y-2 border-t border-white/[0.06] pt-3">

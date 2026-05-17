@@ -262,7 +262,7 @@ function FontUploadSlot({
           <span className="mt-1 text-xs text-muted">اختياري — Arial افتراضياً</span>
         </button>
       )}
-      <p className={`${sampleSizeClass} text-white${family ? ` ${family}` : ""}`}>
+      <p className={`${sampleSizeClass} text-right text-white${family ? ` ${family}` : ""}`}>
         {sampleText}
       </p>
     </div>
@@ -285,7 +285,11 @@ function GoogleFontSlot({
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 p-3">
-        <p className="mb-2 text-xs text-muted">{label} — اختر من Google Fonts</p>
+        {/* `label` is already shown as the slot title ("خط العناوين" /
+            "خط النص") above this component — the previous sub-title
+            "{label} — اختر من Google Fonts" duplicated that and added
+            visual noise. Mode is also clear from the toggle pill,
+            so no caption needed here. */}
         <div className="max-h-[180px] space-y-1 overflow-y-auto pr-1">
           {GOOGLE_FONTS.map((font) => {
             const isActive = selected === font.family;
@@ -315,7 +319,10 @@ function GoogleFontSlot({
         </div>
       </div>
       <p
-        className={`${sampleSizeClass} text-white`}
+        // Force right-align on the sample preview; some Google fonts
+        // include mixed-direction sample text and inherit text-align
+        // unreliably across nested flex/grid parents.
+        className={`${sampleSizeClass} text-right text-white`}
         style={selected ? { fontFamily: `"${selected}", system-ui, sans-serif` } : undefined}
       >
         {sampleText}
@@ -343,12 +350,22 @@ function BrandColorRow({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Compact 2-per-row layout: swatch + hex input + remove-x in a
+  // single 44 px row. Smaller swatch (32 px) + tighter padding
+  // (p-2) so two rows fit the colours card width without forcing
+  // the hex input to wrap.
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 p-3">
+    <div
+      className="flex h-11 items-center gap-2 rounded-xl border p-2"
+      style={{
+        background: "rgba(255, 255, 255, var(--glass-opacity))",
+        borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+      }}
+    >
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="h-10 w-10 shrink-0 rounded-lg border border-[rgba(42,36,59,0.8)]"
+        className="h-7 w-7 shrink-0 rounded-md border border-white/15"
         style={{ backgroundColor: value }}
         aria-label={`اللون ${index + 1}`}
       />
@@ -363,7 +380,7 @@ function BrandColorRow({
         type="text"
         value={value.toUpperCase()}
         onChange={(event) => onChange(event.target.value)}
-        className="input-dark flex-1 font-mono text-sm"
+        className="input-dark min-w-0 flex-1 px-2 py-1 font-mono text-xs"
         spellCheck={false}
       />
       {removable ? (
@@ -371,9 +388,11 @@ function BrandColorRow({
           type="button"
           onClick={onRemove}
           aria-label="إزالة اللون"
-          className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-white"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/50 transition-colors hover:bg-white/10 hover:text-white"
         >
-          <span className="material-symbols-outlined text-base">close</span>
+          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+            close
+          </span>
         </button>
       ) : null}
     </div>
@@ -1102,7 +1121,7 @@ export default function CreateBrandPage() {
                 onSelect={setPaletteScreenshot}
               />
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
                 {colors.map((color, index) => (
                   <BrandColorRow
                     key={index}
@@ -1117,14 +1136,12 @@ export default function CreateBrandPage() {
                   <button
                     type="button"
                     onClick={addColor}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#370BF4]/60 px-3 py-2 text-sm text-white transition-colors hover:bg-[#7D2DFF]/10"
+                    className="flex h-full min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#370BF4]/60 px-3 py-2 text-xs text-white transition-colors hover:bg-[#7D2DFF]/10"
                   >
                     <span className="material-symbols-outlined text-base">add</span>
-                    إضافة لون ({colors.length}/{MAX_COLORS})
+                    إضافة لون
                   </button>
-                ) : (
-                  <p className="text-center text-xs text-muted">الحد الأقصى {MAX_COLORS} ألوان</p>
-                )}
+                ) : null}
               </div>
             )}
           </div>

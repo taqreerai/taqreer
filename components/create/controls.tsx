@@ -28,7 +28,9 @@ const CORNER_OPTIONS: { value: CornerPosition; icon: string; label: string }[] =
 
 // Gradient pill — primary "on" state of a chooser group (design
 // style, palette-mode, exclude flags, etc.). Glass-card surface
-// when off so it tracks the user's glass preset.
+// when off so it tracks the user's glass preset. `.btn-gradient`
+// in globals.css sets `border-radius: 10px`, so the active state
+// forces 9999 inline (same trick as PillButton primary).
 export function Pill({
   active,
   onClick,
@@ -52,7 +54,7 @@ export function Pill({
       }`}
       style={
         active
-          ? undefined
+          ? { borderRadius: 9999 }
           : {
               background: "rgba(255, 255, 255, var(--glass-opacity))",
               borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
@@ -95,9 +97,12 @@ export function PositionPicker({
                 ? "btn-gradient text-white"
                 : "backdrop-blur-glass border text-white hover:opacity-90"
             }`}
+            // Lock the rounded-xl shape for the active state — `.btn-gradient`'s
+            // 10px wins otherwise (corners look softer than the inactive 12 px
+            // siblings). Inactive state uses Tailwind's `rounded-xl` directly.
             style={
               active
-                ? undefined
+                ? { borderRadius: 12 }
                 : {
                     background: "rgba(255, 255, 255, var(--glass-opacity))",
                     borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
