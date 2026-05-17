@@ -188,7 +188,57 @@ type DeckGenerateEvent = {
   type?: "create" | "enhance";
   enhance?: EnhanceData;
   brief: unknown;
+  // User-picked generation quality preset. Maps to model + thinking +
+  // effort below. Optional / unknown values fall back to "medium".
+  quality?: "fast" | "medium" | "quality" | "extreme";
 };
+
+// Map a quality preset to the actual Anthropic call parameters.
+// Knob ladder: fast → medium → quality → extreme.
+//
+// Mode notes:
+//   • fast / "disabled" thinking — Claude streams JSON immediately,
+//     no upfront reasoning. Smallest output quality, fastest.
+//   • adaptive thinking is Claude's "decide if and how much to
+//     think" mode. effort guides the cap; "low" skips for simple
+//     slides, "high" reasons hard on every slide.
+//   • extreme keeps Opus 4.7 + adaptive high — the original baseline
+//     before any speed tuning. Reserved for power-user generations.
+type AnthropicCallParams = {
+  model: string;
+  thinking: { type: "adaptive" } | { type: "disabled" };
+  outputConfig?: { effort: "low" | "medium" | "high" };
+};
+function paramsForQuality(
+  quality: DeckGenerateEvent["quality"],
+): AnthropicCallParams {
+  switch (quality) {
+    case "fast":
+      return {
+        model: "claude-sonnet-4-6",
+        thinking: { type: "disabled" },
+      };
+    case "quality":
+      return {
+        model: "claude-sonnet-4-6",
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "medium" },
+      };
+    case "extreme":
+      return {
+        model: "claude-opus-4-7",
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "high" },
+      };
+    case "medium":
+    default:
+      return {
+        model: "claude-sonnet-4-6",
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "low" },
+      };
+  }
+}
 
 function extractJson(text: string): string {
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -498,6 +548,16 @@ export const deckGenerate = inngest.createFunction(
   async ({ event, step, logger }) => {
     const data = event.data as DeckGenerateEvent;
     const { projectId, versionId, jobId } = data;
+    // Resolve quality preset → model + thinking + effort. Falls back
+    // to "medium" via paramsForQuality's default branch when missing
+    // (older queued jobs predating this field).
+    const callParams = paramsForQuality(data.quality);
+    logger.info("claude_quality_preset", {
+      quality: data.quality ?? "medium (default)",
+      model: callParams.model,
+      thinking: callParams.thinking.type,
+      effort: callParams.outputConfig?.effort ?? "n/a",
+    });
 
     // Estimated total slides for the progress UI. Use the brief's slideCount
     // if the user picked a custom value; otherwise default to 8 (we ask Claude
@@ -558,25 +618,14 @@ export const deckGenerate = inngest.createFunction(
 
         await writeProgress("thinking", maxSlideSeen, estimatedTotal);
 
-        // Sonnet 4.6 + adaptive thinking at "low" effort. One notch
-        // above pure speed mode (thinking: disabled): Claude is now
-        // allowed to think, but the "low" effort cap means it
-        // minimises thinking and SKIPS it entirely on simple slides.
-        // The trade is a small quality lift (Claude can reason about
-        // composition on the slides that actually benefit) for a
-        // modest latency increase (only the slides that need it pay).
-        //
-        // Knob ladder for later tuning, lowest → highest quality:
-        //   Sonnet + thinking disabled                  (raw speed)
-        //   Sonnet + thinking adaptive, effort "low"    ← CURRENT
-        //   Sonnet + thinking adaptive, effort "medium"
-        //   Opus   + thinking disabled
-        //   Opus   + thinking adaptive, effort "low"
-        //   …  up to Opus + adaptive + "high" (full baseline)
+        // Anthropic call params are resolved up-top from the user's
+        // quality preset (paramsForQuality). The single stream call
+        // shape stays the same regardless of tier — only the model /
+        // thinking / effort fields shift.
         const stream = client.messages.stream({
-          model: "claude-sonnet-4-6",
+          model: callParams.model,
           max_tokens: 48000,
-          thinking: { type: "adaptive" },
+          thinking: callParams.thinking,
           system: [
             {
               type: "text",
@@ -584,7 +633,9 @@ export const deckGenerate = inngest.createFunction(
               cache_control: { type: "ephemeral" },
             },
           ],
-          output_config: { effort: "low" },
+          ...(callParams.outputConfig
+            ? { output_config: callParams.outputConfig }
+            : {}),
           messages: [{ role: "user", content: userMessage }],
         });
 

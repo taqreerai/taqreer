@@ -5,6 +5,7 @@ import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { signBrandAssetUrl } from "@/lib/storage/sign";
+import { DEFAULT_QUALITY, isQuality, type Quality } from "@/lib/types/quality";
 
 // Fetch the logo SVG content via the admin storage client (bucket is private)
 // and return sanitised markup. Sanitisation here is a defence-in-depth pass —
@@ -128,6 +129,7 @@ type CreateProjectPayload = {
   };
   saveBrandKit?: boolean;
   slideCount?: number | null;
+  quality?: Quality | null;
 };
 
 function buildProjectTitle(payload: CreateProjectPayload) {
@@ -263,10 +265,19 @@ export async function POST(request: Request) {
       rules: payload.rules ?? null,
       slideCount: payload.slideCount,
     };
+    // Quality preset — user-picked on /create/summary. Validated
+    // here so a malformed value can't drive the Claude call params.
+    // Defaults to "medium" (current backend baseline) on missing /
+    // unknown values, including from older queued jobs that
+    // predate this field.
+    const quality: Quality = isQuality(payload.quality)
+      ? payload.quality
+      : DEFAULT_QUALITY;
     const eventPayload = {
       type: projectType,
       enhance: projectType === "enhance" ? payload.enhance ?? null : null,
       brief,
+      quality,
     };
 
     const result = await prisma.$transaction(async (tx) => {

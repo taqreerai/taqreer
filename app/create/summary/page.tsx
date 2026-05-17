@@ -8,10 +8,20 @@
 // count + rules + logo placement), so this page reads brand +
 // output and stitches them at submit.
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
+import { Pill } from "@/components/create/controls";
+import {
+  DEFAULT_QUALITY,
+  QUALITY_PRESETS,
+  estimateMinutes,
+  isQuality,
+  type Quality,
+} from "@/lib/types/quality";
+
+const QUALITY_KEY = "taqreer:create:quality";
 
 type ContentState = {
   type: "file" | "text";
@@ -90,6 +100,27 @@ export default function CreateSummaryPage() {
   const [output, setOutput] = useState<StoredOutput | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Quality preset — pill-selected, persisted to sessionStorage so a
+  // page refresh keeps the user's pick. Defaults to "medium" which
+  // matches the current backend baseline.
+  const [quality, setQualityState] = useState<Quality>(DEFAULT_QUALITY);
+
+  useLayoutEffect(() => {
+    const stored = window.sessionStorage.getItem(QUALITY_KEY);
+    if (isQuality(stored)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQualityState(stored);
+    }
+  }, []);
+
+  const setQuality = (q: Quality) => {
+    setQualityState(q);
+    try {
+      window.sessionStorage.setItem(QUALITY_KEY, q);
+    } catch {
+      /* quota — best-effort persistence */
+    }
+  };
 
   useEffect(() => {
     const rawContent = sessionStorage.getItem("taqreer:create:content");
@@ -175,6 +206,7 @@ export default function CreateSummaryPage() {
           rules,
           saveBrandKit: false,
           slideCount: resolvedSlideCount,
+          quality,
         }),
       });
 
@@ -319,6 +351,33 @@ export default function CreateSummaryPage() {
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
+      {/* Quality preset — four pills mapping to model + thinking +
+          effort combos in deck-generate.ts. Right-aligned to sit
+          visually adjacent to the إنشاء button below it. Each pill
+          shows a muted "~N د" estimate for the user's current slide
+          count (or 8 if "auto"). */}
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {QUALITY_PRESETS.map((preset) => {
+          const slideCount =
+            output?.slideCount?.value && output.slideCount.value > 0
+              ? output.slideCount.value
+              : 8;
+          const eta = estimateMinutes(preset.key, slideCount);
+          return (
+            <Pill
+              key={preset.key}
+              active={quality === preset.key}
+              onClick={() => setQuality(preset.key)}
+            >
+              <span>{preset.label}</span>
+              <span className="ms-1.5 text-white/40" dir="ltr">
+                ~{eta} د
+              </span>
+            </Pill>
+          );
+        })}
+      </div>
 
       <div className="flex items-center justify-between pt-2">
         <PillButton
