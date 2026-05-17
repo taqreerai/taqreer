@@ -174,25 +174,30 @@ type DeckGenerateEvent = {
 // Map a quality preset to the actual Anthropic call parameters.
 // Knob ladder: fast → medium → quality → extreme.
 //
-// Mode notes:
-//   • fast / "disabled" thinking — Claude streams JSON immediately,
-//     no upfront reasoning. Smallest output quality, fastest.
-//   • medium / quality / extreme use `enabled` thinking with an
-//     EXPLICIT budget_tokens cap. We previously used `adaptive` +
-//     `output_config.effort`, but adaptive has no hard cap — Claude
-//     decides his own budget and on a 600+ line system prompt that
-//     decision could be 15+ minutes of thinking with no streamed
-//     output. `enabled` + budget_tokens is the only way to keep
-//     wall-clock predictable.
-//   • Budgets are rough: at Sonnet's ~30–60 tok/s, 4000 ≈ 1–2 min,
-//     12000 ≈ 3–6 min, 32000 ≈ 9+ min (Opus is slower per-token).
-//   • output_config is intentionally dropped — we don't use
-//     structured outputs and `effort` was load-bearing the wrong way.
+// IMPORTANT — `thinking.type.enabled` (with explicit `budget_tokens`)
+// is REJECTED at runtime on the 4.x models (claude-opus-4-7,
+// claude-sonnet-4-6) with:
+//   "thinking.type.enabled is not supported for this model. Use
+//    thinking.type.adaptive and output_config.effort to control
+//    thinking behavior."
+// (The SDK type definition advertises ThinkingConfigEnabled but the
+// runtime check disagrees — trust the runtime.) So the only supported
+// way to vary thinking on these models is:
+//   • `thinking.type.disabled` — no thinking at all (fast tier)
+//   • `thinking.type.adaptive` + `output_config.effort` — Claude picks
+//     a budget, modulated by effort tier (low / medium / high / xhigh
+//     / max). Effort is a general computational-effort knob, not a
+//     structured-output-only flag.
+//
+// Wall-clock predictability isn't perfect here — adaptive can choose
+// long thinking on complex prompts. We accept the trade-off because
+// it's the only API-supported path on the current models. If runs go
+// long, the next lever is dropping a tier (e.g. quality → medium) or
+// trimming the prompt further.
 type AnthropicCallParams = {
   model: string;
-  thinking:
-    | { type: "disabled" }
-    | { type: "enabled"; budget_tokens: number };
+  thinking: { type: "adaptive" } | { type: "disabled" };
+  outputConfig?: { effort: "low" | "medium" | "high" | "xhigh" | "max" };
 };
 function paramsForQuality(
   quality: DeckGenerateEvent["quality"],
@@ -206,18 +211,21 @@ function paramsForQuality(
     case "quality":
       return {
         model: "claude-sonnet-4-6",
-        thinking: { type: "enabled", budget_tokens: 12000 },
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "medium" },
       };
     case "extreme":
       return {
         model: "claude-opus-4-7",
-        thinking: { type: "enabled", budget_tokens: 32000 },
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "high" },
       };
     case "medium":
     default:
       return {
         model: "claude-sonnet-4-6",
-        thinking: { type: "enabled", budget_tokens: 4000 },
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "low" },
       };
   }
 }
@@ -542,10 +550,7 @@ export const deckGenerate = inngest.createFunction(
       quality: data.quality ?? "medium (default)",
       model: callParams.model,
       thinking: callParams.thinking.type,
-      thinking_budget:
-        callParams.thinking.type === "enabled"
-          ? callParams.thinking.budget_tokens
-          : 0,
+      effort: callParams.outputConfig?.effort ?? "n/a",
     });
 
     // Estimated total slides for the progress UI. Use the brief's slideCount
@@ -610,14 +615,22 @@ export const deckGenerate = inngest.createFunction(
           })
           .catch(() => undefined);
 
-      // Budget surfaced to the UI alongside the live token counter so the
-      // user sees "Claude is thinking… 3.2k / 12k tokens" and can predict
-      // how much longer the thinking phase will run. Zero when thinking is
-      // disabled (fast tier) — the UI hides the counter in that case.
-      const thinkingBudget =
-        callParams.thinking.type === "enabled"
-          ? callParams.thinking.budget_tokens
-          : 0;
+      // Effort tier (low / medium / high) doubles as an approximate budget
+      // ceiling for the UI counter. The API doesn't accept an explicit
+      // budget_tokens on adaptive mode, so we pick a rough cap per effort
+      // tier that matches what we observe at runtime — Claude's adaptive
+      // thinking on Sonnet ~tops out around these levels for editorial-
+      // grade decks. The counter is a UX signal, not a hard contract.
+      const thinkingBudget = (() => {
+        if (callParams.thinking.type !== "adaptive") return 0;
+        const effort = callParams.outputConfig?.effort;
+        if (effort === "low") return 4000;
+        if (effort === "medium") return 12000;
+        if (effort === "high") return 24000;
+        if (effort === "xhigh") return 40000;
+        if (effort === "max") return 48000;
+        return 0;
+      })();
 
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         const userMessage =
@@ -645,6 +658,11 @@ export const deckGenerate = inngest.createFunction(
               cache_control: { type: "ephemeral" },
             },
           ],
+          // output_config.effort is the API-supported way to modulate
+          // adaptive thinking on the 4.x models — see paramsForQuality.
+          ...(callParams.outputConfig
+            ? { output_config: callParams.outputConfig }
+            : {}),
           messages: [{ role: "user", content: userMessage }],
         });
 

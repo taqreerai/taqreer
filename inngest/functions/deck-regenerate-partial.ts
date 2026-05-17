@@ -232,15 +232,14 @@ export const deckRegeneratePartial = inngest.createFunction(
         step.run(`regen-slide-${slideId}`, async () => {
           const client = getClient();
           const userMessage = buildPartialUserMessage(source, slideId, comments);
-          // Explicit thinking budget — `adaptive` + `output_config.effort`
-          // was load-bearing the wrong way (effort isn't a hard cap, and
-          // adaptive can run for 15+ minutes on complex slides). 8000 tokens
-          // gives Opus enough headroom for a careful redesign of one slide
-          // while keeping wall-clock predictable.
+          // `thinking.type.enabled` is rejected at runtime on claude-opus-4-7
+          // ("not supported for this model. Use thinking.type.adaptive and
+          // output_config.effort"). adaptive + effort:high is the supported
+          // path for a careful single-slide redesign.
           const message = await client.messages.create({
             model: "claude-opus-4-7",
             max_tokens: 16000,
-            thinking: { type: "enabled", budget_tokens: 8000 },
+            thinking: { type: "adaptive" },
             system: [
               {
                 type: "text",
@@ -248,6 +247,7 @@ export const deckRegeneratePartial = inngest.createFunction(
                 cache_control: { type: "ephemeral" },
               },
             ],
+            output_config: { effort: "high" },
             messages: [{ role: "user", content: userMessage }],
           });
           logger.info("partial_regen_usage", {
