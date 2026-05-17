@@ -61,7 +61,7 @@ const FontDefinition = z.object({
     .optional(),
 });
 
-const Theme = z.object({
+export const ThemeSchema = z.object({
   // Brand accent palette (3–8 hex). Exposed as CSS vars
   // --brand-1, --brand-2, … --brand-N by the renderer. Minimum 3 because
   // the renderer wires `--primary` / `--accent` / `--secondary` to
@@ -77,7 +77,7 @@ const Theme = z.object({
   text: HexColor,
 });
 
-const Slide = z.object({
+export const SlideSchema = z.object({
   slideId: z.string().min(1),
   role: z
     .enum(["cover", "section", "content", "stats", "quote", "image", "closing"])
@@ -139,8 +139,8 @@ export const SlideManifestSchema = z.object({
   // for backwards-compat with manifests written before this field
   // existed — consumers fall back to "16:9" via `dimensionsForFormat`.
   format: z.enum(SLIDE_FORMATS).optional(),
-  theme: Theme,
-  slides: z.array(Slide).min(1),
+  theme: ThemeSchema,
+  slides: z.array(SlideSchema).min(1),
   // Streaming progress, written during generation and removed once final.
   // Optional so the schema validates both transient and final states.
   //
@@ -175,5 +175,5 @@ export const SlideManifestSchema = z.object({
 });
 
 export type SlideManifest = z.infer<typeof SlideManifestSchema>;
-export type SlideType = z.infer<typeof Slide>;
-export type ThemeType = z.infer<typeof Theme>;
+export type SlideType = z.infer<typeof SlideSchema>;
+export type ThemeType = z.infer<typeof ThemeSchema>;

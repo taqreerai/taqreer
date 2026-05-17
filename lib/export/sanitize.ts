@@ -107,26 +107,206 @@ export function getClientDOMPurify(): DOMPurifyAPI {
 /**
  * Sanitise a Claude-authored slide HTML string. Always returns a safe
  * string — on any failure (DOMPurify unavailable, factory shape changed,
- * sanitize threw) returns an empty string and logs a console error. **Never
- * returns the raw input** — fail-closed by design so a sanitiser bug can't
- * become an XSS vector.
+ * sanitize threw) returns an empty string and logs a console error.
+ * **Never returns the raw input** — fail-closed by design so a sanitiser
+ * bug can't become an XSS vector.
  *
- * There used to be a physical→logical CSS rewrite here (converting
- * `right:N` → `inset-inline-end:N`, etc.) that ran on every element. It
- * was designed for an earlier prompt that asked Claude to lay slides out
- * LTR-style and rely on the rewrite to mirror them for RTL decks. The
- * current SYSTEM_PROMPT instructs Claude to compose natively for the
- * slide's `dir` — physical CSS now means exactly what it says, so the
- * rewrite was actively breaking RTL placement (e.g. an Arabic title
- * Claude pinned with `right:100px` was getting flipped to the visual
- * left). The rewrite is gone; sanitisation is pure DOMPurify.
+ * Pipeline:
+ *   1. DOMPurify with our config (XSS strip + font-link allowlist hook)
+ *   2. `rewriteRtlFlexEndToFlexStart` — column-flex `align-items:flex-end`
+ *      lands on the visual LEFT in RTL; corrects to `flex-start`
+ *   3. `rewriteRtlRowFlexOrder` — explicit `justify-content:flex-end` AND
+ *      the 2-item full-width split-screen case in RTL row-flex; corrects
+ *      to `flex-start` / `row-reverse` respectively
+ *
+ * Both rewriters are scoped to elements inside an RTL slide root with
+ * `dir="ltr"` sub-trees opted out. LTR slides pass through DOMPurify
+ * only. See each rewriter's own docstring for the exact bug they catch.
  */
 export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
-    return dp.sanitize(html, DOMPURIFY_CONFIG);
+    const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
+    return rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean));
   } catch (err) {
     console.error("[sanitize] sanitiseSlideHtml failed:", err);
     return "";
+  }
+}
+
+// Defensive rewriter — keeps the prompt's "design RTL natively" rule
+// from breaking when Claude slips into a specific CSS misconception.
+//
+// The bug pattern: a content container inside an RTL slide root uses
+// `display: flex; flex-direction: column; align-items: flex-end` to
+// right-align the column's children. In RTL the cross axis is
+// inline-reversed, so `flex-end` actually pins items to the visual
+// LEFT — opposite of what Claude intended. Prompt rule covers it
+// (LAYOUT GOTCHAS — "RTL flex columns flip cross-axis alignment")
+// but Claude still makes the mistake every few decks, so we correct
+// the rendered manifest defensively. Logical `end` resolves the same
+// way as `flex-end` for column flex (both = cross-axis end =
+// inline-axis end in RTL = LEFT visually), so we cover both.
+//
+// `flex-start` is never rewritten — in RTL column flex it lands on
+// the visual RIGHT, which is the intended title-side anchor.
+// `flex-direction: row` is intentionally OUT of scope here — main-axis
+// alignment in row flex is a different surface and false-positives
+// would be higher (e.g. chrome rows that genuinely want main-axis
+// flex-end). Add it only if a real failure mode shows up.
+function rewriteRtlFlexEndToFlexStart(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    // Only RTL slide roots opt into the rewrite. LTR slides get
+    // standard CSS semantics with no surprises.
+    const rtlRoot = root.querySelector('div[dir="rtl"]');
+    if (!rtlRoot) return html;
+    const els = rtlRoot.querySelectorAll<HTMLElement>("[style]");
+    let changed = false;
+    els.forEach((el) => {
+      // Skip elements that are inside a nested `dir="ltr"` override —
+      // those are intentionally LTR sub-trees (e.g. a `<div dir="ltr">`
+      // wrapping a pagination block) and their flex alignment should
+      // resolve under LTR semantics. `closest('[dir]')` returns this
+      // element if it has its own `dir`; otherwise walks up to the
+      // nearest ancestor with one — which is at minimum the slide root
+      // (RTL by our pre-filter).
+      const closestDir = el.closest("[dir]");
+      if (closestDir && closestDir.getAttribute("dir") !== "rtl") return;
+      const display = el.style.getPropertyValue("display").trim().toLowerCase();
+      if (display !== "flex" && display !== "inline-flex") return;
+      const flexDir = el.style
+        .getPropertyValue("flex-direction")
+        .trim()
+        .toLowerCase();
+      // Only column / column-reverse. Row + flex-end is a different
+      // failure mode (main-axis instead of cross-axis); leave that
+      // alone for now.
+      if (flexDir !== "column" && flexDir !== "column-reverse") return;
+      const ai = el.style.getPropertyValue("align-items").trim().toLowerCase();
+      if (ai === "flex-end" || ai === "end") {
+        el.style.setProperty("align-items", "flex-start");
+        changed = true;
+      }
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Companion to the column-flex rewriter — catches the OTHER way
+// Claude flips RTL composition. He writes DOM in LTR-mental order
+// (first child = "the thing on the left") then uses
+// `flex-direction: row` with no `justify-content`. In RTL, row-flex's
+// main axis is inline-reversed, so the FIRST DOM child renders on the
+// visual RIGHT — Claude's "left thing" ends up where the Arabic title
+// should be, and his Arabic title ends up where decoration should be.
+//
+// Defensive fix: add `flex-direction: row-reverse` to the eligible
+// container. That re-flips the main axis so DOM order maps to LTR
+// visual order — first child lands LEFT, second lands RIGHT — which
+// is what Claude was thinking when he wrote the DOM.
+//
+// Scope is intentionally narrow to keep false positives near zero:
+//   • RTL slide root only
+//   • `display: flex` + `flex-direction: row` (or unset → defaults
+//     to row, but Claude almost always sets it explicitly when he
+//     wants row, so we require the explicit prop)
+//   • Exactly 2 children — the split-screen pattern. Three+ items
+//     are typically chrome / nav rows where reversal would break
+//     the existing right/left anchoring.
+//   • No explicit `justify-content` — chrome rows usually set
+//     `space-between` / `flex-end` / etc.; leave those alone.
+//   • Container's left+right insets together cover > 50% of the
+//     canvas — filters out narrow chrome strips where reversal
+//     would surprise.
+function rewriteRtlRowFlexOrder(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    const rtlRoot = root.querySelector('div[dir="rtl"]');
+    if (!rtlRoot) return html;
+    const els = rtlRoot.querySelectorAll<HTMLElement>("[style]");
+    let changed = false;
+    els.forEach((el) => {
+      const closestDir = el.closest("[dir]");
+      if (closestDir && closestDir.getAttribute("dir") !== "rtl") return;
+      const display = el.style.getPropertyValue("display").trim().toLowerCase();
+      if (display !== "flex" && display !== "inline-flex") return;
+      const flexDir = el.style
+        .getPropertyValue("flex-direction")
+        .trim()
+        .toLowerCase();
+      // Default flex-direction is "row" — accept empty too.
+      const isRow = flexDir === "" || flexDir === "row";
+      if (!isRow) return;
+      const justify = el.style
+        .getPropertyValue("justify-content")
+        .trim()
+        .toLowerCase();
+
+      // Case A: explicit `justify-content: flex-end` (or logical `end`)
+      // on row-flex. In RTL, main axis is inline-reversed, so flex-end
+      // packs items toward the visual LEFT. Claude reaches for it when
+      // he wants cards on the right side of the canvas — wrong tool.
+      // Rewrite to `flex-start` so they pack toward the main-axis
+      // start = the visual RIGHT in RTL.
+      if (justify === "flex-end" || justify === "end") {
+        el.style.setProperty("justify-content", "flex-start");
+        changed = true;
+        return;
+      }
+
+      // Case B: NO `justify-content` (defaults to flex-start), but DOM
+      // order written LTR-mental — first child packs to the visual
+      // RIGHT in RTL row-flex, putting Claude's "left thing" where the
+      // Arabic title should be. We flip the main axis with row-reverse
+      // so DOM order maps to LTR visual order again.
+      //
+      // Scoped TIGHT to avoid breaking:
+      //   • inline icon-plus-text rows nested inside a column (small,
+      //     no explicit position) where RTL's natural main-axis-start
+      //     anchoring already does the right thing
+      //   • chrome rows (3+ items or explicit justify)
+      //
+      // Signals that this is a TOP-LEVEL content layer (the only kind
+      // we want to reverse): `position: absolute` AND wide insets
+      // (both sides set, or explicit large width). Without
+      // `position:absolute` we leave the row alone — naked
+      // `display:flex` rows inside a column-flex parent flow with the
+      // parent's intrinsic width, where reversing them packs items to
+      // the wrong edge (e.g. the contact-row email/website bug).
+      if (justify && justify !== "flex-start" && justify !== "start") return;
+      const position = el.style.getPropertyValue("position").trim().toLowerCase();
+      if (position !== "absolute") return;
+      const elementChildren = Array.from(el.children).filter(
+        (c): c is Element => c.nodeType === 1,
+      );
+      if (elementChildren.length !== 2) return;
+      const leftPx = parseFloat(el.style.getPropertyValue("left")) || 0;
+      const rightPx = parseFloat(el.style.getPropertyValue("right")) || 0;
+      const widthPx = parseFloat(el.style.getPropertyValue("width")) || 0;
+      const looksFullWidth =
+        (leftPx > 0 && rightPx > 0 && leftPx < 240 && rightPx < 240) ||
+        widthPx > 1200;
+      if (!looksFullWidth) return;
+      el.style.setProperty("flex-direction", "row-reverse");
+      changed = true;
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    return html;
   }
 }

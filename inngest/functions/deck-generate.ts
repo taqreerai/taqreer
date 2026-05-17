@@ -3,9 +3,12 @@ import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
 import {
   SlideManifestSchema,
+  SlideSchema,
   SLIDE_DIMENSIONS,
   type SlideFormat,
+  type SlideType,
 } from "@/lib/schema/slide";
+import { paramsForQuality } from "@/lib/anthropic/quality-params";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -97,15 +100,19 @@ ARABIC TYPOGRAPHY
 - Tashkeel (ـَـِـُّـ): \`line-height\` ≥ 1.6 + ≥ 20 px \`margin-bottom\`. Doesn't apply to chrome (pills/kickers/pagination — \`line-height: 1\`).
 
 SLIDE MARGINS — two-layer + reserved chrome footer
-Pick top/side insets on slide 1, REUSE on every slide. ~80–120 px on 1920-wide, ~50–80 px on 1080-wide vertical. BOTTOM fixed at 140 px (chrome zone — logo / pagination / persistent text). Body MUST NOT extend below \`bottom:140px\`. Chrome decided on slide 1, identical on every content slide. Cover (\`role:"cover"\`) / closing (\`role:"closing"\`) may break chrome for hero composition.
+Use the EXACT same side inset for content as for chrome corners (logo / pagination / persistent text). On a 1920-wide canvas that's 80 px; on a 1080-wide vertical canvas that's 50 px. Top inset matches the same number. BOTTOM is fixed at 140 px (chrome footer zone). Body MUST NOT extend below \`bottom:140px\`. Reuse on every slide. Cover (\`role:"cover"\`) / closing (\`role:"closing"\`) may break chrome for hero composition. The user message echoes the exact \`<N>\` value to use — copy that number verbatim into the content layer's \`top\` / \`left\` / \`right\` insets so the right and left edges of the body line up perfectly with the chrome edges below.
 
 \`\`\`text
 <div dir="rtl" style="position:relative; width:<W>px; height:<H>px; background:var(--brand-bg); overflow:hidden;">
   <div style="position:absolute; inset:0; pointer-events:none;"><!-- background SVGs --></div>
-  <div style="position:absolute; top:<N>px; left:<N>px; right:<N>px; bottom:140px;"><!-- all content --></div>
+  <div style="position:absolute; top:<N>px; left:<N>px; right:<N>px; bottom:140px;"><!-- ALL content lives here --></div>
   <!-- chrome (logo / pagination / persistent text) absolute-positioned per USER RULES -->
 </div>
 \`\`\`
+
+EXACTLY ONE content layer, AND inside it NO ABSOLUTE POSITIONING of body content. The single content \`<div>\` shown above is a \`display: flex; flex-direction: column\` (or grid) container; every body element — title, kicker, subtitle, paragraphs, cards, stats, illustrations, charts, footers — is a NORMAL-FLOW CHILD of that container, never \`position: absolute\` inside it. Absolute children inside the content layer collide just like absolute siblings would: a card row at \`top: 540px\` and a footer at \`bottom: 0\` both inside the same content wrapper still overlap visibly in the bottom strip because the wrapper doesn't grow them apart.
+The only siblings allowed alongside the content layer (NOT inside it) are: the background SVG layer (\`pointer-events:none\`) and the chrome blocks (logo / pagination / persistent text, all in the bottom 140 px chrome zone, never in the body region).
+To anchor a row at the bottom of the slide, set \`margin-top: auto\` on that row inside the flex column — it pushes itself down through the flex flow. Don't reach for \`position: absolute; bottom: 0\` on a child; it doesn't reserve vertical space and will overlap whatever flowed in above it.
 
 COLOUR CONTRAST — non-negotiable
 For each text / icon / shape, name the surface it sits on, pick a contrasting colour. WCAG AA (4.5:1 body) / AAA (7:1 hero headlines). Forbidden:
@@ -165,65 +172,6 @@ type DeckGenerateEvent = {
   quality?: "fast" | "medium" | "quality" | "extreme";
 };
 
-// Map a quality preset to the actual Anthropic call parameters.
-// Knob ladder: fast → medium → quality → extreme.
-//
-// IMPORTANT — `thinking.type.enabled` (with explicit `budget_tokens`)
-// is REJECTED at runtime on the 4.x models (claude-opus-4-7,
-// claude-sonnet-4-6) with:
-//   "thinking.type.enabled is not supported for this model. Use
-//    thinking.type.adaptive and output_config.effort to control
-//    thinking behavior."
-// (The SDK type definition advertises ThinkingConfigEnabled but the
-// runtime check disagrees — trust the runtime.) So the only supported
-// way to vary thinking on these models is:
-//   • `thinking.type.disabled` — no thinking at all (fast tier)
-//   • `thinking.type.adaptive` + `output_config.effort` — Claude picks
-//     a budget, modulated by effort tier (low / medium / high / xhigh
-//     / max). Effort is a general computational-effort knob, not a
-//     structured-output-only flag.
-//
-// Wall-clock predictability isn't perfect here — adaptive can choose
-// long thinking on complex prompts. We accept the trade-off because
-// it's the only API-supported path on the current models. If runs go
-// long, the next lever is dropping a tier (e.g. quality → medium) or
-// trimming the prompt further.
-type AnthropicCallParams = {
-  model: string;
-  thinking: { type: "adaptive" } | { type: "disabled" };
-  outputConfig?: { effort: "low" | "medium" | "high" | "xhigh" | "max" };
-};
-function paramsForQuality(
-  quality: DeckGenerateEvent["quality"],
-): AnthropicCallParams {
-  switch (quality) {
-    case "fast":
-      return {
-        model: "claude-sonnet-4-6",
-        thinking: { type: "disabled" },
-      };
-    case "quality":
-      return {
-        model: "claude-sonnet-4-6",
-        thinking: { type: "adaptive" },
-        outputConfig: { effort: "medium" },
-      };
-    case "extreme":
-      return {
-        model: "claude-opus-4-7",
-        thinking: { type: "adaptive" },
-        outputConfig: { effort: "high" },
-      };
-    case "medium":
-    default:
-      return {
-        model: "claude-sonnet-4-6",
-        thinking: { type: "adaptive" },
-        outputConfig: { effort: "low" },
-      };
-  }
-}
-
 function extractJson(text: string): string {
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (fenceMatch) return fenceMatch[1].trim();
@@ -231,6 +179,155 @@ function extractJson(text: string): string {
   const end = text.lastIndexOf("}");
   if (start >= 0 && end > start) return text.slice(start, end + 1);
   return text.trim();
+}
+
+// Incremental JSON-shape parser that yanks completed slide objects out of
+// Claude's streaming buffer as they close. Used to surface a live per-slide
+// preview to the UI while the rest of the manifest is still streaming — the
+// FINAL deck still goes through the full extractJson + Zod + DOMPurify pass
+// at end-of-stream, so anything we yield here is preview-only and never
+// becomes the canonical manifest.
+//
+// State machine:
+//   • Walk every new char in the buffer since the last advance() call.
+//   • Track string state (escape-aware) so `{` / `}` / `[` / `]` inside
+//     html string values don't count toward structural depth.
+//   • Once we see `"slides"` followed by `:` then `[`, lock in the depth
+//     of that `[` as `slidesArrayDepth`.
+//   • Every `{` that opens at depth `slidesArrayDepth + 1` starts a new
+//     slide; the matching `}` at the same depth closes it. The substring
+//     between them (inclusive) is the slide's raw JSON.
+//
+// Returns an array of newly-closed slide JSON substrings on each advance().
+// Caller still has to JSON.parse + validate them — we only yield byte
+// ranges that LOOK balanced, not ones we know are well-formed.
+class StreamingSlideParser {
+  private inString = false;
+  private escapeNext = false;
+  private totalDepth = 0;
+  private slidesArrayDepth: number | null = null;
+  private currentSlideStart: number | null = null;
+  private lastIdx = 0;
+  private completedCount = 0;
+  // Theme tracking. The manifest is shape-fixed — `theme` always streams
+  // BEFORE `slides`, so by the time the first slide closes the theme
+  // object is fully in the buffer. We snapshot it once and never touch
+  // it again. Used by the live preview to wire the correct CSS vars on
+  // streamingPreview slides; without it colours and fonts fall through
+  // to browser defaults and the preview reads broken.
+  private themeStart: number | null = null;
+  private themeDepth = 0;
+  private themeJson: string | null = null;
+
+  // Walk back over whitespace + `:` + whitespace + `"<key>"` and return
+  // true if the quoted key matches `expected`. Used to anchor structural
+  // events (e.g. the `[` for `slides`, the `{` for `theme`) to the right
+  // top-level key — otherwise `theme.palette = [...]` would be mistaken
+  // for the `slides` array.
+  private precedingKeyEquals(buffer: string, posOfDelimiter: number, expected: string): boolean {
+    let j = posOfDelimiter - 1;
+    while (j >= 0 && /\s/.test(buffer[j])) j--;
+    if (j < 0 || buffer[j] !== ":") return false;
+    j--;
+    while (j >= 0 && /\s/.test(buffer[j])) j--;
+    if (j < 0 || buffer[j] !== '"') return false;
+    const closeQuote = j;
+    j--;
+    while (j >= 0 && buffer[j] !== '"') j--;
+    if (j < 0) return false;
+    return buffer.slice(j + 1, closeQuote) === expected;
+  }
+
+  advance(buffer: string): string[] {
+    const newSlides: string[] = [];
+    for (let i = this.lastIdx; i < buffer.length; i++) {
+      const c = buffer[i];
+
+      if (this.escapeNext) {
+        this.escapeNext = false;
+        continue;
+      }
+      if (this.inString) {
+        if (c === "\\") {
+          this.escapeNext = true;
+          continue;
+        }
+        if (c === '"') this.inString = false;
+        continue;
+      }
+
+      switch (c) {
+        case '"':
+          this.inString = true;
+          break;
+        case "{":
+          this.totalDepth++;
+          if (
+            this.slidesArrayDepth !== null &&
+            this.totalDepth === this.slidesArrayDepth + 1
+          ) {
+            this.currentSlideStart = i;
+          }
+          // Detect the `theme` object's opening brace by looking back
+          // for the `"theme":` key. Only ever captures once.
+          if (
+            this.themeJson === null &&
+            this.themeStart === null &&
+            this.precedingKeyEquals(buffer, i, "theme")
+          ) {
+            this.themeStart = i;
+            this.themeDepth = this.totalDepth;
+          }
+          break;
+        case "}":
+          if (
+            this.currentSlideStart !== null &&
+            this.slidesArrayDepth !== null &&
+            this.totalDepth === this.slidesArrayDepth + 1
+          ) {
+            newSlides.push(buffer.slice(this.currentSlideStart, i + 1));
+            this.currentSlideStart = null;
+            this.completedCount++;
+          }
+          if (
+            this.themeStart !== null &&
+            this.totalDepth === this.themeDepth
+          ) {
+            this.themeJson = buffer.slice(this.themeStart, i + 1);
+            this.themeStart = null;
+          }
+          this.totalDepth--;
+          break;
+        case "[":
+          this.totalDepth++;
+          // First `[` whose preceding key is `"slides"`. Anything else
+          // (e.g. `theme.palette = [...]`) is ignored. Storing
+          // `totalDepth` POST-increment means a slide's `{` opens at
+          // `totalDepth === slidesArrayDepth + 1` — same check shape as
+          // the theme capture, no off-by-one between them.
+          if (
+            this.slidesArrayDepth === null &&
+            this.precedingKeyEquals(buffer, i, "slides")
+          ) {
+            this.slidesArrayDepth = this.totalDepth;
+          }
+          break;
+        case "]":
+          this.totalDepth--;
+          break;
+      }
+    }
+    this.lastIdx = buffer.length;
+    return newSlides;
+  }
+
+  getCompletedCount(): number {
+    return this.completedCount;
+  }
+
+  getThemeJson(): string | null {
+    return this.themeJson;
+  }
 }
 
 type CornerPosition =
@@ -260,15 +357,24 @@ type Rules = {
 // produced an L-shaped layout where pagination sat ~42 px below the
 // other two chrome lines. 40 px on every chrome element fixes that.
 //
-// The horizontal inset stays at 80 px so left/right-aligned chrome
-// elements don't crowd the canvas edge.
-function cornerToCss(corner: CornerPosition): string {
+// SIDE_INSET_PX is the SHARED horizontal margin used by BOTH chrome
+// corners AND the content layer's side insets in the prompt template.
+// Pinning them to a single per-format value keeps chrome edges
+// visually aligned with content edges — previously content was 80–120
+// (a range) while chrome was hardcoded 80, so any non-80 content
+// margin produced a visible misalignment along the right/left edges.
+const SIDE_INSET_PX: Record<SlideFormat, number> = {
+  "16:9": 80,
+  "9:16": 50,
+};
+function cornerToCss(corner: CornerPosition, format: SlideFormat): string {
+  const inset = SIDE_INSET_PX[format];
   const vertical = corner.startsWith("top") ? "top:40px" : "bottom:40px";
   if (corner.endsWith("-center")) {
     return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
   }
   const side = corner.endsWith("-left") ? "left" : "right";
-  return `position:absolute; ${side}:80px; ${vertical};`;
+  return `position:absolute; ${side}:${inset}px; ${vertical};`;
 }
 
 // Pick a corner for pagination that doesn't collide with chrome the
@@ -309,7 +415,11 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "Classic: centered hierarchy, traditional book-cover style on cover, balanced compositions, restrained accents. Timeless rather than trendy.",
 };
 
-function ruleLines(rules: Rules, logoPos: CornerPosition | null): string[] {
+function ruleLines(
+  rules: Rules,
+  logoPos: CornerPosition | null,
+  format: SlideFormat,
+): string[] {
   if (!rules) return [];
   const lines = ["", "Generation rules (user-specified, OVERRIDE matching defaults):"];
   if (rules.designStyle) {
@@ -341,7 +451,7 @@ function ruleLines(rules: Rules, logoPos: CornerPosition | null): string[] {
 
   if (rules.pagination) {
     const paginationCorner = pickPaginationCorner(occupied);
-    const paginationCss = cornerToCss(paginationCorner);
+    const paginationCss = cornerToCss(paginationCorner, format);
     const reservedDesc =
       Array.from(occupied)
         .map((c) => `- ${c} (chrome)`)
@@ -370,7 +480,7 @@ function ruleLines(rules: Rules, logoPos: CornerPosition | null): string[] {
     const scope = exclusions.length === 0
       ? "EVERY slide including cover and closing"
       : `every slide EXCEPT ${exclusions.join(" and ")}`;
-    const persistentCss = cornerToCss(persistentPos);
+    const persistentCss = cornerToCss(persistentPos, format);
     lines.push(
       `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}.`,
       `- Persistent overlay anchor — wrap the text in an element with the \`data-anchor\` attribute and this EXACT inline style: \`${persistentCss}\`. Example: \`<div data-anchor style="${persistentCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;">${rules.persistent.text}</div>\`. Same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock). \`data-anchor\` flags this element as a fixed chrome corner so the renderer leaves physical \`right:\` / \`left:\` values untouched in any direction.`,
@@ -394,6 +504,13 @@ function buildUserMessage(event: DeckGenerateEvent) {
   const { width, height } = SLIDE_DIMENSIONS[format];
   const orientationLabel = format === "9:16" ? "vertical" : "horizontal";
 
+  // Single source of truth for the side/top inset value Claude must use
+  // on the content layer — same value cornerToCss bakes into chrome
+  // corner CSS. Inlining it in the user message means Claude doesn't have
+  // to interpret "80 px on landscape" abstractly; he just copies <N>
+  // verbatim into top:Npx / left:Npx / right:Npx on the content div.
+  const sideInsetPx = SIDE_INSET_PX[format];
+
   const lines = [
     `Generate a slide manifest for this presentation.`,
     ``,
@@ -402,6 +519,10 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // at this exact size and the PPT export uses the matching layout.
     // Echo them up-front so Claude doesn't have to dig them out of the brief.
     `Slide canvas: ${width}×${height} px (${format} ${orientationLabel}).`,
+    // Content side / top inset. Matches the chrome corner inset
+    // (cornerToCss → SIDE_INSET_PX[format]) so the content layer's
+    // right/left edges line up visually with the chrome below.
+    `Content side+top inset: ${sideInsetPx}px (use EXACTLY this value for top / left / right on the content layer; bottom stays 140 px).`,
     ``,
     `Brief:`,
     JSON.stringify(event.brief, null, 2),
@@ -436,7 +557,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
   const briefLogoPos =
     (event.brief as { brand?: { logo?: { position?: CornerPosition } | null } } | null)
       ?.brand?.logo?.position ?? null;
-  lines.push(...ruleLines(rules, briefLogoPos));
+  lines.push(...ruleLines(rules, briefLogoPos, format));
 
   // Logo placement — brand logo, if provided, is up to Claude to compose
   // into the chrome. We tell him *where* the user wants it and *whether*
@@ -471,19 +592,12 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // Exact physical CSS for the user's chosen corner. We give Claude
     // the literal string so he doesn't have to interpret "top-right"
     // through RTL/LTR mental gymnastics — which is what was producing
-    // the wrong-corner placement before this fix.
-    // 40 px from each edge matches cornerToCss (used for pagination
-    // + persistent text) so all chrome shares one horizontal baseline
-    // along the bottom (or top) edge — previously the logo sat at
-    // 80 px while siblings sat at 40 px, breaking the chrome row.
-    const cornerCss = (() => {
-      const vertical = pos.startsWith("top") ? "top:40px" : "bottom:40px";
-      if (pos.endsWith("-center")) {
-        return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
-      }
-      const side = pos.endsWith("-left") ? "left" : "right";
-      return `position:absolute; ${side}:40px; ${vertical};`;
-    })();
+    // the wrong-corner placement before this fix. Reuse cornerToCss()
+    // (same helper pagination + persistent text use) so logo, pagination
+    // and persistent text share one horizontal baseline AND one vertical
+    // offset — previously the logo had its own inlined IIFE that drifted
+    // the horizontal inset (40 px) away from cornerToCss (80 px).
+    const cornerCss = cornerToCss(pos, format);
     if (logo.svgMarkup) {
       // Inline-markup path: brief carries the SVG bytes server-side
       // (fetched by readLogoSvgMarkup). Claude inlines the markup directly
@@ -588,6 +702,22 @@ export const deckGenerate = inngest.createFunction(
       // caption while we wait (e.g. `thinkingTokens` for the live "Claude
       // is thinking…" counter). Falls through to `progress` unmodified, so
       // any unknown field just rides along without schema churn.
+      // Slides we've parsed out of the live stream so far (preview-only).
+      // Persisted into `slideJson.streamingPreview` on every writeProgress
+      // so DeckView's existing poll picks them up incrementally. The
+      // canonical `slideJson.slides` array stays empty during streaming —
+      // the FINAL deck still goes through the full extractJson + Zod +
+      // DOMPurify pass at end-of-stream, so this preview path can never
+      // become the authoritative manifest.
+      const streamingPreview: SlideType[] = [];
+      // Latest theme JSON pulled out of the stream — captured once by
+      // the parser as Claude closes the `theme` object. DeckView needs
+      // it to wire palette / font CSS vars on the live preview slides;
+      // without it the colours fall through to browser defaults.
+      // Stored as `unknown` (no Zod validation here) — DeckView
+      // type-narrows defensively at render time.
+      let streamingTheme: unknown = null;
+
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
         currentSlide: number,
@@ -608,6 +738,12 @@ export const deckGenerate = inngest.createFunction(
                   ...(extra ?? {}),
                 },
                 slides: [],
+                // Snapshot of the live-preview slides so far. Replaced
+                // by the canonical `slides` array on the final save.
+                streamingPreview: streamingPreview.slice(),
+                // Theme captured mid-stream (always streams before slides
+                // in the manifest order). Null until the theme `}` closes.
+                streamingTheme,
               } as never,
             },
           })
@@ -690,16 +826,59 @@ export const deckGenerate = inngest.createFunction(
         // which slide Claude is currently emitting. Throttle DB writes so we
         // don't hammer Prisma on every token. `maxSlideSeen` is the
         // non-monotonic ratchet that prevents retry-induced regressions.
+        //
+        // The StreamingSlideParser yields each slide's raw JSON as Claude
+        // closes the `}` for it. We JSON.parse + SlideSchema.safeParse each
+        // one; failures silently skip (the full-manifest validation pass
+        // catches real errors at end-of-stream). Successes append to
+        // `streamingPreview` which writeProgress snapshots on the next tick.
         let buffer = "";
         let lastPushedSlide = -1;
         let lastWriteAt = 0;
+        const sliceParser = new StreamingSlideParser();
         stream.on("text", (delta) => {
           buffer += delta;
           const matches = buffer.match(/"slideId"\s*:/g);
           const seen = matches ? matches.length : 0;
           if (seen > maxSlideSeen) maxSlideSeen = seen;
+
+          // Drain any slide objects that just closed in the buffer.
+          const justClosed = sliceParser.advance(buffer);
+          for (const raw of justClosed) {
+            try {
+              const candidate = JSON.parse(raw);
+              const parsed = SlideSchema.safeParse(candidate);
+              if (parsed.success) {
+                streamingPreview.push(parsed.data);
+              }
+            } catch {
+              // Malformed mid-stream JSON (rare — Claude usually closes
+              // each object cleanly). The full-manifest pass at
+              // end-of-stream re-validates the whole thing and triggers
+              // the existing self-healing retry if needed.
+            }
+          }
+
+          // Capture the theme once it appears. Theme is parser-cached
+          // so the JSON.parse here only runs while we're between "theme
+          // closed" and "theme committed to local var".
+          if (streamingTheme === null) {
+            const themeRaw = sliceParser.getThemeJson();
+            if (themeRaw) {
+              try {
+                streamingTheme = JSON.parse(themeRaw);
+              } catch {
+                // Malformed partial — wait for the next advance, parser
+                // will keep the same byte range stable.
+              }
+            }
+          }
+
           const now = Date.now();
-          if (maxSlideSeen !== lastPushedSlide && now - lastWriteAt > 800) {
+          if (
+            (maxSlideSeen !== lastPushedSlide || justClosed.length > 0) &&
+            now - lastWriteAt > 800
+          ) {
             lastPushedSlide = maxSlideSeen;
             lastWriteAt = now;
             void writeProgress("designing", maxSlideSeen, estimatedTotal);

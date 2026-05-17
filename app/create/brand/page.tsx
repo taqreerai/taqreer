@@ -81,7 +81,7 @@ function fontSlotFromSaved(saved: SavedFontSlot): FontSlotState {
 
 const DEFAULT_COLORS = ["#370BF4", "#E036B8", "#7D2DFF"];
 const MIN_COLORS = 1;
-const MAX_COLORS = 5;
+const MAX_COLORS = 6;
 
 // Curated list — Arabic-capable + popular Latin. Avoids the full Google Fonts
 // API dance and lets us hardcode a known-good set that all support 400/700.
@@ -428,10 +428,18 @@ function GoogleFontSlot({
           // `top: 100%` would stack on the sample line; using `top: 44`
           // (input height) anchors the popup directly under the field.
           // 240 px max-h fits ~6 rows; the rest scrolls.
+          //
+          // Surface recipe matches the quality-preset dropdown on
+          // /create/summary: translucent-white fill at glass-opacity
+          // over the dark backdrop, glass-border-opacity hairline,
+          // backdrop-blur-glass blur token. Was previously a hardcoded
+          // dark `rgba(15, 11, 30, 0.92)` that didn't respond to the
+          // user's glass preset and read inconsistently against the
+          // rest of the popovers in the flow.
           style={{
             top: 44,
             maxHeight: 240,
-            background: "rgba(15, 11, 30, 0.92)",
+            background: "rgba(255, 255, 255, var(--glass-opacity))",
             borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
           }}
         >
@@ -1410,10 +1418,106 @@ export default function CreateBrandPage() {
       subtitle="اختر الألوان والخطوط وارفع الشعار الخاص بك ليتناسب مع علامتك التجارية."
     >
       <div className="space-y-6">
-        {/* Row 1 — colours (start side) + fonts (end side). Row 2 —
-            logo full width. The brand page used to nest these inside
-            a single grid column, which made `lg:grid-cols-2` render
-            as one column because there was only one child. */}
+        {/* Layout — fonts first (full-width row), then colours + logo
+            side-by-side below. Fonts lead because users typically pick
+            them once per brand and rarely revisit, so they should land
+            at the top of the visual scan order. Colours + logo cluster
+            in a 2-col row below since they're often paired changes. */}
+
+        {/* Fonts — full-width row so heading + body slots sit
+            comfortably side-by-side with room for the upload-zone
+            visuals + Google-fonts combobox. */}
+        <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+          <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+            <span
+              className="material-symbols-outlined text-white"
+              style={{ fontSize: 18 }}
+            >
+              text_fields
+            </span>
+            <h2 className="text-sm font-semibold text-white">الخطوط</h2>
+          </header>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {/* Heading font */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">خط العناوين</p>
+              <div className="flex gap-2">
+                <Pill
+                  active={headingFontSlot.mode === "upload"}
+                  onClick={() => setFontMode("heading", "upload")}
+                >
+                  رفع ملف
+                </Pill>
+                <Pill
+                  active={headingFontSlot.mode === "google"}
+                  onClick={() => setFontMode("heading", "google")}
+                >
+                  Google Fonts
+                </Pill>
+              </div>
+              {headingFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط العناوين"
+                  file={headingFontSlot.uploadFile}
+                  family={headingFontSlot.uploadFamily}
+                  sampleText="أبجد هوز"
+                  sampleSizeClass="text-2xl"
+                  onSelect={(file) => onUploadFont("heading", file)}
+                  onRemove={() => onRemoveUploadFont("heading")}
+                />
+              ) : (
+                <GoogleFontSlot
+                  label="خط العناوين"
+                  selected={headingFontSlot.googleFamily}
+                  sampleText="أبجد هوز"
+                  sampleSizeClass="text-2xl"
+                  onSelect={(family) => onSelectGoogleFont("heading", family)}
+                />
+              )}
+            </div>
+
+            {/* Body font */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">خط النص</p>
+              <div className="flex gap-2">
+                <Pill
+                  active={bodyFontSlot.mode === "upload"}
+                  onClick={() => setFontMode("body", "upload")}
+                >
+                  رفع ملف
+                </Pill>
+                <Pill
+                  active={bodyFontSlot.mode === "google"}
+                  onClick={() => setFontMode("body", "google")}
+                >
+                  Google Fonts
+                </Pill>
+              </div>
+              {bodyFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط النص"
+                  file={bodyFontSlot.uploadFile}
+                  family={bodyFontSlot.uploadFamily}
+                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleSizeClass="text-base"
+                  onSelect={(file) => onUploadFont("body", file)}
+                  onRemove={() => onRemoveUploadFont("body")}
+                />
+              ) : (
+                <GoogleFontSlot
+                  label="خط النص"
+                  selected={bodyFontSlot.googleFamily}
+                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleSizeClass="text-base"
+                  onSelect={(family) => onSelectGoogleFont("body", family)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Colours (start side) + logo (end side) — paired row. */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Brand colors — header pattern matches step 1 + step 3
               (icon + title above a hairline separator). Inner body is
@@ -1430,7 +1534,7 @@ export default function CreateBrandPage() {
               <h2 className="text-sm font-semibold text-white">ألوان العلامة التجارية</h2>
             </header>
             <p className="text-xs text-muted">
-              من 1 إلى 5 ألوان. نختار الخلفية والنص تلقائياً.
+              من 1 إلى 6 ألوان. نختار الخلفية والنص تلقائياً.
             </p>
 
             {/* Palette mode chooser — same Pill primitive as the font
@@ -1467,7 +1571,7 @@ export default function CreateBrandPage() {
                 onSelect={setPaletteScreenshot}
               />
             ) : (
-              // 3-column grid: at MAX_COLORS (5) the layout is 3+2
+              // 3-column grid: at MAX_COLORS (6) the layout is 3+3
               // = 2 rows. At MIN (1) → swatch + dashed add-tile sits
               // on row 1 only, still bounded by the wrapper height.
               <div className="grid grid-cols-3 gap-2">
@@ -1583,100 +1687,6 @@ export default function CreateBrandPage() {
             {logoError && (
               <p className="status-error text-[12px]">{logoError}</p>
             )}
-          </div>
-        </div>
-        {/* /Row 1 — colours + logo. Row 2 — fonts full width below. */}
-
-        {/* Fonts — full-width row so heading + body slots sit
-            comfortably side-by-side with room for the new dropzone
-            visuals + Google-fonts combobox. */}
-        <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
-          <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
-            <span
-              className="material-symbols-outlined text-white"
-              style={{ fontSize: 18 }}
-            >
-              text_fields
-            </span>
-            <h2 className="text-sm font-semibold text-white">الخطوط</h2>
-          </header>
-
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            {/* Heading font */}
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-white">خط العناوين</p>
-              <div className="flex gap-2">
-                <Pill
-                  active={headingFontSlot.mode === "upload"}
-                  onClick={() => setFontMode("heading", "upload")}
-                >
-                  رفع ملف
-                </Pill>
-                <Pill
-                  active={headingFontSlot.mode === "google"}
-                  onClick={() => setFontMode("heading", "google")}
-                >
-                  Google Fonts
-                </Pill>
-              </div>
-              {headingFontSlot.mode === "upload" ? (
-                <FontUploadSlot
-                  label="ارفع خط العناوين"
-                  file={headingFontSlot.uploadFile}
-                  family={headingFontSlot.uploadFamily}
-                  sampleText="أبجد هوز"
-                  sampleSizeClass="text-2xl"
-                  onSelect={(file) => onUploadFont("heading", file)}
-                  onRemove={() => onRemoveUploadFont("heading")}
-                />
-              ) : (
-                <GoogleFontSlot
-                  label="خط العناوين"
-                  selected={headingFontSlot.googleFamily}
-                  sampleText="أبجد هوز"
-                  sampleSizeClass="text-2xl"
-                  onSelect={(family) => onSelectGoogleFont("heading", family)}
-                />
-              )}
-            </div>
-
-            {/* Body font */}
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-white">خط النص</p>
-              <div className="flex gap-2">
-                <Pill
-                  active={bodyFontSlot.mode === "upload"}
-                  onClick={() => setFontMode("body", "upload")}
-                >
-                  رفع ملف
-                </Pill>
-                <Pill
-                  active={bodyFontSlot.mode === "google"}
-                  onClick={() => setFontMode("body", "google")}
-                >
-                  Google Fonts
-                </Pill>
-              </div>
-              {bodyFontSlot.mode === "upload" ? (
-                <FontUploadSlot
-                  label="ارفع خط النص"
-                  file={bodyFontSlot.uploadFile}
-                  family={bodyFontSlot.uploadFamily}
-                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
-                  sampleSizeClass="text-base"
-                  onSelect={(file) => onUploadFont("body", file)}
-                  onRemove={() => onRemoveUploadFont("body")}
-                />
-              ) : (
-                <GoogleFontSlot
-                  label="خط النص"
-                  selected={bodyFontSlot.googleFamily}
-                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
-                  sampleSizeClass="text-base"
-                  onSelect={(family) => onSelectGoogleFont("body", family)}
-                />
-              )}
-            </div>
           </div>
         </div>
       </div>

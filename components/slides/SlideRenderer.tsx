@@ -21,24 +21,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SlideType, ThemeType } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
-
-function themeToCssVars(theme: ThemeType): React.CSSProperties {
-  const vars: Record<string, string> = {
-    "--brand-bg": theme.background,
-    "--brand-text": theme.text,
-    "--font-heading": `"${theme.fontHeading.name}", system-ui, sans-serif`,
-    "--font-body": `"${theme.fontBody.name}", system-ui, sans-serif`,
-  };
-  theme.palette.forEach((hex, i) => {
-    vars[`--brand-${i + 1}`] = hex;
-  });
-  // Convenience aliases — Claude can use --primary / --accent / --secondary
-  // without thinking about indexes.
-  if (theme.palette[0]) vars["--primary"] = theme.palette[0];
-  if (theme.palette[1]) vars["--secondary"] = theme.palette[1];
-  if (theme.palette[2]) vars["--accent"] = theme.palette[2];
-  return vars as React.CSSProperties;
-}
+import { themeToCssVars } from "@/lib/export/theme-css-vars";
 
 export function SlideRenderer({
   slide,
@@ -57,7 +40,13 @@ export function SlideRenderer({
   height?: number;
   scale?: number;
 }) {
-  const cssVars = useMemo(() => themeToCssVars(theme), [theme]);
+  // Shared helper returns a `Record<string, string>` so the html-document
+  // export can reuse the same source of truth. Cast to CSSProperties for
+  // the inline-style API — React accepts string keys prefixed with `--`.
+  const cssVars = useMemo(
+    () => themeToCssVars(theme) as React.CSSProperties,
+    [theme],
+  );
 
   // Empty until the client-side useEffect produces a sanitised string. This
   // means SSR and the first client render are identical (empty inner HTML),
