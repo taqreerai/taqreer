@@ -234,9 +234,16 @@ function FontUploadSlot({
         }}
       />
       {file ? (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 px-4 py-3">
+        <div
+          className="flex items-center justify-between gap-2 rounded-xl border px-4 py-3"
+          style={{
+            background: "rgba(255, 255, 255, var(--glass-opacity))",
+            borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+            minHeight: 160,
+          }}
+        >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="material-symbols-outlined text-[#7D2DFF]">font_download</span>
+            <span className="material-symbols-outlined text-white/80">font_download</span>
             <span className="truncate font-semibold text-white">{file.name}</span>
           </div>
           <button
@@ -246,7 +253,7 @@ function FontUploadSlot({
               onRemove();
             }}
             aria-label={`إزالة ${label}`}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -255,11 +262,28 @@ function FontUploadSlot({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex max-h-[120px] min-h-[100px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#370BF4]/60 bg-[#03030D]/40 p-4 text-center transition-colors hover:border-[#7D2DFF] hover:bg-[#7D2DFF]/10"
+          // Mirrors the رفع ملفات السياق dropzone on step 1 — same
+          // dashed border colour, same glass-circle icon, same
+          // typography hierarchy. min-h shrunk to 160 so two slots
+          // sit side-by-side inside the full-width fonts card.
+          className="flex min-h-[160px] w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-white/15 bg-black/20 p-6 text-center transition-colors hover:border-white/30"
         >
-          <span className="material-symbols-outlined mb-2 text-[28px] text-[#7D2DFF]">font_download</span>
-          <span className="font-semibold text-white">{label}</span>
-          <span className="mt-1 text-xs text-muted">اختياري — Arial افتراضياً</span>
+          <span
+            className="flex h-12 w-12 items-center justify-center rounded-full"
+            style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+          >
+            <span
+              className="material-symbols-outlined text-white/80"
+              style={{ fontSize: 24 }}
+            >
+              font_download
+            </span>
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-white">{label}</p>
+            <p className="mt-1 text-xs text-white/60">اختياري — Arial افتراضياً</p>
+          </div>
+          <p className="text-[10px] text-white/40">صيغ WOFF2, WOFF, TTF, OTF</p>
         </button>
       )}
       <p className={`${sampleSizeClass} text-right text-white${family ? ` ${family}` : ""}`}>
@@ -269,6 +293,18 @@ function FontUploadSlot({
   );
 }
 
+// Searchable Google-Fonts combobox.
+//
+// Input + chevron in a single field. Click the field (or the chevron)
+// to open a styled popup of all available families; type to filter the
+// list to matches. Selecting an item closes the popup and writes the
+// family back via `onSelect`. The popup keeps the same row styling as
+// the previous always-visible list (active row = gradient pill, each
+// row previews its own family on the trailing "Aa" chip).
+//
+// Native `<select>` was rejected because its OS popup doesn't honour
+// the glass chrome — this gives us full control over the dropdown
+// surface while still feeling like a standard searchable field.
 function GoogleFontSlot({
   selected,
   sampleText,
@@ -281,60 +317,135 @@ function GoogleFontSlot({
   sampleSizeClass: string;
   onSelect: (family: string | null) => void;
 }) {
-  // Scrollable list inside a glass-styled box so the inactive state
-  // of every font row reads as part of the surrounding chrome (no
-  // raw `#03030D` rectangle). The list height is pinned so the slot
-  // matches the FontUploadSlot exactly — that's what keeps the card
-  // height stable when the user switches between "upload" / "google"
-  // on either of the two font roles.
-  //
-  // Each row previews its own family in the trailing chip ("Aa")
-  // — the family name itself stays in the default UI face for
-  // alignment, but the chip shows the actual glyphs so the user
-  // can scan styles without committing.
-  // Fixed list height matches the FontUploadSlot's 120 px upload
-  // zone EXACTLY (no surrounding padding/border). Keeps the fonts
-  // card total height constant regardless of which mode is active,
-  // so the colours card next door doesn't resize via the grid row's
-  // stretch alignment.
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Outside-click closes the popup. mousedown (not click) so the
+  // popup dismisses on focus-shift to another element, not after the
+  // bubble — keeps tab-out behaviour clean.
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+
+  const filtered = query.trim()
+    ? GOOGLE_FONTS.filter((font) =>
+        font.family.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : GOOGLE_FONTS;
+
+  const inputValue = open ? query : selected ?? "";
+  const showPlaceholder = !inputValue;
+
   return (
-    <div className="space-y-3">
-      <div
-        className="space-y-1 overflow-y-auto pr-1"
-        style={{ height: 120 }}
-      >
-          {GOOGLE_FONTS.map((font) => {
-            const isActive = selected === font.family;
-            return (
-              <button
-                key={font.family}
-                type="button"
-                onClick={() => onSelect(isActive ? null : font.family)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? "btn-gradient text-white"
-                    : "text-white hover:bg-white/5"
-                }`}
-                style={isActive ? { borderRadius: 8 } : undefined}
-              >
-                <span className="flex items-center gap-2">
-                  <span>{font.family}</span>
-                  <span
-                    className={`text-[10px] ${isActive ? "text-white/80" : "text-white/40"}`}
-                  >
-                    {font.arabic ? "عربي + لاتيني" : "لاتيني"}
-                  </span>
-                </span>
-                <span
-                  className="text-base"
-                  style={{ fontFamily: `"${font.family}", system-ui, sans-serif` }}
-                >
-                  Aa
-                </span>
-              </button>
-            );
-          })}
+    <div ref={wrapperRef} className="relative space-y-3">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          placeholder={showPlaceholder ? "اكتب أو اختر خط Google..." : ""}
+          onFocus={() => {
+            setOpen(true);
+            setQuery("");
+          }}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            if (!open) setOpen(true);
+          }}
+          // Inline padding overrides `.input-dark`'s default 12 16
+          // padding to make room for the chevron on the start edge
+          // (RTL → left).
+          className="input-dark text-right text-sm"
+          style={{ padding: "10px 16px 10px 40px" }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((value) => !value);
+            if (!open) {
+              setQuery("");
+              inputRef.current?.focus();
+            }
+          }}
+          aria-label={open ? "إغلاق القائمة" : "فتح القائمة"}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 transition-colors hover:text-white"
+        >
+          <span
+            className={`material-symbols-outlined block transition-transform ${
+              open ? "rotate-180" : ""
+            }`}
+            style={{ fontSize: 18 }}
+          >
+            expand_more
+          </span>
+        </button>
       </div>
+      {open ? (
+        <div
+          className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 shadow-2xl backdrop-blur-glass"
+          // `top: 100%` would stack on the sample line; using `top: 44`
+          // (input height) anchors the popup directly under the field.
+          // 240 px max-h fits ~6 rows; the rest scrolls.
+          style={{
+            top: 44,
+            maxHeight: 240,
+            background: "rgba(15, 11, 30, 0.92)",
+            borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+          }}
+        >
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-white/40">لا توجد نتائج</p>
+          ) : (
+            filtered.map((font) => {
+              const isActive = selected === font.family;
+              return (
+                <button
+                  key={font.family}
+                  type="button"
+                  onClick={() => {
+                    onSelect(isActive ? null : font.family);
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isActive
+                      ? "btn-gradient text-white"
+                      : "text-white hover:bg-white/5"
+                  }`}
+                  style={isActive ? { borderRadius: 8 } : undefined}
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{font.family}</span>
+                    <span
+                      className={`text-[10px] ${isActive ? "text-white/80" : "text-white/40"}`}
+                    >
+                      {font.arabic ? "عربي + لاتيني" : "لاتيني"}
+                    </span>
+                  </span>
+                  <span
+                    className="text-base"
+                    style={{
+                      fontFamily: `"${font.family}", system-ui, sans-serif`,
+                    }}
+                  >
+                    Aa
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      ) : null}
       <p
         className={`${sampleSizeClass} text-right text-white`}
         style={selected ? { fontFamily: `"${selected}", system-ui, sans-serif` } : undefined}
@@ -1112,7 +1223,7 @@ export default function CreateBrandPage() {
           <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
             <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
               <span
-                className="material-symbols-outlined text-[#7D2DFF]"
+                className="material-symbols-outlined text-white"
                 style={{ fontSize: "18px" }}
               >
                 palette
@@ -1174,114 +1285,20 @@ export default function CreateBrandPage() {
             )}
           </div>
 
-          {/* Fonts — same header vocabulary as the colours card */}
+          {/* Logo card — promoted into row 1 next to colours so the
+              two essentials of the brand kit (palette + mark) sit
+              side-by-side. Fonts then claim a full-width row below,
+              giving heading + body slots enough room to breathe. */}
           <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
             <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
               <span
-                className="material-symbols-outlined text-[#7D2DFF]"
-                style={{ fontSize: "18px" }}
+                className="material-symbols-outlined text-white"
+                style={{ fontSize: 18 }}
               >
-                text_fields
+                image
               </span>
-              <h2 className="text-sm font-semibold text-white">الخطوط</h2>
+              <h2 className="text-sm font-semibold text-white">الشعار</h2>
             </header>
-            <p className="text-xs text-muted">
-              ارفع خطوطك الخاصة أو اختر من Google Fonts. اتركها فارغة لاستخدام Arial.
-            </p>
-
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              {/* Heading font */}
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-white">خط العناوين</p>
-                <div className="flex gap-2">
-                  <Pill
-                    active={headingFontSlot.mode === "upload"}
-                    onClick={() => setFontMode("heading", "upload")}
-                  >
-                    رفع ملف
-                  </Pill>
-                  <Pill
-                    active={headingFontSlot.mode === "google"}
-                    onClick={() => setFontMode("heading", "google")}
-                  >
-                    Google Fonts
-                  </Pill>
-                </div>
-                {headingFontSlot.mode === "upload" ? (
-                  <FontUploadSlot
-                    label="رفع خط العناوين"
-                    file={headingFontSlot.uploadFile}
-                    family={headingFontSlot.uploadFamily}
-                    sampleText="أبجد هوز"
-                    sampleSizeClass="text-2xl"
-                    onSelect={(file) => onUploadFont("heading", file)}
-                    onRemove={() => onRemoveUploadFont("heading")}
-                  />
-                ) : (
-                  <GoogleFontSlot
-                    label="خط العناوين"
-                    selected={headingFontSlot.googleFamily}
-                    sampleText="أبجد هوز"
-                    sampleSizeClass="text-2xl"
-                    onSelect={(family) => onSelectGoogleFont("heading", family)}
-                  />
-                )}
-              </div>
-
-              {/* Body font */}
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-white">خط النص</p>
-                <div className="flex gap-2">
-                  <Pill
-                    active={bodyFontSlot.mode === "upload"}
-                    onClick={() => setFontMode("body", "upload")}
-                  >
-                    رفع ملف
-                  </Pill>
-                  <Pill
-                    active={bodyFontSlot.mode === "google"}
-                    onClick={() => setFontMode("body", "google")}
-                  >
-                    Google Fonts
-                  </Pill>
-                </div>
-                {bodyFontSlot.mode === "upload" ? (
-                  <FontUploadSlot
-                    label="رفع خط النص"
-                    file={bodyFontSlot.uploadFile}
-                    family={bodyFontSlot.uploadFamily}
-                    sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
-                    sampleSizeClass="text-base"
-                    onSelect={(file) => onUploadFont("body", file)}
-                    onRemove={() => onRemoveUploadFont("body")}
-                  />
-                ) : (
-                  <GoogleFontSlot
-                    label="خط النص"
-                    selected={bodyFontSlot.googleFamily}
-                    sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
-                    sampleSizeClass="text-base"
-                    onSelect={(family) => onSelectGoogleFont("body", family)}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* /Row 1 — colours + fonts. Below: logo card spans the
-            full row of the parent space-y-6 wrapper. */}
-
-        {/* Logo — header pattern matches colours + fonts cards */}
-        <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
-          <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
-            <span
-              className="material-symbols-outlined text-[#7D2DFF]"
-              style={{ fontSize: "18px" }}
-            >
-              image
-            </span>
-            <h2 className="text-sm font-semibold text-white">الشعار</h2>
-          </header>
             <p className="text-xs text-muted leading-relaxed">
               صيغة SVG فقط. الشعارات بصيغة SVG تحتفظ بجودتها على أي حجم وتتيح
               تغيير لون الشعار حسب لون الشريحة لضمان التباين.
@@ -1296,37 +1313,135 @@ export default function CreateBrandPage() {
               <p className="status-error text-[12px]">{logoError}</p>
             )}
             {logo || loadedLogoMeta ? (
-              <>
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
-                  {logoPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={logoPreview}
-                      alt="معاينة الشعار"
-                      className="max-h-[60px] max-w-32 object-contain"
-                    />
-                  ) : (
-                    <span className="material-symbols-outlined text-muted">image</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLogo(null);
-                      setLoadedLogoMeta(null);
-                      setLogoPreview("");
-                    }}
-                    className="badge-purple flex items-center gap-1"
-                  >
-                    <span className="text-base leading-none">×</span>
-                    إزالة
-                  </button>
-                </div>
-                {/* Logo placement (corner + cover/closing excludes)
-                    lives on /create/output now — once the user picks
-                    a file here, they choose where it sits on the
-                    next step. */}
-              </>
+              <div
+                className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                style={{
+                  background: "rgba(255, 255, 255, var(--glass-opacity))",
+                  borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+                }}
+              >
+                {logoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoPreview}
+                    alt="معاينة الشعار"
+                    className="max-h-[60px] max-w-32 object-contain"
+                  />
+                ) : (
+                  <span className="material-symbols-outlined text-white/60">image</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLogo(null);
+                    setLoadedLogoMeta(null);
+                    setLogoPreview("");
+                  }}
+                  className="badge-purple flex items-center gap-1"
+                >
+                  <span className="text-base leading-none">×</span>
+                  إزالة
+                </button>
+              </div>
             ) : null}
+          </div>
+        </div>
+        {/* /Row 1 — colours + logo. Row 2 — fonts full width below. */}
+
+        {/* Fonts — full-width row so heading + body slots sit
+            comfortably side-by-side with room for the new dropzone
+            visuals + Google-fonts combobox. */}
+        <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+          <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+            <span
+              className="material-symbols-outlined text-white"
+              style={{ fontSize: 18 }}
+            >
+              text_fields
+            </span>
+            <h2 className="text-sm font-semibold text-white">الخطوط</h2>
+          </header>
+          <p className="text-xs text-muted">
+            ارفع خطوطك الخاصة أو اختر من Google Fonts. اتركها فارغة لاستخدام Arial.
+          </p>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {/* Heading font */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">خط العناوين</p>
+              <div className="flex gap-2">
+                <Pill
+                  active={headingFontSlot.mode === "upload"}
+                  onClick={() => setFontMode("heading", "upload")}
+                >
+                  رفع ملف
+                </Pill>
+                <Pill
+                  active={headingFontSlot.mode === "google"}
+                  onClick={() => setFontMode("heading", "google")}
+                >
+                  Google Fonts
+                </Pill>
+              </div>
+              {headingFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط العناوين"
+                  file={headingFontSlot.uploadFile}
+                  family={headingFontSlot.uploadFamily}
+                  sampleText="أبجد هوز"
+                  sampleSizeClass="text-2xl"
+                  onSelect={(file) => onUploadFont("heading", file)}
+                  onRemove={() => onRemoveUploadFont("heading")}
+                />
+              ) : (
+                <GoogleFontSlot
+                  label="خط العناوين"
+                  selected={headingFontSlot.googleFamily}
+                  sampleText="أبجد هوز"
+                  sampleSizeClass="text-2xl"
+                  onSelect={(family) => onSelectGoogleFont("heading", family)}
+                />
+              )}
+            </div>
+
+            {/* Body font */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">خط النص</p>
+              <div className="flex gap-2">
+                <Pill
+                  active={bodyFontSlot.mode === "upload"}
+                  onClick={() => setFontMode("body", "upload")}
+                >
+                  رفع ملف
+                </Pill>
+                <Pill
+                  active={bodyFontSlot.mode === "google"}
+                  onClick={() => setFontMode("body", "google")}
+                >
+                  Google Fonts
+                </Pill>
+              </div>
+              {bodyFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط النص"
+                  file={bodyFontSlot.uploadFile}
+                  family={bodyFontSlot.uploadFamily}
+                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleSizeClass="text-base"
+                  onSelect={(file) => onUploadFont("body", file)}
+                  onRemove={() => onRemoveUploadFont("body")}
+                />
+              ) : (
+                <GoogleFontSlot
+                  label="خط النص"
+                  selected={bodyFontSlot.googleFamily}
+                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleSizeClass="text-base"
+                  onSelect={(family) => onSelectGoogleFont("body", family)}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

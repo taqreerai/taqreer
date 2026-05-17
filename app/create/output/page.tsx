@@ -331,7 +331,7 @@ function CardShell({
     >
       <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
         <span
-          className="material-symbols-outlined text-[#7D2DFF]"
+          className="material-symbols-outlined text-white"
           style={{ fontSize: "18px" }}
         >
           {icon}
@@ -370,21 +370,27 @@ function SlideCountStepper({
   min: number;
   max: number;
 }) {
+  // All three components are h-8 (32 px) so the stepper drops into
+  // the same row as the Pill toggles above without bumping their
+  // vertical alignment.
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  const stepBtnClasses =
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40";
+  const stepBtnStyle = {
+    background: "rgba(255, 255, 255, var(--glass-opacity))",
+    borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+  } as const;
   return (
-    <div className="flex items-stretch gap-2">
+    <div className="flex items-center gap-1.5">
       <button
         type="button"
         onClick={() => onChange(clamp(value - 1))}
         disabled={value <= min}
         aria-label="إنقاص"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
-        style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
-          borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-        }}
+        className={stepBtnClasses}
+        style={stepBtnStyle}
       >
-        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
           remove
         </span>
       </button>
@@ -398,21 +404,21 @@ function SlideCountStepper({
           const n = Number(event.target.value);
           onChange(Number.isFinite(n) ? clamp(n) : min);
         }}
-        className="input-dark no-spinner flex-1 text-center text-sm"
-        style={{ paddingTop: 6, paddingBottom: 6 }}
+        // `.input-dark`'s default padding makes it 44 px tall;
+        // override with inline px values + width to fit the same
+        // 32 px pill row.
+        className="input-dark no-spinner text-center text-sm"
+        style={{ width: 52, height: 32, padding: "0 8px" }}
       />
       <button
         type="button"
         onClick={() => onChange(clamp(value + 1))}
         disabled={value >= max}
         aria-label="زيادة"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
-        style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
-          borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-        }}
+        className={stepBtnClasses}
+        style={stepBtnStyle}
       >
-        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
           add
         </span>
       </button>
@@ -599,12 +605,11 @@ function ContentCard({
 }) {
   return (
     <CardShell title="المحتوى" icon="tune">
-      {/* Slide count — pill row stays stable; the custom number input
-          appears as its own full-width row underneath when "مخصص" is
-          active, with `−` / `+` step buttons replacing the native
-          arrows (which never match our chrome). The pill row no
-          longer shifts vertically because no taller sibling slides
-          into it. */}
+      {/* Slide count — pills + custom stepper share a single 32 px
+          row. When "مخصص" is selected the stepper (− / input / +)
+          slides in INLINE next to the pills; nothing on the row
+          jumps vertically because every component on this row is
+          h-8 (32 px) regardless of mode. */}
       <div className="space-y-2">
         <SectionLabel>عدد الشرائح</SectionLabel>
         <div className="flex items-center gap-1.5">
@@ -625,15 +630,15 @@ function ContentCard({
           >
             مخصص
           </Pill>
+          {slideCountMode === "custom" ? (
+            <SlideCountStepper
+              value={slideCountValue}
+              onChange={onSlideCountValue}
+              min={1}
+              max={20}
+            />
+          ) : null}
         </div>
-        {slideCountMode === "custom" ? (
-          <SlideCountStepper
-            value={slideCountValue}
-            onChange={onSlideCountValue}
-            min={1}
-            max={20}
-          />
-        ) : null}
       </div>
 
       {/* Logo placement — entire section hidden when no logo was
@@ -663,22 +668,28 @@ function ContentCard({
         </div>
       ) : null}
 
-      {/* Generation rules */}
-      <div className="space-y-2 border-t border-white/[0.06] pt-3">
+      {/* Generation rules — each rule sits in its own band separated
+          by hairline rules. Reads as a settings list, not a stack of
+          loosely related controls. */}
+      <div className="border-t border-white/[0.06] pt-3">
         <SectionLabel>قواعد التوليد</SectionLabel>
-        <div className="flex flex-wrap gap-1.5">
-          {DESIGN_STYLE_OPTIONS.map((option) => (
-            <Pill
-              key={option}
-              active={designStyle === option}
-              onClick={() => onDesignStyle(designStyle === option ? null : option)}
-            >
-              {option}
-            </Pill>
-          ))}
+        <div className="pt-2">
+          <div className="flex flex-wrap gap-1.5">
+            {DESIGN_STYLE_OPTIONS.map((option) => (
+              <Pill
+                key={option}
+                active={designStyle === option}
+                onClick={() => onDesignStyle(designStyle === option ? null : option)}
+              >
+                {option}
+              </Pill>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-1.5 pt-1">
+        <div className="mt-3 border-t border-white/[0.06] pt-3">
           <Toggle label="تصحيح الأخطاء" value={fixTypos} onChange={onFixTypos} />
+        </div>
+        <div className="mt-3 border-t border-white/[0.06] pt-3">
           <Toggle label="ترقيم الشرائح" value={pagination} onChange={onPagination} />
         </div>
       </div>

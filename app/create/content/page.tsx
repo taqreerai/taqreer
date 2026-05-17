@@ -152,7 +152,7 @@ export default function CreateContentPage() {
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
               <span
-                className="material-symbols-outlined text-[#7D2DFF]"
+                className="material-symbols-outlined text-white"
                 style={{ fontSize: "18px" }}
               >
                 cloud_upload
@@ -275,7 +275,7 @@ export default function CreateContentPage() {
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
               <span
-                className="material-symbols-outlined text-[#7D2DFF]"
+                className="material-symbols-outlined text-white"
                 style={{ fontSize: "18px" }}
               >
                 edit_note
