@@ -20,7 +20,10 @@ const BoundsSchema = z.object({
 
 const CreateCommentSchema = z.object({
   slideId: z.string().min(1).max(128),
-  content: z.string().min(1).max(2000),
+  // `.trim().min(1)` rejects whitespace-only content ("   "). Plain
+  // `.min(1)` lets all-space strings through and persists effectively
+  // empty comments — they look like ghosts on the slide.
+  content: z.string().trim().min(1).max(2000),
   boundsJson: BoundsSchema,
 });
 

@@ -43,13 +43,19 @@ const FontDefinition = z.object({
     .refine(
       (url) => {
         try {
-          return ALLOWED_FONT_HOSTS.has(new URL(url).hostname);
+          const u = new URL(url);
+          // Require HTTPS — `http://fonts.googleapis.com/...` would
+          // pass the host check but every modern browser blocks the
+          // mixed-content request on a secure page, silently falling
+          // back to system fonts.
+          if (u.protocol !== "https:") return false;
+          return ALLOWED_FONT_HOSTS.has(u.hostname);
         } catch {
           return false;
         }
       },
       {
-        message: `font URL host must be one of: ${Array.from(ALLOWED_FONT_HOSTS).join(", ")}`,
+        message: `font URL must be HTTPS and host must be one of: ${Array.from(ALLOWED_FONT_HOSTS).join(", ")}`,
       }
     )
     .optional(),
@@ -150,7 +156,18 @@ export const SlideManifestSchema = z.object({
       stage: z.string(),
       currentSlide: z.number(),
       estimatedTotal: z.number(),
-      genStartedAt: z.string().optional(),
+      // Validate the timestamp is parseable — a stray non-date string
+      // here would silently break elapsed-time arithmetic in the
+      // stuck-detection branch (Date.parse returns NaN; everything
+      // derived from it becomes NaN). `.refine` instead of
+      // `.datetime()` so we accept both `Date.now().toISOString()`
+      // shape and any other ISO-ish format `Date.parse` understands.
+      genStartedAt: z
+        .string()
+        .refine((s) => !s || !Number.isNaN(Date.parse(s)), {
+          message: "genStartedAt must be a parseable ISO timestamp",
+        })
+        .optional(),
     })
     .optional(),
 });

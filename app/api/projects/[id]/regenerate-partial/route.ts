@@ -99,16 +99,22 @@ export async function POST(
           },
         });
         // Promote the drafts. The `status: "draft"` guard means concurrent
-        // deletions show up as `count < drafts.length`; re-read the
-        // promoted rows so the dispatched snapshot is exactly what's now
-        // in `applied` state — no rows that vanished, current content.
-        await tx.comment.updateMany({
+        // deletions / concurrent applies show up as `count < drafts.length`.
+        // If `count === 0` another request fully won the race — every draft
+        // we saw was already promoted by another in-flight apply — so we
+        // bail to avoid dispatching a duplicate regenerate event for the
+        // same rows.
+        const updated = await tx.comment.updateMany({
           where: {
             id: { in: drafts.map((c) => c.id) },
             status: "draft",
           },
           data: { status: "applied" },
         });
+        if (updated.count === 0) return { kind: "empty" as const };
+        // Re-read the promoted rows so the dispatched snapshot is exactly
+        // what's now in `applied` state — current content, no rows that
+        // vanished between findMany and updateMany.
         const promoted = await tx.comment.findMany({
           where: {
             id: { in: drafts.map((c) => c.id) },

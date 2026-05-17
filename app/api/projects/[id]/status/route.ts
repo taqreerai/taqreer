@@ -81,6 +81,14 @@ export async function GET(
   }
 
   const latestVersion = project.presentation?.versions[0];
+  // When the caller pinned to a specific versionId but no row matches,
+  // return 404 — leaving the poller to spin forever with `versionId:
+  // null` is ambiguous (the apply-poller can't tell "version was
+  // never created" from "version not ready yet"). Failing fast lets
+  // the disconnect detector pick this up immediately.
+  if (targetVersionId && !latestVersion) {
+    return NextResponse.json({ error: "Version not found" }, { status: 404 });
+  }
   const slideJson = getSlideJson(latestVersion?.slideJson);
   const slideCount = Array.isArray(slideJson?.slides) ? slideJson.slides.length : 0;
   const inferredStatus =

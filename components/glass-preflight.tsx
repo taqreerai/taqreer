@@ -29,7 +29,14 @@ export function GlassPreflight() {
   useLayoutEffect(() => {
     try {
       const saved = localStorage.getItem("taqreer_glass_preset");
-      const v = (saved && PRESETS[saved]) || PRESETS.normal;
+      // Guard against prototype-chain keys like "constructor" /
+      // "toString" — `PRESETS[saved]` would return Object.prototype's
+      // method (truthy) and skip the `.normal` fallback. `hasOwn`
+      // checks ensure only the four real keys above hit.
+      const v =
+        saved !== null && Object.prototype.hasOwnProperty.call(PRESETS, saved)
+          ? PRESETS[saved]
+          : PRESETS.normal;
       const r = document.documentElement;
       r.style.setProperty("--glass-opacity", v[0]);
       r.style.setProperty("--glass-blur", v[1]);

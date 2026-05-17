@@ -1,5 +1,18 @@
 # Plan — Slide Comments & Partial Regeneration
 
+> ⚠️ **SUPERSEDED / ARCHIVED — 2026-05-17.**
+> This plan describes the Lightbox-based UX that shipped on 2026-05-15.
+> The lightbox was removed in PR #26 (canvas-ux refactor); comments now
+> live on the in-page hero canvas via `HeroCommentOverlay.tsx`, and the
+> slide-nav swaps with `CommentsPanel.tsx` in the same fixed slot.
+> Source of truth for the current implementation:
+> - `components/preview/HeroCommentOverlay.tsx` (drag-box + editor)
+> - `components/preview/CommentsPanel.tsx` (panel + Apply action)
+> - `components/preview/DeckView.tsx` (state machine — `commentMode`,
+>   `commentsArmed`, `applying`)
+> - `context/log.md` 2026-05-17 section for the full diff narrative.
+> Do not implement the Lightbox steps below.
+
 Drafted 2026-05-15 after dev → main PR #24 went up. **Step 1 (Lightbox) shipped on dev (uncommitted, no push yet); paused for visual verify before continuing.** Resume on user signal.
 
 > **Reminder when resuming (or in a new window):** all UI work uses the design tokens + class system in `app/globals.css` — never guess hex / rgba / blur values. Always read the top-of-file manual first (`.glass-card`, `.glass-modal`, `.btn-icon`, `.btn-gradient`, `--tq-*` tokens). Inline raw `bg-white/10` / `bg-black/85` is a smell — find the matching semantic class.
@@ -45,7 +58,7 @@ User's open question: *"What if the user wants a comment applied to all slides? 
 
 ## Architecture
 
-```
+```text
 DeckView (existing — extend)
 ├── SlideGrid (existing 4-up cascade)
 │   └── Slide cells — `onClick` opens LightboxModal
@@ -99,7 +112,7 @@ For v1 we go with **(A) sentinel** to ship faster. Migration can come later if/w
 
 ### Drafts
 
-```
+```text
 GET    /api/projects/[id]/comments?versionId=…
 POST   /api/projects/[id]/comments              { slideId, boundsJson, content, status:"draft" }
 PATCH  /api/projects/[id]/comments/[commentId]  { content?, boundsJson? }
@@ -108,7 +121,7 @@ DELETE /api/projects/[id]/comments/[commentId]
 
 ### Apply (the main one)
 
-```
+```text
 POST /api/projects/[id]/regenerate-partial
 {
   // server reads pending draft comments from DB and uses those,
@@ -130,7 +143,7 @@ Server steps:
 
 ## Inngest flow
 
-```
+```text
 event: deck.regenerate.partial.requested
 data: { versionId, targetSlideIds, comments }
 
@@ -161,7 +174,7 @@ handler:
 
 ### Per-slide prompt shape (`buildPartialRegenPrompt`)
 
-```
+```text
 You are regenerating ONE slide in an existing deck. The other slides are
 fixed — keep the chrome / theme / fonts / layout language identical.
 
@@ -203,7 +216,7 @@ exactly. Keep the slide's role ("{slide.role}").
 
 Add a new top-level section to `SYSTEM_PROMPT`:
 
-```
+```text
 PARTIAL REGENERATION MODE
 When the user message includes a "PARTIAL REGEN — ACTIVE SLIDE" block:
 - Regenerate ONLY the slide named there.

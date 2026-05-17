@@ -126,7 +126,7 @@ Actual installed dependencies as of 2026-05-15. See `package.json` for exact ver
 
 Browser-side render + library + post-processor. Inngest does the long-running generation.
 
-```
+```text
 User
  |
  | Next.js 16 Web App  (Turbopack)
@@ -184,7 +184,7 @@ Export pipeline  (client-side, in /preview)
 
 ### Frontend Routes
 
-```
+```text
 app/
   (marketing)/
     page.tsx                            ✅  Landing
@@ -225,7 +225,7 @@ app/
 
 ### API Routes
 
-```
+```text
 app/api/
   projects/route.ts                          ✅  POST creates project + fires deck.generate.requested
   projects/[id]/status/route.ts              ✅  GET polled by DeckView every 1.5 s
@@ -342,7 +342,7 @@ Content upload + reference upload → `mimic.extract.requested` (planned) extrac
 
 **Review-only.** Users browse slides, regenerate the deck, export, save as template. There's no element editor — visual changes go through Claude.
 
-```
+```text
 ┌────────────────────────────────────────────────────────────┐
 │   Vertical action toolbar (left)                          │
 │   - Regenerate (أعد التصميم)                              │
@@ -367,8 +367,8 @@ Content upload + reference upload → `mimic.extract.requested` (planned) extrac
 - ✅ Streaming generation with per-card progress polled at 1.5 s from `/api/projects/[id]/status`
 - ✅ Cascade-in slide reveal (Framer Motion stagger)
 - ✅ Vertical toolbar: Regenerate, Export PPTX, Save as template (popover form)
-- ⏳ Slide-panel side navigation (thumbnails)
-- ⏳ Area-select + comment overlay (toolbar slot is "قريباً" placeholder)
+- ✅ Slide-panel side navigation (thumbnails) — shipped 2026-05-17 (`SlideNavSidebar.tsx`); swaps with `CommentsPanel.tsx` in comment mode
+- ✅ Area-select + comment overlay — shipped 2026-05-17 (`HeroCommentOverlay.tsx`); drag-box draws on the hero canvas, editor popover with quick-action chips
 - ⏳ PDF export (toolbar slot is "قريباً")
 
 ---
@@ -399,7 +399,7 @@ Templates store a v2 SlideManifest as `jsonData` + thumbnail. Browse with catego
 
 Client-side, in [`lib/export/html-export.ts`](../lib/export/html-export.ts). The preview HTML is the source of truth for the export.
 
-```
+```text
 1. exportManifestAsPptx(manifest, fileName)
 2. Mount slides offscreen at 1920×1080, full opacity, no scale transform
 3. Wait for React commit + fonts.ready + every <img>.complete

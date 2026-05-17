@@ -15,7 +15,10 @@ const BoundsSchema = z.object({
 
 const PatchCommentSchema = z
   .object({
-    content: z.string().min(1).max(2000).optional(),
+    // `.trim().min(1)` rejects whitespace-only PATCH content, same as
+    // the create route — without it, "   " sneaks past `.min(1)` and
+    // turns a real comment into a blank one.
+    content: z.string().trim().min(1).max(2000).optional(),
     boundsJson: BoundsSchema.optional(),
   })
   .refine((v) => v.content !== undefined || v.boundsJson !== undefined, {

@@ -1,7 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
-import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
+import {
+  SLIDE_DIMENSIONS,
+  SlideManifestSchema,
+  type SlideFormat,
+  type SlideManifest,
+} from "@/lib/schema/slide";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -17,16 +22,19 @@ function getClient() {
 // we drill in on the things that go wrong in partial mode: producing only
 // HTML (not JSON), matching the surrounding deck's chrome, and minimal-diff
 // behaviour (don't redesign the whole slide if the comment only asked to
-// change the headline colour).
-const PARTIAL_SYSTEM_PROMPT = `You are regenerating ONE slide of an existing presentation. The rest of the deck is fixed — chrome (header row, footer row, brand mark, pagination), theme (palette, fonts, background), and slide-level margins stay locked.
+// change the headline colour). Canvas dims are format-aware so 9:16 decks
+// regen at 1080×1920 instead of being silently downgraded to 16:9.
+function buildPartialSystemPrompt(format: SlideFormat): string {
+  const { width, height } = SLIDE_DIMENSIONS[format];
+  return `You are regenerating ONE slide of an existing presentation. The rest of the deck is fixed — chrome (header row, footer row, brand mark, pagination), theme (palette, fonts, background), and slide-level margins stay locked.
 
 OUTPUT — STRICT
 - Return ONLY the new HTML for the active slide. No JSON. No markdown fences. No prose. No explanation.
-- Start with the slide root element (typically a single \`<div style="position:relative; width:1920px; height:1080px; ...">…</div>\`). Inline \`<style>\` tags are allowed inside the slide HTML.
+- Start with the slide root element (typically a single \`<div style="position:relative; width:${width}px; height:${height}px; ...">…</div>\`). Inline \`<style>\` tags are allowed inside the slide HTML.
 - Do NOT include <!DOCTYPE>, <html>, <head>, <body>. Slide body content only.
 
 CANVAS — same as the rest of the deck
-- 1920×1080 fixed canvas. The slide root sets width:1920px / height:1080px.
+- ${width}×${height} fixed canvas (${format}). The slide root sets width:${width}px / height:${height}px.
 - Set \`dir="rtl"\` or \`dir="ltr"\` on the slide root to match the deck's direction (the brief tells you which).
 - Use the SAME slide-level margin (inset) as the sibling slides — read it off the SIBLING SLIDE EXCERPTS in the user message and replicate.
 
@@ -58,6 +66,7 @@ DECORATIVE GRAPHICS — keep them relevant
 - Icons must match the concept on the card: a card about users gets a \`users\` icon, a security card gets a \`shield\` icon. Don't pick a random Lucide glyph because the card looks empty — pick one that names the idea.
 
 Return ONLY the new slide HTML now.`;
+}
 
 // Trim a sibling slide's HTML to roughly the chrome-bearing prefix + suffix.
 // Chrome typically lives in the first 600-800 chars (slide root style,
@@ -209,6 +218,12 @@ export const deckRegeneratePartial = inngest.createFunction(
       return parsed.data;
     });
 
+    // Resolve the deck format ONCE per job so every per-slide call uses
+    // the same dimensions — Claude needs the right canvas size in the
+    // system prompt or vertical decks regen at 16:9.
+    const sourceFormat: SlideFormat = source.format ?? "16:9";
+    const partialSystemPrompt = buildPartialSystemPrompt(sourceFormat);
+
     // Fan out per-slide Claude calls. Each runs as its own Inngest step so
     // a single slide's failure produces a partial result we can surface to
     // the user, and step results are cached on retry. Calls run in parallel.
@@ -224,7 +239,7 @@ export const deckRegeneratePartial = inngest.createFunction(
             system: [
               {
                 type: "text",
-                text: PARTIAL_SYSTEM_PROMPT,
+                text: partialSystemPrompt,
                 cache_control: { type: "ephemeral" },
               },
             ],

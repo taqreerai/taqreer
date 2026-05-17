@@ -5,7 +5,7 @@
 // glass-modal backdrop, glass-card panel, body-scroll lock + Esc to close.
 // Scrollable; up to 30 items (the store's cap).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -67,40 +67,58 @@ export function AllNotificationsModal({
   //                animation (`.panel-closing`), then onClose fires
   type ClearPhase = "idle" | "clearing" | "collapsing";
   const [clearPhase, setClearPhase] = useState<ClearPhase>("idle");
+  // Track every setTimeout the clear-all sequence schedules so we can
+  // cancel them if the modal closes mid-sequence (Esc / backdrop) —
+  // otherwise the queued timers keep firing and trigger stale
+  // notificationStore.remove / setClearPhase / onClose calls against
+  // a modal that's already closed.
+  const clearTimersRef = useRef<number[]>([]);
+  const cancelClearTimers = useCallback(() => {
+    for (const id of clearTimersRef.current) window.clearTimeout(id);
+    clearTimersRef.current = [];
+  }, []);
 
   const handleClearAll = useCallback(() => {
     if (clearPhase !== "idle") return;
     if (items.length === 0) return;
+    cancelClearTimers();
     setClearPhase("clearing");
     const STAGGER_MS = 80;
     const idsBottomUp = items.map((n) => n.id).reverse();
     idsBottomUp.forEach((id, idx) => {
-      window.setTimeout(() => {
-        notificationStore.remove(id);
-      }, idx * STAGGER_MS);
+      clearTimersRef.current.push(
+        window.setTimeout(() => notificationStore.remove(id), idx * STAGGER_MS),
+      );
     });
     // After all items are removed (+ a small grace for the last row's
     // exit anim to finish), trigger the panel's collapse animation,
     // then close.
     const totalStaggerMs = idsBottomUp.length * STAGGER_MS;
-    window.setTimeout(() => setClearPhase("collapsing"), totalStaggerMs + 200);
-    window.setTimeout(() => {
-      onClose();
-      setClearPhase("idle");
-    }, totalStaggerMs + 200 + 320);
-  }, [clearPhase, items, onClose]);
+    clearTimersRef.current.push(
+      window.setTimeout(() => setClearPhase("collapsing"), totalStaggerMs + 200),
+    );
+    clearTimersRef.current.push(
+      window.setTimeout(() => {
+        onClose();
+        setClearPhase("idle");
+      }, totalStaggerMs + 200 + 320),
+    );
+  }, [clearPhase, items, onClose, cancelClearTimers]);
 
-  // Reset the phase if the modal is closed externally during a sequence
-  // (Esc / backdrop click) so a re-open starts clean. setState-in-effect
-  // is intentional — closure of an external prop (`open`) drives an
-  // internal-only state reset, with no risk of cascade since the flip
-  // is one-shot per open/close edge.
+  // Reset the phase + cancel any in-flight timers if the modal is
+  // closed externally during a sequence (Esc / backdrop click) so a
+  // re-open starts clean and no stale callbacks fire. setState-in-
+  // effect is intentional — closure of an external prop (`open`)
+  // drives an internal-only state reset.
   useEffect(() => {
     if (!open) {
+      cancelClearTimers();
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setClearPhase("idle");
     }
-  }, [open]);
+  }, [open, cancelClearTimers]);
+  // Unmount safety: clear timers even when the host stops rendering us.
+  useEffect(() => cancelClearTimers, [cancelClearTimers]);
 
   if (typeof window === "undefined") return null;
 

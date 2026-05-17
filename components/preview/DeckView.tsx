@@ -1168,8 +1168,8 @@ export function DeckView({
         <motion.div
           ref={gridRef}
           variants={slideCardVariants}
-          initial="rest"
-          animate="rest"
+          initial="hidden"
+          animate="visible"
           aria-label={`الشريحة ${focusedIndex + 1} من ${manifest!.slides.length}`}
           style={{ aspectRatio, width: heroWidthCss }}
           // Animated mesh-gradient ring — class is always present so
