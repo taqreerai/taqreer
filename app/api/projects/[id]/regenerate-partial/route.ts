@@ -42,34 +42,42 @@ export async function POST(
   const presentation = project.presentation;
   const sourceVersionId = presentation.currentVersionId!;
 
-  const draftComments = await prisma.comment.findMany({
-    where: {
-      presentationId: presentation.id,
-      versionId: sourceVersionId,
-      status: "draft",
-    },
-    select: { id: true, slideId: true, content: true, boundsJson: true },
-  });
-  if (draftComments.length === 0) {
-    return NextResponse.json(
-      { error: "No draft comments to apply" },
-      { status: 400 },
-    );
-  }
+  // Atomic snapshot + promote: read drafts, allocate v_n+1, and promote
+  // the read drafts to "applied" INSIDE the same transaction. The
+  // returned `promoted` rows are the exact set we dispatch to Inngest —
+  // no drift window between the read snapshot and the emitted payload
+  // (CR #25 #3 / #4). Retry the whole tx on the (presentationId,
+  // versionNumber) unique-index race; that's a transient retry-able
+  // failure, not a logical conflict.
+  type Promoted = {
+    id: string;
+    slideId: string;
+    content: string;
+    boundsJson: unknown;
+  };
+  type TxResult =
+    | { kind: "empty" }
+    | {
+        kind: "ok";
+        promoted: Promoted[];
+        newVersion: { id: string; versionNumber: number };
+      };
 
-  // Distinct target slides. v1 has no `_global` scope, so this is just the
-  // set of slide IDs referenced by drafts.
-  const targetSlideIds = Array.from(
-    new Set(draftComments.map((c) => c.slideId)),
-  );
-
-  // Allocate v_n+1 inside a transaction; retry on the
-  // (presentationId, versionNumber) unique race the same way regenerate does.
   const MAX_ATTEMPTS = 3;
-  let result: { newVersion: { id: string; versionNumber: number } } | null = null;
+  let result: TxResult | null = null;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
       result = await prisma.$transaction(async (tx) => {
+        const drafts = await tx.comment.findMany({
+          where: {
+            presentationId: presentation.id,
+            versionId: sourceVersionId,
+            status: "draft",
+          },
+          select: { id: true, slideId: true, content: true, boundsJson: true },
+        });
+        if (drafts.length === 0) return { kind: "empty" as const };
+
         const latest = await tx.presentationVersion.findFirst({
           where: { presentationId: presentation.id },
           orderBy: { versionNumber: "desc" },
@@ -90,18 +98,32 @@ export async function POST(
             slideJson: toJson(latest?.slideJson ?? { status: "queued", slides: [] }),
           },
         });
-        // Promote the drafts to applied AGAINST THE SOURCE VERSION. They
-        // remain attached to the version they were authored against; the new
-        // version starts clean (zero comments). Lock by id to avoid
-        // marking a draft applied that someone deleted concurrently.
-        await tx.comment.updateMany({
+        // Promote the drafts. The `status: "draft"` guard means concurrent
+        // deletions / concurrent applies show up as `count < drafts.length`.
+        // If `count === 0` another request fully won the race — every draft
+        // we saw was already promoted by another in-flight apply — so we
+        // bail to avoid dispatching a duplicate regenerate event for the
+        // same rows.
+        const updated = await tx.comment.updateMany({
           where: {
-            id: { in: draftComments.map((c) => c.id) },
+            id: { in: drafts.map((c) => c.id) },
             status: "draft",
           },
           data: { status: "applied" },
         });
-        return { newVersion };
+        if (updated.count === 0) return { kind: "empty" as const };
+        // Re-read the promoted rows so the dispatched snapshot is exactly
+        // what's now in `applied` state — current content, no rows that
+        // vanished between findMany and updateMany.
+        const promoted = await tx.comment.findMany({
+          where: {
+            id: { in: drafts.map((c) => c.id) },
+            status: "applied",
+          },
+          select: { id: true, slideId: true, content: true, boundsJson: true },
+        });
+        if (promoted.length === 0) return { kind: "empty" as const };
+        return { kind: "ok" as const, promoted, newVersion };
       });
       break;
     } catch (error) {
@@ -115,6 +137,15 @@ export async function POST(
       { status: 500 },
     );
   }
+  if (result.kind === "empty") {
+    return NextResponse.json(
+      { error: "No draft comments to apply" },
+      { status: 400 },
+    );
+  }
+
+  const { promoted, newVersion } = result;
+  const targetSlideIds = Array.from(new Set(promoted.map((c) => c.slideId)));
 
   try {
     await sendInngestEventWithRetry({
@@ -122,10 +153,10 @@ export async function POST(
       data: {
         projectId: project.id,
         presentationId: presentation.id,
-        versionId: result.newVersion.id,
+        versionId: newVersion.id,
         sourceVersionId,
         targetSlideIds,
-        comments: draftComments.map((c) => ({
+        comments: promoted.map((c) => ({
           slideId: c.slideId,
           content: c.content,
           boundsJson: c.boundsJson,
@@ -136,12 +167,12 @@ export async function POST(
     // Reverse the version allocation + applied transition so the user can
     // retry without losing their drafts.
     await prisma.presentationVersion
-      .update({ where: { id: result.newVersion.id }, data: { status: "failed" } })
+      .update({ where: { id: newVersion.id }, data: { status: "failed" } })
       .catch(() => undefined);
     await prisma.comment
       .updateMany({
         where: {
-          id: { in: draftComments.map((c) => c.id) },
+          id: { in: promoted.map((c) => c.id) },
           status: "applied",
         },
         data: { status: "draft" },
@@ -155,8 +186,8 @@ export async function POST(
 
   return NextResponse.json({
     ok: true,
-    versionId: result.newVersion.id,
-    versionNumber: result.newVersion.versionNumber,
+    versionId: newVersion.id,
+    versionNumber: newVersion.versionNumber,
     targetSlideIds,
   });
 }

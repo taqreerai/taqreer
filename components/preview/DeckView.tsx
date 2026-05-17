@@ -1,14 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { motion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
+import {
+  SlideNavSidebar,
+  SLIDE_NAV_WIDTH,
+  type NavItem,
+} from "@/components/preview/SlideNavSidebar";
+import { CommentsPanel } from "@/components/preview/CommentsPanel";
+import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
-import { SlideLightbox } from "@/components/preview/SlideLightbox";
 import { createClient } from "@/lib/supabase/client";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { notificationStore } from "@/lib/notifications/store";
@@ -25,6 +39,10 @@ type Props = {
   initialVersionId?: string | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
+  // Slide aspect ratio from the project (set at /create/brand time). Used
+  // as the fallback for placeholder cards during generation, when there's
+  // no manifest yet to read `format` from.
+  initialFormat?: SlideFormat;
 };
 
 type DerivedStatus = "generating" | "completed" | "failed";
@@ -38,6 +56,14 @@ type Progress = {
   // older in-flight runs (pre-deploy) won't have it; in that case the
   // client falls back to mount-time `Date.now()` as before.
   genStartedAt?: string;
+  // Live thinking-phase telemetry — populated by deck-generate's
+  // `stream.on("thinking", …)` handler. Both optional because older
+  // in-flight runs / the fast tier (thinking disabled) won't carry
+  // them. We surface "thinkingTokens / thinkingBudget" in the
+  // caption so the user sees forward motion during the silent
+  // pre-output thinking phase.
+  thinkingTokens?: number;
+  thinkingBudget?: number;
 };
 
 function isProgress(value: unknown): value is Progress {
@@ -50,20 +76,16 @@ function isProgress(value: unknown): value is Progress {
   );
 }
 
-// Cosmetic rotating captions for the generating screen. They rotate
-// independently of the real per-slide progress (which now lives on the
-// current placeholder card), giving the user a sense of momentum even when
-// Claude pauses between slides.
-const FAKE_FEEDBACK = [
-  "إعداد نظام الألوان...",
-  "البحث في تصاميم التخطيط...",
-  "تحسين بنية العرض...",
-  "تنسيق المحتوى مع الهوية البصرية...",
-  "اختيار الخطوط المناسبة...",
-  "ضبط التباين والحدود...",
-  "ترتيب العناصر على الشبكة...",
-  "تجهيز الشرائح...",
-];
+// Compact human-readable token count. Sub-thousand: bare integer.
+// Mid-range (1k–10k): one decimal place (e.g. 3.2k). 10k+: rounded
+// integer (e.g. 12k). Keeps the caption short and readable while the
+// budget grows during the thinking phase.
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "0";
+  if (n < 1000) return `${Math.round(n)}`;
+  if (n >= 10000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1000).toFixed(1)}k`;
+}
 
 // Map the streaming progress to a 0..100 % bar. Thinking gets a small head
 // start so the bar never sits at 0 while Claude warms up. Designing fills the
@@ -87,14 +109,26 @@ function progressPercent(progress: Progress | null): number {
   }
 }
 
-// Slides + placeholders use a responsive grid: 1 col on mobile, 2 on
-// small, 3 on medium, 4 on wide. Each cell is `aspect-ratio: 16/9` so it
-// never overlaps a neighbour when the column shrinks. The internal
-// SlideRenderer scale tracks the cell's actual width via a ResizeObserver.
-const SLIDE_W = 1920;
-// Fallback scale used while ResizeObserver is wiring up + for the
-// non-responsive placeholder fallback.
+// Fallback scale used while ResizeObserver is wiring up to the hero.
 const FALLBACK_SCALE = 0.18;
+
+// Hero canvas layout constants. Kept here (rather than inline) so the
+// width-clamp and the symmetric height-clamp we pass to the side
+// panels read the same numbers — any tweak here flows to all three
+// children of the canvas row.
+//
+// No hard width cap: the hero grows to fill whatever horizontal +
+// vertical space the row affords. The two min() candidates (viewport
+// height + row-fit) keep it from overflowing either dimension on
+// their own, so the artificial 1100 px cap that used to live here
+// only ever made the canvas smaller than necessary on wide monitors.
+//
+// HERO_VERTICAL_PADDING_PX = Header (80) + 40 px breathing room
+// above the hero + 40 px breathing room below = 160 total. Must
+// match the wrapper paddings DashboardShell uses for preview
+// routes (pt-[120px] + pb-[40px]); the row's `minHeight: calc(100vh
+// - HERO_VERTICAL_PADDING_PX)` then fits exactly between them.
+const HERO_VERTICAL_PADDING_PX = 160;
 
 function isCompleted(projectStatus: string, versionStatus: string | null): boolean {
   return (
@@ -108,19 +142,7 @@ function isFailed(projectStatus: string, versionStatus: string | null): boolean 
   return projectStatus === "failed" || versionStatus === "failed";
 }
 
-// Slide grid cascades in first, then the toolbar slides in from screen-left
-// like a Photoshop tool palette. Action-bar delay is constant (1s) regardless
-// of deck size so big decks don't make users wait — toolbar arrives while the
-// final slides are still landing.
-const slideListVariants: Variants = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.1, delayChildren: 0.2 },
-  },
-};
-
-// Opacity-only reveal — no motion, slower fade. Each card breathes in
-// gently rather than slides up; the wave is purely a brightness ladder.
+// Hero card opacity-only reveal on mount.
 const slideCardVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
@@ -129,36 +151,9 @@ const slideCardVariants: Variants = {
   },
 };
 
-// Slide-card hover overlay — dim fades in, zoom-in icon pops up. Driven
-// via parent's whileHover so all child motion.divs sync on enter/leave.
-const slideHoverVariants: Variants = {
-  rest: { opacity: 0, backgroundColor: "rgba(0,0,0,0)" },
-  hover: { opacity: 1, backgroundColor: "rgba(0,0,0,0.35)" },
-};
-const slideHoverIconVariants: Variants = {
-  rest: { scale: 0.8, opacity: 0 },
-  hover: { scale: 1, opacity: 1 },
-};
-
-// Toolbar physics. The outer wrapper springs between page-edge (left: 16)
-// and lightbox position (computed from viewport size) — this is the
-// horizontal "slide from page to slide-right" morph. The inner motion
-// remounts via `key` flip on every state change, firing the scale pulse
-// (0.88 → 1) that gives the "lift off, land" 3d feel.
+// Toolbar entrance — slides in from off-screen on first paint. Spring
+// for a softer landing.
 const TOOLBAR_POSITION_SPRING = { type: "spring" as const, stiffness: 180, damping: 24 };
-const TOOLBAR_SCALE_SPRING = { type: "spring" as const, stiffness: 280, damping: 14 };
-
-// Must match SlideLightbox's stage width clamp `min(calc(90vw - 220px), …)`
-// so the toolbar lands exactly at the stage's left edge minus a gap. The
-// 220px stage reservation is split evenly on both sides because the stage
-// is centered in the viewport — plenty of room for the toolbar at ~80px
-// wide plus the 24px gap on either side.
-const TOOLBAR_RESERVE_PX = 220;
-const TOOLBAR_STAGE_GAP_PX = 24;
-// Approximate physical width of <PreviewActionBar> — 44px button column +
-// 2 × 8px glass-card padding + 1px borders = ~62px, rounded up so the
-// toolbar always lands clear of the stage edge.
-const TOOLBAR_WIDTH_PX = 80;
 
 export function DeckView({
   projectId,
@@ -168,6 +163,7 @@ export function DeckView({
   initialVersionStatus,
   initialManifest,
   initialSlideCount,
+  initialFormat,
 }: Props) {
   const router = useRouter();
   // Initial state seeds from server props. The parent (re)keys this component
@@ -181,121 +177,129 @@ export function DeckView({
   const [retryError, setRetryError] = useState("");
   // Polling sets this when it sees a failed status arrive after mount.
   const [polledFailure, setPolledFailure] = useState(false);
-  // Rotating fake-feedback caption shown under the page title while
-  // generating. `fakeIdx` advances on a 2.5 s timer; `fakeVisible` drives a
-  // 300 ms opacity crossfade between messages.
-  const [fakeIdx, setFakeIdx] = useState(0);
-  const [fakeVisible, setFakeVisible] = useState(true);
 
-  // Stuck-detection state. We track when the generating state started and when
-  // progress.currentSlide last advanced. Two thresholds:
-  //   - SLOW (6 min total)              → soft "taking longer than usual" hint
-  //   - STUCK (12 min total OR 3 min    → action banner with a retry button
-  //     since slide last advanced)
-  // `nowTick` increments every 10 s so the derived elapsed / stale times
-  // recompute even when the polling effect doesn't fire (e.g. progress stops
-  // changing). All times are wall-clock ms — `useState(() => Date.now())` so
-  // the initial value isn't `Date.now()` on every re-render.
+  // Generation-clock state. SLOW threshold (6 min) flips an in-page
+  // caption ("الخادم تحت ضغط عالٍ حالياً") so the user sees the run
+  // is just running long, not silently dead. The old "STUCK" bell
+  // notification was removed — it kept misfiring on legitimately
+  // slow phases.
+  //
+  // `nowTick` increments every 10 s so the derived `elapsedMs` stays
+  // current even when the polling effect doesn't fire (Claude is
+  // silent between slides). useState(() => Date.now()) so the seed
+  // isn't re-evaluated on every re-render.
   const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
-  const [lastProgressAt, setLastProgressAt] = useState<number | null>(null);
-  const [lastSlideSeen, setLastSlideSeen] = useState(0);
-  const [lastStageSeen, setLastStageSeen] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  // Lightbox — null when closed, otherwise the slide index being shown.
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // Slide aspect ratio. During generation `manifest` is null, so we fall
+  // back to `initialFormat` (passed from the server-side preview page,
+  // which reads it from `Project.format` set at /create/brand time).
+  // Legacy manifests / very old projects without either set → 16:9 via
+  // dimensionsForFormat's internal default. Drives placeholder cards,
+  // real slide cards, SlideRenderer dimensions, and the grid scale.
+  const { width: canvasW, height: canvasH } = dimensionsForFormat(
+    manifest?.format ?? initialFormat,
+  );
+  const aspectRatio = `${canvasW} / ${canvasH}`;
 
-  // Responsive slide grid — Tailwind `grid-cols-1/2/3/4` at breakpoints.
-  // Each cell uses `aspect-ratio: 16/9` + `w-full` so columns shrink to
-  // fit the viewport without overlap. SlideRenderer renders at a 1920-wide
-  // canvas internally; we feed it a `scale` derived from the actual cell
-  // width so the slide content fills the cell at any breakpoint. One
-  // ResizeObserver on the grid container measures, then computes the
-  // resolved column count + gap from getComputedStyle.
+  // gridRef is defined here so it can be passed to <motion.div>
+  // below. The scale + height measurement effect that uses it lives
+  // further down (after commentMode is declared — the effect's deps
+  // include commentMode because changing it resizes the hero).
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridScale, setGridScale] = useState(FALLBACK_SCALE);
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    const recompute = () => {
-      const styles = getComputedStyle(el);
-      const cols = styles.gridTemplateColumns.split(" ").filter(Boolean).length;
-      const gapPx = parseFloat(styles.columnGap) || 0;
-      const w = el.clientWidth;
-      if (w <= 0 || cols <= 0) return;
-      const cellW = (w - (cols - 1) * gapPx) / cols;
-      if (cellW > 0) {
-        setGridScale(cellW / SLIDE_W);
-      }
-    };
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [manifest]);
 
-  // Comment-feature state (Steps 2-4 of context/plan-comments.md).
-  //
-  //   commentMode: drives the toolbar toggle + the dim-0-comment-slides
-  //                affordance in the grid + the drag-box overlay in the
-  //                lightbox.
-  //   comments:    DRAFT comments for the current version. Fetched on
-  //                first render in `completed` state. Server keeps the
-  //                authoritative list; we keep an optimistic local copy.
-  //   applying:    set when POST /regenerate-partial is in flight or the
-  //                new version is queued and not yet `completed`. While
-  //                set, the targetSlideIds get a per-slide "regenerating"
-  //                overlay and toolbar buttons disable.
+  // Comment-feature state.
+  //   commentMode: in commenting flow → SlideNavSidebar swaps out for
+  //                CommentsPanel in the right-edge slot. Drives the
+  //                drag-box overlay on the hero (step 2c).
+  //   comments:    DRAFT comments for the current version. Server is
+  //                authoritative; we keep an optimistic local copy.
+  //   applying:    partial regen in flight (versionId queued until
+  //                Inngest completes). Targeted slides get a
+  //                "regenerating" overlay; the Apply button locks.
   const [commentMode, setCommentMode] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
-  // `commentsArmed` is a CLIENT-ONLY UX flag: the user clicked "Apply"
-  // (locked in the drafts), but Claude hasn't been called yet. While
-  // armed, the apply cell is hidden and the regen icon shows a check —
-  // clicking the regen button is what actually fires the partial regen.
-  // Resets to false when applying completes (or fails).
-  const [commentsArmed, setCommentsArmed] = useState(false);
   const [applying, setApplying] = useState<{
     versionId: string;
     targetSlideIds: string[];
   } | null>(null);
 
-  // Viewport size — needed to compute the toolbar's lightbox-position
-  // landing point (left edge of stage minus gap). Updated on resize so
-  // the toolbar tracks viewport changes (rotate, sidebar toggle, etc.).
-  // SSR default = a desktop-ish 1440×900 so the first render produces a
-  // sensible toolbarLightboxLeft; replaced on mount before any interaction.
-  const [viewport, setViewport] = useState({ w: 1440, h: 900 });
+  // Measure the hero's rendered width so we can feed SlideRenderer
+  // a `scale` of canvas-pixels-per-hero-pixel. The side panels are
+  // now fixed-positioned (height comes from CSS `top: 80; bottom: 0`),
+  // so we no longer need to track hero height.
+  useLayoutEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const recompute = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && canvasW > 0) setGridScale(rect.width / canvasW);
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [manifest, canvasW]);
+
+  // Main app sidebar width — drives the slide-nav's `right` offset
+  // so it docks against the main sidebar's inner edge. Mirrors the
+  // source of truth in DashboardShell.tsx (localStorage +
+  // `taqreer_sidebar_collapsed_changed` custom event). Default to
+  // the expanded width (260) for SSR; the effect below replaces it
+  // with the stored value on mount.
+  const [mainSidebarWidth, setMainSidebarWidth] = useState<number>(260);
   useEffect(() => {
-    const sync = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
-    sync();
-    window.addEventListener("resize", sync);
-    return () => window.removeEventListener("resize", sync);
+    const readWidth = (): number => {
+      try {
+        const v = window.localStorage.getItem("taqreer_sidebar_collapsed");
+        if (v === "true") return 80;
+        return 260;
+      } catch {
+        return 260;
+      }
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMainSidebarWidth(readWidth());
+    const onChange = (e: Event) => {
+      if (e instanceof CustomEvent && typeof e.detail === "boolean") {
+        setMainSidebarWidth(e.detail ? 80 : 260);
+        return;
+      }
+      setMainSidebarWidth(readWidth());
+    };
+    window.addEventListener("taqreer_sidebar_collapsed_changed", onChange);
+    window.addEventListener("storage", onChange);
+    return () => {
+      window.removeEventListener(
+        "taqreer_sidebar_collapsed_changed",
+        onChange,
+      );
+      window.removeEventListener("storage", onChange);
+    };
   }, []);
 
-  // Toolbar is portal'd to document.body so its z-[1050] is in the same
-  // stacking context as the lightbox portal (z-[1000]). Without this,
-  // any ancestor of <section> that creates a stacking context (transform,
-  // filter, isolation, opacity != 1, etc.) traps the toolbar's z-index
-  // beneath the body-level lightbox. `bodyMounted` gates the createPortal
-  // call so we don't touch document during SSR.
+  // Currently-focused slide in the hero canvas. Default to 0; resets
+  // when a new manifest arrives (e.g. after regen) to keep the user on
+  // the first slide rather than a potentially-out-of-range index.
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  useEffect(() => {
+    if (!manifest) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentSlideIndex((prev) =>
+      prev < manifest.slides.length ? prev : 0,
+    );
+  }, [manifest]);
+
+  // Toolbar is portal'd to document.body so its z-index isn't trapped
+  // by any ancestor's stacking context (transform, filter, isolation,
+  // opacity != 1, etc.). `bodyMounted` gates the createPortal call so
+  // we don't touch document during SSR.
   const [bodyMounted, setBodyMounted] = useState(false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBodyMounted(true);
   }, []);
-
-  // Stage width formula must mirror SlideLightbox's CSS clamp:
-  //   `min(calc(90vw - TOOLBAR_RESERVE_PX), calc((100vh - 160) * 16/9))`
-  // — the same min() of width-based and height-based candidates. The
-  // toolbar lands just to the LEFT of the stage: its right edge sits at
-  // `stage_left - gap`, so its `left` is `stage_left - gap - width`.
-  const stageW = Math.min(
-    viewport.w * 0.9 - TOOLBAR_RESERVE_PX,
-    ((viewport.h - 160) * 16) / 9
-  );
-  const stageLeftEdge = (viewport.w - stageW) / 2;
-  const toolbarLightboxLeft =
-    stageLeftEdge - TOOLBAR_STAGE_GAP_PX - TOOLBAR_WIDTH_PX;
 
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
@@ -405,28 +409,12 @@ export function DeckView({
     };
   }, [projectId, status, router]);
 
-  // Drive the rotating fake-feedback caption while generating. Each cycle
-  // fades the current message out (300 ms), swaps the index, and fades the
-  // next one in.
-  useEffect(() => {
-    if (status !== "generating") return;
-    const id = window.setInterval(() => {
-      setFakeVisible(false);
-      window.setTimeout(() => {
-        setFakeIdx((current) => (current + 1) % FAKE_FEEDBACK.length);
-        setFakeVisible(true);
-      }, 300);
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [status]);
-
-  // Start the generation clock when we first enter `generating`. Prefer the
-  // server-persisted `progress.genStartedAt` (ISO from the Inngest job) over
-  // local mount time so a mid-generation tab reload doesn't reset the clock
-  // to 0 — without this, refreshing a stuck deck would silently re-arm the
-  // stuck-detection thresholds and the user would never see the banner.
-  // Fall back to Date.now() for older in-flight runs that didn't write the
-  // timestamp yet. setState-in-effect is intentional (client-only wall clock).
+  // Start the generation clock when we first enter `generating`. Prefer
+  // the server-persisted `progress.genStartedAt` (ISO from the Inngest
+  // job) over local mount time so a mid-generation tab reload doesn't
+  // reset the clock to 0. Fall back to Date.now() for older in-flight
+  // runs that didn't write the timestamp yet. setState-in-effect is
+  // intentional (client-only wall clock).
   useEffect(() => {
     if (status !== "generating") return;
     if (genStartedAt !== null) return;
@@ -435,29 +423,7 @@ export function DeckView({
     const start = Number.isFinite(serverStartMs) ? serverStartMs : Date.now();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGenStartedAt(start);
-    setLastProgressAt(Date.now());
   }, [status, genStartedAt, progress]);
-
-  // Advance lastProgressAt whenever the streamed slide number ticks up OR
-  // the pipeline stage changes (e.g. `content` → `validating` → `saving`).
-  // Without the stage check, the validating/saving phases — which can take
-  // 30–60s with no slide-number movement — falsely trip STUCK_STALE_MS.
-  // Same setState-in-effect reasoning: wall-clock derived from streamed prop.
-  useEffect(() => {
-    if (status !== "generating") return;
-    const slide = progress?.currentSlide ?? 0;
-    const stage = progress?.stage ?? null;
-    const slideAdvanced = slide > lastSlideSeen;
-    const stageChanged = stage !== null && stage !== lastStageSeen;
-    if (slideAdvanced || stageChanged) {
-      if (slideAdvanced) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setLastSlideSeen(slide);
-      }
-      if (stageChanged) setLastStageSeen(stage);
-      setLastProgressAt(Date.now());
-    }
-  }, [progress, status, lastSlideSeen, lastStageSeen]);
 
   // Re-render every 10 s so the elapsed / stale times stay current even when
   // no other state changes (i.e. when the generation actually IS stuck and
@@ -468,48 +434,19 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
-  // Stuck thresholds. SLOW just nudges copy; STUCK surfaces a retry CTA.
+  // SLOW just nudges in-page copy ("الخادم تحت ضغط عالٍ حالياً").
+  // The stuck-detection bell notification was removed entirely
+  // (was producing false positives even with tightened thresholds —
+  // notifications persist in localStorage so any old alert kept
+  // re-surfacing). If a run actually hangs, the user closes the tab
+  // or hits retry from the preview — no need for the bell channel
+  // to second-guess.
   const SLOW_WARN_MS = 6 * 60 * 1000;
-  const STUCK_TOTAL_MS = 12 * 60 * 1000;
-  const STUCK_STALE_MS = 3 * 60 * 1000;
   const elapsedMs = genStartedAt ? nowTick - genStartedAt : 0;
-  const staleMs = lastProgressAt ? nowTick - lastProgressAt : 0;
-  const isStuck =
-    status === "generating" &&
-    !!genStartedAt &&
-    (elapsedMs > STUCK_TOTAL_MS || staleMs > STUCK_STALE_MS);
   const isSlow =
     status === "generating" &&
     !!genStartedAt &&
-    !isStuck &&
     elapsedMs > SLOW_WARN_MS;
-
-  // Surface a single "stuck" notification to the bell when the deck first
-  // crosses the STUCK threshold. We push exactly once per stuck-window via
-  // a ref-tracked latch so the user doesn't see the same alert repeated
-  // every 10 s (the nowTick interval re-evaluates isStuck constantly).
-  // The notification carries the project's preview href so clicking
-  // returns the user here.
-  const stuckNotifiedRef = useRef(false);
-  useEffect(() => {
-    if (!isStuck) {
-      // Reset the latch when stuck clears (retry succeeded, etc.) so a
-      // future stuck window will fire a fresh notification.
-      stuckNotifiedRef.current = false;
-      return;
-    }
-    if (stuckNotifiedRef.current) return;
-    stuckNotifiedRef.current = true;
-    notificationStore.push({
-      kind: "warning",
-      title: "تصميم العرض متوقف",
-      desc: `${projectTitle} — يبدو أن العملية متوقفة. جرّب إعادة المحاولة.`,
-      // Route to the summary page so the user lands on the "Generate"
-      // CTA — their content + brand data is preserved in sessionStorage
-      // from the create flow, so a single click re-fires generation.
-      href: `/create/summary`,
-    });
-  }, [isStuck, projectId, projectTitle]);
 
   // Fetch draft comments once on completed mount. The server filters by the
   // presentation's currentVersionId, so refetching on manifest swap (after
@@ -537,41 +474,122 @@ export function DeckView({
     };
   }, [projectId, status, manifest?.presentationId]);
 
-  // While applying, poll project status. Apply is "done" only when the
-  // LATEST version's id matches the applying state's versionId AND its
-  // status is "completed" — otherwise we'd false-positive immediately on
-  // the source version (still "completed" at apply-time before the new
-  // version is allocated). Once done: clear applying state, drop applied
-  // drafts from local state, exit comment mode, refresh server-render.
+  // While applying, poll project status. The user must hear about
+  // ANY disconnect — Inngest cancellations don't flip the DB row to
+  // "failed" (it stays "queued" forever), network blips might mask
+  // real failures, and a genuinely stuck job needs to fail visibly
+  // instead of spinning silently. Four terminal cases, each surfaces
+  // via notificationStore and clears `applying` so the UI returns
+  // to its normal view:
+  //   1. Pinned version status === "completed" → success.
+  //   2. Pinned version status === "failed" / project "failed" →
+  //      explicit backend failure.
+  //   3. No `progress` advancement for 60 s while pinned & queued →
+  //      treat as stuck / cancelled (Inngest-cancelled case).
+  //   4. ≥5 consecutive fetch failures → server / network disconnect.
+  //   5. Hard 5-min cap as a final fallback.
   useEffect(() => {
     if (!applying) return;
     let cancelled = false;
+    const applyStartedAt = Date.now();
+    const APPLY_TIMEOUT_MS = 5 * 60 * 1000;
+    const STUCK_NO_PROGRESS_MS = 60 * 1000;
+    const MAX_CONSECUTIVE_ERRORS = 5;
+    let lastProgressMs = Date.now();
+    let lastProgressSlide = 0;
+    let lastProgressStage: string | null = null;
+    let consecutiveErrors = 0;
+    const failApply = (message: string) => {
+      if (cancelled) return;
+      setApplying(null);
+      notificationStore.push({
+        kind: "warning",
+        title: "تعذر تطبيق التعليقات",
+        desc: `${projectTitle} — ${message}`,
+        href: `/preview/${projectId}`,
+      });
+    };
     const tick = async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/status`);
-        if (!res.ok || cancelled) return;
+        // Pin the poll to the EXACT target version once known. Two
+        // close partial regens otherwise let the status route return
+        // the newer version's row, leaving this poller stuck. Pre-
+        // apply (sentinel versionId), fall back to default (latest).
+        const versionParam =
+          applying.versionId && applying.versionId !== "__pending__"
+            ? `?versionId=${encodeURIComponent(applying.versionId)}`
+            : "";
+        const res = await fetch(
+          `/api/projects/${projectId}/status${versionParam}`,
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (cancelled) return;
+        consecutiveErrors = 0;
         const data = (await res.json()) as {
           status: string;
           versionId: string | null;
           versionStatus: string | null;
+          progress: { stage: string; currentSlide: number } | null;
         };
         // Optimistic mode: applying.versionId starts as "__pending__".
         // Until the apply POST returns and we replace it with the real
-        // versionId, no completion can be declared (real id can never
-        // equal the sentinel).
-        if (
-          data.versionId &&
-          data.versionId === applying.versionId &&
-          data.versionStatus === "completed"
-        ) {
+        // versionId, no terminal can be declared on a pinned version
+        // (real id can never equal the sentinel).
+        const isPinned =
+          applying.versionId &&
+          applying.versionId !== "__pending__" &&
+          data.versionId === applying.versionId;
+
+        // 1. Success.
+        if (isPinned && data.versionStatus === "completed") {
           setApplying(null);
           setComments([]);
           setCommentMode(false);
-          setCommentsArmed(false);
           router.refresh();
+          return;
+        }
+        // 2. Explicit failure.
+        if (
+          (isPinned && data.versionStatus === "failed") ||
+          data.status === "failed"
+        ) {
+          failApply("تم إلغاء العملية أو حدث خطأ. يمكنك المحاولة مرة أخرى.");
+          return;
+        }
+
+        // Update progress watermark if it advanced.
+        if (
+          data.progress &&
+          (data.progress.currentSlide !== lastProgressSlide ||
+            data.progress.stage !== lastProgressStage)
+        ) {
+          lastProgressMs = Date.now();
+          lastProgressSlide = data.progress.currentSlide;
+          lastProgressStage = data.progress.stage;
+        }
+
+        // 3. Stuck — pinned + queued + no progress in 60 s. Covers
+        // the Inngest-cancelled case (DB row stays "queued" forever).
+        if (
+          isPinned &&
+          data.versionStatus !== "completed" &&
+          Date.now() - lastProgressMs > STUCK_NO_PROGRESS_MS
+        ) {
+          failApply("توقفت العملية. ربما تم إلغاؤها — حاول مرة أخرى.");
+          return;
+        }
+
+        // 5. Hard timeout.
+        if (Date.now() - applyStartedAt > APPLY_TIMEOUT_MS) {
+          failApply("استغرقت العملية وقتاً أطول من المتوقع. حاول مجدداً.");
+          return;
         }
       } catch {
-        /* network blip */
+        consecutiveErrors += 1;
+        // 4. Network / server disconnect. ~10 s of failed polls.
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          failApply("انقطع الاتصال بالخادم. تحقق من الشبكة ثم حاول مجدداً.");
+        }
       }
     };
     void tick();
@@ -580,7 +598,31 @@ export function DeckView({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [applying, projectId, router]);
+  }, [applying, projectId, projectTitle, router]);
+
+  // Translate API failure status codes to Arabic UI messages — used
+  // by the drag-box comment editor (step 2c/d). 409 is the realistic
+  // real-world failure: comment was promoted to "applied" between the
+  // user opening the editor and submitting. 401 happens after long
+  // idle sessions.
+  const throwApiError = (
+    status: number,
+    fallback: string,
+  ): never => {
+    let message: string;
+    if (status === 409) {
+      message = "تم تطبيق التعليقات. لم يعد قابلاً للتعديل.";
+    } else if (status === 401) {
+      message = "انتهت الجلسة، أعد تسجيل الدخول.";
+    } else if (status === 404) {
+      message = "التعليق غير موجود.";
+    } else {
+      message = fallback;
+    }
+    const err = new Error(message) as Error & { status?: number };
+    err.status = status;
+    throw err;
+  };
 
   const handleCreateComment = useCallback(
     async (input: { slideId: string; bounds: CommentBounds; content: string }) => {
@@ -593,7 +635,7 @@ export function DeckView({
           content: input.content,
         }),
       });
-      if (!res.ok) throw new Error("Failed to save comment");
+      if (!res.ok) throwApiError(res.status, "تعذر حفظ التعليق.");
       const data = (await res.json()) as { comment: CommentRow };
       setComments((prev) => [...prev, data.comment]);
     },
@@ -617,7 +659,7 @@ export function DeckView({
           body: JSON.stringify(body),
         },
       );
-      if (!res.ok) throw new Error("Failed to update comment");
+      if (!res.ok) throwApiError(res.status, "تعذر تحديث التعليق.");
       const data = (await res.json()) as { comment: CommentRow };
       setComments((prev) =>
         prev.map((c) => (c.id === input.commentId ? data.comment : c)),
@@ -632,34 +674,31 @@ export function DeckView({
         `/api/projects/${projectId}/comments/${commentId}`,
         { method: "DELETE" },
       );
-      if (!res.ok) throw new Error("Failed to delete comment");
+      if (!res.ok) throwApiError(res.status, "تعذر حذف التعليق.");
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     },
     [projectId],
   );
 
-  // Apply button = "lock in the drafts and prep the regen button to fire".
-  // This handler is INTENTIONALLY local-only: no fetch, no Claude call.
-  // Drafts stay as `status="draft"` in the DB. The regen button is what
-  // actually fires the partial regen (see handleFirePartialRegen below).
+  // Apply button (in CommentsPanel footer) = just exit comment mode.
+  // Drafts persist; the toolbar's regen button — which morphs to an
+  // AI icon when drafts are armed — is what fires the actual partial
+  // regen via handleFirePartialRegen below.
   const handleApplyComments = useCallback(() => {
     if (comments.length === 0) return;
-    if (applying) return;
-    setCommentsArmed(true);
-  }, [comments.length, applying]);
+    setCommentMode(false);
+  }, [comments.length]);
 
-  // Triggered by the regen button when it's in its "armed" (check-icon)
-  // state. THIS is the call that hits Claude — POST to /regenerate-partial
-  // dispatches the Inngest job. Optimistic applying state surfaces the
-  // per-slide overlay within one frame; authoritative versionId arrives
-  // when the API resolves. Lightbox closes so the user watches the grid.
+  // Toolbar regen button when commentsArmed = true. Fires the partial
+  // regen on every slide that has draft comments. Optimistic
+  // `applying` state surfaces the per-slide overlay within one frame;
+  // authoritative versionId arrives when the API resolves.
   const handleFirePartialRegen = useCallback(async () => {
     if (applying) return;
     if (comments.length === 0) return;
     const optimisticTargetIds = Array.from(
       new Set(comments.map((c) => c.slideId)),
     );
-    setLightboxIndex(null);
     setApplying({ versionId: "__pending__", targetSlideIds: optimisticTargetIds });
     try {
       const res = await fetch(
@@ -688,12 +727,9 @@ export function DeckView({
     setCommentMode((v) => !v);
   }, []);
 
-  // Esc handler — when comment mode is on AND the lightbox is closed, Esc
-  // exits comment mode. (When the lightbox is open, the lightbox's own Esc
-  // handler runs first: 1st press closes the editor or the lightbox; this
-  // DeckView-level handler picks up the 2nd press to exit comment mode.)
+  // Esc handler — exits comment mode when active.
   useEffect(() => {
-    if (!commentMode || lightboxIndex !== null) return;
+    if (!commentMode) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -702,17 +738,37 @@ export function DeckView({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [commentMode, lightboxIndex]);
+  }, [commentMode]);
 
-  // Auto-disarm if the user deletes all drafts while armed — armed without
-  // any comments makes no sense (the regen button as check would fire an
-  // empty regen). setState-in-effect is intentional (derived state).
+  // Click-outside handler — exits comment mode when the user clicks
+  // anywhere that isn't the hero canvas, the CommentsPanel, the
+  // slide-nav (transient during fade), the toolbar, the app header,
+  // or the main sidebar. The HeroCommentOverlay's editor popover is
+  // a descendant of the hero so it's included via the hero closest().
   useEffect(() => {
-    if (commentsArmed && comments.length === 0 && !applying) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCommentsArmed(false);
-    }
-  }, [commentsArmed, comments.length, applying]);
+    if (!commentMode) return;
+    const handler = (e: MouseEvent) => {
+      // Bail if the event somehow fired without an Element target
+      // (e.g. dispatched on document directly — `.closest` is
+      // Element-only).
+      if (!(e.target instanceof Element)) return;
+      const target = e.target;
+      if (
+        target.closest('[aria-label^="الشريحة"]') || // Hero motion.div
+        target.closest('aside[aria-label="لوحة التعليقات"]') || // Comments panel
+        target.closest('aside[aria-label="شريط الشرائح"]') || // SlideNav (transient during fade)
+        target.closest(".glass-card.flex-col") || // Toolbar column (portal'd to body)
+        target.closest(".glass-modal") || // Editor popover
+        target.closest("header") || // App header
+        target.closest('aside[aria-label="Sidebar"]') // Main app sidebar
+      ) {
+        return;
+      }
+      setCommentMode(false);
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [commentMode]);
 
   // Per-slide draft comment counts. Drives the dim affordance in the grid
   // and the Apply button badge.
@@ -810,134 +866,212 @@ export function DeckView({
 
     const percent = progressPercent(progress);
     const total = placeholders.length;
+    const navItems: NavItem[] = placeholders.map((_, idx) => ({
+      kind: "placeholder",
+      index: idx,
+      state: cardStatus(idx),
+    }));
+    // Slide-nav is fixed-positioned outside the row, so the row has
+    // no internal reservation while generating (no comments yet,
+    // either). Hero centers in the remaining width.
+    const genHeroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
     return (
-      <section dir="rtl" className="page-container space-y-6">
-        <header className="text-center">
-          <h1 className="font-headline-lg text-[36px] font-bold text-white">
-            جارٍ تصميم عرضك...
-          </h1>
-          <div className="text-muted mt-3 flex items-center justify-center gap-3 text-sm">
-            <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-            <span
-              className={`transition-opacity duration-300 ${fakeVisible ? "opacity-100" : "opacity-0"}`}
+      <section
+        dir="rtl"
+        className="relative"
+        style={{ marginRight: SLIDE_NAV_WIDTH }}
+      >
+        <SlideNavSidebar
+          items={navItems}
+          currentIndex={null}
+          onSelect={() => {
+            /* no-op during generating — placeholders aren't navigable */
+          }}
+          manifest={null}
+          format={initialFormat ?? "16:9"}
+          mainSidebarWidth={mainSidebarWidth}
+        />
+        {/* Canvas row — hero centered in the remaining width. Same
+            shape as the completed branch so the shell doesn't reflow
+            when generation finishes. */}
+        <div
+          dir="ltr"
+          className="flex items-center justify-center"
+          style={{ minHeight: `calc(100vh - ${HERO_VERTICAL_PADDING_PX}px)` }}
+        >
+          <div
+            ref={gridRef}
+            className="glass-card relative flex items-center justify-center overflow-hidden rounded-2xl"
+            style={{ aspectRatio, width: genHeroWidthCss }}
+          >
+            {/* `dir="rtl"` so the spinner sits to the START of the
+                Arabic caption (visual right) and the progress meta
+                (`5% · 0 / 4`) reads in RTL order. Without this the
+                content inherits `dir="ltr"` from the row wrapper
+                (which is `ltr` so the optional CommentsPanel sits
+                on the visual LEFT in the completed view). */}
+            <div
+              dir="rtl"
+              className="flex flex-col items-center gap-4 px-6 text-center text-white"
             >
-              {FAKE_FEEDBACK[fakeIdx]}
-            </span>
-          </div>
-          <div className="mx-auto mt-4 max-w-md">
-            <div className="progress-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-              <div className="progress-bar" style={{ width: `${percent}%` }} />
-            </div>
-            <p className="text-muted mt-2 text-xs">{percent}%</p>
-          </div>
-
-          {/* SLOW notice lives on the active slide card (see the
-              `state === "current"` branch below). The STUCK signal is
-              surfaced via the bell notification — DeckView pushes it
-              when `isStuck` first flips true. No on-page banner: the
-              bell is the single source of "something's wrong, look
-              here". When the job actually fails, the failure card
-              (top of this component) shows the retry affordance. */}
-        </header>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {placeholders.map((_, idx) => {
-            const state = cardStatus(idx);
-            return (
-              <div
-                key={idx}
-                style={{ aspectRatio: "16 / 9" }}
-                className={`glass-card relative w-full overflow-hidden rounded-xl ${
-                  state === "pending" || state === "current" ? "animate-pulse" : ""
-                }`}
-                aria-label={`الشريحة ${idx + 1} — ${
-                  state === "done" ? "اكتملت" : state === "current" ? "قيد التصميم" : "بانتظار الدور"
-                }`}
-              >
-                <div
-                  className={`h-full w-full ${
-                    state === "done" ? "bg-emerald-500/5" : "bg-white/5"
-                  }`}
-                />
-                {state === "done" ? (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[80px] text-emerald-400">
-                      check_circle
-                    </span>
-                  </div>
-                ) : null}
-                {state === "current" ? (
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-white">
-                    <span className="spinner h-6 w-6 rounded-full border-2 border-white/20 border-t-white" />
-                    <span className="text-sm" dir="rtl">
-                      جارٍ تصميم الشريحة {idx + 1} من {total}
-                    </span>
-                    {/* SLOW notice surfaces here on the active slide card —
-                        not as a global header line — so it reads as "this
-                        specific slide is taking longer". Wording switched
-                        from "long content" to "server pressure" per the
-                        product brief. */}
-                    {isSlow && (
-                      <span className="text-[11px] leading-relaxed text-white/60" dir="rtl">
-                        الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي
-                      </span>
-                    )}
-                  </div>
-                ) : null}
+              <h1 className="font-headline-lg text-[28px] font-bold">
+                جارٍ تصميم عرضك...
+              </h1>
+              {/* Live progress caption. Was a rotating set of cosmetic
+                  captions — now derived from the real stage signal:
+                  thinking-token counter during the silent thinking
+                  phase, slide-being-designed during the streaming
+                  phase, validating / saving on the tail. The spinner
+                  spins for as long as the run is generating; the
+                  caption text changes in place. */}
+              <div className="text-muted flex items-center justify-center gap-3 text-sm">
+                <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+                <span>
+                  {progress?.stage === "thinking" && progress.thinkingBudget
+                    ? `التفكير: ${formatTokens(progress.thinkingTokens ?? 0)} / ${formatTokens(progress.thinkingBudget)} رمز`
+                    : progress?.stage === "thinking"
+                      ? "بدء التفكير..."
+                      : progress?.stage === "validating"
+                        ? "التحقق من المخرجات..."
+                        : progress?.stage === "saving"
+                          ? "حفظ العرض..."
+                          : progress?.currentSlide
+                            ? `جارٍ تصميم الشريحة ${progress.currentSlide} من ${total}`
+                            : "بدء التصميم..."}
+                </span>
               </div>
-            );
-          })}
+              <div className="w-full max-w-md">
+                <div
+                  className="progress-track"
+                  role="progressbar"
+                  aria-valuenow={percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <div className="progress-bar" style={{ width: `${percent}%` }} />
+                </div>
+                <p className="text-muted mt-2 text-xs">
+                  {percent}% · {progress?.currentSlide ?? 0} / {total}
+                </p>
+              </div>
+              {isSlow && (
+                <span className="text-[11px] leading-relaxed text-white/60">
+                  الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </section>
     );
   }
 
   // ─── Completed ─────────────────────────────────────────────────────────────
+  // Currently-focused slide. Clamped here so we don't blow up if the
+  // index outpaces a freshly-shrunk manifest (e.g. after a partial regen
+  // dropped a slide — shouldn't happen, but defensive).
+  const focusedIndex = Math.min(
+    Math.max(currentSlideIndex, 0),
+    manifest!.slides.length - 1,
+  );
+  const focusedSlide = manifest!.slides[focusedIndex];
+  const navItems: NavItem[] = manifest!.slides.map((slide, idx) => ({
+    kind: "slide",
+    index: idx,
+    slide,
+    commentCount: commentsBySlideId.get(slide.slideId)?.length ?? 0,
+    regenerating: !!applying?.targetSlideIds.includes(slide.slideId),
+  }));
+  const isFocusedRegenerating = !!applying?.targetSlideIds.includes(
+    focusedSlide.slideId,
+  );
+  // Hero width clamp — two candidates, smallest wins:
+  //   • viewport-height-derived width (so hero never exceeds the
+  //     remaining vertical space given its aspect ratio)
+  //   • the row's full width (side panels are fixed-positioned
+  //     outside the section, so the row reserves nothing).
+  const heroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
   return (
-    <section dir={manifest!.direction} className="page-container space-y-6">
+    <section
+      dir={manifest!.direction}
+      className="relative"
+      style={{ marginRight: SLIDE_NAV_WIDTH }}
+    >
       {fontLinks.map((url) => (
         <link key={url} rel="stylesheet" href={url} />
       ))}
 
-      <header className="text-center">
-        <p className="text-muted text-xs tracking-widest">
-          {manifest!.slides.length} SLIDES
-        </p>
-        <h1 className="mt-2 text-3xl font-bold text-white">{manifest!.title}</h1>
-      </header>
+      {/* Right-edge slot: SlideNavSidebar swaps for CommentsPanel
+          while in comment mode. Same fixed position (against the
+          main sidebar's inner edge), same 260 px width, so section
+          marginRight stays constant and the hero doesn't reflow.
+          AnimatePresence crossfades the two panels — opacity is
+          inheritable, so motion.div wrappers handle the fade without
+          touching the fixed-positioned asides inside. */}
+      <AnimatePresence initial={false}>
+        {commentMode ? (
+          <motion.div
+            key="comments"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            // 1 s ease — matches the canvas gradient-border fade so
+            // both transitions hit completion at the same moment.
+            // Matches CSS `ease` (cubic-bezier(0.25, 0.1, 0.25, 1)),
+            // so this swap's curve mirrors the canvas border's CSS
+            // `transition: opacity 1s ease`.
+            transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1] }}
+          >
+            <CommentsPanel
+              comments={comments}
+              slideId={focusedSlide.slideId}
+              onClose={handleToggleCommentMode}
+              onApply={handleApplyComments}
+              mainSidebarWidth={mainSidebarWidth}
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="slidenav"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            // Matches CSS `ease` (cubic-bezier(0.25, 0.1, 0.25, 1)),
+            // so this swap's curve mirrors the canvas border's CSS
+            // `transition: opacity 1s ease`.
+            transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1] }}
+          >
+            <SlideNavSidebar
+              items={navItems}
+              currentIndex={focusedIndex}
+              onSelect={(idx) => setCurrentSlideIndex(idx)}
+              manifest={manifest}
+              format={manifest!.format ?? initialFormat ?? "16:9"}
+              title={manifest!.title}
+              mainSidebarWidth={mainSidebarWidth}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Universal toolbar. Single PreviewActionBar instance that lives
-          at the page root (portal'd to body so its z-index isn't trapped
-          by an ancestor stacking context) and animates its `left` between
-          the page edge (16px) and a position just to the LEFT of the
-          lightbox stage when the user enlarges a slide. The inner motion
-          remounts via `key` flip on every state change, firing the scale
-          pulse (0.88 → 1) that gives the "lift off, land" 3d feel.
-          z-[1050] keeps it above the z-[1000] lightbox backdrop in body's
-          stacking context. pointer-events-none on the outer wrapper so
-          the full-height fixed strip never intercepts clicks outside the
-          toolbar's actual buttons. */}
+      {/* Universal toolbar. Portal'd to document.body so its z-index
+          isn't trapped by any ancestor stacking context (transform,
+          filter, isolation, opacity != 1, etc.). pointer-events-none
+          on the full-height fixed strip so it never intercepts clicks
+          outside the toolbar's actual buttons. */}
       {bodyMounted
         ? createPortal(
             <motion.div
               className="pointer-events-none fixed inset-y-0 z-[1050] flex items-center"
-              initial={{ left: -150, opacity: 0 }}
-              animate={{
-                left: lightboxIndex !== null ? toolbarLightboxLeft : 16,
-                opacity: 1,
-              }}
+              style={{ left: 16 }}
+              initial={{ x: -150, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
               transition={{
-                left: TOOLBAR_POSITION_SPRING,
+                x: TOOLBAR_POSITION_SPRING,
                 opacity: { duration: 0.5, ease: "easeOut" },
               }}
             >
-              <motion.div
-                key={lightboxIndex !== null ? "open" : "closed"}
-                initial={{ scale: 0.88 }}
-                animate={{ scale: 1 }}
-                transition={TOOLBAR_SCALE_SPRING}
-                className="pointer-events-auto"
-              >
+              <div className="pointer-events-auto">
                 <PreviewActionBar
                   projectId={projectId}
                   projectTitle={projectTitle}
@@ -945,138 +1079,99 @@ export function DeckView({
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
                   draftCommentCount={comments.length}
-                  onApplyComments={handleApplyComments}
-                  commentsArmed={commentsArmed}
+                  // Armed = drafts exist, user has exited comment
+                  // mode, and no apply is in flight → the regen
+                  // button morphs to the AI icon and now triggers
+                  // the partial regen.
+                  commentsArmed={
+                    !commentMode && comments.length > 0 && !applying
+                  }
                   onFirePartialRegen={handleFirePartialRegen}
                   applying={!!applying}
+                  formatFallback={initialFormat}
                 />
-              </motion.div>
+              </div>
             </motion.div>,
             document.body
           )
         : null}
 
-      <motion.div
-        ref={gridRef}
-        variants={slideListVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      {/* Canvas row.
+          Single flex container — hero centered in the remaining
+          width. Side panels are fixed-positioned (outside this row),
+          so the row reserves no internal horizontal space. */}
+      <div
+        dir="ltr"
+        className="flex items-center justify-center"
+        style={{ minHeight: `calc(100vh - ${HERO_VERTICAL_PADDING_PX}px)` }}
       >
-        {manifest!.slides.map((slide, idx) => {
-          const slideCommentCount = commentsBySlideId.get(slide.slideId)?.length ?? 0;
-          const isRegenerating = !!applying?.targetSlideIds.includes(slide.slideId);
-          // In comment mode, slides with 0 comments dim so the user can see
-          // at a glance which slides are queued for partial regen. Slides
-          // with comments stay bright. During applying, the targeted slides
-          // get a spinner overlay AND non-targeted slides stay bright.
-          const dimmed = commentMode && slideCommentCount === 0 && !isRegenerating;
-          return (
-            <motion.button
-              type="button"
-              key={slide.slideId}
-              variants={slideCardVariants}
-              whileHover="hover"
-              initial="rest"
-              animate="rest"
-              onClick={() => setLightboxIndex(idx)}
-              aria-label={`فتح الشريحة ${idx + 1} بحجم أكبر`}
-              style={{ aspectRatio: "16 / 9" }}
-              // During applying, ALL slides are non-interactive — clicking
-              // a non-target shouldn't open the lightbox or otherwise let
-              // the user mess with state that's mid-transition. The target
-              // slide carries its own blur+spinner overlay; non-targets stay
-              // dimmed but locked. Once Inngest completes and the manifest
-              // swaps in, clicks restore.
-              className={`glass-card relative w-full overflow-hidden rounded-xl p-0 text-start outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-white/60 ${
-                applying ? "pointer-events-none cursor-default" : "cursor-zoom-in"
-              } ${dimmed && !applying ? "opacity-40 hover:opacity-100" : ""}`}
-            >
-              {/* Slide content. Heavily blurred while THIS slide is being
-                  regenerated (no opacity dim — full brightness, the blur
-                  alone signals "processing"). The regenerating overlay
-                  sits on top in sharp focus. Non-target slides render
-                  normally so the deck stays legible. */}
-              <div
-                className="h-full w-full transition-[filter] duration-300"
-                style={isRegenerating ? { filter: "blur(20px)" } : undefined}
-              >
-                <SlideRenderer
-                  slide={slide}
-                  theme={manifest!.theme}
-                  direction={manifest!.direction}
-                  language={manifest!.language}
-                  scale={gridScale}
-                />
-              </div>
-              {/* Hover overlay — only enabled when NOT in comment mode so
-                  the dim affordance reads clearly. */}
-              {!commentMode ? (
-                <motion.div
-                  aria-hidden
-                  variants={slideHoverVariants}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                >
-                  <motion.div
-                    variants={slideHoverIconVariants}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="glass-card flex h-12 w-12 items-center justify-center rounded-full text-white"
-                  >
-                    <span className="material-symbols-outlined">zoom_in</span>
-                  </motion.div>
-                </motion.div>
-              ) : null}
-              {/* Comment-count badge — top-end (left in RTL). Only shows in
-                  comment mode when the slide has drafts. Hidden while the
-                  slide is being regenerated (the regen overlay is taking
-                  the user's attention; the badge would be redundant /
-                  distracting). Brand-blue chip with a compact comment
-                  glyph; sized smaller than before so it doesn't crowd
-                  the slide thumbnail. */}
-              {commentMode && slideCommentCount > 0 && !isRegenerating ? (
-                <div
-                  className="absolute end-2 top-2 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow"
-                  style={{ background: "var(--tq-blue)" }}
-                >
-                  <span className="material-symbols-outlined text-[11px]">
-                    comment
-                  </span>
-                  {slideCommentCount}
-                </div>
-              ) : null}
-              {/* Regenerating overlay — spinner + label sitting directly on
-                  the blurred slide. No glass-card surround; the heavy blur
-                  underneath already gives enough separation. */}
-              {isRegenerating ? (
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
-                    <span className="text-xs font-medium">جارٍ إعادة التصميم...</span>
-                  </div>
-                </div>
-              ) : null}
-            </motion.button>
-          );
-        })}
-      </motion.div>
+        <motion.div
+          ref={gridRef}
+          variants={slideCardVariants}
+          initial="hidden"
+          animate="visible"
+          aria-label={`الشريحة ${focusedIndex + 1} من ${manifest!.slides.length}`}
+          style={{ aspectRatio, width: heroWidthCss }}
+          // Animated mesh-gradient ring — class is always present so
+          // CSS owns the fade in/out via `data-active`. When false,
+          // the ring is opacity:0 + animation paused; when true, it
+          // fades to opacity:1 over 1 s and the slow drift resumes.
+          // Crosshair cursor signals "click + drag to draw" while in
+          // commentMode; reverts to default outside it.
+          className={`canvas-gradient-border relative overflow-hidden rounded-xl p-0 shadow-2xl${
+            commentMode ? " cursor-crosshair" : ""
+          }`}
+          data-active={commentMode ? "true" : "false"}
+        >
+          {/* Slide content. Heavily blurred while THIS slide is being
+              regenerated; the regenerating overlay sits on top in sharp
+              focus. */}
+          <div
+            className="h-full w-full transition-[filter] duration-300"
+            style={isFocusedRegenerating ? { filter: "blur(20px)" } : undefined}
+          >
+            <SlideRenderer
+              slide={focusedSlide}
+              theme={manifest!.theme}
+              direction={manifest!.direction}
+              language={manifest!.language}
+              width={canvasW}
+              height={canvasH}
+              scale={gridScale}
+            />
+          </div>
 
-      {/* Lightbox — full-viewport modal. Mounted unconditionally so the
-          AnimatePresence inside can play exit animations on close. The
-          toolbar lives at DeckView root and animates into a position
-          alongside the lightbox stage; the lightbox itself just reserves
-          a gap on its right via the TOOLBAR_RESERVE_PX clamp. */}
-      <SlideLightbox
-        manifest={manifest!}
-        index={lightboxIndex}
-        mode={commentMode ? "comment" : "idle"}
-        comments={comments}
-        onClose={() => setLightboxIndex(null)}
-        onNav={(next) => setLightboxIndex(next)}
-        onCreateComment={handleCreateComment}
-        onUpdateComment={handleUpdateComment}
-        onDeleteComment={handleDeleteComment}
-      />
+          {/* Regenerating overlay. */}
+          {isFocusedRegenerating ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+              <div className="flex flex-col items-center gap-2 text-center">
+                <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
+                <span className="text-xs font-medium">
+                  جارٍ إعادة التصميم...
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Comment overlay — drag-to-draw + pins + editor popover.
+              Only mounted while commentMode is on so its mouse
+              capture doesn't intercept regular interactions outside
+              the commenting flow. */}
+          {commentMode ? (
+            <HeroCommentOverlay
+              slideId={focusedSlide.slideId}
+              comments={comments}
+              scale={gridScale}
+              canvasW={canvasW}
+              canvasH={canvasH}
+              direction={manifest!.direction}
+              onCreate={handleCreateComment}
+              onUpdate={handleUpdateComment}
+              onDelete={handleDeleteComment}
+            />
+          ) : null}
+        </motion.div>
+      </div>
     </section>
   );
 }

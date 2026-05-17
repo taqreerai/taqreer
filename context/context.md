@@ -126,7 +126,7 @@ Actual installed dependencies as of 2026-05-15. See `package.json` for exact ver
 
 Browser-side render + library + post-processor. Inngest does the long-running generation.
 
-```
+```text
 User
  |
  | Next.js 16 Web App  (Turbopack)
@@ -184,7 +184,7 @@ Export pipeline  (client-side, in /preview)
 
 ### Frontend Routes
 
-```
+```text
 app/
   (marketing)/
     page.tsx                            ✅  Landing
@@ -225,7 +225,7 @@ app/
 
 ### API Routes
 
-```
+```text
 app/api/
   projects/route.ts                          ✅  POST creates project + fires deck.generate.requested
   projects/[id]/status/route.ts              ✅  GET polled by DeckView every 1.5 s
@@ -292,6 +292,7 @@ The schema lives in [`lib/schema/slide.ts`](../lib/schema/slide.ts). Each slide 
     "background": "#0D0B1F",                   // exposed as --brand-bg
     "text":       "#FFFFFF"                    // exposed as --brand-text
   },
+  "format": "16:9" | "9:16",                // slide aspect ratio (16:9 → 1920×1080 px, 9:16 → 1080×1920 px). Optional; consumers fall back to 16:9 via `dimensionsForFormat`.
   "slides": [
     { "slideId": "s1", "role": "cover", "html": "<div style=...>...</div>" },
     { "slideId": "s2", "role": "content", "html": "..." }
@@ -306,6 +307,7 @@ The schema lives in [`lib/schema/slide.ts`](../lib/schema/slide.ts). Each slide 
 - No `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` wrapper. Slide body content only.
 - Set `dir="rtl"` or `dir="ltr"` on the slide root. The export pipeline handles all BiDi metadata downstream — no `<bdi>`, no U+200E/U+200F marks.
 - Inline `<style>`, `<svg>`, `<link>`, `<img>` allowed; `<script>`, event handlers, `javascript:` URIs are stripped at render by DOMPurify (graceful fallback when SSR singleton is missing — see §15).
+- Slide roots set `width:<W>px; height:<H>px` matching the manifest's `format` — 1920×1080 for 16:9, 1080×1920 for 9:16. The renderer / lightbox / export all derive dimensions from one source: `dimensionsForFormat(manifest.format)` in `lib/schema/slide.ts`.
 - Slide roles: `cover · section · content · stats · quote · image · closing` (optional).
 
 The pre-pivot schema was a JSON manifest with per-element `{type, x, y, width, height, style.fontSize, …}`. Claude was doing layout math. That schema was deleted in §18.
@@ -340,7 +342,7 @@ Content upload + reference upload → `mimic.extract.requested` (planned) extrac
 
 **Review-only.** Users browse slides, regenerate the deck, export, save as template. There's no element editor — visual changes go through Claude.
 
-```
+```text
 ┌────────────────────────────────────────────────────────────┐
 │   Vertical action toolbar (left)                          │
 │   - Regenerate (أعد التصميم)                              │
@@ -365,8 +367,8 @@ Content upload + reference upload → `mimic.extract.requested` (planned) extrac
 - ✅ Streaming generation with per-card progress polled at 1.5 s from `/api/projects/[id]/status`
 - ✅ Cascade-in slide reveal (Framer Motion stagger)
 - ✅ Vertical toolbar: Regenerate, Export PPTX, Save as template (popover form)
-- ⏳ Slide-panel side navigation (thumbnails)
-- ⏳ Area-select + comment overlay (toolbar slot is "قريباً" placeholder)
+- ✅ Slide-panel side navigation (thumbnails) — shipped 2026-05-17 (`SlideNavSidebar.tsx`); swaps with `CommentsPanel.tsx` in comment mode
+- ✅ Area-select + comment overlay — shipped 2026-05-17 (`HeroCommentOverlay.tsx`); drag-box draws on the hero canvas, editor popover with quick-action chips
 - ⏳ PDF export (toolbar slot is "قريباً")
 
 ---
@@ -397,7 +399,7 @@ Templates store a v2 SlideManifest as `jsonData` + thumbnail. Browse with catego
 
 Client-side, in [`lib/export/html-export.ts`](../lib/export/html-export.ts). The preview HTML is the source of truth for the export.
 
-```
+```text
 1. exportManifestAsPptx(manifest, fileName)
 2. Mount slides offscreen at 1920×1080, full opacity, no scale transform
 3. Wait for React commit + fonts.ready + every <img>.complete
@@ -617,19 +619,20 @@ Single ledger of every code-level enhancement on the HTML → PPT pipeline. When
 
 5. **PASS 1 — `<a:bodyPr rtlCol="1">` flip.** PptxGenJS emits `rtlCol="0"` by default; PowerPoint treats it as a hard LTR-column hint that overrides paragraph-level `rtl="1"`. Flip every `txBody` whose paragraphs contain strong-RTL text. This was the missing piece that kept slide 4 broken in the spike even after pPr fixes were correct.
 6. **PASS 2 — paragraph-level RTL + smart run-merge + lang retag.** For each RTL paragraph: set `<a:pPr rtl="1" algn="r">` when missing; merge adjacent `<a:r>` runs sharing an `rPr` signature (excluding `lang`) so PowerPoint can apply UAX-9 across script-split runs (eliminates "%12 خلال" jumble); retag every surviving run + `endParaRPr` `lang` to `"ar-SA"`. LTR-content paragraphs inside an RTL `txBody` get explicit `rtl="0"` + default `algn="r"` so English titles in Arabic decks read LTR but stay right-anchored.
-7. **PASS 3 — direction-aware shape extension.** Short (≤80 chars) text shapes under 3 M EMU wide grow `cx` by 10% on the side OPPOSITE the text anchor; clamped to slide bounds. Absorbs PowerPoint's slightly-wider glyph metrics so single-line text doesn't wrap. Anchored side never moves → Claude's slide margins are preserved.
-8. **PASS 4 — gradient-text sentinel swap.** For every `<a:rPr>` whose `<a:srgbClr val="FExxxx"/>` matches a sentinel allocated by `extractGradientIntents`, drop the `<a:solidFill>` and insert a real `<a:gradFill>` built from the recipe (linear → `<a:lin>`; radial → `<a:path path="circle">` + center-degenerate `fillToRect`).
+7. **PASS 3 — direction-aware shape extension.** Short (≤80 chars) text shapes under 3 M EMU wide grow `cx` by 14% on the side OPPOSITE the text anchor (with a 100 k EMU absolute floor); clamped to slide bounds. Absorbs PowerPoint's slightly-wider glyph metrics so single-line text doesn't wrap. Anchored side never moves → Claude's slide margins are preserved. **Aspect-ratio guard**: shapes with `cx/cy ∈ (0.85, 1.18)` skip slack growth — these are numbered badges / avatars / single-glyph chips that should render as circles, not get widened into ovals.
+8. **PASS 3.5 — pill-row layout.** Detects horizontal rows of pill-like shapes (bordered or filled, height ≤ 600 k EMU, cx/cy ≥ 1.15) via vertical-overlap clustering. Within each row: walks left-to-right pushing overlapping pills apart with 8 px min gap (the PASS 3 widening often eats the original CSS gap between adjacent pills); then restores the row's POSITION-based anchor — if the row's rightmost edge was within 250 px of slide right edge, preserve that edge (RTL design intent); mirror for left; otherwise preserve original row center. Final safety clamp to slide bounds. **Known limit**: gradient pills emit as two `<p:sp>` (gradFill bg + text overlay) and don't pass the `hasTxBody && (hasFill || hasBorder)` filter — they're untouched. Pair detection needed when it becomes a real-world issue.
+9. **PASS 4 — gradient-text sentinel swap.** For every `<a:rPr>` whose `<a:srgbClr val="FExxxx"/>` matches a sentinel allocated by `extractGradientIntents`, drop the `<a:solidFill>` and insert a real `<a:gradFill>` built from the recipe (linear → `<a:lin>`; radial → `<a:path path="circle">` + center-degenerate `fillToRect`).
 
 ### C. DOM preprocess + gradient extractor — `lib/export/html-export.ts` + `lib/export/gradient-text.ts`
 
-9. **`splitMixedScriptFlexChildren`** (`html-export.ts`). Wrap direct text nodes in a `<span>` when the parent is a flex/grid container with mixed-script siblings, OR when an element child has explicit `dir`. Lets the patched `isTextContainer` see non-uniform script element children and recurse → one shape per child at its measured position.
-10. **`stripArabicLetterSpacing`** (`html-export.ts`). Kill inherited `letter-spacing` on any element directly bearing Arabic text. CSS `letter-spacing` breaks Arabic contextual shaping (the connecting glyphs decouple).
-11. **`insertScriptTransitionSpaces`** (`html-export.ts`). Insert a space at every Arabic↔Latin / Arabic↔digit adjacency inside text nodes so PowerPoint's BiDi resolver doesn't glue them into the wrong script run.
-12. **`extractGradientIntents` + sentinel-hex bridge** (`gradient-text.ts`). Walk the offscreen DOM, find every element using `background-clip: text` + linear/radial gradient, replace its CSS with a unique sentinel hex (`#FExxxx`), stash the recipe in a `Map`. PASS 4 then swaps each sentinel `solidFill` for the real `gradFill`. Multi-stop / explicit percentages / multi-layer backgrounds / radial all covered; conic + repeating-* skip cleanly. `parseColorToHex` front-gates on `CSS.supports('color', input)` so non-color keywords like `circle` can't slip through canvas `fillStyle`'s "keep previous on invalid" behaviour. Per-element sentinels (no recipe dedup) keep separate gradient elements as separate runs.
+10. **`splitMixedScriptFlexChildren`** (`html-export.ts`). Wrap direct text nodes in a `<span>` when the parent is a flex/grid container with mixed-script siblings, OR when an element child has explicit `dir`. Lets the patched `isTextContainer` see non-uniform script element children and recurse → one shape per child at its measured position.
+11. **`stripArabicLetterSpacing`** (`html-export.ts`). Kill inherited `letter-spacing` on any element directly bearing Arabic text. CSS `letter-spacing` breaks Arabic contextual shaping (the connecting glyphs decouple).
+12. **`insertScriptTransitionSpaces`** (`html-export.ts`). Insert a space at every Arabic↔Latin / Arabic↔digit adjacency inside text nodes so PowerPoint's BiDi resolver doesn't glue them into the wrong script run.
+13. **`extractGradientIntents` + sentinel-hex bridge** (`gradient-text.ts`). Walk the offscreen DOM, find every element using `background-clip: text` + linear/radial gradient, replace its CSS with a unique sentinel hex (`#FExxxx`), stash the recipe in a `Map`. PASS 4 then swaps each sentinel `solidFill` for the real `gradFill`. Multi-stop / explicit percentages / multi-layer backgrounds / radial all covered; conic + repeating-* skip cleanly. `parseColorToHex` front-gates on `CSS.supports('color', input)` so non-color keywords like `circle` can't slip through canvas `fillStyle`'s "keep previous on invalid" behaviour. Per-element sentinels (no recipe dedup) keep separate gradient elements as separate runs.
 
 ### D. SlideRenderer — `components/slides/SlideRenderer.tsx`
 
-13. **DOMPurify graceful fallback.** `dompurify@3.4.3`'s `createDOMPurify()` returns a factory without `.sanitize` when `window` is missing at module load (Turbopack SSR pass), and Turbopack appears to share that SSR singleton with the client bundle. Renderer tries `DOMPurify.sanitize` and falls back to RAW HTML when it's unavailable. **Pre-launch TODO:** reintroduce server-side sanitization in `inngest/functions/deck-generate.ts` before sharing / templates ship.
+14. **DOMPurify graceful fallback.** `dompurify@3.4.3`'s `createDOMPurify()` returns a factory without `.sanitize` when `window` is missing at module load (Turbopack SSR pass), and Turbopack appears to share that SSR singleton with the client bundle. Renderer tries `DOMPurify.sanitize` and falls back to RAW HTML when it's unavailable. **Pre-launch TODO:** reintroduce server-side sanitization in `inngest/functions/deck-generate.ts` before sharing / templates ship.
 
 ### Caveats and known limits worth tracking
 

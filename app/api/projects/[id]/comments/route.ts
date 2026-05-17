@@ -4,19 +4,26 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
-// Drag-box coordinates are persisted in slide-space (0..1920, 0..1080) so
-// they remain valid across viewport changes. Clamping happens on read so a
-// future canvas resize wouldn't break existing comments.
+// Drag-box coordinates are persisted in slide-space — slide width/height
+// depending on the deck's format. 16:9 → 1920×1080; 9:16 → 1080×1920.
+// The larger dimension on either axis is 1920 in both formats, so the
+// schema accepts up to 1920 on both x AND y. Tighter, format-specific
+// validation is the lightbox's job (it clamps to canvasW/canvasH before
+// submit); the API just trusts coordinates are non-negative and finite
+// within the absolute envelope.
 const BoundsSchema = z.object({
   x: z.number().min(0).max(1920),
-  y: z.number().min(0).max(1080),
+  y: z.number().min(0).max(1920),
   w: z.number().min(1).max(1920),
-  h: z.number().min(1).max(1080),
+  h: z.number().min(1).max(1920),
 });
 
 const CreateCommentSchema = z.object({
   slideId: z.string().min(1).max(128),
-  content: z.string().min(1).max(2000),
+  // `.trim().min(1)` rejects whitespace-only content ("   "). Plain
+  // `.min(1)` lets all-space strings through and persists effectively
+  // empty comments — they look like ghosts on the slide.
+  content: z.string().trim().min(1).max(2000),
   boundsJson: BoundsSchema,
 });
 
@@ -62,10 +69,13 @@ export async function GET(
   const url = new URL(request.url);
   const requestedVersionId = url.searchParams.get("versionId") ?? ctx.versionId;
 
+  // Drafts only — applied comments are immutable history (the prompt
+  // that was actually sent to Claude) and shouldn't surface to the editor.
   const comments = await prisma.comment.findMany({
     where: {
       presentationId: ctx.presentationId,
       versionId: requestedVersionId,
+      status: "draft",
     },
     orderBy: { createdAt: "asc" },
   });

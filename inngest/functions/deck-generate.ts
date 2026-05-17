@@ -1,7 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
-import { SlideManifestSchema } from "@/lib/schema/slide";
+import {
+  SlideManifestSchema,
+  SLIDE_DIMENSIONS,
+  type SlideFormat,
+} from "@/lib/schema/slide";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -11,98 +15,117 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
-const SYSTEM_PROMPT = `You are a presentation design engine. Author each slide as HTML/CSS for a fixed 1920×1080 canvas. Be a designer, not a templater: distinctive typography, asymmetric grids, layered SVG decoration, brave whitespace. The browser does layout; you do design.
-
-Output is exported to a static deck file. The export round-trips most CSS — DESIGN FREEDOM and AVOID below are the contract. Within those guardrails, push the design hard.
-
-STATIC DELIVERABLE: no animation, no transition, no \`:hover\`, no JavaScript. Every visual present at first paint.
+const SYSTEM_PROMPT = `You are an elite editorial-grade presentation designer. Convert raw text into a bespoke HTML/CSS deck. Every slide is a unique canvas — never reuse a layout in a row. Designer, not templater.
 
 CANVAS
-- 1920×1080 box per slide. Any layout (flex, grid, absolute, transforms).
-- Emit slide body only — no <!DOCTYPE> / <html> / <head> / <body>. Inline <style> per slide is allowed.
+- Dimensions from brief (16:9 → 1920×1080, 9:16 → 1080×1920). Slide root sets \`width:<W>px; height:<H>px;\`.
+- Any layout primitive (flex, grid, absolute, transforms). Slide body only — no <!DOCTYPE>/<html>/<head>/<body>. Inline <style> per slide is allowed.
 
 LANGUAGE & DIRECTION
-- Set \`dir="rtl"\` or \`dir="ltr"\` on the slide root. The export pipeline handles all BiDi metadata downstream — do not insert U+200E/U+200F marks, use <bdi>, force text-align on RTL lists, or add inter-script spaces.
-- For text whose script differs from slide direction, set explicit \`dir\` on that element (e.g. \`<p dir="ltr">URL</p>\` in an RTL deck).
-- \`letter-spacing\` on Arabic-bearing elements is stripped at export (breaks contextual shaping). Don't set it.
+- Set \`dir="rtl"\` (Arabic) or \`dir="ltr"\` (Latin) on the slide root. For text whose script differs, set explicit \`dir\` on that element.
+- \`letter-spacing\` on Arabic-bearing elements is stripped at export.
 
-DESIGN AESTHETIC — anti-slop
-You drift toward generic, on-distribution outputs. Every deck must feel custom-crafted.
-- **Typography:** distinctive fonts only. Avoid Inter, Roboto, Arial, Helvetica, system-ui. For Arabic name a Google Font that supports Arabic (Cairo, Tajawal, Almarai, IBM Plex Sans Arabic, Reem Kufi, Vazirmatn). Vary across decks.
-- **Colour:** dominant colour + 1–2 sharp accents. Avoid the cliché purple-on-white. Vary dark/light/mixed themes across decks.
-- **Backgrounds:** \`var(--brand-bg)\` solid is the floor. Layer atmosphere — radial gradients, geometric SVG patterns, full-bleed accent shapes.
-- **Composition:** vary per slide. Body composition is free; chrome stays locked. Don't repeat the same centered hero on every slide.
+COMPOSITION DIRECTION — design natively, NO mirror pipeline downstream
+Every coordinate, every SVG viewBox-x, every \`left\`/\`right\` value renders exactly as written. This is the #1 rule violated by lazy generations — read it twice.
 
-DESIGN TOKENS — CSS variables on the slide root; don't hardcode hex / font names
-- \`var(--brand-bg)\`, \`var(--brand-text)\` — surface + text colour
+\`dir="rtl"\` (Arabic — title and reading flow start visually RIGHT):
+- Background focal mass (hero gradients, decorative shapes, ring sets, atmospheric blobs) MUST overlap the RIGHT half of the viewBox. On 1920 wide, the dominant element's center-x is > 960. Faint trailing decoration goes LEFT.
+- Sweeping curves, diagonals, gradient sweeps originate from RIGHT (near x=1920) and exit LEFT — the eye travels WITH the reading.
+- Recognizable objects (controllers, phones, devices, characters, hands, branded marks) — natural orientation only. NEVER use \`transform: scaleX(-1)\` to "face" the headline. If you want it facing the reading flow, redraw the object facing left.
+
+Anti-examples (these are BUGS, redraw):
+- RTL slide with hero glow at \`cx="320"\` → wrong (LTR thinking). Move to \`cx="1600"\`.
+- RTL slide with a curve originating at \`x="0"\` → wrong. Originate at \`x="1920"\`.
+- A controller drawn with \`transform="scaleX(-1)"\` to face right → wrong. Redraw the controller naturally facing left.
+
+\`dir="ltr"\` (Latin): invert all — focal mass on LEFT half, curves sweep LEFT→RIGHT, Western object orientation.
+
+DESIGN PHILOSOPHY
+- 30–40 % of every slide is whitespace.
+- Asymmetric composition. Vary every slide. Chrome stays locked.
+- Text length is a design variable — short → MASSIVE structural type; long → multi-column editorial.
+- Dominant colour + 1–2 accents. Vary themes across the deck.
+
+CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE
+Pick the layout from the content's shape. FORCE VARIETY: if three consecutive content slides are card grids, you've fallen into templating. Break by using one of these instead:
+- **Giant typography** — one word or phrase at hero scale, supporting line below.
+- **Magazine spread** — large display headline + 2–3 narrow text columns underneath.
+- **Asymmetric split-screen** — 60/40 or 70/30; one side typography, the other illustration/data/quote.
+- **Full-bleed illustration / poster** — a single concept rendered as inline SVG, text wrapping or laid over.
+- **Sparse poster** — one stat or fact at monumental scale, vast whitespace.
+- **Timeline** — horizontal or staggered visual path.
+- **Stark comparison** — side-by-side opposing concepts.
+- **Pure data** — bar / donut / structural blocks in CSS + inline SVG, no chart libraries.
+
+Cards are ONE option, not the default. Use them ONLY for genuine parallel sets (3–6 equal-weight categories). Card slides must carry concept-matching icons — never generic placeholder shapes. Never output <ul>/<li>.
+
+DESIGN TOKENS — CSS vars on the slide root
+- \`var(--brand-bg)\`, \`var(--brand-text)\` — surface + text
 - \`var(--primary)\`, \`var(--secondary)\`, \`var(--accent)\` — palette[0..2]
-- \`var(--brand-1)\` … \`var(--brand-N)\` — every palette entry, 1-indexed
-- \`var(--font-heading)\`, \`var(--font-body)\` — fonts with system fallback
-Fill the matching \`theme\` object in OUTPUT JSON; the renderer wires the vars.
+- \`var(--brand-1)\` … \`var(--brand-N)\` — palette entries, 1-indexed
+- \`var(--font-heading)\`, \`var(--font-body)\`
+Fill matching \`theme\` in OUTPUT JSON; the renderer wires the vars.
 
-DESIGN FREEDOM — these round-trip cleanly
-- \`linear-gradient\` / \`radial-gradient\` with SOLID colour stops.
-- \`box-shadow\`, \`text-shadow\`, \`border-radius\` (per-corner), \`transform: rotate/scale/translate\`, \`opacity\` on the element.
-- Gradient-clipped text: \`background: linear-gradient(...); -webkit-background-clip: text; color: transparent;\`
-- Solid borders, any thickness, any colour.
-- \`text-decoration: underline | line-through\`. Strike uses the run's own \`color\` (text-decoration-color is ignored on export).
+TECHNICAL CONSTRAINTS
+Static deliverable — no animation, no transition, no \`:hover\`/\`:focus\`, no JavaScript. Every visual present at first paint.
+
+Round-trip cleanly: \`linear-gradient\`/\`radial-gradient\` (solid stops), \`box-shadow\`, \`text-shadow\`, \`border-radius\` (per-corner), \`opacity\` on element, gradient-clipped text (\`-webkit-background-clip:text; color:transparent\`), solid borders any thickness, \`text-decoration: underline | line-through\` (strike uses run's own colour).
+
+Break in export — DO NOT USE:
+- \`animation\`, \`transition\`, \`:hover\`, \`:focus\`, JavaScript, external CSS frameworks.
+- \`conic-gradient\`, colour-to-alpha CSS gradients (use inline SVG).
+- \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`.
+- \`-webkit-text-stroke\` (becomes filled — use <svg><text stroke fill="none">).
+- \`rgba()\` for transparency on solid fills (use \`opacity\` on the element).
+- Webfonts outside \`fonts.googleapis.com\` / \`fonts.gstatic.com\`.
 
 GRAPHICS — inline SVG only
-- Decorative shapes, background patterns, icons, logos: inline <svg> with brand-token fills. NO icon fonts (Material/FontAwesome) — they don't embed.
-- Material icons: copy the SVG path from material-icons.com into a 24-viewBox <svg>; size via CSS.
-- Alpha effects → inline <svg> \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`. CSS rgba alpha/conic-gradient/color-to-alpha don't round-trip.
-- Logos are always SVG. The brief carries the SVG markup pre-fetched — inline it directly and recolour via \`fill\` on the <svg> root per slide for contrast (USER RULES has the per-request specifics).
+- All decoration, atmosphere, icons, illustrations, logos: inline <svg> with brand-token fills. NO icon fonts (Material font, FontAwesome).
+- Alpha via SVG <radialGradient>/<linearGradient> \`stop-opacity\` (CSS rgba doesn't round-trip).
+- Every graphic must mean something. If you can't name what it represents in one phrase, cut it. Sizes: icons 16–32 px, illustrations 300–500 px. Soft ceiling ~16 SVG elements per illustration.
+- No floating abstract shapes "filling space" — every shape anchors a corner, frames the headline, or separates sections.
+- Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.
 
-GRAPHICS BALANCE — relevant, not filler
-- Graphics MUST be relevant to the slide's content or deck theme. No random shapes.
-- Mix sizes: icons in cards (16–32 px), illustrations on hero/section/closing (300–500 px), light background decoration on every slide.
-- Cards without icons look underdesigned. Reach for relevant iconography to fill empty space.
-- Soft ceiling ~16 SVG elements per illustration. Composition over quantity.
+ICONS — Lucide stroke icons, concept-matched
+Envelope: \`<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">…paths…</svg>\`
+Match icon to concept: users (audience), shield (security), zap (speed), trending-up (growth), target (goals), lightbulb (idea), check-circle (achievement), arrow-up-right (forward), star (premium), chart-bar (data), coins (money), rocket (launch). Use Lucide's actual path data — don't invent or paraphrase. If you need a glyph not in standard Lucide, draw a Lucide-style stroke icon at 24×24, stroke-width 2, linecap round.
 
-AVOID — break in export
-- \`animation\`, \`transition\`, \`:hover\`, \`:focus\`, JavaScript.
-- CSS \`conic-gradient\`, color-to-alpha CSS gradients (use inline SVG).
-- \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`.
-- \`-webkit-text-stroke\` — becomes filled. Use \`<svg><text stroke fill="none">\`.
-- \`rgba()\` for transparency on solid fills — alpha doesn't embed. Use \`opacity\` on the element.
-- Webfont URLs not on \`fonts.googleapis.com\` / \`fonts.gstatic.com\` (manifest rejects).
+TYPOGRAPHY
+- Headers/display: editorial serifs (Playfair Display, Georgia, IBM Plex Serif). Structural elements, not decoration.
+- Body: when no brief font sourced, use \`"Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif\`. Avoid \`system-ui\` / \`-apple-system\` as LEAD fallback (Apple-only).
+- Arabic: Google Arabic font (Cairo, Tajawal, Almarai, IBM Plex Sans Arabic, Reem Kufi, Vazirmatn). Fallback: \`"Segoe UI", Tahoma, Arial, sans-serif\`.
+- Avoid Inter / Roboto / default web sans as primary.
+- ONLY two font weights across the deck: \`400\` and \`700\` (Arabic fonts ink-bomb at 800+ in export). For emphasis, scale size or change colour.
 
-FONT WEIGHT — technical export constraint
-ONLY two values across the deck: \`400\` and \`700\`. Arabic fonts (Cairo/Tajawal/Almarai) thicken in export; 800+ becomes ink-bombed unreadable. For more emphasis scale font-size or change colour; don't push weight.
+ARABIC TYPOGRAPHY
+- Glyphs render ~15–20 % wider in export. Default Arabic headlines + long single-line Arabic to FULL available width.
+- Bold Arabic ≥ 24 px: \`line-height: 1.5\` min.
+- Cards with Arabic need 32–48 px padding. NEVER fix \`height\` on Arabic content — use \`min-height\`.
+- Tashkeel (ـَـِـُّـ): \`line-height\` ≥ 1.6 + ≥ 20 px \`margin-bottom\`. Doesn't apply to chrome (pills/kickers/pagination — \`line-height: 1\`).
 
-ARABIC TYPOGRAPHY — export drift
-- Arabic glyphs render ~15–20 % wider in export than browser. Default Arabic headlines + long single-line Arabic to FULL available width.
-- Bold Arabic ≥ 24 px: \`line-height: 1.5\` minimum (1.4 is too tight; text overflows in export).
-- Cards holding Arabic need real padding (32–48 px), especially padding-bottom. NEVER set fixed \`height\` on a card whose content includes Arabic — use \`min-height\`.
-- Arabic body text with tashkeel (ـَـِـُّـ): bump line-height to ≥ 1.6 and add ≥ 20 px \`margin-bottom\`. Does NOT apply to chrome elements (pills, kickers, pagination) — those stay at \`line-height: 1\` with their own padding.
+SLIDE MARGINS — two-layer + reserved chrome footer
+Pick top/side insets on slide 1, REUSE on every slide. ~80–120 px on 1920-wide, ~50–80 px on 1080-wide vertical. BOTTOM fixed at 140 px (chrome zone — logo / pagination / persistent text). Body MUST NOT extend below \`bottom:140px\`. Chrome decided on slide 1, identical on every content slide. Cover (\`role:"cover"\`) / closing (\`role:"closing"\`) may break chrome for hero composition.
 
-SLIDE MARGINS — two-layer pattern
-Pick an inset (80–120 px) on slide 1 and reuse identically on EVERY slide.
-\`\`\`
-<div dir="rtl" style="position:relative; width:1920px; height:1080px; background:var(--brand-bg); overflow:hidden;">
+\`\`\`text
+<div dir="rtl" style="position:relative; width:<W>px; height:<H>px; background:var(--brand-bg); overflow:hidden;">
   <div style="position:absolute; inset:0; pointer-events:none;"><!-- background SVGs --></div>
-  <div style="position:absolute; inset:96px;"><!-- all content lives here --></div>
+  <div style="position:absolute; top:<N>px; left:<N>px; right:<N>px; bottom:140px;"><!-- all content --></div>
+  <!-- chrome (logo / pagination / persistent text) absolute-positioned per USER RULES -->
 </div>
 \`\`\`
-Don't bypass the inset with \`position:absolute; left:0; right:0\` on the slide root. Cards inside the content layer span the full inset width.
 
-COLOUR CONTRAST — every text and shape must read against what's behind it
-Forbidden: text \`color\` matching its parent container's background; SVG fill matching the surface it sits on; gradient text where a stop equals the background; muted text within ~10 lightness points of background.
+COLOUR CONTRAST — non-negotiable
+For each text / icon / shape, name the surface it sits on, pick a contrasting colour. WCAG AA (4.5:1 body) / AAA (7:1 hero headlines). Forbidden:
+- Text colour matching its container's background (same-tone text on same-tone surface).
+- Brand-token text on a brand-token surface of the same value.
+- SVG fill/stroke matching its surface (icon disappears).
+- Gradient stops, muted text, pill text within ~10 lightness pts of the background.
+Fallback: white on dark, near-black on light.
 
 LAYOUT GOTCHAS
-- **Pills/badges/chips:** \`inline-flex\` + \`align-items: center\` + \`justify-content: center\` + \`line-height: 1\` + explicit \`height\`. Padding alone makes Arabic text top-anchor.
-\`\`\`
-<span style="display:inline-flex; align-items:center; justify-content:center; padding:0 22px; height:40px; line-height:1; border:1px solid var(--primary); border-radius:9999px;">رؤيتنا</span>
-\`\`\`
-- **Direction-anchored pieces** (e.g. card numbers always on the LEFT in RTL): absolute positioning with explicit \`left:\`/\`right:\`. Flex flips silently under RTL.
-- **Headline + body in one container:** explicit \`margin-bottom\` or grid \`gap\`. Tight stacks overlap in export.
-- **Single-line text:** prefer \`width: max-content\` + \`padding-inline\`. Inside a constrained parent use \`white-space: nowrap\`.
-- **Single-script siblings in flex/grid** (e.g. two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Use absolute positioning. Mixed-script siblings auto-split, so flex is fine for them.
-
-CHROME CONSISTENCY
-- Decide chrome on slide 1 (headline / kicker / pagination / brand mark) and reuse identically on every content slide. Cover (\`role: "cover"\`) and closing (\`role: "closing"\`) may break chrome for hero composition.
-- Chrome stays INSIDE the canvas — no negative top/right/bottom/left.
-- Reserve ≥ 40–60 px between body content and footer chrome.
+- Headline + body in one container: explicit \`margin-bottom\` or grid \`gap\` (tight stacks overlap in export).
+- Single-line text: \`width: max-content\` + \`padding-inline\`; inside constrained parent use \`white-space: nowrap\`.
+- Single-script siblings in flex (two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Use absolute positioning. Mixed-script siblings auto-split.
 
 OUTPUT — JSON only, no prose, no markdown fences
 {
@@ -122,7 +145,11 @@ OUTPUT — JSON only, no prose, no markdown fences
     { "slideId": "<unique>", "role": "cover" | "section" | "content" | "stats" | "quote" | "image" | "closing", "html": "<div dir='rtl' style='...'>...</div>" }
   ]
 }
-Slide count: match the brief's slideCount if provided; otherwise adapt to content (sparse intro 5, deep doc 20+). Every \`slideId\` unique within the deck.`;
+Slide count: match brief's \`slideCount\` if provided; otherwise adapt (sparse intro 5, deep doc 20+). Every \`slideId\` unique.
+
+FONT SOURCING
+- When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
+- If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@400;700&display=swap\`.`;
 
 type EnhanceData = {
   level?: "light" | "medium" | "radical";
@@ -139,7 +166,61 @@ type DeckGenerateEvent = {
   type?: "create" | "enhance";
   enhance?: EnhanceData;
   brief: unknown;
+  // User-picked generation quality preset. Maps to model + thinking +
+  // effort below. Optional / unknown values fall back to "medium".
+  quality?: "fast" | "medium" | "quality" | "extreme";
 };
+
+// Map a quality preset to the actual Anthropic call parameters.
+// Knob ladder: fast → medium → quality → extreme.
+//
+// Mode notes:
+//   • fast / "disabled" thinking — Claude streams JSON immediately,
+//     no upfront reasoning. Smallest output quality, fastest.
+//   • medium / quality / extreme use `enabled` thinking with an
+//     EXPLICIT budget_tokens cap. We previously used `adaptive` +
+//     `output_config.effort`, but adaptive has no hard cap — Claude
+//     decides his own budget and on a 600+ line system prompt that
+//     decision could be 15+ minutes of thinking with no streamed
+//     output. `enabled` + budget_tokens is the only way to keep
+//     wall-clock predictable.
+//   • Budgets are rough: at Sonnet's ~30–60 tok/s, 4000 ≈ 1–2 min,
+//     12000 ≈ 3–6 min, 32000 ≈ 9+ min (Opus is slower per-token).
+//   • output_config is intentionally dropped — we don't use
+//     structured outputs and `effort` was load-bearing the wrong way.
+type AnthropicCallParams = {
+  model: string;
+  thinking:
+    | { type: "disabled" }
+    | { type: "enabled"; budget_tokens: number };
+};
+function paramsForQuality(
+  quality: DeckGenerateEvent["quality"],
+): AnthropicCallParams {
+  switch (quality) {
+    case "fast":
+      return {
+        model: "claude-sonnet-4-6",
+        thinking: { type: "disabled" },
+      };
+    case "quality":
+      return {
+        model: "claude-sonnet-4-6",
+        thinking: { type: "enabled", budget_tokens: 12000 },
+      };
+    case "extreme":
+      return {
+        model: "claude-opus-4-7",
+        thinking: { type: "enabled", budget_tokens: 32000 },
+      };
+    case "medium":
+    default:
+      return {
+        model: "claude-sonnet-4-6",
+        thinking: { type: "enabled", budget_tokens: 4000 },
+      };
+  }
+}
 
 function extractJson(text: string): string {
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -169,6 +250,43 @@ type Rules = {
   } | null;
 } | null;
 
+// Build physical CSS for a chrome corner. ALL chrome elements
+// (logo, persistent overlay, pagination) share the same 40-px
+// distance from the canvas edge so they sit on a single horizontal
+// baseline when placed at bottom corners (or top corners). Earlier
+// runs had logo/persistent at 80 px and pagination at 38 px, which
+// produced an L-shaped layout where pagination sat ~42 px below the
+// other two chrome lines. 40 px on every chrome element fixes that.
+//
+// The horizontal inset stays at 80 px so left/right-aligned chrome
+// elements don't crowd the canvas edge.
+function cornerToCss(corner: CornerPosition): string {
+  const vertical = corner.startsWith("top") ? "top:40px" : "bottom:40px";
+  if (corner.endsWith("-center")) {
+    return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
+  }
+  const side = corner.endsWith("-left") ? "left" : "right";
+  return `position:absolute; ${side}:80px; ${vertical};`;
+}
+
+// Pick a corner for pagination that doesn't collide with chrome the
+// user has already pinned (logo + persistent text). Preference order:
+// bottom-left → bottom-right → bottom-center → top-left → top-right
+// → top-center (extreme fallback — never reached in practice unless
+// the user occupied 5 of 6 corners).
+function pickPaginationCorner(occupied: Set<CornerPosition>): CornerPosition {
+  const priority: CornerPosition[] = [
+    "bottom-left",
+    "bottom-right",
+    "bottom-center",
+    "top-left",
+    "top-right",
+    "top-center",
+  ];
+  for (const c of priority) if (!occupied.has(c)) return c;
+  return "bottom-left";
+}
+
 // Design-style directives — each style cracks open the layout pattern
 // otherwise enforced by DESIGN-SYSTEM LOCK. Chrome stays locked across the
 // deck; the style determines WHAT chrome and body compositions look like.
@@ -189,7 +307,7 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "Classic: centered hierarchy, traditional book-cover style on cover, balanced compositions, restrained accents. Timeless rather than trendy.",
 };
 
-function ruleLines(rules: Rules): string[] {
+function ruleLines(rules: Rules, logoPos: CornerPosition | null): string[] {
   if (!rules) return [];
   const lines = ["", "Generation rules (user-specified, OVERRIDE matching defaults):"];
   if (rules.designStyle) {
@@ -205,12 +323,42 @@ function ruleLines(rules: Rules): string[] {
       ? `- Fix typos: correct spelling and grammar errors in the source content silently while preserving meaning.`
       : `- Preserve user text verbatim: do NOT auto-correct spelling or grammar — keep the source content as-written.`,
   );
-  lines.push(
-    rules.pagination
-      ? `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"), positioned as part of the locked chrome (typically bottom-left or bottom-right corner). DO NOT emit additional pagination strings like "الصفحة 02" or "صفحة 02 — العنوان" or "PAGE 02 — TITLE" elsewhere on the slide; one numeric indicator is the entire pagination. Use Latin digits + slash (e.g. "02 / 07") even in an Arabic deck so the indicator reads left-to-right.`
-      : `- Pagination: DISABLED. Do NOT emit any page-number text element on any slide — no "N / Total", no "الصفحة 02", no "PAGE 02 — title". The user opted out of pagination entirely.`,
-  );
-  if (rules.persistent && rules.persistent.text.trim()) {
+
+  // Chrome corners already taken by user picks. Pagination will be
+  // auto-routed to the highest-priority FREE corner from this set's
+  // complement (see pickPaginationCorner). If the user puts logo +
+  // persistent text on the same corner that's their decision — we
+  // pass both through and let Claude render them stacked.
+  const persistentPos =
+    rules.persistent && rules.persistent.text.trim()
+      ? rules.persistent.position
+      : null;
+  const occupied = new Set<CornerPosition>();
+  if (logoPos) occupied.add(logoPos);
+  if (persistentPos) occupied.add(persistentPos);
+
+  if (rules.pagination) {
+    const paginationCorner = pickPaginationCorner(occupied);
+    const paginationCss = cornerToCss(paginationCorner);
+    const reservedDesc =
+      Array.from(occupied)
+        .map((c) => `- ${c} (chrome)`)
+        .concat([`- ${paginationCorner} (pagination)`])
+        .join("\n  ") || "(none)";
+    lines.push(
+      `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"). Use Latin digits + slash even in an Arabic deck so the indicator reads left-to-right.`,
+      `- Pagination anchor — wrap the page number in an element with BOTH a \`data-anchor\` attribute AND \`dir="ltr"\`, with this EXACT inline style: \`${paginationCss}\`. Example: \`<div data-anchor dir="ltr" style="${paginationCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;font-weight:700;">02 / 07</div>\`. \`data-anchor\` flags this element as a fixed chrome corner — the renderer leaves the physical \`right:\` / \`left:\` values untouched so it stays put in any direction.`,
+      `- Pagination corner was auto-chosen to AVOID the logo's corner and the persistent-text corner. Do NOT override it.`,
+      `- Do NOT emit additional pagination strings like "الصفحة 02" or "صفحة 02 — العنوان" or "PAGE 02 — TITLE" elsewhere on the slide; one numeric indicator is the entire pagination.`,
+      `- Reserved chrome corners (DO NOT place body content / cards / illustrations in these — they're already taken by chrome elements):`,
+      `  ${reservedDesc}`,
+    );
+  } else {
+    lines.push(
+      `- Pagination: DISABLED. Do NOT emit any page-number text element on any slide — no "N / Total", no "الصفحة 02", no "PAGE 02 — title". The user opted out of pagination entirely.`,
+    );
+  }
+  if (rules.persistent && rules.persistent.text.trim() && persistentPos) {
     const excludeCover = rules.persistent.exclude.includes("cover");
     const excludeClosing = rules.persistent.exclude.includes("closing");
     const exclusions = [
@@ -220,18 +368,38 @@ function ruleLines(rules: Rules): string[] {
     const scope = exclusions.length === 0
       ? "EVERY slide including cover and closing"
       : `every slide EXCEPT ${exclusions.join(" and ")}`;
+    const persistentCss = cornerToCss(persistentPos);
     lines.push(
-      `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}, at the ${rules.persistent.position} corner. Use the EXACT same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock — see DESIGN-SYSTEM LOCK).`,
+      `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}.`,
+      `- Persistent overlay anchor — wrap the text in an element with the \`data-anchor\` attribute and this EXACT inline style: \`${persistentCss}\`. Example: \`<div data-anchor style="${persistentCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;">${rules.persistent.text}</div>\`. Same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock). \`data-anchor\` flags this element as a fixed chrome corner so the renderer leaves physical \`right:\` / \`left:\` values untouched in any direction.`,
     );
   }
   return lines;
 }
 
+// Resolve the slide aspect ratio the user picked on /create/brand.
+// Falls back to "16:9" — the legacy default — when missing or invalid
+// (older briefs, enhance flow, etc.). The single source of truth for
+// canvas dimensions is `SLIDE_DIMENSIONS` in `lib/schema/slide.ts`.
+function resolveFormat(event: DeckGenerateEvent): SlideFormat {
+  const candidate = (event.brief as { brand?: { slideSize?: unknown } } | null)?.brand
+    ?.slideSize;
+  return candidate === "9:16" ? "9:16" : "16:9";
+}
+
 function buildUserMessage(event: DeckGenerateEvent) {
+  const format = resolveFormat(event);
+  const { width, height } = SLIDE_DIMENSIONS[format];
+  const orientationLabel = format === "9:16" ? "vertical" : "horizontal";
+
   const lines = [
     `Generate a slide manifest for this presentation.`,
     ``,
     `Flow: ${event.type ?? "create"}`,
+    // Canvas dimensions are a hard contract — the renderer measures the DOM
+    // at this exact size and the PPT export uses the matching layout.
+    // Echo them up-front so Claude doesn't have to dig them out of the brief.
+    `Slide canvas: ${width}×${height} px (${format} ${orientationLabel}).`,
     ``,
     `Brief:`,
     JSON.stringify(event.brief, null, 2),
@@ -261,7 +429,12 @@ function buildUserMessage(event: DeckGenerateEvent) {
   }
 
   const rules = (event.brief as { rules?: Rules } | null)?.rules ?? null;
-  lines.push(...ruleLines(rules));
+  // Extract logo corner once — ruleLines needs it to allocate a free
+  // pagination corner that doesn't collide with the user's logo pick.
+  const briefLogoPos =
+    (event.brief as { brand?: { logo?: { position?: CornerPosition } | null } } | null)
+      ?.brand?.logo?.position ?? null;
+  lines.push(...ruleLines(rules, briefLogoPos));
 
   // Logo placement — brand logo, if provided, is up to Claude to compose
   // into the chrome. We tell him *where* the user wants it and *whether*
@@ -293,6 +466,18 @@ function buildUserMessage(event: DeckGenerateEvent) {
         ? "every slide"
         : `every slide except ${scopeParts.join(" and ")}`;
     const logoSrc = logo.url ?? logo.storageUrl;
+    // Exact physical CSS for the user's chosen corner. We give Claude
+    // the literal string so he doesn't have to interpret "top-right"
+    // through RTL/LTR mental gymnastics — which is what was producing
+    // the wrong-corner placement before this fix.
+    const cornerCss = (() => {
+      const vertical = pos.startsWith("top") ? "top:80px" : "bottom:80px";
+      if (pos.endsWith("-center")) {
+        return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
+      }
+      const side = pos.endsWith("-left") ? "left" : "right";
+      return `position:absolute; ${side}:80px; ${vertical};`;
+    })();
     if (logo.svgMarkup) {
       // Inline-markup path: brief carries the SVG bytes server-side
       // (fetched by readLogoSvgMarkup). Claude inlines the markup directly
@@ -300,7 +485,9 @@ function buildUserMessage(event: DeckGenerateEvent) {
       // data-fill custom attributes, no runtime fetch round-trip.
       lines.push(
         ``,
-        `Brand logo — inline the SVG markup BELOW directly on every slide where it appears (${scope}). Place it in the ${pos}; same position + size every time (chrome-lock). Box ~120×40 px, always preserve aspect ratio.`,
+        `Brand logo — inline the SVG markup BELOW directly on every slide where it appears (${scope}). Box ~120×40 px, always preserve aspect ratio.`,
+        ``,
+        `Position (chrome-lock — same on EVERY slide): wrap the inlined <svg> in a positioned element that carries the \`data-anchor\` attribute AND this EXACT inline style: \`${cornerCss}\`. Example: \`<div data-anchor style="${cornerCss}width:120px;"><svg ...>...inlined markup...</svg></div>\`. The \`data-anchor\` flag tells the renderer to leave these physical \`right:\` / \`left:\` / \`top:\` / \`bottom:\` values untouched — chrome stays in the user's chosen visual corner regardless of slide direction. Without it the renderer mirrors physical L/R into logical ones and the logo flips to the wrong corner.`,
         ``,
         `Recolour per slide by setting \`fill="#hex"\` on the inlined <svg> root:`,
         `  - Dark slide background → \`fill="#FFFFFF"\` (or a near-white hex).`,
@@ -327,8 +514,8 @@ function buildUserMessage(event: DeckGenerateEvent) {
         ``,
         `Brand logo (always SVG — raster blocked at upload). SVG markup unavailable on this run; use <img src> as a fallback:`,
         `- Source: ${logoSrc}`,
-        `- Place it in the ${pos} of ${scope}. Same position + size on every slide where it appears (chrome-lock). Box ~ 120×40 px, \`object-fit: contain\`.`,
-        `- Per-slide recolouring is not available on this generation; design backgrounds the logo reads cleanly against.`,
+        `- Position chrome (${scope}): wrap the <img> in an element with \`data-anchor\` and EXACT style \`${cornerCss}\`. Example: \`<div data-anchor style="${cornerCss}width:120px;"><img src="${logoSrc}" style="width:100%;height:auto;object-fit:contain;" alt=""/></div>\`.`,
+        `- Box ~ 120×40 px, \`object-fit: contain\`. Per-slide recolouring is not available on this generation; design backgrounds the logo reads cleanly against.`,
       );
     }
   }
@@ -347,6 +534,19 @@ export const deckGenerate = inngest.createFunction(
   async ({ event, step, logger }) => {
     const data = event.data as DeckGenerateEvent;
     const { projectId, versionId, jobId } = data;
+    // Resolve quality preset → model + thinking + effort. Falls back
+    // to "medium" via paramsForQuality's default branch when missing
+    // (older queued jobs predating this field).
+    const callParams = paramsForQuality(data.quality);
+    logger.info("claude_quality_preset", {
+      quality: data.quality ?? "medium (default)",
+      model: callParams.model,
+      thinking: callParams.thinking.type,
+      thinking_budget:
+        callParams.thinking.type === "enabled"
+          ? callParams.thinking.budget_tokens
+          : 0,
+    });
 
     // Estimated total slides for the progress UI. Use the brief's slideCount
     // if the user picked a custom value; otherwise default to 8 (we ask Claude
@@ -354,6 +554,11 @@ export const deckGenerate = inngest.createFunction(
     // streamed in.
     const briefSlideCount = (data.brief as { slideCount?: number | null } | null)?.slideCount;
     const estimatedTotal = typeof briefSlideCount === "number" && briefSlideCount > 0 ? briefSlideCount : 8;
+
+    // Slide aspect ratio chosen on /create/brand. Persisted on the
+    // manifest so renderer + lightbox + export all see one source of
+    // truth (vs reading project.format separately downstream).
+    const slideFormat = resolveFormat(data);
 
     // Captured ONCE at the top of the job and persisted through every
     // writeProgress call. DeckView reads this back to seed its elapsed-time
@@ -375,7 +580,17 @@ export const deckGenerate = inngest.createFunction(
       // Persists a transient progress payload to the version's slideJson.
       // Best-effort — failed writes don't block generation. The client polls
       // /api/projects/[id]/status to surface these into <DeckView>.
-      const writeProgress = (stage: "thinking" | "designing" | "validating" | "saving", currentSlide: number, total: number) =>
+      //
+      // `extra` carries stage-specific metrics that DeckView surfaces in the
+      // caption while we wait (e.g. `thinkingTokens` for the live "Claude
+      // is thinking…" counter). Falls through to `progress` unmodified, so
+      // any unknown field just rides along without schema churn.
+      const writeProgress = (
+        stage: "thinking" | "designing" | "validating" | "saving",
+        currentSlide: number,
+        total: number,
+        extra?: { thinkingTokens?: number; thinkingBudget?: number },
+      ) =>
         prisma.presentationVersion
           .update({
             where: { id: versionId },
@@ -387,6 +602,7 @@ export const deckGenerate = inngest.createFunction(
                   currentSlide,
                   estimatedTotal: Math.max(total, currentSlide),
                   genStartedAt,
+                  ...(extra ?? {}),
                 },
                 slides: [],
               } as never,
@@ -394,18 +610,34 @@ export const deckGenerate = inngest.createFunction(
           })
           .catch(() => undefined);
 
+      // Budget surfaced to the UI alongside the live token counter so the
+      // user sees "Claude is thinking… 3.2k / 12k tokens" and can predict
+      // how much longer the thinking phase will run. Zero when thinking is
+      // disabled (fast tier) — the UI hides the counter in that case.
+      const thinkingBudget =
+        callParams.thinking.type === "enabled"
+          ? callParams.thinking.budget_tokens
+          : 0;
+
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         const userMessage =
           attempt === 1
             ? baseUserMessage
             : `${baseUserMessage}\n\nThe previous attempt was rejected:\n${lastError}\n\nReturn corrected JSON now. JSON only, no prose, no fences.`;
 
-        await writeProgress("thinking", maxSlideSeen, estimatedTotal);
+        await writeProgress("thinking", maxSlideSeen, estimatedTotal, {
+          thinkingTokens: 0,
+          thinkingBudget,
+        });
 
+        // Anthropic call params are resolved up-top from the user's
+        // quality preset (paramsForQuality). The single stream call
+        // shape stays the same regardless of tier — only the model /
+        // thinking fields shift.
         const stream = client.messages.stream({
-          model: "claude-opus-4-7",
+          model: callParams.model,
           max_tokens: 48000,
-          thinking: { type: "adaptive" },
+          thinking: callParams.thinking,
           system: [
             {
               type: "text",
@@ -413,8 +645,29 @@ export const deckGenerate = inngest.createFunction(
               cache_control: { type: "ephemeral" },
             },
           ],
-          output_config: { effort: "high" },
           messages: [{ role: "user", content: userMessage }],
+        });
+
+        // Live thinking-phase telemetry. Before this listener existed, the
+        // pipeline was silent during thinking — DeckView could only show
+        // "stage:thinking, slide 0" with no incremental signal, and on
+        // long thinking phases (12k+ token budget) the user couldn't tell
+        // if the run was making progress or stuck. We surface a rough
+        // token estimate from the cumulative thinking snapshot (~4 chars
+        // per token is a common approximation) and write at most once per
+        // second so we don't hammer Prisma.
+        let thinkingChars = 0;
+        let lastThinkingWriteAt = 0;
+        stream.on("thinking", (_delta, snapshot) => {
+          thinkingChars = snapshot.length;
+          const now = Date.now();
+          if (now - lastThinkingWriteAt > 1000) {
+            lastThinkingWriteAt = now;
+            void writeProgress("thinking", maxSlideSeen, estimatedTotal, {
+              thinkingTokens: Math.round(thinkingChars / 4),
+              thinkingBudget,
+            });
+          }
         });
 
         // Watch the streamed text — count `"slideId":` occurrences to know
@@ -476,10 +729,15 @@ export const deckGenerate = inngest.createFunction(
     });
 
     await step.run("save-to-database", async () => {
+      // Stamp the format the user picked onto the manifest so every
+      // downstream consumer (renderer, lightbox, export) reads it from
+      // one source of truth. Overrides whatever Claude may have set
+      // (the system prompt doesn't tell him about this field).
+      const manifestToSave = { ...validated, format: slideFormat };
       await prisma.presentationVersion.update({
         where: { id: versionId },
         data: {
-          slideJson: validated as never,
+          slideJson: manifestToSave as never,
           status: "completed",
         },
       });

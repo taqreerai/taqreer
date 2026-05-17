@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
+import {
+  SlideManifestSchema,
+  type SlideManifest,
+  type SlideFormat,
+} from "@/lib/schema/slide";
 import { DeckView } from "@/components/preview/DeckView";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +17,10 @@ type InitialState = {
   initialVersionId: string | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
+  // Slide aspect ratio chosen on /create/brand. Used as the fallback for
+  // the generating-state placeholder grid (when the manifest isn't ready
+  // yet) so the cards have the correct orientation from the first paint.
+  initialFormat: SlideFormat;
 };
 
 function readSlideCountHint(aiPrompt: string | null): number | null {
@@ -48,6 +56,11 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
       title: true,
       status: true,
       aiPrompt: true,
+      // `format` was written at /api/projects creation time from
+      // payload.brand.slideSize ("16:9" or "9:16"). Used here so the
+      // generating-state placeholder grid in DeckView shows the correct
+      // orientation BEFORE the manifest finishes streaming.
+      format: true,
       presentation: {
         select: { id: true, currentVersionId: true },
       },
@@ -81,6 +94,8 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
     if (Array.isArray(slides) && slides.length > 0) initialSlideCount = slides.length;
   }
 
+  const initialFormat: SlideFormat = project.format === "9:16" ? "9:16" : "16:9";
+
   return {
     projectTitle: project.title,
     presentationId: project.presentation?.id ?? null,
@@ -89,6 +104,7 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
     initialVersionId: version?.id ?? null,
     initialManifest: manifest,
     initialSlideCount,
+    initialFormat,
   };
 }
 

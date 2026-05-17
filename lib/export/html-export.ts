@@ -3,6 +3,7 @@
 import { createRoot } from "react-dom/client";
 import { createElement } from "react";
 import type { SlideManifest } from "@/lib/schema/slide";
+import { dimensionsForFormat } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import {
   downloadBlob,
@@ -108,13 +109,51 @@ async function inlineSvgImages(root: HTMLElement): Promise<void> {
   await Promise.all(
     imgs.map(async (img) => {
       try {
-        const res = await fetch(img.src);
+        // Abort the fetch after 8 s so a stuck Supabase signed-URL
+        // request doesn't leave the export promise hanging forever
+        // (the offscreen DOM stays mounted until tab reload otherwise).
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+        let res: Response;
+        try {
+          res = await fetch(img.src, { signal: controller.signal });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
         if (!res.ok) return;
         const svgText = await res.text();
         const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
         if (parsed.getElementsByTagName("parsererror").length > 0) return;
         const svg = parsed.querySelector("svg");
         if (!svg) return;
+
+        // SANITIZE — slide-authored `img.src` could point to a remote
+        // URL whose SVG carries `<script>`, event-handler attributes,
+        // `<foreignObject>` (which can host HTML/JS), or external
+        // references. Strip those before injecting into the live DOM
+        // (this code path runs in the user's browser; the offscreen
+        // export tree is still part of `document`). Defence-in-depth
+        // on top of the upload-route's MIME / extension whitelist.
+        svg.querySelectorAll("script, foreignObject").forEach((el) => el.remove());
+        const ALLOWED_HREF_RX = /^(#|data:image\/|https:\/\/)/i;
+        const walk = (el: Element) => {
+          for (const attr of Array.from(el.attributes)) {
+            const name = attr.name.toLowerCase();
+            // on* event handlers (onclick, onload, etc.).
+            if (name.startsWith("on")) {
+              el.removeAttribute(attr.name);
+              continue;
+            }
+            // href / xlink:href that point at `javascript:` or
+            // off-allowlist destinations.
+            if (name === "href" || name === "xlink:href") {
+              const v = attr.value.trim();
+              if (!ALLOWED_HREF_RX.test(v)) el.removeAttribute(attr.name);
+            }
+          }
+          for (const child of Array.from(el.children)) walk(child);
+        };
+        walk(svg);
 
         // Recolour pass — if Claude tagged the img with data-fill="#hex",
         // overwrite every fill / stroke attribute inside the SVG (except
@@ -260,6 +299,14 @@ export async function exportManifestAsPptx(
   manifest: SlideManifest,
   fileName: string
 ): Promise<{ stats: BiDiPostprocessStats; slideCount: number }> {
+  // Slide canvas dimensions from the manifest's format (16:9 → 1920×1080;
+  // 9:16 → 1080×1920). Used for the offscreen render container, each
+  // slide's inline width/height, dom-to-pptx's PPT layout, and the BiDi
+  // post-processor's bounds checks. Falls back to 16:9 for legacy
+  // manifests written before the field existed.
+  const { width: canvasW, height: canvasH } = dimensionsForFormat(manifest.format);
+  const slideFormat = manifest.format === "9:16" ? "9:16" : "16:9";
+
   const container = document.createElement("div");
   container.setAttribute("data-html-export", "true");
   Object.assign(container.style, {
@@ -271,7 +318,7 @@ export async function exportManifestAsPptx(
     // trade: not visible to the user, but fully rendered + measurable.
     left: "-99999px",
     top: "0px",
-    width: "1920px",
+    width: `${canvasW}px`,
     pointerEvents: "none",
     // Keep opacity:1 + visibility:visible explicitly in case parent styles
     // (e.g. a transition or animation) try to inherit something different.
@@ -293,13 +340,15 @@ export async function exportManifestAsPptx(
             {
               key: slide.slideId,
               className: "hx-slide",
-              style: { width: 1920, height: 1080, marginBottom: 20 },
+              style: { width: canvasW, height: canvasH, marginBottom: 20 },
             },
             createElement(SlideRenderer, {
               slide,
               theme: manifest.theme,
               direction: manifest.direction,
               language: manifest.language,
+              width: canvasW,
+              height: canvasH,
               scale: 1,
             })
           )
@@ -321,6 +370,15 @@ export async function exportManifestAsPptx(
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     );
 
+    // Race every "wait for resource" promise against a hard timeout so
+    // export can still proceed in a degraded state (raster img, system
+    // font, unstyled fallback) instead of hanging forever — e.g. a
+    // Supabase signed URL that 503s without resolving the load event,
+    // or a Google Fonts request blocked by an ad-blocker.
+    const RESOURCE_TIMEOUT_MS = 8000;
+    const raceWithTimeout = (p: Promise<unknown>) =>
+      Promise.race([p, new Promise<void>((r) => setTimeout(r, RESOURCE_TIMEOUT_MS))]);
+
     // Wait for any slide-local <link rel="stylesheet"> to finish loading.
     // The export path allows arbitrary stylesheet links inside slide HTML,
     // and DOMPurify keeps them. dom-to-pptx reads computed styles from the
@@ -331,22 +389,24 @@ export async function exportManifestAsPptx(
       container.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
     );
     if (stylesheets.length > 0) {
-      await Promise.all(
-        stylesheets.map(
-          (link) =>
-            new Promise<void>((resolve) => {
-              if (link.sheet) {
-                resolve();
-                return;
-              }
-              const done = () => {
-                link.removeEventListener("load", done);
-                link.removeEventListener("error", done);
-                resolve();
-              };
-              link.addEventListener("load", done);
-              link.addEventListener("error", done);
-            })
+      await raceWithTimeout(
+        Promise.all(
+          stylesheets.map(
+            (link) =>
+              new Promise<void>((resolve) => {
+                if (link.sheet) {
+                  resolve();
+                  return;
+                }
+                const done = () => {
+                  link.removeEventListener("load", done);
+                  link.removeEventListener("error", done);
+                  resolve();
+                };
+                link.addEventListener("load", done);
+                link.addEventListener("error", done);
+              })
+          )
         )
       );
     }
@@ -354,7 +414,7 @@ export async function exportManifestAsPptx(
     // Wait for any webfonts referenced in the manifest to be ready, so
     // dom-to-pptx measures the right glyph metrics.
     if (document.fonts && document.fonts.ready) {
-      await document.fonts.ready;
+      await raceWithTimeout(document.fonts.ready);
     }
 
     // Wait for every <img> inside the offscreen tree to finish loading.
@@ -362,22 +422,24 @@ export async function exportManifestAsPptx(
     // they'll have 0×0 bounding rects and the library will skip them.
     const images = Array.from(container.querySelectorAll("img"));
     if (images.length > 0) {
-      await Promise.all(
-        images.map(
-          (img) =>
-            new Promise<void>((resolve) => {
-              if (img.complete && img.naturalWidth > 0) {
-                resolve();
-                return;
-              }
-              const done = () => {
-                img.removeEventListener("load", done);
-                img.removeEventListener("error", done);
-                resolve();
-              };
-              img.addEventListener("load", done);
-              img.addEventListener("error", done);
-            })
+      await raceWithTimeout(
+        Promise.all(
+          images.map(
+            (img) =>
+              new Promise<void>((resolve) => {
+                if (img.complete && img.naturalWidth > 0) {
+                  resolve();
+                  return;
+                }
+                const done = () => {
+                  img.removeEventListener("load", done);
+                  img.removeEventListener("error", done);
+                  resolve();
+                };
+                img.addEventListener("load", done);
+                img.addEventListener("error", done);
+              })
+          )
         )
       );
     }
@@ -453,10 +515,21 @@ export async function exportManifestAsPptx(
     // PowerPoint, recolourable, infinite zoom). Without it, dom-to-pptx
     // rasterises every SVG to a PNG — Material icons and decorative shapes
     // end up tiny / pixelated / missing depending on viewBox.
+    //
+    // width / height (in inches) drives dom-to-pptx's `pptx.defineLayout`
+    // call so the resulting PPT has the correct page size:
+    //   16:9 → 10″ × 5.625″
+    //   9:16 → 5.625″ × 10″
+    // Without these, the lib defaults to LAYOUT_16x9 and a vertical 9:16
+    // deck would render as a landscape PPT with shapes outside the page.
+    const slideWidthIn = canvasW / 192; // 1920px → 10″, 1080px → 5.625″
+    const slideHeightIn = canvasH / 192;
     const rawBlob = await exportToPptx(slideNodes, {
       fileName,
       skipDownload: true,
       svgAsVector: true,
+      width: slideWidthIn,
+      height: slideHeightIn,
     } as const);
 
     if (!(rawBlob instanceof Blob)) {
@@ -471,7 +544,8 @@ export async function exportManifestAsPptx(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       JSZip as any,
       stats,
-      intents
+      intents,
+      slideFormat
     );
 
     downloadBlob(fixedBlob, fileName);

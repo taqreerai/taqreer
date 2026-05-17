@@ -1,33 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { CreateShell } from "@/components/create/CreateShell";
+import { PillButton } from "@/components/create/PillButton";
+import { Pill } from "@/components/create/controls";
+import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
+import { notifyCreateStateChange } from "@/components/create/CreateStepper";
+import type { CornerPosition } from "@/components/create/controls";
+
+// Brand page (step 2 of 4) — colours, fonts (Google + upload), and
+// LOGO UPLOAD (just the file; placement + excludes moved to
+// `/create/output` step 3). Output-side fields (slide size, slide
+// count, generation rules, logo placement) were stripped on
+// 2026-05-18 per `context/plan-create-flow.md`.
 
 type PaletteMode = "manual" | "screenshot";
-type SlideCountMode = "match" | "auto" | "custom";
-type CornerPosition =
-  | "top-left"
-  | "top-center"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-center"
-  | "bottom-right";
-type LogoPosition = CornerPosition;
-type PersistentPosition = CornerPosition;
 type FontMode = "upload" | "google";
 type FontTarget = "heading" | "body";
-
-// 6-button position picker: 3 top + 3 bottom, with directional arrow icons.
-// Default to top-right (RTL convention for chrome marks).
-const CORNER_OPTIONS: { value: CornerPosition; icon: string; label: string }[] = [
-  { value: "top-left", icon: "north_west", label: "أعلى يسار" },
-  { value: "top-center", icon: "north", label: "أعلى الوسط" },
-  { value: "top-right", icon: "north_east", label: "أعلى يمين" },
-  { value: "bottom-left", icon: "south_west", label: "أسفل يسار" },
-  { value: "bottom-center", icon: "south", label: "أسفل الوسط" },
-  { value: "bottom-right", icon: "south_east", label: "أسفل يمين" },
-];
 
 type FontSlotState = {
   mode: FontMode;
@@ -55,7 +46,11 @@ type SavedFontSlot = {
 };
 
 type SavedLogo = {
+  // Bucket-relative PATH (private bucket; not loadable as <img src>).
   storageUrl?: string | null;
+  // 1-year signed HTTPS URL added by /api/brand-kits GET for preview.
+  // The path stays in storageUrl so brief submission can re-sign it.
+  displayUrl?: string | null;
   previewDataUrl?: string | null;
   position?: CornerPosition;
   exclude?: ("cover" | "closing")[];
@@ -85,7 +80,7 @@ function fontSlotFromSaved(saved: SavedFontSlot): FontSlotState {
 }
 
 const DEFAULT_COLORS = ["#370BF4", "#E036B8", "#7D2DFF"];
-const MIN_COLORS = 3;
+const MIN_COLORS = 1;
 const MAX_COLORS = 5;
 
 // Curated list — Arabic-capable + popular Latin. Avoids the full Google Fonts
@@ -168,6 +163,16 @@ function readFileAsDataUrl(file: File | null) {
   });
 }
 
+// Reverse of readFileAsDataUrl — used when handleNext has only a
+// saved-draft previewDataUrl (user picked a logo, navigated away
+// before clicking Next, came back). We need a File object to feed
+// the storage upload API.
+async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], fileName, { type: blob.type || "image/svg+xml" });
+}
+
 function CompactUploadZone({
   label,
   accept,
@@ -197,11 +202,31 @@ function CompactUploadZone({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="flex max-h-[120px] min-h-[100px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#370BF4]/60 bg-[#03030D]/40 p-4 text-center transition-colors hover:border-[#7D2DFF] hover:bg-[#7D2DFF]/10"
+        // Tall dropzone for logo + colour-from-screenshot uploads —
+        // these are user-attention features (one-tap of the brand
+        // identity), so they keep room to breathe. White/15 dashed
+        // border matches the step 1 + font upload vocabulary; glass-
+        // circle icon hierarchy mirrors رفع ملفات السياق.
+        className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 p-4 text-center transition-colors hover:border-white/30"
+        style={{ minHeight: 100 }}
       >
-        <span className="material-symbols-outlined mb-2 text-[28px] text-[#7D2DFF]">upload</span>
-        <span className="font-semibold text-white">{label}</span>
-        {file ? <span className="mt-2 max-w-full truncate text-sm text-[#9A94A8]">{file.name}</span> : null}
+        <span
+          className="flex h-10 w-10 items-center justify-center rounded-full"
+          style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+        >
+          <span
+            className="material-symbols-outlined text-white/80"
+            style={{ fontSize: 22 }}
+          >
+            upload
+          </span>
+        </span>
+        <span className="text-sm font-semibold text-white">{label}</span>
+        {file ? (
+          <span className="max-w-full truncate text-xs text-white/60">
+            {file.name}
+          </span>
+        ) : null}
       </button>
     </div>
   );
@@ -240,10 +265,21 @@ function FontUploadSlot({
         }}
       />
       {file ? (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 px-4 py-3">
+        <div
+          className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2"
+          style={{
+            background: "rgba(255, 255, 255, var(--glass-opacity))",
+            borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+          }}
+        >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="material-symbols-outlined text-[#7D2DFF]">font_download</span>
-            <span className="truncate font-semibold text-white">{file.name}</span>
+            <span
+              className="material-symbols-outlined text-white/80"
+              style={{ fontSize: 16 }}
+            >
+              font_download
+            </span>
+            <span className="truncate text-xs font-semibold text-white">{file.name}</span>
           </div>
           <button
             type="button"
@@ -252,31 +288,54 @@ function FontUploadSlot({
               onRemove();
             }}
             aria-label={`إزالة ${label}`}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+              close
+            </span>
           </button>
         </div>
       ) : (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex max-h-[120px] min-h-[100px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#370BF4]/60 bg-[#03030D]/40 p-4 text-center transition-colors hover:border-[#7D2DFF] hover:bg-[#7D2DFF]/10"
+          // Compact dropzone — horizontal layout (icon + label inline)
+          // so the slot stays the same height as the Google-fonts
+          // combobox input. Same dashed white/15 surface as step 1
+          // (just shorter), so the design vocabulary stays consistent.
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 px-3 py-2 text-center transition-colors hover:border-white/30"
+          style={{ height: 44 }}
         >
-          <span className="material-symbols-outlined mb-2 text-[28px] text-[#7D2DFF]">font_download</span>
-          <span className="font-semibold text-white">{label}</span>
-          <span className="mt-1 text-xs text-muted">اختياري — Arial افتراضياً</span>
+          <span
+            className="material-symbols-outlined text-white/70"
+            style={{ fontSize: 18 }}
+          >
+            font_download
+          </span>
+          <span className="text-xs font-semibold text-white">{label}</span>
+          <span className="text-[10px] text-white/40">— WOFF / TTF / OTF</span>
         </button>
       )}
-      <p className={`${sampleSizeClass} text-white${family ? ` ${family}` : ""}`}>
+      <p className={`${sampleSizeClass} text-right text-white${family ? ` ${family}` : ""}`}>
         {sampleText}
       </p>
     </div>
   );
 }
 
+// Searchable Google-Fonts combobox.
+//
+// Input + chevron in a single field. Click the field (or the chevron)
+// to open a styled popup of all available families; type to filter the
+// list to matches. Selecting an item closes the popup and writes the
+// family back via `onSelect`. The popup keeps the same row styling as
+// the previous always-visible list (active row = gradient pill, each
+// row previews its own family on the trailing "Aa" chip).
+//
+// Native `<select>` was rejected because its OS popup doesn't honour
+// the glass chrome — this gives us full control over the dropdown
+// surface while still feeling like a standard searchable field.
 function GoogleFontSlot({
-  label,
   selected,
   sampleText,
   sampleSizeClass,
@@ -288,40 +347,151 @@ function GoogleFontSlot({
   sampleSizeClass: string;
   onSelect: (family: string | null) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Outside-click closes the popup. mousedown (not click) so the
+  // popup dismisses on focus-shift to another element, not after the
+  // bubble — keeps tab-out behaviour clean.
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+
+  const filtered = query.trim()
+    ? GOOGLE_FONTS.filter((font) =>
+        font.family.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : GOOGLE_FONTS;
+
+  const inputValue = open ? query : selected ?? "";
+  const showPlaceholder = !inputValue;
+
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 p-3">
-        <p className="mb-2 text-xs text-muted">{label} — اختر من Google Fonts</p>
-        <div className="max-h-[180px] space-y-1 overflow-y-auto pr-1">
-          {GOOGLE_FONTS.map((font) => {
-            const isActive = selected === font.family;
-            return (
-              <button
-                key={font.family}
-                type="button"
-                onClick={() => onSelect(isActive ? null : font.family)}
-                // Family name kept in the site default font so the list stays
-                // visually uniform; the live preview at the bottom is the
-                // single place where the selected face renders.
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? "bg-[#370BF4]/20 text-white"
-                    : "text-white hover:bg-white/5"
-                }`}
-              >
-                <span>{font.family}</span>
-                {font.arabic ? (
-                  <span className="text-[10px] text-[#9A94A8]">عربي + لاتيني</span>
-                ) : (
-                  <span className="text-[10px] text-[#9A94A8]">لاتيني</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+    <div ref={wrapperRef} className="relative space-y-3">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          placeholder={showPlaceholder ? "اكتب أو اختر خط Google..." : ""}
+          onFocus={() => {
+            setOpen(true);
+            setQuery("");
+          }}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            if (!open) setOpen(true);
+          }}
+          // Inline padding + height pin so the combobox matches the
+          // FontUploadSlot button at 44 px EXACTLY — switching between
+          // "رفع ملف" and "Google Fonts" produces zero card height
+          // change. Padding override also makes room for the chevron
+          // on the start edge (RTL → left).
+          className="input-dark text-right text-sm"
+          style={{ height: 44, padding: "0 16px 0 40px" }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((value) => !value);
+            if (!open) {
+              setQuery("");
+              inputRef.current?.focus();
+            }
+          }}
+          aria-label={open ? "إغلاق القائمة" : "فتح القائمة"}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 transition-colors hover:text-white"
+        >
+          <span
+            className={`material-symbols-outlined block transition-transform ${
+              open ? "rotate-180" : ""
+            }`}
+            style={{ fontSize: 18 }}
+          >
+            expand_more
+          </span>
+        </button>
       </div>
+      {open ? (
+        <div
+          className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 shadow-2xl backdrop-blur-glass"
+          // `top: 100%` would stack on the sample line; using `top: 44`
+          // (input height) anchors the popup directly under the field.
+          // 240 px max-h fits ~6 rows; the rest scrolls.
+          style={{
+            top: 44,
+            maxHeight: 240,
+            background: "rgba(15, 11, 30, 0.92)",
+            borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+          }}
+        >
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-white/40">لا توجد نتائج</p>
+          ) : (
+            filtered.map((font) => {
+              const isActive = selected === font.family;
+              return (
+                <button
+                  key={font.family}
+                  type="button"
+                  onClick={() => {
+                    onSelect(isActive ? null : font.family);
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                  // Active row uses the same vocabulary as the Pill
+                  // primitive: white-stroke + white text on the glass
+                  // surface (no purple gradient). Idle row is muted
+                  // text with a faint hover lift.
+                  className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    isActive
+                      ? "text-white"
+                      : "border-transparent text-white/70 hover:bg-white/5"
+                  }`}
+                  style={
+                    isActive
+                      ? {
+                          borderColor: "rgba(255, 255, 255, 1)",
+                          background:
+                            "rgba(255, 255, 255, var(--glass-opacity))",
+                        }
+                      : undefined
+                  }
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{font.family}</span>
+                    <span
+                      className={`text-[10px] ${isActive ? "text-white/80" : "text-white/40"}`}
+                    >
+                      {font.arabic ? "عربي + لاتيني" : "لاتيني"}
+                    </span>
+                  </span>
+                  <span
+                    className="text-base"
+                    style={{
+                      fontFamily: `"${font.family}", system-ui, sans-serif`,
+                    }}
+                  >
+                    Aa
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      ) : null}
       <p
-        className={`${sampleSizeClass} text-white`}
+        className={`${sampleSizeClass} text-right text-white`}
         style={selected ? { fontFamily: `"${selected}", system-ui, sans-serif` } : undefined}
       >
         {sampleText}
@@ -330,102 +500,9 @@ function GoogleFontSlot({
   );
 }
 
-function Pill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
-        active
-          ? "btn-gradient text-white"
-          : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// 6-button position picker: 3 top + 3 bottom, each button shows a directional
-// arrow (north_west, north, north_east, south_west, south, south_east). Used
-// for both the logo position and the persistent-overlay position.
-// `dir="ltr"` is intentional: it locks the grid so the visually-rightmost
-// button always maps to the *right* side of the canvas, regardless of the
-// page's RTL context. Without this, the array's first entry (top-left) ends
-// up on the visual right under RTL — which would silently flip the mapping.
-function PositionPicker({
-  value,
-  onChange,
-}: {
-  value: CornerPosition;
-  onChange: (next: CornerPosition) => void;
-}) {
-  return (
-    <div className="grid grid-cols-3 gap-2" dir="ltr">
-      {CORNER_OPTIONS.map((option) => {
-        const active = value === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            aria-label={option.label}
-            title={option.label}
-            className={`flex h-12 items-center justify-center rounded-xl transition-colors ${
-              active
-                ? "btn-gradient text-white"
-                : "border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 text-white hover:bg-white/5"
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px]">{option.icon}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Toggle({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-white">{label}</span>
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        role="switch"
-        aria-checked={value}
-        aria-label={label}
-        className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
-          value ? "tq-switch-on" : "bg-white/10"
-        }`}
-      >
-        {/* RTL: knob anchored to the right edge by default (OFF), slides to
-            the left edge when ON. */}
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            value ? "right-[22px]" : "right-0.5"
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
+// (Pill, PositionPicker, Toggle moved to `components/create/controls.tsx`
+// and are now imported above. The remaining inline component below —
+// BrandColorRow — is brand-page-specific and stays here.)
 
 function BrandColorRow({
   value,
@@ -440,41 +517,43 @@ function BrandColorRow({
   onChange: (next: string) => void;
   onRemove: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
+  // Swatch → opens the custom ColorPickerPopover (replaces the OS
+  // `<input type="color">` so the picker honours our glass chrome).
+  // Popover always centers on the swatch — `align` is omitted so
+  // the component falls back to its "center" default. Edge swatches
+  // may extend the popover past the card boundary; that's fine,
+  // overlapping siblings is normal popover behaviour.
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 p-3">
+    <div className="relative">
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
-        className="h-10 w-10 shrink-0 rounded-lg border border-[rgba(42,36,59,0.8)]"
+        onClick={() => setPickerOpen((v) => !v)}
+        className="block h-12 w-full rounded-xl border border-white/15 transition-shadow hover:shadow-lg"
         style={{ backgroundColor: value }}
         aria-label={`اللون ${index + 1}`}
       />
-      <input
-        ref={inputRef}
-        type="color"
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={!removable}
+        aria-label="إزالة اللون"
+        // Overlay × in the inline-start corner (RTL → top-right).
+        // White-on-black chip so it's visible on any swatch colour.
+        // Always rendered; disabled at MIN so the column doesn't
+        // jump when the user is at the floor.
+        className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white transition-opacity hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-0"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+          close
+        </span>
+      </button>
+      <ColorPickerPopover
+        open={pickerOpen}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="hidden"
+        onChange={onChange}
+        onClose={() => setPickerOpen(false)}
       />
-      <input
-        type="text"
-        value={value.toUpperCase()}
-        onChange={(event) => onChange(event.target.value)}
-        className="input-dark flex-1 font-mono text-sm"
-        spellCheck={false}
-      />
-      {removable ? (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label="إزالة اللون"
-          className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <span className="material-symbols-outlined text-base">close</span>
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -484,16 +563,37 @@ function BrandColorRow({
 // fires once per mount per call site.
 type StoredBrandShape = {
   colors?: unknown;
-  slideSize?: unknown;
-  slideCount?: { mode?: SlideCountMode; value?: number | null };
-  rules?: {
-    designStyle?: string | null;
-    fixTypos?: boolean;
-    pagination?: boolean;
-    persistent?:
-      | { text?: string; position?: PersistentPosition; exclude?: ("cover" | "closing")[] }
-      | null;
-  };
+  // Persisted font selections (heading + body) — written by the
+  // brand page on `handleNext`. Each slot mirrors what's sent to
+  // /api/projects: `name`, `storageUrl`, `url`, `family`. The
+  // uploaded File itself can't round-trip through sessionStorage,
+  // but everything else (Google family name, uploaded storageUrl,
+  // typed family) can — restoring them keeps the selectors populated
+  // when the user navigates back from a later step.
+  fonts?: {
+    heading?: {
+      name?: string | null;
+      storageUrl?: string | null;
+      url?: string | null;
+      family?: string | null;
+    } | null;
+    body?: {
+      name?: string | null;
+      storageUrl?: string | null;
+      url?: string | null;
+      family?: string | null;
+    } | null;
+  } | null;
+  logo?: {
+    name?: string;
+    storageUrl?: string;
+    previewDataUrl?: string | null;
+  } | null;
+  // Output-side fields (slideSize, slideCount, rules) used to live
+  // in this blob too; they moved to `taqreer:create:output` in the
+  // 4-step refactor (2026-05-18). Keep the legacy keys readable in
+  // case the user is mid-flow with old session data — `/create/output`
+  // migrates them on its own hydrate.
 };
 function readStoredBrand(): StoredBrandShape | null {
   if (typeof window === "undefined") return null;
@@ -512,16 +612,82 @@ export default function CreateBrandPage() {
   // ─── Right column state ─────────────────────────────────────────────────
   // Brand colors — 3 default slots, expandable up to 5. No background/text
   // color inputs; Claude picks the surface colors based on contrast.
-  // Lazy initializers restore from sessionStorage when the user comes back
-  // via the summary's "رجوع" button (no in-effect prop sync needed).
-  const [colors, setColors] = useState<string[]>(() => {
+  //
+  // Initial value MUST match server render exactly to avoid hydration
+  // mismatches — sessionStorage is client-only so the previous
+  // `useState(() => readStoredBrand()?.colors)` pattern silently
+  // changed value on the first client render. Default seed renders
+  // on the server; the `useLayoutEffect` below restores the user's
+  // saved colours before paint (no flash).
+  const [colors, setColors] = useState<string[]>(DEFAULT_COLORS);
+  // Restore colours + font selections from sessionStorage post-hydration.
+  // useLayoutEffect (not useEffect) so the swap happens BEFORE the browser
+  // paints — user never sees the default-palette / empty-font-selectors
+  // flash if they're returning from a later step with their picks already
+  // saved. The uploaded File itself can't be reconstructed (binary blobs
+  // don't round-trip through sessionStorage), so for slots that were in
+  // upload mode we restore the metadata (name + storageUrl + family) but
+  // leave `uploadFile: null` — the slot displays as "filled" via the
+  // stored name/url, and the user can re-pick only if they want to
+  // replace it.
+  useLayoutEffect(() => {
     const s = readStoredBrand();
-    if (s && Array.isArray(s.colors)) {
-      const valid = (s.colors as unknown[]).filter((c): c is string => typeof c === "string");
-      if (valid.length >= MIN_COLORS) return valid.slice(0, MAX_COLORS);
+    if (!s) return;
+    if (Array.isArray(s.colors)) {
+      const valid = (s.colors as unknown[]).filter(
+        (c): c is string => typeof c === "string",
+      );
+      if (valid.length >= MIN_COLORS) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setColors(valid.slice(0, MAX_COLORS));
+      }
     }
-    return DEFAULT_COLORS;
-  });
+    const restoreSlot = (
+      saved:
+        | { name?: string | null; storageUrl?: string | null; url?: string | null; family?: string | null }
+        | null
+        | undefined,
+    ): FontSlotState | null => {
+      if (!saved) return null;
+      // Google-family slot: `url` is set (Google CSS link) and
+      // `storageUrl` is null. Stored `name`/`family` matches the
+      // Google family.
+      if (saved.url && !saved.storageUrl) {
+        return {
+          mode: "google",
+          uploadFile: null,
+          uploadName: null,
+          uploadStorageUrl: null,
+          uploadFamily: "",
+          googleFamily: saved.family || saved.name || null,
+        };
+      }
+      // Upload slot: `storageUrl` is set (Supabase path), `name` is
+      // the original filename. The File blob is gone — slot still
+      // reads as filled via name + storageUrl.
+      if (saved.storageUrl) {
+        return {
+          mode: "upload",
+          uploadFile: null,
+          uploadName: saved.name ?? null,
+          uploadStorageUrl: saved.storageUrl,
+          uploadFamily: saved.family ?? "",
+          googleFamily: null,
+        };
+      }
+      return null;
+    };
+    const heading = restoreSlot(s.fonts?.heading);
+    if (heading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHeadingFontSlot(heading);
+    }
+    const body = restoreSlot(s.fonts?.body);
+    if (body) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBodyFontSlot(body);
+    }
+  }, []);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("manual");
   const [paletteScreenshot, setPaletteScreenshot] = useState<File | null>(null);
 
@@ -548,16 +714,18 @@ export default function CreateBrandPage() {
   const [logo, setLogo] = useState<File | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
-  const [logoPosition, setLogoPosition] = useState<LogoPosition>("top-right");
-  const [logoExcludeCover, setLogoExcludeCover] = useState(false);
-  const [logoExcludeClosing, setLogoExcludeClosing] = useState(false);
 
   // SVG-only logo policy (2026-05-15). Raster formats (PNG/JPG) are rejected
   // because we can't recolor them per slide for contrast — see context.md
   // Phase 9. Polychrome SVGs are accepted but can't be recolored either;
   // Claude is told in the prompt to design backgrounds compatible with
   // the logo's colors when it's not a monochrome SVG.
-  const acceptLogo = (next: File) => {
+  //
+  // Auto-save: also write the preview data URL to sessionStorage on
+  // pick, so the preview survives navigating to the dashboard before
+  // clicking Next. handleNext later reconstructs a File from the data
+  // URL when no fresh File is in state.
+  const acceptLogo = async (next: File) => {
     const isSvgMime = next.type === "image/svg+xml";
     const isSvgExt = next.name.toLowerCase().endsWith(".svg");
     if (!isSvgMime && !isSvgExt) {
@@ -566,44 +734,29 @@ export default function CreateBrandPage() {
     }
     setLogoError(null);
     setLogo(next);
+    // Best-effort persist — failure leaves state in-memory only,
+    // matching the pre-auto-save behaviour.
+    try {
+      const previewDataUrl = await readFileAsDataUrl(next);
+      if (typeof window !== "undefined") {
+        const raw = window.sessionStorage.getItem("taqreer:create:brand");
+        const blob = raw ? JSON.parse(raw) : {};
+        blob.logo = {
+          name: next.name,
+          previewDataUrl,
+          // storageUrl intentionally left empty — set on Next.
+          storageUrl: null,
+        };
+        window.sessionStorage.setItem(
+          "taqreer:create:brand",
+          JSON.stringify(blob),
+        );
+        notifyCreateStateChange();
+      }
+    } catch {
+      /* persistence is best-effort */
+    }
   };
-
-  // ─── Left column state ──────────────────────────────────────────────────
-  // Generation rules — moved here from /create/summary so the summary step
-  // is content-only. Tone removed (will live on /enhance later).
-  const [designStyle, setDesignStyle] = useState<string | null>(() => {
-    return readStoredBrand()?.rules?.designStyle ?? null;
-  });
-  const [fixTypos, setFixTypos] = useState<boolean>(() => {
-    return Boolean(readStoredBrand()?.rules?.fixTypos);
-  });
-  const [pagination, setPagination] = useState<boolean>(() => {
-    return readStoredBrand()?.rules?.pagination !== false;
-  });
-  const [persistentText, setPersistentText] = useState<string>(() => {
-    return readStoredBrand()?.rules?.persistent?.text ?? "";
-  });
-  const [persistentPosition, setPersistentPosition] = useState<PersistentPosition>(() => {
-    return readStoredBrand()?.rules?.persistent?.position ?? "top-right";
-  });
-  const [excludeCover, setExcludeCover] = useState<boolean>(() => {
-    return readStoredBrand()?.rules?.persistent?.exclude?.includes("cover") ?? false;
-  });
-  const [excludeClosing, setExcludeClosing] = useState<boolean>(() => {
-    return readStoredBrand()?.rules?.persistent?.exclude?.includes("closing") ?? false;
-  });
-  const [slideSize, setSlideSize] = useState<"16:9" | "9:16">(() => {
-    const ss = readStoredBrand()?.slideSize;
-    return ss === "9:16" ? "9:16" : "16:9";
-  });
-  const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>(() => {
-    const m = readStoredBrand()?.slideCount?.mode;
-    return m === "match" || m === "custom" ? m : "auto";
-  });
-  const [slideCountValue, setSlideCountValue] = useState<number>(() => {
-    const sc = readStoredBrand()?.slideCount;
-    return sc?.mode === "custom" && typeof sc.value === "number" ? sc.value : 8;
-  });
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -631,10 +784,39 @@ export default function CreateBrandPage() {
   // sees the logo on slides. `logo` (File) stays null because we don't
   // have the bytes; this holds the equivalent storage-side reference.
   const [loadedLogoMeta, setLoadedLogoMeta] = useState<{
-    storageUrl: string;
+    // `null` storageUrl = the user picked a logo but hasn't clicked
+    // Next yet (auto-save draft from `acceptLogo`). handleNext sees
+    // the missing storageUrl and reconstructs a File from
+    // previewDataUrl to do the actual storage upload at that point.
+    storageUrl: string | null;
     name: string;
     previewDataUrl: string | null;
   } | null>(null);
+
+  // Restore logo from sessionStorage post-hydration. Two paths:
+  //   1. Full save (storageUrl + previewDataUrl) — after a previous
+  //      Next click. handleNext can forward storageUrl directly.
+  //   2. Draft (previewDataUrl only) — user picked a logo via the
+  //      auto-save path and navigated away before clicking Next.
+  //      handleNext reconstructs a File from previewDataUrl and
+  //      uploads then.
+  // Either way the preview chip appears immediately — no flash of
+  // empty upload zone.
+  useLayoutEffect(() => {
+    const s = readStoredBrand();
+    if (s?.logo?.previewDataUrl || s?.logo?.storageUrl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoadedLogoMeta({
+        storageUrl: s.logo.storageUrl ?? null,
+        name: s.logo.name ?? "logo",
+        previewDataUrl: s.logo.previewDataUrl ?? null,
+      });
+      if (s.logo.previewDataUrl) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLogoPreview(s.logo.previewDataUrl);
+      }
+    }
+  }, []);
 
   // Constants + helpers hoisted above hydrateFromBrandKit so they're
   // accessible (the original declarations sat farther down the component
@@ -722,23 +904,35 @@ export default function CreateBrandPage() {
     const assetUrls = kit.assetUrls as { logo?: SavedLogo | null } | null;
     const savedLogo = assetUrls?.logo;
     if (savedLogo?.storageUrl) {
-      setLogoPreview(savedLogo.previewDataUrl || savedLogo.storageUrl);
+      // Prefer the signed displayUrl for the <img> preview; fall back
+      // through previewDataUrl (legacy kits saved with base64) to the
+      // raw storageUrl as a last resort (will 404 on private buckets
+      // — same broken-state as before this fix, no regression).
+      setLogoPreview(
+        savedLogo.displayUrl ||
+          savedLogo.previewDataUrl ||
+          savedLogo.storageUrl,
+      );
       setLoadedLogoMeta({
+        // Keep the PATH here so the brief submission can re-sign it.
         storageUrl: savedLogo.storageUrl,
         name: (savedLogo as { name?: string }).name ?? "logo",
         previewDataUrl: savedLogo.previewDataUrl ?? null,
       });
-      if (savedLogo.position) setLogoPosition(savedLogo.position);
-      if (Array.isArray(savedLogo.exclude)) {
-        setLogoExcludeCover(savedLogo.exclude.includes("cover"));
-        setLogoExcludeClosing(savedLogo.exclude.includes("closing"));
-      }
+      // Logo position + excludes now live on /create/output; the
+      // brand-page no longer reads or sets them.
     }
 
     // Compute the fingerprint over the values we just set and persist it
-    // as the saved snapshot. Has to be computed manually here (not via
+    // as the saved snapshot. Must be computed manually here (not via
     // brandFingerprint) because React state setters above are async and
     // brandFingerprint still reflects the pre-hydrate render.
+    //
+    // MUST mirror brandFingerprint's shape EXACTLY (line ~967 below) —
+    // any field present there must be present here, or the saved
+    // snapshot won't match the live fingerprint and the save button
+    // will stay "idle" right after hydration ("asks to save again"
+    // even though nothing changed).
     const headingName =
       nextHeading?.mode === "google"
         ? nextHeading.googleFamily
@@ -747,10 +941,16 @@ export default function CreateBrandPage() {
       nextBody?.mode === "google"
         ? nextBody.googleFamily
         : (nextBody?.uploadFamily || nextBody?.uploadName) ?? null;
+    const savedLogoForFingerprint = assetUrls?.logo ?? null;
+    // Brand-page fingerprint covers ONLY brand-side data now:
+    // colours, font names, and logo presence (by storageUrl). Logo
+    // position + excludes live on /create/output, so they don't
+    // affect whether the user has unsaved brand changes here.
     const fingerprint = JSON.stringify({
       colors: nextColors ?? colors,
       headingFont: headingName ?? fontName(headingFontSlot),
       bodyFont: bodyName ?? fontName(bodyFontSlot),
+      logo: savedLogoForFingerprint?.storageUrl ?? null,
     });
     try {
       sessionStorage.setItem(BRAND_SAVED_SNAPSHOT_KEY, fingerprint);
@@ -771,9 +971,7 @@ export default function CreateBrandPage() {
       router.replace("/create/content");
       return;
     }
-    queueMicrotask(() => {
-      setContent(JSON.parse(rawContent) as StoredContent);
-    });
+    setContent(JSON.parse(rawContent) as StoredContent);
 
     // Auto-load most recent BrandKit when sessionStorage brand is empty.
     // If the user came back here via "رجوع" from summary, the lazy
@@ -811,14 +1009,22 @@ export default function CreateBrandPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  // Live preview for logo
+  // Live preview for logo. When the user picks a fresh File via the
+  // upload zone we build an Object URL. When `logo` is null we only
+  // clear the preview if there's no `loadedLogoMeta` either — that
+  // way a session-restored logo (no File, only previewDataUrl) keeps
+  // its preview, but an explicit "Remove" (which nulls both `logo`
+  // and `loadedLogoMeta`) still wipes the chip.
+  // Live preview for a newly-picked logo File. We DON'T clear
+  // `logoPreview` when `logo` is null — explicit removal already
+  // clears it via the in-card "إزالة" button, and a session-restored
+  // logo (no File, only previewDataUrl) needs the preview to survive
+  // until the user removes it. The cleanup callback revokes the
+  // object URL when the File is replaced or unmounted.
   useEffect(() => {
-    if (!logo) {
-      queueMicrotask(() => setLogoPreview(""));
-      return;
-    }
+    if (!logo) return;
     const url = URL.createObjectURL(logo);
-    queueMicrotask(() => setLogoPreview(url));
+    setLogoPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [logo]);
 
@@ -942,16 +1148,20 @@ export default function CreateBrandPage() {
     else setBodyFontSlot(update);
   };
 
-  // Fingerprint over the SAVEABLE brand data — used to detect whether the
-  // current state matches the last-saved snapshot. Only includes what
-  // /api/brand-kits actually persists (colours + font names); changes to
-  // logo / position / etc. don't reset the saved state because they
-  // wouldn't have ended up in the BrandKit row anyway. `fontName` +
-  // `BRAND_SAVED_SNAPSHOT_KEY` are hoisted above hydrateFromBrandKit.
+  // Fingerprint over the SAVEABLE brand data — colours, font names,
+  // and logo identity (File or kit storageUrl). MUST stay in sync
+  // with the hydrate-fingerprint above (line ~628); see
+  // `feedback_*` memory if you ever see the Save button stuck idle
+  // after a clean hydration. Logo position + excludes intentionally
+  // omitted — those live on the new `/create/output` step.
+  const logoFingerprint = logo
+    ? `${logo.name}:${logo.size}:${logo.lastModified}`
+    : (loadedLogoMeta?.storageUrl ?? null);
   const brandFingerprint = JSON.stringify({
     colors,
     headingFont: fontName(headingFontSlot),
     bodyFont: fontName(bodyFontSlot),
+    logo: logoFingerprint,
   });
 
   // On mount: if a snapshot from a previous save matches the current
@@ -983,26 +1193,52 @@ export default function CreateBrandPage() {
   // save time so the kit holds storage URLs ready for the load flow to
   // rehydrate. The button morphs save → check via framer-motion; on
   // error we revert.
+  // Resolve the File object we should upload for the logo. Three cases:
+  //   1. Fresh File in state → use it directly.
+  //   2. Auto-save draft only (loadedLogoMeta with previewDataUrl,
+  //      no storageUrl) → reconstruct a File from the data URL.
+  //   3. Already-uploaded logo (storageUrl present) → no File needed;
+  //      caller falls back to `loadedLogoMeta` to forward the URL.
+  const resolveLogoFileForUpload = async (): Promise<File | null> => {
+    if (logo) return logo;
+    if (
+      loadedLogoMeta &&
+      !loadedLogoMeta.storageUrl &&
+      loadedLogoMeta.previewDataUrl
+    ) {
+      try {
+        return await dataUrlToFile(
+          loadedLogoMeta.previewDataUrl,
+          loadedLogoMeta.name || "logo.svg",
+        );
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
   const handleSaveAsBrand = async () => {
     if (saveBrandState !== "idle") return;
     setError("");
     setSaveBrandState("saving");
     try {
+      const logoFile = await resolveLogoFileForUpload();
       // Upload any pending File-typed assets so the kit holds permanent
       // URLs. Logo + per-slot uploaded fonts run in parallel. Each
       // upload is a no-op if the file is null. If a kit was previously
-      // loaded (no new File picked), `loadedLogoMeta` carries the
-      // existing storage URL so re-saving doesn't drop the logo.
+      // loaded with a real storageUrl, `loadedLogoMeta` carries it so
+      // re-saving doesn't drop the logo.
       const [logoAsset, headingFontAsset, bodyFontAsset, freshLogoPreview] =
         await Promise.all([
-          uploadAsset("brand-assets", "logos", logo),
+          uploadAsset("brand-assets", "logos", logoFile),
           headingFontSlot.mode === "upload"
             ? uploadAsset("brand-assets", "fonts", headingFontSlot.uploadFile)
             : Promise.resolve(null),
           bodyFontSlot.mode === "upload"
             ? uploadAsset("brand-assets", "fonts", bodyFontSlot.uploadFile)
             : Promise.resolve(null),
-          readFileAsDataUrl(logo),
+          readFileAsDataUrl(logoFile),
         ]);
       // Fall back to the loaded kit's logo metadata when the user didn't
       // pick a new file.
@@ -1041,11 +1277,13 @@ export default function CreateBrandPage() {
         };
       };
 
-      const logoExclude = [
-        logoExcludeCover ? "cover" : null,
-        logoExcludeClosing ? "closing" : null,
-      ].filter((value): value is "cover" | "closing" => value !== null);
-
+      // Logo placement + excludes used to be saved alongside the
+      // logo file here, but they're now owned by `/create/output`.
+      // The brand-kit row keeps `position` / `exclude` from the
+      // previous schema (so existing kits load correctly), it just
+      // doesn't receive new values from this page. The next time
+      // the user reaches `/create/output`, that page reads its own
+      // sessionStorage and persists position there.
       const res = await fetch("/api/brand-kits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1060,8 +1298,6 @@ export default function CreateBrandPage() {
                 name: effectiveLogo.name,
                 storageUrl: effectiveLogo.storageUrl,
                 previewDataUrl: effectiveLogo.previewDataUrl,
-                position: logoPosition,
-                exclude: logoExclude,
               }
             : null,
         }),
@@ -1088,6 +1324,7 @@ export default function CreateBrandPage() {
     setLoading(true);
 
     try {
+      const logoFile = await resolveLogoFileForUpload();
       const [paletteScreenshotAsset, headingFontAsset, bodyFontAsset, logoAsset, logoPreviewDataUrl] =
         await Promise.all([
           paletteMode === "screenshot"
@@ -1095,8 +1332,8 @@ export default function CreateBrandPage() {
             : Promise.resolve(null),
           uploadAsset("brand-assets", "fonts", headingFontSlot.uploadFile),
           uploadAsset("brand-assets", "fonts", bodyFontSlot.uploadFile),
-          uploadAsset("brand-assets", "logos", logo),
-          readFileAsDataUrl(logo),
+          uploadAsset("brand-assets", "logos", logoFile),
+          readFileAsDataUrl(logoFile),
         ]);
 
       // Resolve each font slot to the API-facing shape: { name, storageUrl,
@@ -1118,20 +1355,10 @@ export default function CreateBrandPage() {
         };
       };
 
-      const trimmedPersistent = persistentText.trim();
-      const exclude = [
-        excludeCover ? "cover" : null,
-        excludeClosing ? "closing" : null,
-      ].filter((value): value is "cover" | "closing" => value !== null);
-      const rules = {
-        designStyle,
-        fixTypos,
-        pagination,
-        persistent: trimmedPersistent
-          ? { text: trimmedPersistent, position: persistentPosition, exclude }
-          : null,
-      };
-
+      // Brand-page payload — colours, fonts, logo upload metadata.
+      // Output-side fields (slideSize, slideCount, rules, logo
+      // placement) write to `taqreer:create:output` from the next
+      // step, not from here.
       sessionStorage.setItem(
         "taqreer:create:brand",
         JSON.stringify({
@@ -1147,37 +1374,23 @@ export default function CreateBrandPage() {
                 name: logoAsset.name,
                 storageUrl: logoAsset.storageUrl,
                 previewDataUrl: logoPreviewDataUrl,
-                position: logoPosition,
-                exclude: [
-                  logoExcludeCover ? "cover" : null,
-                  logoExcludeClosing ? "closing" : null,
-                ].filter((value): value is "cover" | "closing" => value !== null),
               }
             : loadedLogoMeta
               ? {
                   // Brand-kit was auto-loaded; user didn't re-pick a file.
-                  // Forward the saved storage URL + metadata so Claude sees
-                  // the logo on slides.
+                  // Forward the saved storage URL + metadata so the
+                  // /create/output step can decide whether to show the
+                  // logo-placement card as enabled.
                   name: loadedLogoMeta.name,
                   storageUrl: loadedLogoMeta.storageUrl,
                   previewDataUrl: loadedLogoMeta.previewDataUrl,
-                  position: logoPosition,
-                  exclude: [
-                    logoExcludeCover ? "cover" : null,
-                    logoExcludeClosing ? "closing" : null,
-                  ].filter((value): value is "cover" | "closing" => value !== null),
                 }
               : null,
-          slideSize,
-          slideCount: {
-            mode: slideCountMode,
-            value: slideCountMode === "custom" ? slideCountValue : null,
-          },
-          rules,
         }),
       );
+      notifyCreateStateChange();
 
-      router.push("/create/summary");
+      router.push("/create/output");
     } catch (caughtError) {
       console.error("Create brand upload error:", caughtError);
       setError(
@@ -1191,183 +1404,61 @@ export default function CreateBrandPage() {
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <section dir="rtl" className="space-y-6">
-      <div>
-        <h1 className="font-headline-lg text-[36px] font-bold text-white">الهوية البصرية</h1>
-        <p className="mt-2 text-[#9A94A8]">
-          ألوان علامتك، خطوطها، شعار، وقواعد التوليد — كل ذلك قبل المراجعة النهائية
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* ─── LEFT COLUMN ─────────────────────────────────────────────── */}
-        <div className="space-y-6">
-          {/* Generation rules */}
-          <div className="glass-card rounded-xl p-6 space-y-6">
-            <h2 className="font-semibold text-white">قواعد التوليد</h2>
-
-            <div>
-              <p className="mb-2 text-sm text-white">نمط التصميم</p>
-              <div className="flex flex-wrap gap-2">
-                {DESIGN_STYLE_OPTIONS.map((option) => (
-                  <Pill
-                    key={option}
-                    active={designStyle === option}
-                    onClick={() => setDesignStyle(designStyle === option ? null : option)}
-                  >
-                    {option}
-                  </Pill>
-                ))}
-              </div>
-              {designStyle ? (
-                <p className="mt-2 text-xs text-muted">سيُصمَّم العرض بأسلوب «{designStyle}».</p>
-              ) : (
-                <p className="mt-2 text-xs text-muted">اتركها فارغة ليختار كلود الأسلوب المناسب.</p>
-              )}
-            </div>
-
-            <Toggle
-              label="تصحيح الأخطاء الإملائية والنحوية"
-              value={fixTypos}
-              onChange={setFixTypos}
-            />
-
-            <Toggle
-              label="ترقيم الشرائح (مثل: 1 / 10)"
-              value={pagination}
-              onChange={setPagination}
-            />
-
-            <div className="space-y-3">
-              <p className="text-sm text-white">عنصر ثابت على كل الشرائح</p>
-              <input
-                type="text"
-                value={persistentText}
-                onChange={(event) => setPersistentText(event.target.value)}
-                placeholder="مثل: التاريخ، الموقع الإلكتروني"
-                className="input-dark"
-              />
-              {mounted && persistentText.trim() ? (
-                <div className="space-y-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/30 p-4">
-                  <div>
-                    <p className="mb-2 text-xs text-muted">الموقع</p>
-                    <PositionPicker
-                      value={persistentPosition}
-                      onChange={setPersistentPosition}
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs text-muted">استثناء</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Pill
-                        active={excludeCover}
-                        onClick={() => setExcludeCover((current) => !current)}
-                      >
-                        صفحة الغلاف
-                      </Pill>
-                      <Pill
-                        active={excludeClosing}
-                        onClick={() => setExcludeClosing((current) => !current)}
-                      >
-                        صفحة الشكر
-                      </Pill>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Slide size */}
-          <div className="glass-card rounded-xl p-6 space-y-4">
-            <h2 className="font-semibold text-white">حجم الشريحة</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setSlideSize("16:9")}
-                className={`cursor-pointer rounded-xl p-4 text-right transition-colors ${selectedClass(slideSize === "16:9")}`}
+    <CreateShell
+      currentStep="brand"
+      title="إعداد الهوية البصرية"
+      subtitle="اختر الألوان والخطوط وارفع الشعار الخاص بك ليتناسب مع علامتك التجارية."
+    >
+      <div className="space-y-6">
+        {/* Row 1 — colours (start side) + fonts (end side). Row 2 —
+            logo full width. The brand page used to nest these inside
+            a single grid column, which made `lg:grid-cols-2` render
+            as one column because there was only one child. */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Brand colors — header pattern matches step 1 + step 3
+              (icon + title above a hairline separator). Inner body is
+              gap-driven instead of `space-y-*` so the layout follows
+              the same vocabulary as the other steps. */}
+          <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+            <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+              <span
+                className="material-symbols-outlined text-white"
+                style={{ fontSize: "18px" }}
               >
-                <span className="font-semibold text-white">16:9 — أفقي</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSlideSize("9:16")}
-                className={`cursor-pointer rounded-xl p-4 text-right transition-colors ${selectedClass(slideSize === "9:16")}`}
-              >
-                <span className="font-semibold text-white">9:16 — عمودي</span>
-              </button>
-            </div>
-          </div>
+                palette
+              </span>
+              <h2 className="text-sm font-semibold text-white">ألوان العلامة التجارية</h2>
+            </header>
+            <p className="text-xs text-muted">
+              من 1 إلى 5 ألوان. نختار الخلفية والنص تلقائياً.
+            </p>
 
-          {/* Slide count */}
-          <div className="glass-card rounded-xl p-6 space-y-4">
-            <h2 className="font-semibold text-white">عدد الشرائح</h2>
-            <div className="space-y-3">
-              {content?.type === "file" ? (
-                <button
-                  type="button"
-                  onClick={() => setSlideCountMode("match")}
-                  className={`w-full cursor-pointer rounded-xl p-3 text-right transition-colors ${selectedClass(slideCountMode === "match")}`}
-                >
-                  طابق عدد صفحات الملف المرفوع
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setSlideCountMode("auto")}
-                className={`w-full cursor-pointer rounded-xl p-3 text-right transition-colors ${selectedClass(slideCountMode === "auto")}`}
-              >
-                اتركها لنا — سنقرر بناءً على المحتوى
-              </button>
-              <button
-                type="button"
-                onClick={() => setSlideCountMode("custom")}
-                className={`w-full cursor-pointer rounded-xl p-3 text-right transition-colors ${selectedClass(slideCountMode === "custom")}`}
-              >
-                حدد عدداً
-              </button>
-              {slideCountMode === "custom" ? (
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={slideCountValue}
-                  onChange={(event) => setSlideCountValue(Number(event.target.value))}
-                  className="input-dark max-w-32"
-                />
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        {/* ─── RIGHT COLUMN ────────────────────────────────────────────── */}
-        <div className="space-y-6">
-          {/* Brand colors */}
-          <div className="glass-card rounded-xl p-6 space-y-5">
-            <div>
-              <h2 className="font-semibold text-white">ألوان العلامة التجارية</h2>
-              <p className="mt-1 text-xs text-muted">
-                ٣ ألوان على الأقل، حتى ٥. كلود يختار لون الخلفية ولون النص تلقائياً ليطابق ألوانك.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
+            {/* Palette mode chooser — same Pill primitive as the font
+                mode toggle below, so the two cards share one button
+                vocabulary instead of two parallel implementations. */}
+            <div className="flex flex-wrap gap-2">
+              <Pill
+                active={paletteMode === "manual"}
                 onClick={() => setPaletteMode("manual")}
-                className={`cursor-pointer rounded-xl p-3 text-right text-sm transition-colors ${selectedClass(paletteMode === "manual")}`}
               >
-                <span className="font-semibold text-white">اختيار يدوي</span>
-              </button>
-              <button
-                type="button"
+                اختيار يدوي
+              </Pill>
+              <Pill
+                active={paletteMode === "screenshot"}
                 onClick={() => setPaletteMode("screenshot")}
-                className={`cursor-pointer rounded-xl p-3 text-right text-sm transition-colors ${selectedClass(paletteMode === "screenshot")}`}
               >
-                <span className="font-semibold text-white">رفع لقطة شاشة</span>
-              </button>
+                رفع لقطة شاشة
+              </Pill>
             </div>
 
+            {/* Fixed-height mode slot so the colours card doesn't
+                shrink/expand when the user toggles between اختيار
+                يدوي (swatch grid) and رفع لقطة شاشة (taller dropzone).
+                Block layout (not flex) so child elements naturally
+                stretch to the full card width — the previous flex
+                wrapper was sizing the screenshot zone to content
+                width instead of card width. */}
+            <div className="w-full" style={{ minHeight: 116 }}>
             {paletteMode === "screenshot" ? (
               <CompactUploadZone
                 label="ارفع لقطة شاشة"
@@ -1376,7 +1467,10 @@ export default function CreateBrandPage() {
                 onSelect={setPaletteScreenshot}
               />
             ) : (
-              <div className="space-y-3">
+              // 3-column grid: at MAX_COLORS (5) the layout is 3+2
+              // = 2 rows. At MIN (1) → swatch + dashed add-tile sits
+              // on row 1 only, still bounded by the wrapper height.
+              <div className="grid grid-cols-3 gap-2">
                 {colors.map((color, index) => (
                   <BrandColorRow
                     key={index}
@@ -1391,173 +1485,198 @@ export default function CreateBrandPage() {
                   <button
                     type="button"
                     onClick={addColor}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#370BF4]/60 px-3 py-2 text-sm text-white transition-colors hover:bg-[#7D2DFF]/10"
+                    aria-label="إضافة لون"
+                    className="flex h-12 w-full items-center justify-center rounded-xl border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                   >
-                    <span className="material-symbols-outlined text-base">add</span>
-                    إضافة لون ({colors.length}/{MAX_COLORS})
+                    <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+                      add
+                    </span>
                   </button>
-                ) : (
-                  <p className="text-center text-xs text-muted">الحد الأقصى {MAX_COLORS} ألوان</p>
-                )}
+                ) : null}
               </div>
             )}
-          </div>
-
-          {/* Fonts */}
-          <div className="glass-card rounded-xl p-6 space-y-5">
-            <div>
-              <h2 className="font-semibold text-white">الخطوط</h2>
-              <p className="mt-1 text-xs text-muted">
-                ارفع خطوطك الخاصة أو اختر من Google Fonts. اتركها فارغة لاستخدام Arial.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              {/* Heading font */}
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-white">خط العناوين</p>
-                <div className="flex gap-2">
-                  <Pill
-                    active={headingFontSlot.mode === "upload"}
-                    onClick={() => setFontMode("heading", "upload")}
-                  >
-                    رفع ملف
-                  </Pill>
-                  <Pill
-                    active={headingFontSlot.mode === "google"}
-                    onClick={() => setFontMode("heading", "google")}
-                  >
-                    Google Fonts
-                  </Pill>
-                </div>
-                {headingFontSlot.mode === "upload" ? (
-                  <FontUploadSlot
-                    label="رفع خط العناوين"
-                    file={headingFontSlot.uploadFile}
-                    family={headingFontSlot.uploadFamily}
-                    sampleText="أبجد هوز"
-                    sampleSizeClass="text-2xl"
-                    onSelect={(file) => onUploadFont("heading", file)}
-                    onRemove={() => onRemoveUploadFont("heading")}
-                  />
-                ) : (
-                  <GoogleFontSlot
-                    label="خط العناوين"
-                    selected={headingFontSlot.googleFamily}
-                    sampleText="أبجد هوز"
-                    sampleSizeClass="text-2xl"
-                    onSelect={(family) => onSelectGoogleFont("heading", family)}
-                  />
-                )}
-              </div>
-
-              {/* Body font */}
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-white">خط النص</p>
-                <div className="flex gap-2">
-                  <Pill
-                    active={bodyFontSlot.mode === "upload"}
-                    onClick={() => setFontMode("body", "upload")}
-                  >
-                    رفع ملف
-                  </Pill>
-                  <Pill
-                    active={bodyFontSlot.mode === "google"}
-                    onClick={() => setFontMode("body", "google")}
-                  >
-                    Google Fonts
-                  </Pill>
-                </div>
-                {bodyFontSlot.mode === "upload" ? (
-                  <FontUploadSlot
-                    label="رفع خط النص"
-                    file={bodyFontSlot.uploadFile}
-                    family={bodyFontSlot.uploadFamily}
-                    sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
-                    sampleSizeClass="text-base"
-                    onSelect={(file) => onUploadFont("body", file)}
-                    onRemove={() => onRemoveUploadFont("body")}
-                  />
-                ) : (
-                  <GoogleFontSlot
-                    label="خط النص"
-                    selected={bodyFontSlot.googleFamily}
-                    sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
-                    sampleSizeClass="text-base"
-                    onSelect={(family) => onSelectGoogleFont("body", family)}
-                  />
-                )}
-              </div>
             </div>
           </div>
 
-          {/* Logo */}
-          <div className="glass-card rounded-xl p-6 space-y-4">
-            <h2 className="font-semibold text-white">الشعار</h2>
-            <p className="text-[12px] text-muted leading-relaxed">
-              صيغة SVG فقط. الشعارات بصيغة SVG تحتفظ بجودتها على أي حجم وتتيح
-              تغيير لون الشعار حسب لون الشريحة لضمان التباين.
+          {/* Logo card — promoted into row 1 next to colours so the
+              two essentials of the brand kit (palette + mark) sit
+              side-by-side. Fonts then claim a full-width row below,
+              giving heading + body slots enough room to breathe. */}
+          <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+            <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+              <span
+                className="material-symbols-outlined text-white"
+                style={{ fontSize: 18 }}
+              >
+                image
+              </span>
+              <h2 className="text-sm font-semibold text-white">الشعار</h2>
+            </header>
+            <p className="text-xs text-muted">
+              يُقبل SVG لإعادة تلوينه على كل شريحة.
             </p>
-            <CompactUploadZone
-              label="ارفع الشعار (SVG فقط)"
-              accept=".svg,image/svg+xml"
-              file={logo}
-              onSelect={acceptLogo}
-            />
+            {/* Upload zone OR preview chip — never both. Once a
+                logo is in place the dropzone is redundant; the user
+                removes via the × on the preview, which restores the
+                dropzone for re-upload. */}
+            {logo || loadedLogoMeta ? (
+              <div
+                className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                style={{
+                  background: "rgba(255, 255, 255, var(--glass-opacity))",
+                  borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+                }}
+              >
+                {logoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoPreview}
+                    alt="معاينة الشعار"
+                    className="max-h-[60px] max-w-32 object-contain"
+                  />
+                ) : (
+                  <span className="material-symbols-outlined text-white/60">image</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLogo(null);
+                    setLoadedLogoMeta(null);
+                    setLogoPreview("");
+                    // Clear the draft logo from sessionStorage too — the
+                    // accept path auto-saves into `taqreer:create:brand`,
+                    // so without this a refresh / nav-away-and-back would
+                    // resurrect the deleted logo. Best-effort: if storage
+                    // is blocked (private mode etc.) we still clear
+                    // in-memory state above.
+                    if (typeof window !== "undefined") {
+                      try {
+                        const raw = window.sessionStorage.getItem("taqreer:create:brand");
+                        if (raw) {
+                          const blob = JSON.parse(raw) as Record<string, unknown>;
+                          blob.logo = null;
+                          window.sessionStorage.setItem(
+                            "taqreer:create:brand",
+                            JSON.stringify(blob),
+                          );
+                          notifyCreateStateChange();
+                        }
+                      } catch {
+                        /* best effort — storage may be blocked */
+                      }
+                    }
+                  }}
+                  className="badge-purple flex items-center gap-1"
+                >
+                  <span className="text-base leading-none">×</span>
+                  إزالة
+                </button>
+              </div>
+            ) : (
+              <CompactUploadZone
+                label="ارفع الشعار (SVG فقط)"
+                accept=".svg,image/svg+xml"
+                file={logo}
+                onSelect={acceptLogo}
+              />
+            )}
             {logoError && (
               <p className="status-error text-[12px]">{logoError}</p>
             )}
-            {logo || loadedLogoMeta ? (
-              <>
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
-                  {logoPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={logoPreview}
-                      alt="معاينة الشعار"
-                      className="max-h-[60px] max-w-32 object-contain"
-                    />
-                  ) : (
-                    <span className="material-symbols-outlined text-muted">image</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLogo(null);
-                      setLoadedLogoMeta(null);
-                      setLogoPreview("");
-                    }}
-                    className="badge-purple flex items-center gap-1"
-                  >
-                    <span className="text-base leading-none">×</span>
-                    إزالة
-                  </button>
-                </div>
+          </div>
+        </div>
+        {/* /Row 1 — colours + logo. Row 2 — fonts full width below. */}
 
-                <div className="space-y-3">
-                  <p className="text-sm text-white">موقع الشعار</p>
-                  <PositionPicker value={logoPosition} onChange={setLogoPosition} />
-                </div>
+        {/* Fonts — full-width row so heading + body slots sit
+            comfortably side-by-side with room for the new dropzone
+            visuals + Google-fonts combobox. */}
+        <div className="glass-card flex flex-col gap-4 rounded-2xl p-5">
+          <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+            <span
+              className="material-symbols-outlined text-white"
+              style={{ fontSize: 18 }}
+            >
+              text_fields
+            </span>
+            <h2 className="text-sm font-semibold text-white">الخطوط</h2>
+          </header>
 
-                <div className="space-y-3">
-                  <p className="text-sm text-white">استثناء الشعار من</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Pill
-                      active={logoExcludeCover}
-                      onClick={() => setLogoExcludeCover((current) => !current)}
-                    >
-                      صفحة الغلاف
-                    </Pill>
-                    <Pill
-                      active={logoExcludeClosing}
-                      onClick={() => setLogoExcludeClosing((current) => !current)}
-                    >
-                      صفحة الشكر
-                    </Pill>
-                  </div>
-                </div>
-              </>
-            ) : null}
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {/* Heading font */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">خط العناوين</p>
+              <div className="flex gap-2">
+                <Pill
+                  active={headingFontSlot.mode === "upload"}
+                  onClick={() => setFontMode("heading", "upload")}
+                >
+                  رفع ملف
+                </Pill>
+                <Pill
+                  active={headingFontSlot.mode === "google"}
+                  onClick={() => setFontMode("heading", "google")}
+                >
+                  Google Fonts
+                </Pill>
+              </div>
+              {headingFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط العناوين"
+                  file={headingFontSlot.uploadFile}
+                  family={headingFontSlot.uploadFamily}
+                  sampleText="أبجد هوز"
+                  sampleSizeClass="text-2xl"
+                  onSelect={(file) => onUploadFont("heading", file)}
+                  onRemove={() => onRemoveUploadFont("heading")}
+                />
+              ) : (
+                <GoogleFontSlot
+                  label="خط العناوين"
+                  selected={headingFontSlot.googleFamily}
+                  sampleText="أبجد هوز"
+                  sampleSizeClass="text-2xl"
+                  onSelect={(family) => onSelectGoogleFont("heading", family)}
+                />
+              )}
+            </div>
+
+            {/* Body font */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">خط النص</p>
+              <div className="flex gap-2">
+                <Pill
+                  active={bodyFontSlot.mode === "upload"}
+                  onClick={() => setFontMode("body", "upload")}
+                >
+                  رفع ملف
+                </Pill>
+                <Pill
+                  active={bodyFontSlot.mode === "google"}
+                  onClick={() => setFontMode("body", "google")}
+                >
+                  Google Fonts
+                </Pill>
+              </div>
+              {bodyFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط النص"
+                  file={bodyFontSlot.uploadFile}
+                  family={bodyFontSlot.uploadFamily}
+                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleSizeClass="text-base"
+                  onSelect={(file) => onUploadFont("body", file)}
+                  onRemove={() => onRemoveUploadFont("body")}
+                />
+              ) : (
+                <GoogleFontSlot
+                  label="خط النص"
+                  selected={bodyFontSlot.googleFamily}
+                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleSizeClass="text-base"
+                  onSelect={(family) => onSelectGoogleFont("body", family)}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1565,9 +1684,17 @@ export default function CreateBrandPage() {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
       <div className="flex items-center justify-between">
-        <button className="btn-outline-dark px-6 py-3" onClick={() => router.back()}>
-          → رجوع
-        </button>
+        {/* Explicit route — `router.back()` would land on /create/output
+            when the user reached this page via the stepper from step 3,
+            which broke the linear "previous = one step earlier" mental
+            model. */}
+        <PillButton
+          variant="secondary"
+          onClick={() => router.push("/create/content")}
+          icon="arrow_forward"
+        >
+          السابق
+        </PillButton>
         <div className="flex items-center gap-3">
           {/* Save-as-brand — glass icon button. Save icon morphs to a
               check on success via a one-shot 360° rotation + cross-fade
@@ -1582,14 +1709,19 @@ export default function CreateBrandPage() {
                 ? "تم الحفظ كهوية بصرية"
                 : "حفظ كهوية بصرية"
             }
+            // Pill height + radius to match the PillButton secondary
+            // variant used by السابق / الخطوة التالية — keeps the
+            // bottom-bar visually one row of pills instead of one
+            // rounded-rect + two pills.
             style={{
               background: "rgba(255, 255, 255, var(--glass-opacity))",
               backdropFilter:
                 "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
               WebkitBackdropFilter:
                 "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+              borderRadius: 9999,
             }}
-            className={`group relative inline-flex h-12 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors ${
+            className={`group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
               saveBrandState === "saved"
                 ? "border-white/40 text-white cursor-default"
                 : saveBrandState === "saving"
@@ -1641,16 +1773,17 @@ export default function CreateBrandPage() {
               {saveBrandState === "saved" ? "محفوظ كهوية بصرية" : "حفظ كهوية بصرية"}
             </span>
           </button>
-          <button
-            className="btn-gradient inline-flex items-center gap-2 px-6 py-3 disabled:opacity-60"
+          <PillButton
+            variant="primary"
             onClick={handleNext}
             disabled={loading}
+            loading={loading}
+            icon="arrow_back"
           >
-            {loading ? <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" /> : null}
-            التالي ←
-          </button>
+            الخطوة التالية
+          </PillButton>
         </div>
       </div>
-    </section>
+    </CreateShell>
   );
 }

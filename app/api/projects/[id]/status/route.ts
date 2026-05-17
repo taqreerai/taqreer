@@ -30,7 +30,7 @@ function isProgress(value: unknown): value is Progress {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
@@ -43,6 +43,22 @@ export async function GET(
   }
 
   const { id } = await params;
+  // Optional ?versionId= — when provided, the poller wants the status of
+  // a SPECIFIC version (e.g. the partial-regen target). Without it, two
+  // close-together partial regens could let `take: 1` mask completion of
+  // the version the client is actually waiting on.
+  const targetVersionId = new URL(request.url).searchParams.get("versionId");
+  const versionsQuery = targetVersionId
+    ? {
+        where: { id: targetVersionId },
+        take: 1,
+        select: { id: true, status: true, slideJson: true },
+      }
+    : {
+        orderBy: { versionNumber: "desc" as const },
+        take: 1,
+        select: { id: true, status: true, slideJson: true },
+      };
   const project = await prisma.project.findFirst({
     where: {
       id,
@@ -54,15 +70,7 @@ export async function GET(
       status: true,
       presentation: {
         select: {
-          versions: {
-            orderBy: { versionNumber: "desc" },
-            take: 1,
-            select: {
-              id: true,
-              status: true,
-              slideJson: true,
-            },
-          },
+          versions: versionsQuery,
         },
       },
     },
@@ -73,6 +81,14 @@ export async function GET(
   }
 
   const latestVersion = project.presentation?.versions[0];
+  // When the caller pinned to a specific versionId but no row matches,
+  // return 404 — leaving the poller to spin forever with `versionId:
+  // null` is ambiguous (the apply-poller can't tell "version was
+  // never created" from "version not ready yet"). Failing fast lets
+  // the disconnect detector pick this up immediately.
+  if (targetVersionId && !latestVersion) {
+    return NextResponse.json({ error: "Version not found" }, { status: 404 });
+  }
   const slideJson = getSlideJson(latestVersion?.slideJson);
   const slideCount = Array.isArray(slideJson?.slides) ? slideJson.slides.length : 0;
   const inferredStatus =

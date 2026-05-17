@@ -43,13 +43,19 @@ const FontDefinition = z.object({
     .refine(
       (url) => {
         try {
-          return ALLOWED_FONT_HOSTS.has(new URL(url).hostname);
+          const u = new URL(url);
+          // Require HTTPS — `http://fonts.googleapis.com/...` would
+          // pass the host check but every modern browser blocks the
+          // mixed-content request on a secure page, silently falling
+          // back to system fonts.
+          if (u.protocol !== "https:") return false;
+          return ALLOWED_FONT_HOSTS.has(u.hostname);
         } catch {
           return false;
         }
       },
       {
-        message: `font URL host must be one of: ${Array.from(ALLOWED_FONT_HOSTS).join(", ")}`,
+        message: `font URL must be HTTPS and host must be one of: ${Array.from(ALLOWED_FONT_HOSTS).join(", ")}`,
       }
     )
     .optional(),
@@ -99,6 +105,27 @@ const Slide = z.object({
   html: z.string().min(1),
 });
 
+// Slide aspect ratio. 16:9 is the legacy default (landscape PPT, what we
+// shipped at). 9:16 is the vertical / mobile-first alternative the user
+// can pick on /create/brand. Authored at:
+//   16:9 → 1920×1080 px in the browser → 10″ × 5.625″ in PPT (16:9 wide)
+//   9:16 → 1080×1920 px in the browser → 5.625″ × 10″ in PPT (vertical)
+// dom-to-pptx accepts custom layout via { width, height } in inches.
+export const SLIDE_FORMATS = ["16:9", "9:16"] as const;
+export type SlideFormat = (typeof SLIDE_FORMATS)[number];
+
+// Canonical pixel dimensions Claude authors against for each format.
+// Same constants exported for the renderer, lightbox, and export
+// pipeline so there's one source of truth.
+export const SLIDE_DIMENSIONS = {
+  "16:9": { width: 1920, height: 1080 },
+  "9:16": { width: 1080, height: 1920 },
+} as const;
+
+export function dimensionsForFormat(format: SlideFormat | undefined) {
+  return SLIDE_DIMENSIONS[format ?? "16:9"];
+}
+
 export const SlideManifestSchema = z.object({
   version: z.literal("2.0"),
   presentationId: z.string().min(1),
@@ -108,6 +135,10 @@ export const SlideManifestSchema = z.object({
   title: z.string().trim().min(1).max(160),
   language: z.enum(["ar", "en"]),
   direction: Direction,
+  // Slide aspect ratio chosen by the user on /create/brand. Optional
+  // for backwards-compat with manifests written before this field
+  // existed — consumers fall back to "16:9" via `dimensionsForFormat`.
+  format: z.enum(SLIDE_FORMATS).optional(),
   theme: Theme,
   slides: z.array(Slide).min(1),
   // Streaming progress, written during generation and removed once final.
@@ -125,7 +156,20 @@ export const SlideManifestSchema = z.object({
       stage: z.string(),
       currentSlide: z.number(),
       estimatedTotal: z.number(),
-      genStartedAt: z.string().optional(),
+      // Validate the timestamp is parseable — a stray non-date string
+      // here would silently break elapsed-time arithmetic in the
+      // stuck-detection branch (Date.parse returns NaN; everything
+      // derived from it becomes NaN). `.refine` instead of
+      // `.datetime()` so we accept both `Date.now().toISOString()`
+      // shape and any other ISO-ish format `Date.parse` understands.
+      genStartedAt: z
+        .string()
+        .trim()
+        .min(1)
+        .refine((s) => !Number.isNaN(Date.parse(s)), {
+          message: "genStartedAt must be a parseable ISO timestamp",
+        })
+        .optional(),
     })
     .optional(),
 });
