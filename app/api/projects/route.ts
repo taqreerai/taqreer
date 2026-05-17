@@ -4,24 +4,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
-
-// The brand-assets bucket is private. Upload returns a storage *path* (e.g.
-// "userId/create/brand-assets/uuid-name.png"), which Claude / the renderer /
-// the PPTX exporter can't fetch directly. Sign it to a long-lived HTTPS URL
-// once at brief assembly so the manifest stores a fetchable src.
-async function signBrandAssetUrl(path: string): Promise<string | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  const admin = createSupabaseAdminClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  // 1 year. If we ever need permanent URLs, switch the bucket to public read.
-  const { data } = await admin.storage
-    .from("brand-assets")
-    .createSignedUrl(path, 60 * 60 * 24 * 365);
-  return data?.signedUrl ?? null;
-}
+import { signBrandAssetUrl } from "@/lib/storage/sign";
 
 // Fetch the logo SVG content via the admin storage client (bucket is private)
 // and return sanitised markup. Sanitisation here is a defence-in-depth pass —
@@ -191,16 +174,34 @@ export async function POST(request: Request) {
     // Also fill in font fallbacks — if the user didn't upload custom fonts,
     // Arial is the universal default (available on every OS, supports both
     // Arabic and Latin scripts).
+    // Brand page passes `url` for Google fonts (CSS link), `storageUrl`
+    // for uploaded font files, plus `family` (alias of `name`). Carry
+    // ALL of them through — earlier this only forwarded name + storageUrl,
+    // so Google fonts arrived at Claude as `{ name: "Playfair Display",
+    // storageUrl: null }` with no URL, forcing Claude to guess the
+    // Google CSS endpoint (and frequently miss).
     const incomingFonts = (payload.brand?.fonts ?? null) as
       | {
-          heading?: { name?: string | null; storageUrl?: string | null } | null;
-          body?: { name?: string | null; storageUrl?: string | null } | null;
+          heading?: {
+            name?: string | null;
+            storageUrl?: string | null;
+            url?: string | null;
+            family?: string | null;
+          } | null;
+          body?: {
+            name?: string | null;
+            storageUrl?: string | null;
+            url?: string | null;
+            family?: string | null;
+          } | null;
         }
       | null;
     const headingFontName = incomingFonts?.heading?.name?.trim() || "Arial";
-    const headingFontUrl = incomingFonts?.heading?.storageUrl || null;
+    const headingFontStorageUrl = incomingFonts?.heading?.storageUrl || null;
+    const headingFontUrl = incomingFonts?.heading?.url || null;
     const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
-    const bodyFontUrl = incomingFonts?.body?.storageUrl || null;
+    const bodyFontStorageUrl = incomingFonts?.body?.storageUrl || null;
+    const bodyFontUrl = incomingFonts?.body?.url || null;
     const logoPath = payload.brand?.logo?.storageUrl ?? null;
     // Fetch sign URL + SVG markup in parallel — both hit Supabase Storage so
     // pipelining saves a round trip. svgMarkup is the Option B addition:
@@ -218,8 +219,20 @@ export async function POST(request: Request) {
       ? {
           ...payload.brand,
           fonts: {
-            heading: { name: headingFontName, storageUrl: headingFontUrl },
-            body: { name: bodyFontName, storageUrl: bodyFontUrl },
+            // Carry `url` (Google CSS link) and `storageUrl` (uploaded
+            // file) BOTH through to the brief. The system prompt's
+            // OUTPUT schema asks Claude to emit `fontHeading.url` /
+            // `fontBody.url`; without `url` here Claude was guessing.
+            heading: {
+              name: headingFontName,
+              storageUrl: headingFontStorageUrl,
+              url: headingFontUrl,
+            },
+            body: {
+              name: bodyFontName,
+              storageUrl: bodyFontStorageUrl,
+              url: bodyFontUrl,
+            },
           },
           logo: payload.brand.logo
             ? {

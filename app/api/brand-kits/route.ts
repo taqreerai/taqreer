@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { signBrandAssetUrl } from "@/lib/storage/sign";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -118,5 +119,37 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ kits });
+  // The brand-assets bucket is private, so the stored `logo.storageUrl`
+  // is a bucket-relative PATH that won't load as an <img src>. Add a
+  // SEPARATE `displayUrl` field (1-year signed) for the brand page's
+  // preview, while keeping the original path so `/api/projects` (and
+  // its `readLogoSvgMarkup` helper) can still fetch the file from
+  // Supabase Storage server-side.
+  type Kit = (typeof kits)[number];
+  const signedKits = await Promise.all(
+    kits.map(async (kit: Kit) => {
+      const assetUrls = kit.assetUrls as
+        | { logo?: { storageUrl?: string | null } | null }
+        | null;
+      const logoPath = assetUrls?.logo?.storageUrl ?? null;
+      if (!logoPath) return kit;
+      const signed = await signBrandAssetUrl(logoPath);
+      if (!signed) return kit;
+      return {
+        ...kit,
+        assetUrls: {
+          ...(assetUrls ?? {}),
+          logo: {
+            ...(assetUrls?.logo ?? {}),
+            // Keep storageUrl as the PATH — the brief submission
+            // needs it raw to round-trip through signing again.
+            storageUrl: logoPath,
+            displayUrl: signed,
+          },
+        },
+      };
+    }),
+  );
+
+  return NextResponse.json({ kits: signedKits });
 }

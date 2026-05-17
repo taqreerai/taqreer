@@ -55,7 +55,11 @@ type SavedFontSlot = {
 };
 
 type SavedLogo = {
+  // Bucket-relative PATH (private bucket; not loadable as <img src>).
   storageUrl?: string | null;
+  // 1-year signed HTTPS URL added by /api/brand-kits GET for preview.
+  // The path stays in storageUrl so brief submission can re-sign it.
+  displayUrl?: string | null;
   previewDataUrl?: string | null;
   position?: CornerPosition;
   exclude?: ("cover" | "closing")[];
@@ -722,8 +726,17 @@ export default function CreateBrandPage() {
     const assetUrls = kit.assetUrls as { logo?: SavedLogo | null } | null;
     const savedLogo = assetUrls?.logo;
     if (savedLogo?.storageUrl) {
-      setLogoPreview(savedLogo.previewDataUrl || savedLogo.storageUrl);
+      // Prefer the signed displayUrl for the <img> preview; fall back
+      // through previewDataUrl (legacy kits saved with base64) to the
+      // raw storageUrl as a last resort (will 404 on private buckets
+      // — same broken-state as before this fix, no regression).
+      setLogoPreview(
+        savedLogo.displayUrl ||
+          savedLogo.previewDataUrl ||
+          savedLogo.storageUrl,
+      );
       setLoadedLogoMeta({
+        // Keep the PATH here so the brief submission can re-sign it.
         storageUrl: savedLogo.storageUrl,
         name: (savedLogo as { name?: string }).name ?? "logo",
         previewDataUrl: savedLogo.previewDataUrl ?? null,
@@ -736,9 +749,15 @@ export default function CreateBrandPage() {
     }
 
     // Compute the fingerprint over the values we just set and persist it
-    // as the saved snapshot. Has to be computed manually here (not via
+    // as the saved snapshot. Must be computed manually here (not via
     // brandFingerprint) because React state setters above are async and
     // brandFingerprint still reflects the pre-hydrate render.
+    //
+    // MUST mirror brandFingerprint's shape EXACTLY (line ~967 below) —
+    // any field present there must be present here, or the saved
+    // snapshot won't match the live fingerprint and the save button
+    // will stay "idle" right after hydration ("asks to save again"
+    // even though nothing changed).
     const headingName =
       nextHeading?.mode === "google"
         ? nextHeading.googleFamily
@@ -747,10 +766,19 @@ export default function CreateBrandPage() {
       nextBody?.mode === "google"
         ? nextBody.googleFamily
         : (nextBody?.uploadFamily || nextBody?.uploadName) ?? null;
+    const savedLogoForFingerprint = assetUrls?.logo ?? null;
     const fingerprint = JSON.stringify({
       colors: nextColors ?? colors,
       headingFont: headingName ?? fontName(headingFontSlot),
       bodyFont: bodyName ?? fontName(bodyFontSlot),
+      logo: savedLogoForFingerprint?.storageUrl ?? null,
+      logoPosition: savedLogoForFingerprint?.position ?? "top-right",
+      logoExcludeCover:
+        Array.isArray(savedLogoForFingerprint?.exclude) &&
+        savedLogoForFingerprint!.exclude!.includes("cover"),
+      logoExcludeClosing:
+        Array.isArray(savedLogoForFingerprint?.exclude) &&
+        savedLogoForFingerprint!.exclude!.includes("closing"),
     });
     try {
       sessionStorage.setItem(BRAND_SAVED_SNAPSHOT_KEY, fingerprint);

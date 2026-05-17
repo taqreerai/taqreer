@@ -50,10 +50,12 @@ DESIGN RULES — keep what already works
 - The active slide's existing HTML is your strongest style anchor. Match its font sizing scale, line-heights, padding rhythm, decorative SVG style. Don't drift to a different design vocabulary just because you're regenerating.
 - For Arabic: keep \`line-height ≥ 1.5\` on bold Arabic ≥ 24 px (export glyph height is taller). Cards with Arabic content use \`padding\` not fixed \`height\`. Don't use \`letter-spacing\` on Arabic.
 - Decorative graphics stay inline <svg>. Icons stay inline <svg> (not icon fonts).
+- **Icons: use Lucide** (https://lucide.dev/icons) — inline \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\` with the path data from lucide.dev. Material icons (https://fonts.google.com/icons) are an acceptable fallback. NEVER icon fonts.
 - Webfont URLs must be on \`fonts.googleapis.com\` / \`fonts.gstatic.com\`.
 
 DECORATIVE GRAPHICS — keep them relevant
-- If you add graphics to this slide, make them relevant to the slide's content or the overall theme of the deck.
+- **Every graphic must mean something.** Don't add generic blobs, random circles, or vague decorative shapes that don't connect to the slide's idea. If you can't name what the shape represents in one phrase, cut it.
+- Icons must match the concept on the card: a card about users gets a \`users\` icon, a security card gets a \`shield\` icon. Don't pick a random Lucide glyph because the card looks empty — pick one that names the idea.
 
 Return ONLY the new slide HTML now.`;
 

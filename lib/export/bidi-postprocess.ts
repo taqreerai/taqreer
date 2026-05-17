@@ -650,7 +650,56 @@ function injectBiDiMarkers(
     const firstPPr = firstP
       ? firstP.getElementsByTagNameNS(NS_A, "pPr")[0] ?? null
       : null;
-    const algn = firstPPr ? firstPPr.getAttribute("algn") : null;
+    let algn = firstPPr ? firstPPr.getAttribute("algn") : null;
+
+    // STYLED-BOX (pill) HORIZONTAL CENTER: a browser shrink-to-fits
+    // an inline-block pill to exactly text_width + padding so the
+    // text APPEARS centered. dom-to-pptx writes `algn="l"` for LTR
+    // pills and `algn="r"` for RTL pills (both inherited from the
+    // slide direction when `text-align` wasn't set on the element).
+    // PASS 3 then grows the shape by ~14 % slack to absorb glyph
+    // drift, but the text stays anchored to its original edge:
+    //   • LTR pill: shape grows right → text flush-left → empty room
+    //     on the right of the text.
+    //   • RTL pill: shape grows left  → text flush-right → empty
+    //     room on the left of the text.
+    // Either way the pill no longer reads as centered.
+    //
+    // Fix: for shapes that paint their own fill or border on the
+    // SAME element as the text (i.e. pills, not nested text inside
+    // a card with parent-only chrome), force `algn="ctr"` before the
+    // slack growth runs. The discriminator naturally excludes cards
+    // (their bg/border lives on the parent container; the inner text
+    // shape has no own fill/border).
+    //
+    // `algn="just"` is preserved (designer intent — though it's a
+    // no-op on single-line text anyway).
+    let _hasOwnFill = false;
+    let _hasOwnBorder = false;
+    for (let j = 0; j < spPr.children.length; j++) {
+      const c = spPr.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "solidFill" || c.localName === "gradFill") {
+        _hasOwnFill = true;
+      } else if (c.localName === "ln") {
+        const w = c.getAttribute("w") ?? "0";
+        if (w !== "0") _hasOwnBorder = true;
+      }
+    }
+    if (
+      (_hasOwnFill || _hasOwnBorder) &&
+      algn !== "ctr" &&
+      algn !== "just" &&
+      firstP
+    ) {
+      let pPrEl = firstP.getElementsByTagNameNS(NS_A, "pPr")[0] ?? null;
+      if (!pPrEl) {
+        pPrEl = doc.createElementNS(NS_A, "a:pPr");
+        firstP.insertBefore(pPrEl, firstP.firstChild);
+      }
+      pPrEl.setAttribute("algn", "ctr");
+      algn = "ctr";
+    }
 
     const desiredGrowth = Math.max(
       Math.round(oldCx * slack),

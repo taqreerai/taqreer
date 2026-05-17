@@ -41,8 +41,8 @@ You drift toward generic, on-distribution outputs. Every deck must feel custom-c
 
 TYPOGRAPHY
 - **Headers / display:** elegant editorial serifs (Playfair Display, Georgia, IBM Plex Serif). Treat headers as structural design elements, not decoration.
-- **Body / UI:** system stack (\`system-ui, -apple-system, sans-serif\`) for instant, clean rendering of supporting copy.
-- **Arabic:** name a Google Font that supports Arabic (Cairo, Tajawal, Almarai, IBM Plex Sans Arabic, Reem Kufi, Vazirmatn). Apply equivalent weight hierarchy.
+- **Body / UI:** for supporting copy when no Google Font is sourced from the brief, use a cross-platform stack that resolves on BOTH macOS and Windows: \`"Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif\` (Segoe UI ships on Windows, Helvetica Neue / Helvetica on macOS, Arial as universal fallback). Avoid \`system-ui\` / \`-apple-system\` as the LEAD fallback — they only resolve cleanly on Apple platforms and look subtly broken on Windows.
+- **Arabic:** name a Google Font that supports Arabic (Cairo, Tajawal, Almarai, IBM Plex Sans Arabic, Reem Kufi, Vazirmatn). Arabic fallback stack: \`"Segoe UI", Tahoma, Arial, sans-serif\` (Tahoma is the historical Windows Arabic-capable font; Segoe UI handles modern Windows; macOS uses its system Arabic stack via Arial). Apply the same weight hierarchy as Latin.
 - Avoid generic web-default sans (Inter, Roboto, default UI sans) as the primary type — they read as on-distribution.
 
 CONTENT-DRIVEN EXECUTION
@@ -78,15 +78,17 @@ AVOID — break in export or violate the contract
 
 GRAPHICS — inline SVG only
 - Decorative shapes that support the current slide's content, background patterns, icons, logos: inline \`<svg>\` with brand-token fills.
-- Google icons: copy the SVG path from https://fonts.google.com/icons into an \`<svg>\`. Size flexible; 16–32 px typical for cards. NO icon fonts (Material/FontAwesome) — they don't embed.
+- **Icons: use Lucide's stroke-based icon set** — https://lucide.dev/icons (open-source, 1000+ pictograms). Reproduce the icon as inline \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\` with the path data from lucide.dev. Inherit colour via \`stroke="currentColor"\` so a parent \`color\` controls the icon hue. 16–32 px typical inside cards; up to 48 px for hero accents. Every concept-bearing slide should ship at least one relevant icon (cards without icons read as underdesigned).
+- Material icons (https://fonts.google.com/icons) are an acceptable fallback when Lucide lacks a glyph, but prefer Lucide for visual consistency across the deck.
+- NO icon fonts (Material font, FontAwesome) — they don't embed in the export.
 - Alpha effects → inline \`<svg>\` \`<radialGradient>\` / \`<linearGradient>\` with \`stop-opacity\`. CSS rgba / conic / color-to-alpha don't round-trip.
 - Logos are always SVG. The brief carries the SVG markup pre-fetched — inline it directly and recolour via \`fill\` on the \`<svg>\` root per slide for contrast (USER RULES has the per-request specifics).
 
 GRAPHICS BALANCE — relevant, not filler
-- Graphics MUST be relevant to the slide's content or deck theme. No random shapes.
+- **Every graphic must mean something.** Skip generic blobs, random circles, vague "decorative shapes" that don't connect to the slide's idea. If you can't name what the shape represents in one phrase, cut it.
+- Icons must match the concept on the card: a stat card about users gets a \`users\` icon, a security card gets a \`shield\` icon, a speed card gets a \`zap\` icon. Don't pick a random Lucide glyph because the card looks empty — pick one that names the idea.
 - Mix sizes: icons in cards (16–32 px), illustrations on hero/section/closing (300–500 px).
-- Brutalist borders, overlapping background shapes, abstract geometric decorations — all fair game for anchoring composition.
-- Cards without icons look underdesigned. Reach for relevant iconography to fill empty space.
+- Brutalist borders, overlapping background shapes, abstract geometric decorations are fair game ONLY when they support the composition (anchor a corner, frame the headline, separate sections). No floating abstract elements that "fill space".
 - Soft ceiling ~16 SVG elements per illustration. Composition over quantity.
 
 FONT WEIGHT — technical export constraint
@@ -108,8 +110,17 @@ Pick an inset on slide 1 and reuse identically on EVERY slide. Scale the inset t
 \`\`\`
 Don't bypass the inset with \`position:absolute; left:0; right:0\` on the slide root. Cards inside the content layer span the full inset width.
 
-COLOUR CONTRAST — every text and shape must read against what's behind it
-Forbidden: text \`color\` matching its parent container's background; SVG fill matching the surface it sits on; gradient text where a stop equals the background; muted text within ~10 lightness points of background.
+COLOUR CONTRAST — non-negotiable, every text and shape must read against what's behind it
+For each text / icon / shape, before you write the colour, name the surface it lives on (slide background OR the immediate parent container's fill) and pick a colour that contrasts strongly with that surface. Target WCAG AA at minimum for body text (4.5:1) and AAA for headlines on top of decorative backgrounds (7:1).
+Forbidden — these break contrast:
+- Text \`color\` matching its container's background (e.g. dark-text on a same-tone dark card, light-text on a same-tone light card).
+- Brand-token text on a brand-token surface of the same value (\`color: var(--primary)\` on \`background: var(--primary)\`).
+- SVG fill / stroke matching the surface it sits on (transparent icons disappearing into the panel).
+- Gradient-text where a stop equals or is within ~10 lightness points of the background colour.
+- Muted text within ~10 lightness points of the background.
+- Pill / chip text where the pill background colour ≈ the pill text colour (use a contrasting fill or a strong-contrast text colour against the slide background).
+- Border colour that matches the background (border vanishes — pick an accent or a near-white/near-black hue).
+When in doubt, fall back to white (\`#FFFFFF\`) on dark surfaces and a near-black palette colour on light surfaces.
 
 LAYOUT GOTCHAS
 - **Headline + body in one container:** explicit \`margin-bottom\` or grid \`gap\`. Tight stacks overlap in export.
@@ -139,7 +150,11 @@ OUTPUT — JSON only, no prose, no markdown fences
     { "slideId": "<unique>", "role": "cover" | "section" | "content" | "stats" | "quote" | "image" | "closing", "html": "<div dir='rtl' style='...'>...</div>" }
   ]
 }
-Slide count: match the brief's slideCount if provided; otherwise adapt to content (sparse intro 5, deep doc 20+). Every \`slideId\` unique within the deck.`;
+Slide count: match the brief's slideCount if provided; otherwise adapt to content (sparse intro 5, deep doc 20+). Every \`slideId\` unique within the deck.
+
+FONT SOURCING — use what the user picked
+- When \`brief.brand.fonts.heading.url\` and/or \`brief.brand.fonts.body.url\` are present, COPY those URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and copy the matching \`brief.brand.fonts.heading.name\` / \`brief.brand.fonts.body.name\` into the \`name\` fields. Don't rewrite or rename — the user picked these on the brand page.
+- If a slot is missing from the brief, pick a sensible Google font yourself and emit a valid Google Fonts URL of the form \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@400;700&display=swap\`.`;
 
 type EnhanceData = {
   level?: "light" | "medium" | "radical";
