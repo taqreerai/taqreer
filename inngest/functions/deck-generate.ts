@@ -27,6 +27,7 @@ CANVAS
 - Emit slide body only — no <!DOCTYPE> / <html> / <head> / <body>. Inline <style> per slide is allowed.
 
 LANGUAGE & DIRECTION
+- When the deck content is Arabic, prefer to do your adaptive thinking in concise Arabic phrases. Short sentences are best — your thinking text is surfaced to the user as a live caption during generation, so it doubles as progress narration for them. English thinking is acceptable when it helps you reason; don't force Arabic at the cost of accuracy.
 - Set \`dir="rtl"\` or \`dir="ltr"\` on the slide root. The export pipeline handles all BiDi metadata downstream — do not insert U+200E/U+200F marks, use <bdi>, force text-align on RTL lists, or add inter-script spaces.
 - For text whose script differs from slide direction, set explicit \`dir\` on that element (e.g. \`<p dir="ltr">URL</p>\` in an RTL deck).
 - \`letter-spacing\` on Arabic-bearing elements is stripped at export (breaks contextual shaping). Don't set it.
@@ -182,57 +183,24 @@ function extractJson(text: string): string {
   return text.trim();
 }
 
-// Surfaces a short caption from Claude's thinking-snapshot text.
-//
-// Important: thinking blocks stream character-by-character. Mid-block
-// the snapshot can end in a fragment ("Tr", "For", "Confir") because
-// Claude is mid-word. Naive extraction surfaces those fragments to
-// the user as garbled captions.
-//
-// Rules to publish a caption:
-//   1. The snapshot must contain at least one sentence terminator
-//      (`.`, `!`, `?`, `؟`, or newline). No terminator = we're inside
-//      the very first sentence, return null (keep the previous one).
-//   2. The LAST sentence terminator marks the boundary of the most
-//      recent COMPLETE sentence. Take the sentence immediately before
-//      that terminator — that's guaranteed to be a full sentence, no
-//      partial trailing word.
-//   3. Final sentence must be ≥ 12 chars after trim (avoids "OK." /
-//      "Hmm." style single-token sentences).
-//
-// Length-capped at 120 chars with an ellipsis.
+// Surfaces a short caption from Claude's thinking-snapshot text. We
+// scan backwards for the last sentence terminator (`.`, `؟`, `!`, `\n`)
+// inside the final 240 chars, then trim. Length-capped at 120 chars
+// so the caption fits the DeckView slot without truncation.
 function extractLastSentence(snapshot: string): string | null {
   const trimmed = snapshot.trim();
   if (!trimmed) return null;
-  // Find the position of the last terminator. Everything UP TO it
-  // (inclusive) is finished prose; everything after is the in-progress
-  // sentence that we ignore.
-  const lastTerminatorIdx = Math.max(
-    trimmed.lastIndexOf("."),
-    trimmed.lastIndexOf("!"),
-    trimmed.lastIndexOf("?"),
-    trimmed.lastIndexOf("؟"),
-    trimmed.lastIndexOf("\n"),
-  );
-  if (lastTerminatorIdx < 0) return null;
-  // The finished portion ends at lastTerminatorIdx (inclusive). Look
-  // backwards from there for the previous terminator to find the
-  // start of the last COMPLETE sentence.
-  const finished = trimmed.slice(0, lastTerminatorIdx + 1);
-  const prevTerminator = Math.max(
-    finished.slice(0, -1).lastIndexOf("."),
-    finished.slice(0, -1).lastIndexOf("!"),
-    finished.slice(0, -1).lastIndexOf("?"),
-    finished.slice(0, -1).lastIndexOf("؟"),
-    finished.slice(0, -1).lastIndexOf("\n"),
-  );
-  const sentence = finished
-    .slice(prevTerminator + 1)
-    .replace(/^[.!?؟\n\s]+/, "")
-    .replace(/[\s]+$/, "")
-    .trim();
-  if (sentence.length < 12) return null;
-  return sentence.length > 120 ? `${sentence.slice(0, 117).trim()}…` : sentence;
+  // Look at the tail (last ~240 chars) — earlier text already shipped
+  // as a previous caption, no point re-surfacing it.
+  const tail = trimmed.slice(-240);
+  // Sentence terminators: ASCII `.`/`!`/`?`, Arabic `؟`, and newlines.
+  // Capture text AFTER the last terminator → the in-progress sentence.
+  const matches = tail.match(/[.!?؟\n][^.!?؟\n]*$/);
+  const candidate = (matches ? matches[0].replace(/^[.!?؟\n]+/, "") : tail).trim();
+  if (!candidate) return null;
+  // Hard length cap — long thinking sentences get truncated to first
+  // 120 chars + ellipsis so the caption stays one short line.
+  return candidate.length > 120 ? `${candidate.slice(0, 117).trim()}…` : candidate;
 }
 
 type CornerPosition =
@@ -536,15 +504,12 @@ export const deckGenerate = inngest.createFunction(
               cache_control: { type: "ephemeral" },
             },
           ],
-          // Dropped to "low" after observing that "medium" still
-          // kept Claude in the thinking phase for 10+ minutes on a
-          // 5-slide brief. The effort knob is soft guidance: at
-          // "low" Claude minimises thinking and skips it entirely
-          // for tasks where speed matters more than deep reasoning.
-          // Slide design fits that bucket — generation is largely
-          // pattern-output, not multi-step proof — so the thinking
-          // budget was over-spent vs. quality returned.
-          output_config: { effort: "low" },
+          // Dropped from "high" → "medium". "high" effort spends much
+          // more time on internal reasoning before producing output —
+          // for slide design that doesn't translate to better output
+          // proportionally, just slower turnaround. "medium" cuts a
+          // noticeable chunk of latency.
+          output_config: { effort: "medium" },
           messages: [{ role: "user", content: userMessage }],
         });
 
