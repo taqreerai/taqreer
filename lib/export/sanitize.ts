@@ -195,6 +195,12 @@ function rewriteStyleAttr(style: string): string {
 // `<style>` blocks intentionally NOT touched — Claude rarely emits them
 // and the regex-on-CSS-text risk (false positives in selectors / urls /
 // keyframe % values) outweighs the benefit at the volume we see.
+//
+// Opt-out: elements carrying `data-anchor` are skipped. Used by chrome
+// (logo, pagination) where the position is a physical corner the user
+// explicitly picked — those should stay anchored to the SAME visual
+// corner regardless of slide direction. The prompt tells Claude to
+// stamp `data-anchor` on those elements with physical CSS values.
 function rewritePhysicalToLogical(html: string): string {
   if (typeof window === "undefined") return html;
   try {
@@ -204,7 +210,7 @@ function rewritePhysicalToLogical(html: string): string {
     );
     const root = doc.body.firstElementChild;
     if (!root) return html;
-    const els = root.querySelectorAll("[style]");
+    const els = root.querySelectorAll("[style]:not([data-anchor]):not([data-anchor] *)");
     let changed = false;
     els.forEach((el) => {
       const original = el.getAttribute("style") ?? "";

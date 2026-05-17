@@ -237,11 +237,29 @@ function ruleLines(rules: Rules): string[] {
       ? `- Fix typos: correct spelling and grammar errors in the source content silently while preserving meaning.`
       : `- Preserve user text verbatim: do NOT auto-correct spelling or grammar — keep the source content as-written.`,
   );
-  lines.push(
-    rules.pagination
-      ? `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"), positioned as part of the locked chrome (typically bottom-left or bottom-right corner). DO NOT emit additional pagination strings like "الصفحة 02" or "صفحة 02 — العنوان" or "PAGE 02 — TITLE" elsewhere on the slide; one numeric indicator is the entire pagination. Use Latin digits + slash (e.g. "02 / 07") even in an Arabic deck so the indicator reads left-to-right.`
-      : `- Pagination: DISABLED. Do NOT emit any page-number text element on any slide — no "N / Total", no "الصفحة 02", no "PAGE 02 — title". The user opted out of pagination entirely.`,
-  );
+  if (rules.pagination) {
+    const logoBrief = (event.brief as { brand?: { logo?: { position?: CornerPosition } | null } } | null)?.brand?.logo ?? null;
+    const logoPos = logoBrief?.position ?? null;
+    // Pagination goes on the OPPOSITE bottom corner from the logo.
+    // If the user picked a bottom corner for the logo, force the
+    // opposite. Otherwise default to bottom-left.
+    const paginationCorner: "bottom-left" | "bottom-right" =
+      logoPos === "bottom-right" ? "bottom-left" :
+      logoPos === "bottom-left" ? "bottom-right" :
+      "bottom-left";
+    const paginationCss = paginationCorner === "bottom-right"
+      ? "position:absolute; right:80px; bottom:38px;"
+      : "position:absolute; left:80px; bottom:38px;";
+    lines.push(
+      `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"). Use Latin digits + slash (e.g. "02 / 07") even in an Arabic deck so the indicator reads left-to-right.`,
+      `- Pagination anchor (chrome — keeps the same VISUAL corner regardless of slide direction): wrap the page number in an element that carries BOTH a \`data-anchor\` attribute AND \`dir="ltr"\`, with this EXACT inline style: \`${paginationCss}\`. Example: \`<div data-anchor dir="ltr" style="${paginationCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;font-weight:700;">02 / 07</div>\`. The \`data-anchor\` flag tells the renderer to leave these physical \`right:\` / \`left:\` values untouched (chrome stays put across LTR/RTL); without it the renderer mirrors physical L/R props into logical ones, which would flip chrome to the wrong corner.`,
+      `- Do NOT emit additional pagination strings like "الصفحة 02" or "صفحة 02 — العنوان" or "PAGE 02 — TITLE" elsewhere on the slide; one numeric indicator is the entire pagination.`,
+    );
+  } else {
+    lines.push(
+      `- Pagination: DISABLED. Do NOT emit any page-number text element on any slide — no "N / Total", no "الصفحة 02", no "PAGE 02 — title". The user opted out of pagination entirely.`,
+    );
+  }
   if (rules.persistent && rules.persistent.text.trim()) {
     const excludeCover = rules.persistent.exclude.includes("cover");
     const excludeClosing = rules.persistent.exclude.includes("closing");
@@ -343,6 +361,18 @@ function buildUserMessage(event: DeckGenerateEvent) {
         ? "every slide"
         : `every slide except ${scopeParts.join(" and ")}`;
     const logoSrc = logo.url ?? logo.storageUrl;
+    // Exact physical CSS for the user's chosen corner. We give Claude
+    // the literal string so he doesn't have to interpret "top-right"
+    // through RTL/LTR mental gymnastics — which is what was producing
+    // the wrong-corner placement before this fix.
+    const cornerCss = (() => {
+      const vertical = pos.startsWith("top") ? "top:80px" : "bottom:80px";
+      if (pos.endsWith("-center")) {
+        return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
+      }
+      const side = pos.endsWith("-left") ? "left" : "right";
+      return `position:absolute; ${side}:80px; ${vertical};`;
+    })();
     if (logo.svgMarkup) {
       // Inline-markup path: brief carries the SVG bytes server-side
       // (fetched by readLogoSvgMarkup). Claude inlines the markup directly
@@ -350,7 +380,9 @@ function buildUserMessage(event: DeckGenerateEvent) {
       // data-fill custom attributes, no runtime fetch round-trip.
       lines.push(
         ``,
-        `Brand logo — inline the SVG markup BELOW directly on every slide where it appears (${scope}). Place it in the ${pos}; same position + size every time (chrome-lock). Box ~120×40 px, always preserve aspect ratio.`,
+        `Brand logo — inline the SVG markup BELOW directly on every slide where it appears (${scope}). Box ~120×40 px, always preserve aspect ratio.`,
+        ``,
+        `Position (chrome-lock — same on EVERY slide): wrap the inlined <svg> in a positioned element that carries the \`data-anchor\` attribute AND this EXACT inline style: \`${cornerCss}\`. Example: \`<div data-anchor style="${cornerCss}width:120px;"><svg ...>...inlined markup...</svg></div>\`. The \`data-anchor\` flag tells the renderer to leave these physical \`right:\` / \`left:\` / \`top:\` / \`bottom:\` values untouched — chrome stays in the user's chosen visual corner regardless of slide direction. Without it the renderer mirrors physical L/R into logical ones and the logo flips to the wrong corner.`,
         ``,
         `Recolour per slide by setting \`fill="#hex"\` on the inlined <svg> root:`,
         `  - Dark slide background → \`fill="#FFFFFF"\` (or a near-white hex).`,
@@ -377,8 +409,8 @@ function buildUserMessage(event: DeckGenerateEvent) {
         ``,
         `Brand logo (always SVG — raster blocked at upload). SVG markup unavailable on this run; use <img src> as a fallback:`,
         `- Source: ${logoSrc}`,
-        `- Place it in the ${pos} of ${scope}. Same position + size on every slide where it appears (chrome-lock). Box ~ 120×40 px, \`object-fit: contain\`.`,
-        `- Per-slide recolouring is not available on this generation; design backgrounds the logo reads cleanly against.`,
+        `- Position chrome (${scope}): wrap the <img> in an element with \`data-anchor\` and EXACT style \`${cornerCss}\`. Example: \`<div data-anchor style="${cornerCss}width:120px;"><img src="${logoSrc}" style="width:100%;height:auto;object-fit:contain;" alt=""/></div>\`.`,
+        `- Box ~ 120×40 px, \`object-fit: contain\`. Per-slide recolouring is not available on this generation; design backgrounds the logo reads cleanly against.`,
       );
     }
   }
