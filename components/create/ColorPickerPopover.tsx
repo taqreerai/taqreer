@@ -162,6 +162,17 @@ export function ColorPickerPopover({
   // Pointer events (not touch + mouse separately) so a single
   // handler covers mouse + trackpad + touchscreen.
 
+  // We track HSV in a ref alongside React state so the drag handlers
+  // can read the freshest hue (or s/v) without going through the
+  // updater function. Side effects (onChange to parent, setHexInput)
+  // MUST live outside `setHsv`'s updater — React 19 flags setState
+  // calls inside an updater because the updater is supposed to be
+  // pure and may run twice in StrictMode.
+  const hsvRef = useRef(hsv);
+  useEffect(() => {
+    hsvRef.current = hsv;
+  }, [hsv]);
+
   const dragSv = (event: React.PointerEvent) => {
     event.preventDefault();
     const rect = svRef.current?.getBoundingClientRect();
@@ -171,13 +182,13 @@ export function ColorPickerPopover({
       const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
       const s = x / rect.width;
       const v = 1 - y / rect.height;
-      setHsv((prev) => {
-        const next = { ...prev, s, v };
-        const hex = hsvToHex(next.h, s, v);
-        setHexInput(hex);
-        onChange(hex);
-        return next;
-      });
+      const h = hsvRef.current.h;
+      const next = { h, s, v };
+      const hex = hsvToHex(h, s, v);
+      hsvRef.current = next;
+      setHsv(next);
+      setHexInput(hex);
+      onChange(hex);
     };
     apply(event.clientX, event.clientY);
     const onMove = (moveEvent: PointerEvent) =>
@@ -197,13 +208,13 @@ export function ColorPickerPopover({
     const apply = (clientX: number) => {
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
       const h = (x / rect.width) * 360;
-      setHsv((prev) => {
-        const next = { ...prev, h };
-        const hex = hsvToHex(h, next.s, next.v);
-        setHexInput(hex);
-        onChange(hex);
-        return next;
-      });
+      const { s, v } = hsvRef.current;
+      const next = { h, s, v };
+      const hex = hsvToHex(h, s, v);
+      hsvRef.current = next;
+      setHsv(next);
+      setHexInput(hex);
+      onChange(hex);
     };
     apply(event.clientX);
     const onMove = (moveEvent: PointerEvent) => apply(moveEvent.clientX);
