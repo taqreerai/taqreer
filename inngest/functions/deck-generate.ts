@@ -117,15 +117,16 @@ ARABIC TYPOGRAPHY — export drift
 - Cards holding Arabic need real padding (32–48 px), especially padding-bottom. NEVER set fixed \`height\` on a card whose content includes Arabic — use \`min-height\`.
 - Arabic body text with tashkeel (ـَـِـُّـ): bump line-height to ≥ 1.6 and add ≥ 20 px \`margin-bottom\`. Does NOT apply to chrome elements (pills, kickers, pagination) — those stay at \`line-height: 1\` with their own padding.
 
-SLIDE MARGINS — two-layer pattern
-Pick an inset on slide 1 and reuse identically on EVERY slide. Scale the inset to the canvas: ~80–120 px on a 1920-wide canvas, ~50–80 px on a 1080-wide vertical canvas.
+SLIDE MARGINS — two-layer pattern with reserved footer strip
+Pick top/side insets on slide 1 and reuse identically on EVERY slide. Scale to the canvas: ~80–120 px on a 1920-wide canvas, ~50–80 px on a 1080-wide vertical canvas. The BOTTOM inset is fixed at 140 px regardless — this reserves the chrome footer strip where logo / pagination / persistent-text live. Body content (text, charts, cards, illustrations) MUST NOT extend into the bottom 140 px of the canvas.
 \`\`\`
 <div dir="rtl" style="position:relative; width:<W>px; height:<H>px; background:var(--brand-bg); overflow:hidden;">
   <div style="position:absolute; inset:0; pointer-events:none;"><!-- background SVGs / or solid --></div>
-  <div style="position:absolute; inset:<N>px;"><!-- all content lives here --></div>
+  <div style="position:absolute; top:<N>px; left:<N>px; right:<N>px; bottom:140px;"><!-- all content lives here --></div>
+  <!-- chrome (logo / pagination / persistent text) sit on top of the slide root with their own `position:absolute` per USER RULES. Body content stops above this 140 px footer strip. -->
 </div>
 \`\`\`
-Don't bypass the inset with \`position:absolute; left:0; right:0\` on the slide root. Cards inside the content layer span the full inset width.
+Don't bypass with \`position:absolute; left:0; right:0; bottom:0\` on the slide root or on a "full bleed" wrapper — bottom must always land at or above the 140 px footer band so chrome doesn't overlap the slide's body.
 
 COLOUR CONTRAST — non-negotiable, every text and shape must read against what's behind it
 For each text / icon / shape, before you write the colour, name the surface it lives on (slide background OR the immediate parent container's fill) and pick a colour that contrasts strongly with that surface. Target WCAG AA at minimum for body text (4.5:1) and AAA for headlines on top of decorative backgrounds (7:1).
@@ -147,7 +148,7 @@ LAYOUT GOTCHAS
 CHROME CONSISTENCY
 - Decide chrome on slide 1 (headline / kicker / pagination / brand mark) and reuse identically on every content slide. Cover (\`role: "cover"\`) and closing (\`role: "closing"\`) may break chrome for hero composition.
 - Chrome stays INSIDE the canvas — no negative top/right/bottom/left.
-- Reserve ≥ 40–60 px between body content and footer chrome.
+- The full 140 px bottom band is the chrome zone (see SLIDE MARGINS above). Body content stops above it.
 
 OUTPUT — JSON only, no prose, no markdown fences
 {
@@ -268,14 +269,18 @@ type Rules = {
   } | null;
 } | null;
 
-// Build physical CSS for a corner. `verticalPx` lets pagination use a
-// slightly higher inset (38 px) than logo / persistent text (80 px)
-// so the page number sits below the line of body content but above
-// the very edge of the canvas.
-function cornerToCss(corner: CornerPosition, verticalPx = 80): string {
-  const vertical = corner.startsWith("top")
-    ? `top:${verticalPx}px`
-    : `bottom:${verticalPx}px`;
+// Build physical CSS for a chrome corner. ALL chrome elements
+// (logo, persistent overlay, pagination) share the same 40-px
+// distance from the canvas edge so they sit on a single horizontal
+// baseline when placed at bottom corners (or top corners). Earlier
+// runs had logo/persistent at 80 px and pagination at 38 px, which
+// produced an L-shaped layout where pagination sat ~42 px below the
+// other two chrome lines. 40 px on every chrome element fixes that.
+//
+// The horizontal inset stays at 80 px so left/right-aligned chrome
+// elements don't crowd the canvas edge.
+function cornerToCss(corner: CornerPosition): string {
+  const vertical = corner.startsWith("top") ? "top:40px" : "bottom:40px";
   if (corner.endsWith("-center")) {
     return `position:absolute; left:50%; ${vertical}; transform:translateX(-50%);`;
   }
@@ -353,7 +358,7 @@ function ruleLines(rules: Rules, logoPos: CornerPosition | null): string[] {
 
   if (rules.pagination) {
     const paginationCorner = pickPaginationCorner(occupied);
-    const paginationCss = cornerToCss(paginationCorner, 38);
+    const paginationCss = cornerToCss(paginationCorner);
     const reservedDesc =
       Array.from(occupied)
         .map((c) => `- ${c} (chrome)`)
