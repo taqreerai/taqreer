@@ -182,8 +182,12 @@ export function DeckView({
   // Stuck-detection state. We track when the generating state started and when
   // progress.currentSlide last advanced. Two thresholds:
   //   - SLOW (6 min total)              → soft "taking longer than usual" hint
-  //   - STUCK (12 min total OR 3 min    → action banner with a retry button
-  //     since slide last advanced)
+  //   - STUCK (18 min total AND 10 min  → bell notification with a retry CTA
+  //     since slide/stage last advanced)
+  // BOTH stuck conditions must be true — a long quiet window alone or a long
+  // total alone is not enough confidence; many legitimate slow phases sit
+  // silent for several minutes. Two-agree gate avoids wasting the user's
+  // tokens on a retry that wasn't actually needed.
   // `nowTick` increments every 10 s so the derived elapsed / stale times
   // recompute even when the polling effect doesn't fire (e.g. progress stops
   // changing). All times are wall-clock ms — `useState(() => Date.now())` so
@@ -475,16 +479,25 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
-  // Stuck thresholds. SLOW just nudges copy; STUCK surfaces a retry CTA.
+  // Stuck thresholds. SLOW just nudges copy; STUCK pushes a bell
+  // notification with a retry CTA. Tightened 2026-05-17 — the old
+  // 3-min stale threshold was false-positive-prone (validating /
+  // saving phases can sit silent that long), pushing a "generation
+  // suspended" alert while the run was still alive. Now we require
+  // BOTH conditions: a long total elapsed AND a long quiet window,
+  // so the alert only fires when both signals agree the run is
+  // genuinely dead — no more spurious notifications that waste the
+  // user's tokens on an unnecessary retry.
   const SLOW_WARN_MS = 6 * 60 * 1000;
-  const STUCK_TOTAL_MS = 12 * 60 * 1000;
-  const STUCK_STALE_MS = 3 * 60 * 1000;
+  const STUCK_TOTAL_MS = 18 * 60 * 1000;
+  const STUCK_STALE_MS = 10 * 60 * 1000;
   const elapsedMs = genStartedAt ? nowTick - genStartedAt : 0;
   const staleMs = lastProgressAt ? nowTick - lastProgressAt : 0;
   const isStuck =
     status === "generating" &&
     !!genStartedAt &&
-    (elapsedMs > STUCK_TOTAL_MS || staleMs > STUCK_STALE_MS);
+    elapsedMs > STUCK_TOTAL_MS &&
+    staleMs > STUCK_STALE_MS;
   const isSlow =
     status === "generating" &&
     !!genStartedAt &&
