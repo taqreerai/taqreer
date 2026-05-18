@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { isQuality, type Quality } from "@/lib/types/quality";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -147,6 +148,23 @@ export async function POST(
   const { promoted, newVersion } = result;
   const targetSlideIds = Array.from(new Set(promoted.map((c) => c.slideId)));
 
+  // Look up the original deck's quality preset from the most recent
+  // successful generation job for this project. Forwarded to the
+  // partial-regen function so the single-slide redesign uses the SAME
+  // model + thinking the user picked when generating — without it
+  // every regen burned Opus tier regardless of the user's fast/medium
+  // choice. Falls through to `medium` (paramsForQuality default) when
+  // no successful job exists or the field is missing on older jobs.
+  const lastJob = await prisma.job.findFirst({
+    where: { projectId: project.id, type: "deck.generate", status: "succeeded" },
+    orderBy: { createdAt: "desc" },
+    select: { inputJson: true },
+  });
+  const lastInput = (lastJob?.inputJson ?? null) as { quality?: unknown } | null;
+  const originalQuality: Quality | null = isQuality(lastInput?.quality)
+    ? lastInput.quality
+    : null;
+
   try {
     await sendInngestEventWithRetry({
       name: "deck.regenerate.partial.requested",
@@ -161,6 +179,7 @@ export async function POST(
           content: c.content,
           boundsJson: c.boundsJson,
         })),
+        quality: originalQuality,
       },
     });
   } catch (error) {

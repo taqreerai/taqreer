@@ -12,7 +12,14 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { SlideManifestSchema, type SlideManifest } from "@/lib/schema/slide";
+import {
+  SlideManifestSchema,
+  SlideSchema,
+  ThemeSchema,
+  type SlideManifest,
+  type SlideType,
+  type ThemeType,
+} from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import {
@@ -173,6 +180,32 @@ export function DeckView({
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
   const [slideCount, setSlideCount] = useState(initialSlideCount);
   const [progress, setProgress] = useState<Progress | null>(null);
+  // Live-preview slides parsed out of Claude's streaming buffer by
+  // deck-generate's StreamingSlideParser. Each entry is a Slide that
+  // already passed shape validation server-side; we still re-validate
+  // here via SlideSchema.safeParse before rendering. Empty until the
+  // first slide closes in the stream — typically 30–60 s into a
+  // generation. Reset to [] when status leaves "generating".
+  const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
+  // Theme captured from the same stream once Claude closes the
+  // `theme` object (always streams before slides). Drives the CSS-var
+  // wiring for streamingPreview slides — without it palette / fonts /
+  // background colours fall through to browser defaults.
+  const [streamingTheme, setStreamingTheme] = useState<ThemeType | null>(null);
+  // Direction + language carried through the brief and echoed on the
+  // streaming-preview slideJson. Without them the preview branch was
+  // hardcoded to "rtl"/"ar" — fine for the current Arabic-first decks
+  // but wrong if Taqreer ever ships an LTR/EN deck. Defaults match the
+  // brief defaults so absence-of-signal looks identical to today.
+  const [streamingDirection, setStreamingDirection] = useState<"rtl" | "ltr">("rtl");
+  const [streamingLanguage, setStreamingLanguage] = useState<"ar" | "en">("ar");
+  // True once the user has clicked a thumbnail during the streaming
+  // phase — disables the auto-advance that otherwise yanks the hero
+  // canvas to whatever slide just closed in the buffer. Stays true for
+  // the rest of the run; the user can re-sync by clicking the latest
+  // thumbnail manually. Ref (not state) because changing it shouldn't
+  // re-render the effect that reads it.
+  const previewManualClickRef = useRef(false);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
   // Polling sets this when it sees a failed status arrive after mount.
@@ -307,6 +340,20 @@ export function DeckView({
       ? "completed"
       : "generating";
 
+  // Auto-advance the hero focus to the latest streamed slide while the
+  // user is still riding the live stream (no manual click yet). Once the
+  // user clicks any thumbnail, `previewManualClickRef.current` flips to
+  // true and this effect goes dormant — respects their intent over the
+  // raw arrival ordering. Triggers on `streamingPreview.length` (not
+  // contents) so re-renders that don't add a slide don't bump the index.
+  useEffect(() => {
+    if (status !== "generating") return;
+    if (previewManualClickRef.current) return;
+    if (streamingPreview.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentSlideIndex(streamingPreview.length - 1);
+  }, [status, streamingPreview.length]);
+
   // Realtime — Inngest writes the version → Supabase emits → we parse + render.
   // Scoped to this presentation via a server-side filter so other projects'
   // updates can't overwrite our local state.
@@ -381,6 +428,10 @@ export function DeckView({
           status: string;
           slideCount: number;
           progress: Progress | null;
+          streamingPreview?: unknown[] | null;
+          streamingTheme?: unknown;
+          streamingDirection?: "rtl" | "ltr" | null;
+          streamingLanguage?: "ar" | "en" | null;
         };
         if (data.progress && isProgress(data.progress)) {
           setProgress(data.progress);
@@ -389,6 +440,34 @@ export function DeckView({
           }
         } else if (data.slideCount > 0) {
           setSlideCount(data.slideCount);
+        }
+        // Live-preview slides — validate each via SlideSchema before
+        // accepting (the server already validated, but the wire format
+        // is `unknown` so we re-check rather than trust a cast).
+        if (Array.isArray(data.streamingPreview)) {
+          const validated: SlideType[] = [];
+          for (const candidate of data.streamingPreview) {
+            const parsed = SlideSchema.safeParse(candidate);
+            if (parsed.success) validated.push(parsed.data);
+          }
+          // Monotonic guard — never shrink the preview during a single
+          // generation. If a retry restarts Claude from slide 1, the
+          // server's `streamingPreview` resets to [], but DeckView keeps
+          // the high-watermark list visible until the canonical
+          // `manifest` arrives on completion.
+          setStreamingPreview((prev) =>
+            validated.length >= prev.length ? validated : prev,
+          );
+        }
+        if (data.streamingTheme) {
+          const parsed = ThemeSchema.safeParse(data.streamingTheme);
+          if (parsed.success) setStreamingTheme(parsed.data);
+        }
+        if (data.streamingDirection === "rtl" || data.streamingDirection === "ltr") {
+          setStreamingDirection(data.streamingDirection);
+        }
+        if (data.streamingLanguage === "ar" || data.streamingLanguage === "en") {
+          setStreamingLanguage(data.streamingLanguage);
         }
         if (data.status === "failed") {
           setPolledFailure(true);
@@ -866,11 +945,61 @@ export function DeckView({
 
     const percent = progressPercent(progress);
     const total = placeholders.length;
-    const navItems: NavItem[] = placeholders.map((_, idx) => ({
-      kind: "placeholder",
-      index: idx,
-      state: cardStatus(idx),
-    }));
+    // Mix real streamed slides (kind:"slide") into the head of the
+    // nav row, padded with placeholders for slots Claude hasn't
+    // closed yet. Once `streamingTheme` is null we can't render a
+    // thumbnail (SlideRenderer needs theme CSS vars), so fall back
+    // to placeholder pulse with the right state. Comment count is
+    // hard-coded to 0 during streaming — comments don't exist yet.
+    const navItems: NavItem[] = placeholders.map((_, idx) => {
+      const previewSlide = streamingPreview[idx];
+      if (previewSlide && streamingTheme) {
+        return {
+          kind: "slide",
+          index: idx,
+          slide: previewSlide,
+          commentCount: 0,
+        };
+      }
+      return {
+        kind: "placeholder",
+        index: idx,
+        state: cardStatus(idx),
+      };
+    });
+    // Synthetic manifest shell so SlideNavSidebar's `manifest.theme`
+    // / `manifest.direction` / `manifest.language` reads work without
+    // the canonical manifest existing yet. Only the fields the nav +
+    // SlideRenderer actually consume are populated; the rest stay
+    // structurally valid but empty.
+    const previewManifestForNav: SlideManifest | null = streamingTheme
+      ? ({
+          version: "2.0",
+          // `presentationId` and `title` are non-null in the canonical
+          // schema. The preview manifest is a structural shim — empty
+          // strings keep the type contract honoured and the nav doesn't
+          // surface either field while generating, so the value is
+          // never read.
+          presentationId: presentationId ?? "",
+          title: projectTitle ?? "",
+          language: streamingLanguage,
+          direction: streamingDirection,
+          format: initialFormat ?? "16:9",
+          theme: streamingTheme,
+          slides: streamingPreview,
+        } satisfies SlideManifest)
+      : null;
+    // The slide focused in the hero — user click overrides the
+    // auto-tracked latest. Clamp to a slot that actually has a
+    // preview slide; out-of-range falls back to the latest closed
+    // slide so the hero never shows a blank canvas when there's
+    // *something* to show.
+    const previewHeroIdx =
+      streamingPreview.length === 0
+        ? -1
+        : Math.min(currentSlideIndex, streamingPreview.length - 1);
+    const previewHeroSlide =
+      previewHeroIdx >= 0 ? streamingPreview[previewHeroIdx] : null;
     // Slide-nav is fixed-positioned outside the row, so the row has
     // no internal reservation while generating (no comments yet,
     // either). Hero centers in the remaining width.
@@ -883,11 +1012,17 @@ export function DeckView({
       >
         <SlideNavSidebar
           items={navItems}
-          currentIndex={null}
-          onSelect={() => {
-            /* no-op during generating — placeholders aren't navigable */
+          currentIndex={previewHeroIdx >= 0 ? previewHeroIdx : null}
+          onSelect={(idx) => {
+            // First user click in the streaming phase locks the hero
+            // away from auto-advance for the rest of the run. They
+            // can re-sync by clicking the latest thumbnail manually
+            // (auto-advance won't override their next click — it's
+            // already disabled).
+            previewManualClickRef.current = true;
+            setCurrentSlideIndex(idx);
           }}
-          manifest={null}
+          manifest={previewManifestForNav}
           format={initialFormat ?? "16:9"}
           mainSidebarWidth={mainSidebarWidth}
         />
@@ -904,62 +1039,84 @@ export function DeckView({
             className="glass-card relative flex items-center justify-center overflow-hidden rounded-2xl"
             style={{ aspectRatio, width: genHeroWidthCss }}
           >
-            {/* `dir="rtl"` so the spinner sits to the START of the
-                Arabic caption (visual right) and the progress meta
-                (`5% · 0 / 4`) reads in RTL order. Without this the
-                content inherits `dir="ltr"` from the row wrapper
-                (which is `ltr` so the optional CommentsPanel sits
-                on the visual LEFT in the completed view). */}
-            <div
-              dir="rtl"
-              className="flex flex-col items-center gap-4 px-6 text-center text-white"
-            >
-              <h1 className="font-headline-lg text-[28px] font-bold">
-                جارٍ تصميم عرضك...
-              </h1>
-              {/* Live progress caption. Was a rotating set of cosmetic
-                  captions — now derived from the real stage signal:
-                  thinking-token counter during the silent thinking
-                  phase, slide-being-designed during the streaming
-                  phase, validating / saving on the tail. The spinner
-                  spins for as long as the run is generating; the
-                  caption text changes in place. */}
-              <div className="text-muted flex items-center justify-center gap-3 text-sm">
-                <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-                <span>
-                  {progress?.stage === "thinking" && progress.thinkingBudget
-                    ? `التفكير: ${formatTokens(progress.thinkingTokens ?? 0)} / ${formatTokens(progress.thinkingBudget)} رمز`
-                    : progress?.stage === "thinking"
-                      ? "بدء التفكير..."
-                      : progress?.stage === "validating"
-                        ? "التحقق من المخرجات..."
-                        : progress?.stage === "saving"
-                          ? "حفظ العرض..."
-                          : progress?.currentSlide
-                            ? `جارٍ تصميم الشريحة ${progress.currentSlide} من ${total}`
-                            : "بدء التصميم..."}
-                </span>
+            {/* Live preview hero — renders whichever slide the user is
+                currently focused on (default: the latest streamed
+                slide). Falls back to a blank canvas + caption until the
+                first slide closes in Claude's buffer. SlideRenderer
+                runs its own sanitize pass so the raw preview HTML is
+                XSS-safe before it paints. */}
+            {previewHeroSlide && streamingTheme ? (
+              <div className="absolute inset-0 transition-opacity duration-300">
+                <SlideRenderer
+                  slide={previewHeroSlide}
+                  theme={streamingTheme}
+                  direction={streamingDirection}
+                  language={streamingLanguage}
+                  width={canvasW}
+                  height={canvasH}
+                  scale={gridScale}
+                />
               </div>
-              <div className="w-full max-w-md">
-                <div
-                  className="progress-track"
-                  role="progressbar"
-                  aria-valuenow={percent}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <div className="progress-bar" style={{ width: `${percent}%` }} />
+            ) : null}
+            {/* Caption overlay — ONLY shown when there's nothing
+                rendered on the canvas yet (no streamed slide AND no
+                theme to wire it). Once a real slide is visible behind,
+                the thumbnail row + the rendered slide itself
+                communicate progress; layering the caption on top is
+                noisy and obscures content. The "stuck" banner stays
+                visible since it's a different signal class.
+
+                When this branch IS active, `dir="rtl"` so the spinner
+                sits to the START of the Arabic caption (visual right)
+                and the meta line reads in RTL order. */}
+            {!(previewHeroSlide && streamingTheme) ? (
+              <div
+                dir="rtl"
+                className="flex flex-col items-center gap-4 px-6 text-center text-white"
+              >
+                <h1 className="font-headline-lg text-[28px] font-bold">
+                  جارٍ تصميم عرضك...
+                </h1>
+                {/* Live progress caption — thinking-token counter
+                    during silent thinking, slide-being-designed during
+                    streaming, validating / saving on the tail. */}
+                <div className="text-muted flex items-center justify-center gap-3 text-sm">
+                  <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+                  <span>
+                    {progress?.stage === "thinking" && progress.thinkingBudget
+                      ? `التفكير: ${formatTokens(progress.thinkingTokens ?? 0)} / ${formatTokens(progress.thinkingBudget)} رمز`
+                      : progress?.stage === "thinking"
+                        ? "بدء التفكير..."
+                        : progress?.stage === "validating"
+                          ? "التحقق من المخرجات..."
+                          : progress?.stage === "saving"
+                            ? "حفظ العرض..."
+                            : progress?.currentSlide
+                              ? `جارٍ تصميم الشريحة ${progress.currentSlide} من ${total}`
+                              : "بدء التصميم..."}
+                  </span>
                 </div>
-                <p className="text-muted mt-2 text-xs">
-                  {percent}% · {progress?.currentSlide ?? 0} / {total}
-                </p>
+                <div className="w-full max-w-md">
+                  <div
+                    className="progress-track"
+                    role="progressbar"
+                    aria-valuenow={percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div className="progress-bar" style={{ width: `${percent}%` }} />
+                  </div>
+                  <p className="text-muted mt-2 text-xs">
+                    {percent}% · {progress?.currentSlide ?? 0} / {total}
+                  </p>
+                </div>
+                {isSlow && (
+                  <span className="text-[11px] leading-relaxed text-white/60">
+                    الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي
+                  </span>
+                )}
               </div>
-              {isSlow && (
-                <span className="text-[11px] leading-relaxed text-white/60">
-                  الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي
-                </span>
-              )}
-            </div>
+            ) : null}
           </div>
         </div>
       </section>

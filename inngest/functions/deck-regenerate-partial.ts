@@ -7,6 +7,8 @@ import {
   type SlideFormat,
   type SlideManifest,
 } from "@/lib/schema/slide";
+import { paramsForQuality } from "@/lib/anthropic/quality-params";
+import { isQuality, type Quality } from "@/lib/types/quality";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -161,6 +163,13 @@ type RegenPartialEvent = {
   sourceVersionId: string;
   targetSlideIds: string[];
   comments: CommentInput[];
+  // Quality preset from the original generation. Plumbed through so a
+  // partial regen matches the model + thinking the user picked for the
+  // deck — without it every regen used Opus + adaptive + effort:high
+  // regardless of the user's fast/medium/quality choice.
+  // Optional for backwards compat with in-flight events that predate
+  // this field — falls back to "medium" via paramsForQuality's default.
+  quality?: Quality | null;
 };
 
 export const deckRegeneratePartial = inngest.createFunction(
@@ -199,6 +208,69 @@ export const deckRegeneratePartial = inngest.createFunction(
       targetSlideIds,
       comments,
     } = data;
+    // Resolve the original deck's quality preset → Claude call params.
+    // Falls back to "medium" (the paramsForQuality default) for older
+    // in-flight events that predate the `quality` field.
+    const eventQuality: Quality | null = isQuality(data.quality)
+      ? data.quality
+      : null;
+    const callParams = paramsForQuality(eventQuality);
+    logger.info("partial_regen_quality_preset", {
+      quality: eventQuality ?? "medium (default)",
+      model: callParams.model,
+      thinking: callParams.thinking.type,
+      effort: callParams.outputConfig?.effort ?? "n/a",
+    });
+
+    // Heartbeat writer — bumps `slideJson.progress.currentSlide` as each
+    // per-slide Claude call completes. DeckView's apply-poller treats
+    // 60s without progress as a "stuck" signal and surfaces a cancel
+    // warning. Without a heartbeat the partial-regen function never
+    // updates `currentSlide` (it was previously a Promise.all that wrote
+    // nothing mid-run), so the poller false-fired on every regen that
+    // ran longer than 60s — even though the worker was healthy.
+    //
+    // Read-modify-write so we don't clobber the `slides` field the route
+    // copied in at version creation (DeckView keeps the previous slides
+    // visible while regen runs; wiping them would blank the canvas).
+    // Race-safe enough: heartbeats fire post-step.run sequentially in
+    // the closure, and Prisma updates are atomic at the DB level so
+    // worst case the later write wins with consistent content.
+    // Best-effort; failures don't block the regen.
+    const totalTargets = targetSlideIds.length;
+    const heartbeat = async (
+      currentSlide: number,
+      stage: "designing" | "validating" | "saving",
+    ) => {
+      try {
+        const current = await prisma.presentationVersion.findUnique({
+          where: { id: versionId },
+          select: { slideJson: true },
+        });
+        const existing =
+          (current?.slideJson as Record<string, unknown> | null) ?? {};
+        await prisma.presentationVersion.update({
+          where: { id: versionId },
+          data: {
+            slideJson: {
+              ...existing,
+              status: "regenerating",
+              progress: {
+                stage,
+                currentSlide,
+                estimatedTotal: totalTargets,
+              },
+            } as never,
+          },
+        });
+      } catch {
+        /* heartbeat failure doesn't fail the regen */
+      }
+    };
+
+    // Initial pulse — even before any slide closes, tell the poller the
+    // run is alive and what shape it'll have.
+    await heartbeat(0, "designing");
 
     // Load the source manifest in a step so a retry doesn't re-read the DB
     // unnecessarily. Source = the previous version's manifest; new version
@@ -226,21 +298,30 @@ export const deckRegeneratePartial = inngest.createFunction(
 
     // Fan out per-slide Claude calls. Each runs as its own Inngest step so
     // a single slide's failure produces a partial result we can surface to
-    // the user, and step results are cached on retry. Calls run in parallel.
+    // the user, and step results are cached on retry. Calls run in parallel;
+    // a closure-shared counter writes a heartbeat each time one completes so
+    // the apply-poller sees forward motion.
+    let completedSlides = 0;
+    // Collect in-flight heartbeat writes so we can settle them before
+    // the validating heartbeat fires. Without this the fire-and-forget
+    // `void heartbeat(...)` could outlive its tick and race with the
+    // final `validating` write — the later write wins by Prisma's
+    // atomic-update semantics but the order is non-deterministic, and
+    // CR rightly flagged the read-modify-write window as a real race
+    // on `slideJson.progress`.
+    const heartbeatWrites: Promise<void>[] = [];
     const regenResults = await Promise.all(
       targetSlideIds.map((slideId) =>
         step.run(`regen-slide-${slideId}`, async () => {
           const client = getClient();
           const userMessage = buildPartialUserMessage(source, slideId, comments);
-          // Explicit thinking budget — `adaptive` + `output_config.effort`
-          // was load-bearing the wrong way (effort isn't a hard cap, and
-          // adaptive can run for 15+ minutes on complex slides). 8000 tokens
-          // gives Opus enough headroom for a careful redesign of one slide
-          // while keeping wall-clock predictable.
+          // Use the original deck's quality preset — paramsForQuality
+          // gives us model + thinking + effort matching what generated
+          // the deck originally (fast / medium / quality / extreme).
           const message = await client.messages.create({
-            model: "claude-opus-4-7",
+            model: callParams.model,
             max_tokens: 16000,
-            thinking: { type: "enabled", budget_tokens: 8000 },
+            thinking: callParams.thinking,
             system: [
               {
                 type: "text",
@@ -248,6 +329,9 @@ export const deckRegeneratePartial = inngest.createFunction(
                 cache_control: { type: "ephemeral" },
               },
             ],
+            ...(callParams.outputConfig
+              ? { output_config: callParams.outputConfig }
+              : {}),
             messages: [{ role: "user", content: userMessage }],
           });
           logger.info("partial_regen_usage", {
@@ -265,10 +349,22 @@ export const deckRegeneratePartial = inngest.createFunction(
           if (!html) {
             throw new Error(`Empty HTML returned for slide ${slideId}`);
           }
+          completedSlides += 1;
+          // Push the heartbeat promise into the queue (NOT fire-and-
+          // forget). We don't await here — that would serialise the
+          // per-slide Claude calls. Instead we settle the entire
+          // queue once the Promise.all resolves, BEFORE the final
+          // validating-stage heartbeat. Errors are swallowed inside
+          // heartbeat() so a failed write can't fail the regen.
+          heartbeatWrites.push(heartbeat(completedSlides, "designing"));
           return { slideId, html };
         }),
       ),
     );
+    // Drain in-flight heartbeat writes so the next heartbeat lands on
+    // top of the latest state, not racing with one still in flight.
+    await Promise.allSettled(heartbeatWrites);
+    await heartbeat(totalTargets, "validating");
 
     // Splice the regenerated slides into a fresh copy of the source manifest
     // and persist. We rebuild the manifest object from scratch (vs. mutating

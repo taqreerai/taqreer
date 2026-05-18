@@ -311,9 +311,19 @@ export default function CreateOutputPage() {
 // ─── Card primitives ──────────────────────────────────────────────
 
 // `layout` on motion.div animates the card's height when its
-// contents change size (e.g. custom-input toggle, logo placement
-// appearing/disappearing). 250 ms ease-out matches the rest of the
+// contents change size DURING interaction (e.g. custom-input toggle,
+// logo placement appearing). 250 ms ease-out matches the rest of the
 // flow's hover/active timings; no spring tail.
+//
+// `layoutEnabled` is gated behind a useEffect + rAF so the layout
+// animation does NOT fire on initial mount. The parent's
+// sessionStorage-hydration useEffect runs AFTER first paint and
+// flips child-conditional state (hasLogo, slide-count custom mode,
+// etc.), which changes the card's height. Without this gate, Framer
+// Motion would animate that diff as a visible "stretch on load" —
+// noise the user didn't ask for. Two rAFs is enough to defer past
+// the parent's hydration commit so the first measured layout is
+// already the steady-state.
 function CardShell({
   title,
   icon,
@@ -323,9 +333,24 @@ function CardShell({
   icon: string;
   children: React.ReactNode;
 }) {
+  const [layoutEnabled, setLayoutEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const id1 = window.requestAnimationFrame(() => {
+      const id2 = window.requestAnimationFrame(() => {
+        if (!cancelled) setLayoutEnabled(true);
+      });
+      void id2;
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(id1);
+    };
+  }, []);
+
   return (
     <motion.div
-      layout
+      layout={layoutEnabled}
       transition={{ layout: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }}
       className="glass-card flex flex-col gap-4 rounded-2xl p-5"
     >
@@ -338,7 +363,10 @@ function CardShell({
         </span>
         <h2 className="text-sm font-semibold text-white">{title}</h2>
       </header>
-      <motion.div layout className="flex flex-1 flex-col gap-4">
+      <motion.div
+        layout={layoutEnabled}
+        className="flex flex-1 flex-col gap-4"
+      >
         {children}
       </motion.div>
     </motion.div>

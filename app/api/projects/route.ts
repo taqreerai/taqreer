@@ -328,17 +328,46 @@ export async function POST(request: Request) {
         },
       });
 
+      // Mirror the `safeLogo` filter from /api/brand-kits POST — without
+      // it the saveBrandKit branch would persist `payload.brand.logo`
+      // verbatim, including any base64 `previewDataUrl` that bloats the
+      // row by 50–500 KB and rides along on every subsequent GET. The
+      // shape allowlist also clamps `position` / `exclude` to known
+      // values so unrelated fields the client may have stuffed into the
+      // logo object don't end up in storage. The `storageUrl` ownership
+      // check already ran above (`isOwnedBrandAssetPath`).
+      const safeLogoForKit = payload.brand?.logo
+        ? {
+            name:
+              typeof payload.brand.logo.name === "string"
+                ? payload.brand.logo.name.slice(0, 200)
+                : null,
+            storageUrl:
+              typeof payload.brand.logo.storageUrl === "string"
+                ? payload.brand.logo.storageUrl.slice(0, 2000)
+                : null,
+            position:
+              typeof payload.brand.logo.position === "string"
+                ? payload.brand.logo.position.slice(0, 32)
+                : null,
+            exclude: Array.isArray(payload.brand.logo.exclude)
+              ? payload.brand.logo.exclude.filter(
+                  (v): v is "cover" | "closing" =>
+                    v === "cover" || v === "closing",
+                )
+              : [],
+          }
+        : null;
+
       const brandKit = payload.saveBrandKit
         ? await tx.brandKit.create({
             data: {
               userId: dbUser.id,
               name: `${title} — هوية بصرية`,
-              logo: payload.brand?.logo?.storageUrl ?? null,
+              logo: safeLogoForKit?.storageUrl ?? null,
               colors: toJson(payload.brand?.colors ?? null),
               fonts: toJson(payload.brand?.fonts ?? null),
-              assetUrls: toJson({
-                logo: payload.brand?.logo ?? null,
-              }),
+              assetUrls: toJson({ logo: safeLogoForKit }),
             },
           })
         : null;

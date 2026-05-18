@@ -449,28 +449,33 @@ export default function CreateSummaryPage() {
               className="relative inline-flex w-10 items-center justify-center bg-transparent text-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{ borderRadius: "0 9999px 9999px 0" }}
             >
+              {/* Closed: chevron-up — affords "menu opens above".
+                  Open: 180° rotation → chevron-down, "click to close". */}
               <span
                 className={`material-symbols-outlined leading-none transition-transform ${
                   presetMenuOpen ? "rotate-180" : ""
                 }`}
                 style={{ fontSize: 18 }}
               >
-                expand_more
+                expand_less
               </span>
             </button>
           </div>
 
-          {/* Preset menu — pops below the split-button when the
-              arrow is clicked. Anchored to the visual right (where
-              the arrow lives in LTR mode) so it doesn't drift off
-              screen. Same glass surface as the rest of the popovers
-              in the create flow. */}
+          {/* Preset menu — pops ABOVE the split-button. Was below
+              ("top-full") but on /create/summary the button sits near
+              the bottom of the page, so a downward menu extended the
+              body below viewport, summoned a vertical scrollbar, and
+              the scrollbar's gutter reservation narrowed clientWidth
+              by ~6 px — visible as a 2 px shift when the menu opened.
+              Anchored to bottom-full + mb-2 keeps the menu inside the
+              page bounds so no scrollbar is triggered, no shift. */}
           <AnimatePresence>
             {presetMenuOpen ? (
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                initial={{ opacity: 0, scale: 0.95, y: 4 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                exit={{ opacity: 0, scale: 0.95, y: 4 }}
                 transition={{
                   type: "spring",
                   bounce: 0.25,
@@ -483,7 +488,7 @@ export default function CreateSummaryPage() {
                 // blur via the Tailwind `backdrop-blur-glass` utility
                 // (which composes the `--backdrop-blur-glass` theme
                 // token = `glass-blur * 2.5`). Zero hardcoded alpha.
-                className="backdrop-blur-glass absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl border shadow-2xl"
+                className="backdrop-blur-glass absolute right-0 bottom-full z-30 mb-2 w-56 overflow-hidden rounded-2xl border shadow-2xl"
                 style={{
                   background: "rgba(255, 255, 255, var(--glass-opacity))",
                   borderColor:
