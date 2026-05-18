@@ -192,6 +192,13 @@ export function DeckView({
   // wiring for streamingPreview slides — without it palette / fonts /
   // background colours fall through to browser defaults.
   const [streamingTheme, setStreamingTheme] = useState<ThemeType | null>(null);
+  // Direction + language carried through the brief and echoed on the
+  // streaming-preview slideJson. Without them the preview branch was
+  // hardcoded to "rtl"/"ar" — fine for the current Arabic-first decks
+  // but wrong if Taqreer ever ships an LTR/EN deck. Defaults match the
+  // brief defaults so absence-of-signal looks identical to today.
+  const [streamingDirection, setStreamingDirection] = useState<"rtl" | "ltr">("rtl");
+  const [streamingLanguage, setStreamingLanguage] = useState<"ar" | "en">("ar");
   // True once the user has clicked a thumbnail during the streaming
   // phase — disables the auto-advance that otherwise yanks the hero
   // canvas to whatever slide just closed in the buffer. Stays true for
@@ -423,6 +430,8 @@ export function DeckView({
           progress: Progress | null;
           streamingPreview?: unknown[] | null;
           streamingTheme?: unknown;
+          streamingDirection?: "rtl" | "ltr" | null;
+          streamingLanguage?: "ar" | "en" | null;
         };
         if (data.progress && isProgress(data.progress)) {
           setProgress(data.progress);
@@ -453,6 +462,12 @@ export function DeckView({
         if (data.streamingTheme) {
           const parsed = ThemeSchema.safeParse(data.streamingTheme);
           if (parsed.success) setStreamingTheme(parsed.data);
+        }
+        if (data.streamingDirection === "rtl" || data.streamingDirection === "ltr") {
+          setStreamingDirection(data.streamingDirection);
+        }
+        if (data.streamingLanguage === "ar" || data.streamingLanguage === "en") {
+          setStreamingLanguage(data.streamingLanguage);
         }
         if (data.status === "failed") {
           setPolledFailure(true);
@@ -967,8 +982,8 @@ export function DeckView({
           // never read.
           presentationId: presentationId ?? "",
           title: projectTitle ?? "",
-          language: "ar",
-          direction: "rtl",
+          language: streamingLanguage,
+          direction: streamingDirection,
           format: initialFormat ?? "16:9",
           theme: streamingTheme,
           slides: streamingPreview,
@@ -1035,8 +1050,8 @@ export function DeckView({
                 <SlideRenderer
                   slide={previewHeroSlide}
                   theme={streamingTheme}
-                  direction="rtl"
-                  language="ar"
+                  direction={streamingDirection}
+                  language={streamingLanguage}
                   width={canvasW}
                   height={canvasH}
                   scale={gridScale}

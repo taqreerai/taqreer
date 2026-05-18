@@ -302,6 +302,14 @@ export const deckRegeneratePartial = inngest.createFunction(
     // a closure-shared counter writes a heartbeat each time one completes so
     // the apply-poller sees forward motion.
     let completedSlides = 0;
+    // Collect in-flight heartbeat writes so we can settle them before
+    // the validating heartbeat fires. Without this the fire-and-forget
+    // `void heartbeat(...)` could outlive its tick and race with the
+    // final `validating` write — the later write wins by Prisma's
+    // atomic-update semantics but the order is non-deterministic, and
+    // CR rightly flagged the read-modify-write window as a real race
+    // on `slideJson.progress`.
+    const heartbeatWrites: Promise<void>[] = [];
     const regenResults = await Promise.all(
       targetSlideIds.map((slideId) =>
         step.run(`regen-slide-${slideId}`, async () => {
@@ -342,14 +350,20 @@ export const deckRegeneratePartial = inngest.createFunction(
             throw new Error(`Empty HTML returned for slide ${slideId}`);
           }
           completedSlides += 1;
-          // Heartbeat — outside step.run so the write isn't memoized
-          // on retries (cached per-step results don't re-run the body).
-          // Fire-and-forget; failure doesn't fail the regen.
-          void heartbeat(completedSlides, "designing");
+          // Push the heartbeat promise into the queue (NOT fire-and-
+          // forget). We don't await here — that would serialise the
+          // per-slide Claude calls. Instead we settle the entire
+          // queue once the Promise.all resolves, BEFORE the final
+          // validating-stage heartbeat. Errors are swallowed inside
+          // heartbeat() so a failed write can't fail the regen.
+          heartbeatWrites.push(heartbeat(completedSlides, "designing"));
           return { slideId, html };
         }),
       ),
     );
+    // Drain in-flight heartbeat writes so the next heartbeat lands on
+    // top of the latest state, not racing with one still in flight.
+    await Promise.allSettled(heartbeatWrites);
     await heartbeat(totalTargets, "validating");
 
     // Splice the regenerated slides into a fresh copy of the source manifest

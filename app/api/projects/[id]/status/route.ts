@@ -24,6 +24,10 @@ type SlideJson = {
   // slides so palette / fonts / background resolve correctly before
   // the final manifest validates.
   streamingTheme?: unknown;
+  // Direction + language echoed from the brief so the live-preview
+  // SlideRenderer doesn't assume RTL/Arabic.
+  streamingDirection?: unknown;
+  streamingLanguage?: unknown;
 };
 
 function getSlideJson(value: unknown): SlideJson | null {
@@ -124,6 +128,18 @@ export async function GET(
     slideJson?.streamingTheme && typeof slideJson.streamingTheme === "object"
       ? slideJson.streamingTheme
       : null;
+  // String-narrow the direction + language to the two valid values
+  // each accepts; anything else collapses to null and DeckView falls
+  // back to its own default (which currently matches the brief's
+  // hard-default of RTL/Arabic).
+  const streamingDirection =
+    slideJson?.streamingDirection === "rtl" || slideJson?.streamingDirection === "ltr"
+      ? slideJson.streamingDirection
+      : null;
+  const streamingLanguage =
+    slideJson?.streamingLanguage === "ar" || slideJson?.streamingLanguage === "en"
+      ? slideJson.streamingLanguage
+      : null;
 
   return NextResponse.json({
     status: inferredStatus,
@@ -131,6 +147,8 @@ export async function GET(
     progress,
     streamingPreview,
     streamingTheme,
+    streamingDirection,
+    streamingLanguage,
     // Latest version id + its own status. DeckView's partial-regen polling
     // uses this to distinguish "applying is done" (versionId == the new
     // version's id AND status=completed) from "you're still looking at the

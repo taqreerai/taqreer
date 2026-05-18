@@ -40,7 +40,7 @@ export function buildHtmlDocument(manifest: SlideManifest): string {
   // inline style. Adapt to CSS-text-string lines for the <style> block.
   const cssVarRecord = themeToCssVars(manifest.theme);
   const cssVars = Object.entries(cssVarRecord)
-    .map(([k, v]) => `    ${k}: ${v};`)
+    .map(([k, v]) => `    ${k}: ${escapeCssValue(v)};`)
     .join("\n");
 
   const slides = manifest.slides
@@ -85,6 +85,22 @@ ${cssVars}
 ${slides}
 </body>
 </html>`;
+}
+
+// CSS-value escape for `<style>` block injection. Theme fields
+// (background hex, font name) flow from a Zod-validated manifest, but
+// the values eventually round-trip from Claude's free text — a stray
+// `</style>` substring in a font name (or a malicious hex with newline
+// + `</style>` injection) would prematurely close the style block and
+// leak whatever follows as HTML. Neutralise the two attack surfaces:
+//   • `</style` → `<\/style` (escaped solidus is a no-op inside CSS
+//     but breaks the parser's exit-tag match)
+//   • newlines / form-feeds → space (line-terminating chars can break
+//     declarations and create injection windows in some parsers)
+function escapeCssValue(value: string): string {
+  return value
+    .replace(/<\/style/gi, "<\\/style")
+    .replace(/[\r\n\f]/g, " ");
 }
 
 function escapeAttr(s: string): string {

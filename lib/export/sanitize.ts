@@ -165,8 +165,14 @@ function rewriteRtlFlexEndToFlexStart(html: string): string {
     if (!root) return html;
     // Only RTL slide roots opt into the rewrite. LTR slides get
     // standard CSS semantics with no surprises.
-    const rtlRoot = root.querySelector('div[dir="rtl"]');
-    if (!rtlRoot) return html;
+    // The slide root is the wrapper's first element child (we wrapped
+    // the incoming HTML in a synthetic `<div>` at parse time). Check
+    // its OWN `dir` attribute — not `querySelector('[dir="rtl"]')`
+    // which would also match a nested `<div dir="rtl">` inside an
+    // otherwise-LTR slide and apply the RTL rewrites to its subtree.
+    const slideRoot = root.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    const rtlRoot = slideRoot;
     const els = rtlRoot.querySelectorAll<HTMLElement>("[style]");
     let changed = false;
     els.forEach((el) => {
@@ -236,8 +242,14 @@ function rewriteRtlRowFlexOrder(html: string): string {
     );
     const root = doc.body.firstElementChild;
     if (!root) return html;
-    const rtlRoot = root.querySelector('div[dir="rtl"]');
-    if (!rtlRoot) return html;
+    // The slide root is the wrapper's first element child (we wrapped
+    // the incoming HTML in a synthetic `<div>` at parse time). Check
+    // its OWN `dir` attribute — not `querySelector('[dir="rtl"]')`
+    // which would also match a nested `<div dir="rtl">` inside an
+    // otherwise-LTR slide and apply the RTL rewrites to its subtree.
+    const slideRoot = root.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    const rtlRoot = slideRoot;
     const els = rtlRoot.querySelectorAll<HTMLElement>("[style]");
     let changed = false;
     els.forEach((el) => {

@@ -125,7 +125,7 @@ Fallback: white on dark, near-black on light.
 LAYOUT GOTCHAS
 - Headline + body in one container: explicit \`margin-bottom\` or grid \`gap\` (tight stacks overlap in export).
 - Single-line text: \`width: max-content\` + \`padding-inline\`; inside constrained parent use \`white-space: nowrap\`.
-- Single-script siblings in flex (two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Use absolute positioning. Mixed-script siblings auto-split.
+- Single-script siblings in flex (two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Split them into separate flex / grid columns or wrap each in its own row INSIDE the single content layer so they're independent flow blocks; do NOT \`position:absolute\` them out of the content layer. Mixed-script siblings auto-split, so flex is fine for them.
 - RTL flex columns flip cross-axis alignment. \`align-items: flex-end\` on a \`flex-direction: column\` container lands items on the VISUAL LEFT in an RTL slide (the cross axis is inline-reversed). To right-align column items in RTL, use \`align-items: flex-start\` — or drop \`align-items\` entirely and let \`text-align: right\` on the container do the work with full-width block children.
 
 OUTPUT — JSON only, no prose, no markdown fences
@@ -717,6 +717,18 @@ export const deckGenerate = inngest.createFunction(
       // Stored as `unknown` (no Zod validation here) — DeckView
       // type-narrows defensively at render time.
       let streamingTheme: unknown = null;
+      // Direction + language carried through the brief — surface them
+      // on the live-preview path so DeckView's SlideRenderer + nav
+      // manifest aren't hardcoded to "rtl"/"ar". Currently every brief
+      // sets `direction:"rtl", language:"ar"` (Taqreer is Arabic-first),
+      // but the path stays generic so an LTR/EN deck doesn't render
+      // mirrored during streaming.
+      const briefForStream =
+        (data.brief as { direction?: "rtl" | "ltr"; language?: "ar" | "en" } | null) ?? null;
+      const streamDirection: "rtl" | "ltr" =
+        briefForStream?.direction === "ltr" ? "ltr" : "rtl";
+      const streamLanguage: "ar" | "en" =
+        briefForStream?.language === "en" ? "en" : "ar";
 
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
@@ -744,6 +756,10 @@ export const deckGenerate = inngest.createFunction(
                 // Theme captured mid-stream (always streams before slides
                 // in the manifest order). Null until the theme `}` closes.
                 streamingTheme,
+                // Direction + language echoed from the brief so DeckView's
+                // preview SlideRenderer doesn't have to assume RTL/Arabic.
+                streamingDirection: streamDirection,
+                streamingLanguage: streamLanguage,
               } as never,
             },
           })
@@ -767,6 +783,15 @@ export const deckGenerate = inngest.createFunction(
       })();
 
       for (let attempt = 1; attempt <= 3; attempt += 1) {
+        // Reset preview state at the start of each retry. Without this,
+        // a failed validation on attempt N leaves attempt N's partial
+        // slides in `streamingPreview`, and attempt N+1's parser appends
+        // its own slides onto the leftover — DeckView sees duplicates
+        // / stale frames and the post-success snapshot to slideJson can
+        // include slides that never made it into the canonical manifest.
+        streamingPreview.length = 0;
+        streamingTheme = null;
+
         const userMessage =
           attempt === 1
             ? baseUserMessage
