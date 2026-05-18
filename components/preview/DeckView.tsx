@@ -356,9 +356,14 @@ export function DeckView({
 
   // Realtime — Inngest writes the version → Supabase emits → we parse + render.
   // Scoped to this presentation via a server-side filter so other projects'
-  // updates can't overwrite our local state.
+  // updates can't overwrite our local state. Active during EITHER full
+  // generation (`status==="generating"`) OR an in-flight partial regen
+  // (`applying != null`) — partial regen flips the target version row
+  // status to "completed" via Inngest, and without the channel subscribed
+  // during that window the new manifest doesn't reach DeckView and the
+  // user has to reload to see the spliced slides.
   useEffect(() => {
-    if (status !== "generating") return;
+    if (status !== "generating" && !applying) return;
     if (!presentationId) return;
     const supabase = createClient();
     const channel = supabase
@@ -412,7 +417,7 @@ export function DeckView({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [presentationId, status]);
+  }, [presentationId, status, applying]);
 
   // Polling — primary feedback channel for progress while Claude streams.
   // Tighter cadence (1.5 s) so the per-slide progress UI updates close to
@@ -609,6 +614,13 @@ export function DeckView({
           versionId: string | null;
           versionStatus: string | null;
           progress: { stage: string; currentSlide: number } | null;
+          // Status route returns the full manifest alongside the version
+          // status when (a) the caller pinned a versionId and (b) that
+          // version is completed. Used here to swap in the spliced
+          // slides without depending on Supabase Realtime (which the
+          // local docker Postgres doesn't broadcast) or `router.refresh()`
+          // (RSC payload caching has been unreliable).
+          manifest?: unknown;
         };
         // Optimistic mode: applying.versionId starts as "__pending__".
         // Until the apply POST returns and we replace it with the real
@@ -621,6 +633,16 @@ export function DeckView({
 
         // 1. Success.
         if (isPinned && data.versionStatus === "completed") {
+          // Splice the new manifest in directly from the status
+          // response. Local-dev parity: Supabase Realtime doesn't
+          // broadcast from the docker Postgres, and `router.refresh()`
+          // alone has been flaky for swapping the manifest in-place.
+          // Schema-validate before assigning so a malformed payload
+          // can't corrupt the visible deck.
+          if (data.manifest) {
+            const parsed = SlideManifestSchema.safeParse(data.manifest);
+            if (parsed.success) setManifest(parsed.data);
+          }
           setApplying(null);
           setComments([]);
           setCommentMode(false);

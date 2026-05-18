@@ -9,6 +9,7 @@ import {
 } from "@/lib/schema/slide";
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { isQuality, type Quality } from "@/lib/types/quality";
+import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -50,15 +51,17 @@ THEME — locked
 USER COMMENTS — apply faithfully, minimally
 - Each comment carries a slide-space bounding box (x, y, w, h in 0..1920, 0..1080) pointing at the element the user wants changed. Use the box to disambiguate which element they meant.
 - Apply only what the comment asks. If the comment says "make this headline bigger", scale 1.2-1.5×, not 3×. If it says "change colour", change just the colour. Aim for minimal diff from the existing slide.
+- **PRESERVATION RULE — strict.** If the comment doesn't mention placement, the element's position and surrounding layout MUST stay identical. If it doesn't mention size, dimensions stay identical (except the specific text run referenced, if any). If it doesn't mention removal, nothing is removed. Every element the comment didn't reference is kept verbatim — same tag, same coordinates, same children. A colour-only comment changes ONLY the colour token.
 - If the comment is ambiguous, prefer the conservative interpretation.
 - If multiple comments conflict, the later one wins (comments are listed in submission order).
 
 STATIC DELIVERABLE
 - No animation, no transition, no \`:hover\`, no JavaScript. Same as the rest of the deck.
 
+${COMPOSITION_RULES}
+
 DESIGN RULES — keep what already works
 - The active slide's existing HTML is your strongest style anchor. Match its font sizing scale, line-heights, padding rhythm, decorative SVG style. Don't drift to a different design vocabulary just because you're regenerating.
-- For Arabic: keep \`line-height ≥ 1.5\` on bold Arabic ≥ 24 px (export glyph height is taller). Cards with Arabic content use \`padding\` not fixed \`height\`. Don't use \`letter-spacing\` on Arabic.
 - Decorative graphics stay inline <svg>. Icons stay inline <svg> (not icon fonts).
 - **Icons: use Lucide** (https://lucide.dev/icons) — inline \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\` with the path data from lucide.dev. Material icons (https://fonts.google.com/icons) are an acceptable fallback. NEVER icon fonts.
 - Webfont URLs must be on \`fonts.googleapis.com\` / \`fonts.gstatic.com\`.
@@ -170,6 +173,10 @@ type RegenPartialEvent = {
   // Optional for backwards compat with in-flight events that predate
   // this field — falls back to "medium" via paramsForQuality's default.
   quality?: Quality | null;
+  // Telemetry Job row id allocated by the regen-partial route. Receives
+  // the per-regen token-usage breakdown when the function completes.
+  // Optional for backwards compat with in-flight pre-telemetry events.
+  jobId?: string | null;
 };
 
 export const deckRegeneratePartial = inngest.createFunction(
@@ -357,7 +364,19 @@ export const deckRegeneratePartial = inngest.createFunction(
           // validating-stage heartbeat. Errors are swallowed inside
           // heartbeat() so a failed write can't fail the regen.
           heartbeatWrites.push(heartbeat(completedSlides, "designing"));
-          return { slideId, html };
+          return {
+            slideId,
+            html,
+            // Return usage from the step so it survives Inngest's
+            // step-result cache on retry — closure-mutated counters
+            // would reset across replays.
+            usage: {
+              inputTokens: message.usage.input_tokens ?? 0,
+              outputTokens: message.usage.output_tokens ?? 0,
+              cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+              cacheCreationTokens: message.usage.cache_creation_input_tokens ?? 0,
+            },
+          };
         }),
       ),
     );
@@ -430,6 +449,48 @@ export const deckRegeneratePartial = inngest.createFunction(
         }),
       ]);
     });
+
+    // Telemetry — sum per-slide usage across the run and write to the
+    // Job allocated by the regen route. Pre-billing pass: observability
+    // only. Best-effort; failures don't fail the regen since the
+    // user-visible work (the new version) is already committed above.
+    if (data.jobId) {
+      const totals = regenResults.reduce(
+        (acc, r) => ({
+          inputTokens: acc.inputTokens + r.usage.inputTokens,
+          outputTokens: acc.outputTokens + r.usage.outputTokens,
+          cacheReadTokens: acc.cacheReadTokens + r.usage.cacheReadTokens,
+          cacheCreationTokens:
+            acc.cacheCreationTokens + r.usage.cacheCreationTokens,
+        }),
+        {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+        },
+      );
+      await prisma.job
+        .update({
+          where: { id: data.jobId },
+          data: {
+            status: "succeeded",
+            model: callParams.model,
+            quality: eventQuality ?? "medium",
+            attempts: regenResults.length,
+            inputTokens: totals.inputTokens,
+            outputTokens: totals.outputTokens,
+            cacheReadTokens: totals.cacheReadTokens,
+            cacheCreationTokens: totals.cacheCreationTokens,
+          },
+        })
+        .catch((err) => {
+          logger.warn("partial_regen_job_update_failed", {
+            jobId: data.jobId,
+            error: String(err),
+          });
+        });
+    }
 
     return { success: true, regenerated: regenResults.length };
   },

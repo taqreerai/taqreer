@@ -2,13 +2,70 @@
 
 /*
  * ═══════════════════════════════════════════════════════════════════
- *  TAQREER DESIGN SYSTEM — THEME MANUAL
+ *  TAQREER DESIGN SYSTEM
  * ═══════════════════════════════════════════════════════════════════
  *
- *  HOW THE THEME WORKS
- *  ────────────────────
- *  All styling is token-driven. Build new UI by composing semantic
- *  classes — never hardcode hex values or rgba() in TSX files.
+ *  This file is the SINGLE SOURCE OF TRUTH for visual primitives.
+ *  Every new piece of UI must compose existing tokens / classes here
+ *  — do not invent new hex values, new border-radius numbers, or new
+ *  background recipes in TSX. If a pattern you need isn't in this
+ *  manual, ADD it here first, give it a class, then consume the class
+ *  from TSX.
+ *
+ *
+ *  UI PATTERN VOCABULARY  ← read this first
+ *  ─────────────────────────────────────────
+ *  Four named patterns cover almost everything we render. Pick one,
+ *  use the listed class / primitive, don't invent variations.
+ *
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │ 1. NORMAL BUTTON                                            │
+ *  │    Pill, glass surface, white text. Used for secondary      │
+ *  │    actions (Previous, Cancel, mode toggles, segmented       │
+ *  │    pills inside cards).                                     │
+ *  │    Class:    .btn-pill   (composed via Pill or PillButton)  │
+ *  │    Primitive: <PillButton variant="secondary" />            │
+ *  └─────────────────────────────────────────────────────────────┘
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │ 2. CTA                                                      │
+ *  │    Pill, brand-gradient fill, white text, brand-coloured    │
+ *  │    box-shadow. Used for the page's primary action (Next,    │
+ *  │    Save, Use these colors, Open project).                   │
+ *  │    Class:    .btn-gradient   (radius pinned to pill here)   │
+ *  │    Primitive: <PillButton variant="primary" />              │
+ *  └─────────────────────────────────────────────────────────────┘
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │ 3. LAYOUT SURFACES — popovers / menus / dropdowns /         │
+ *  │    color pickers / quality picker / Google-fonts dropdown   │
+ *  │                                                             │
+ *  │    Glass tied to the user's preset, NOT hardcoded. Recipe:  │
+ *  │      background:   rgba(255, 255, 255, var(--glass-opacity))│
+ *  │      border-color: rgba(255, 255, 255, var(--glass-border-  │
+ *  │                          opacity))                          │
+ *  │      class:        backdrop-blur-glass  (Tailwind utility   │
+ *  │                                          tied to the same   │
+ *  │                                          --backdrop-blur-   │
+ *  │                                          glass token)       │
+ *  │    Do NOT use raw `backdrop-filter:blur(20px)` — it bypasses │
+ *  │    the preset and gets composited differently by Tailwind. │
+ *  │    Existing card classes (.glass-card, .glass-popover) all  │
+ *  │    follow this pattern.                                     │
+ *  └─────────────────────────────────────────────────────────────┘
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │ 4. AI BUTTONS — Generate, Regen, Apply Comments             │
+ *  │    Animated mesh-gradient stroke (idle = pure ring drift,   │
+ *  │    hover = full-body gradient fade-in). The visual signal   │
+ *  │    for "Claude does work here."                             │
+ *  │                                                             │
+ *  │    Class:  .btn-gradient-anim                               │
+ *  │    Sibling: .canvas-gradient-border  (same idea on a        │
+ *  │             non-button surface — the hero canvas border     │
+ *  │             during comment mode)                            │
+ *  │                                                             │
+ *  │    Never apply to non-AI actions; this is a brand cue that  │
+ *  │    something will trigger a model call.                     │
+ *  └─────────────────────────────────────────────────────────────┘
+ *
  *
  *  TOKEN LAYERS (bottom → top)
  *  ────────────────────────────
@@ -31,52 +88,54 @@
  *  Presets are initialized before paint by the inline <script> in
  *  app/layout.tsx and toggled live from Settings → مظهر التطبيق.
  *
- *  CARD CLASSES
- *  ─────────────
- *  .glass-card           Standard card  — glass bg + border (responds to preset)
- *  .glass-empty-state    Empty-state card — same glass, no gradient stroke
- *  .glass-card-danger    Danger variant — glass bg + red border
  *
- *  OVERLAY CLASSES
- *  ────────────────
- *  .glass-dropdown       Portal dropdowns (dark glass, not preset-responsive)
- *  .glass-modal          Modal dialogs   (darker, not preset-responsive)
+ *  CLASS INDEX
+ *  ────────────
+ *  Cards
+ *    .glass-card             Standard card  (glass bg + border, preset-responsive)
+ *    .glass-empty-state      Empty-state card (same glass, no gradient stroke)
+ *    .glass-card-danger      Danger variant (glass bg + red border)
  *
- *  INTERACTIVE CLASSES
- *  ────────────────────
- *  .btn-gradient         Primary CTA — brand blue→violet gradient
- *  .btn-outline-dark     Secondary CTA — ghost border button
- *  .btn-danger           Destructive action
- *  .dropdown-item        Item inside a .glass-dropdown
- *  .nav-item             Sidebar nav link (idle)
- *  .nav-active           Sidebar nav link (active)
+ *  Surfaces — popovers / menus / pickers (see PATTERN 3 above)
+ *    .glass-popover          Re-usable popover (matches PATTERN 3 recipe)
+ *    .glass-dropdown         Portal dropdowns (dark glass, NOT preset-responsive)
+ *    .glass-modal            Modal dialogs (darker, NOT preset-responsive)
  *
- *  TEXT CLASSES
- *  ─────────────
- *  text-white            Primary text  (use Tailwind utility)
- *  .text-muted           Secondary text (#9A94A8)
+ *  Buttons (see PATTERNS 1, 2, 4 above)
+ *    .btn-pill               Normal button surface (pill + glass + white text)
+ *    .btn-gradient           CTA surface (pill + brand gradient + shadow)
+ *    .btn-gradient-anim      AI button (animated mesh-stroke + hover fill)
+ *    .canvas-gradient-border AI surface ring (non-button equivalent)
+ *    .btn-outline-dark       Legacy ghost border — prefer <PillButton ghost>
+ *    .btn-danger             Destructive action
  *
- *  FORM CLASSES
- *  ─────────────
- *  .input-dark           Text / email / password field
- *  .input-search         Search field in header
- *  .status-success       Inline success feedback
- *  .status-error         Inline error feedback
+ *  Navigation / chrome
+ *    .dropdown-item          Item inside a .glass-dropdown
+ *    .nav-item               Sidebar nav link (idle)
+ *    .nav-active             Sidebar nav link (active)
  *
- *  AVATAR CLASSES
- *  ───────────────
- *  .tq-avatar-ring       Ring around <img> avatar
- *  .tq-avatar-fallback   Gradient placeholder when no avatar image
+ *  Text
+ *    text-white              Primary text  (Tailwind utility)
+ *    .text-muted             Secondary text (#9A94A8)
  *
- *  MISC CLASSES
- *  ─────────────
- *  .tq-thumbnail         Dark bg for project/template thumbnail areas
- *  .tq-card-divider      Hairline separator inside a card
- *  .badge-purple         Small pill badge
- *  .plan-banner          Plan usage section (gradient stroke border)
- *  .progress-track /
- *  .progress-bar         Usage progress bar
- *  .divider-dark         Full-width sidebar divider
+ *  Form
+ *    .input-dark             Text / email / password field
+ *    .input-search           Search field in header
+ *    .status-success         Inline success feedback
+ *    .status-error           Inline error feedback
+ *
+ *  Avatar
+ *    .tq-avatar-ring         Ring around <img> avatar
+ *    .tq-avatar-fallback     Gradient placeholder when no avatar image
+ *
+ *  Misc
+ *    .tq-thumbnail           Dark bg for project/template thumbnail areas
+ *    .tq-card-divider        Hairline separator inside a card
+ *    .badge-purple           Small pill badge
+ *    .plan-banner            Plan usage section (gradient stroke border)
+ *    .progress-track /
+ *    .progress-bar           Usage progress bar
+ *    .divider-dark           Full-width sidebar divider
  *
  * ═══════════════════════════════════════════════════════════════════
  */
@@ -459,7 +518,15 @@ body {
   box-shadow: var(--tq-shadow-brand);
   color: var(--tq-text-primary);
   transition: box-shadow 0.2s ease;
-  border-radius: 10px;
+  /* Pill shape across the create flow + dashboard CTAs. Previously
+     10 px (square-rounded) which drifted away from the .btn-pill
+     vocabulary used by every other button on the page; the PillButton
+     primitive had to override this inline (`borderRadius: 9999`) to
+     get the pill back. Pin to pill at the source so every direct
+     `.btn-gradient` consumer (settings, enhance, header, dashboard
+     widget) matches the rest of the button system without each one
+     re-stating the radius. */
+  border-radius: 9999px;
   font-weight: 500;
 }
 

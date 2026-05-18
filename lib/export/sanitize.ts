@@ -250,6 +250,15 @@ function rewriteRtlRowFlexOrder(html: string): string {
     const slideRoot = root.firstElementChild as HTMLElement | null;
     if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
     const rtlRoot = slideRoot;
+    // Read the slide-root's canvas width so the wide-row threshold scales
+    // for both formats — 1920px (16:9) and 1080px (9:16). Without this the
+    // detection was tuned for 1920 (widthPx > 1200 = ~62 %) and silently
+    // dead on 9:16 where a "full-width" container is at most 1080px. Fall
+    // back to 1920 if the root's width style is missing or unparseable so
+    // legacy manifests behave as they did before.
+    const rootWidthPx =
+      parseFloat(slideRoot.style.getPropertyValue("width")) || 1920;
+    const fullWidthThresholdPx = rootWidthPx * 0.62;
     const els = rtlRoot.querySelectorAll<HTMLElement>("[style]");
     let changed = false;
     els.forEach((el) => {
@@ -312,7 +321,7 @@ function rewriteRtlRowFlexOrder(html: string): string {
       const widthPx = parseFloat(el.style.getPropertyValue("width")) || 0;
       const looksFullWidth =
         (leftPx > 0 && rightPx > 0 && leftPx < 240 && rightPx < 240) ||
-        widthPx > 1200;
+        widthPx > fullWidthThresholdPx;
       if (!looksFullWidth) return;
       el.style.setProperty("flex-direction", "row-reverse");
       changed = true;

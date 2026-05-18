@@ -9,6 +9,7 @@ import {
   type SlideType,
 } from "@/lib/schema/slide";
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
+import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -31,10 +32,7 @@ LANGUAGE & DIRECTION
 - Digit-only chrome blocks (pagination "01 / 07", dates "26.08.2026", phone numbers) — \`dir="ltr"\` on the block IS fine, because the digits would otherwise reorder under the RTL paragraph direction.
 - \`letter-spacing\` on Arabic-bearing elements is stripped at export.
 
-COMPOSITION DIRECTION — design natively, NO mirror pipeline downstream
-Every coordinate renders as written. Background graphics (gradients, decorative shapes, ring sets, atmospheric blobs, illustrations, recognizable objects) anchor on the OPPOSITE half of the canvas from the text content, so they complement instead of overlap. In RTL slides the text sits on the RIGHT (reading start), so all decoration anchors on the LEFT half (focal center-x < 960 on a 1920 canvas). LTR slides invert — text on LEFT, decoration on RIGHT.
-
-Recognizable objects (controllers, phones, characters, hands, marks) keep their natural orientation. NEVER use \`transform: scaleX(-1)\` to face them — pose is in the source path data, not a CSS transform.
+${COMPOSITION_RULES}
 
 DESIGN PHILOSOPHY
 - 30–40 % of every slide is whitespace.
@@ -93,27 +91,6 @@ TYPOGRAPHY
 - Avoid Inter / Roboto / default web sans as primary.
 - ONLY two font weights across the deck: \`400\` and \`700\` (Arabic fonts ink-bomb at 800+ in export). For emphasis, scale size or change colour.
 
-ARABIC TYPOGRAPHY
-- Glyphs render ~15–20 % wider in export. Default Arabic headlines + long single-line Arabic to FULL available width.
-- Bold Arabic ≥ 24 px: \`line-height: 1.5\` min.
-- Cards with Arabic need 32–48 px padding. NEVER fix \`height\` on Arabic content — use \`min-height\`.
-- Tashkeel (ـَـِـُّـ): \`line-height\` ≥ 1.6 + ≥ 20 px \`margin-bottom\`. Doesn't apply to chrome (pills/kickers/pagination — \`line-height: 1\`).
-
-SLIDE MARGINS — two-layer + reserved chrome footer
-Use the EXACT same side inset for content as for chrome corners (logo / pagination / persistent text). On a 1920-wide canvas that's 80 px; on a 1080-wide vertical canvas that's 50 px. Top inset matches the same number. BOTTOM is fixed at 140 px (chrome footer zone). Body MUST NOT extend below \`bottom:140px\`. Reuse on every slide. Cover (\`role:"cover"\`) / closing (\`role:"closing"\`) may break chrome for hero composition. The user message echoes the exact \`<N>\` value to use — copy that number verbatim into the content layer's \`top\` / \`left\` / \`right\` insets so the right and left edges of the body line up perfectly with the chrome edges below.
-
-\`\`\`text
-<div dir="rtl" style="position:relative; width:<W>px; height:<H>px; background:var(--brand-bg); overflow:hidden;">
-  <div style="position:absolute; inset:0; pointer-events:none;"><!-- background SVGs --></div>
-  <div style="position:absolute; top:<N>px; left:<N>px; right:<N>px; bottom:140px;"><!-- ALL content lives here --></div>
-  <!-- chrome (logo / pagination / persistent text) absolute-positioned per USER RULES -->
-</div>
-\`\`\`
-
-EXACTLY ONE content layer, AND inside it NO ABSOLUTE POSITIONING of body content. The single content \`<div>\` shown above is a \`display: flex; flex-direction: column\` (or grid) container; every body element — title, kicker, subtitle, paragraphs, cards, stats, illustrations, charts, footers — is a NORMAL-FLOW CHILD of that container, never \`position: absolute\` inside it. Absolute children inside the content layer collide just like absolute siblings would: a card row at \`top: 540px\` and a footer at \`bottom: 0\` both inside the same content wrapper still overlap visibly in the bottom strip because the wrapper doesn't grow them apart.
-The only siblings allowed alongside the content layer (NOT inside it) are: the background SVG layer (\`pointer-events:none\`) and the chrome blocks (logo / pagination / persistent text, all in the bottom 140 px chrome zone, never in the body region).
-To anchor a row at the bottom of the slide, set \`margin-top: auto\` on that row inside the flex column — it pushes itself down through the flex flow. Don't reach for \`position: absolute; bottom: 0\` on a child; it doesn't reserve vertical space and will overlap whatever flowed in above it.
-
 COLOUR CONTRAST — non-negotiable
 For each text / icon / shape, name the surface it sits on, pick a contrasting colour. WCAG AA (4.5:1 body) / AAA (7:1 hero headlines). Forbidden:
 - Text colour matching its container's background (same-tone text on same-tone surface).
@@ -121,12 +98,6 @@ For each text / icon / shape, name the surface it sits on, pick a contrasting co
 - SVG fill/stroke matching its surface (icon disappears).
 - Gradient stops, muted text, pill text within ~10 lightness pts of the background.
 Fallback: white on dark, near-black on light.
-
-LAYOUT GOTCHAS
-- Headline + body in one container: explicit \`margin-bottom\` or grid \`gap\` (tight stacks overlap in export).
-- Single-line text: \`width: max-content\` + \`padding-inline\`; inside constrained parent use \`white-space: nowrap\`.
-- Single-script siblings in flex (two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Split them into separate flex / grid columns or wrap each in its own row INSIDE the single content layer so they're independent flow blocks; do NOT \`position:absolute\` them out of the content layer. Mixed-script siblings auto-split, so flex is fine for them.
-- RTL flex columns flip cross-axis alignment. \`align-items: flex-end\` on a \`flex-direction: column\` container lands items on the VISUAL LEFT in an RTL slide (the cross axis is inline-reversed). To right-align column items in RTL, use \`align-items: flex-start\` — or drop \`align-items\` entirely and let \`text-align: right\` on the container do the work with full-width block children.
 
 OUTPUT — JSON only, no prose, no markdown fences
 {
@@ -782,6 +753,17 @@ export const deckGenerate = inngest.createFunction(
         return 0;
       })();
 
+      // Token-usage telemetry — accumulates across retry attempts so
+      // the persisted Job row reflects the real Anthropic cost of the
+      // full job (including any rejected attempts). Pre-billing pass:
+      // observability only, no gating.
+      const usage = {
+        attempts: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      };
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         // Reset preview state at the start of each retry. Without this,
         // a failed validation on attempt N leaves attempt N's partial
@@ -911,6 +893,11 @@ export const deckGenerate = inngest.createFunction(
         });
 
         const message = await stream.finalMessage();
+        usage.attempts += 1;
+        usage.inputTokens += message.usage.input_tokens ?? 0;
+        usage.outputTokens += message.usage.output_tokens ?? 0;
+        usage.cacheReadTokens += message.usage.cache_read_input_tokens ?? 0;
+        usage.cacheCreationTokens += message.usage.cache_creation_input_tokens ?? 0;
         logger.info("claude_usage", {
           attempt,
           input: message.usage.input_tokens,
@@ -939,7 +926,7 @@ export const deckGenerate = inngest.createFunction(
         const result = SlideManifestSchema.safeParse(parsed);
         if (result.success) {
           await writeProgress("saving", result.data.slides.length, result.data.slides.length);
-          return result.data;
+          return { manifest: result.data, usage };
         }
 
         lastError = JSON.stringify(result.error.issues).slice(0, 1200);
@@ -947,13 +934,15 @@ export const deckGenerate = inngest.createFunction(
 
       throw new Error(`Validation failed after 3 attempts: ${lastError}`);
     });
+    const usage = validated.usage;
+    const manifest = validated.manifest;
 
     await step.run("save-to-database", async () => {
       // Stamp the format the user picked onto the manifest so every
       // downstream consumer (renderer, lightbox, export) reads it from
       // one source of truth. Overrides whatever Claude may have set
       // (the system prompt doesn't tell him about this field).
-      const manifestToSave = { ...validated, format: slideFormat };
+      const manifestToSave = { ...manifest, format: slideFormat };
       await prisma.presentationVersion.update({
         where: { id: versionId },
         data: {
@@ -968,12 +957,12 @@ export const deckGenerate = inngest.createFunction(
       // human-readable title.
       await prisma.project.update({
         where: { id: projectId },
-        data: { status: "completed", title: validated.title },
+        data: { status: "completed", title: manifest.title },
       });
       await prisma.presentation
         .update({
           where: { projectId },
-          data: { title: validated.title },
+          data: { title: manifest.title },
         })
         .catch(() => undefined);
 
@@ -983,7 +972,16 @@ export const deckGenerate = inngest.createFunction(
             where: { id: jobId },
             data: {
               status: "succeeded",
-              outputJson: validated as never,
+              outputJson: manifest as never,
+              // Token telemetry — see Job schema notes. Captured for
+              // pricing analysis; no gating yet.
+              model: callParams.model,
+              quality: data.quality ?? "medium",
+              attempts: usage.attempts,
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              cacheReadTokens: usage.cacheReadTokens,
+              cacheCreationTokens: usage.cacheCreationTokens,
             },
           })
           .catch((error) => {

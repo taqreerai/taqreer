@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { getPalette as getColorPalette } from "colorthief";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
 import { Pill } from "@/components/create/controls";
@@ -171,6 +172,102 @@ async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
   const response = await fetch(dataUrl);
   const blob = await response.blob();
   return new File([blob], fileName, { type: blob.type || "image/svg+xml" });
+}
+
+// Three-state pane that fits inside the screenshot palette mode:
+//   idle    → dropzone (same CompactUploadZone the manual flows use)
+//   loading → spinner + caption inside a same-sized box
+//   preview → fade-in row of swatches (piano-stagger) + Use / Try-again
+//   error   → message + retry button
+// Returns a single element occupying the same vertical footprint so the
+// card doesn't shift size between states.
+function ScreenshotExtractionPane({
+  state,
+  file,
+  onSelect,
+  onUse,
+  onRetry,
+}: {
+  state:
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "preview"; colors: string[] }
+    | { kind: "error"; message: string };
+  file: File | null;
+  onSelect: (file: File | null) => void;
+  onUse: (colors: string[]) => void;
+  onRetry: () => void;
+}) {
+  if (state.kind === "loading") {
+    return (
+      <div
+        className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/15 bg-white/[0.02] py-6 text-white/60"
+        aria-busy
+        aria-live="polite"
+      >
+        <span className="spinner h-5 w-5 rounded-full border-2 border-white/20 border-t-white" />
+        <span className="text-xs">جارٍ استخراج الألوان...</span>
+      </div>
+    );
+  }
+  if (state.kind === "preview") {
+    return (
+      <div className="flex flex-col gap-3">
+        {/* Swatch row — 6 fixed slots, each fade-in staggered (piano)
+            so the user sees the result materialise rather than appear
+            in one flash. 60 ms stagger × 6 ≈ 360 ms total — fast
+            enough to feel snappy but slow enough to read as motion. */}
+        <div className="grid grid-cols-6 gap-2">
+          {state.colors.map((hex, i) => (
+            <motion.div
+              key={`${hex}-${i}`}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, delay: i * 0.06, ease: "easeOut" }}
+              className="aspect-square w-full rounded-lg border border-white/10"
+              style={{ background: hex }}
+              title={hex}
+            />
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <PillButton variant="ghost" size="sm" onClick={onRetry}>
+            حاول مرة أخرى
+          </PillButton>
+          <PillButton
+            variant="primary"
+            size="sm"
+            onClick={() => onUse(state.colors)}
+          >
+            استخدم هذه الألوان
+          </PillButton>
+        </div>
+      </div>
+    );
+  }
+  if (state.kind === "error") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-red-500/30 bg-red-500/[0.06] py-6 text-center">
+        <p className="text-xs text-red-300">{state.message}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-xs text-white/70 underline transition-colors hover:text-white"
+        >
+          حاول صورة أخرى
+        </button>
+      </div>
+    );
+  }
+  // idle
+  return (
+    <CompactUploadZone
+      label="ارفع لقطة شاشة"
+      accept="image/*"
+      file={file}
+      onSelect={onSelect}
+    />
+  );
 }
 
 function CompactUploadZone({
@@ -698,6 +795,20 @@ export default function CreateBrandPage() {
   }, []);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("manual");
   const [paletteScreenshot, setPaletteScreenshot] = useState<File | null>(null);
+  // Three-state machine for the screenshot extraction flow inside the
+  // screenshot palette mode:
+  //   idle    → empty dropzone, user hasn't picked a file yet
+  //   loading → spinner inside the dropzone while colorthief quantises
+  //   preview → row of extracted swatches + Use / Try-again buttons
+  //   error   → extraction failed (CORS, decode, no pixels), show inline
+  // `paletteScreenshot` is the source file; `extractedColors` is the
+  // result we're about to (maybe) apply to `colors`.
+  type ExtractionState =
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "preview"; colors: string[] }
+    | { kind: "error"; message: string };
+  const [extraction, setExtraction] = useState<ExtractionState>({ kind: "idle" });
 
   // Fonts: each slot has a mode (upload | google) and corresponding state.
   // The upload File object can't be serialised back from sessionStorage, so
@@ -1104,6 +1215,93 @@ export default function CreateBrandPage() {
   };
   const removeColor = (index: number) => {
     setColors((current) => (current.length <= MIN_COLORS ? current : current.filter((_, i) => i !== index)));
+  };
+
+  // ─── Screenshot → palette extraction ──────────────────────────────────
+  // Runs entirely client-side via colorthief's median-cut quantiser.
+  // The file → Image element decode is async and CPU-bound; we stage
+  // through `extraction` so the UI can show a loading state while
+  // colorthief is working, then a "preview" state with the extracted
+  // swatches and two actions (Use / Try-again). The user reviews
+  // before committing, so we never overwrite their manual edits
+  // without consent.
+  const onPaletteScreenshotSelect = async (file: File | null) => {
+    if (!file) {
+      setPaletteScreenshot(null);
+      setExtraction({ kind: "idle" });
+      return;
+    }
+    // Hard cap on the source image. Extraction runs client-side via
+    // colorthief; large images take noticeably longer on lower-end
+    // devices and the result quality plateaus past ~1 MP anyway.
+    // Reject UP-FRONT — don't even stash the File on state so we
+    // never hold a multi-MB blob in memory.
+    const SCREENSHOT_MAX_BYTES = 500 * 1024;
+    if (file.size > SCREENSHOT_MAX_BYTES) {
+      setPaletteScreenshot(null);
+      const kb = Math.round(file.size / 1024);
+      setExtraction({
+        kind: "error",
+        message: `حجم الصورة (${kb}KB) أكبر من الحد المسموح (500KB). اختر صورة أصغر.`,
+      });
+      return;
+    }
+    setPaletteScreenshot(file);
+    setExtraction({ kind: "loading" });
+    try {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          // Same-origin object URL — no crossOrigin needed, but pin
+          // it anyway in case the source is ever swapped to a remote
+          // signed URL.
+          el.crossOrigin = "anonymous";
+          el.onload = () => resolve(el);
+          el.onerror = () => reject(new Error("decode failed"));
+          el.src = url;
+        });
+        // colorthief v3 async API — returns `Color[]` with `.hex()`
+        // accessors. `colorCount` is the exact size requested; the
+        // library may return fewer if the image is too uniform.
+        const palette = await getColorPalette(img, { colorCount: MAX_COLORS });
+        if (!palette || palette.length === 0) {
+          setExtraction({ kind: "error", message: "تعذر استخراج الألوان من هذه الصورة." });
+          return;
+        }
+        const hexes = palette
+          .slice(0, MAX_COLORS)
+          .map((c) => c.hex().toUpperCase());
+        setExtraction({ kind: "preview", colors: hexes });
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      setExtraction({ kind: "error", message: "تعذر قراءة الصورة. جرّب صورة أخرى." });
+    }
+  };
+
+  // Commit the extracted palette → switch to manual mode so the user
+  // can edit any swatch via the existing custom picker. Drop the
+  // screenshot reference too: extraction is done, no reason to hold
+  // a multi-hundred-KB blob in memory. The mode-switch also gates
+  // the handleNext upload path (`paletteMode === "screenshot"` gate)
+  // so the file never reaches Supabase Storage either — palette
+  // extraction is a one-shot client-side transform, not a stored
+  // asset.
+  const applyExtractedColors = (next: string[]) => {
+    if (next.length === 0) return;
+    setColors(next.slice(0, MAX_COLORS));
+    setPaletteMode("manual");
+    setPaletteScreenshot(null);
+    setExtraction({ kind: "idle" });
+  };
+
+  // Discard the extraction result and return to the upload state so
+  // the user can try a different screenshot.
+  const retryPaletteScreenshot = () => {
+    setPaletteScreenshot(null);
+    setExtraction({ kind: "idle" });
   };
 
   // ─── Font slot handlers ─────────────────────────────────────────────────
@@ -1564,11 +1762,12 @@ export default function CreateBrandPage() {
                 width instead of card width. */}
             <div className="w-full" style={{ minHeight: 116 }}>
             {paletteMode === "screenshot" ? (
-              <CompactUploadZone
-                label="ارفع لقطة شاشة"
-                accept="image/*"
+              <ScreenshotExtractionPane
+                state={extraction}
                 file={paletteScreenshot}
-                onSelect={setPaletteScreenshot}
+                onSelect={onPaletteScreenshotSelect}
+                onUse={applyExtractedColors}
+                onRetry={retryPaletteScreenshot}
               />
             ) : (
               // 3-column grid: at MAX_COLORS (6) the layout is 3+3

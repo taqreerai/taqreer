@@ -5,8 +5,9 @@ import { themeToCssVars } from "@/lib/export/theme-css-vars";
 
 /**
  * Builds a single self-contained HTML document containing every slide of the
- * deck stacked vertically at full 1920×1080. Used for the "download as HTML"
- * button so the user can open the file in a browser, resize to 1920 px, and
+ * deck stacked vertically at the manifest's canvas size (16:9 → 1920×1080,
+ * 9:16 → 1080×1920). Used for the "download as HTML" button so the user can
+ * open the file in a browser, resize to the deck's native width, and
  * screenshot each slide cleanly without dom-to-pptx in the picture.
  *
  * The document mirrors what the in-app preview renders: the same theme CSS

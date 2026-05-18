@@ -12,6 +12,7 @@ import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
 import { Toggle } from "@/components/create/controls";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
+import RosetteDiscountCheckIcon from "@/components/icons/rosette-discount-check-icon";
 
 // sessionStorage key for the content blob. Same key used by the
 // stepper to detect "step 1 done" + by the brand page's navigation
@@ -19,15 +20,11 @@ import { notifyCreateStateChange } from "@/components/create/CreateStepper";
 // all reference the same value.
 const CONTENT_KEY = "taqreer:create:content";
 
-type StoredContent =
-  | { type: "text"; text: string; keepVerbatim?: boolean }
-  | {
-      type: "file";
-      fileName: string;
-      fileSize: number;
-      storageUrl: string;
-      keepVerbatim?: boolean;
-    };
+type StoredContent = {
+  type: "text";
+  text: string;
+  keepVerbatim?: boolean;
+};
 
 type Tab = "file" | "text";
 
@@ -49,6 +46,7 @@ function readableFileName(raw: string): string {
   }
 }
 
+
 export default function CreateContentPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,21 +56,19 @@ export default function CreateContentPage() {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [progressStep, setProgressStep] = useState<1 | 2 | null>(null);
+  // File → text extraction state. The file picker fires the extract
+  // call immediately on select; on success the extracted text drops
+  // into the free-text textarea and we never upload the binary —
+  // submission downstream is always `{ type: "text", text }`. That
+  // keeps the token bill predictable (PDF document blocks would
+  // multiply per-page tokens) and skips the storage round-trip.
+  const [extracting, setExtracting] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
   // Default OFF: surface the user's content verbatim (no invented
   // headings or grouping). When the user flips this on, we let
   // Claude reorganize freely.
   const [letUsHandle, setLetUsHandle] = useState(false);
-  // Restored file metadata — when the user uploaded a file on a
-  // previous visit and clicked Next, we get back the fileName +
-  // storageUrl from sessionStorage. The File object itself can't
-  // be serialised, so this is the equivalent storage-side
-  // reference. Mirrors brand-page's `loadedLogoMeta` pattern.
-  const [loadedFileMeta, setLoadedFileMeta] = useState<{
-    fileName: string;
-    fileSize: number;
-    storageUrl: string;
-  } | null>(null);
   // Hydration guard — `mounted=true` AFTER the useLayoutEffect that
   // restores state. Until then we suppress the auto-save effect so
   // an initial default-value render doesn't blow away the saved
@@ -88,19 +84,9 @@ export default function CreateContentPage() {
       const raw = window.sessionStorage.getItem(CONTENT_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as StoredContent;
-        if (parsed.type === "text") {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setText(parsed.text ?? "");
-          if (parsed.text?.trim()) setTab("text");
-        } else if (parsed.type === "file") {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setLoadedFileMeta({
-            fileName: parsed.fileName,
-            fileSize: parsed.fileSize,
-            storageUrl: parsed.storageUrl,
-          });
-          setTab("file");
-        }
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setText(parsed.text ?? "");
+        if (parsed.text?.trim()) setTab("text");
         if (parsed.keepVerbatim != null) {
           // `letUsHandle` is the inverse of `keepVerbatim` (toggle
           // ON = let us reorganise = NOT verbatim).
@@ -123,20 +109,12 @@ export default function CreateContentPage() {
     if (!mounted) return;
     if (typeof window === "undefined") return;
     if (!text.trim()) {
-      // If the user clears the textarea AND there's a saved text
-      // blob (not a file), strip it so coming back lands on the
-      // default empty state instead of restoring stale text.
-      const existing = window.sessionStorage.getItem(CONTENT_KEY);
-      if (existing) {
-        try {
-          const parsed = JSON.parse(existing) as StoredContent;
-          if (parsed.type === "text") {
-            window.sessionStorage.removeItem(CONTENT_KEY);
-            notifyCreateStateChange();
-          }
-        } catch {
-          /* corrupt blob — leave */
-        }
+      // Empty textarea → drop the stored blob so re-entering the
+      // page lands on the default empty state instead of restoring
+      // stale text.
+      if (window.sessionStorage.getItem(CONTENT_KEY)) {
+        window.sessionStorage.removeItem(CONTENT_KEY);
+        notifyCreateStateChange();
       }
       return;
     }
@@ -154,36 +132,59 @@ export default function CreateContentPage() {
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
     setFile(nextFile);
-    // A fresh File supersedes any previously-uploaded one — the user
-    // explicitly re-picked, so drop the loaded-meta and re-upload on
-    // Next.
-    setLoadedFileMeta(null);
     setTab("file");
     setError("");
+    void extractFile(nextFile);
+  };
+
+  // Posts the file to the extract route, drops the returned text
+  // into the free-text textarea on success. Failure rolls the file
+  // chip back so the user knows the file wasn't accepted.
+  const extractFile = async (target: File) => {
+    setExtracting("loading");
+    try {
+      const formData = new FormData();
+      formData.append("file", target);
+      const res = await fetch("/api/content/extract", {
+        method: "POST",
+        body: formData,
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { text?: string; truncated?: boolean; error?: string }
+        | null;
+      if (!res.ok || !body?.text) {
+        throw new Error(body?.error ?? "تعذر قراءة الملف");
+      }
+      setText(body.text);
+      setExtracting("success");
+      if (body.truncated) {
+        // Surface the truncation as a soft warning — text is still
+        // valid for submission, just clipped to the 30k-char cap.
+        setError("تم اقتطاع جزء من النص بسبب الحجم — راجع المحتوى قبل المتابعة.");
+      } else {
+        setError("");
+      }
+    } catch (caughtError) {
+      console.error("extract failed", caughtError);
+      setExtracting("error");
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "تعذر قراءة الملف. حاول مرة أخرى.",
+      );
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+    }
   };
 
   const removeFile = () => {
     setFile(null);
-    setLoadedFileMeta(null);
+    setExtracting("idle");
     // Reset the native input so re-selecting the SAME file fires onChange
     // again. Without this, the input's `value` still points at the removed
     // file and the browser de-dupes — the user clicks "select" again,
     // picks the same file, and nothing happens.
     if (inputRef.current) inputRef.current.value = "";
-    if (typeof window !== "undefined") {
-      const existing = window.sessionStorage.getItem(CONTENT_KEY);
-      if (existing) {
-        try {
-          const parsed = JSON.parse(existing) as StoredContent;
-          if (parsed.type === "file") {
-            window.sessionStorage.removeItem(CONTENT_KEY);
-            notifyCreateStateChange();
-          }
-        } catch {
-          /* corrupt — leave */
-        }
-      }
-    }
   };
 
   const onTextChange = (next: string) => {
@@ -194,84 +195,34 @@ export default function CreateContentPage() {
 
   const handleNext = async () => {
     setError("");
-    const hasFreshFile = tab === "file" && file;
-    const hasLoadedFile = tab === "file" && !file && loadedFileMeta;
-    const hasText = tab === "text" && text.trim().length > 0;
-
-    if (!hasFreshFile && !hasLoadedFile && !hasText) {
-      setError("اختر ملفاً أو أدخل نصاً للمتابعة.");
+    // Extraction happens at file-pick time and writes into `text`;
+    // any other path also writes there. So Continue only needs a
+    // non-empty `text`. The `file` chip is purely cosmetic post-
+    // extraction — submission is always text.
+    if (text.trim().length === 0) {
+      setError(
+        extracting === "loading"
+          ? "جارٍ استخراج النص — انتظر حتى يكتمل."
+          : "اختر ملفاً أو أدخل نصاً للمتابعة.",
+      );
       return;
     }
-
     setLoading(true);
     try {
-      if (file && tab === "file") {
-        setProgressStep(1);
-        await new Promise((resolve) => setTimeout(resolve, 450));
-        setProgressStep(2);
-
-        const formData = new FormData();
-        formData.append("bucket", "source-files");
-        formData.append("folder", "content");
-        formData.append("file", file);
-
-        const uploadResponse = await fetch("/api/storage/upload", {
-          method: "POST",
-          body: formData,
-        });
-        if (!uploadResponse.ok) {
-          const data = (await uploadResponse.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          throw new Error(data?.error ?? "Upload failed");
-        }
-        const uploaded = (await uploadResponse.json()) as { storageUrl: string };
-
-        sessionStorage.setItem(
-          CONTENT_KEY,
-          JSON.stringify({
-            type: "file",
-            fileName: readableFileName(file.name),
-            fileSize: file.size,
-            storageUrl: uploaded.storageUrl,
-            keepVerbatim: !letUsHandle,
-          }),
-        );
-      } else if (loadedFileMeta && tab === "file") {
-        // Previously-uploaded file, no fresh File picked — forward
-        // the same storage URL + metadata. No re-upload.
-        sessionStorage.setItem(
-          CONTENT_KEY,
-          JSON.stringify({
-            type: "file",
-            fileName: loadedFileMeta.fileName,
-            fileSize: loadedFileMeta.fileSize,
-            storageUrl: loadedFileMeta.storageUrl,
-            keepVerbatim: !letUsHandle,
-          }),
-        );
-      } else {
-        sessionStorage.setItem(
-          CONTENT_KEY,
-          JSON.stringify({
-            type: "text",
-            text: text.trim(),
-            keepVerbatim: !letUsHandle,
-          }),
-        );
-      }
-
+      sessionStorage.setItem(
+        CONTENT_KEY,
+        JSON.stringify({
+          type: "text",
+          text: text.trim(),
+          keepVerbatim: !letUsHandle,
+        }),
+      );
       notifyCreateStateChange();
       router.push("/create/brand");
     } catch (caughtError) {
-      console.error("Create content upload error:", caughtError);
-      setError(
-        caughtError instanceof Error
-          ? `تعذر حفظ المحتوى: ${caughtError.message}`
-          : "تعذر حفظ المحتوى. حاول مرة أخرى.",
-      );
+      console.error("Create content save error:", caughtError);
+      setError("تعذر حفظ المحتوى. حاول مرة أخرى.");
       setLoading(false);
-      setProgressStep(null);
     }
   };
 
@@ -291,7 +242,7 @@ export default function CreateContentPage() {
             in DOM order and the row inherits dir="rtl". */}
         <div
           className={`glass-card flex flex-col gap-3 rounded-2xl p-5 transition-opacity ${
-            !file && !loadedFileMeta && text.trim().length > 0 ? "opacity-60" : ""
+            !file && text.trim().length > 0 ? "opacity-60" : ""
           }`}
         >
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
@@ -308,7 +259,7 @@ export default function CreateContentPage() {
           <input
             ref={inputRef}
             type="file"
-            accept=".pptx,.pdf,.docx,.txt,.png,.jpg,.jpeg"
+            accept=".docx,.pptx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
             className="hidden"
             onChange={(event) => selectFile(event.target.files?.[0])}
           />
@@ -337,23 +288,36 @@ export default function CreateContentPage() {
               className="flex h-12 w-12 items-center justify-center rounded-full"
               style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
             >
-              <span
-                className="material-symbols-outlined text-white/80"
-                style={{ fontSize: "24px" }}
-              >
-                cloud_upload
-              </span>
+              {extracting === "success" ? (
+                // Animated rosette plays its in-animation once on mount
+                // (state-driven, not hover). Tabler stroke-width=1
+                // matches the rest of our outline-icon vocabulary.
+                <RosetteDiscountCheckIcon
+                  key="extract-success"
+                  size={24}
+                  color="rgb(52, 211, 153)"
+                  strokeWidth={1}
+                  playOnMount
+                />
+              ) : extracting === "loading" ? (
+                <span className="spinner h-5 w-5 rounded-full border-2 border-white/20 border-t-white" />
+              ) : (
+                <span
+                  className="material-symbols-outlined text-white/80"
+                  style={{ fontSize: "24px" }}
+                >
+                  cloud_upload
+                </span>
+              )}
             </span>
             <div>
               <p className="text-sm font-semibold text-white">اسحب وأفلت الملفات هنا</p>
               <p className="mt-1 text-xs text-white/60">أو انقر لتصفح جهازك</p>
             </div>
-            <p className="text-[10px] text-white/40">ندعم صيغ PPTX, PDF, DOCX</p>
+            <p className="text-[10px] text-white/40">ندعم صيغ DOCX و PPTX</p>
           </button>
 
-          {/* Chip shows EITHER the freshly-picked File OR the
-              previously-uploaded loadedFileMeta — never both. */}
-          {file || loadedFileMeta ? (
+          {file ? (
             <div
               className="flex items-center justify-between gap-3 rounded-xl border p-3"
               style={{
@@ -363,14 +327,10 @@ export default function CreateContentPage() {
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-white">
-                  {file
-                    ? readableFileName(file.name)
-                    : (loadedFileMeta?.fileName ?? "")}
+                  {readableFileName(file.name)}
                 </p>
                 <p className="text-xs text-white/50">
-                  {formatFileSize(
-                    file ? file.size : (loadedFileMeta?.fileSize ?? 0),
-                  )}
+                  {formatFileSize(file.size)}
                 </p>
               </div>
               <button
@@ -388,41 +348,12 @@ export default function CreateContentPage() {
               </button>
             </div>
           ) : null}
-
-          {loading && file ? (
-            <div
-              className="space-y-2 rounded-xl border p-3"
-              style={{
-                background: "rgba(255, 255, 255, var(--glass-opacity))",
-                borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-              }}
-            >
-              {[
-                { step: 1, label: "جارٍ قراءة المحتوى..." },
-                { step: 2, label: "جارٍ تحليل الهيكل..." },
-              ].map((item) => (
-                <div key={item.step} className="flex items-center gap-2 text-xs text-white">
-                  {progressStep === item.step ? (
-                    <span className="spinner h-3 w-3 rounded-full border-2 border-white/20 border-t-white" />
-                  ) : (
-                    <span
-                      className="material-symbols-outlined text-emerald-400"
-                      style={{ fontSize: "14px" }}
-                    >
-                      check_circle
-                    </span>
-                  )}
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
         </div>
 
         {/* Free-text card */}
         <div
           className={`glass-card flex flex-col gap-3 rounded-2xl p-5 transition-opacity ${
-            (file || loadedFileMeta) && text.trim().length === 0 ? "opacity-60" : ""
+            file && text.trim().length === 0 ? "opacity-60" : ""
           }`}
         >
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">

@@ -294,7 +294,8 @@ function makeSentinelAllocator(): () => string {
  * with a `linear-gradient(...)` background, replace its CSS with a solid
  * sentinel color, and return the sentinel→gradient map.
  *
- * Call this AFTER the slide is mounted offscreen at 1920×1080 and BEFORE
+ * Call this AFTER the slide is mounted offscreen at its native canvas
+ * size (1920×1080 for 16:9, 1080×1920 for 9:16) and BEFORE
  * `exportToPptx`. The mutation is intentional: dom-to-pptx reads
  * `getComputedStyle` on the live DOM, so the override is what it sees.
  */

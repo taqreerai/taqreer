@@ -499,12 +499,24 @@ function injectBiDiMarkers(
     const hasBorder = !!lnEl && (lnEl.getAttribute("w") ?? "0") !== "0";
     const isRectish = prst === "rect" || prst === "roundRect";
     // Card-like size: not full-bleed (excludes slide background panel) and
-    // big enough to plausibly contain other shapes.
+    // big enough to plausibly contain other shapes. The original cx cap
+    // of 0.85 × SLIDE_WIDTH_EMU was tuned for 16:9 — on 9:16 the canvas
+    // is narrower (1080px vs 1920px), and full-content-width cards
+    // routinely span ~90% of the slide, which would EXCEED 0.85 and
+    // disqualify them as containers. We now exclude only TRUE full-bleed
+    // shapes: those that ALSO occupy most of the slide height (the
+    // canonical slide background panel). A wide-but-short shape (a
+    // header strip, a featured horizontal card) stays in the container
+    // set.
+    const NEAR_FULL_BLEED = 0.95;
+    const isFullBleed =
+      cx >= Math.round(SLIDE_WIDTH_EMU * NEAR_FULL_BLEED) &&
+      cy >= 6_000_000; // ≈ 60 % of the 16:9 slide height, ≈ 65 % of 9:16
     const isCardSize =
       cx > 500000 &&
       cy > 200000 &&
-      cx <= Math.round(SLIDE_WIDTH_EMU * 0.85) &&
-      cy <= 5_500_000;
+      cy <= 5_500_000 &&
+      !isFullBleed;
     if (isRectish && (hasFill || hasBorder) && isCardSize) {
       containers.push({ x, y, cx, cy });
     }
@@ -615,20 +627,6 @@ function injectBiDiMarkers(
     const oldY = off ? parseInt(off.getAttribute("y") ?? "0", 10) : 0;
     const oldCy = parseInt(ext.getAttribute("cy") ?? "0", 10);
 
-    // ASPECT-RATIO GUARD: near-square shapes are numbered badges /
-    // avatars / icon containers / single-glyph chips. They have full
-    // border-radius and render as visual circles. PASS 3 only grows
-    // cx (never cy), so applying slack here turns the circle into an
-    // oval. Skip them entirely — drift on 1-2 character content is
-    // tiny in absolute terms and these shapes are already sized
-    // comfortably for what they hold. The 0.85..1.18 window covers
-    // natural circle shapes with a small tolerance for rounding noise
-    // out of dom-to-pptx.
-    if (oldCy > 0) {
-      const aspectRatio = oldCx / oldCy;
-      if (aspectRatio > 0.85 && aspectRatio < 1.18) continue;
-    }
-
     // Containment-aware clamp: if this text shape is enclosed by a
     // container (card with visible bg/border), the growth on each side
     // is capped at the gap between the text shape's edge and the
@@ -640,6 +638,29 @@ function injectBiDiMarkers(
     // For top-level text (no container), the limit collapses to the
     // slide bounds — preserving the original behaviour.
     const enclosing = findSmallestEnclosingContainer(oldX, oldY, oldCx, oldCy);
+
+    // ASPECT-RATIO GUARD: near-square shapes are numbered badges /
+    // avatars / icon containers / single-glyph chips. They have full
+    // border-radius and render as visual circles. PASS 3 only grows
+    // cx (never cy), so applying slack here turns the circle into an
+    // oval. Skip them entirely — drift on 1-2 character content is
+    // tiny in absolute terms and these shapes are already sized
+    // comfortably for what they hold. The 0.85..1.18 window covers
+    // natural circle shapes with a small tolerance for rounding noise
+    // out of dom-to-pptx.
+    //
+    // GATE: only apply on TOP-LEVEL text (no container around it).
+    // Text enclosed by a card / panel is body content like "01" / "02"
+    // numbered headings — looks square because of line-height:1 + few
+    // characters, but it's NOT a chip / badge / circle. Skipping
+    // extension on these caused the "card numbers wrap to 2 lines in
+    // PowerPoint" bug because Cairo Bold digits drift wider than the
+    // browser-measured shape width. When enclosed, the interior slack
+    // we computed above is what protects us from overgrowing.
+    if (!enclosing && oldCy > 0) {
+      const aspectRatio = oldCx / oldCy;
+      if (aspectRatio > 0.85 && aspectRatio < 1.18) continue;
+    }
     const leftLimit = enclosing ? enclosing.x : 0;
     const rightLimit = enclosing ? enclosing.x + enclosing.cx : SLIDE_WIDTH_EMU;
     const availableLeft = Math.max(0, oldX - leftLimit);

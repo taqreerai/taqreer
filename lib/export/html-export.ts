@@ -207,6 +207,51 @@ async function inlineSvgImages(root: HTMLElement): Promise<void> {
   );
 }
 
+// Strip inline-element backgrounds (and their padding / border-radius) from
+// any descendant inline element (`span`, `em`, `strong`, `b`, `i`, `mark`)
+// that sits inside flowing prose. Claude occasionally emits the "highlight
+// one word" pattern — `<h1>...<span style="background:#...">word</span>...</h1>` —
+// which the browser renders inline cleanly, but dom-to-pptx splits into
+// three independent shapes (prefix, fill-bearing middle, suffix) because
+// PPT can't apply a background to a text RUN. The three split shapes then
+// overlap in PowerPoint thanks to Arabic glyph drift.
+//
+// Earlier attempt: inject a positioned `<div>` BEHIND the span with the
+// same fill to preserve the highlight visual. Removed 2026-05-19 because
+// (a) PASS 3 widens the parent heading and PPT wraps to fewer lines than
+// the browser → the measured pill position is wrong, and (b) the slide
+// root's white background emits AFTER the pill and paints over it. See
+// the commit history if you need the full breakdown.
+//
+// Current behaviour: just NEUTRALISE the inline-background pattern. We
+// lose the highlight visual but the heading survives as a single, sane
+// text shape — much better than three overlapping fragments. A future
+// pass could implement OOXML `<a:highlight>` server-side to restore the
+// highlight (wrap-robust by construction), but for now this guard is
+// what protects the export from Claude reintroducing the bug.
+function stripInlineBackgrounds(root: HTMLElement): void {
+  const inlines = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      "span, em, strong, b, i, mark, u, code",
+    ),
+  );
+  for (const el of inlines) {
+    const cs = window.getComputedStyle(el);
+    const bg = cs.backgroundColor;
+    if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") continue;
+    // Drop background + padding + border-radius. Padding/border-radius
+    // were only meaningful in service of the pill visual; without the
+    // fill they're invisible and just shift surrounding text-flow.
+    el.style.background = "";
+    el.style.backgroundColor = "";
+    el.style.padding = "";
+    el.style.paddingInline = "";
+    el.style.paddingLeft = "";
+    el.style.paddingRight = "";
+    el.style.borderRadius = "";
+  }
+}
+
 function splitMixedScriptFlexChildren(root: HTMLElement): void {
   // querySelectorAll snapshot before mutation so the iteration is stable.
   const elements = Array.from(root.querySelectorAll<HTMLElement>("*"));
@@ -486,6 +531,7 @@ export async function exportManifestAsPptx(
       splitMixedScriptFlexChildren(slideNode);
       stripArabicLetterSpacing(slideNode);
       insertScriptTransitionSpaces(slideNode);
+      stripInlineBackgrounds(slideNode);
     }
 
     // Walk the offscreen slides for any element using CSS `background-clip:
@@ -539,8 +585,47 @@ export async function exportManifestAsPptx(
     }
 
     const stats = makeStats();
+    // Embed the theme fonts (Google Fonts heading + body, weights 400 + 700)
+    // server-side via the API route — wawoff2's WASM bridge has a Node-only
+    // `fs` dep that Turbopack can't bundle for the browser, so the embed
+    // step lives on the server. Best-effort: if the route fails or returns
+    // an error, we fall through with the unembedded blob (legacy behaviour,
+    // PPT will resolve fonts via the system registry — the very bug this
+    // is meant to fix, but at least the export still works).
+    let fontEmbeddedBlob: Blob = rawBlob;
+    try {
+      const fd = new FormData();
+      fd.append("pptx", rawBlob, fileName);
+      fd.append(
+        "fonts",
+        JSON.stringify(
+          [manifest.theme.fontHeading, manifest.theme.fontBody]
+            .filter((f) => f?.url && f.name)
+            .map((f) => ({ name: f.name, url: f.url })),
+        ),
+      );
+      const res = await fetch("/api/export/embed-fonts", {
+        method: "POST",
+        body: fd,
+      });
+      if (res.ok) {
+        fontEmbeddedBlob = await res.blob();
+        if (typeof console !== "undefined") {
+          const embedded = res.headers.get("x-embed-stats") ?? "?";
+          console.log(`[html-export] font-embed: ${embedded}`);
+        }
+      } else if (typeof console !== "undefined") {
+        console.warn(
+          `[html-export] font-embed: server returned ${res.status}, continuing without embed`,
+        );
+      }
+    } catch (err) {
+      if (typeof console !== "undefined") {
+        console.warn("[html-export] font-embed: skipped due to error:", err);
+      }
+    }
     const fixedBlob = await fixBiDiInPptxBlob(
-      rawBlob,
+      fontEmbeddedBlob,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       JSZip as any,
       stats,

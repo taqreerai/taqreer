@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
-import Image from "next/image";
 
 export function Hero() {
   const { scrollY } = useScroll();
@@ -83,12 +82,20 @@ export function Hero() {
                   }}
                   className="relative origin-top"
                 >
-                  <Image alt="Dashboard Mockup"
-                      className="relative rounded-2xl border border-white/10 shadow-2xl w-full h-auto mx-auto"
-                      width={1200}
-                      height={800}
-                      loading="eager"
-                      src="/hero.png" />
+                  {/* Placeholder hero — the real /hero.png stalls the
+                      landing page in local dev because Next.js image
+                      optimization shares Chrome's per-origin connection
+                      pool with the inngest-cli poll loop (20+ req/s),
+                      starving the IMG fetch behind the queue. Restore
+                      the <Image src="/hero.png" /> once we're either on
+                      HTTP/2 or splitting Inngest onto a different
+                      origin. */}
+                  <div
+                      aria-label="Dashboard Mockup"
+                      className="relative rounded-2xl border border-white/10 shadow-2xl w-full mx-auto aspect-[3/2] bg-gradient-to-br from-brand-purple-600/30 via-brand-purple-500/15 to-blue-600/25 flex items-center justify-center"
+                  >
+                      <span className="text-white/40 text-sm tracking-wide">Preview Placeholder</span>
+                  </div>
                 </motion.div>
             </div>
         </div>

@@ -141,6 +141,19 @@ export async function GET(
       ? slideJson.streamingLanguage
       : null;
 
+  // Include the FULL slide manifest on the response when the caller
+  // pinned a versionId AND that version is completed. DeckView's
+  // partial-regen poll-success path uses this to swap the spliced
+  // slides in WITHOUT needing Supabase Realtime (which doesn't
+  // broadcast from the local docker Postgres — no
+  // `supabase_realtime` publication) and WITHOUT relying on
+  // `router.refresh()` to repopulate RSC cleanly. The poll loop
+  // stops after first "completed" response, so the manifest payload
+  // is sent at most once per regen. Returned unchanged; DeckView
+  // re-validates with `SlideManifestSchema` before calling setManifest.
+  const manifest =
+    targetVersionId && latestVersion?.status === "completed" ? slideJson : null;
+
   return NextResponse.json({
     status: inferredStatus,
     slideCount,
@@ -155,5 +168,6 @@ export async function GET(
     // pre-apply version" (versionId == source).
     versionId: latestVersion?.id ?? null,
     versionStatus: latestVersion?.status ?? null,
+    manifest,
   });
 }

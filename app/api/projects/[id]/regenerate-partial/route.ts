@@ -165,7 +165,37 @@ export async function POST(
     ? lastInput.quality
     : null;
 
+  // Job row to record token-usage telemetry for the regen + Inngest
+  // event dispatch. Both wrapped in one try/catch so a failure at
+  // EITHER step rolls back the version + comment promotions that the
+  // tx above already committed. Previously the Job.create call sat
+  // OUTSIDE the catch — when it threw (e.g. Prisma XOR rejection on a
+  // newly-added scalar), the 500 left the comment stranded in
+  // "applied" and version 2 stranded in "queued" with no Inngest run.
+  //
+  // Use `project: { connect }` (strict relation form) rather than raw
+  // `projectId` (unchecked FK form). Mixing the FK shorthand with the
+  // newly-added scalar columns (`quality`, etc.) flips Prisma's XOR
+  // resolution to JobCreateInput-strict at runtime and rejects
+  // `projectId` as "unknown argument". Connect form is unambiguous.
+  let regenJobId: string | null = null;
   try {
+    const regenJob = await prisma.job.create({
+      data: {
+        project: { connect: { id: project.id } },
+        type: "deck.regenerate.partial",
+        status: "queued",
+        inputJson: toJson({
+          sourceVersionId,
+          versionId: newVersion.id,
+          targetSlideIds,
+          commentCount: promoted.length,
+          quality: originalQuality,
+        }),
+        quality: originalQuality ?? "medium",
+      },
+    });
+    regenJobId = regenJob.id;
     await sendInngestEventWithRetry({
       name: "deck.regenerate.partial.requested",
       data: {
@@ -180,11 +210,12 @@ export async function POST(
           boundsJson: c.boundsJson,
         })),
         quality: originalQuality,
+        jobId: regenJob.id,
       },
     });
   } catch (error) {
-    // Reverse the version allocation + applied transition so the user can
-    // retry without losing their drafts.
+    // Reverse the version allocation + applied transition + telemetry
+    // job so the user can retry without losing their drafts.
     await prisma.presentationVersion
       .update({ where: { id: newVersion.id }, data: { status: "failed" } })
       .catch(() => undefined);
@@ -197,6 +228,14 @@ export async function POST(
         data: { status: "draft" },
       })
       .catch(() => undefined);
+    // Only attempt to roll the job to "failed" when it actually got
+    // created. If Job.create itself was the failure point, there's
+    // no row to update.
+    if (regenJobId) {
+      await prisma.job
+        .update({ where: { id: regenJobId }, data: { status: "failed" } })
+        .catch(() => undefined);
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to dispatch regenerate" },
       { status: 500 },

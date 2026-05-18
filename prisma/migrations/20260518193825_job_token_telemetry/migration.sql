@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "Job" ADD COLUMN     "attempts" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "cacheCreationTokens" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "cacheReadTokens" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "inputTokens" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "model" TEXT,
+ADD COLUMN     "outputTokens" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "quality" TEXT;

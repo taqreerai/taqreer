@@ -281,22 +281,22 @@ export function ColorPickerPopover({
     <AnimatePresence>
       {open ? (
         <div
-          className="absolute top-full z-30 mt-2"
+          className="absolute bottom-full z-30 mb-2"
           style={{ ...positionStyle, width: 240 }}
         >
-        {/* Solid-ish backdrop tint (not just glass-opacity) so the
-            SV gradient stays readable over busy backgrounds. Border
-            still uses the user's glass-border preset for cohesion. */}
+        {/* Glass surface — pattern #3 from the design-system block
+            in globals.css (popovers / menus / pickers all share this
+            recipe so backdrop blur + tint track the user's preset). */}
         <motion.div
           ref={wrapperRef}
-          initial={{ opacity: 0, scale: 0.9, y: -6 }}
+          initial={{ opacity: 0, scale: 0.9, y: 6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: -6 }}
+          exit={{ opacity: 0, scale: 0.9, y: 6 }}
           transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
           className="backdrop-blur-glass rounded-2xl border p-3 shadow-2xl"
           style={{
-            background: "rgba(15, 11, 30, 0.92)",
+            background: "rgba(255, 255, 255, var(--glass-opacity))",
             borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
           }}
         >
