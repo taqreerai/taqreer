@@ -102,7 +102,7 @@ export function SlidePill({
       // pointer-events:auto so child clicks land (parent canvas may
       // have crosshair cursor during comment mode — we don't want
       // the pill to take that styling).
-      className="pointer-events-auto absolute left-1/2 z-20 -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+      className="pointer-events-auto absolute left-1/2 z-20 -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover/canvas:opacity-100"
       style={{ top: 30 }}
       onMouseLeave={() => setHistoryOpen(false)}
     >
@@ -125,7 +125,7 @@ export function SlidePill({
         />
         <PillButton
           icon="replay"
-          label="حاول مرة أخرى"
+          label="حاول بالتعليقات مرة أخرى"
           variant="ai"
           disabled={!canTryAgain}
           onClick={onTryAgain}
@@ -192,18 +192,31 @@ function PillButton({
         : "backdrop-blur-glass border";
   const variantStyle = variant === "glass" ? NEUTRAL_GLASS_STYLE : undefined;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className={`${BUTTON_BASE} ${variantClass}`}
-      style={variantStyle}
-    >
-      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-        {icon}
+    // Named `group/btn` so the tooltip's `group-hover/btn:` matches
+    // THIS wrapper specifically, leaving the outer `group/canvas`
+    // (used by the pill's overall fade-in) untouched.
+    <span className="group/btn relative inline-flex">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        className={`${BUTTON_BASE} ${variantClass}`}
+        style={variantStyle}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+          {icon}
+        </span>
+        <span className="sr-only">{label}</span>
+      </button>
+      {/* Tooltip — appears BELOW the button so it doesn't clash with
+          the slide content above the pill. Same recipe as
+          PreviewActionBar (Pattern 1 vocabulary, see globals.css). */}
+      <span
+        className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/90 px-2.5 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover/btn:opacity-100"
+      >
+        {label}
       </span>
-      <span className="sr-only">{label}</span>
-    </button>
+    </span>
   );
 }

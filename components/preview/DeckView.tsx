@@ -1313,7 +1313,7 @@ export function DeckView({
           // fades to opacity:1 over 1 s and the slow drift resumes.
           // Crosshair cursor signals "click + drag to draw" while in
           // commentMode; reverts to default outside it.
-          className={`canvas-gradient-border group relative overflow-hidden rounded-xl p-0 shadow-2xl${
+          className={`canvas-gradient-border group/canvas relative overflow-hidden rounded-xl p-0 shadow-2xl${
             commentMode ? " cursor-crosshair" : ""
           }`}
           data-active={commentMode ? "true" : "false"}
