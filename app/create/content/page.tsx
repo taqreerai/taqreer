@@ -173,6 +173,11 @@ export default function CreateContentPage() {
           : "تعذر قراءة الملف. حاول مرة أخرى.",
       );
       setFile(null);
+      // Also clear `text` from any prior successful extract — handleNext
+      // gates Continue on `text.trim().length > 0`, so leaving stale
+      // text in place would let the user proceed with content from an
+      // earlier file even though their CURRENT pick failed.
+      setText("");
       if (inputRef.current) inputRef.current.value = "";
     }
   };

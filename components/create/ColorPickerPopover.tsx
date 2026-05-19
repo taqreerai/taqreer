@@ -353,6 +353,8 @@ export function ColorPickerPopover({
               onChange={(event) => onHexChange(event.target.value)}
               spellCheck={false}
               maxLength={7}
+              aria-label="رمز اللون (HEX)"
+              placeholder="#RRGGBB"
               className="input-dark min-w-0 flex-1 font-mono text-xs"
               style={{ padding: "6px 10px" }}
             />

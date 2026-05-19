@@ -336,15 +336,20 @@ function CardShell({
   const [layoutEnabled, setLayoutEnabled] = useState(false);
   useEffect(() => {
     let cancelled = false;
+    let id2: number | null = null;
     const id1 = window.requestAnimationFrame(() => {
-      const id2 = window.requestAnimationFrame(() => {
+      id2 = window.requestAnimationFrame(() => {
         if (!cancelled) setLayoutEnabled(true);
       });
-      void id2;
     });
     return () => {
       cancelled = true;
       window.cancelAnimationFrame(id1);
+      // Cancel the INNER rAF too — if the component unmounts after id1
+      // fires but before id2 fires, the inner callback would still run
+      // and call setLayoutEnabled on an unmounted component (React warns
+      // + may flag the state set as a memory leak).
+      if (id2 !== null) window.cancelAnimationFrame(id2);
     };
   }, []);
 

@@ -196,10 +196,27 @@ function rewriteRtlFlexEndToFlexStart(html: string): string {
       // alone for now.
       if (flexDir !== "column" && flexDir !== "column-reverse") return;
       const ai = el.style.getPropertyValue("align-items").trim().toLowerCase();
-      if (ai === "flex-end" || ai === "end") {
-        el.style.setProperty("align-items", "flex-start");
-        changed = true;
-      }
+      if (ai !== "flex-end" && ai !== "end") return;
+      // INTENT GUARD: if the container carries ANY physical-direction
+      // signal (`text-align: left/start`, `padding-left`, `padding-right`,
+      // `padding` shorthand with asymmetric L/R), Claude is deliberately
+      // composing a LEFT-SIDE block in an RTL slide — e.g. a timeline-step
+      // label that sits in the right half of the canvas but is anchored
+      // to its own LEFT edge so it reads adjacent to a centred timeline
+      // rule. `align-items: flex-end` in that case is CORRECT (RTL column
+      // flex's cross-axis end resolves to visual left). The bug we're
+      // defending against is the pattern with NO physical hints where
+      // Claude reached for flex-end thinking it meant "right-align in
+      // RTL"; that one we still flip.
+      const ta = el.style.getPropertyValue("text-align").trim().toLowerCase();
+      if (ta === "left" || ta === "start") return;
+      const pl = el.style.getPropertyValue("padding-left").trim();
+      const pr = el.style.getPropertyValue("padding-right").trim();
+      const hasNonZero = (v: string) =>
+        v.length > 0 && v !== "0" && v !== "0px" && v !== "0%";
+      if (hasNonZero(pl) || hasNonZero(pr)) return;
+      el.style.setProperty("align-items", "flex-start");
+      changed = true;
     });
     return changed ? root.innerHTML : html;
   } catch {

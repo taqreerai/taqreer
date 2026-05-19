@@ -410,13 +410,18 @@ Client-side, in [`lib/export/html-export.ts`](../lib/export/html-export.ts). The
    - extractGradientIntents          replace background-clip:text + gradient with sentinel hex (#FExxxx)
 5. exportToPptx(slideNodes, { skipDownload: true, svgAsVector: true })
    ↳ patched dom-to-pptx (5 fixes — see §19 patch index)
-6. fixBiDiInPptxBlob(blob, JSZip, stats, intents)
+6. POST /api/export/embed-fonts (server-side font embed — see §19D)
+   ↳ Google Fonts CSS → woff2/ttf → ttf2eot direct (preserves GSUB)
+   ↳ <p:embeddedFontLst> inserted before <p:defaultTextStyle>
+7. fixBiDiInPptxBlob(blob, JSZip, stats, intents)
    ↳ PASS 1  rtlCol="1" on RTL bodyPr
    ↳ PASS 2  pPr rtl/algn + smart run-merge + lang retag + LTR override
    ↳ PASS 3  direction-aware shape extension (10% on opposite side, capped)
    ↳ PASS 4  swap sentinel solidFill → real <a:gradFill>
-7. downloadBlob(fixedBlob, fileName)
+8. downloadBlob(fixedBlob, fileName)
 ```
+
+Each slide is authored against the manifest's `format` (16:9 → 1920×1080, 9:16 → 1080×1920). Every step is format-aware: dom-to-pptx receives `defineLayout(slideWidthIn, slideHeightIn)` derived from `canvasW / 192`, font embed only patches the layout-agnostic `[Content_Types].xml` + `ppt/presentation.xml` + relationships, and BiDi postprocess parametrises `SLIDE_WIDTH_EMU` per format.
 
 **PDF export — pending.** UI shows "قريباً". Plan: Puppeteer prints the same SlideRenderer HTML to PDF (one page per slide). `puppeteer` 24 is already installed.
 

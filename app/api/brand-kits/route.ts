@@ -156,6 +156,13 @@ export async function GET() {
         | null;
       const logoPath = assetUrls?.logo?.storageUrl ?? null;
       if (!logoPath) return kit;
+      // Re-check ownership before signing. The POST path validates this
+      // when a kit is created, but a legacy / migrated / hand-edited row
+      // could still hold a path that doesn't match this user — minting a
+      // signed URL would leak access to another user's asset. Skip the
+      // displayUrl in that case; the kit still loads, just without a
+      // logo preview.
+      if (!isOwnedBrandAssetPath(logoPath, ctx.supabaseUserId)) return kit;
       const signed = await signBrandAssetUrl(logoPath);
       if (!signed) return kit;
       return {

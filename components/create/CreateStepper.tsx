@@ -93,7 +93,11 @@ export function CreateStepper({ currentStep }: { currentStep: CreateStepId }) {
     >
       <h2 className="text-base font-semibold text-white">خطوات الإعداد</h2>
 
-      <ol className="relative flex flex-col gap-5">
+      {/* Wrapper carries `position: relative` so the connector <span>
+          can live as a sibling of the <ol> (not a child of it — <ol>
+          must contain only <li>) while still anchoring against the
+          rows visually. */}
+      <div className="relative">
         {/* Continuous vertical connector behind the dots — sits at
             the same horizontal position as the dot centres. RTL uses
             `right` so visual-right anchoring matches the dot column
@@ -104,27 +108,29 @@ export function CreateStepper({ currentStep }: { currentStep: CreateStepId }) {
           style={{ right: "calc(0.625rem - 0.5px)" }}
         />
 
-        {CREATE_STEPS.map((step) => {
-          const state = stateOf(step);
-          return (
-            <li key={step.id} className="relative">
-              <div className="flex w-full items-center gap-3 rounded-lg text-start">
-                <StepDot state={state} />
-                <div className="flex flex-1 flex-col gap-1">
-                  <span
-                    className={`text-sm font-medium ${
-                      state === "pending" ? "text-white/40" : "text-white"
-                    }`}
-                  >
-                    {step.label}
-                  </span>
-                  <StepPill state={state} />
+        <ol className="flex flex-col gap-5">
+          {CREATE_STEPS.map((step) => {
+            const state = stateOf(step);
+            return (
+              <li key={step.id} className="relative">
+                <div className="flex w-full items-center gap-3 rounded-lg text-start">
+                  <StepDot state={state} />
+                  <div className="flex flex-1 flex-col gap-1">
+                    <span
+                      className={`text-sm font-medium ${
+                        state === "pending" ? "text-white/40" : "text-white"
+                      }`}
+                    >
+                      {step.label}
+                    </span>
+                    <StepPill state={state} />
+                  </div>
                 </div>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
     </aside>
   );
 }

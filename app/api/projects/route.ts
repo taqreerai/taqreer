@@ -5,12 +5,32 @@ import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
+import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
 import {
   DEFAULT_QUALITY,
   estimateSlideCountFromText,
   isQuality,
   type Quality,
 } from "@/lib/types/quality";
+
+// Allowlist client-supplied font URLs against the schema's trusted-host
+// set (HTTPS + `fonts.googleapis.com` / `fonts.gstatic.com`). Without this,
+// `payload.brand.fonts.{heading,body}.url` would be persisted + forwarded
+// to the brief verbatim, and Claude would render `@font-face src: url(...)`
+// pointing at attacker-controlled origins on every exported deck — both a
+// privacy leak (every render fetches from that origin) and a code-injection
+// surface (a hostile font file could exploit shaping bugs in PowerPoint).
+function safeFontUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return null;
+    if (!ALLOWED_FONT_HOSTS.has(u.hostname)) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
 
 // Fetch the logo SVG content via the admin storage client (bucket is private)
 // and return sanitised markup. Sanitisation here is a defence-in-depth pass —
@@ -205,10 +225,10 @@ export async function POST(request: Request) {
       | null;
     const headingFontName = incomingFonts?.heading?.name?.trim() || "Arial";
     const headingFontStorageUrl = incomingFonts?.heading?.storageUrl || null;
-    const headingFontUrl = incomingFonts?.heading?.url || null;
+    const headingFontUrl = safeFontUrl(incomingFonts?.heading?.url);
     const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
     const bodyFontStorageUrl = incomingFonts?.body?.storageUrl || null;
-    const bodyFontUrl = incomingFonts?.body?.url || null;
+    const bodyFontUrl = safeFontUrl(incomingFonts?.body?.url);
     const logoPath = payload.brand?.logo?.storageUrl ?? null;
     // AUTHORIZE the logo path before we touch Supabase. The helpers below
     // both run with service-role credentials (signed URL → embedded in

@@ -1,7 +1,10 @@
 // Shared comment types — used by the comments API routes (server) and
 // the canvas drag-box editor (client). Mirrors the Prisma `Comment`
 // model minus internal columns we don't render. `boundsJson` lives in
-// slide-space (0..1920 × 0..1080) so it survives viewport changes.
+// slide-space — server validation accepts 0..1920 on BOTH x AND y so
+// the same envelope covers 16:9 (1920×1080) and 9:16 (1080×1920); the
+// renderer / lightbox clamps to the actual `canvasW`/`canvasH` of the
+// active slide format before drawing.
 
 export type CommentBounds = {
   x: number;
