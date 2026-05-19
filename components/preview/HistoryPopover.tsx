@@ -31,11 +31,11 @@ export type HistoryRow = {
   createdAt: string; // ISO
 };
 
-const POPOVER_WIDTH = 280;
-// Margin from the trigger button + small inset from the viewport
-// edge. Both small enough to feel anchored, big enough that the
-// glass surface doesn't read as flush with the canvas.
-const ANCHOR_GAP_PX = 8;
+const POPOVER_WIDTH = 220;
+// Margin from the trigger button. Matches the per-button tooltip
+// `mt-3` (12 px) on the pill so the two affordances feel like
+// they belong to the same visual family.
+const ANCHOR_GAP_PX = 12;
 const VIEWPORT_EDGE_INSET_PX = 12;
 
 export function HistoryPopover({
@@ -87,11 +87,15 @@ export function HistoryPopover({
   if (typeof document === "undefined") return null;
   if (!open || !triggerRect) return null;
 
-  const centerX = triggerRect.left + triggerRect.width / 2;
+  // Right-anchored: the popover's right edge lines up with the
+  // History button's right edge (the visual-right corner under
+  // the icon in RTL). Drops down-and-left from the trigger
+  // rather than centred — feels less "menu-bar" and more like a
+  // chip flag tied to the button.
   const left = Math.max(
     VIEWPORT_EDGE_INSET_PX,
     Math.min(
-      centerX - POPOVER_WIDTH / 2,
+      triggerRect.right - POPOVER_WIDTH,
       window.innerWidth - POPOVER_WIDTH - VIEWPORT_EDGE_INSET_PX,
     ),
   );
@@ -111,11 +115,8 @@ export function HistoryPopover({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       >
-        <header className="border-b border-white/[0.08] px-4 py-3">
-          <p className="text-sm font-semibold text-white">سجل الإصدارات</p>
-          <p className="mt-0.5 text-[11px] text-white/50">
-            اختر إصدارًا لاستعادته. لا يتم حذف أي إصدار.
-          </p>
+        <header className="border-b border-white/[0.08] px-3 py-2">
+          <p className="text-xs font-semibold text-white">سجل الإصدارات</p>
         </header>
         <ul className="flex flex-col">
           <AnimatePresence initial={false}>
@@ -169,21 +170,21 @@ function HistoryItem({
       type="button"
       onClick={disabled || isCurrent ? undefined : onClick}
       disabled={disabled || isCurrent}
-      className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-start text-sm transition-colors ${
+      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-start transition-colors ${
         isCurrent
           ? "bg-white/[0.06] text-white"
           : "text-white/80 hover:bg-white/[0.04] hover:text-white"
       } ${disabled && !isCurrent ? "cursor-wait opacity-60" : ""}`}
     >
       <span className="flex flex-col gap-0.5">
-        <span className="text-sm font-medium text-white">
+        <span className="text-xs font-medium text-white">
           {`الإصدار ${number}`}
         </span>
-        <span className="text-[11px] text-white/50">{relative}</span>
+        <span className="text-[10px] text-white/50">{relative}</span>
       </span>
       {isCurrent ? (
         <span
-          className="rounded-full px-2 py-0.5 text-[10px] font-medium leading-none text-white"
+          className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-white"
           style={{ background: "var(--tq-violet)" }}
         >
           الحالي

@@ -1473,11 +1473,17 @@ export function DeckView({
                 }
               }}
               onOpenHistory={async (rect) => {
-                if (!rect) {
+                // Pill is stateless w.r.t. popover open/closed —
+                // every click here is a TOGGLE relative to the
+                // parent's current historyAnchor. If the popover
+                // is already open for this slide, close it; else
+                // open it at the new rect.
+                if (historyAnchor != null) {
                   setHistoryAnchor(null);
                   setHistorySlideKey(null);
                   return;
                 }
+                if (!rect) return;
                 setHistoryAnchor(rect);
                 setHistorySlideKey(focusedSlide.slideId);
                 // Lazy-fetch versions on open. Cached per slide so

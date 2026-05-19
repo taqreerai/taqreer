@@ -31,7 +31,7 @@
 // later steps (Lock = step 4, Undo/History = step 5, Regen/Try
 // again = step 6).
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 export type SlidePillState = {
   currentVersionNumber: number;
@@ -60,19 +60,23 @@ export type SlidePillProps = SlidePillState & {
 // class (`btn-gradient-anim`, `btn-gradient`, or the neutral glass
 // recipe below). Centralised so the five buttons stay pixel-
 // identical regardless of variant.
+// Base geometry only — per-variant classes paint the text colour
+// so the glass variant can run the muted→hover treatment without
+// being overridden by a base `text-white`.
 const BUTTON_BASE =
-  "relative inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition-all disabled:cursor-not-allowed disabled:opacity-40";
+  "relative inline-flex h-9 w-9 items-center justify-center rounded-full transition-all disabled:cursor-not-allowed disabled:opacity-40";
 
-// Neutral glass surface (Pattern 1 from globals.css). Bg + border
-// alphas reference the user's glass preset; the blur comes from
-// the Tailwind `backdrop-blur-glass` utility on the element itself
-// (tied to `--backdrop-blur-glass = glass-blur * 2.5`). DO NOT
-// inline raw `backdrop-filter` here — it bypasses the preset and
-// composites differently than the rest of the design system.
+// Neutral glass surface — matches the normal-button treatment in
+// PreviewActionBar so the pill reads as part of the same button
+// vocabulary. Bg from the user's glass preset; border + text fade
+// from muted (white/15, white/60) to bright (white/40, white)
+// on hover. No raw `backdrop-filter` inline — the blur comes from
+// the Tailwind `backdrop-blur-glass` utility (globals.css §3).
 const NEUTRAL_GLASS_STYLE = {
   background: "rgba(255, 255, 255, var(--glass-opacity))",
-  borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
 } as const;
+const NEUTRAL_GLASS_CLASSES =
+  "border border-white/15 text-white/60 hover:border-white/40 hover:text-white";
 
 type PillButtonVariant = "glass" | "ai" | "cta";
 
@@ -87,14 +91,14 @@ export function SlidePill({
   onOpenHistory,
   onToggleLock,
 }: SlidePillProps) {
-  // Ref to the History button so we can pass its DOMRect upward
-  // on click. The parent renders the popover, anchored to this
-  // rect. Stays in this component so the geometry stays cohesive
-  // with the rest of the pill (no parent-side ref-forwarding).
+  // Ref to the History button so the click handler can pass its
+  // DOMRect upward. The parent renders the popover, anchored to
+  // this rect. Open/closed state is owned by the parent (it's the
+  // one that renders the portal'd popover) — having a local
+  // "historyOpen" flag mirrored against parent state caused a
+  // setState-during-render war earlier (parent's setState fired
+  // from inside a SlidePill render-phase code path).
   const historyBtnRef = useRef<HTMLButtonElement | null>(null);
-  // Local "is the popover currently open" flag — controls whether
-  // the History click sends a real rect (open) or null (close).
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Per the product spec: when no draft exists (slide is still at
   // v1), only Lock + Regen are active. Undo / Try again / History
@@ -118,7 +122,6 @@ export function SlidePill({
       // the pill to take that styling).
       className="pointer-events-auto absolute left-1/2 z-20 -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover/canvas:opacity-100"
       style={{ top: 30 }}
-      onMouseLeave={() => setHistoryOpen(false)}
     >
       <div
         // Pattern 3 (Layout surface) via `.glass-popover` — the
@@ -158,17 +161,9 @@ export function SlidePill({
           disabled={!canOpenHistory}
           buttonRef={historyBtnRef}
           onClick={() => {
-            setHistoryOpen((wasOpen) => {
-              const nextOpen = !wasOpen;
-              // Pass the trigger's live rect on open, null on close.
-              // The parent re-anchors the popover from this rect.
-              onOpenHistory?.(
-                nextOpen && historyBtnRef.current
-                  ? historyBtnRef.current.getBoundingClientRect()
-                  : null,
-              );
-              return nextOpen;
-            });
+            onOpenHistory?.(
+              historyBtnRef.current?.getBoundingClientRect() ?? null,
+            );
           }}
         />
         <PillButton
@@ -210,14 +205,16 @@ function PillButton({
   //           styling, no inline override.
   // Glass variant composes the preset-linked blur via the Tailwind
   // `backdrop-blur-glass` utility (NOT raw `backdrop-filter` — see
-  // globals.css §3 / Pattern 3). AI + CTA variants paint their own
-  // surfaces via the global classes.
+  // globals.css §3 / Pattern 3) AND the muted→hover treatment from
+  // PreviewActionBar so the pill reads as part of the same button
+  // vocabulary. AI + CTA variants paint their own surfaces via the
+  // global classes and ship as white text.
   const variantClass =
     variant === "ai"
-      ? "btn-gradient-anim hover:scale-[1.03]"
+      ? "btn-gradient-anim text-white hover:scale-[1.03]"
       : variant === "cta"
-        ? "btn-gradient"
-        : "backdrop-blur-glass border";
+        ? "btn-gradient text-white"
+        : `backdrop-blur-glass ${NEUTRAL_GLASS_CLASSES}`;
   const variantStyle = variant === "glass" ? NEUTRAL_GLASS_STYLE : undefined;
   return (
     // Named `group/btn` so the tooltip's `group-hover/btn:` matches
