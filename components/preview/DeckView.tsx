@@ -1406,6 +1406,15 @@ export function DeckView({
               isLocked={
                 slideStates[focusedSlide.slideId]?.lockedAt != null
               }
+              // Keep the pill fully opaque while THIS slide's history
+              // popover is open — the popover is portal'd to body so
+              // the cursor moving onto it leaves the canvas's hover
+              // area, which would otherwise fade the pill back out
+              // while the user is still interacting with the menu.
+              popoverOpen={
+                historyAnchor != null &&
+                historySlideKey === focusedSlide.slideId
+              }
               onToggleLock={async () => {
                 const current = slideStates[focusedSlide.slideId];
                 const shouldLock = current?.lockedAt == null;
@@ -1454,22 +1463,6 @@ export function DeckView({
                       lockedAt: current?.lockedAt ?? null,
                     },
                   }));
-                }
-              }}
-              onUndo={async () => {
-                try {
-                  const res = await fetch(
-                    `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/undo`,
-                    { method: "POST" },
-                  );
-                  if (!res.ok) throw new Error(`undo: ${res.status}`);
-                  const data = (await res.json()) as {
-                    currentVersionNumber: number;
-                    slide: SlideType;
-                  };
-                  applyRestoredSlide(focusedSlide.slideId, data);
-                } catch (err) {
-                  console.error("undo failed", err);
                 }
               }}
               onOpenHistory={async (rect) => {

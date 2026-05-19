@@ -5,11 +5,14 @@
 // mouse leaves the canvas. Owns the per-slide actions that operate
 // on the currently-focused slide:
 //
-//   ← Undo       Revert this slide to its previous SlideVersion
 //   ⟳ Try again  Replay cached comments through partial regen  [AI]
 //   ↻ Regen      Clean partial regen (no comments)              [AI]
 //   ⌛ History   Open the version list popover
 //   🔒 Lock      Lock this slide against full-deck regen        [CTA when active]
+//
+// Undo was removed 2026-05-20 — History + Restore handle every
+// "go back" path non-destructively, and the destructive Undo
+// muddled the mental model. See log.md.
 //
 // STYLING (matches globals.css design vocabulary):
 //   - Try again + Regen use `.btn-gradient-anim` (Pattern 4 — AI
@@ -17,19 +20,15 @@
 //     for "Claude does work here", same as the regen toolbar button.
 //   - Lock when active uses `.btn-gradient` (Pattern 2 — CTA, brand
 //     gradient fill + shadow). When unlocked it's neutral glass.
-//   - Undo + History stay neutral glass (Pattern 1 — normal button).
+//   - History stays neutral glass (Pattern 1 — normal button)
+//     matching the PreviewActionBar muted→hover treatment.
 //   - Geometry is icon-only square (h-9 w-9) so the bar fits inside
 //     both 16:9 and 9:16 slide canvases without overflowing.
 //
 // Visibility rules:
 //   - Lock + Regen are ALWAYS visible
-//   - Undo + Try again appear only when meaningful
-//   - When the slide has no draft beyond v1, Undo / Try again /
-//     History stay rendered but disabled (stable pill geometry)
-//
-// This file ships the VISUAL pill — click handlers are wired up in
-// later steps (Lock = step 4, Undo/History = step 5, Regen/Try
-// again = step 6).
+//   - Try again appears only when there's a cached comment payload
+//   - History is always visible; popover shows what rows exist
 
 import { useRef } from "react";
 
@@ -44,14 +43,17 @@ export type SlidePillState = {
 };
 
 export type SlidePillProps = SlidePillState & {
-  onUndo?: () => void;
   onTryAgain?: () => void;
   onRegen?: () => void;
   // Receives the History trigger button's DOMRect so the parent
-  // (DeckView) can anchor the popover under it. null when the
-  // popover should close.
+  // (DeckView) can anchor the popover under it. The parent owns
+  // the popover open/closed state — pill is stateless here.
   onOpenHistory?: (triggerRect: DOMRect | null) => void;
   onToggleLock?: () => void;
+  // True while THIS slide's history popover is open. Forces the
+  // pill to stay fully opaque even though the cursor has moved
+  // onto the (portal'd) popover and left the canvas's hover area.
+  popoverOpen?: boolean;
 };
 
 // Common geometry for every button on the pill. Icon-only square,
@@ -81,11 +83,11 @@ const NEUTRAL_GLASS_CLASSES =
 type PillButtonVariant = "glass" | "ai" | "cta";
 
 export function SlidePill({
-  currentVersionNumber,
+  currentVersionNumber: _currentVersionNumber,
   hasCachedComments,
   isLocked,
   busy = false,
-  onUndo,
+  popoverOpen = false,
   onTryAgain,
   onRegen,
   onOpenHistory,
@@ -100,17 +102,13 @@ export function SlidePill({
   // from inside a SlidePill render-phase code path).
   const historyBtnRef = useRef<HTMLButtonElement | null>(null);
 
-  // Per the product spec: when no draft exists (slide is still at
-  // v1), only Lock + Regen are active. Undo / Try again / History
-  // grey out — the controls are visible (stable pill geometry)
-  // but communicate "nothing to act on yet."
-  const canUndo = currentVersionNumber > 1 && !isLocked && !busy;
+  // Per the product spec: Lock + Regen are always available.
+  // Try again only when there's a cached comment payload. History
+  // is always available (popover shows whatever rows exist) —
+  // gating on a version count would have blocked the redo-after-
+  // restore path (rows survive a non-destructive restore).
   const canTryAgain = hasCachedComments && !isLocked && !busy;
   const canRegen = !isLocked && !busy;
-  // History is always available (popover shows whatever rows exist).
-  // Gating on `currentVersionNumber > 1` was wrong — after a Restore
-  // back to v1 the user can still want to step FORWARD into v2 (the
-  // row is preserved by Restore's non-destructive semantics).
   const canOpenHistory = !busy;
   const canLock = !busy;
 
@@ -120,7 +118,11 @@ export function SlidePill({
       // pointer-events:auto so child clicks land (parent canvas may
       // have crosshair cursor during comment mode — we don't want
       // the pill to take that styling).
-      className="pointer-events-auto absolute left-1/2 z-20 -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover/canvas:opacity-100"
+      className={`pointer-events-auto absolute left-1/2 z-20 -translate-x-1/2 transition-opacity duration-150 ${
+        popoverOpen
+          ? "opacity-100"
+          : "opacity-0 group-hover/canvas:opacity-100"
+      }`}
       style={{ top: 30 }}
     >
       <div
@@ -134,22 +136,15 @@ export function SlidePill({
         className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] flex items-center gap-2.5 rounded-full px-2.5 py-2"
       >
         <PillButton
-          icon="undo"
-          label="تراجع"
-          variant="glass"
-          disabled={!canUndo}
-          onClick={onUndo}
-        />
-        <PillButton
           icon="replay"
-          label="حاول بالتعليقات مرة أخرى"
+          label="إعادة التصميم بالتعليقات"
           variant="ai"
           disabled={!canTryAgain}
           onClick={onTryAgain}
         />
         <PillButton
           icon="autorenew"
-          label="إعادة إنشاء هذه الشريحة"
+          label="أعد تصميم الشريحة"
           variant="ai"
           disabled={!canRegen}
           onClick={onRegen}
