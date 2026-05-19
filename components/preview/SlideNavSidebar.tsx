@@ -31,6 +31,10 @@ export type NavItem =
       // Dims the thumbnail + shows a spinner overlay so the user sees
       // which slides are being rewritten.
       regenerating?: boolean;
+      // True when the slide's SlideState.lockedAt is set — surfaces a
+      // small lock badge in the top-LEFT corner of the thumbnail
+      // (mirror of the comment-count badge on the top-right).
+      locked?: boolean;
     };
 
 export function SlideNavSidebar({
@@ -176,6 +180,24 @@ export function SlideNavSidebar({
               {item.kind === "slide" && item.commentCount > 0 ? (
                 <div className="pointer-events-none absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
                   {item.commentCount}
+                </div>
+              ) : null}
+
+              {/* Lock badge — visual TOP-LEFT corner, mirror of the
+                  comment-count badge. Solid brand-violet so it reads
+                  the same as the active Lock button on the slide
+                  pill (Pattern 2 — CTA/brand-gradient). */}
+              {item.kind === "slide" && item.locked ? (
+                <div
+                  className="pointer-events-none absolute left-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-white shadow"
+                  style={{ background: "var(--tq-violet)" }}
+                >
+                  <span
+                    className="material-symbols-outlined leading-none"
+                    style={{ fontSize: 11 }}
+                  >
+                    lock
+                  </span>
                 </div>
               ) : null}
             </button>

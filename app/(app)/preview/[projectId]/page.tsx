@@ -9,6 +9,17 @@ import { DeckView } from "@/components/preview/DeckView";
 
 export const dynamic = "force-dynamic";
 
+// Per-slide state shared with DeckView for the pill (lock badge,
+// undo affordance, version count, cached comments). Stays a flat
+// serialisable shape so it can cross the server→client boundary
+// without re-fetching client-side.
+export type InitialSlideState = {
+  slideKey: string;
+  currentVersionNumber: number;
+  hasCachedComments: boolean;
+  lockedAt: string | null;
+};
+
 type InitialState = {
   projectTitle: string;
   presentationId: string | null;
@@ -17,6 +28,7 @@ type InitialState = {
   initialVersionId: string | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
+  initialSlideStates: InitialSlideState[];
   // Slide aspect ratio chosen on /create/brand. Used as the fallback for
   // the generating-state placeholder grid (when the manifest isn't ready
   // yet) so the cards have the correct orientation from the first paint.
@@ -96,6 +108,31 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
 
   const initialFormat: SlideFormat = project.format === "9:16" ? "9:16" : "16:9";
 
+  // Per-slide state for the pill (lock + version count + cached
+  // comments). Only fetched when we have a presentation row;
+  // legacy projects without a presentation skip this entirely.
+  // `hasCachedComments` is a boolean (not the payload) — the
+  // payload itself only travels to the server when "Try again"
+  // fires (step 6).
+  let initialSlideStates: InitialSlideState[] = [];
+  if (project.presentation?.id) {
+    const states = await prisma.slideState.findMany({
+      where: { presentationId: project.presentation.id },
+      select: {
+        slideKey: true,
+        currentVersionNumber: true,
+        lockedAt: true,
+        cachedComments: true,
+      },
+    });
+    initialSlideStates = states.map((s) => ({
+      slideKey: s.slideKey,
+      currentVersionNumber: s.currentVersionNumber,
+      lockedAt: s.lockedAt ? s.lockedAt.toISOString() : null,
+      hasCachedComments: s.cachedComments != null,
+    }));
+  }
+
   return {
     projectTitle: project.title,
     presentationId: project.presentation?.id ?? null,
@@ -104,6 +141,7 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
     initialVersionId: version?.id ?? null,
     initialManifest: manifest,
     initialSlideCount,
+    initialSlideStates,
     initialFormat,
   };
 }

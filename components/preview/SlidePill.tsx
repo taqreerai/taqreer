@@ -6,34 +6,41 @@
 // on the currently-focused slide:
 //
 //   ← Undo       Revert this slide to its previous SlideVersion
-//   ⟳ Try again  Replay cached comments through partial regen
-//   ↻ Regen      Clean partial regen (no comments)
+//   ⟳ Try again  Replay cached comments through partial regen  [AI]
+//   ↻ Regen      Clean partial regen (no comments)              [AI]
 //   ⌛ History   Open the version list popover
-//   🔒 Lock      Lock this slide against full-deck regen
+//   🔒 Lock      Lock this slide against full-deck regen        [CTA when active]
 //
-// Visibility rules at the per-slide level (per the product req):
+// STYLING (matches globals.css design vocabulary):
+//   - Try again + Regen use `.btn-gradient-anim` (Pattern 4 — AI
+//     trigger). The animated mesh-gradient stroke is the brand cue
+//     for "Claude does work here", same as the regen toolbar button.
+//   - Lock when active uses `.btn-gradient` (Pattern 2 — CTA, brand
+//     gradient fill + shadow). When unlocked it's neutral glass.
+//   - Undo + History stay neutral glass (Pattern 1 — normal button).
+//   - Geometry is icon-only square (h-9 w-9) so the bar fits inside
+//     both 16:9 and 9:16 slide canvases without overflowing.
+//
+// Visibility rules:
 //   - Lock + Regen are ALWAYS visible
 //   - Undo + Try again appear only when meaningful
-//   - When the slide has no draft beyond v1, Undo + Try again are
-//     rendered but disabled (greyed out, not hidden — keeps the
-//     pill's geometry stable across slides)
+//   - When the slide has no draft beyond v1, Undo / Try again /
+//     History stay rendered but disabled (stable pill geometry)
 //
-// This file ships the VISUAL pill only — buttons are wired up in
+// This file ships the VISUAL pill — click handlers are wired up in
 // later steps (Lock = step 4, Undo/History = step 5, Regen/Try
-// again = step 6). Until then click handlers are no-ops, matching
-// the user's "go step by step, we test as we go" cadence.
+// again = step 6).
 
 import { useState } from "react";
 
 export type SlidePillState = {
-  // Slide's current version number — controls Undo affordance.
-  // 1 = no history beyond initial; >1 = Undo enabled.
   currentVersionNumber: number;
-  // Whether this slide has a cached comment payload — controls
-  // "Try again" affordance.
   hasCachedComments: boolean;
-  // Lock state — flips the Lock button's label + active styling.
   isLocked: boolean;
+  // Disables every button (including Lock + Regen) while a regen
+  // is mid-flight for this slide. Avoids double-clicks while the
+  // hero overlay is up.
+  busy?: boolean;
 };
 
 export type SlidePillProps = SlidePillState & {
@@ -44,44 +51,50 @@ export type SlidePillProps = SlidePillState & {
   onToggleLock?: () => void;
 };
 
-// Glass-pill chrome matches `.btn-pill` recipe from globals.css
-// (Pattern 1: normal-button surface). Icon-only square buttons —
-// a labeled pill would overflow the slide in 9:16 (native 1080
-// wide, scales to ~400 px in the preview hero). Tooltip /
-// screen-reader text lives in `aria-label`.
-const PILL_BTN_CLASS =
-  "backdrop-blur-glass inline-flex h-9 w-9 items-center justify-center rounded-full border text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+// Common geometry for every button on the pill. Icon-only square,
+// hover/disabled handled by Tailwind utilities. The actual
+// background / border / glow surface comes from the per-variant
+// class (`btn-gradient-anim`, `btn-gradient`, or the neutral glass
+// recipe below). Centralised so the five buttons stay pixel-
+// identical regardless of variant.
+const BUTTON_BASE =
+  "relative inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition-all disabled:cursor-not-allowed disabled:opacity-40";
 
-const PILL_BTN_STYLE = {
+// Neutral glass surface (Pattern 1). Used by Undo, History, and
+// the unlocked Lock button. Inline-style for the bg + border-color
+// so they pick up the user's preset glass tokens at runtime.
+const NEUTRAL_GLASS_STYLE = {
   background: "rgba(255, 255, 255, var(--glass-opacity))",
   borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+  backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+  WebkitBackdropFilter:
+    "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
 } as const;
+
+type PillButtonVariant = "glass" | "ai" | "cta";
 
 export function SlidePill({
   currentVersionNumber,
   hasCachedComments,
   isLocked,
+  busy = false,
   onUndo,
   onTryAgain,
   onRegen,
   onOpenHistory,
   onToggleLock,
 }: SlidePillProps) {
-  // Local guard so a brief mouse-shake near the canvas edge doesn't
-  // toggle the pill in/out repeatedly. The hover-driven visibility
-  // is owned by the parent (CSS group-hover); this state is only
-  // for child interactions (e.g. the History popover stays open
-  // until dismissed even if the cursor briefly leaves the pill).
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // Per the product spec: when no draft exists (slide is still at
   // v1), only Lock + Regen are active. Undo / Try again / History
   // grey out — the controls are visible (stable pill geometry)
   // but communicate "nothing to act on yet."
-  const canUndo = currentVersionNumber > 1 && !isLocked;
-  const canTryAgain = hasCachedComments && !isLocked;
-  const canRegen = !isLocked;
-  const canOpenHistory = currentVersionNumber > 1;
+  const canUndo = currentVersionNumber > 1 && !isLocked && !busy;
+  const canTryAgain = hasCachedComments && !isLocked && !busy;
+  const canRegen = !isLocked && !busy;
+  const canOpenHistory = currentVersionNumber > 1 && !busy;
+  const canLock = !busy;
 
   return (
     <div
@@ -91,9 +104,6 @@ export function SlidePill({
       // the pill to take that styling).
       className="pointer-events-auto absolute left-1/2 z-20 -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
       style={{ top: 30 }}
-      // Reset history popover when the pill itself unmounts on
-      // canvas leave — we don't want a stale-open menu reappearing
-      // next time the user hovers in.
       onMouseLeave={() => setHistoryOpen(false)}
     >
       <div
@@ -101,7 +111,8 @@ export function SlidePill({
         style={{
           background: "rgba(3, 3, 13, 0.6)",
           borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-          backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+          backdropFilter:
+            "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
           WebkitBackdropFilter:
             "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
         }}
@@ -109,24 +120,28 @@ export function SlidePill({
         <PillButton
           icon="undo"
           label="تراجع"
+          variant="glass"
           disabled={!canUndo}
           onClick={onUndo}
         />
         <PillButton
           icon="replay"
           label="حاول مرة أخرى"
+          variant="ai"
           disabled={!canTryAgain}
           onClick={onTryAgain}
         />
         <PillButton
           icon="autorenew"
           label="إعادة إنشاء"
+          variant="ai"
           disabled={!canRegen}
           onClick={onRegen}
         />
         <PillButton
           icon="history"
           label="السجل"
+          variant="glass"
           disabled={!canOpenHistory}
           onClick={() => {
             setHistoryOpen((v) => !v);
@@ -135,8 +150,9 @@ export function SlidePill({
         />
         <PillButton
           icon={isLocked ? "lock" : "lock_open"}
-          label={isLocked ? "مقفل" : "قفل"}
-          active={isLocked}
+          label={isLocked ? "مقفل — اضغط للإلغاء" : "قفل الشريحة"}
+          variant={isLocked ? "cta" : "glass"}
+          disabled={!canLock}
           onClick={onToggleLock}
         />
       </div>
@@ -147,41 +163,43 @@ export function SlidePill({
 function PillButton({
   icon,
   label,
+  variant,
   disabled,
-  active,
   onClick,
 }: {
   icon: string;
   label: string;
+  variant: PillButtonVariant;
   disabled?: boolean;
-  active?: boolean;
   onClick?: () => void;
 }) {
+  // Class composition per variant:
+  //   glass → border + neutral glass surface (inline style)
+  //   ai    → `.btn-gradient-anim` (animated mesh-stroke ring +
+  //           hover fill, brand glow). No border utility needed —
+  //           the class draws its own ::before ring.
+  //   cta   → `.btn-gradient` (solid brand gradient fill + shadow).
+  //           Active "locked" state for the Lock button. Pure class
+  //           styling, no inline override.
+  const variantClass =
+    variant === "ai"
+      ? "btn-gradient-anim hover:scale-[1.03]"
+      : variant === "cta"
+        ? "btn-gradient"
+        : "border";
+  const variantStyle = variant === "glass" ? NEUTRAL_GLASS_STYLE : undefined;
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className={`${PILL_BTN_CLASS} ${
-        active
-          ? "border-white/60 text-white"
-          : "hover:bg-white/10"
-      }`}
-      style={
-        active
-          ? {
-              ...PILL_BTN_STYLE,
-              borderColor: "rgba(255, 255, 255, 0.6)",
-            }
-          : PILL_BTN_STYLE
-      }
+      className={`${BUTTON_BASE} ${variantClass}`}
+      style={variantStyle}
     >
       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
         {icon}
       </span>
-      {/* Visually hidden — kept for screen readers in addition to
-          the aria-label, since some readers prefer text content. */}
       <span className="sr-only">{label}</span>
     </button>
   );

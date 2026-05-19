@@ -22,6 +22,7 @@ import {
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlidePill } from "@/components/preview/SlidePill";
+import type { InitialSlideState } from "@/app/(app)/preview/[projectId]/page";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import {
   SlideNavSidebar,
@@ -47,6 +48,11 @@ type Props = {
   initialVersionId?: string | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
+  // Per-slide state for the pill (lock / version count / cached
+  // comments). Empty array for projects without a presentation row.
+  // The shape stays serialisable so it crosses the server→client
+  // boundary without a client-side re-fetch.
+  initialSlideStates?: InitialSlideState[];
   // Slide aspect ratio from the project (set at /create/brand time). Used
   // as the fallback for placeholder cards during generation, when there's
   // no manifest yet to read `format` from.
@@ -171,12 +177,20 @@ export function DeckView({
   initialVersionStatus,
   initialManifest,
   initialSlideCount,
+  initialSlideStates = [],
   initialFormat,
 }: Props) {
   const router = useRouter();
   // Initial state seeds from server props. The parent (re)keys this component
   // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);
+  // Per-slide pill state, keyed by slideKey. Mutated by Lock /
+  // Undo / Try-again actions; reseeds from props on parent remount.
+  // Map<slideKey, state> for O(1) lookup; serialised to InitialSlideState
+  // for crossing back to the server when an action fires.
+  const [slideStates, setSlideStates] = useState<
+    Record<string, InitialSlideState>
+  >(() => Object.fromEntries(initialSlideStates.map((s) => [s.slideKey, s])));
   const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
   const [slideCount, setSlideCount] = useState(initialSlideCount);
@@ -1161,6 +1175,7 @@ export function DeckView({
     slide,
     commentCount: commentsBySlideId.get(slide.slideId)?.length ?? 0,
     regenerating: !!applying?.targetSlideIds.includes(slide.slideId),
+    locked: slideStates[slide.slideId]?.lockedAt != null,
   }));
   const isFocusedRegenerating = !!applying?.targetSlideIds.includes(
     focusedSlide.slideId,
@@ -1330,9 +1345,65 @@ export function DeckView({
               the client. */}
           {!isFocusedRegenerating ? (
             <SlidePill
-              currentVersionNumber={1}
-              hasCachedComments={false}
-              isLocked={false}
+              currentVersionNumber={
+                slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
+              }
+              hasCachedComments={
+                slideStates[focusedSlide.slideId]?.hasCachedComments ?? false
+              }
+              isLocked={
+                slideStates[focusedSlide.slideId]?.lockedAt != null
+              }
+              onToggleLock={async () => {
+                const current = slideStates[focusedSlide.slideId];
+                const shouldLock = current?.lockedAt == null;
+                // Optimistic flip — UI reacts before the request lands.
+                // Server response (lockedAt ISO string) replaces our
+                // synthesised value once it arrives. On error we revert.
+                const optimistic: InitialSlideState = {
+                  slideKey: focusedSlide.slideId,
+                  currentVersionNumber: current?.currentVersionNumber ?? 1,
+                  hasCachedComments: current?.hasCachedComments ?? false,
+                  lockedAt: shouldLock ? new Date().toISOString() : null,
+                };
+                setSlideStates((prev) => ({
+                  ...prev,
+                  [focusedSlide.slideId]: optimistic,
+                }));
+                try {
+                  const res = await fetch(
+                    `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/lock`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ locked: shouldLock }),
+                    },
+                  );
+                  if (!res.ok) throw new Error(`lock toggle: ${res.status}`);
+                  const data = (await res.json()) as {
+                    lockedAt: string | null;
+                  };
+                  setSlideStates((prev) => ({
+                    ...prev,
+                    [focusedSlide.slideId]: {
+                      ...optimistic,
+                      lockedAt: data.lockedAt,
+                    },
+                  }));
+                } catch (err) {
+                  console.error("lock toggle failed", err);
+                  setSlideStates((prev) => ({
+                    ...prev,
+                    [focusedSlide.slideId]: {
+                      slideKey: focusedSlide.slideId,
+                      currentVersionNumber:
+                        current?.currentVersionNumber ?? 1,
+                      hasCachedComments: current?.hasCachedComments ?? false,
+                      lockedAt: current?.lockedAt ?? null,
+                    },
+                  }));
+                }
+              }}
             />
           ) : null}
 
