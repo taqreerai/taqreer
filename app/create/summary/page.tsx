@@ -1,12 +1,19 @@
 "use client";
 
-// Step 4 — Summary. Three stacked cards, one per previous step,
-// each with an Edit button that jumps back to that step (state
-// preserved via sessionStorage). The "Generate" CTA POSTs every
-// piece into `/api/projects` — that endpoint expects ONE merged
-// brand payload (colours + fonts + logo + slide size + slide
-// count + rules + logo placement), so this page reads brand +
-// output and stitches them at submit.
+// Step 3 — Summary. Restructured 2026-05-19 (was step 4 of 4):
+//   Row 1: المحتوى المدخل — spans the full width, inline-EDITABLE
+//          (textarea writes back to taqreer:create:content on blur,
+//          so the user can fix typos without bouncing back to step 1).
+//   Row 2: 2-col grid (2fr / 1fr) → الهوية البصرية + إعدادات الإخراج.
+//
+// Output settings now live on step 1's bottom row, so the "edit
+// إعدادات الإخراج" button jumps to /create/content (not /create/output;
+// that route is gone). Edit brand still goes to /create/brand.
+//
+// The "Generate" CTA POSTs every piece into `/api/projects` — that
+// endpoint expects ONE merged brand payload (colours + fonts + logo
+// + slide size + slide count + rules + logo placement), so this
+// page reads brand + output and stitches them at submit.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -104,6 +111,11 @@ export default function CreateSummaryPage() {
   // page refresh keeps the user's pick. Defaults to "medium" which
   // matches the current backend baseline.
   const [quality, setQualityState] = useState<Quality>(DEFAULT_QUALITY);
+  // Content textarea is read-only until the user hits "تعديل" on the
+  // المحتوى المدخل card. Stays in-card (no nav) so users can fix
+  // typos without losing the brand/output context. Other cards still
+  // route to their owning step because their UI doesn't fit inline.
+  const [contentEditing, setContentEditing] = useState(false);
 
   useLayoutEffect(() => {
     const stored = window.sessionStorage.getItem(QUALITY_KEY);
@@ -259,12 +271,13 @@ export default function CreateSummaryPage() {
   // way through three layers of undefined.
   const slideSizeLabel =
     output?.slideSize === "9:16" ? "9:16 — عمودي" : "16:9 — أفقي";
+  // "match" was the file-upload-only mode; dropped 2026-05-19 along
+  // with the file-binary submission path. Existing stored blobs with
+  // `mode: "match"` fall back to "تلقائي" via the else branch.
   const slideCountLabel =
     output?.slideCount?.mode === "custom" && output.slideCount.value
       ? `${output.slideCount.value} شريحة`
-      : output?.slideCount?.mode === "match"
-        ? "يطابق الملف"
-        : "تلقائي";
+      : "تلقائي";
   const logoPositionLabel =
     output?.logo?.position && POSITION_LABELS[output.logo.position]
       ? POSITION_LABELS[output.logo.position]
@@ -276,11 +289,36 @@ export default function CreateSummaryPage() {
       title="كل شيء جاهز للإنشاء"
       subtitle="لقد قمنا بجمع البيانات المطلوبة. راجع الملخص أدناه قبل البدء."
     >
-      <div className="flex flex-col gap-4">
+      {/* No inner wrapper — children render directly into the
+          CreateShell column (`flex flex-col gap-4`) so the row→
+          buttons gap stays `gap-4`, identical to step 2's. Row 1's
+          content card uses `grow` so it absorbs the min-h slack
+          (~50 px) instead of leaving an empty band before the
+          buttons. */}
+      <>
+        {/* Row 1 — content, full width, inline-editable. Spans the
+            full row instead of sitting in column 1 of the 2-col grid
+            below; this matches the relative importance of the brief
+            (the deck's content) vs. the supporting brand + output
+            cards. */}
         <SummaryCard
           title="المحتوى المدخل"
           icon="description"
-          onEdit={() => router.push("/create/content")}
+          grow
+          // For file-based content the textarea wouldn't be useful, so
+          // the edit button still routes back to step 1. For pasted
+          // text it toggles inline edit mode.
+          onEdit={
+            content?.type === "file"
+              ? () => router.push("/create/content")
+              : () => setContentEditing((v) => !v)
+          }
+          editLabel={
+            content?.type === "file" ? "تعديل" : contentEditing ? "تم" : "تعديل"
+          }
+          editIcon={
+            content?.type === "file" ? "edit" : contentEditing ? "check" : "edit"
+          }
         >
           {content?.type === "file" ? (
             <div>
@@ -293,101 +331,119 @@ export default function CreateSummaryPage() {
               </p>
             </div>
           ) : (
-            <div>
-              <p className="line-clamp-2 text-sm text-white/80 leading-relaxed">
-                {content?.text || "لا يوجد محتوى"}
-              </p>
-              <p className="mt-1 text-xs text-white/50">
-                {content?.text ? `${content.text.trim().split(/\s+/).filter(Boolean).length} كلمة` : ""}
-                {content?.keepVerbatim === false ? " · سيُعاد تنظيمه" : ""}
-              </p>
-            </div>
+            <SummaryContentEditor
+              value={content?.text ?? ""}
+              keepVerbatim={content?.keepVerbatim !== false}
+              editing={contentEditing}
+              onCommit={(next) => {
+                if (!content) return;
+                const updated: ContentState = { ...content, text: next };
+                setContent(updated);
+                try {
+                  window.sessionStorage.setItem(
+                    "taqreer:create:content",
+                    JSON.stringify(updated),
+                  );
+                } catch {
+                  /* storage blocked — keep in-memory edit */
+                }
+              }}
+            />
           )}
         </SummaryCard>
 
-        <SummaryCard
-          title="الهوية البصرية"
-          icon="palette"
-          onEdit={() => router.push("/create/brand")}
-        >
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex flex-1 flex-col gap-2 min-w-0">
-              {brand?.colors && brand.colors.length > 0 ? (
-                <div className="flex items-center gap-1.5">
-                  {brand.colors.map((c, i) => (
-                    <span
-                      key={i}
-                      className="h-5 w-5 rounded-md border border-white/10"
-                      style={{ background: c }}
-                      title={c}
-                    />
-                  ))}
+        {/* Row 2 — 2-col grid (RTL inherits from parent dir="rtl").
+            grid-template-columns: 2fr 1fr makes الهوية البصرية the
+            wider card and إعدادات الإخراج the narrower one — the
+            "2/1 split" the design ask called for. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+          <SummaryCard
+            title="الهوية البصرية"
+            icon="palette"
+            onEdit={() => router.push("/create/brand")}
+          >
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-1 flex-col gap-2 min-w-0">
+                {brand?.colors && brand.colors.length > 0 ? (
+                  <div className="flex items-center gap-2">
+                    {brand.colors.map((c, i) => (
+                      <span
+                        key={i}
+                        className="h-9 w-9 rounded-lg border border-white/10"
+                        style={{ background: c }}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                <p className="text-xs text-white/60">
+                  {brand?.fonts?.heading?.name ?? "خط افتراضي"}
+                  {" · "}
+                  {brand?.fonts?.body?.name ?? "خط افتراضي"}
+                </p>
+              </div>
+              {brand?.logo?.previewDataUrl ? (
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-lg border border-white/10 bg-white/5"
+                  style={{
+                    backgroundImage: `url(${brand.logo.previewDataUrl})`,
+                    backgroundSize: "contain",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat",
+                  }}
+                  aria-label="الشعار"
+                />
+              ) : brand?.logo?.storageUrl ? (
+                // Brand kits restored from /api/brand-kits hydrate
+                // with a signed `storageUrl` but no inline
+                // `previewDataUrl` (we dropped the base64 preview to
+                // keep rows small — see brand-kits POST). The kit
+                // DOES carry a logo; we just don't have a base64
+                // thumbnail to render here. Show a confirmation label
+                // so the user doesn't think the logo was lost.
+                <span className="text-xs text-white/60">تم إرفاق شعار</span>
+              ) : (
+                <span className="text-xs text-white/40">بدون شعار</span>
+              )}
+            </div>
+          </SummaryCard>
+
+          <SummaryCard
+            title="إعدادات الإخراج"
+            icon="tune"
+            onEdit={() => router.push("/create/content")}
+          >
+            <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs">
+              <SummaryStat label="حجم الشريحة" value={slideSizeLabel} />
+              <SummaryStat label="عدد الشرائح" value={slideCountLabel} />
+              <SummaryStat
+                label="موقع الشعار"
+                value={brand?.logo ? logoPositionLabel : "بدون شعار"}
+              />
+              <SummaryStat
+                label="نمط التصميم"
+                value={output?.rules?.designStyle ?? "تلقائي"}
+              />
+              {output?.rules?.persistent?.text ? (
+                <div className="pt-1">
+                  <span className="text-white/40">عنصر ثابت: </span>
+                  <span className="text-white/80">{output.rules.persistent.text}</span>
                 </div>
               ) : null}
-              <p className="text-xs text-white/60">
-                {brand?.fonts?.heading?.name ?? "خط افتراضي"}
-                {" · "}
-                {brand?.fonts?.body?.name ?? "خط افتراضي"}
-              </p>
             </div>
-            {brand?.logo?.previewDataUrl ? (
-              <span
-                className="flex h-12 w-12 items-center justify-center rounded-lg border border-white/10 bg-white/5"
-                style={{
-                  backgroundImage: `url(${brand.logo.previewDataUrl})`,
-                  backgroundSize: "contain",
-                  backgroundPosition: "center",
-                  backgroundRepeat: "no-repeat",
-                }}
-                aria-label="الشعار"
-              />
-            ) : brand?.logo?.storageUrl ? (
-              // Brand kits restored from /api/brand-kits hydrate with a
-              // signed `storageUrl` but no inline `previewDataUrl` (we
-              // dropped the base64 preview to keep rows small — see
-              // brand-kits POST). The kit DOES carry a logo; we just
-              // don't have a base64 thumbnail to render here. Show a
-              // confirmation label so the user doesn't think the logo
-              // was lost between the brand page and summary.
-              <span className="text-xs text-white/60">تم إرفاق شعار</span>
-            ) : (
-              <span className="text-xs text-white/40">بدون شعار</span>
-            )}
-          </div>
-        </SummaryCard>
-
-        <SummaryCard
-          title="إعدادات الإخراج"
-          icon="tune"
-          onEdit={() => router.push("/create/output")}
-        >
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-            <SummaryStat label="حجم الشريحة" value={slideSizeLabel} />
-            <SummaryStat label="عدد الشرائح" value={slideCountLabel} />
-            <SummaryStat
-              label="موقع الشعار"
-              value={brand?.logo ? logoPositionLabel : "بدون شعار"}
-            />
-            <SummaryStat
-              label="نمط التصميم"
-              value={output?.rules?.designStyle ?? "تلقائي"}
-            />
-            {output?.rules?.persistent?.text ? (
-              <div className="col-span-2 pt-1">
-                <span className="text-white/40">عنصر ثابت: </span>
-                <span className="text-white/80">{output.rules.persistent.text}</span>
-              </div>
-            ) : null}
-          </div>
-        </SummaryCard>
-      </div>
+          </SummaryCard>
+        </div>
+      </>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
+      {/* No `mt-auto` — row 1's content card carries `grow` and
+          absorbs the min-h slack instead. The gap between row 2 and
+          this button row is the same `gap-4` as on step 2. */}
       <div className="flex items-center justify-between pt-2">
         <PillButton
           variant="secondary"
-          onClick={() => router.push("/create/output")}
+          onClick={() => router.push("/create/brand")}
           icon="arrow_forward"
         >
           السابق
@@ -552,15 +608,30 @@ function SummaryCard({
   title,
   icon,
   onEdit,
+  editLabel = "تعديل",
+  editIcon = "edit",
+  grow = false,
   children,
 }: {
   title: string;
   icon: string;
   onEdit: () => void;
+  // Label + icon are overridable so the content card can swap to
+  // "تم" / check when its inline editor is active. The other summary
+  // cards keep the default "تعديل" / edit pencil that routes away.
+  editLabel?: string;
+  editIcon?: string;
+  // When true the card uses `flex-1` so it absorbs the column's
+  // min-h slack — used on row 1's content card so the editable
+  // textarea expands to fill the page instead of leaving a gap
+  // before the next row.
+  grow?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className="glass-card flex flex-col gap-3 rounded-2xl p-5">
+    <div
+      className={`glass-card flex ${grow ? "flex-1 " : ""}flex-col gap-3 rounded-2xl p-5`}
+    >
       <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
           <span
@@ -571,11 +642,13 @@ function SummaryCard({
           </span>
           {title}
         </h2>
-        <PillButton variant="ghost" size="sm" onClick={onEdit} icon="edit">
-          تعديل
+        <PillButton variant="ghost" size="sm" onClick={onEdit} icon={editIcon}>
+          {editLabel}
         </PillButton>
       </header>
-      <div className="text-sm text-white/80">{children}</div>
+      <div className={`text-sm text-white/80 ${grow ? "flex flex-1 flex-col" : ""}`}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -585,6 +658,78 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
     <div className="flex items-center gap-2">
       <span className="text-white/40">{label}:</span>
       <span className="text-white/90">{value}</span>
+    </div>
+  );
+}
+
+// Inline-editable content textarea for the summary's first card.
+// Local draft so each keystroke doesn't churn sessionStorage; commits
+// on blur. Word count + verbatim-flag note re-render whenever the
+// committed value changes (kept in parent state).
+function SummaryContentEditor({
+  value,
+  keepVerbatim,
+  editing,
+  onCommit,
+}: {
+  value: string;
+  keepVerbatim: boolean;
+  // Externally-controlled: parent SummaryCard's "تعديل" / "تم" button
+  // flips this. Read-only when false; on transition to false we also
+  // commit any pending draft.
+  editing: boolean;
+  onCommit: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  // Re-sync if the prop value changes (e.g. parent reloads from
+  // storage while we're focused). Only overwrites the draft when the
+  // textarea isn't currently being edited — we test that via a ref so
+  // the user's in-flight typing isn't clobbered.
+  const editingRef = useRef(false);
+  useEffect(() => {
+    if (!editingRef.current) setDraft(value);
+  }, [value]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prevEditingRef = useRef(editing);
+  useEffect(() => {
+    const wasEditing = prevEditingRef.current;
+    prevEditingRef.current = editing;
+    if (editing && !wasEditing) {
+      // Auto-focus the textarea when the user opens edit mode so the
+      // cursor is ready without a second click.
+      textareaRef.current?.focus();
+    } else if (!editing && wasEditing) {
+      // Commit on exit — guard against a no-op write to keep
+      // sessionStorage notifications quiet.
+      editingRef.current = false;
+      if (draft !== value) onCommit(draft);
+    }
+  }, [editing, draft, value, onCommit]);
+  const wordCount = draft.trim().split(/\s+/).filter(Boolean).length;
+  return (
+    <div className="flex flex-1 flex-col gap-1">
+      <textarea
+        ref={textareaRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={() => {
+          editingRef.current = true;
+        }}
+        onBlur={() => {
+          editingRef.current = false;
+          if (draft !== value) onCommit(draft);
+        }}
+        readOnly={!editing}
+        placeholder="اكتب أو الصق محتوى عرضك هنا..."
+        className={`input-dark min-h-[200px] flex-1 resize-none leading-7 ${
+          editing ? "" : "cursor-default opacity-90"
+        }`}
+        maxLength={50000}
+      />
+      <p className="text-xs text-white/50">
+        {wordCount > 0 ? `${wordCount} كلمة` : ""}
+        {!keepVerbatim ? " · سيُعاد تنظيمه" : ""}
+      </p>
     </div>
   );
 }

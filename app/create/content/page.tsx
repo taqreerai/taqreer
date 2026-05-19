@@ -13,12 +13,25 @@ import { PillButton } from "@/components/create/PillButton";
 import { Toggle } from "@/components/create/controls";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
 import RosetteDiscountCheckIcon from "@/components/icons/rosette-discount-check-icon";
+import {
+  CanvasCard,
+  OutputContentCard,
+  SlideSizeFields,
+  type SlideSize,
+  type SlideCountMode,
+  type StoredOutput,
+  type PersistentPosition,
+} from "@/components/create/OutputCards";
 
 // sessionStorage key for the content blob. Same key used by the
 // stepper to detect "step 1 done" + by the brand page's navigation
 // guard. Hoisted to a constant so auto-save / hydrate / handleNext
 // all reference the same value.
 const CONTENT_KEY = "taqreer:create:content";
+// Output-settings blob — auto-saved from the bottom-row cards (slide
+// size + count + rules + persistent overlay). Same key the summary
+// page reads, same key the brand page writes logo placement into.
+const OUTPUT_KEY = "taqreer:create:output";
 
 type StoredContent = {
   type: "text";
@@ -65,10 +78,29 @@ export default function CreateContentPage() {
   const [extracting, setExtracting] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
-  // Default OFF: surface the user's content verbatim (no invented
-  // headings or grouping). When the user flips this on, we let
-  // Claude reorganize freely.
-  const [letUsHandle, setLetUsHandle] = useState(false);
+  // Verbatim by default — we removed the "نظّم وأعد صياغة المحتوى"
+  // toggle from the free-text card on 2026-05-19 (replaced by the
+  // generation-rule toggles) so there's no UI to flip this. If the
+  // rephrase mode comes back, surface it as another row-1 toggle.
+  const keepVerbatim = true;
+
+  // Output settings — moved here from the removed `/create/output`
+  // step (2026-05-19). Stored under `taqreer:create:output` so the
+  // summary page + the API stitcher keep their existing readers.
+  // Logo placement (the third group from the old output page) now
+  // lives on the brand page's logo card.
+  const [slideSize, setSlideSize] = useState<SlideSize>("16:9");
+  const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
+  const [slideCountValue, setSlideCountValue] = useState<number>(10);
+  const [designStyle, setDesignStyle] = useState<string | null>(null);
+  const [fixTypos, setFixTypos] = useState<boolean>(false);
+  const [pagination, setPagination] = useState<boolean>(true);
+  const [persistentText, setPersistentText] = useState<string>("");
+  const [persistentPosition, setPersistentPosition] =
+    useState<PersistentPosition>("bottom-center");
+  const [persistentExcludeCover, setPersistentExcludeCover] = useState<boolean>(false);
+  const [persistentExcludeClosing, setPersistentExcludeClosing] = useState<boolean>(false);
+
   // Hydration guard — `mounted=true` AFTER the useLayoutEffect that
   // restores state. Until then we suppress the auto-save effect so
   // an initial default-value render doesn't blow away the saved
@@ -77,7 +109,9 @@ export default function CreateContentPage() {
 
   // Hydrate from sessionStorage post-render but BEFORE paint, so
   // the user never sees an empty textarea flash if they're coming
-  // back to the page with content in storage.
+  // back to the page with content in storage. Both the content blob
+  // and the output blob hydrate here; output-card state defaults
+  // match the server render so the swap is paint-free.
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -87,10 +121,35 @@ export default function CreateContentPage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setText(parsed.text ?? "");
         if (parsed.text?.trim()) setTab("text");
-        if (parsed.keepVerbatim != null) {
-          // `letUsHandle` is the inverse of `keepVerbatim` (toggle
-          // ON = let us reorganise = NOT verbatim).
-          setLetUsHandle(!parsed.keepVerbatim);
+        // `keepVerbatim` is now hardcoded — the rephrase toggle was
+        // removed on 2026-05-19. Stored value is ignored.
+      }
+    } catch {
+      /* corrupt blob — leave defaults */
+    }
+    try {
+      const rawOut = window.sessionStorage.getItem(OUTPUT_KEY);
+      if (rawOut) {
+        const out = JSON.parse(rawOut) as StoredOutput;
+        if (out.slideSize) setSlideSize(out.slideSize);
+        if (out.slideCount?.mode === "custom" || out.slideCount?.mode === "auto") {
+          setSlideCountMode(out.slideCount.mode);
+        }
+        if (typeof out.slideCount?.value === "number") {
+          setSlideCountValue(out.slideCount.value);
+        }
+        if (out.rules?.designStyle !== undefined) setDesignStyle(out.rules.designStyle);
+        if (typeof out.rules?.fixTypos === "boolean") setFixTypos(out.rules.fixTypos);
+        if (typeof out.rules?.pagination === "boolean") setPagination(out.rules.pagination);
+        if (out.rules?.persistent?.text) setPersistentText(out.rules.persistent.text);
+        if (out.rules?.persistent?.position) {
+          setPersistentPosition(out.rules.persistent.position);
+        }
+        if (typeof out.rules?.persistent?.excludeCover === "boolean") {
+          setPersistentExcludeCover(out.rules.persistent.excludeCover);
+        }
+        if (typeof out.rules?.persistent?.excludeClosing === "boolean") {
+          setPersistentExcludeClosing(out.rules.persistent.excludeClosing);
         }
       }
     } catch {
@@ -99,6 +158,61 @@ export default function CreateContentPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
+
+  // Auto-save the output blob whenever any of its fields change.
+  // Reads the existing blob first so we PRESERVE `logo.*` fields
+  // (logo position lives in the same blob and is written from the
+  // brand page; this page never sets it).
+  useEffect(() => {
+    if (!mounted) return;
+    if (typeof window === "undefined") return;
+    let existingLogo: StoredOutput["logo"] | undefined;
+    try {
+      const prev = window.sessionStorage.getItem(OUTPUT_KEY);
+      if (prev) existingLogo = (JSON.parse(prev) as StoredOutput).logo;
+    } catch {
+      /* corrupt — fall through with no logo carry-over */
+    }
+    const payload: StoredOutput = {
+      slideSize,
+      slideCount: {
+        mode: slideCountMode,
+        value: slideCountMode === "custom" ? slideCountValue : null,
+      },
+      logo: existingLogo,
+      rules: {
+        designStyle,
+        fixTypos,
+        pagination,
+        persistent: persistentText.trim()
+          ? {
+              text: persistentText.trim(),
+              position: persistentPosition,
+              excludeCover: persistentExcludeCover,
+              excludeClosing: persistentExcludeClosing,
+            }
+          : null,
+      },
+    };
+    try {
+      window.sessionStorage.setItem(OUTPUT_KEY, JSON.stringify(payload));
+      notifyCreateStateChange();
+    } catch {
+      /* quota — best-effort persistence */
+    }
+  }, [
+    mounted,
+    slideSize,
+    slideCountMode,
+    slideCountValue,
+    designStyle,
+    fixTypos,
+    pagination,
+    persistentText,
+    persistentPosition,
+    persistentExcludeCover,
+    persistentExcludeClosing,
+  ]);
 
   // Auto-save text drafts as the user types. Skips when not yet
   // mounted (avoid clobbering during hydration) and when typing into
@@ -123,11 +237,11 @@ export default function CreateContentPage() {
       JSON.stringify({
         type: "text",
         text,
-        keepVerbatim: !letUsHandle,
+        keepVerbatim,
       }),
     );
     notifyCreateStateChange();
-  }, [text, letUsHandle, mounted]);
+  }, [text, mounted, keepVerbatim]);
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -219,7 +333,7 @@ export default function CreateContentPage() {
         JSON.stringify({
           type: "text",
           text: text.trim(),
-          keepVerbatim: !letUsHandle,
+          keepVerbatim,
         }),
       );
       notifyCreateStateChange();
@@ -234,7 +348,6 @@ export default function CreateContentPage() {
   // Active card glows; the other dims to half opacity. Picking up
   // interaction (drop a file / type) sets the active card.
   const fileActive = tab === "file";
-  const textActive = tab === "text";
 
   return (
     <CreateShell
@@ -242,7 +355,7 @@ export default function CreateContentPage() {
       title="ما هو موضوع عرضك التقديمي؟"
       subtitle="قم بتزويد الذكاء الاصطناعي بالمحتوى الأساسي. ارفع ملفاً أو الصق نصاً وسنقوم نحن بالباقي."
     >
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* File upload card — visual right in RTL since it's first
             in DOM order and the row inherits dir="rtl". */}
         <div
@@ -281,7 +394,7 @@ export default function CreateContentPage() {
               setDragging(false);
               selectFile(event.dataTransfer.files?.[0]);
             }}
-            className={`flex min-h-[200px] w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+            className={`flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 text-center transition-colors ${
               dragging
                 ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
                 : fileActive
@@ -353,6 +466,14 @@ export default function CreateContentPage() {
               </button>
             </div>
           ) : null}
+
+          {/* Slide size lives here on row 1 — moved 2026-05-19 from
+              row 2's CanvasCard so step 1's total height matches
+              step 2's. CanvasCard now only carries the persistent
+              overlay. */}
+          <div className="border-t border-white/[0.08] pt-3">
+            <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} />
+          </div>
         </div>
 
         {/* Free-text card */}
@@ -384,7 +505,7 @@ export default function CreateContentPage() {
           <textarea
             value={text}
             onChange={(event) => onTextChange(event.target.value)}
-            className="input-dark min-h-[200px] flex-1 resize-none leading-7"
+            className="input-dark min-h-[120px] flex-1 resize-none leading-7"
             placeholder="اكتب أو الصق أفكارك، النقاط الرئيسية، أو المقال الذي تريد تحويله إلى عرض تقديمي هنا..."
             maxLength={5000}
           />
@@ -393,18 +514,53 @@ export default function CreateContentPage() {
               {text.length.toLocaleString("en-US")} / 5000 حرف
             </span>
           </div>
-          {textActive ? (
-            <Toggle
-              label="نظّم وأعد صياغة المحتوى"
-              value={letUsHandle}
-              onChange={setLetUsHandle}
-            />
-          ) : null}
+          {/* Generation-rule toggles live HERE on row 1's free-text
+              card (since 2026-05-19). They used to be on row 2's
+              المحتوى card; moving them up balances row 1's height
+              with the file-upload card on the left and lets row 2
+              drop a bit. Two-column flex so both toggles fit on a
+              single line without wrapping at default breakpoints. */}
+          <div className="grid grid-cols-2 gap-3 border-t border-white/[0.08] pt-3">
+            <Toggle label="تصحيح الأخطاء" value={fixTypos} onChange={setFixTypos} />
+            <Toggle label="ترقيم الشرائح" value={pagination} onChange={setPagination} />
+          </div>
         </div>
+      </div>
+
+      {/* Row 2 — output-settings cards. Absorbed the deleted
+          `/create/output` step (2026-05-19). `flex-1` makes this
+          row absorb the min-h slack so the page naturally fills
+          810 px (matching step 2). Cards inside grid-stretch to
+          row height — no `mt-auto` on the button bar means the
+          gap between row 2 and buttons is the standard `gap-4`,
+          identical to step 2's row→button spacing. */}
+      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+        <CanvasCard
+          persistentText={persistentText}
+          persistentPosition={persistentPosition}
+          persistentExcludeCover={persistentExcludeCover}
+          persistentExcludeClosing={persistentExcludeClosing}
+          onPersistentText={setPersistentText}
+          onPersistentPosition={setPersistentPosition}
+          onPersistentExcludeCover={setPersistentExcludeCover}
+          onPersistentExcludeClosing={setPersistentExcludeClosing}
+        />
+        <OutputContentCard
+          slideCountMode={slideCountMode}
+          slideCountValue={slideCountValue}
+          designStyle={designStyle}
+          onSlideCountMode={setSlideCountMode}
+          onSlideCountValue={setSlideCountValue}
+          onDesignStyle={setDesignStyle}
+        />
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
+      {/* No `mt-auto` — row 2 carries `flex-1` so the cards absorb
+          any min-h slack themselves; the gap-4 between this button
+          row and row 2 ends up identical to step 2's row→button
+          spacing. */}
       <div className="flex items-center justify-end pt-2">
         <PillButton
           variant="primary"

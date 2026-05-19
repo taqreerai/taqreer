@@ -372,6 +372,21 @@ button, a, [role="button"] {
   --font-sans: "Cairo", var(--font-cairo), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Reserve scrollbar space on every page so navigating between a
+   page that scrolls (create flow) and one that doesn't (short
+   dashboard view) doesn't horizontally jolt the layout when the
+   scrollbar appears/disappears.
+   The viewport scrollbar in this app is on <html> (body has
+   overflow-x:hidden but the actual root scroller is still html,
+   since the page can grow taller than the viewport). Forcing
+   `overflow-y: scroll` on html keeps the scrollbar TRACK rendered
+   on every page, even when content fits — that's the simplest,
+   most portable guarantee against the shift. `scrollbar-gutter`
+   alone wasn't being honoured for html in this layout chain. */
+html {
+  overflow-y: scroll;
+}
+
 body {
   background-color: var(--tq-bg);
   color: #ffffff;

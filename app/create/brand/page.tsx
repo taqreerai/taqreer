@@ -10,12 +10,18 @@ import { Pill } from "@/components/create/controls";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
 import type { CornerPosition } from "@/components/create/controls";
+import {
+  LogoPositionFields,
+  type StoredOutput,
+} from "@/components/create/OutputCards";
 
-// Brand page (step 2 of 4) — colours, fonts (Google + upload), and
-// LOGO UPLOAD (just the file; placement + excludes moved to
-// `/create/output` step 3). Output-side fields (slide size, slide
-// count, generation rules, logo placement) were stripped on
-// 2026-05-18 per `context/plan-create-flow.md`.
+// Brand page (step 2 of 3) — colours, fonts (Google + upload), and
+// LOGO UPLOAD + PLACEMENT. The 4-step create flow was collapsed to
+// 3 steps on 2026-05-19: logo placement moved back here (lives with
+// the logo upload on the same card); slide-size / slide-count /
+// generation rules moved to step 1's bottom row. Search history for
+// the `/create/output` references — those are stale and should be
+// updated when touched.
 
 type PaletteMode = "manual" | "screenshot";
 type FontMode = "upload" | "google";
@@ -275,11 +281,18 @@ function CompactUploadZone({
   accept,
   file,
   onSelect,
+  compact = false,
 }: {
   label: string;
   accept: string;
   file: File | null;
   onSelect: (file: File) => void;
+  // `compact` shrinks the dropzone for the logo card so the always-
+  // visible <LogoPositionFields> below it can share the same card
+  // height it had when placement was conditional on upload. The
+  // screenshot dropzone stays at its original height — there are no
+  // controls below it competing for vertical space.
+  compact?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -304,8 +317,8 @@ function CompactUploadZone({
         // identity), so they keep room to breathe. White/15 dashed
         // border matches the step 1 + font upload vocabulary; glass-
         // circle icon hierarchy mirrors رفع ملفات السياق.
-        className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 p-4 text-center transition-colors hover:border-white/30"
-        style={{ minHeight: 100 }}
+        className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 text-center transition-colors hover:border-white/30 ${compact ? "gap-1.5 p-2.5" : "p-4"}`}
+        style={{ minHeight: compact ? 72 : 100 }}
       >
         <span
           className="flex h-10 w-10 items-center justify-center rounded-full"
@@ -833,6 +846,15 @@ export default function CreateBrandPage() {
   const [logo, setLogo] = useState<File | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
+  // Logo placement state — was on the deleted `/create/output` step;
+  // moved here on 2026-05-19 so all logo-related controls live in the
+  // same card. Persisted into `taqreer:create:output` (`.logo.*`)
+  // because the summary page + the API stitcher already read it from
+  // there. The brand-saved-snapshot fingerprint ignores these
+  // fields (placement is per-deck, not per-brand-kit).
+  const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
+  const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(false);
+  const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
 
   // SVG-only logo policy (2026-05-15). Raster formats (PNG/JPG) are rejected
   // because we can't recolor them per slide for contrast — see context.md
@@ -935,7 +957,47 @@ export default function CreateBrandPage() {
         setLogoPreview(s.logo.previewDataUrl);
       }
     }
+    // Hydrate logo placement from the output blob. Lives in the same
+    // sessionStorage key as the rest of the output settings (which
+    // step 1 owns), so this page only READS the logo.* slot then
+    // WRITES it back when the controls change — preserving everything
+    // else step 1 wrote.
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem("taqreer:create:output");
+      if (!raw) return;
+      const out = JSON.parse(raw) as StoredOutput;
+      if (out.logo?.position) setLogoPosition(out.logo.position);
+      if (typeof out.logo?.excludeCover === "boolean") {
+        setLogoExcludeCover(out.logo.excludeCover);
+      }
+      if (typeof out.logo?.excludeClosing === "boolean") {
+        setLogoExcludeClosing(out.logo.excludeClosing);
+      }
+    } catch {
+      /* corrupt blob — leave defaults */
+    }
   }, []);
+
+  // Auto-save logo placement back into the output blob whenever any
+  // of its three fields change. Read-modify-write so step 1's slide
+  // size / count / rules are preserved across edits here.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem("taqreer:create:output");
+      const out: StoredOutput = raw ? JSON.parse(raw) : {};
+      out.logo = {
+        position: logoPosition,
+        excludeCover: logoExcludeCover,
+        excludeClosing: logoExcludeClosing,
+      };
+      window.sessionStorage.setItem("taqreer:create:output", JSON.stringify(out));
+      notifyCreateStateChange();
+    } catch {
+      /* best-effort persistence */
+    }
+  }, [logoPosition, logoExcludeCover, logoExcludeClosing]);
 
   // Constants + helpers hoisted above hydrateFromBrandKit so they're
   // accessible (the original declarations sat farther down the component
@@ -1596,7 +1658,7 @@ export default function CreateBrandPage() {
       );
       notifyCreateStateChange();
 
-      router.push("/create/output");
+      router.push("/create/summary");
     } catch (caughtError) {
       console.error("Create brand upload error:", caughtError);
       setError(
@@ -1615,7 +1677,11 @@ export default function CreateBrandPage() {
       title="إعداد الهوية البصرية"
       subtitle="اختر الألوان والخطوط وارفع الشعار الخاص بك ليتناسب مع علامتك التجارية."
     >
-      <div className="space-y-6">
+      {/* No inner wrapper — direct children of CreateShell's column
+          (`flex flex-col gap-4`) so the row→button gap is the same
+          gap-4 as on steps 1 + 3 (visual continuity across the
+          flow). */}
+      <>
         {/* Layout — fonts first (full-width row), then colours + logo
             side-by-side below. Fonts lead because users typically pick
             them once per brand and rarely revisit, so they should land
@@ -1636,7 +1702,7 @@ export default function CreateBrandPage() {
             <h2 className="text-sm font-semibold text-white">الخطوط</h2>
           </header>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* Heading font */}
             <div className="space-y-3">
               <p className="text-sm font-semibold text-white">خط العناوين</p>
@@ -1716,7 +1782,7 @@ export default function CreateBrandPage() {
         </div>
 
         {/* Colours (start side) + logo (end side) — paired row. */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Brand colors — header pattern matches step 1 + step 3
               (icon + title above a hairline separator). Inner body is
               gap-driven instead of `space-y-*` so the layout follows
@@ -1881,17 +1947,37 @@ export default function CreateBrandPage() {
                 accept=".svg,image/svg+xml"
                 file={logo}
                 onSelect={acceptLogo}
+                compact
               />
             )}
             {logoError && (
               <p className="status-error text-[12px]">{logoError}</p>
             )}
+            {/* Logo placement — always rendered so the logo card has a
+                stable footprint that matches step-1's two-row card
+                density. When no logo is uploaded the picker + pills
+                are visibly disabled (greyed out) rather than absent;
+                the compact upload zone above absorbs the slack. */}
+            <LogoPositionFields
+              position={logoPosition}
+              excludeCover={logoExcludeCover}
+              excludeClosing={logoExcludeClosing}
+              onPosition={setLogoPosition}
+              onExcludeCover={setLogoExcludeCover}
+              onExcludeClosing={setLogoExcludeClosing}
+              disabled={!(logo || loadedLogoMeta)}
+            />
           </div>
         </div>
-      </div>
+      </>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
+      {/* No `mt-auto` — the fonts row + colors/logo row naturally
+          fill the column to the 810 px floor (step 2 is the height
+          reference), so the gap-4 between row 2 and this button row
+          is the standard CreateShell column gap, matching steps 1
+          + 3. */}
       <div className="flex items-center justify-between">
         {/* Explicit route — `router.back()` would land on /create/output
             when the user reached this page via the stepper from step 3,

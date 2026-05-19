@@ -84,7 +84,11 @@ export function CreateStepper({ currentStep }: { currentStep: CreateStepId }) {
       // Glass card primitives (no `.glass-card` because the hover
       // transition on that class is for actionable surfaces; the
       // stepper itself is static, only its rows are clickable).
-      className="backdrop-blur-glass relative flex flex-none flex-col gap-5 rounded-2xl border p-5"
+      // `self-stretch` makes the panel match the content column's
+      // full height (cards + nav button row); without it the aside
+      // shrinks to its content (3 short rows) and visually looks
+      // detached from the cards next to it.
+      className="backdrop-blur-glass relative flex flex-none flex-col gap-5 self-stretch rounded-2xl border p-5"
       style={{
         width: CREATE_STEPPER_WIDTH,
         background: "rgba(255, 255, 255, var(--glass-opacity))",
