@@ -1693,11 +1693,116 @@ export default function CreateBrandPage() {
   };
 
   // ─── Render ─────────────────────────────────────────────────────────────
+  const bottomBar = (
+    <div className="flex items-center justify-between">
+      {/* Explicit route — `router.back()` would land on /create/output
+          when the user reached this page via the stepper from step 3,
+          which broke the linear "previous = one step earlier" mental
+          model. */}
+      <PillButton
+        variant="secondary"
+        onClick={() => router.push("/create/content")}
+        icon="arrow_forward"
+      >
+        السابق
+      </PillButton>
+      <div className="flex items-center gap-3">
+        {/* Save-as-brand — glass icon button. Save icon morphs to a
+            check on success via a one-shot 360° rotation + cross-fade
+            (same recipe as the sidebar burger ↔ close morph). Disabled
+            while saving; stays as check once saved. */}
+        <button
+          type="button"
+          onClick={handleSaveAsBrand}
+          disabled={saveBrandState !== "idle"}
+          aria-label={
+            saveBrandState === "saved"
+              ? "تم الحفظ كهوية بصرية"
+              : "حفظ كهوية بصرية"
+          }
+          // Pill height + radius to match the PillButton secondary
+          // variant used by السابق / الخطوة التالية — keeps the
+          // bottom-bar visually one row of pills instead of one
+          // rounded-rect + two pills.
+          style={{
+            background: "rgba(255, 255, 255, var(--glass-opacity))",
+            backdropFilter:
+              "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+            WebkitBackdropFilter:
+              "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+            borderRadius: 9999,
+          }}
+          className={`group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
+            saveBrandState === "saved"
+              ? "border-white/40 text-white cursor-default"
+              : saveBrandState === "saving"
+                ? "border-white/30 text-white/80 cursor-wait"
+                : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
+          }`}
+        >
+          <motion.div
+            animate={{ rotate: saveBrandState === "saved" ? 360 : 0 }}
+            transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
+            className="flex h-[22px] w-[22px] items-center justify-center"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {saveBrandState === "saved" ? (
+                <motion.span
+                  key="check"
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={{ duration: 0.25 }}
+                  className="material-symbols-outlined text-[20px]"
+                >
+                  check
+                </motion.span>
+              ) : saveBrandState === "saving" ? (
+                <motion.span
+                  key="saving"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white"
+                />
+              ) : (
+                <motion.span
+                  key="save"
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={{ duration: 0.25 }}
+                  className="material-symbols-outlined text-[20px]"
+                >
+                  save
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.div>
+          <span>
+            {saveBrandState === "saved" ? "محفوظ كهوية بصرية" : "حفظ كهوية بصرية"}
+          </span>
+        </button>
+        <PillButton
+          variant="primary"
+          onClick={handleNext}
+          disabled={loading}
+          loading={loading}
+          icon="arrow_back"
+        >
+          الخطوة التالية
+        </PillButton>
+      </div>
+    </div>
+  );
+
   return (
     <CreateShell
       currentStep="brand"
       title="إعداد الهوية البصرية"
       subtitle="اختر الألوان والخطوط وارفع الشعار الخاص بك ليتناسب مع علامتك التجارية."
+      bottomBar={bottomBar}
     >
       {/* No inner wrapper — direct children of CreateShell's column
           (`flex flex-col gap-4`) so the row→button gap is the same
@@ -1994,110 +2099,6 @@ export default function CreateBrandPage() {
       </>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-
-      {/* `mt-auto` pins the button row to the section bottom so
-          the stepper's `self-stretch` lower edge aligns with it. */}
-      <div className="mt-auto flex items-center justify-between">
-        {/* Explicit route — `router.back()` would land on /create/output
-            when the user reached this page via the stepper from step 3,
-            which broke the linear "previous = one step earlier" mental
-            model. */}
-        <PillButton
-          variant="secondary"
-          onClick={() => router.push("/create/content")}
-          icon="arrow_forward"
-        >
-          السابق
-        </PillButton>
-        <div className="flex items-center gap-3">
-          {/* Save-as-brand — glass icon button. Save icon morphs to a
-              check on success via a one-shot 360° rotation + cross-fade
-              (same recipe as the sidebar burger ↔ close morph). Disabled
-              while saving; stays as check once saved. */}
-          <button
-            type="button"
-            onClick={handleSaveAsBrand}
-            disabled={saveBrandState !== "idle"}
-            aria-label={
-              saveBrandState === "saved"
-                ? "تم الحفظ كهوية بصرية"
-                : "حفظ كهوية بصرية"
-            }
-            // Pill height + radius to match the PillButton secondary
-            // variant used by السابق / الخطوة التالية — keeps the
-            // bottom-bar visually one row of pills instead of one
-            // rounded-rect + two pills.
-            style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-              backdropFilter:
-                "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-              WebkitBackdropFilter:
-                "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-              borderRadius: 9999,
-            }}
-            className={`group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
-              saveBrandState === "saved"
-                ? "border-white/40 text-white cursor-default"
-                : saveBrandState === "saving"
-                  ? "border-white/30 text-white/80 cursor-wait"
-                  : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
-            }`}
-          >
-            <motion.div
-              animate={{ rotate: saveBrandState === "saved" ? 360 : 0 }}
-              transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
-              className="flex h-[22px] w-[22px] items-center justify-center"
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                {saveBrandState === "saved" ? (
-                  <motion.span
-                    key="check"
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{ duration: 0.25 }}
-                    className="material-symbols-outlined text-[20px]"
-                  >
-                    check
-                  </motion.span>
-                ) : saveBrandState === "saving" ? (
-                  <motion.span
-                    key="saving"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white"
-                  />
-                ) : (
-                  <motion.span
-                    key="save"
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{ duration: 0.25 }}
-                    className="material-symbols-outlined text-[20px]"
-                  >
-                    save
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </motion.div>
-            <span>
-              {saveBrandState === "saved" ? "محفوظ كهوية بصرية" : "حفظ كهوية بصرية"}
-            </span>
-          </button>
-          <PillButton
-            variant="primary"
-            onClick={handleNext}
-            disabled={loading}
-            loading={loading}
-            icon="arrow_back"
-          >
-            الخطوة التالية
-          </PillButton>
-        </div>
-      </div>
     </CreateShell>
   );
 }

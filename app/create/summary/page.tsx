@@ -297,11 +297,167 @@ export default function CreateSummaryPage() {
       ? POSITION_LABELS[output.logo.position]
       : "غير محدد";
 
+  const bottomBar = (
+    <div className="flex items-center justify-between">
+      <PillButton
+        variant="secondary"
+        onClick={() => router.push("/create/brand")}
+        icon="arrow_forward"
+      >
+        السابق
+      </PillButton>
+
+      {/* Generate split-button — left half fires generation with
+          the current preset, right half toggles a dropdown menu
+          for picking a different preset. The animated mesh-
+          gradient ring wraps the WHOLE wrapper (one continuous
+          ring around both halves), and a single 1 px muted line
+          divides the two clickable areas. Inner buttons carry no
+          background of their own. `dir="ltr"` on the wrapper
+          forces a deterministic visual order regardless of any
+          RTL inheritance from CreateShell — main on the visual
+          left, arrow on the visual right. */}
+      <div ref={splitButtonRef} className="relative">
+        <div
+          dir="ltr"
+          className="btn-gradient-anim flex h-11 items-stretch transition-shadow"
+          style={{ borderRadius: 9999 }}
+        >
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={loading}
+            aria-label="إنشاء"
+            className="relative inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ borderRadius: "9999px 0 0 9999px" }}
+          >
+            {loading ? (
+              <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <span
+                className="material-symbols-outlined leading-none"
+                style={{ fontSize: 18 }}
+              >
+                auto_awesome
+              </span>
+            )}
+            <span>{loading ? "جارٍ الإنشاء..." : "إنشاء"}</span>
+          </button>
+          {/* Single 1 px divider between the two clickable areas.
+              Muted via the glass-border opacity token so it reads
+              like part of the same glass surface, not a separate
+              stroke. */}
+          <span
+            aria-hidden
+            className="my-2 w-px"
+            style={{
+              background: "rgba(255, 255, 255, var(--glass-border-opacity))",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setPresetMenuOpen((v) => !v)}
+            disabled={loading}
+            aria-label={presetMenuOpen ? "إغلاق قائمة الجودة" : "اختيار جودة"}
+            aria-expanded={presetMenuOpen}
+            className="relative inline-flex w-10 items-center justify-center bg-transparent text-white disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ borderRadius: "0 9999px 9999px 0" }}
+          >
+            {/* Closed: chevron-up — affords "menu opens above".
+                Open: 180° rotation → chevron-down, "click to close". */}
+            <span
+              className={`material-symbols-outlined leading-none transition-transform ${
+                presetMenuOpen ? "rotate-180" : ""
+              }`}
+              style={{ fontSize: 18 }}
+            >
+              expand_less
+            </span>
+          </button>
+        </div>
+
+        {/* Preset menu — pops ABOVE the split-button. Was below
+            ("top-full") but on /create/summary the button sits near
+            the bottom of the page, so a downward menu extended the
+            body below viewport, summoned a vertical scrollbar, and
+            the scrollbar's gutter reservation narrowed clientWidth
+            by ~6 px — visible as a 2 px shift when the menu opened.
+            Anchored to bottom-full + mb-2 keeps the menu inside the
+            page bounds so no scrollbar is triggered, no shift. */}
+        <AnimatePresence>
+          {presetMenuOpen ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 4 }}
+              transition={{
+                type: "spring",
+                bounce: 0.25,
+                duration: 0.25,
+              }}
+              dir="rtl"
+              className="backdrop-blur-glass absolute right-0 bottom-full z-30 mb-2 w-56 overflow-hidden rounded-2xl border shadow-2xl"
+              style={{
+                background: "rgba(255, 255, 255, var(--glass-opacity))",
+                borderColor:
+                  "rgba(255, 255, 255, var(--glass-border-opacity))",
+              }}
+            >
+              <div className="px-3 py-2 text-[11px] text-white/40">
+                جودة التوليد
+              </div>
+              {QUALITY_PRESETS.map((preset) => {
+                const slideCount =
+                  output?.slideCount?.value && output.slideCount.value > 0
+                    ? output.slideCount.value
+                    : 8;
+                const eta = estimateMinutes(preset.key, slideCount);
+                const active = quality === preset.key;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => {
+                      setQuality(preset.key);
+                      setPresetMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start text-sm transition-colors ${
+                      active
+                        ? "bg-white/[0.06] text-white"
+                        : "text-white/70 hover:bg-white/[0.04] hover:text-white"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="material-symbols-outlined leading-none"
+                        style={{
+                          fontSize: 16,
+                          opacity: active ? 1 : 0,
+                        }}
+                      >
+                        check
+                      </span>
+                      <span>{preset.label}</span>
+                    </span>
+                    <span className="text-[11px] text-white/40" dir="ltr">
+                      ~{eta} د
+                    </span>
+                  </button>
+                );
+              })}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+
   return (
     <CreateShell
       currentStep="summary"
       title="كل شيء جاهز للإنشاء"
       subtitle="لقد قمنا بجمع البيانات المطلوبة. راجع الملخص أدناه قبل البدء."
+      bottomBar={bottomBar}
     >
       {/* No inner wrapper — children render directly into the
           CreateShell column (`flex flex-col gap-4`) so the row→
@@ -450,167 +606,6 @@ export default function CreateSummaryPage() {
       </>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-
-      {/* `mt-auto` pins the button row to the section bottom so
-          the stepper's `self-stretch` lower edge aligns with it. */}
-      <div className="mt-auto flex items-center justify-between">
-        <PillButton
-          variant="secondary"
-          onClick={() => router.push("/create/brand")}
-          icon="arrow_forward"
-        >
-          السابق
-        </PillButton>
-
-        {/* Generate split-button — left half fires generation with
-            the current preset, right half toggles a dropdown menu
-            for picking a different preset. The animated mesh-
-            gradient ring wraps the WHOLE wrapper (one continuous
-            ring around both halves), and a single 1 px muted line
-            divides the two clickable areas. Inner buttons carry no
-            background of their own. `dir="ltr"` on the wrapper
-            forces a deterministic visual order regardless of any
-            RTL inheritance from CreateShell — main on the visual
-            left, arrow on the visual right. */}
-        <div ref={splitButtonRef} className="relative">
-          <div
-            dir="ltr"
-            className="btn-gradient-anim flex h-11 items-stretch transition-shadow"
-            style={{ borderRadius: 9999 }}
-          >
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={loading}
-              aria-label="إنشاء"
-              className="relative inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ borderRadius: "9999px 0 0 9999px" }}
-            >
-              {loading ? (
-                <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
-              ) : (
-                <span
-                  className="material-symbols-outlined leading-none"
-                  style={{ fontSize: 18 }}
-                >
-                  auto_awesome
-                </span>
-              )}
-              <span>{loading ? "جارٍ الإنشاء..." : "إنشاء"}</span>
-            </button>
-            {/* Single 1 px divider between the two clickable areas.
-                Muted via the glass-border opacity token so it reads
-                like part of the same glass surface, not a separate
-                stroke. */}
-            <span
-              aria-hidden
-              className="my-2 w-px"
-              style={{
-                background: "rgba(255, 255, 255, var(--glass-border-opacity))",
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => setPresetMenuOpen((v) => !v)}
-              disabled={loading}
-              aria-label={presetMenuOpen ? "إغلاق قائمة الجودة" : "اختيار جودة"}
-              aria-expanded={presetMenuOpen}
-              className="relative inline-flex w-10 items-center justify-center bg-transparent text-white disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ borderRadius: "0 9999px 9999px 0" }}
-            >
-              {/* Closed: chevron-up — affords "menu opens above".
-                  Open: 180° rotation → chevron-down, "click to close". */}
-              <span
-                className={`material-symbols-outlined leading-none transition-transform ${
-                  presetMenuOpen ? "rotate-180" : ""
-                }`}
-                style={{ fontSize: 18 }}
-              >
-                expand_less
-              </span>
-            </button>
-          </div>
-
-          {/* Preset menu — pops ABOVE the split-button. Was below
-              ("top-full") but on /create/summary the button sits near
-              the bottom of the page, so a downward menu extended the
-              body below viewport, summoned a vertical scrollbar, and
-              the scrollbar's gutter reservation narrowed clientWidth
-              by ~6 px — visible as a 2 px shift when the menu opened.
-              Anchored to bottom-full + mb-2 keeps the menu inside the
-              page bounds so no scrollbar is triggered, no shift. */}
-          <AnimatePresence>
-            {presetMenuOpen ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 4 }}
-                transition={{
-                  type: "spring",
-                  bounce: 0.25,
-                  duration: 0.25,
-                }}
-                dir="rtl"
-                // Same glass recipe as `.glass-card` straight from
-                // the top of globals.css: white bg at glass-opacity
-                // alpha, white border at glass-border-opacity alpha,
-                // blur via the Tailwind `backdrop-blur-glass` utility
-                // (which composes the `--backdrop-blur-glass` theme
-                // token = `glass-blur * 2.5`). Zero hardcoded alpha.
-                className="backdrop-blur-glass absolute right-0 bottom-full z-30 mb-2 w-56 overflow-hidden rounded-2xl border shadow-2xl"
-                style={{
-                  background: "rgba(255, 255, 255, var(--glass-opacity))",
-                  borderColor:
-                    "rgba(255, 255, 255, var(--glass-border-opacity))",
-                }}
-              >
-                <div className="px-3 py-2 text-[11px] text-white/40">
-                  جودة التوليد
-                </div>
-                {QUALITY_PRESETS.map((preset) => {
-                  const slideCount =
-                    output?.slideCount?.value && output.slideCount.value > 0
-                      ? output.slideCount.value
-                      : 8;
-                  const eta = estimateMinutes(preset.key, slideCount);
-                  const active = quality === preset.key;
-                  return (
-                    <button
-                      key={preset.key}
-                      type="button"
-                      onClick={() => {
-                        setQuality(preset.key);
-                        setPresetMenuOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start text-sm transition-colors ${
-                        active
-                          ? "bg-white/[0.06] text-white"
-                          : "text-white/70 hover:bg-white/[0.04] hover:text-white"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="material-symbols-outlined leading-none"
-                          style={{
-                            fontSize: 16,
-                            opacity: active ? 1 : 0,
-                          }}
-                        >
-                          check
-                        </span>
-                        <span>{preset.label}</span>
-                      </span>
-                      <span className="text-[11px] text-white/40" dir="ltr">
-                        ~{eta} د
-                      </span>
-                    </button>
-                  );
-                })}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        </div>
-      </div>
     </CreateShell>
   );
 }

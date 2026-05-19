@@ -375,6 +375,19 @@ export default function CreateContentPage() {
       currentStep="content"
       title="ما هو موضوع عرضك التقديمي؟"
       subtitle="قم بتزويد الذكاء الاصطناعي بالمحتوى الأساسي. ارفع ملفاً أو الصق نصاً وسنقوم نحن بالباقي."
+      bottomBar={
+        <div className="flex items-center justify-end">
+          <PillButton
+            variant="primary"
+            onClick={handleNext}
+            disabled={loading}
+            loading={loading}
+            icon="arrow_back"
+          >
+            الخطوة التالية
+          </PillButton>
+        </div>
+      }
     >
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* File upload card — visual right in RTL since it's first
@@ -577,18 +590,6 @@ export default function CreateContentPage() {
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-
-      <div className="mt-auto flex items-center justify-end">
-        <PillButton
-          variant="primary"
-          onClick={handleNext}
-          disabled={loading}
-          loading={loading}
-          icon="arrow_back"
-        >
-          الخطوة التالية
-        </PillButton>
-      </div>
     </CreateShell>
   );
 }
