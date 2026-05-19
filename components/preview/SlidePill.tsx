@@ -31,7 +31,7 @@
 // later steps (Lock = step 4, Undo/History = step 5, Regen/Try
 // again = step 6).
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export type SlidePillState = {
   currentVersionNumber: number;
@@ -47,7 +47,10 @@ export type SlidePillProps = SlidePillState & {
   onUndo?: () => void;
   onTryAgain?: () => void;
   onRegen?: () => void;
-  onOpenHistory?: () => void;
+  // Receives the History trigger button's DOMRect so the parent
+  // (DeckView) can anchor the popover under it. null when the
+  // popover should close.
+  onOpenHistory?: (triggerRect: DOMRect | null) => void;
   onToggleLock?: () => void;
 };
 
@@ -84,6 +87,13 @@ export function SlidePill({
   onOpenHistory,
   onToggleLock,
 }: SlidePillProps) {
+  // Ref to the History button so we can pass its DOMRect upward
+  // on click. The parent renders the popover, anchored to this
+  // rect. Stays in this component so the geometry stays cohesive
+  // with the rest of the pill (no parent-side ref-forwarding).
+  const historyBtnRef = useRef<HTMLButtonElement | null>(null);
+  // Local "is the popover currently open" flag — controls whether
+  // the History click sends a real rect (open) or null (close).
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // Per the product spec: when no draft exists (slide is still at
@@ -93,7 +103,11 @@ export function SlidePill({
   const canUndo = currentVersionNumber > 1 && !isLocked && !busy;
   const canTryAgain = hasCachedComments && !isLocked && !busy;
   const canRegen = !isLocked && !busy;
-  const canOpenHistory = currentVersionNumber > 1 && !busy;
+  // History is always available (popover shows whatever rows exist).
+  // Gating on `currentVersionNumber > 1` was wrong — after a Restore
+  // back to v1 the user can still want to step FORWARD into v2 (the
+  // row is preserved by Restore's non-destructive semantics).
+  const canOpenHistory = !busy;
   const canLock = !busy;
 
   return (
@@ -132,7 +146,7 @@ export function SlidePill({
         />
         <PillButton
           icon="autorenew"
-          label="إعادة إنشاء"
+          label="إعادة إنشاء هذه الشريحة"
           variant="ai"
           disabled={!canRegen}
           onClick={onRegen}
@@ -142,9 +156,19 @@ export function SlidePill({
           label="السجل"
           variant="glass"
           disabled={!canOpenHistory}
+          buttonRef={historyBtnRef}
           onClick={() => {
-            setHistoryOpen((v) => !v);
-            onOpenHistory?.();
+            setHistoryOpen((wasOpen) => {
+              const nextOpen = !wasOpen;
+              // Pass the trigger's live rect on open, null on close.
+              // The parent re-anchors the popover from this rect.
+              onOpenHistory?.(
+                nextOpen && historyBtnRef.current
+                  ? historyBtnRef.current.getBoundingClientRect()
+                  : null,
+              );
+              return nextOpen;
+            });
           }}
         />
         <PillButton
@@ -164,12 +188,16 @@ function PillButton({
   label,
   variant,
   disabled,
+  buttonRef,
   onClick,
 }: {
   icon: string;
   label: string;
   variant: PillButtonVariant;
   disabled?: boolean;
+  // Optional — only used by the History button so the parent can
+  // measure the trigger and anchor a popover under it.
+  buttonRef?: React.RefObject<HTMLButtonElement | null>;
   onClick?: () => void;
 }) {
   // Class composition per variant:
@@ -197,6 +225,7 @@ function PillButton({
     // (used by the pill's overall fade-in) untouched.
     <span className="group/btn relative inline-flex">
       <button
+        ref={buttonRef}
         type="button"
         onClick={onClick}
         disabled={disabled}

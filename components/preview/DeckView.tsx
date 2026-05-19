@@ -22,6 +22,7 @@ import {
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlidePill } from "@/components/preview/SlidePill";
+import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
 import type { InitialSlideState } from "@/app/(app)/preview/[projectId]/page";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import {
@@ -191,6 +192,57 @@ export function DeckView({
   const [slideStates, setSlideStates] = useState<
     Record<string, InitialSlideState>
   >(() => Object.fromEntries(initialSlideStates.map((s) => [s.slideKey, s])));
+  // History popover state. `anchorRect` is the History button's
+  // bounding rect captured at click time; `slideKey` is the slide
+  // whose history is being viewed. Both null when the popover is
+  // closed. `versions` is lazy-loaded the first time the popover
+  // opens for a given slide; cached in a Map keyed by slideKey so
+  // re-opening the same slide's history doesn't re-fetch.
+  const [historyAnchor, setHistoryAnchor] = useState<DOMRect | null>(null);
+  const [historySlideKey, setHistorySlideKey] = useState<string | null>(null);
+  const [historyVersions, setHistoryVersions] = useState<
+    Record<string, HistoryRow[]>
+  >({});
+  const [historyBusy, setHistoryBusy] = useState(false);
+  // Splice helper used by both Undo and Restore. Updates the live
+  // manifest (so the renderer immediately shows the older slide
+  // content) AND the per-slide pill state (currentVersionNumber).
+  // Server returns the slide JSON + new pointer; client mirrors
+  // those into local state. No re-fetch needed.
+  const applyRestoredSlide = (
+    slideKey: string,
+    payload: { currentVersionNumber: number; slide: SlideType },
+  ) => {
+    setManifest((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        slides: prev.slides.map((s) =>
+          s.slideId === slideKey ? payload.slide : s,
+        ),
+      };
+    });
+    setSlideStates((prev) => {
+      const current = prev[slideKey];
+      return {
+        ...prev,
+        [slideKey]: {
+          slideKey,
+          currentVersionNumber: payload.currentVersionNumber,
+          hasCachedComments: current?.hasCachedComments ?? false,
+          lockedAt: current?.lockedAt ?? null,
+        },
+      };
+    });
+    // History list is stale after a destructive Undo (a row was
+    // deleted server-side) — clear the cache for this slide so
+    // the next open re-fetches.
+    setHistoryVersions((prev) => {
+      const next = { ...prev };
+      delete next[slideKey];
+      return next;
+    });
+  };
   const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
   const [slideCount, setSlideCount] = useState(initialSlideCount);
@@ -1404,6 +1456,51 @@ export function DeckView({
                   }));
                 }
               }}
+              onUndo={async () => {
+                try {
+                  const res = await fetch(
+                    `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/undo`,
+                    { method: "POST" },
+                  );
+                  if (!res.ok) throw new Error(`undo: ${res.status}`);
+                  const data = (await res.json()) as {
+                    currentVersionNumber: number;
+                    slide: SlideType;
+                  };
+                  applyRestoredSlide(focusedSlide.slideId, data);
+                } catch (err) {
+                  console.error("undo failed", err);
+                }
+              }}
+              onOpenHistory={async (rect) => {
+                if (!rect) {
+                  setHistoryAnchor(null);
+                  setHistorySlideKey(null);
+                  return;
+                }
+                setHistoryAnchor(rect);
+                setHistorySlideKey(focusedSlide.slideId);
+                // Lazy-fetch versions on open. Cached per slide so
+                // re-opening the same slide skips the round-trip.
+                if (!historyVersions[focusedSlide.slideId]) {
+                  try {
+                    const res = await fetch(
+                      `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/versions`,
+                    );
+                    if (!res.ok) throw new Error(`versions: ${res.status}`);
+                    const data = (await res.json()) as {
+                      currentVersionNumber: number | null;
+                      versions: HistoryRow[];
+                    };
+                    setHistoryVersions((prev) => ({
+                      ...prev,
+                      [focusedSlide.slideId]: data.versions,
+                    }));
+                  } catch (err) {
+                    console.error("history fetch failed", err);
+                  }
+                }
+              }}
             />
           ) : null}
 
@@ -1438,6 +1535,70 @@ export function DeckView({
           ) : null}
         </motion.div>
       </div>
+      {/* History popover — portals to body so the canvas's
+          overflow-hidden + z-index don't clip it. Owned by DeckView
+          rather than SlidePill because the popover survives canvas-
+          hover state changes (closing on mouseleave would be wrong
+          — user might leave to click a row). */}
+      <HistoryPopover
+        open={historyAnchor != null && historySlideKey != null}
+        triggerRect={historyAnchor}
+        versions={
+          historySlideKey ? (historyVersions[historySlideKey] ?? []) : []
+        }
+        currentVersionNumber={
+          historySlideKey
+            ? (slideStates[historySlideKey]?.currentVersionNumber ?? null)
+            : null
+        }
+        busy={historyBusy}
+        onClose={() => {
+          setHistoryAnchor(null);
+          setHistorySlideKey(null);
+        }}
+        onRestore={async (versionNumber) => {
+          if (!historySlideKey) return;
+          setHistoryBusy(true);
+          try {
+            const res = await fetch(
+              `/api/projects/${projectId}/slides/${encodeURIComponent(historySlideKey)}/restore`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ versionNumber }),
+              },
+            );
+            if (!res.ok) throw new Error(`restore: ${res.status}`);
+            const data = (await res.json()) as {
+              currentVersionNumber: number;
+              slide: SlideType;
+            };
+            applyRestoredSlide(historySlideKey, data);
+            // Refetch the versions list so the "current" highlight
+            // moves to the restored row. The list itself didn't
+            // change (Restore is non-destructive) so a cheap
+            // refresh is fine.
+            const vRes = await fetch(
+              `/api/projects/${projectId}/slides/${encodeURIComponent(historySlideKey)}/versions`,
+            );
+            if (vRes.ok) {
+              const vData = (await vRes.json()) as {
+                versions: HistoryRow[];
+              };
+              setHistoryVersions((prev) => ({
+                ...prev,
+                [historySlideKey]: vData.versions,
+              }));
+            }
+          } catch (err) {
+            console.error("restore failed", err);
+          } finally {
+            setHistoryBusy(false);
+            setHistoryAnchor(null);
+            setHistorySlideKey(null);
+          }
+        }}
+      />
     </section>
   );
 }

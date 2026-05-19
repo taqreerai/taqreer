@@ -148,10 +148,11 @@ model SlideState {
   @@unique([presentationId, slideKey])
 }
 
-// Append-only per-slide history. Capped at 10 rows per SlideState
-// — oldest pruned on insert so the table can't grow unbounded
-// even for heavy iteration. Locked versions are also pruneable
-// (lock is a SlideState-level flag, not a version-level flag).
+// Append-only per-slide history. Capped at 5 rows per SlideState
+// (see MAX_VERSIONS_PER_SLIDE in lib/db/slide-versioning.ts) —
+// oldest pruned on insert so the table can't grow unbounded even
+// for heavy iteration. Locked versions are also pruneable (lock
+// is a SlideState-level flag, not a version-level flag).
 model SlideVersion {
   id            String     @id @default(cuid())
   slideStateId  String
