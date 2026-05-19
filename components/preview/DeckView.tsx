@@ -21,6 +21,7 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { SlidePill } from "@/components/preview/SlidePill";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import {
   SlideNavSidebar,
@@ -1297,7 +1298,7 @@ export function DeckView({
           // fades to opacity:1 over 1 s and the slow drift resumes.
           // Crosshair cursor signals "click + drag to draw" while in
           // commentMode; reverts to default outside it.
-          className={`canvas-gradient-border relative overflow-hidden rounded-xl p-0 shadow-2xl${
+          className={`canvas-gradient-border group relative overflow-hidden rounded-xl p-0 shadow-2xl${
             commentMode ? " cursor-crosshair" : ""
           }`}
           data-active={commentMode ? "true" : "false"}
@@ -1319,6 +1320,21 @@ export function DeckView({
               scale={gridScale}
             />
           </div>
+
+          {/* Per-slide pill — Undo / Try again / Regen / History /
+              Lock. Step 3 ships VISUAL ONLY; click handlers land
+              in steps 4-6. Mounted inside the canvas-gradient-
+              border container so it inherits the `group` hover
+              state, fading in on canvas hover. State props are
+              still placeholders until step 5 wires SlideState to
+              the client. */}
+          {!isFocusedRegenerating ? (
+            <SlidePill
+              currentVersionNumber={1}
+              hasCachedComments={false}
+              isLocked={false}
+            />
+          ) : null}
 
           {/* Regenerating overlay. */}
           {isFocusedRegenerating ? (
