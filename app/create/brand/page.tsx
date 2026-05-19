@@ -3,7 +3,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { getPalette as getColorPalette, getSwatches } from "colorthief";
+// colorthief was previously used here. Replaced by a direct pixel
+// histogram (see `extractDominantColors` below) because median-cut
+// quantisation returns CLUSTER CENTROIDS — averaging a bright brand
+// colour with surrounding antialiased pixels and producing duller,
+// off-by-many-RGB results. The histogram approach buckets the
+// actual source pixels, ranks by frequency, and reconstructs the
+// precise mean of each bucket so the swatches read back the pure
+// brand hex (e.g. #BBF54B stays #BBF54B instead of #69F954).
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
 import { Pill } from "@/components/create/controls";
@@ -89,6 +96,97 @@ function fontSlotFromSaved(saved: SavedFontSlot): FontSlotState {
 const DEFAULT_COLORS = ["#370BF4", "#E036B8", "#7D2DFF"];
 const MIN_COLORS = 1;
 const MAX_COLORS = 6;
+
+// Direct pixel histogram → dominant brand colours. Replaces
+// colorthief because its median-cut quantiser returned cluster
+// CENTROIDS — averaging a bright accent with surrounding pixels
+// and producing duller hex values than the actual source.
+//
+// Algorithm:
+//   1. Bucket every pixel by RGB at `STEP` resolution (16 = ~16
+//      levels per channel, 4096 max buckets). Coarse enough to
+//      collapse antialiasing into the dominant tone, fine enough
+//      to keep distinct brand hues apart.
+//   2. Track each bucket's pixel count AND the running RGB sum so
+//      we can compute the exact mean of source pixels per bucket
+//      after the loop — that mean IS the source colour for any
+//      flat fill (no quantisation drift).
+//   3. Sort buckets by count descending, walk them, accept the
+//      first `maxColors` whose mean is at least `MIN_RGB_DISTANCE`
+//      from every already-accepted colour. Stop early if a
+//      candidate's proportion falls under `MIN_PROPORTION` — those
+//      are antialiasing remnants, not brand colours, and padding
+//      the swatches with them gave the user 6 shades of grey/green
+//      instead of the 3 distinct hues they actually wanted.
+function extractDominantColors(
+  img: HTMLImageElement,
+  maxColors: number,
+): string[] {
+  const STEP = 16;
+  const MIN_RGB_DISTANCE = 60;
+  const MIN_PROPORTION = 0.005; // 0.5 %
+
+  const canvas = document.createElement("canvas");
+  // Cap analysis at a reasonable size — exact pixel counts don't
+  // change the dominant colours, and large source images turn
+  // getImageData into a multi-MB allocation.
+  const MAX_DIM = 800;
+  const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height, 1));
+  canvas.width = Math.max(1, Math.round(img.width * scale));
+  canvas.height = Math.max(1, Math.round(img.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return [];
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  const counts = new Map<string, number>();
+  const sums = new Map<string, [number, number, number]>();
+  for (let i = 0; i < data.length; i += 4) {
+    // Skip transparent pixels — they're not brand colours.
+    if (data[i + 3] < 128) continue;
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const key = `${Math.floor(r / STEP)},${Math.floor(g / STEP)},${Math.floor(b / STEP)}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const s = sums.get(key) ?? [0, 0, 0];
+    s[0] += r;
+    s[1] += g;
+    s[2] += b;
+    sums.set(key, s);
+  }
+
+  const totalPixels = canvas.width * canvas.height;
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const dist = (
+    a: [number, number, number],
+    b: [number, number, number],
+  ) =>
+    Math.sqrt(
+      (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2,
+    );
+
+  const accepted: Array<{ rgb: [number, number, number]; hex: string }> = [];
+  for (const [key, count] of ranked) {
+    if (count / totalPixels < MIN_PROPORTION) break;
+    const s = sums.get(key)!;
+    const rgb: [number, number, number] = [
+      Math.round(s[0] / count),
+      Math.round(s[1] / count),
+      Math.round(s[2] / count),
+    ];
+    if (accepted.some((a) => dist(a.rgb, rgb) < MIN_RGB_DISTANCE)) continue;
+    const hex =
+      "#" +
+      rgb
+        .map((n) => n.toString(16).padStart(2, "0"))
+        .join("")
+        .toUpperCase();
+    accepted.push({ rgb, hex });
+    if (accepted.length >= maxColors) break;
+  }
+  return accepted.map((a) => a.hex);
+}
 
 // Curated list — Arabic-capable + popular Latin. Avoids the full Google Fonts
 // API dance and lets us hardcode a known-good set that all support 400/700.
@@ -1330,49 +1428,12 @@ export default function CreateBrandPage() {
           el.onerror = () => reject(new Error("decode failed"));
           el.src = url;
         });
-        // Two-pass extraction. `getSwatches` returns ROLE-tagged
-        // swatches (Vibrant, DarkVibrant, LightVibrant, Muted,
-        // DarkMuted, LightMuted) — vibrant-family swatches catch
-        // the true brand accents that median-cut alone would
-        // average together with adjacent neutrals (e.g. a bright
-        // green logo on a dark background previously came back as
-        // a duller green than the source). We then fall back to
-        // `getPalette` sorted by `proportion` to fill out to
-        // MAX_COLORS with dominant background/text colours.
-        // `quality: 1` samples every pixel for maximum fidelity.
-        const [swatches, palette] = await Promise.all([
-          getSwatches(img, { quality: 1 }),
-          getColorPalette(img, { colorCount: 20, quality: 1 }),
-        ]);
-        if (!palette || palette.length === 0) {
+        const hexes = extractDominantColors(img, MAX_COLORS);
+        if (hexes.length === 0) {
           setExtraction({ kind: "error", message: "تعذر استخراج الألوان من هذه الصورة." });
           return;
         }
-        const vibrantOrder: Array<keyof typeof swatches> = [
-          "Vibrant",
-          "DarkVibrant",
-          "LightVibrant",
-          "Muted",
-          "DarkMuted",
-          "LightMuted",
-        ];
-        const ordered: string[] = [];
-        for (const role of vibrantOrder) {
-          const hex = swatches[role]?.color.hex().toUpperCase();
-          if (hex && !ordered.includes(hex)) ordered.push(hex);
-          if (ordered.length >= MAX_COLORS) break;
-        }
-        if (ordered.length < MAX_COLORS) {
-          const sortedPalette = [...palette].sort(
-            (a, b) => b.proportion - a.proportion,
-          );
-          for (const c of sortedPalette) {
-            const hex = c.hex().toUpperCase();
-            if (!ordered.includes(hex)) ordered.push(hex);
-            if (ordered.length >= MAX_COLORS) break;
-          }
-        }
-        setExtraction({ kind: "preview", colors: ordered.slice(0, MAX_COLORS) });
+        setExtraction({ kind: "preview", colors: hexes });
       } finally {
         URL.revokeObjectURL(url);
       }
