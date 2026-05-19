@@ -1330,15 +1330,21 @@ export default function CreateBrandPage() {
           el.onerror = () => reject(new Error("decode failed"));
           el.src = url;
         });
-        // colorthief v3 async API — returns `Color[]` with `.hex()`
-        // accessors. `colorCount` is the exact size requested; the
-        // library may return fewer if the image is too uniform.
-        const palette = await getColorPalette(img, { colorCount: MAX_COLORS });
+        // colorthief v3 async API — returns `Color[]` with a
+        // `.proportion` (0–1 fraction of pixels). Request a LARGER
+        // palette than we'll keep (median-cut returns clusters in
+        // an arbitrary order, not by dominance) then sort by
+        // `proportion` so the top `MAX_COLORS` are the truly most-
+        // present hues. Without this, a screenshot with a strong
+        // primary + lots of background neutrals can surface the
+        // neutrals first and bury the brand colour.
+        const palette = await getColorPalette(img, { colorCount: 20 });
         if (!palette || palette.length === 0) {
           setExtraction({ kind: "error", message: "تعذر استخراج الألوان من هذه الصورة." });
           return;
         }
-        const hexes = palette
+        const hexes = [...palette]
+          .sort((a, b) => b.proportion - a.proportion)
           .slice(0, MAX_COLORS)
           .map((c) => c.hex().toUpperCase());
         setExtraction({ kind: "preview", colors: hexes });
@@ -1989,12 +1995,9 @@ export default function CreateBrandPage() {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      {/* No `mt-auto` — the fonts row + colors/logo row naturally
-          fill the column to the 810 px floor (step 2 is the height
-          reference), so the gap-4 between row 2 and this button row
-          is the standard CreateShell column gap, matching steps 1
-          + 3. */}
-      <div className="flex items-center justify-between">
+      {/* `mt-auto` pins the button row to the section bottom so
+          the stepper's `self-stretch` lower edge aligns with it. */}
+      <div className="mt-auto flex items-center justify-between">
         {/* Explicit route — `router.back()` would land on /create/output
             when the user reached this page via the stepper from step 3,
             which broke the linear "previous = one step earlier" mental

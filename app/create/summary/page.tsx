@@ -451,10 +451,9 @@ export default function CreateSummaryPage() {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      {/* No `mt-auto` — row 1's content card carries `grow` and
-          absorbs the min-h slack instead. The gap between row 2 and
-          this button row is the same `gap-4` as on step 2. */}
-      <div className="flex items-center justify-between pt-2">
+      {/* `mt-auto` pins the button row to the section bottom so
+          the stepper's `self-stretch` lower edge aligns with it. */}
+      <div className="mt-auto flex items-center justify-between">
         <PillButton
           variant="secondary"
           onClick={() => router.push("/create/brand")}

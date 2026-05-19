@@ -264,6 +264,17 @@ button, a, [role="button"] {
   background: rgba(255, 255, 255, 0.07);
 }
 
+/* Read-only inputs should NOT look focusable — the summary page's
+   content textarea is read-only until the user hits "تعديل", so
+   suppress the violet focus ring + brightened background in that
+   state and switch the cursor to the default arrow. */
+.input-dark[readonly]:focus,
+.input-dark[readonly] {
+  border-color: rgba(255, 255, 255, var(--glass-border-opacity));
+  background: rgba(255, 255, 255, 0.05);
+  cursor: default;
+}
+
 .input-dark::placeholder {
   color: #9A94A8;
 }

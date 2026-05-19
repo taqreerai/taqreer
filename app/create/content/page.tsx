@@ -578,11 +578,7 @@ export default function CreateContentPage() {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      {/* No `mt-auto` — row 2 carries `flex-1` so the cards absorb
-          any min-h slack themselves; the gap-4 between this button
-          row and row 2 ends up identical to step 2's row→button
-          spacing. */}
-      <div className="flex items-center justify-end pt-2">
+      <div className="mt-auto flex items-center justify-end">
         <PillButton
           variant="primary"
           onClick={handleNext}
