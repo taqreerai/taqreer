@@ -165,14 +165,28 @@ export default function CreateSummaryPage() {
       router.replace("/create/content");
       return;
     }
-    setContent(JSON.parse(rawContent) as ContentState);
-    setBrand(JSON.parse(rawBrand) as StoredBrand);
-    if (rawOutput) setOutput(JSON.parse(rawOutput) as StoredOutput);
+    try {
+      setContent(JSON.parse(rawContent) as ContentState);
+      setBrand(JSON.parse(rawBrand) as StoredBrand);
+      if (rawOutput) setOutput(JSON.parse(rawOutput) as StoredOutput);
+    } catch {
+      // A corrupt session blob would blank the whole summary; bounce
+      // to step 1 so the user re-enters from a clean state instead.
+      router.replace("/create/content");
+    }
   }, [router]);
 
   const handleGenerate = async () => {
     if (!content || !brand) return;
     setError("");
+    // The summary editor lets the user clear the textarea, which
+    // persists `text: ""` to sessionStorage. Reject empty briefs
+    // up front instead of POSTing them to `/api/projects` where
+    // they'd produce a blank deck.
+    if (content.type === "text" && !content.text?.trim()) {
+      setError("لا يمكن إنشاء عرض بدون محتوى. عُد إلى الخطوة الأولى لإدخال النص.");
+      return;
+    }
     setLoading(true);
     try {
       // Stitch brand + output into the legacy "brand" payload Claude

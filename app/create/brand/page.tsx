@@ -1152,7 +1152,14 @@ export default function CreateBrandPage() {
       router.replace("/create/content");
       return;
     }
-    setContent(JSON.parse(rawContent) as StoredContent);
+    try {
+      setContent(JSON.parse(rawContent) as StoredContent);
+    } catch {
+      // Corrupt session payload — bounce to step 1 instead of crashing
+      // the whole page. Step 1 will hydrate fresh state.
+      router.replace("/create/content");
+      return;
+    }
 
     // Auto-load most recent BrandKit when sessionStorage brand is empty.
     // If the user came back here via "رجوع" from summary, the lazy
@@ -1422,9 +1429,18 @@ export default function CreateBrandPage() {
   // `feedback_*` memory if you ever see the Save button stuck idle
   // after a clean hydration. Logo position + excludes intentionally
   // omitted — those live on the new `/create/output` step.
+  // A `storageUrl` represents a logo that's already been uploaded to
+  // backend storage. A draft logo (only `previewDataUrl`) hasn't been
+  // saved yet — it must still produce a non-null fingerprint so the
+  // Save button correctly distinguishes "saved" from "has unsaved
+  // logo draft." Using `name` as the draft token keeps the fingerprint
+  // string short while changing whenever the user picks a different
+  // file via the dropzone.
   const logoFingerprint = logo
     ? `${logo.name}:${logo.size}:${logo.lastModified}`
-    : (loadedLogoMeta?.storageUrl ?? null);
+    : loadedLogoMeta
+      ? (loadedLogoMeta.storageUrl ?? `draft:${loadedLogoMeta.name ?? ""}`)
+      : null;
   const brandFingerprint = JSON.stringify({
     colors,
     headingFont: fontName(headingFontSlot),

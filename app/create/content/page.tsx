@@ -63,6 +63,11 @@ function readableFileName(raw: string): string {
 export default function CreateContentPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Monotonic request id for file extraction. Bumped on every new
+  // selection and on file removal so a slow earlier extract can't
+  // overwrite text/state set by a later pick. The async extractFile
+  // captures the id at call-time and bails if `current` has moved on.
+  const extractRequestIdRef = useRef(0);
   const [tab, setTab] = useState<Tab>("file");
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState("");
@@ -245,16 +250,24 @@ export default function CreateContentPage() {
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
+    // New pick supersedes whatever extraction was in flight + any
+    // text from the previous file. Without this clear, a slow
+    // earlier extract can finish AFTER the new pick and overwrite
+    // its text, OR (if the new pick fails) we'd leave stale text
+    // in the textarea and let the user proceed with content that
+    // doesn't match their current file.
+    const requestId = ++extractRequestIdRef.current;
+    setText("");
     setFile(nextFile);
     setTab("file");
     setError("");
-    void extractFile(nextFile);
+    void extractFile(nextFile, requestId);
   };
 
   // Posts the file to the extract route, drops the returned text
   // into the free-text textarea on success. Failure rolls the file
   // chip back so the user knows the file wasn't accepted.
-  const extractFile = async (target: File) => {
+  const extractFile = async (target: File, requestId: number) => {
     setExtracting("loading");
     try {
       const formData = new FormData();
@@ -263,6 +276,9 @@ export default function CreateContentPage() {
         method: "POST",
         body: formData,
       });
+      // Drop the response on the floor if a newer pick (or a removal)
+      // has bumped the counter while this fetch was in flight.
+      if (requestId !== extractRequestIdRef.current) return;
       const body = (await res.json().catch(() => null)) as
         | { text?: string; truncated?: boolean; error?: string }
         | null;
@@ -279,6 +295,7 @@ export default function CreateContentPage() {
         setError("");
       }
     } catch (caughtError) {
+      if (requestId !== extractRequestIdRef.current) return;
       console.error("extract failed", caughtError);
       setExtracting("error");
       setError(
@@ -297,8 +314,12 @@ export default function CreateContentPage() {
   };
 
   const removeFile = () => {
+    // Bump the counter so any in-flight extract for the now-removed
+    // file becomes a no-op when it resolves.
+    extractRequestIdRef.current += 1;
     setFile(null);
     setExtracting("idle");
+    setText("");
     // Reset the native input so re-selecting the SAME file fires onChange
     // again. Without this, the input's `value` still points at the removed
     // file and the browser de-dupes — the user clicks "select" again,
