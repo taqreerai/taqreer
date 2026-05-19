@@ -60,15 +60,15 @@ export type SlidePillProps = SlidePillState & {
 const BUTTON_BASE =
   "relative inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition-all disabled:cursor-not-allowed disabled:opacity-40";
 
-// Neutral glass surface (Pattern 1). Used by Undo, History, and
-// the unlocked Lock button. Inline-style for the bg + border-color
-// so they pick up the user's preset glass tokens at runtime.
+// Neutral glass surface (Pattern 1 from globals.css). Bg + border
+// alphas reference the user's glass preset; the blur comes from
+// the Tailwind `backdrop-blur-glass` utility on the element itself
+// (tied to `--backdrop-blur-glass = glass-blur * 2.5`). DO NOT
+// inline raw `backdrop-filter` here — it bypasses the preset and
+// composites differently than the rest of the design system.
 const NEUTRAL_GLASS_STYLE = {
   background: "rgba(255, 255, 255, var(--glass-opacity))",
   borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-  backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-  WebkitBackdropFilter:
-    "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
 } as const;
 
 type PillButtonVariant = "glass" | "ai" | "cta";
@@ -107,15 +107,14 @@ export function SlidePill({
       onMouseLeave={() => setHistoryOpen(false)}
     >
       <div
-        className="flex items-center gap-1 rounded-full border p-1"
-        style={{
-          background: "rgba(3, 3, 13, 0.6)",
-          borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-          backdropFilter:
-            "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-          WebkitBackdropFilter:
-            "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-        }}
+        // Pattern 3 (Layout surface) via `.glass-popover` — the
+        // canonical dark-tinted glass popover defined in globals.css.
+        // Tailwind utilities supply the blur + saturate as required
+        // by globals.css §"backdrop-filter"; raw `backdrop-filter`
+        // would lose to Tailwind's compositional rule. Bg + border
+        // come from the class so we stay preset-aware without
+        // hardcoding any colour or alpha.
+        className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] flex items-center gap-2.5 rounded-full px-2.5 py-2"
       >
         <PillButton
           icon="undo"
@@ -181,12 +180,16 @@ function PillButton({
   //   cta   → `.btn-gradient` (solid brand gradient fill + shadow).
   //           Active "locked" state for the Lock button. Pure class
   //           styling, no inline override.
+  // Glass variant composes the preset-linked blur via the Tailwind
+  // `backdrop-blur-glass` utility (NOT raw `backdrop-filter` — see
+  // globals.css §3 / Pattern 3). AI + CTA variants paint their own
+  // surfaces via the global classes.
   const variantClass =
     variant === "ai"
       ? "btn-gradient-anim hover:scale-[1.03]"
       : variant === "cta"
         ? "btn-gradient"
-        : "border";
+        : "backdrop-blur-glass border";
   const variantStyle = variant === "glass" ? NEUTRAL_GLASS_STYLE : undefined;
   return (
     <button
