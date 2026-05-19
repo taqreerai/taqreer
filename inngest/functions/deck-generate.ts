@@ -10,6 +10,7 @@ import {
 } from "@/lib/schema/slide";
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
+import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -950,6 +951,25 @@ export const deckGenerate = inngest.createFunction(
           status: "completed",
         },
       });
+
+      // Seed v1 of every slide into SlideState + SlideVersion so the
+      // per-slide pill (Undo / History / Lock) has data to work with
+      // from the moment the deck lands. Idempotent via upsert keyed
+      // on (presentationId, slideKey) — safe under Inngest retries.
+      // The lookup-then-call is intentional: deck-generate only has
+      // projectId in scope, the Presentation row was created earlier
+      // by /api/projects POST.
+      const presentation = await prisma.presentation.findUnique({
+        where: { projectId },
+        select: { id: true },
+      });
+      if (presentation) {
+        await seedSlideVersionsForInitialGeneration(
+          prisma,
+          presentation.id,
+          manifestToSave,
+        );
+      }
 
       // Promote Claude's generated title to the Project (dashboard name) and
       // the Presentation (also used for new versions). The truncated paste

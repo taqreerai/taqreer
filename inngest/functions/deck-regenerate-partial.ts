@@ -10,6 +10,7 @@ import {
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
+import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -448,6 +449,22 @@ export const deckRegeneratePartial = inngest.createFunction(
           data: { status: "completed" },
         }),
       ]);
+
+      // Per-slide history bookkeeping. One new SlideVersion row per
+      // regenerated slide (source="partial_regen"), SlideState
+      // pointer bumped, oldest pruned if >10. Lazy-creates state
+      // for legacy projects that pre-date the versioning migration.
+      // Same step as the transaction above so a retry replays both
+      // sides together — Inngest only memoises whole-step success.
+      const regenSlides = newManifest.slides.filter((s) =>
+        targetSlideIds.includes(s.slideId),
+      );
+      await recordSlidePartialRegen(
+        prisma,
+        data.presentationId,
+        regenSlides,
+        "partial_regen",
+      );
     });
 
     // Telemetry — sum per-slide usage across the run and write to the

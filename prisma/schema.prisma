@@ -7,26 +7,26 @@ datasource db {
 }
 
 model User {
-  id              String         @id @default(cuid())
-  supabaseUserId  String?        @unique
-  name            String?
-  email           String         @unique
-  emailVerified   DateTime?
-  image           String?
-  password        String?
-  plan            String         @default("free")
-  role            String         @default("user")
-  language        String         @default("ar")
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  projects        Project[]
-  templates       Template[]
-  brandKits       BrandKit[]
-  folders         Folder[]
-  accounts        Account[]
-  sessions        Session[]
-  subscriptions   Subscription[]
-  usageEvents     UsageEvent[]
+  id             String         @id @default(cuid())
+  supabaseUserId String?        @unique
+  name           String?
+  email          String         @unique
+  emailVerified  DateTime?
+  image          String?
+  password       String?
+  plan           String         @default("free")
+  role           String         @default("user")
+  language       String         @default("ar")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  projects       Project[]
+  templates      Template[]
+  brandKits      BrandKit[]
+  folders        Folder[]
+  accounts       Account[]
+  sessions       Session[]
+  subscriptions  Subscription[]
+  usageEvents    UsageEvent[]
 }
 
 model Account {
@@ -56,32 +56,48 @@ model Session {
 }
 
 model Project {
-  id            String         @id @default(cuid())
+  id            String        @id @default(cuid())
   userId        String
   title         String
-  type          String         @default("create")
-  language      String         @default("ar")
-  format        String         @default("16:9")
-  tone          String         @default("formal")
-  status        String         @default("draft")
+  type          String        @default("create")
+  language      String        @default("ar")
+  format        String        @default("16:9")
+  tone          String        @default("formal")
+  status        String        @default("draft")
   thumbnail     String?
+  // Per-slide WebP thumbnails for the hover-scrub UI on the
+  // dashboard and projects page. Ordered slide-1 → slide-N.
+  // Populated on "Save project" via the puppeteer pipeline.
+  thumbnailUrls String[]
+  // Filter columns for /projects. Frozen on first generation —
+  // not updated by regen / partial-regen / save (per product req).
+  slideCount    Int?
+  dominantColor String?
+  isFavorite    Boolean       @default(false)
   folderId      String?
   templateId    String?
   brandKitId    String?
   aiPrompt      String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  folder        Folder?        @relation(fields: [folderId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder        Folder?       @relation(fields: [folderId], references: [id])
   presentation  Presentation?
   files         File[]
   jobs          Job[]
+
+  @@index([userId, isFavorite])
 }
 
 model Presentation {
   id               String                @id @default(cuid())
   projectId        String                @unique
   currentVersionId String?
+  // The PresentationVersion id this project was last "saved" at —
+  // the canonical pinned snapshot used to source dashboard
+  // thumbnails, /projects filter data, and template exports.
+  // null until the user clicks "حفظ المشروع" for the first time.
+  savedVersionId   String?
   title            String
   language         String                @default("ar")
   direction        String                @default("rtl")
@@ -90,6 +106,7 @@ model Presentation {
   project          Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   versions         PresentationVersion[]
   comments         Comment[]
+  slideStates      SlideState[]
 }
 
 model PresentationVersion {
@@ -105,6 +122,50 @@ model PresentationVersion {
   @@unique([presentationId, versionNumber])
 }
 
+// Per-slide metadata that survives across slide-content versions
+// for the same logical slide (matched by `slideKey`, the stable
+// id Claude assigns in the manifest). Carries the lock flag and
+// the comment payload cache used by "Try again" on the per-slide
+// pill.
+model SlideState {
+  id                   String         @id @default(cuid())
+  presentationId       String
+  slideKey             String
+  currentVersionNumber Int            @default(1)
+  // null = unlocked. When set, full-deck regen skips this slide
+  // entirely (per-slide regen / undo still allowed — lock only
+  // protects against bulk operations).
+  lockedAt             DateTime?
+  // Last-applied comment payload, JSON shape mirrors what
+  // `deck-regenerate-partial` accepts. Replayed by "Try again".
+  // Cleared on Lock, Regen (clean), or when fresh comments arrive.
+  cachedComments       Json?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  presentation         Presentation   @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  versions             SlideVersion[]
+
+  @@unique([presentationId, slideKey])
+}
+
+// Append-only per-slide history. Capped at 10 rows per SlideState
+// — oldest pruned on insert so the table can't grow unbounded
+// even for heavy iteration. Locked versions are also pruneable
+// (lock is a SlideState-level flag, not a version-level flag).
+model SlideVersion {
+  id            String     @id @default(cuid())
+  slideStateId  String
+  versionNumber Int
+  slideJson     Json
+  // create | regen | partial_regen | restore
+  source        String     @default("create")
+  createdAt     DateTime   @default(now())
+  slideState    SlideState @relation(fields: [slideStateId], references: [id], onDelete: Cascade)
+
+  @@unique([slideStateId, versionNumber])
+  @@index([slideStateId, createdAt(sort: Desc)])
+}
+
 model File {
   id         String   @id @default(cuid())
   projectId  String
@@ -117,7 +178,7 @@ model File {
 }
 
 model Comment {
-  id             String               @id @default(cuid())
+  id             String              @id @default(cuid())
   presentationId String
   versionId      String
   slideId        String
@@ -126,23 +187,23 @@ model Comment {
   boundsJson     Json?
   screenshotUrl  String?
   content        String
-  status         String               @default("draft")
-  createdAt      DateTime             @default(now())
-  presentation   Presentation         @relation(fields: [presentationId], references: [id], onDelete: Cascade)
-  version        PresentationVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  status         String              @default("draft")
+  createdAt      DateTime            @default(now())
+  presentation   Presentation        @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  version        PresentationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
   @@index([presentationId, versionId, status])
   @@index([slideId])
 }
 
 model Job {
-  id           String   @id @default(cuid())
-  projectId    String?
-  inngestRunId String?  @unique
-  type         String
-  status       String   @default("queued")
-  inputJson    Json?
-  outputJson   Json?
+  id                  String   @id @default(cuid())
+  projectId           String?
+  inngestRunId        String?  @unique
+  type                String
+  status              String   @default("queued")
+  inputJson           Json?
+  outputJson          Json?
   // Token-usage telemetry. Captured from Anthropic's `message.usage`
   // when the stream / non-streaming call completes. Accumulates across
   // retry attempts. Pre-credits-billing this is pure observability —
@@ -151,14 +212,14 @@ model Job {
   // outputJson) for cheap aggregate queries.
   model               String?
   quality             String?
-  attempts            Int     @default(0)
-  inputTokens         Int     @default(0)
-  outputTokens        Int     @default(0)
-  cacheReadTokens     Int     @default(0)
-  cacheCreationTokens Int     @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  attempts            Int      @default(0)
+  inputTokens         Int      @default(0)
+  outputTokens        Int      @default(0)
+  cacheReadTokens     Int      @default(0)
+  cacheCreationTokens Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  project             Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 }
 
 model Template {
@@ -212,15 +273,15 @@ model Folder {
 }
 
 model Subscription {
-  id                 String    @id @default(cuid())
-  userId             String
-  stripeCustomerId   String?   @unique
-  plan               String    @default("free")
-  status             String    @default("active")
-  currentPeriodEnd   DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  userId           String
+  stripeCustomerId String?   @unique
+  plan             String    @default("free")
+  status           String    @default("active")
+  currentPeriodEnd DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UsageEvent {
