@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { getPalette as getColorPalette } from "colorthief";
+import { getPalette as getColorPalette, getSwatches } from "colorthief";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
 import { Pill } from "@/components/create/controls";
@@ -1330,24 +1330,49 @@ export default function CreateBrandPage() {
           el.onerror = () => reject(new Error("decode failed"));
           el.src = url;
         });
-        // colorthief v3 async API — returns `Color[]` with a
-        // `.proportion` (0–1 fraction of pixels). Request a LARGER
-        // palette than we'll keep (median-cut returns clusters in
-        // an arbitrary order, not by dominance) then sort by
-        // `proportion` so the top `MAX_COLORS` are the truly most-
-        // present hues. Without this, a screenshot with a strong
-        // primary + lots of background neutrals can surface the
-        // neutrals first and bury the brand colour.
-        const palette = await getColorPalette(img, { colorCount: 20 });
+        // Two-pass extraction. `getSwatches` returns ROLE-tagged
+        // swatches (Vibrant, DarkVibrant, LightVibrant, Muted,
+        // DarkMuted, LightMuted) — vibrant-family swatches catch
+        // the true brand accents that median-cut alone would
+        // average together with adjacent neutrals (e.g. a bright
+        // green logo on a dark background previously came back as
+        // a duller green than the source). We then fall back to
+        // `getPalette` sorted by `proportion` to fill out to
+        // MAX_COLORS with dominant background/text colours.
+        // `quality: 1` samples every pixel for maximum fidelity.
+        const [swatches, palette] = await Promise.all([
+          getSwatches(img, { quality: 1 }),
+          getColorPalette(img, { colorCount: 20, quality: 1 }),
+        ]);
         if (!palette || palette.length === 0) {
           setExtraction({ kind: "error", message: "تعذر استخراج الألوان من هذه الصورة." });
           return;
         }
-        const hexes = [...palette]
-          .sort((a, b) => b.proportion - a.proportion)
-          .slice(0, MAX_COLORS)
-          .map((c) => c.hex().toUpperCase());
-        setExtraction({ kind: "preview", colors: hexes });
+        const vibrantOrder: Array<keyof typeof swatches> = [
+          "Vibrant",
+          "DarkVibrant",
+          "LightVibrant",
+          "Muted",
+          "DarkMuted",
+          "LightMuted",
+        ];
+        const ordered: string[] = [];
+        for (const role of vibrantOrder) {
+          const hex = swatches[role]?.color.hex().toUpperCase();
+          if (hex && !ordered.includes(hex)) ordered.push(hex);
+          if (ordered.length >= MAX_COLORS) break;
+        }
+        if (ordered.length < MAX_COLORS) {
+          const sortedPalette = [...palette].sort(
+            (a, b) => b.proportion - a.proportion,
+          );
+          for (const c of sortedPalette) {
+            const hex = c.hex().toUpperCase();
+            if (!ordered.includes(hex)) ordered.push(hex);
+            if (ordered.length >= MAX_COLORS) break;
+          }
+        }
+        setExtraction({ kind: "preview", colors: ordered.slice(0, MAX_COLORS) });
       } finally {
         URL.revokeObjectURL(url);
       }
