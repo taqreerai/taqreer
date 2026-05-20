@@ -228,8 +228,16 @@ function PillButton({
       </button>
       {/* Tooltip — appears BELOW the button so it doesn't clash with
           the slide content above the pill. Same recipe as
-          PreviewActionBar (Pattern 1 vocabulary, see globals.css). */}
+          PreviewActionBar (Pattern 1 vocabulary, see globals.css).
+          `dir="auto"` so Arabic UI labels ("السجل", "قفل الشريحة")
+          render RTL even when the surrounding canvas is an EN deck
+          (manifest.direction === "ltr" → ancestor dir flips LTR →
+          tooltip text would otherwise inherit LTR and render the
+          Arabic word with mis-placed inline punctuation / mixed-
+          script runs). Auto = first strong directional character
+          wins, so each tooltip gets the right direction for free. */}
       <span
+        dir="auto"
         className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/90 px-2.5 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover/btn:opacity-100"
       >
         {label}

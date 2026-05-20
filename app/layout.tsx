@@ -57,7 +57,13 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${poppins.variable}`} suppressHydrationWarning>
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0,0&display=swap" rel="stylesheet" />
+        {/* FILL axis range bumped to `0..1` (was `0`) so callers can
+            toggle to the filled variant via inline font-variation-
+            settings. Used today by the Comment toolbar button to
+            signal commentMode (outlined → filled). Tiny size bump
+            on the variable font file; same axes, just an extra
+            value on the FILL axis. */}
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap" rel="stylesheet" />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
         <GlassPreflight />

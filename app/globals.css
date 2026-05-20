@@ -180,6 +180,14 @@
   --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
   --tq-border-subtle: rgba(255, 255, 255, 0.05);
   --tq-border-danger: rgba(239, 68, 68, 0.22);
+  /* Neutral focus / "active border" — brighter than the resting
+     muted border but still neutral (not brand-blue). Used on
+     `.input-dark:focus`, and any future control that wants a
+     visible "you're interacting with this" cue without leaning on
+     brand colour. Matches the `border-white/40` value the
+     `.btn-pill:hover` rule already uses, just behind a named
+     token. */
+  --tq-border-focus:  rgba(255, 255, 255, 0.4);
 
   /* 5. Gradients */
   --tq-gradient-brand:  linear-gradient(135deg, #370BF4 0%, #7D2DFF 100%);
@@ -310,7 +318,13 @@ button, a, [role="button"] {
 }
 
 .input-dark:focus {
-  border-color: rgba(55, 11, 244, 0.7);
+  /* Neutral lighter border instead of the brand-violet rgba(55,11,244,
+     0.7) — user feedback 2026-05-21: the violet focus ring read
+     as "warning" / off-brand against the otherwise-neutral glass
+     system. `var(--tq-border-focus)` is white at 0.4 alpha,
+     visibly brighter than the resting `--glass-border-opacity`
+     (~0.09) so the focus signal is still clear, just neutral. */
+  border-color: var(--tq-border-focus);
   background: rgba(255, 255, 255, 0.07);
 }
 
@@ -326,7 +340,11 @@ button, a, [role="button"] {
 }
 
 .input-dark::placeholder {
-  color: #9A94A8;
+  /* Use the canonical muted token so a future palette tweak in
+     :root flows through here automatically — previously the same
+     `#9A94A8` was inlined and would drift if --tq-text-muted ever
+     changed. */
+  color: var(--tq-text-muted);
 }
 
 .input-dark:disabled {
@@ -901,16 +919,29 @@ body {
 }
 
 /* ─── Sidebar ─── */
+/* Sidebar glass surface — matches the SlideNavSidebar / .glass-card
+   recipe so all three vertical panels (main sidebar, slide-nav,
+   comments) share one visual language. Background is the canonical
+   white-tint at the preset's --glass-opacity, NOT a 72%-solid dark
+   override (that was visually opaque against `--tq-bg` and read as
+   "no glass" — user feedback 2026-05-21).
+   Backdrop blur + saturation come from the Tailwind utilities
+   `backdrop-blur-glass backdrop-saturate-(--glass-saturation)`
+   applied on the <aside> element so the panel responds to the
+   user's Settings → glass-preset like every other glass surface. */
 .sidebar-bg {
-  background: rgba(3, 3, 13, 0.72);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  background: rgba(255, 255, 255, var(--glass-opacity));
   border-color: rgba(255, 255, 255, var(--glass-border-opacity));
 }
 
+/* Active nav item — subtle raised-glass tint instead of the loud
+   solid brand-blue block. Mirrors the toolbar's active-state recipe
+   (rgba(255,255,255, calc(--glass-opacity * 2.6))) so every active
+   surface in the app reads with one vocabulary. Icon + text bump to
+   `--tq-text-primary` is owned by the JSX (`nav-icon` colour swap)
+   so this class only needs to paint the surface. */
 .nav-active {
-  background: var(--tq-blue);
-  box-shadow: var(--tq-shadow-brand);
+  background: rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6));
   color: var(--tq-text-primary);
 }
 
@@ -932,7 +963,14 @@ body {
    the popover / modal panels. Keeps all elevated surfaces in lock-step
    under the user's glass-preset. */
 .header-bg {
-  background: rgba(3, 3, 13, 0.6);
+  /* Header glass — same recipe as `.sidebar-bg` (white-tint at the
+     user's --glass-opacity preset) so the chrome panels share one
+     visual language. Was rgba(3,3,13,0.6) — 60% solid dark over
+     --tq-bg, invisible glass. Blur + saturation come from Tailwind
+     utilities on the <header> element (see components/app/Header.tsx)
+     so the panel responds to the Settings glass preset like every
+     other elevated surface. */
+  background: rgba(255, 255, 255, var(--glass-opacity));
   border-bottom: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
 }
 
@@ -1194,8 +1232,13 @@ body {
 
 .input-search:focus {
   outline: none;
-  border-color: rgba(55, 11, 244, 0.6);
-  box-shadow: 0 0 0 1px rgba(55, 11, 244, 0.3);
+  /* Neutral focus border + halo via `--tq-border-focus` so the
+     header search reads "focused" without the brand-violet ring.
+     Same token + rationale as `.input-dark:focus`. The box-shadow
+     halo uses a lower alpha (rgba 0.2) for a subtle outer glow
+     instead of a saturated ring. */
+  border-color: var(--tq-border-focus);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .input-search::placeholder {
@@ -1229,16 +1272,47 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-/* ─── Dashboard background ─── */
+/* ─── Dashboard background ───
+   Two-layer composition so descendants with `backdrop-filter` (the
+   main sidebar, slide-nav sidebar, header, comments panel) can
+   actually blur the brand-aurora layer behind them:
+
+     1. `.dashboard-bg` itself paints only the solid base
+        (--tq-bg). No backgrounds → no `background-attachment: fixed`.
+     2. A `::before` pseudo-element positioned `fixed; inset: 0;
+        z-index: 0;` carries the three radial-gradient blobs.
+        Because the pseudo is its OWN positioned layer, browsers
+        treat it as a real compositing layer that backdrop-filter
+        can reach.
+
+   Why this matters: the previous `background-attachment: fixed`
+   recipe rendered the gradients into the SAME paint layer as the
+   .dashboard-bg element, and some browsers (Safari + Chromium
+   under certain GPU pipelines) won't let a child with
+   backdrop-filter blur a `background-attachment: fixed`
+   ancestor — the sidebar's glass effect was invisible against
+   the solid #03030D base (user-reported 2026-05-21).
+
+   Result: pick any Settings → glass preset; the sidebar (and any
+   future fixed-glass surface) refracts the magenta / blue /
+   violet blobs visibly. */
 .dashboard-bg {
   background-color: #03030D;
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+.dashboard-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background-image:
     radial-gradient(ellipse 75% 60% at 10% 90%, rgba(55, 11, 244, 0.28) 0%, transparent 55%),
     radial-gradient(ellipse 60% 50% at 90% 5%,  rgba(224, 54, 184, 0.22) 0%, transparent 55%),
     radial-gradient(ellipse 55% 55% at 55% 50%, rgba(125, 45, 255, 0.14) 0%, transparent 60%);
-  background-attachment: fixed;
-  position: relative;
-  min-height: 100vh;
 }
 
 /* ─── Avatar ─── */

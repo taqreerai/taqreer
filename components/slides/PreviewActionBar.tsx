@@ -43,6 +43,7 @@ function ToolButton({
   running,
   active,
   gradient,
+  iconFilled,
 }: {
   icon: string;
   // Optional custom icon node — overrides the material-symbols icon when
@@ -63,9 +64,18 @@ function ToolButton({
   running?: boolean;
   active?: boolean;
   // Animated brand-gradient variant (`.btn-gradient-anim` in globals.css).
-  // Used ONLY on the regen button so the deck's primary CTA stands out
-  // against the otherwise-neutral glass toolbar.
+  // Used on the AI-related buttons (Regen, Comment) so they read as
+  // one family against the otherwise-neutral glass toolbar.
   gradient?: boolean;
+  // Swap the Material Symbols icon to its FILLED variant
+  // (`font-variation-settings: FILL 1`). Substitutes the
+  // raised-bg active state on `gradient` buttons — under
+  // .btn-gradient-anim the inline `activeBg` is suppressed, so a
+  // shape-level cue (outline → filled) is the cleanest way to
+  // signal "this button is engaged" without competing with the
+  // animated gradient ring. The font URL in layout.tsx loads
+  // FILL@0..1 so this toggle is a no-extra-network swap.
+  iconFilled?: boolean;
 }) {
   const isDisabled = disabled || running;
   // Two coordinated visual transitions on hover:
@@ -116,7 +126,24 @@ function ToolButton({
         ) : running ? (
           <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
         ) : (
-          <span className="material-symbols-outlined text-[22px]">{icon}</span>
+          <span
+            className="material-symbols-outlined text-[22px]"
+            // `font-variation-settings` replaces the WHOLE shorthand,
+            // not just one axis — so when we want FILL=1 we have to
+            // re-state every axis the base `.material-symbols-outlined`
+            // rule set (wght 200, GRAD 0, opsz 24). Otherwise wght
+            // would silently drop to the variable-font default.
+            style={
+              iconFilled
+                ? {
+                    fontVariationSettings:
+                      '"FILL" 1, "wght" 200, "GRAD" 0, "opsz" 24',
+                  }
+                : undefined
+            }
+          >
+            {icon}
+          </span>
         )}
         {/* Count badge — top-end corner. Clear sky blue (Tailwind
             blue-500) so it reads as an unmistakable "info" indicator.
@@ -128,8 +155,18 @@ function ToolButton({
           </span>
         ) : null}
       </button>
-      {/* Tooltip — appears to the right of the toolbar (toward content) */}
+      {/* Tooltip — appears to the right of the toolbar (toward content).
+          `dir="auto"` so the FIRST strong directional character of
+          the label drives reading direction. Without it the tooltip
+          inherits the toolbar wrapper's outer dir="ltr" (chosen so
+          the icon stack centres correctly), and Arabic labels like
+          "تصدير PPTX" render bidi-flipped — Arabic glyph order
+          stays correct (Unicode BiDi handles it) but the inline
+          "PPTX" lands on the wrong side of the Arabic word. With
+          dir="auto" the tooltip reads RTL for Arabic labels and LTR
+          for any pure-Latin label, no per-button decision needed. */}
       <div
+        dir="auto"
         className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-3 py-1.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
         style={{ left: "100%", marginLeft: "12px" }}
       >
@@ -483,9 +520,24 @@ export function PreviewActionBar({
             </motion.div>
           }
         />
+        {/* AI-pair styling — Regen above + Comment here both run the
+            `.btn-gradient-anim` ring so the user reads them as a
+            single AI family. The `assistant` icon (speech bubble +
+            sparkles) reinforces the system: assistant captures
+            intent → auto_awesome applies it.
+            Active state (commentMode on) is signalled by swapping
+            the icon to its FILLED Material Symbols variant
+            (outlined → solid bubble+sparkles). Under .btn-gradient-
+            anim the raised-bg active style is suppressed by the
+            gradient ring, so a SHAPE-level cue is the cleanest way
+            to show "I'm engaged" without competing with the animated
+            mesh-gradient. The font URL in layout.tsx loads
+            FILL@0..1 so the toggle is a no-extra-network swap. */}
         <ToolButton
-          icon="comment"
+          icon="assistant"
           label={commentMode ? "إنهاء وضع التعليقات" : "إضافة تعليق"}
+          gradient
+          iconFilled={commentMode}
           onClick={onToggleCommentMode}
           active={commentMode}
           disabled={applying}

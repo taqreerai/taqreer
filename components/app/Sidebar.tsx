@@ -91,27 +91,25 @@ export function Sidebar({
     router.refresh();
   };
 
+  // Action buttons — `إنشاء / تحسين / محاكاة / من قالب / من بيانات`.
+  // The per-flow brand colours (blue/magenta/lavender/violet/cyan)
+  // that used to paint the active background block were dropped
+  // 2026-05-21: solid coloured blocks competed with the glass system
+  // and made the sidebar read as "loud chrome" rather than the
+  // canonical raised-glass active state used elsewhere. Active state
+  // now reuses `.nav-active` (same recipe as the lower nav links)
+  // so all sidebar items share one active vocabulary.
   const actionButtons: Array<{
     label: string;
     icon: string;
-    color: string;
-    glow: string;
     path: string;
     comingSoon?: boolean;
   }> = [
-    // Brand palette + glow alphas, sourced from the design-system
-    // tokens (--tq-blue / --tq-magenta / --tq-lavender / --tq-violet)
-    // and their *-rgb companions where defined. The data-deck cyan
-    // doesn't have a token yet — flagged inline. When that flow
-    // un-stubs, add `--tq-cyan` to globals.css and route the entry
-    // through it.
-    { label: 'إنشاء', icon: 'add_circle', color: 'var(--tq-blue)', glow: 'rgba(var(--tq-blue-rgb), 0.4)', path: '/create' },
-    { label: 'تحسين', icon: 'auto_fix_high', color: 'var(--tq-magenta)', glow: 'rgba(var(--tq-magenta-rgb), 0.4)', path: '/enhance' },
-    { label: 'محاكاة', icon: 'content_copy', color: 'var(--tq-lavender)', glow: 'rgba(147,38,201,0.4)', path: '/mimic' },
-    { label: 'من قالب', icon: 'grid_view', color: 'var(--tq-violet)', glow: 'rgba(var(--tq-violet-rgb), 0.4)', path: '/templates' },
-    // Data-deck entry uses a cyan accent — no design-system token
-    // yet. Inline hex flagged for follow-up when the flow ships.
-    { label: 'من بيانات', icon: 'dataset', color: '#36B8E0', glow: 'rgba(54,184,224,0.4)', path: '/datasheet', comingSoon: true },
+    { label: 'إنشاء', icon: 'add_circle', path: '/create' },
+    { label: 'تحسين', icon: 'auto_fix_high', path: '/enhance' },
+    { label: 'محاكاة', icon: 'content_copy', path: '/mimic' },
+    { label: 'من قالب', icon: 'grid_view', path: '/templates' },
+    { label: 'من بيانات', icon: 'dataset', path: '/datasheet', comingSoon: true },
   ];
 
   const navLinks = [
@@ -128,7 +126,12 @@ export function Sidebar({
   return (
     <aside
       aria-label="Sidebar"
-      className={`sidebar-bg fixed right-0 top-0 h-screen z-50 flex flex-col border-l ${transitionClass} ${
+      // `backdrop-blur-glass backdrop-saturate-(--glass-saturation)`
+      // tracks the user's Settings → glass preset; `sidebar-bg`
+      // owns the (now-transparent) tint + border color. Tailwind
+      // composes backdrop-filter — raw `backdrop-filter` in the
+      // class would lose to it (memory: feedback_tw_glass_system).
+      className={`sidebar-bg backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed right-0 top-0 h-screen z-50 flex flex-col border-l ${transitionClass} ${
         isCollapsed ? "w-[80px]" : "w-[260px]"
       }`}
     >
@@ -212,13 +215,14 @@ export function Sidebar({
               <div key={btn.path} className="relative group w-full">
                 <Link
                   href={btn.path}
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] rounded-xl transition-all duration-300 overflow-hidden whitespace-nowrap relative ${
-                    isActive ? '' : 'hover:bg-white/5'
+                  // Active vs. idle uses the same `.nav-active` /
+                  // `.nav-item` classes as the lower nav links so
+                  // every sidebar item shares one active vocabulary.
+                  // No per-flow background-color or boxShadow — see
+                  // actionButtons docstring above for the rationale.
+                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl relative ${
+                    isActive ? 'nav-active' : 'nav-item'
                   }`}
-                  style={isActive ? {
-                    backgroundColor: btn.color,
-                    boxShadow: `0 4px 20px ${btn.glow}`,
-                  } : {}}
                 >
                   <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
                     <span
@@ -230,7 +234,7 @@ export function Sidebar({
                   </div>
                   <span className={`font-medium text-sm transition-all duration-300 ${
                     isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
-                  } ${isActive ? 'text-white' : 'text-white'}`}>
+                  } text-white`}>
                     {btn.label}
                   </span>
                   {btn.comingSoon && !isCollapsed && (
