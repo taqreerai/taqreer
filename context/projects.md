@@ -2,7 +2,19 @@
 
 Working doc for the dashboard "RecentProjects" rework, the /projects listing,
 the 3-dots menu actions, and the supporting thumbnail / metadata pipeline.
-Branch: `hotfix/thinking-config-adaptive`. Last sync: 2026-05-20.
+Branch: `hotfix/thinking-config-adaptive` (the ONLY feature branch — see
+context.md "Branch + PR strategy"). Last sync: 2026-05-21.
+
+## Current PR state (as of 2026-05-21)
+
+- **PR #28** (`hotfix → dev`) — MERGED. After 51-commit / 82-commit divergence
+  with dev, we created safety backups (`stable-2026-05-21` tag,
+  `dev-backup-2026-05-21` + `main-backup-2026-05-21` branches) and force-pushed
+  `hotfix/...` over `dev`. PR auto-closed as merged.
+- **PR #29** (`dev → main`) — OPEN. CodeRabbit triggered. Waiting on review,
+  fix loop, then merge → `main = dev = hotfix`.
+- All work continues on `hotfix/thinking-config-adaptive`. Never create new
+  branches.
 
 ---
 

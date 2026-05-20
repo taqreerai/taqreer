@@ -769,11 +769,40 @@ If you're a fresh agent picking this up, read in this order:
 8. [`lib/export/html-export.ts`](../lib/export/html-export.ts) + [`bidi-postprocess.ts`](../lib/export/bidi-postprocess.ts) — export entry + BiDi post-processor.
 9. [`app/spike/page.tsx`](../app/spike/page.tsx) — BiDi regression harness.
 
-### Branch + PR strategy
+### Branch + PR strategy (locked 2026-05-21)
 
-- All work goes to `dev`.
-- CodeRabbit reviews `dev → main` PRs.
-- Don't auto-push. Commit freely; push only on user request, meaningful milestone, or >3 accumulated commits.
+**Single-developer setup. Existing branches only — never create new ones.**
+
+Branches that exist on `origin`:
+
+| Branch | Purpose |
+|---|---|
+| `hotfix/thinking-config-adaptive` | Active working branch. All new code goes here. |
+| `dev` | Production-track. Updated by force-pushing `hotfix/...` over it (see flow below). |
+| `main` | Released. Updated via `dev → main` PR (CR-reviewed). |
+| `dev-backup-YYYY-MM-DD`, `main-backup-YYYY-MM-DD` | Snapshots created before each force-replace of dev/main. Preserves prior history. Keep ~30 days. |
+
+**Why we don't create new feature branches:**
+The previous "branch per feature" attempt produced an 82-commit / 51-commit divergence between `hotfix/...` and `dev` that took a destructive force-replace to reconcile (2026-05-21). Solo developer + GitHub branch protection are doing different jobs; we don't need both layers of indirection.
+
+**The workflow:**
+1. Code goes on `hotfix/thinking-config-adaptive` (local + push).
+2. Periodically, the user says "promote to dev" — we tag the current state (`stable-YYYY-MM-DD`), create `dev-backup-YYYY-MM-DD` branch on origin (preserves dev's then-current state), then **`git push origin hotfix/thinking-config-adaptive:dev --force`**. Dev now equals hotfix.
+3. Open `gh pr create --base main --head dev` for the CodeRabbit review pass.
+4. Address CR findings on `hotfix/...` → push → re-push to dev with `:dev --force` → CR re-reviews.
+5. When CR is clean, merge PR → `main = dev = hotfix`.
+
+**Rules to keep this clean:**
+- **Never `git checkout -b new-branch`.** If you think a new branch is warranted, ask first.
+- **Tag before any force-push.** `git tag stable-YYYY-MM-DD && git push origin stable-YYYY-MM-DD`.
+- **Backup the branch you're overwriting.** `git push origin refs/remotes/origin/dev:refs/heads/dev-backup-YYYY-MM-DD` before `--force`.
+- **Don't auto-push.** Commit freely; push only on user request or a meaningful milestone (>3 commits is the usual threshold).
+
+**Restoring from backup if a force-push goes wrong:**
+```bash
+git push origin dev-backup-YYYY-MM-DD:dev --force
+# dev is restored to the backup state
+```
 
 ### Memory pointers
 
