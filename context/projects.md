@@ -455,6 +455,63 @@ on line 89.
 
 - Rendered as menu item but disabled. Wait for user spec.
 
+**Locked design intent (2026-05-21):** "Save copy as template" is the
+*explicit consent* gate for sharing user content with the community
+template gallery. Until a user clicks it, their decks + thumbnails are
+*their* private content. Once clicked, the project graduates to a
+public `Template` row and its assets become acceptable for unauth
+public delivery. This gives us a clean privacy story: **owner-only
+by default, consent-gated public**.
+
+This intent ALSO drives the storage privacy plan (see next section).
+
+### Storage privacy plan (pre-GA migration)
+
+**Current state (acceptable for pre-launch):** the `slide-previews`
+bucket is **public**. Per-slide thumbnails serve directly from
+Supabase Storage public URLs into `<img>` tags. Paths are high-entropy
+(`${supabaseUserId}/${projectId}/${savedVersionId}/${slideKey}.webp`)
+so URL enumeration is infeasible — the only way someone reaches a
+thumbnail is if the URL has been leaked (screenshots showing the URL,
+network-tab pastes, browser sync, etc.).
+
+**Why this is OK NOW:** Taqreer is pre-launch / solo-developer. No
+users have confidential content yet; no enterprise-buyer due
+diligence; URL leakage paths effectively zero. CodeRabbit flagged
+this on PR #29 as a 🟠 Major (Heavy lift) — we acknowledged but
+deferred.
+
+**Why this MUST change before GA:**
+1. Once real users upload sensitive content (pitches, financials,
+   client work), public-by-default becomes a real disclosure risk.
+2. Enterprise B2B buyers ask "where is user content stored, how is
+   it served?" Public ACL is a red flag on every SOC 2 / ISO / GDPR
+   questionnaire.
+3. Migration is well-understood but harder once URLs are in the
+   wild — easier to do before users exist.
+
+**Target architecture (paired with the "Save copy as template" flow):**
+
+1. **Two buckets** (or one bucket with two paths):
+   - `slide-previews-private/${userId}/${projectId}/...` — owner-only.
+     Serves via signed URLs from `/api/projects/[id]/thumbnails/[slideKey]`
+     after an auth check. `<img>` hits that endpoint; endpoint returns
+     a short-lived (e.g. 15-min) signed URL via 302 redirect or proxy.
+   - `template-previews-public/${templateId}/...` — fully public.
+     Only populated when a user clicks "Save copy as template" (step 14)
+     and the deck is promoted to a Template row. URLs from this bucket
+     are acceptable for unauth delivery because the user *consented*.
+2. **Promotion flow:** "Save copy as template" copies the saved
+   thumbnails from the private bucket to the public template bucket,
+   stamps `Template.thumbnailUrls`, and the dashboard / template
+   gallery references either depending on whether the asset is
+   user-private or community-template.
+3. **Backfill on migration day:** existing public bucket files move
+   to `slide-previews-private`, `Project.thumbnailUrls` updated to
+   the API-path shape instead of public URLs, public bucket deleted.
+
+**Migration is on the pre-GA punch list.** Tracked as a deferred refactor; will land alongside (or just before) the templates flow PR (step 14 / templates gallery).
+
 ### 15: Share modal
 
 **Triggered by**: 3-dots menu → "Share..." (item #1 from step 9f).
