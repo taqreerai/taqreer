@@ -51,12 +51,10 @@ export function CreateShell({
   return (
     <div className="flex flex-col gap-4">
       <header>
-        <h1 className="font-headline-lg text-[32px] font-bold text-white">
-          {title}
-        </h1>
-        {subtitle ? (
-          <p className="text-muted mt-2 text-sm">{subtitle}</p>
-        ) : null}
+        {/* `.tq-h1` + `.tq-subhead` is the canonical pair: tight
+            4 px gap between them + 24 px breathing room below. */}
+        <h1 className="tq-h1">{title}</h1>
+        {subtitle ? <p className="tq-subhead">{subtitle}</p> : null}
       </header>
 
       <section

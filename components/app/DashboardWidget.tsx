@@ -21,7 +21,11 @@ type DashboardEmptyStateProps = {
 export function DashboardWidgetHeader({ title, href, actionLabel = "عرض الكل" }: DashboardWidgetHeaderProps) {
   return (
     <div className="flex items-center justify-between">
-      <h2 className="tq-widget-title">{title}</h2>
+      {/* tq-h1 is typography only — no built-in margin. The
+          DashboardWidget section spaces children via `space-y-3`.
+          Kept as <h2> for semantic structure: the dashboard page's
+          actual h1 lives elsewhere — these are subsection titles. */}
+      <h2 className="tq-h1">{title}</h2>
       {href ? (
         <Link className="tq-widget-link no-underline" href={href}>
           {actionLabel}

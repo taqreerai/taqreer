@@ -115,6 +115,16 @@
  *    .nav-active             Sidebar nav link (active)
  *
  *  Text
+ *    .tq-h1                  Page / section H1 typography (24 px
+ *                            bold white). Single source of truth
+ *                            for top-level titles. NO built-in
+ *                            margin — compose `mb-6` inline on
+ *                            standalone-page h1s; omit for widget
+ *                            headers inside space-y sections.
+ *    .tq-subhead             Descriptive paragraph paired under a
+ *                            `.tq-h1`. 14 px muted + tight 4 px gap
+ *                            from h1 + 24 px below. Use when an
+ *                            h1 has a descriptive line beneath.
  *    text-white              Primary text  (Tailwind utility)
  *    .text-muted             Secondary text (#9A94A8)
  *
@@ -226,6 +236,35 @@ button, a, [role="button"] {
   font-size: 1.5rem;
   line-height: 2rem;
   font-weight: 700;
+}
+
+/* ─── Canonical H1 ─── */
+/* Single source of truth for top-level title TYPOGRAPHY: size +
+   weight + color. Used on dashboard widget headers, create-flow
+   page titles, settings page title, and all standalone-page h1s.
+   NO `margin-bottom` baked in — each consumer composes its own
+   spacing (`mb-6` for page-level h1s without a subhead; nothing
+   for widget headers in space-y sections; nothing for h1s paired
+   with a `.tq-subhead` — the subhead owns the bottom margin). */
+.tq-h1 {
+  color: var(--tq-text-primary);
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+}
+
+/* ─── Canonical subhead ─── */
+/* Paragraph that sits IMMEDIATELY under a `.tq-h1` to describe
+   the page's purpose. Pattern: tight 4 px gap from the h1 (the
+   pair reads as a single title block) + 24 px below for clear
+   separation to the content beneath. Use on every page that has
+   an h1 + descriptive paragraph pair so spacing is uniform. */
+.tq-subhead {
+  color: var(--tq-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  margin-top: 0.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .settings-divider {

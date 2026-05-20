@@ -168,7 +168,7 @@ export default function SettingsPage() {
       ) : null}
 
       {/* Page title */}
-      <h1 className="cards-title mt-8 mb-6">الإعدادات</h1>
+      <h1 className="tq-h1 mt-8 mb-6">الإعدادات</h1>
 
       {/* 2-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
