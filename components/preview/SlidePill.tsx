@@ -31,6 +31,7 @@
 //   - History is always visible; popover shows what rows exist
 
 import { useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
 export type SlidePillState = {
   currentVersionNumber: number;
@@ -119,7 +120,7 @@ export function SlidePill({
       }`}
       style={{ top: 30 }}
     >
-      <div
+      <motion.div
         // Pattern 3 (Layout surface) via `.glass-popover` — the
         // canonical dark-tinted glass popover defined in globals.css.
         // Tailwind utilities supply the blur + saturate as required
@@ -127,15 +128,40 @@ export function SlidePill({
         // would lose to Tailwind's compositional rule. Bg + border
         // come from the class so we stay preset-aware without
         // hardcoding any colour or alpha.
+        //
+        // `layout` lets the pill resize smoothly when conditional
+        // buttons (Try Again) mount/unmount — without it the width
+        // would snap instantly as the child set changes.
+        layout
+        transition={{ layout: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } }}
         className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] flex items-center gap-2.5 rounded-full px-2.5 py-2"
       >
-        <PillButton
-          icon="replay"
-          label="إعادة التصميم بالتعليقات"
-          variant="ai"
-          disabled={!canTryAgain}
-          onClick={onTryAgain}
-        />
+        {/* Try Again — visible ONLY when the slide has a cached
+            comment payload. Wrapped in AnimatePresence + motion.div
+            so it scales/fades in on mount and out on unmount, and
+            the pill container's `layout` prop animates the width
+            change in lock-step. */}
+        <AnimatePresence initial={false} mode="popLayout">
+          {hasCachedComments ? (
+            <motion.div
+              key="try-again"
+              layout
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.6 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="inline-flex"
+            >
+              <PillButton
+                icon="replay"
+                label="إعادة التصميم بالتعليقات"
+                variant="ai"
+                disabled={!canTryAgain}
+                onClick={onTryAgain}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
         <PillButton
           icon="autorenew"
           label="أعد تصميم الشريحة"
@@ -162,7 +188,7 @@ export function SlidePill({
           disabled={!canLock}
           onClick={onToggleLock}
         />
-      </div>
+      </motion.div>
     </div>
   );
 }

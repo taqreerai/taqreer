@@ -193,8 +193,14 @@ type RestoreResult = {
   currentVersionNumber: number;
 };
 
+// Accepts EITHER the top-level PrismaClient OR an interactive
+// transaction client — restoreSlideToVersion calls this inside
+// `prisma.$transaction(async (tx) => { ... })` so the pointer
+// move + splice atomically commit-or-roll-back together.
+type AnyPrismaClient = PrismaClient | Prisma.TransactionClient;
+
 async function spliceSlideIntoActiveManifest(
-  prisma: PrismaClient,
+  prisma: AnyPrismaClient,
   presentationId: string,
   slideKey: string,
   newSlide: SlideType,
@@ -297,16 +303,22 @@ export async function restoreSlideToVersion(
     );
   }
 
-  await prisma.slideState.update({
-    where: { id: state.id },
-    data: { currentVersionNumber: targetVersionNumber },
+  // Atomic: pointer + manifest update commit together. Without the
+  // transaction a splice failure mid-way could leave
+  // SlideState.currentVersionNumber bumped but the active manifest
+  // still showing the old slide HTML.
+  await prisma.$transaction(async (tx) => {
+    await tx.slideState.update({
+      where: { id: state.id },
+      data: { currentVersionNumber: targetVersionNumber },
+    });
+    await spliceSlideIntoActiveManifest(
+      tx,
+      presentationId,
+      slideKey,
+      parsed.data,
+    );
   });
-  await spliceSlideIntoActiveManifest(
-    prisma,
-    presentationId,
-    slideKey,
-    parsed.data,
-  );
 
   return {
     slide: parsed.data,

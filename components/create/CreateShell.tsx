@@ -55,7 +55,7 @@ export function CreateShell({
           {title}
         </h1>
         {subtitle ? (
-          <p className="mt-2 text-sm text-[#9A94A8]">{subtitle}</p>
+          <p className="text-muted mt-2 text-sm">{subtitle}</p>
         ) : null}
       </header>
 

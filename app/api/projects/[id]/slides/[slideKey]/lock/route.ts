@@ -37,8 +37,18 @@ export async function POST(
   }
 
   const { id: projectId, slideKey } = await params;
-  const body = (await request.json().catch(() => ({}))) as LockPayload;
-  const shouldLock = body.locked === true;
+  const body = (await request.json().catch(() => null)) as LockPayload | null;
+  // Malformed / missing payload returns 400 instead of falling
+  // through. Previously `({})` default + `body.locked === true`
+  // silently coerced bad input into an UNLOCK — a corrupt request
+  // could clear an existing lock the user didn't intend to touch.
+  if (!body || typeof body.locked !== "boolean") {
+    return NextResponse.json(
+      { error: "locked must be a boolean" },
+      { status: 400 },
+    );
+  }
+  const shouldLock = body.locked;
 
   // Verify ownership AND grab presentation id in one round-trip.
   const project = await prisma.project.findFirst({
@@ -55,11 +65,14 @@ export async function POST(
   }
 
   const presentationId = project.presentation.id;
-  const lockedAt = shouldLock ? new Date() : null;
 
-  // Upsert keyed on (presentationId, slideKey). For legacy projects
-  // that never got a SlideState seeded (pre-versioning migration),
-  // this lazy-creates the row with currentVersionNumber=1.
+  // Idempotent semantics:
+  // - locked:true on an unlocked slide  → set lockedAt = now
+  // - locked:true on an ALREADY-locked slide → keep the original
+  //   lockedAt (no-op on the update branch). The contract is "lock
+  //   the slide", not "refresh the lock timestamp" — repeated
+  //   requests should leave the existing pinned-at moment alone.
+  // - locked:false → clear lockedAt regardless of prior state.
   const state = await prisma.slideState.upsert({
     where: {
       presentationId_slideKey: { presentationId, slideKey },
@@ -68,11 +81,9 @@ export async function POST(
       presentationId,
       slideKey,
       currentVersionNumber: 1,
-      lockedAt,
+      lockedAt: shouldLock ? new Date() : null,
     },
-    update: {
-      lockedAt,
-    },
+    update: shouldLock ? {} : { lockedAt: null },
     select: { lockedAt: true },
   });
 
