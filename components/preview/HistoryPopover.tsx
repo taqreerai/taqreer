@@ -135,7 +135,7 @@ export function HistoryPopover({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+          className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
           style={{ top, left, width: POPOVER_WIDTH }}
         >
           <header className="border-b border-white/[0.08] px-3 py-2">

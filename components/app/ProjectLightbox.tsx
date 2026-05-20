@@ -23,7 +23,7 @@
 //
 // Glass discipline (memory: feedback_tw_glass_system):
 //   • Top toolbar + bottom thumb strip → `.glass-popover` + Tailwind
-//     `backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)]`
+//     `backdrop-blur-glass backdrop-saturate-(--glass-saturation)`
 //     so the user's glass preset controls the blur. Raw
 //     `backdrop-filter` would lose to Tailwind v4's compositional
 //     rule.
@@ -192,7 +192,7 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
               exit={{ y: -16, opacity: 0 }}
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               onClick={stop}
-              className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] pointer-events-auto flex items-center justify-between gap-4 px-6 py-3"
+              className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto flex items-center justify-between gap-4 px-6 py-3"
             >
               <h2
                 className="min-w-0 flex-1 truncate text-sm font-semibold text-white"
@@ -330,7 +330,7 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
                 exit={{ y: 16, opacity: 0 }}
                 transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                 onClick={stop}
-                className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] pointer-events-auto flex justify-center gap-2 overflow-x-auto px-6 py-3"
+                className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto flex justify-center gap-2 overflow-x-auto px-6 py-3"
               >
                 {slides.map((src, i) => {
                   const active = i === index;

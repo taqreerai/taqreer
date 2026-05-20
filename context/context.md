@@ -415,7 +415,7 @@ Three glass-popover buttons per slide:
 - ✅ Comment authoring (drag-box → editor → draft → arm → fire partial regen)
 - ✅ Per-slide pill (regen / history / lock)
 - ✅ Per-slide history with non-destructive restore (5-version cap)
-- ✅ Stuck-detection: notifies via bell after 6 min slow / disconnect / 60 s no-progress / 5-min hard cap
+- ✅ Stuck-detection: in-page slow warning rendered by `DeckView` after 6 min slow / disconnect / 60 s no-progress / 5-min hard cap. (Generation-phase bell alerts were removed — the bell is reserved for post-generation completion notifications.)
 
 ---
 

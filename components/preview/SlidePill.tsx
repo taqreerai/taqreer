@@ -128,7 +128,7 @@ export function SlidePill({
         // would lose to Tailwind's compositional rule. Bg + border
         // come from the class so we stay preset-aware without
         // hardcoding any colour or alpha.
-        className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] flex items-center gap-2.5 rounded-full px-2.5 py-2"
+        className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) flex items-center gap-2.5 rounded-full px-2.5 py-2"
       >
         <PillButton
           icon="autorenew"

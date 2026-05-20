@@ -334,7 +334,7 @@ export default function SettingsPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="glass-modal backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] rounded-2xl p-8 max-w-md w-full mt-[20vh] shadow-2xl"
+              className="glass-modal backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl p-8 max-w-md w-full mt-[20vh] shadow-2xl"
             >
               <h3 className="text-xl font-bold mb-2 text-white">حذف الحساب</h3>
               <p className="text-muted text-sm mb-8">هل أنت متأكد؟ هذا الإجراء لا يمكن التراجع عنه وسيُحذف حسابك وجميع بياناتك نهائياً.</p>

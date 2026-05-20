@@ -311,7 +311,7 @@ export function BellDropdown() {
         style={{
           background: "rgba(255, 255, 255, var(--glass-opacity))",
         }}
-        className="backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+        className="backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 text-white/60 transition-colors hover:border-white/40 hover:text-white"
       >
         <span className="material-symbols-outlined text-[22px]">notifications</span>
         {unread > 0 ? (
@@ -338,7 +338,7 @@ export function BellDropdown() {
             <div
               dir="rtl"
               data-bell-popover
-              className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] fixed z-[1100] w-80 overflow-hidden rounded-2xl shadow-2xl"
+              className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] w-80 overflow-hidden rounded-2xl shadow-2xl"
               style={{
                 top: bellRect.top,
                 left: Math.max(
@@ -489,7 +489,7 @@ function BellToast({
       // Absolute positioning so each toast is anchored only by its
       // animated transform — no flex/layout interaction. Same glass
       // surface treatment as the bell popover.
-      className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl shadow-2xl"
+      className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl shadow-2xl"
     >
       <NotificationRow n={n} onClick={onClick} compact={false} showTime={false} />
       <button

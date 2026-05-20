@@ -300,7 +300,7 @@ export function ColorPickerPopover({
           exit={{ opacity: 0, scale: 0.9, y: 6 }}
           transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
-          className="glass-card backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] rounded-2xl p-3 shadow-2xl"
+          className="glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl p-3 shadow-2xl"
         >
           {/* SV plane — saturation on X, value on Y. The base layer
               is a solid pure-hue colour; a left-to-right white

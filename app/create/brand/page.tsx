@@ -1816,7 +1816,7 @@ export default function CreateBrandPage() {
             background: "rgba(255, 255, 255, var(--glass-opacity))",
             borderRadius: 9999,
           }}
-          className={`backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
+          className={`backdrop-blur-glass backdrop-saturate-(--glass-saturation) group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
             saveBrandState === "saved"
               ? "border-white/40 text-white cursor-default"
               : saveBrandState === "saving"

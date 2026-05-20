@@ -106,7 +106,7 @@ function ToolButton({
             ? `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-xl transition-shadow ${
                 isDisabled ? "" : "hover:scale-[1.02]"
               }`
-            : `backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${colorClasses} ${
+            : `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${colorClasses} ${
                 isDisabled ? "opacity-40" : ""
               }`
         }
