@@ -5,24 +5,16 @@
 // Layout: 3-column grid, max 6 items (2 rows × 3 cols). The dashboard
 // page caps the query at `take: 6` newest-first.
 //
-// Each tile is a full-bleed `ProjectThumbnail`:
-//   • Default state: just the WebP thumbnail of slide 1.
-//   • On hover: thumbnail dims, title + creation date appear at
-//     bottom-end, 3-dots menu trigger appears at top-end.
-//   • Click thumbnail → opens the project lightbox.
-//   • Click 3-dots → opens the actions menu (built in step 9f).
-//
-// The lightbox lives one level up (here, NOT inside the tile) so we
-// keep a single instance for the whole widget — opening tile A and
-// then tile B reuses the same modal instead of mounting per-tile
-// modals (Framer Motion would treat them as separate trees and
-// double-fade).
-//
-// The 3-dots menu state ALSO lives here (step 9f will hook in). For
-// now `onOpenMenu` is a no-op placeholder; the next step wires the
-// actual `<ProjectActionsMenu>` portal.
+// Each tile is a full-bleed `ProjectThumbnail` — the tile owns its
+// own 3-dots menu (`ProjectActionsMenu`), inline rename mode, and
+// trash confirmation dialog (step 9f). This widget keeps the
+// shared lightbox (so opening tile A then B reuses one modal
+// instance instead of double-fading) and a local set of
+// just-deleted projectIds so the grid optimistically drops a tile
+// the moment the server confirms a trash delete — no need to
+// re-fetch the dashboard for the UI to settle.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DashboardEmptyState,
   DashboardWidget,
@@ -42,6 +34,11 @@ type Project = {
   // Slide format set at /create time. Drives the 16:9 vs 9:16 crop
   // behaviour in ProjectThumbnail + the lightbox aspect ratio.
   format: string;
+  // Step 9f — drives the menu's star icon + label ("Add to favorites"
+  // vs. "Remove from favorites"). Optimistic toggles live INSIDE the
+  // tile; we don't mirror them here because nothing else on the
+  // dashboard reacts to the favorite state.
+  isFavorite: boolean;
 };
 
 function toFormat(v: string): SlideFormat {
@@ -53,12 +50,23 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
   // project object (not just id) so closing → reopening a different
   // tile doesn't flash placeholder state mid-transition.
   const [openProject, setOpenProject] = useState<Project | null>(null);
+  // Set of project IDs the user has just trashed. Filtered out of
+  // `visibleProjects` so the tile disappears the moment the DELETE
+  // round-trip succeeds. The server-rendered prop still contains
+  // them until the next dashboard visit — this is purely client
+  // state and is fine to lose on reload.
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+
+  const visibleProjects = useMemo(
+    () => projects.filter((p) => !deletedIds.has(p.id)),
+    [projects, deletedIds],
+  );
 
   return (
     <DashboardWidget>
       <DashboardWidgetHeader title="أحدث المشاريع" href="/projects" />
 
-      {projects.length === 0 ? (
+      {visibleProjects.length === 0 ? (
         <DashboardEmptyState
           icon="add_circle"
           title="لا توجد مشاريع بعد"
@@ -67,18 +75,23 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
         />
       ) : (
         <div className="grid grid-cols-1 gap-x-3 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
+          {visibleProjects.map((project) => (
             <ProjectThumbnail
               key={project.id}
+              projectId={project.id}
               slides={project.thumbnailUrls}
               format={toFormat(project.format)}
               title={project.title}
               createdAt={project.createdAt}
+              isFavorite={project.isFavorite}
               onOpen={() => setOpenProject(project)}
-              // Step 9f will wire the actions menu here. Placeholder
-              // for now so the 3-dots button still renders and is
-              // ready to receive the menu's open/closed state.
-              onOpenMenu={() => undefined}
+              onDeleted={(id) =>
+                setDeletedIds((prev) => {
+                  const next = new Set(prev);
+                  next.add(id);
+                  return next;
+                })
+              }
             />
           ))}
         </div>

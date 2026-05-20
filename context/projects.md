@@ -99,9 +99,9 @@ User-visible value first, Share modal last (deepest backend work).
 | 9b | Hover scrub + RTL direction + gating on movement | ✅ shipped |
 | 9c | Click-to-lightbox (tile is the entry point) | ✅ shipped |
 | 10 | Lightbox slider (glass system, RTL keyboard nav, arrows outside slide, fade-out on close) | ✅ shipped |
-| **9d** | **Dashboard grid: 3 columns × 2 rows = max 6** | ⏳ next |
-| **9e** | **Tile chrome: full-bleed thumbnail, hover dims, title + date bottom-right, 3-dots top-right** | ⏳ next |
-| **9f** | **3-dots menu (Share / Rename / Add to favorites / Copy link / Use this as a template / Save copy as template [disabled] / Send to trash)** | ⏳ next |
+| 9d | Dashboard grid: 3 columns (sm:2 → lg:3) | ✅ shipped |
+| 9e | Tile chrome: full-bleed thumbnail + footer (title + date start, 3-dots end), no hover dim | ✅ shipped |
+| 9f | 3-dots menu — wired: favorite toggle, copy link, inline-rename, send-to-trash (hard delete + storage cleanup, confirmation modal). Stubbed: share (step 15), use-as-template (step 13). Disabled: save-copy-as-template. | ✅ shipped |
 | 8b | Move `slideCount` + `dominantColor` capture from `/save` route → deck-generate completion | ⏳ next |
 | **11a** | **/projects page: 5-per-row grid using ProjectThumbnail** | ⏳ next |
 | **11b** | **Sort dropdown** | ⏳ next |

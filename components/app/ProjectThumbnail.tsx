@@ -27,44 +27,75 @@
 //   3. CLICK — opens the lightbox via the parent's onOpen callback.
 //
 // FOOTER (always visible, below the thumbnail):
-//   • Title + creation date (truncated, RTL-aligned to start side
-//     = visual right in Arabic).
-//   • 3-dots menu trigger on the end side (= visual LEFT in RTL).
-//     Real button; stopPropagation isn't required because the
-//     footer is OUTSIDE the thumbnail click surface.
+//   • Title (or rename input when renameMode=true) + creation
+//     date on the start side (visual right in RTL).
+//   • 3-dots menu trigger on the end side (visual left in RTL).
+//     Stamped `data-project-menu-trigger` so the menu's outside-
+//     click handler ignores it (otherwise the trigger's own click
+//     re-opens the menu after the mousedown closes it — same
+//     pattern as HistoryPopover's exclusion).
+//
+// MENU + ACTIONS (step 9f):
+//   Per-tile state for menu open/closed, rename mode, and the
+//   optimistic favorite toggle lives here. Three side effects
+//   bubble up to the parent:
+//     • onDeleted(projectId) — fires after a successful trash
+//       DELETE so the dashboard can drop the tile from its list.
+//     • onRenamed(projectId, title) — optional; lets the parent
+//       reflect the new title elsewhere (none currently uses it,
+//       but parity with onDeleted keeps the API symmetrical).
+//   Favorite is local-only; nothing else on the dashboard reacts
+//   to it. The /favorites page will fetch fresh.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SlideFormat } from "@/lib/schema/slide";
+import { ProjectActionsMenu } from "@/components/app/ProjectActionsMenu";
+import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";
 
 // Pixels of cursor travel required to consider the user actually
 // scrubbing (not just hovering at rest). ~2 trackpad ticks.
 const SCRUB_ACTIVATION_PX = 6;
+// Mirror the server-side cap in /api/projects/[id] PATCH so the
+// input can't write past what the route would silently truncate.
+const MAX_TITLE_LENGTH = 200;
 
 type Props = {
+  // Stable per-project — drives API calls + clipboard URL.
+  projectId: string;
   slides: string[];
   format: SlideFormat;
   title: string;
   createdAt: Date | string;
+  isFavorite: boolean;
   // Click anywhere on the thumbnail surface opens the lightbox.
   // Parent owns lightbox state.
   onOpen: () => void;
-  // Click on the 3-dots button — passes the trigger's DOMRect so
-  // the parent can anchor a menu under it.
-  onOpenMenu?: (triggerRect: DOMRect | null) => void;
+  // Fires AFTER the DELETE round-trip succeeds. Parent uses this
+  // to drop the tile from its rendered list (we don't unmount
+  // ourselves — the parent owns the projects array).
+  onDeleted?: (projectId: string) => void;
+  // Optional: notify parent of a successful rename. Tile updates
+  // its own local title optimistically; this exists so other
+  // surfaces showing the same title (none today) can sync.
+  onRenamed?: (projectId: string, newTitle: string) => void;
 };
 
 export function ProjectThumbnail({
+  projectId,
   slides,
   format,
   title,
   createdAt,
+  isFavorite,
   onOpen,
-  onOpenMenu,
+  onDeleted,
+  onRenamed,
 }: Props) {
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const entryXRef = useRef<number | null>(null);
   // Thumbnail-hover flag — flips title + 3-dots between muted /
@@ -74,6 +105,46 @@ export function ProjectThumbnail({
   // level). Easier to set state than to restructure DOM for a
   // CSS selector.
   const [thumbHovered, setThumbHovered] = useState(false);
+
+  // ── Step 9f state ──────────────────────────────────────────────
+  // Menu open + the DOMRect the menu anchors to. Null rect ↔ closed.
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
+
+  // Optimistic favorite — server response replaces this once the
+  // PATCH lands. We don't revert on failure because the UX cost
+  // of "star flicker" outweighs the rare network error case; an
+  // error logs to console for traceability and the next reload
+  // shows truth.
+  const [favoriteState, setFavoriteState] = useState(isFavorite);
+  // Local title — starts from the prop, mutated on rename for
+  // optimistic UI. The prop is the SSR value and won't change
+  // post-mount unless the parent re-fetches.
+  const [titleState, setTitleState] = useState(title);
+  const [renameMode, setRenameMode] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(title);
+  const [renameSaving, setRenameSaving] = useState(false);
+
+  // Trash confirmation dialog open + in-flight flag for the DELETE.
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [trashBusy, setTrashBusy] = useState(false);
+
+  // Focus + select the input when entering rename mode. useEffect
+  // (not a callback ref) because the input only exists conditionally;
+  // when renameMode flips on, we wait for the next paint then focus.
+  useEffect(() => {
+    if (renameMode) {
+      // Defer focus to the next microtask so the input has actually
+      // mounted by the time we call .focus().
+      const id = window.requestAnimationFrame(() => {
+        const el = renameInputRef.current;
+        if (el) {
+          el.focus();
+          el.select();
+        }
+      });
+      return () => window.cancelAnimationFrame(id);
+    }
+  }, [renameMode]);
 
   const displayIndex = hoverIndex ?? 0;
   const src = slides[displayIndex] ?? null;
@@ -113,6 +184,110 @@ export function ProjectThumbnail({
     locale: ar,
   });
 
+  // ── Menu actions ───────────────────────────────────────────────
+  const openMenu = () => {
+    setMenuRect(menuBtnRef.current?.getBoundingClientRect() ?? null);
+  };
+  const closeMenu = () => setMenuRect(null);
+
+  const handleToggleFavorite = async () => {
+    const next = !favoriteState;
+    setFavoriteState(next);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/favorite`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isFavorite: next }),
+      });
+      if (!res.ok) throw new Error(`favorite: ${res.status}`);
+      const data = (await res.json()) as { isFavorite: boolean };
+      setFavoriteState(data.isFavorite);
+    } catch (err) {
+      console.error("favorite toggle failed", err);
+      // Leave the optimistic value — see component docstring for
+      // the rationale (rare error + better-than-flicker UX).
+    }
+  };
+
+  const handleCopyLink = async () => {
+    const url = `${window.location.origin}/preview/${projectId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (err) {
+      console.error("copy link failed", err);
+    }
+  };
+
+  const handleUseAsTemplate = () => {
+    // Route lands in step 13. For 9f we just navigate — the page
+    // will 404 today; that's the documented contract for the
+    // intermediate state.
+    window.location.href = `/create/from/${projectId}`;
+  };
+
+  const handleShare = () => {
+    // Placeholder for step 15. Logged so a stray click on a
+    // pre-modal build doesn't look broken-silent.
+    console.info("[share] modal not implemented yet (step 15)");
+  };
+
+  // Rename ↔ submit flow. Enter / blur commits, Escape cancels.
+  // Empty title is rejected client-side AND server-side (the
+  // PATCH route returns 400 on empty after trim).
+  const enterRenameMode = () => {
+    setRenameDraft(titleState);
+    setRenameMode(true);
+  };
+  const cancelRename = () => {
+    setRenameMode(false);
+    setRenameDraft(titleState);
+  };
+  const commitRename = async () => {
+    const trimmed = renameDraft.trim().slice(0, MAX_TITLE_LENGTH);
+    if (trimmed.length === 0 || trimmed === titleState) {
+      // Nothing to save — bail out without an API call.
+      cancelRename();
+      return;
+    }
+    setRenameSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: trimmed }),
+      });
+      if (!res.ok) throw new Error(`rename: ${res.status}`);
+      const data = (await res.json()) as { title: string };
+      setTitleState(data.title);
+      onRenamed?.(projectId, data.title);
+      setRenameMode(false);
+    } catch (err) {
+      console.error("rename failed", err);
+      // Keep rename mode open + draft intact so the user can retry.
+      // Real prod would surface a toast here; deferred until we
+      // have a global toast system.
+    } finally {
+      setRenameSaving(false);
+    }
+  };
+
+  const handleConfirmTrash = async () => {
+    setTrashBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`delete: ${res.status}`);
+      setTrashOpen(false);
+      onDeleted?.(projectId);
+    } catch (err) {
+      console.error("delete failed", err);
+      // Leave dialog open so the user can retry / cancel.
+    } finally {
+      setTrashBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {/* Thumbnail — clean, no hover dim, no overlay chrome.
@@ -132,8 +307,8 @@ export function ProjectThumbnail({
           disabled={!hasSlides}
           aria-label={
             hasSlides
-              ? `معاينة ${title} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
-              : `${title} — لا توجد معاينة`
+              ? `معاينة ${titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
+              : `${titleState} — لا توجد معاينة`
           }
           className={`absolute inset-0 block ${
             hasSlides ? "cursor-zoom-in" : "cursor-default"
@@ -171,9 +346,9 @@ export function ProjectThumbnail({
         ) : null}
       </div>
 
-      {/* Info row — title + creation date on the start side (right
-          in RTL), 3-dots menu trigger on the end side (left in RTL).
-          Always visible, no hover gating. */}
+      {/* Info row — title (or rename input) + creation date on the
+          start side (right in RTL), 3-dots menu trigger on the end
+          side (left in RTL). Always visible, no hover gating. */}
       <div dir="rtl" className="flex items-start justify-between gap-2 px-0.5">
         <div className="min-w-0 flex-1">
           {/* Title + 3-dots color is driven by INLINE style (not
@@ -184,28 +359,58 @@ export function ProjectThumbnail({
               is on the className — Tailwind v4's @layer cascade
               gives unlayered rules higher priority. Inline-style
               sidesteps the entire layer fight. */}
-          <p
-            className="truncate text-xs font-semibold leading-tight transition-colors"
-            style={{
-              color: thumbHovered
-                ? "var(--tq-text-primary)"
-                : "var(--tq-text-muted)",
-            }}
-            title={title}
-          >
-            {title}
-          </p>
+          {renameMode ? (
+            <input
+              ref={renameInputRef}
+              type="text"
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitRename();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelRename();
+                }
+              }}
+              disabled={renameSaving}
+              maxLength={MAX_TITLE_LENGTH}
+              aria-label="اسم المشروع"
+              className="w-full truncate rounded-md border border-white/15 bg-white/[0.04] px-1.5 py-0.5 text-xs font-semibold leading-tight text-white outline-none transition-colors focus:border-white/40 disabled:opacity-60"
+            />
+          ) : (
+            <p
+              className="truncate text-xs font-semibold leading-tight transition-colors"
+              style={{
+                color: thumbHovered
+                  ? "var(--tq-text-primary)"
+                  : "var(--tq-text-muted)",
+              }}
+              title={titleState}
+            >
+              {titleState}
+            </p>
+          )}
           <p className="mt-0.5 text-[10px] text-muted">{relativeDate}</p>
         </div>
         <button
           ref={menuBtnRef}
           type="button"
           aria-label="خيارات المشروع"
+          aria-haspopup="menu"
+          aria-expanded={menuRect !== null}
+          data-project-menu-trigger
           onClick={(e) => {
             e.stopPropagation();
-            onOpenMenu?.(
-              menuBtnRef.current?.getBoundingClientRect() ?? null,
-            );
+            // Toggle: closed → open at current rect, open → close.
+            // Pattern mirrors the History pill's toggle handler.
+            if (menuRect != null) {
+              closeMenu();
+            } else {
+              openMenu();
+            }
           }}
           className="btn-icon -mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors"
           style={{
@@ -217,6 +422,29 @@ export function ProjectThumbnail({
           <span className="material-symbols-outlined text-[18px]">more_vert</span>
         </button>
       </div>
+
+      <ProjectActionsMenu
+        open={menuRect !== null}
+        triggerRect={menuRect}
+        isFavorite={favoriteState}
+        onClose={closeMenu}
+        onShare={handleShare}
+        onRename={enterRenameMode}
+        onToggleFavorite={handleToggleFavorite}
+        onCopyLink={handleCopyLink}
+        onUseAsTemplate={handleUseAsTemplate}
+        onSendToTrash={() => setTrashOpen(true)}
+      />
+
+      <TrashConfirmDialog
+        open={trashOpen}
+        projectTitle={titleState}
+        busy={trashBusy}
+        onCancel={() => {
+          if (!trashBusy) setTrashOpen(false);
+        }}
+        onConfirm={handleConfirmTrash}
+      />
     </div>
   );
 }

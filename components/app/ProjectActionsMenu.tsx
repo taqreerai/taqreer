@@ -1,0 +1,247 @@
+"use client";
+
+// Per-tile actions menu opened from the 3-dots button on a
+// ProjectThumbnail. Seven items (RTL order):
+//
+//   1. Share          — opens placeholder modal (filled in step 15)
+//   2. Rename         — switches the tile into inline-edit mode
+//   3. Favorites      — toggles Project.isFavorite (PATCH /favorite)
+//   4. Copy link      — copies /preview/<id> to clipboard
+//   5. Use as template— navigates to /create/from/<id> (route ships
+//                       in step 13 — for now the link is rendered
+//                       but the destination 404s, which is the
+//                       documented contract for 9f)
+//   6. Save copy as template — DISABLED + no handler (locked by user)
+//   7. Send to trash  — destructive; parent opens TrashConfirmDialog
+//
+// Anchoring + open/close mirror HistoryPopover.tsx (which mirrors
+// BellDropdown.tsx): portal'd .glass-popover, position derived from
+// the trigger's DOMRect, closes on outside-click + Esc. The trigger
+// is tagged `data-project-menu-trigger` so its own click doesn't get
+// captured by the outside-click handler — without that exclusion,
+// mousedown closes the menu and the subsequent click re-opens it
+// (same bug we just fixed on HistoryPopover).
+
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
+
+const MENU_WIDTH = 240;
+// Distance from the trigger button. Matches HistoryPopover's
+// ANCHOR_GAP_PX so menus across the app feel like one family.
+const ANCHOR_GAP_PX = 8;
+const VIEWPORT_EDGE_INSET_PX = 12;
+
+export type ProjectActionsMenuActions = {
+  onShare?: () => void;
+  onRename?: () => void;
+  onToggleFavorite?: () => void;
+  onCopyLink?: () => void;
+  onUseAsTemplate?: () => void;
+  onSendToTrash?: () => void;
+};
+
+export function ProjectActionsMenu({
+  open,
+  triggerRect,
+  isFavorite,
+  onClose,
+  onShare,
+  onRename,
+  onToggleFavorite,
+  onCopyLink,
+  onUseAsTemplate,
+  onSendToTrash,
+  onExitComplete,
+}: {
+  open: boolean;
+  triggerRect: DOMRect | null;
+  isFavorite: boolean;
+  onClose: () => void;
+  // Fires once AnimatePresence finishes exiting. Parent uses this
+  // to release any "menu is open" latch (none on the tile yet, but
+  // matching HistoryPopover's contract keeps swapping cheap if we
+  // need it later).
+  onExitComplete?: () => void;
+} & ProjectActionsMenuActions) {
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+
+  // Outside click + Esc to close. The trigger button is excluded
+  // via data-project-menu-trigger so clicking it again toggles via
+  // the parent rather than instantly reopening (see HistoryPopover
+  // for the bug this avoids).
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      if (surfaceRef.current?.contains(target)) return;
+      if (target.closest?.("[data-project-menu-trigger]")) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  // Right-anchored under the trigger (same pattern as HistoryPopover):
+  // the menu's right edge lines up with the trigger's right edge so
+  // it drops "down and to the left", which reads naturally in RTL
+  // where the 3-dots sit at the tile's visual-left corner. The
+  // clamp keeps the menu inside the viewport at narrow widths.
+  const left = triggerRect
+    ? Math.max(
+        VIEWPORT_EDGE_INSET_PX,
+        Math.min(
+          triggerRect.right - MENU_WIDTH,
+          window.innerWidth - MENU_WIDTH - VIEWPORT_EDGE_INSET_PX,
+        ),
+      )
+    : 0;
+  const top = triggerRect ? triggerRect.bottom + ANCHOR_GAP_PX : 0;
+
+  return createPortal(
+    <AnimatePresence onExitComplete={onExitComplete}>
+      {open && triggerRect ? (
+        <motion.div
+          key="project-actions-menu"
+          ref={surfaceRef}
+          dir="rtl"
+          role="menu"
+          aria-label="خيارات المشروع"
+          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -6, scale: 0.98 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+          style={{ top, left, width: MENU_WIDTH }}
+        >
+          <ul className="flex flex-col p-1.5">
+            <MenuItem
+              icon="share"
+              label="مشاركة"
+              onClick={onShare}
+              closeAfter
+              onClose={onClose}
+            />
+            <MenuItem
+              icon="edit"
+              label="إعادة تسمية"
+              onClick={onRename}
+              closeAfter
+              onClose={onClose}
+            />
+            <MenuItem
+              icon={isFavorite ? "star" : "star_outline"}
+              label={isFavorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"}
+              onClick={onToggleFavorite}
+              closeAfter
+              onClose={onClose}
+            />
+            <MenuItem
+              icon="link"
+              label="نسخ الرابط"
+              onClick={onCopyLink}
+              closeAfter
+              onClose={onClose}
+            />
+            <MenuItem
+              icon="dashboard_customize"
+              label="استخدامه كقالب"
+              onClick={onUseAsTemplate}
+              closeAfter
+              onClose={onClose}
+            />
+            {/* "Save copy as template" — rendered intentionally
+                disabled per user lock. No onClick, no toast, no
+                "coming soon" badge — it just doesn't activate. */}
+            <MenuItem
+              icon="bookmark_add"
+              label="حفظ نسخة كقالب"
+              disabled
+            />
+            {/* Divider before the destructive action so the row
+                reads as visually separated from the rest. */}
+            <li
+              aria-hidden
+              className="my-1 h-px bg-white/[0.08]"
+            />
+            <MenuItem
+              icon="delete"
+              label="نقل إلى المهملات"
+              destructive
+              onClick={onSendToTrash}
+              closeAfter
+              onClose={onClose}
+            />
+          </ul>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  disabled,
+  destructive,
+  closeAfter,
+  onClose,
+}: {
+  icon: string;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  destructive?: boolean;
+  // Most items dismiss the menu the moment they fire — but the
+  // close callback is owned by the parent (the menu doesn't
+  // know its own open state). Setting `closeAfter` + passing
+  // `onClose` keeps the dismiss/fire pair atomic.
+  closeAfter?: boolean;
+  onClose?: () => void;
+}) {
+  // `.dropdown-item` provides the row layout (icon gap, padding,
+  // muted → primary on hover, no border). Destructive variant
+  // re-paints icon + label red; hover background tints red too.
+  // Disabled keeps the muted resting state and blocks interaction.
+  const handleClick = () => {
+    if (disabled) return;
+    onClick?.();
+    if (closeAfter) onClose?.();
+  };
+  return (
+    <li role="none">
+      <button
+        type="button"
+        role="menuitem"
+        onClick={handleClick}
+        disabled={disabled}
+        className={`dropdown-item ${
+          destructive
+            ? "text-red-300 hover:!bg-red-500/10 hover:!text-red-200"
+            : ""
+        } ${disabled ? "cursor-not-allowed opacity-40 hover:!bg-transparent hover:!text-[color:var(--tq-text-muted)]" : ""}`}
+      >
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: 18 }}
+          aria-hidden
+        >
+          {icon}
+        </span>
+        <span className="flex-1 text-start">{label}</span>
+      </button>
+    </li>
+  );
+}

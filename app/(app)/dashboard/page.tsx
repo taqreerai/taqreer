@@ -52,13 +52,15 @@ export default async function DashboardPage() {
       // Pinned columns only — keeps the SSR payload small and makes
       // the RecentProjects `Project` type the canonical contract.
       // `thumbnailUrls` + `format` are required by the new tile
-      // (hover scrub + aspect-ratio crop).
+      // (hover scrub + aspect-ratio crop). `isFavorite` feeds the
+      // 3-dots menu's star icon + label (step 9f).
       select: {
         id: true,
         title: true,
         format: true,
         thumbnailUrls: true,
         createdAt: true,
+        isFavorite: true,
       },
     }),
     prisma.template.findMany({
