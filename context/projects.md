@@ -102,6 +102,9 @@ User-visible value first, Share modal last (deepest backend work).
 | 9d | Dashboard grid: 3 columns (sm:2 → lg:3) | ✅ shipped |
 | 9e | Tile chrome: full-bleed thumbnail + footer (title + date start, 3-dots end), no hover dim | ✅ shipped |
 | 9f | 3-dots menu — wired: favorite toggle, copy link, inline-rename, send-to-trash (hard delete + storage cleanup, confirmation modal). Stubbed: share (step 15), use-as-template (step 13). Disabled: save-copy-as-template. | ✅ shipped |
+| Lang A | Content language picker (`العربية` / `الإنجليزية`) on /create/content; threads through sessionStorage → POST → Project.language + Presentation.language/direction + brief.language. Replaces 3 hardcoded `"ar"`/`"rtl"` sites. | ✅ shipped |
+| Lang B | LANGUAGE directive injected at TOP of `buildUserMessage` based on `brief.language`. AR (default, reinforces RTL + Arabic font stack). EN (new — produce English-only deck text, dir=ltr, drop Arabic font fallbacks). System prompt unchanged (prompt-cache warm). | ✅ shipped |
+| Lang C | BiDi post-processor gating on `language === "en"` + rendered HTML `dir="ltr"` for EN decks. Wrap `lib/export/bidi-postprocess.ts` call in `if (manifest.language !== "en")`; update `html-document-server.ts` + `html-document.ts` to switch `dir` on language. | ⏳ deferred (needs Phase B in production first for detection-accuracy data) |
 | 8b | Move `slideCount` + `dominantColor` capture from `/save` route → deck-generate completion | ⏳ next |
 | **11a** | **/projects page: 5-per-row grid using ProjectThumbnail** | ⏳ next |
 | **11b** | **Sort dropdown** | ⏳ next |
@@ -190,6 +193,76 @@ User-visible value first, Share modal last (deepest backend work).
 - Active thumb gradient outline via two-background composition
   (`linear-gradient(var(--tq-bg), var(--tq-bg)), var(--tq-gradient-brand)`).
 - Files: [components/app/ProjectLightbox.tsx](components/app/ProjectLightbox.tsx).
+
+### Step 9f: Dashboard tile 3-dots menu
+
+- `<ProjectActionsMenu>` portal'd `.glass-popover` anchored to the
+  3-dots button's `DOMRect`. Outside-click + Esc close; trigger tagged
+  `data-project-menu-trigger` so its own click is excluded from the
+  close handler (otherwise mousedown closes → click re-opens —
+  same bug pattern we fixed on `HistoryPopover` in the same session).
+- Seven menu items, three states:
+  - **Wired**: Favorites toggle (optimistic + `PATCH /api/projects/[id]/favorite`),
+    Copy link (`${origin}/preview/${id}` to clipboard), Inline rename
+    (`<p>` flips to `<input>`; Enter/blur commits to `PATCH /api/projects/[id]`,
+    Escape cancels; trimmed + 200-char cap on both sides), Send to trash
+    (`<TrashConfirmDialog>` → `DELETE /api/projects/[id]` → cascade DB +
+    best-effort wipe `slide-previews/${userId}/${projectId}/**`).
+  - **Stubbed**: Share (logs placeholder until step 15), Use as template
+    (navigates to `/create/from/[projectId]` — 404s until step 13).
+  - **Disabled**: Save copy as template (no handler, per user lock).
+- `RecentProjects` tracks a `Set<id>` of just-deleted projects and
+  filters the list — tile disappears the moment the server confirms.
+  Dashboard SSR select clause gains `isFavorite` so the star icon
+  resolves correctly on first paint.
+- Files: [components/app/ProjectActionsMenu.tsx](components/app/ProjectActionsMenu.tsx),
+  [components/app/TrashConfirmDialog.tsx](components/app/TrashConfirmDialog.tsx),
+  [app/api/projects/[id]/favorite/route.ts](app/api/projects/[id]/favorite/route.ts),
+  [app/api/projects/[id]/route.ts](app/api/projects/[id]/route.ts) (PATCH rename + DELETE),
+  [components/app/ProjectThumbnail.tsx](components/app/ProjectThumbnail.tsx),
+  [components/app/RecentProjects.tsx](components/app/RecentProjects.tsx),
+  [app/(app)/dashboard/page.tsx](app/(app)/dashboard/page.tsx).
+
+### Language Phase A + B (content language picker + prompt directive)
+
+- **Phase A** — UI + persistence. New `<LanguagePills>` 2-segment
+  radio (`العربية` / `الإنجليزية`) on `/create/content` row 1, right
+  card. Replaced the retired `تصحيح الأخطاء` toggle (model now
+  preserves user text verbatim by default; `rules.fixTypos` always
+  sent as `false`). Pagination toggle + LanguagePills sit on a
+  `justify-between` flex row. `Toggle` component switched from
+  `flex` to `inline-flex` so it hugs its content. Threaded through
+  sessionStorage → `/create/summary` POST → `/api/projects/route.ts`
+  which validates the union with `isContentLanguage` /
+  `directionForLanguage` helpers and stamps `Project.language` +
+  `Presentation.language` + `Presentation.direction` (`ar → rtl`,
+  `en → ltr`) + `brief.language`/`direction`. Replaces three
+  hardcoded `"ar"` / `"rtl"` sites. No backfill — existing rows
+  stay tagged `"ar"` (per user direction: all current decks are AR
+  or BI; both map to AR under the prompt).
+- **Phase B** — LANGUAGE directive injected at the TOP of
+  `buildUserMessage` based on `brief.language`. System prompt stays
+  unchanged (prompt-cache warm). AR reinforces dir=rtl + Arabic
+  font stack + inline LTR run wrapping; EN instructs English-only
+  slide text, dir=ltr, Latin typography (skip Arabic font
+  fallbacks). The OUTPUT JSON spec was already `"language": "ar" | "en"`
+  — no schema change. An earlier-same-day "BI" bucket was retired
+  in favor of a 2-bucket pick — the AR prompt is already
+  bilingual-aware. Legacy `"bi"` payloads collapse to `"ar"` at
+  every read site.
+- **Phase C** (deferred) — wrap `lib/export/bidi-postprocess.ts`
+  call in `if (manifest.language !== "en")`; switch rendered HTML
+  `dir` on language in `html-document-server.ts` +
+  `html-document.ts`. Needs Phase B in production first so we have
+  EN-tagged decks to validate gating against.
+- Files: [components/create/controls.tsx](components/create/controls.tsx)
+  (LanguagePills + LanguageCode), [components/create/OutputCards.tsx](components/create/OutputCards.tsx)
+  (StoredOutput.language), [app/create/content/page.tsx](app/create/content/page.tsx),
+  [app/create/summary/page.tsx](app/create/summary/page.tsx),
+  [app/api/projects/route.ts](app/api/projects/route.ts) (ContentLanguage
+  + isContentLanguage + directionForLanguage),
+  [inngest/functions/deck-generate.ts](inngest/functions/deck-generate.ts)
+  (LANGUAGE directive in buildUserMessage).
 
 ---
 
@@ -553,21 +626,24 @@ under that project's path. Confirmation modal on the 3-dots
 
 ### Components
 
-- ✅ [components/app/ProjectThumbnail.tsx](components/app/ProjectThumbnail.tsx)
+- ✅ [components/app/ProjectThumbnail.tsx](components/app/ProjectThumbnail.tsx) — also owns menu open state + inline rename mode + favorite optimistic state
 - ✅ [components/app/ProjectLightbox.tsx](components/app/ProjectLightbox.tsx)
-- ⏳ [components/app/RecentProjects.tsx](components/app/RecentProjects.tsx) — rewrite tile chrome
-- ⏳ `components/app/ProjectActionsMenu.tsx` — NEW (3-dots menu)
-- ⏳ Sidebar / DashboardShell — update `/features` link
+- ✅ [components/app/RecentProjects.tsx](components/app/RecentProjects.tsx) — tile chrome + deleted-set filter
+- ✅ [components/app/ProjectActionsMenu.tsx](components/app/ProjectActionsMenu.tsx) — 3-dots menu portal
+- ✅ [components/app/TrashConfirmDialog.tsx](components/app/TrashConfirmDialog.tsx) — destructive confirm modal
+- ✅ [components/create/controls.tsx](components/create/controls.tsx) — LanguagePills + LanguageCode
+- ⏳ Sidebar / DashboardShell — update `/features` link (step 12a)
 
 ### Routes & API
 
 - ✅ [app/api/projects/[id]/save/route.ts](app/api/projects/[id]/save/route.ts)
-- ⏳ Same file — REMOVE slideCount + dominantColor writes
-- ⏳ `app/api/projects/[id]/favorite/route.ts` — NEW
-- ⏳ `app/(app)/projects/page.tsx` — rewrite stub
-- ⏳ `app/(app)/favorites/page.tsx` — rename from `features`
-- ⏳ `app/create/from/[projectId]/page.tsx` — NEW
-- ⏳ `app/api/projects/[id]/route.ts` — DELETE handler (hard delete + storage cleanup)
+- ⏳ Same file — REMOVE slideCount + dominantColor writes (step 8b)
+- ✅ [app/api/projects/[id]/favorite/route.ts](app/api/projects/[id]/favorite/route.ts) — PATCH (step 9f)
+- ✅ [app/api/projects/[id]/route.ts](app/api/projects/[id]/route.ts) — PATCH (rename) + DELETE (hard delete + storage cleanup) (step 9f)
+- ✅ [app/api/projects/route.ts](app/api/projects/route.ts) — Language A pipeline (validates + persists user-picked language)
+- ⏳ `app/(app)/projects/page.tsx` — rewrite stub (step 11)
+- ⏳ `app/(app)/favorites/page.tsx` — rename from `features` (step 12a)
+- ⏳ `app/create/from/[projectId]/page.tsx` — NEW (step 13)
 - ⏳ `app/api/projects/[id]/share/route.ts` — NEW (step 15)
 - ⏳ `app/api/invitations/[token]/accept/route.ts` — NEW (step 15)
 - ⏳ `app/api/projects/[id]/export/png/route.ts` — NEW (step 15.5)
@@ -575,7 +651,8 @@ under that project's path. Confirmation modal on the 3-dots
 ### Inngest / server modules
 
 - ✅ [inngest/functions/thumbnail-render.ts](inngest/functions/thumbnail-render.ts)
-- ⏳ [inngest/functions/deck-generate.ts](inngest/functions/deck-generate.ts) — ADD slideCount + dominantColor writes
+- ✅ [inngest/functions/deck-generate.ts](inngest/functions/deck-generate.ts) — Language B LANGUAGE directive injected in `buildUserMessage`; streaming narrowing widened to AR/EN (no BI)
+- ⏳ Same file — ADD slideCount + dominantColor writes (step 8b)
 - ✅ [lib/export/sanitize-server.ts](lib/export/sanitize-server.ts)
 - ✅ [lib/export/html-document-server.ts](lib/export/html-document-server.ts)
 
@@ -621,6 +698,15 @@ before any visual work.)
 - ✅ **Edit-access semantics**: auto-clone, no shared editing.
 - ✅ **`/create/from/[projectId]`**: option (a) — content-only page,
   pre-filled brand from source.
+- ✅ **Content language picker**: user-explicit 2-bucket pick
+  (`العربية` / `الإنجليزية`) on `/create/content` row 1, right card.
+  `Project.language` is now truthful per user-pick — Step 11c's
+  language filter is unblocked. The "BI" bucket from an early draft
+  was retired same day; AR already covers bilingual content under
+  the existing prompt's LANGUAGE & DIRECTION rules.
+- ✅ **`fixTypos` toggle**: retired 2026-05-20. Model preserves user
+  text verbatim by default; tone/correction picks deferred to a
+  future per-language settings drawer.
 
 ## Deferred refactors (low-priority, called out by the 2026-05-20 audit)
 

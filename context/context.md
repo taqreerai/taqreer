@@ -121,10 +121,12 @@ User
 API Layer (app/api/*)
  |
  |-- /projects                          POST → fires deck.generate.requested
+ |-- /projects/[id]                     PATCH rename · DELETE hard delete + storage cleanup
  |-- /projects/[id]/status              GET, polled every 1.5 s
  |-- /projects/[id]/retry               POST retry failed generation
  |-- /projects/[id]/regenerate          POST full deck → re-fires deck.generate.requested
  |-- /projects/[id]/regenerate-partial  POST partial regen on commented slides
+ |-- /projects/[id]/favorite            PATCH toggle isFavorite
  |-- /projects/[id]/save                POST pins savedVersionId + per-slide snapshot
  |                                          → dispatches deck.thumbnails.render
  |-- /projects/[id]/slides/[key]/regen     POST one-slide regen
@@ -222,11 +224,13 @@ app/
 
 ```text
 app/api/
-  projects/route.ts                                  ✅  POST creates project + fires deck.generate.requested
+  projects/route.ts                                  ✅  POST creates project + fires deck.generate.requested (validates user-picked language)
+  projects/[id]/route.ts                             ✅  PATCH rename + DELETE hard delete + storage cleanup
   projects/[id]/status/route.ts                      ✅  GET polled by DeckView at 1.5 s
   projects/[id]/retry/route.ts                       ✅  POST retry failed generation
   projects/[id]/regenerate/route.ts                  ✅  POST allocate v_n+1 + re-fire (full deck)
   projects/[id]/regenerate-partial/route.ts          ✅  POST partial regen on commented slides
+  projects/[id]/favorite/route.ts                    ✅  PATCH toggle isFavorite
   projects/[id]/save/route.ts                        ✅  POST pin savedVersionId + per-slide snapshot
                                                           → dispatches deck.thumbnails.render
   projects/[id]/slides/[slideKey]/regen/route.ts     ✅  POST per-slide regen
@@ -244,9 +248,10 @@ app/api/
   content/extract/route.ts                           ✅  Extract text from uploads
   export/embed-fonts/route.ts                        ✅  Server-side font embed for PPTX
 
+  projects/[id]/favorite/route.ts                    ✅  PATCH isFavorite toggle (step 9f)
+  projects/[id]/route.ts                             ✅  PATCH (rename) + DELETE (hard delete + storage cleanup) (step 9f)
+
   // Planned (per projects.md)
-  projects/[id]/favorite/route.ts                    ⏳  PATCH isFavorite toggle (step 12)
-  projects/[id]/route.ts                             ⏳  DELETE (hard delete, step 9f)
   projects/[id]/share/route.ts                       ⏳  Owner-only: manage publicAccessLevel + ProjectShare rows (step 15)
   projects/[id]/export/png/route.ts                  ⏳  Server-side PNG ZIP via Puppeteer (step 15.5)
   invitations/[token]/accept/route.ts                ⏳  Invite acceptance + auto-clone on edit invites (step 15.4)
@@ -628,10 +633,11 @@ Schema is wired (`Subscription` + `UsageEvent`); enforcement is partial.
 | 6 | **Comments + Partial Regen** — comment authoring, draft → applied lifecycle, partial regen Inngest flow, per-slide pill (regen / history / lock), 5-version capped history | ✅ |
 | 7 | **Save Project + Thumbnails** — savedVersionId + per-slide snapshot + Puppeteer/sharp WebP pipeline + restore-aware indicator | ✅ |
 | 8 | **Dashboard Tile Rework** — full-bleed thumbnail + scrub + click-to-lightbox + lightbox slider + .tq-h1 / .tq-subhead unified typography | ✅ |
-| 9 | **3-dots Menu** — Share / Rename / Favorites / Copy link / Use as template / Save copy as template (disabled) / Trash | ⏳ in progress (step 9f) |
+| 9 | **3-dots Menu** — Favorites toggle + Copy link + Inline rename + Send to trash (wired); Share + Use as template (stubbed); Save copy as template (disabled) | ✅ (step 9f shipped 2026-05-20) |
+| 9.5 | **Content language picker + prompt directive** — user-explicit AR/EN pick on /create/content drives Project.language + Presentation.direction + buildUserMessage's LANGUAGE block (Phase A + B). BiDi gating + dir="ltr" on rendered HTML deferred (Phase C). | ✅ (Phases A+B shipped 2026-05-20; C deferred) |
 | 10 | **/favorites rename + isFavorite toggle** | ⏳ step 12 |
 | 11 | **/create/from/[projectId]** content-only "use as template" entry | ⏳ step 13 |
-| 12 | **/projects page** — 5-per-row grid + sort + filters (slide count / language / color) | ⏳ step 11 |
+| 12 | **/projects page** — 5-per-row grid + sort + filters (slide count / language / color) — language column is finally truthful, filter now works | ⏳ step 11 |
 | 13 | **Share modal** — schema, Resend invites, public access, auto-clone on edit invites, PNG export, LinkedIn button | ⏳ step 15.1 → 15.6 |
 | 14 | **PDF export** | ⏳ step 15.7 |
 | 15 | **Enhance Flow review page** — Claude vision extraction + per-asset overrides | 🟡 |
@@ -653,7 +659,8 @@ Schema is wired (`Subscription` + `UsageEvent`); enforcement is partial.
 - **Partial regen.** Comment-driven slide regen with parallel Claude calls; deck stays visible during regen; atomic version promotion.
 - **PPTX export.** ~99 % preview ↔ PPT parity for Arabic decks.
 - **Thumbnail pipeline.** Puppeteer-rendered WebPs per slide on every Save; URLs in `Project.thumbnailUrls`.
-- **Dashboard tile rework.** Full-bleed thumbnail + RTL scrub + click-to-lightbox; 3-col grid; canonical `.tq-h1` + `.tq-subhead`.
+- **Dashboard tile rework.** Full-bleed thumbnail + RTL scrub + click-to-lightbox; 3-col grid; canonical `.tq-h1` + `.tq-subhead`. 3-dots menu wired (favorites / copy link / inline rename / trash with confirmation + storage cleanup); share + use-as-template stubbed for steps 15 + 13.
+- **Content language pick.** Two-pill picker (`العربية` / `الإنجليزية`) on `/create/content` drives `Project.language` + `Presentation.direction` + a LANGUAGE directive at the top of `buildUserMessage`. AR (default) reinforces RTL + Arabic font stack. EN instructs English-only deck text, dir=ltr, Latin typography. Phase C (BiDi post-processor gating on `language === "en"`) still deferred.
 - **Notification system.** Bell dropdown + toast stack + per-user localStorage. Stuck-detection pushes warnings.
 
 ### Lessons learned — do not repeat
@@ -670,6 +677,8 @@ Schema is wired (`Subscription` + `UsageEvent`); enforcement is partial.
 - **Progress in slideJson, polled — Realtime not required.** Streaming progress writes to `slideJson.progress`; DeckView polls at 1.5 s. Supabase Realtime depends on publication config, which wasn't reliable on local Docker.
 - **Local dev DB is Docker compose, not Supabase.** Postgres + Redis run locally via `docker compose up -d`. Supabase is auth + storage only.
 - **Delete failed fixes, don't stack.** When a fix doesn't work, revert before trying the next; never accumulate dead paths.
+- **Prisma `upsert`'s update branch can't reference current-row state.** If the new value depends on the existing value (e.g. "set `lockedAt = now()` ONLY if currently null"), the upsert update clause has no read-side. Bit us on `/lock/route.ts` where the update branch only wrote `{ cachedComments: DbNull }` for `shouldLock=true`, never `lockedAt` — existing SlideState rows stayed unlocked. Fix: read first, then upsert with the resolved value (see lock route's `existing?.lockedAt ?? new Date()` pattern). Applies anywhere we want idempotent-on-repeat semantics.
+- **Outside-click handlers MUST exclude the trigger.** When a portal'd popover/menu uses `mousedown` to detect outside clicks, clicking the trigger fires `mousedown` (closes popover) → `click` (re-opens). Net result: trigger never closes the popover; it always re-opens. Fix: tag the trigger with `data-<name>-trigger` and skip the close in the handler when `e.target.closest("[data-<name>-trigger]")` matches. Bit us on `HistoryPopover` and would have bit `ProjectActionsMenu` if we'd missed it. Pattern: `data-history-trigger`, `data-project-menu-trigger`.
 
 ### Coding rules (from `app/globals.css`)
 
