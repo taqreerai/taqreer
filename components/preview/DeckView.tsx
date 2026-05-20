@@ -1389,13 +1389,15 @@ export function DeckView({
           </div>
 
           {/* Per-slide pill — Undo / Try again / Regen / History /
-              Lock. Step 3 ships VISUAL ONLY; click handlers land
-              in steps 4-6. Mounted inside the canvas-gradient-
-              border container so it inherits the `group` hover
-              state, fading in on canvas hover. State props are
-              still placeholders until step 5 wires SlideState to
-              the client. */}
-          {!isFocusedRegenerating ? (
+              Lock. Mounted inside the canvas-gradient-border
+              container so it inherits the `group/canvas` hover
+              state, fading in on canvas hover.
+              Hidden while the slide is being regenerated (the
+              blur + spinner overlay owns the canvas) AND while
+              the user is in comment mode (the comment overlay
+              owns the canvas; the pill would steal cursor focus
+              from drag-to-draw). */}
+          {!isFocusedRegenerating && !commentMode ? (
             <SlidePill
               currentVersionNumber={
                 slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
