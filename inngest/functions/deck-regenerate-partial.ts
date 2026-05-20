@@ -459,11 +459,30 @@ export const deckRegeneratePartial = inngest.createFunction(
       const regenSlides = newManifest.slides.filter((s) =>
         targetSlideIds.includes(s.slideId),
       );
+      // Group the dispatched comments by their target slideId so
+      // each slide's SlideState caches ONLY its own comments. A
+      // clean regen (this whole array is empty) leaves the map
+      // empty for every targeted slide — recordSlidePartialRegen
+      // then clears each SlideState.cachedComments to SQL NULL.
+      const commentsBySlide = new Map<
+        string,
+        { slideId: string; content: string; boundsJson: unknown }[]
+      >();
+      for (const c of comments) {
+        const arr = commentsBySlide.get(c.slideId) ?? [];
+        arr.push({
+          slideId: c.slideId,
+          content: c.content,
+          boundsJson: c.boundsJson,
+        });
+        commentsBySlide.set(c.slideId, arr);
+      }
       await recordSlidePartialRegen(
         prisma,
         data.presentationId,
         regenSlides,
         "partial_regen",
+        commentsBySlide,
       );
     });
 

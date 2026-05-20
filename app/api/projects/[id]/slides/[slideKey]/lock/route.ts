@@ -16,6 +16,7 @@
 // got a SlideState).
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -68,11 +69,17 @@ export async function POST(
 
   // Idempotent semantics:
   // - locked:true on an unlocked slide  → set lockedAt = now
+  //   AND clear cachedComments (locking finalises the slide; the
+  //   user's "in-flight" comment intent shouldn't survive a lock).
   // - locked:true on an ALREADY-locked slide → keep the original
   //   lockedAt (no-op on the update branch). The contract is "lock
   //   the slide", not "refresh the lock timestamp" — repeated
   //   requests should leave the existing pinned-at moment alone.
+  //   cachedComments was already null from the first lock; the
+  //   no-op update keeps it null.
   // - locked:false → clear lockedAt regardless of prior state.
+  //   Doesn't restore cachedComments — that was wiped on lock and
+  //   isn't reconstructible.
   const state = await prisma.slideState.upsert({
     where: {
       presentationId_slideKey: { presentationId, slideKey },
@@ -83,7 +90,9 @@ export async function POST(
       currentVersionNumber: 1,
       lockedAt: shouldLock ? new Date() : null,
     },
-    update: shouldLock ? {} : { lockedAt: null },
+    update: shouldLock
+      ? { cachedComments: Prisma.DbNull }
+      : { lockedAt: null },
     select: { lockedAt: true },
   });
 

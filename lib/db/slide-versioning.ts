@@ -16,7 +16,8 @@
 // max+1, so a duplicate call re-bumps but never collides on the
 // unique constraint.
 
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { SlideManifestSchema, SlideSchema } from "@/lib/schema/slide";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 
@@ -26,6 +27,17 @@ import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 export const MAX_VERSIONS_PER_SLIDE = 5;
 
 type RegenSource = "regen" | "partial_regen";
+
+// Cached comment payload — written to SlideState.cachedComments
+// when a partial regen with user comments completes, so the pill's
+// "Try again" can replay those comments through a fresh Claude
+// call without re-creating Comment table rows. Shape mirrors what
+// the inngest event carries (slideId + content + boundsJson).
+export type CachedComment = {
+  slideId: string;
+  content: string;
+  boundsJson: unknown;
+};
 
 function slideToJson(slide: SlideType): Prisma.InputJsonValue {
   // SlideType is just `{ slideId, role?, html }` — flat JSON-safe.
@@ -92,8 +104,18 @@ export async function recordSlidePartialRegen(
   presentationId: string,
   regeneratedSlides: SlideType[],
   source: RegenSource,
+  // Per-slide cached comment payload to write alongside the new
+  // SlideVersion. Keyed by slideKey. Slides ABSENT from this map
+  // (or with an empty array) → cachedComments CLEARED to null —
+  // means a clean regen wiped the user-intent cache. Slides
+  // PRESENT with entries → cachedComments REPLACED with those
+  // entries so "Try again" can replay them later.
+  commentsBySlide?: Map<string, CachedComment[]>,
 ): Promise<void> {
   for (const slide of regeneratedSlides) {
+    const slideComments = commentsBySlide?.get(slide.slideId);
+    const hasComments = !!slideComments && slideComments.length > 0;
+
     const state = await prisma.slideState.findUnique({
       where: {
         presentationId_slideKey: {
@@ -112,13 +134,20 @@ export async function recordSlidePartialRegen(
     });
 
     if (!state) {
-      // Legacy project — seed v1 = the regen output. Comment cache
-      // is left untouched (null by default on create).
+      // Legacy project — seed v1 = the regen output. Cached
+      // comments are only written when this regen actually carried
+      // a payload; clean regens leave the field at its default null.
       await prisma.slideState.create({
         data: {
           presentationId,
           slideKey: slide.slideId,
           currentVersionNumber: 1,
+          ...(hasComments
+            ? {
+                cachedComments:
+                  slideComments as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
           versions: {
             create: {
               versionNumber: 1,
@@ -144,7 +173,16 @@ export async function recordSlidePartialRegen(
       }),
       prisma.slideState.update({
         where: { id: state.id },
-        data: { currentVersionNumber: nextVersionNumber },
+        data: {
+          currentVersionNumber: nextVersionNumber,
+          // Comments came with this regen → replace cache.
+          // Clean regen (no comments) → clear cache (SQL NULL) so
+          // "Try again" greys out (per spec: clean regen wipes
+          // user intent).
+          cachedComments: hasComments
+            ? (slideComments as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+        },
       }),
     ]);
 
