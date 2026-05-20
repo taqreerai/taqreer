@@ -12,7 +12,11 @@ const buckets = [
   { name: "source-files", public: false },
   { name: "brand-assets", public: false },
   { name: "generated-presentations", public: false },
-  { name: "slide-previews", public: false },
+  // public: dashboards/projects pages render <img> tiles for every
+  // project on every page load; signed URLs would mean N round-trips
+  // per page. Thumbnails are low-value visually and only ever come
+  // from the saved version pointer, so public is the simpler tradeoff.
+  { name: "slide-previews", public: true },
   { name: "template-assets", public: true },
 ];
 
