@@ -971,13 +971,54 @@ export const deckGenerate = inngest.createFunction(
         );
       }
 
+      // /projects filter columns — frozen on FIRST successful
+      // deck-generate completion, never updated afterwards.
+      //   slideCount    ← manifest.slides.length
+      //   dominantColor ← brief.brand.colors[0] (validated hex)
+      // Read existing values first; only write when currently null
+      // so a full-deck regen (which also fires `deck.generate.
+      // requested`) doesn't overwrite the original values. Partial
+      // regen runs in `deck-regenerate-partial.ts` and never hits
+      // this path. NOTE: the /save route used to capture these on
+      // first-save — that path has been removed; capture is now
+      // exclusively here (per the product call: "we get the slide
+      // count on generation complete").
+      const projectFreezeState = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { slideCount: true, dominantColor: true },
+      });
+      const slideCountFromManifest = manifest.slides.length;
+      let dominantColorFromBrief: string | null = null;
+      const briefBrandColors = (data.brief as {
+        brand?: { colors?: unknown[] };
+      } | null)?.brand?.colors;
+      const firstColor = briefBrandColors?.[0];
+      if (
+        typeof firstColor === "string" &&
+        /^#[0-9A-Fa-f]{6}$/.test(firstColor)
+      ) {
+        dominantColorFromBrief = firstColor.toUpperCase();
+      }
+
       // Promote Claude's generated title to the Project (dashboard name) and
       // the Presentation (also used for new versions). The truncated paste
       // that seeded the row at /api/projects time is now replaced by a real
       // human-readable title.
       await prisma.project.update({
         where: { id: projectId },
-        data: { status: "completed", title: manifest.title },
+        data: {
+          status: "completed",
+          title: manifest.title,
+          // Freeze-on-first conditional spread. Same pattern the
+          // /save route used to use.
+          ...(projectFreezeState?.slideCount == null
+            ? { slideCount: slideCountFromManifest }
+            : {}),
+          ...(projectFreezeState?.dominantColor == null &&
+          dominantColorFromBrief != null
+            ? { dominantColor: dominantColorFromBrief }
+            : {}),
+        },
       });
       await prisma.presentation
         .update({
