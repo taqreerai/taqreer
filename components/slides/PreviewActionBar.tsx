@@ -140,6 +140,21 @@ function ToolButton({
   );
 }
 
+// Hairline separator between toolbar categories. Full-width 1 px
+// line at white/12 alpha with vertical breathing room — earlier
+// w-7 / my-0.5 / white/8 read as "did this divider exist?" against
+// the glass card. Now sits at my-2 (8 px top + bottom) and spans
+// the toolbar's inner width so the category boundary is
+// unambiguous.
+function ToolbarDivider() {
+  return (
+    <div
+      aria-hidden
+      className="my-2 h-px w-full bg-white/[0.12]"
+    />
+  );
+}
+
 export function PreviewActionBar({
   projectId,
   projectTitle,
@@ -196,6 +211,7 @@ export function PreviewActionBar({
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
   const [exportPptx, setExportPptx] = useState<ButtonState>({ status: "idle" });
   const [exportHtml, setExportHtml] = useState<ButtonState>({ status: "idle" });
+  const [exportPng, setExportPng] = useState<ButtonState>({ status: "idle" });
   const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
   const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
 
@@ -297,6 +313,52 @@ export function PreviewActionBar({
     }
   };
 
+  // PNG export — server-side, sync. POST /api/projects/[id]/export/png
+  // returns a ZIP of canvas-native PNGs (1920×1080 / 1080×1920) rendered
+  // by Puppeteer + the same JSDOM-backed HTML builder the thumbnail
+  // pipeline uses. The endpoint streams the ZIP back as a single blob
+  // (~3-10s for 5-25 slides); the button just spins for the duration
+  // and no toast surfaces — the browser's own download UI is the
+  // success signal, matching the PPTX + HTML buttons' pattern.
+  const handleExportPng = async () => {
+    if (exportPng.status === "running") return;
+    setExportPng({ status: "running", message: "جارٍ تصدير الصور..." });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/export/png`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "PNG export failed");
+      }
+      // Stream the blob into a download. Same anchor-click trick the
+      // dom-to-pptx export uses (`saveAs` from file-saver wraps this
+      // internally); inlined here since we only need it for the ZIP
+      // and don't want to pull file-saver as a dep just for that.
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${baseFileName(manifest.title || projectTitle)}-pngs.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Defer revoke so Safari's download flow has a tick to read
+      // the blob URL — premature revoke aborts the download in some
+      // browsers. 1 s is conservative; the download has long latched
+      // onto the blob by then.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportPng({ status: "idle" });
+    } catch (error) {
+      setExportPng({
+        status: "error",
+        message: error instanceof Error ? error.message : "تعذر تصدير الصور",
+      });
+    }
+  };
+
   // HTML download — bundles all slides into one standalone .html file at
   // the manifest's canvas dimensions (1920×1080 for 16:9, 1080×1920 for
   // 9:16) so the user can open it in a browser and screenshot. No
@@ -361,6 +423,7 @@ export function PreviewActionBar({
     regen.status === "error" ? { text: regen.message, kind: "error" as const } :
     exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :
     exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
+    exportPng.status === "error" ? { text: exportPng.message, kind: "error" as const } :
     saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
     saveProject.status === "error" ? { text: saveProject.message, kind: "error" as const } :
     saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
@@ -370,11 +433,21 @@ export function PreviewActionBar({
 
   return (
     <div dir="ltr" className="flex flex-col items-center gap-3">
-      {/* Toolbar column — Photoshop-style icon stack. All buttons share
-          one neutral glass surface. */}
+      {/* Toolbar column — Photoshop-style icon stack, grouped into
+          three visual categories by horizontal dividers. Categories
+          (top → bottom):
+            1. EDIT / AI       — regen, comments
+            2. PERSISTENCE     — save project, save as template
+            3. EXPORT          — PPTX, HTML, PNG, PDF
+          The dividers are 1 px lines at white/8 alpha — same colour
+          token the rest of the glass surfaces use for hairline
+          separators. Match the visual recipe in SlideNavSidebar's
+          header / footer borders so the toolbar reads as part of
+          the same chrome family. */}
       <div
         className="glass-card flex flex-col items-center gap-1.5 rounded-2xl p-2"
       >
+        {/* ── Category 1: AI / Edit ─────────────────────────────── */}
         {/* Regen button — two roles depending on state:
               • Idle / no drafts: full-deck regenerate (autorenew).
               • Armed (drafts exist + commentMode off): partial regen
@@ -418,6 +491,10 @@ export function PreviewActionBar({
           disabled={applying}
           countBadge={draftCommentCount}
         />
+
+        <ToolbarDivider />
+
+        {/* ── Category 2: Persistence ───────────────────────────── */}
         {/* Save Project — pins the canonical version. Icon morphs
             save → check once the current version matches
             savedVersionId. `active` brightens the glass when saved
@@ -448,17 +525,27 @@ export function PreviewActionBar({
           }
         />
         <ToolButton
+          icon="bookmark_add"
+          label="حفظ كقالب"
+          running={saveTpl.status === "running"}
+          onClick={() => setShowSaveForm((v) => !v)}
+          disabled={applying}
+        />
+
+        <ToolbarDivider />
+
+        {/* ── Category 3: Export ────────────────────────────────── */}
+        {/* Tooltip wording unified — every export reads "تصدير X"
+            and the order is PPTX → PDF → PNG → HTML (locked
+            2026-05-21). PDF currently disabled with "قريباً"
+            badge until step E lands. HTML was historically
+            labelled "تنزيل HTML" — renamed to "تصدير HTML" so the
+            export category reads as a single family. */}
+        <ToolButton
           icon="download"
           label="تصدير PPTX"
           running={exportPptx.status === "running"}
           onClick={handleExport}
-          disabled={applying}
-        />
-        <ToolButton
-          icon="code"
-          label="تنزيل HTML"
-          running={exportHtml.status === "running"}
-          onClick={handleDownloadHtml}
           disabled={applying}
         />
         <ToolButton
@@ -468,10 +555,17 @@ export function PreviewActionBar({
           disabled
         />
         <ToolButton
-          icon="bookmark_add"
-          label="حفظ كقالب"
-          running={saveTpl.status === "running"}
-          onClick={() => setShowSaveForm((v) => !v)}
+          icon="image"
+          label="تصدير PNG"
+          running={exportPng.status === "running"}
+          onClick={handleExportPng}
+          disabled={applying}
+        />
+        <ToolButton
+          icon="code"
+          label="تصدير HTML"
+          running={exportHtml.status === "running"}
+          onClick={handleDownloadHtml}
           disabled={applying}
         />
       </div>
