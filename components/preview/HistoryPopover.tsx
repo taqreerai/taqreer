@@ -46,6 +46,7 @@ export function HistoryPopover({
   busy,
   onRestore,
   onClose,
+  onExitComplete,
 }: {
   open: boolean;
   // null while the popover is closed or the trigger hasn't mounted
@@ -59,6 +60,11 @@ export function HistoryPopover({
   busy: boolean;
   onRestore: (versionNumber: number) => void;
   onClose: () => void;
+  // Fires after the exit animation finishes. Used by the parent
+  // to release the slide pill's "stay visible" latch — the pill
+  // would otherwise flicker the instant `open` flipped to false
+  // because the cursor was still over the fading popover.
+  onExitComplete?: () => void;
 }) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
@@ -111,7 +117,7 @@ export function HistoryPopover({
     // after a restore commits and the parent clears
     // historyAnchor). Without this, the popover unmounted
     // instantly — visible glitch the user flagged 2026-05-20.
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={onExitComplete}>
       {open && triggerRect ? (
         <motion.div
           key="history-popover"

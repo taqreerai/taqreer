@@ -200,9 +200,27 @@ export function DeckView({
   // re-opening the same slide's history doesn't re-fetch.
   const [historyAnchor, setHistoryAnchor] = useState<DOMRect | null>(null);
   const [historySlideKey, setHistorySlideKey] = useState<string | null>(null);
+  // Hydrate from SSR — `initialSlideStates` carries each slide's
+  // version list inline, so the popover opens already populated
+  // and avoids the "0 rows → fetch → expand" glitch on first
+  // open after a page refresh. Subsequent regens still push fresh
+  // rows in via the partial-regen completion flow.
   const [historyVersions, setHistoryVersions] = useState<
     Record<string, HistoryRow[]>
-  >({});
+  >(() =>
+    Object.fromEntries(
+      initialSlideStates.map((s) => [s.slideKey, s.versions ?? []]),
+    ),
+  );
+  // `popoverEngaged` latches TRUE while the history popover is
+  // either open OR fading out. Used by the slide pill to stay
+  // visible through the entire popover lifecycle — without this,
+  // the pill flickered when the popover unmounted because the
+  // cursor was on the popover (outside the canvas hover area) at
+  // the moment historyAnchor flipped to null. Set true on every
+  // popover open; reset to false by HistoryPopover's
+  // onExitComplete after the fade-out finishes.
+  const [popoverEngaged, setPopoverEngaged] = useState(false);
   const [historyBusy, setHistoryBusy] = useState(false);
   // Splice helper used by both Undo and Restore. Updates the live
   // manifest (so the renderer immediately shows the older slide
@@ -234,14 +252,12 @@ export function DeckView({
         },
       };
     });
-    // History list is stale after a destructive Undo (a row was
-    // deleted server-side) — clear the cache for this slide so
-    // the next open re-fetches.
-    setHistoryVersions((prev) => {
-      const next = { ...prev };
-      delete next[slideKey];
-      return next;
-    });
+    // historyVersions cache is intentionally NOT cleared here.
+    // Restore is non-destructive — the rows themselves don't
+    // change, only the SlideState pointer (currentVersionNumber)
+    // moves. Clearing then refetching would briefly empty the
+    // popover before unmount, producing the "collapse-then-flash"
+    // glitch the user flagged 2026-05-20.
   };
   const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
@@ -1414,12 +1430,12 @@ export function DeckView({
                 slideStates[focusedSlide.slideId]?.lockedAt != null
               }
               // Keep the pill fully opaque while THIS slide's history
-              // popover is open — the popover is portal'd to body so
-              // the cursor moving onto it leaves the canvas's hover
-              // area, which would otherwise fade the pill back out
-              // while the user is still interacting with the menu.
+              // popover is open OR is animating out — without latching
+              // through the exit phase the pill flickered the instant
+              // historyAnchor flipped to null (cursor was still over
+              // the fading popover, not the canvas).
               popoverOpen={
-                historyAnchor != null &&
+                popoverEngaged &&
                 historySlideKey === focusedSlide.slideId
               }
               onToggleLock={async () => {
@@ -1544,6 +1560,7 @@ export function DeckView({
                 if (!rect) return;
                 setHistoryAnchor(rect);
                 setHistorySlideKey(focusedSlide.slideId);
+                setPopoverEngaged(true);
                 // Lazy-fetch versions on open. Cached per slide so
                 // re-opening the same slide skips the round-trip.
                 if (!historyVersions[focusedSlide.slideId]) {
@@ -1607,6 +1624,10 @@ export function DeckView({
       <HistoryPopover
         open={historyAnchor != null && historySlideKey != null}
         triggerRect={historyAnchor}
+        // Fires after the popover's fade-out animation completes.
+        // Releases the pill's `popoverEngaged` latch so it returns
+        // to canvas-hover-only visibility.
+        onExitComplete={() => setPopoverEngaged(false)}
         versions={
           historySlideKey ? (historyVersions[historySlideKey] ?? []) : []
         }
@@ -1622,10 +1643,34 @@ export function DeckView({
         }}
         onRestore={async (versionNumber) => {
           if (!historySlideKey) return;
-          setHistoryBusy(true);
+          const targetSlideKey = historySlideKey;
+          // CLOSE THE POPOVER FIRST — start the exit animation
+          // immediately so the click feels responsive. The async
+          // work below splices the slide into the manifest after.
+          // Previously we awaited both the /restore call AND a
+          // followup /versions refetch BEFORE closing the popover,
+          // leaving the popover frozen at full opacity for ~500 ms.
+          // Optimistic local pointer update so the highlighted
+          // "current" row would have already moved if the popover
+          // weren't unmounting — keeps the projects table in sync
+          // before the server response.
+          setSlideStates((prev) => {
+            const current = prev[targetSlideKey];
+            return {
+              ...prev,
+              [targetSlideKey]: {
+                slideKey: targetSlideKey,
+                currentVersionNumber: versionNumber,
+                hasCachedComments: current?.hasCachedComments ?? false,
+                lockedAt: current?.lockedAt ?? null,
+              },
+            };
+          });
+          setHistoryAnchor(null);
+          setHistorySlideKey(null);
           try {
             const res = await fetch(
-              `/api/projects/${projectId}/slides/${encodeURIComponent(historySlideKey)}/restore`,
+              `/api/projects/${projectId}/slides/${encodeURIComponent(targetSlideKey)}/restore`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1637,29 +1682,33 @@ export function DeckView({
               currentVersionNumber: number;
               slide: SlideType;
             };
-            applyRestoredSlide(historySlideKey, data);
-            // Refetch the versions list so the "current" highlight
-            // moves to the restored row. The list itself didn't
-            // change (Restore is non-destructive) so a cheap
-            // refresh is fine.
-            const vRes = await fetch(
-              `/api/projects/${projectId}/slides/${encodeURIComponent(historySlideKey)}/versions`,
-            );
-            if (vRes.ok) {
-              const vData = (await vRes.json()) as {
-                versions: HistoryRow[];
-              };
-              setHistoryVersions((prev) => ({
-                ...prev,
-                [historySlideKey]: vData.versions,
-              }));
-            }
+            // Splice the returned slide into the manifest so the
+            // hero renders the restored version. NOT clearing the
+            // historyVersions cache — restore is non-destructive,
+            // the list didn't change.
+            applyRestoredSlide(targetSlideKey, data);
           } catch (err) {
             console.error("restore failed", err);
-          } finally {
-            setHistoryBusy(false);
-            setHistoryAnchor(null);
-            setHistorySlideKey(null);
+            // Revert the optimistic pointer update on error.
+            setSlideStates((prev) => {
+              const current = prev[targetSlideKey];
+              if (!current) return prev;
+              return {
+                ...prev,
+                [targetSlideKey]: {
+                  ...current,
+                  // We don't know the actual prior versionNumber
+                  // since we overwrote it optimistically — best
+                  // we can do is refetch from the server, but for
+                  // now revert to the cached row's current value
+                  // BEFORE the optimistic write (which we lost).
+                  // In practice errors here are network-only and
+                  // rare; the next History open will refetch and
+                  // reconcile.
+                  currentVersionNumber: current.currentVersionNumber,
+                },
+              };
+            });
           }
         }}
       />

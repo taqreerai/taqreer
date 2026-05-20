@@ -13,11 +13,30 @@ export const dynamic = "force-dynamic";
 // undo affordance, version count, cached comments). Stays a flat
 // serialisable shape so it can cross the server→client boundary
 // without re-fetching client-side.
+//
+// `versions` is preloaded so the History popover opens already
+// populated — opening it with `historyVersions[key] ?? []`
+// previously rendered an empty list for one frame before the
+// /versions fetch completed, then the list expanded as rows
+// appeared (the "0 rows → expand → glitch" the user flagged
+// 2026-05-20).
+export type InitialSlideVersion = {
+  versionNumber: number;
+  source: string; // "create" | "regen" | "partial_regen" | "restore"
+  createdAt: string; // ISO
+};
+
 export type InitialSlideState = {
   slideKey: string;
   currentVersionNumber: number;
   hasCachedComments: boolean;
   lockedAt: string | null;
+  // Optional — only populated on the SSR-hydration path so the
+  // client can seed `historyVersions` and skip the first-open
+  // fetch. Runtime mutations that construct a fresh slide state
+  // (optimistic restore, lock toggle) omit it; the cache lives
+  // in DeckView's `historyVersions` map, not on each row.
+  versions?: InitialSlideVersion[];
 };
 
 type InitialState = {
@@ -123,6 +142,19 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
         currentVersionNumber: true,
         lockedAt: true,
         cachedComments: true,
+        // Versions are bounded (MAX_VERSIONS_PER_SLIDE = 5) so
+        // serialising them inline adds at most ~250 B per slide
+        // to the page payload — well worth eliminating the
+        // first-open glitch. Newest-first so the popover
+        // doesn't need to re-sort client-side.
+        versions: {
+          orderBy: { versionNumber: "desc" },
+          select: {
+            versionNumber: true,
+            source: true,
+            createdAt: true,
+          },
+        },
       },
     });
     initialSlideStates = states.map((s) => ({
@@ -130,6 +162,11 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
       currentVersionNumber: s.currentVersionNumber,
       lockedAt: s.lockedAt ? s.lockedAt.toISOString() : null,
       hasCachedComments: s.cachedComments != null,
+      versions: s.versions.map((v) => ({
+        versionNumber: v.versionNumber,
+        source: v.source,
+        createdAt: v.createdAt.toISOString(),
+      })),
     }));
   }
 
