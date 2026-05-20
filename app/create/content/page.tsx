@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
-import { Toggle } from "@/components/create/controls";
+import { LanguagePills, Toggle, type LanguageCode } from "@/components/create/controls";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
 import RosetteDiscountCheckIcon from "@/components/icons/rosette-discount-check-icon";
 import {
@@ -98,7 +98,11 @@ export default function CreateContentPage() {
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(10);
   const [designStyle, setDesignStyle] = useState<string | null>(null);
-  const [fixTypos, setFixTypos] = useState<boolean>(false);
+  // Content language. Default "ar" matches the historical hardcoded
+  // value so existing stored blobs (without `language`) keep working
+  // as-is. Drives Project.language + Presentation.direction (ar/bi →
+  // rtl, en → ltr) downstream.
+  const [language, setLanguage] = useState<LanguageCode>("ar");
   const [pagination, setPagination] = useState<boolean>(true);
   const [persistentText, setPersistentText] = useState<string>("");
   const [persistentPosition, setPersistentPosition] =
@@ -144,7 +148,12 @@ export default function CreateContentPage() {
           setSlideCountValue(out.slideCount.value);
         }
         if (out.rules?.designStyle !== undefined) setDesignStyle(out.rules.designStyle);
-        if (typeof out.rules?.fixTypos === "boolean") setFixTypos(out.rules.fixTypos);
+        // Language hydrate — older stored blobs (pre-2026-05-20) won't
+        // have this field; we fall through to the "ar" default in that
+        // case via the state initialiser above.
+        if (out.language === "ar" || out.language === "en" || out.language === "bi") {
+          setLanguage(out.language);
+        }
         if (typeof out.rules?.pagination === "boolean") setPagination(out.rules.pagination);
         if (out.rules?.persistent?.text) setPersistentText(out.rules.persistent.text);
         if (out.rules?.persistent?.position) {
@@ -184,10 +193,10 @@ export default function CreateContentPage() {
         mode: slideCountMode,
         value: slideCountMode === "custom" ? slideCountValue : null,
       },
+      language,
       logo: existingLogo,
       rules: {
         designStyle,
-        fixTypos,
         pagination,
         persistent: persistentText.trim()
           ? {
@@ -211,7 +220,7 @@ export default function CreateContentPage() {
     slideCountMode,
     slideCountValue,
     designStyle,
-    fixTypos,
+    language,
     pagination,
     persistentText,
     persistentPosition,
@@ -577,15 +586,18 @@ export default function CreateContentPage() {
             </span>
           </div>
           </div>
-          {/* Generation-rule toggles live HERE on row 1's free-text
-              card (since 2026-05-19). They used to be on row 2's
-              المحتوى card; moving them up balances row 1's height
-              with the file-upload card on the left and lets row 2
-              drop a bit. Sits OUTSIDE the dim-wrapper above —
-              same reason as SlideSizeFields on the left card. */}
-          <div className="grid grid-cols-2 gap-3 border-t border-white/[0.08] pt-3">
-            <Toggle label="تصحيح الأخطاء" value={fixTypos} onChange={setFixTypos} />
+          {/* Row 1's output controls: pagination toggle on the start
+              side, language picker pills on the end side. The
+              previous "تصحيح الأخطاء" toggle was retired 2026-05-20
+              in favor of language-aware behavior — the model now
+              respects source verbatim by default; tone/correction
+              picks will surface in Phase B per language. The empty
+              cell that left behind became the LanguagePills slot.
+              Sits OUTSIDE the dim-wrapper above — same reason as
+              SlideSizeFields on the left card. */}
+          <div className="flex items-center justify-between gap-3 border-t border-white/[0.08] pt-3">
             <Toggle label="ترقيم الشرائح" value={pagination} onChange={setPagination} />
+            <LanguagePills value={language} onChange={setLanguage} />
           </div>
         </div>
       </div>

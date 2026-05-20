@@ -62,6 +62,11 @@ type StoredOutput = {
     excludeCover?: boolean;
     excludeClosing?: boolean;
   };
+  // User-picked on /create/content (2026-05-20). Drives Project.language
+  // + Presentation.direction (ar/bi → rtl, en → ltr). Optional here
+  // because legacy stored blobs predate the picker — the consumer
+  // falls back to "ar".
+  language?: "ar" | "en" | "bi";
   rules?: {
     designStyle?: string | null;
     fixTypos?: boolean;
@@ -229,7 +234,12 @@ export default function CreateSummaryPage() {
       const rules = output?.rules
         ? {
             designStyle: output.rules.designStyle ?? null,
-            fixTypos: Boolean(output.rules.fixTypos),
+            // `fixTypos` retired 2026-05-20 — coerce any stale stored
+            // value to `false` so the server's prompt path lands on
+            // "preserve user text verbatim". The UI no longer exposes
+            // the toggle; this default matches the historical
+            // off-by-default behavior.
+            fixTypos: false,
             pagination: output.rules.pagination !== false,
             persistent: persistent?.text
               ? {
@@ -246,6 +256,15 @@ export default function CreateSummaryPage() {
           ? output.slideCount.value
           : null;
 
+      // User-picked content language. Defaults to "ar" if the stored
+      // blob predates the picker — preserves the historical baseline.
+      // Server validates the union strictly; anything off-axis would
+      // 400 (same contract as lock/regen/favorite).
+      const language: "ar" | "en" | "bi" =
+        output?.language === "en" || output?.language === "bi"
+          ? output.language
+          : "ar";
+
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -253,6 +272,7 @@ export default function CreateSummaryPage() {
           content,
           brand: mergedBrand,
           rules,
+          language,
           saveBrandKit: false,
           slideCount: resolvedSlideCount,
           quality,

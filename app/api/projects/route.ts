@@ -155,7 +155,23 @@ type CreateProjectPayload = {
   saveBrandKit?: boolean;
   slideCount?: number | null;
   quality?: Quality | null;
+  // User-picked on /create/content (2026-05-20). Drives Project.language
+  // + Presentation.direction (ar/bi → rtl, en → ltr) + the brief sent
+  // to deck-generate. Missing → defaults to "ar" so legacy clients +
+  // bookmarklets keep working as-is.
+  language?: "ar" | "en" | "bi";
 };
+
+// Whitelist-validated language → direction mapping. Centralised so
+// every persistence site (Project.language, Presentation.language +
+// direction, brief.language + direction) reads from the same source.
+type ContentLanguage = "ar" | "en" | "bi";
+function isContentLanguage(v: unknown): v is ContentLanguage {
+  return v === "ar" || v === "en" || v === "bi";
+}
+function directionForLanguage(lang: ContentLanguage): "rtl" | "ltr" {
+  return lang === "en" ? "ltr" : "rtl";
+}
 
 function buildProjectTitle(payload: CreateProjectPayload) {
   if (payload.content?.type === "file" && payload.content.fileName) {
@@ -304,15 +320,21 @@ export async function POST(request: Request) {
         ? estimateSlideCountFromText(payload.content.text)
         : null);
 
-    // Arabic-first product baseline. Once the create form grows a
-    // language picker (Phase: bilingual support), thread the picked
-    // value through `payload.language` and derive direction
-    // (`ar/he/ur/fa → rtl`, else `ltr`). The Inngest prompts +
-    // BiDi post-processor already handle both directions.
+    // User-picked language from /create/content (since 2026-05-20).
+    // Falls back to "ar" if the payload doesn't carry the field —
+    // covers legacy clients + bookmarklets that POST without
+    // language. Anything off-axis (string we don't recognise)
+    // also collapses to "ar"; we don't 400 here because the union
+    // is a UX detail, not a security boundary. Phase B/C will
+    // branch on this for prompt selection + BiDi gating.
+    const contentLanguage: ContentLanguage = isContentLanguage(payload.language)
+      ? payload.language
+      : "ar";
+    const contentDirection = directionForLanguage(contentLanguage);
     const brief = {
       title,
-      language: "ar",
-      direction: "rtl",
+      language: contentLanguage,
+      direction: contentDirection,
       content: payload.content,
       brand: claudeBrand,
       rules: payload.rules ?? null,
@@ -402,7 +424,7 @@ export async function POST(request: Request) {
           userId: dbUser.id,
           title,
           type: projectType,
-          language: "ar",
+          language: contentLanguage,
           format: payload.brand?.slideSize ?? "16:9",
           status: "queued",
           brandKitId: brandKit?.id,
@@ -417,13 +439,15 @@ export async function POST(request: Request) {
         },
       });
 
-      // Arabic-first baseline (same TODO as above on the brief).
+      // Presentation.language + .direction now reflect the user's
+      // pick (see `contentLanguage` above for the validation +
+      // fallback contract).
       const presentation = await tx.presentation.create({
         data: {
           projectId: project.id,
           title,
-          language: "ar",
-          direction: "rtl",
+          language: contentLanguage,
+          direction: contentDirection,
         },
       });
 

@@ -38,6 +38,16 @@ export const DESIGN_STYLE_OPTIONS = [
   "جريء",
 ];
 
+// Content language — user-picked on /create/content. Drives:
+//   • Project.language + Presentation.language (filter-accuracy on
+//     /projects, and the Phase B/C work below)
+//   • Presentation.direction (ar/bi → rtl, en → ltr)
+//   • Phase B (TBD): prompt selection (Arabic vs English system prompt)
+//   • Phase C (TBD): BiDi post-processor gating + rendered HTML dir
+// Default "ar" matches the historical hardcoded value, so existing
+// stored blobs without a language field keep working as-is.
+export type StoredOutputLanguage = "ar" | "en" | "bi";
+
 export type StoredOutput = {
   slideSize?: SlideSize;
   // `mode === "match"` was the file-upload-only "match the source" pill —
@@ -45,14 +55,19 @@ export type StoredOutput = {
   // is always text now). Existing stored blobs with `mode: "match"` fall
   // back to "auto" via the readers in the consumer pages.
   slideCount?: { mode?: SlideCountMode; value?: number | null };
+  language?: StoredOutputLanguage;
   logo?: {
     position?: LogoPosition;
     excludeCover?: boolean;
     excludeClosing?: boolean;
   };
+  // `fixTypos` removed 2026-05-20: the toggle was retired in favor of
+  // language-aware behavior (the model now respects source verbatim
+  // by default; future Phase B will surface tone/correction picks per
+  // language). Existing stored blobs with `rules.fixTypos` still
+  // serialize fine — the field just isn't read anymore.
   rules?: {
     designStyle?: string | null;
-    fixTypos?: boolean;
     pagination?: boolean;
     persistent?: {
       text?: string;

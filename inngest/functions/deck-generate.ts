@@ -691,12 +691,17 @@ export const deckGenerate = inngest.createFunction(
       let streamingTheme: unknown = null;
       // Direction + language carried through the brief — surface them
       // on the live-preview path so DeckView's SlideRenderer + nav
-      // manifest aren't hardcoded to "rtl"/"ar". Currently every brief
-      // sets `direction:"rtl", language:"ar"` (Taqreer is Arabic-first),
-      // but the path stays generic so an LTR/EN deck doesn't render
-      // mirrored during streaming.
+      // manifest aren't hardcoded to "rtl"/"ar". Since the
+      // 2026-05-20 language picker landed, the brief now carries
+      // the user's pick: "ar" / "en" / "bi". The streaming preview
+      // collapses "bi" → "ar" because mixed content reads correctly
+      // under RTL with Arabic-leaning typography (Phase B will
+      // refine this when the English prompt ships).
       const briefForStream =
-        (data.brief as { direction?: "rtl" | "ltr"; language?: "ar" | "en" } | null) ?? null;
+        (data.brief as {
+          direction?: "rtl" | "ltr";
+          language?: "ar" | "en" | "bi";
+        } | null) ?? null;
       const streamDirection: "rtl" | "ltr" =
         briefForStream?.direction === "ltr" ? "ltr" : "rtl";
       const streamLanguage: "ar" | "en" =

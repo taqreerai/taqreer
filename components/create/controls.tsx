@@ -131,8 +131,15 @@ export function Toggle({
   value: boolean;
   onChange: (next: boolean) => void;
 }) {
+  // `inline-flex` (not `flex`) so the Toggle takes natural width when
+  // placed in a parent that uses `justify-between` (e.g. the
+  // pagination ↔ language-pills row on /create/content). With
+  // plain `flex`, justify-between inside this component spread the
+  // label and switch to opposite ends of whatever space the parent
+  // gave it — leaving a large empty gap when the parent was wider
+  // than the toggle's natural content.
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="inline-flex items-center justify-between gap-3">
       <span className="text-sm text-white">{label}</span>
       <button
         type="button"
@@ -150,6 +157,61 @@ export function Toggle({
           }`}
         />
       </button>
+    </div>
+  );
+}
+
+// Three-pill segmented control for content language: AR / EN / BI.
+// Lives next to a Toggle on /create/content's right card. Active
+// pill = brighter border + white text (matches `.btn-pill:hover`).
+// Idle pill = `.btn-pill` resting state.
+//
+// Why we INLINE the pill styles instead of using `.btn-pill`:
+// `.btn-pill` lives OUTSIDE `@layer utilities` in globals.css and
+// beats any Tailwind `text-white`/`border-white/40` utility we'd add
+// to flip the active state. Already burned by this with `.text-muted`
+// — sidestepping the layer-cascade fight is cheaper than re-shuffling
+// globals.css for a 3-button control.
+export type LanguageCode = "ar" | "en" | "bi";
+
+const LANGUAGE_OPTIONS: ReadonlyArray<{ code: LanguageCode; label: string }> = [
+  { code: "ar", label: "AR" },
+  { code: "en", label: "EN" },
+  { code: "bi", label: "BI" },
+];
+
+export function LanguagePills({
+  value,
+  onChange,
+}: {
+  value: LanguageCode;
+  onChange: (next: LanguageCode) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="لغة المحتوى"
+      className="inline-flex items-center gap-1"
+    >
+      {LANGUAGE_OPTIONS.map((opt) => {
+        const isActive = value === opt.code;
+        return (
+          <button
+            key={opt.code}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            onClick={() => onChange(opt.code)}
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              isActive
+                ? "border-white/40 text-white"
+                : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
