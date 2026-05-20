@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -1005,9 +1006,16 @@ export const deckGenerate = inngest.createFunction(
       // The lookup-then-call is intentional: deck-generate only has
       // projectId in scope, the Presentation row was created earlier
       // by /api/projects POST.
+      //
+      // `savedVersionId` is read here so we know whether THIS run is
+      // the project's first-ever generation. Auto-save fires only on
+      // the first run (savedVersionId == null) — subsequent full-
+      // deck regens land here too (they re-fire `deck.generate.
+      // requested`) but the user already saved at some prior point,
+      // so we MUST NOT clobber their pinned snapshot.
       const presentation = await prisma.presentation.findUnique({
         where: { projectId },
-        select: { id: true },
+        select: { id: true, savedVersionId: true },
       });
       if (presentation) {
         await seedSlideVersionsForInitialGeneration(
@@ -1015,6 +1023,67 @@ export const deckGenerate = inngest.createFunction(
           presentation.id,
           manifestToSave,
         );
+
+        // Auto-save the first-ever completed generation so the user
+        // doesn't have to click "Save Project" before the dashboard
+        // tile gets a thumbnail. Previously the only way to populate
+        // Project.thumbnailUrls was an explicit save click — fresh
+        // decks landed on the dashboard with the placeholder icon
+        // until the user opened the preview and clicked Save (user-
+        // reported 2026-05-20).
+        //
+        // Subsequent regens stay user-controlled: the explicit Save
+        // button is how the user promotes a regen result to "this is
+        // now the canonical version." We don't touch savedVersionId
+        // here on regen runs because doing so would silently
+        // overwrite the user's prior pinned snapshot.
+        if (presentation.savedVersionId == null) {
+          // Per-slide snapshot. For a fresh v1 generation every slide
+          // is at currentVersionNumber=1 (just seeded above); read
+          // back to compose the canonical map, in case future
+          // generation paths seed something different. Mirrors the
+          // /save route's logic for parity.
+          const seededStates = await prisma.slideState.findMany({
+            where: { presentationId: presentation.id },
+            select: { slideKey: true, currentVersionNumber: true },
+          });
+          const savedSlideVersions: Record<string, number> = {};
+          for (const s of seededStates) {
+            savedSlideVersions[s.slideKey] = s.currentVersionNumber;
+          }
+          await prisma.presentation.update({
+            where: { id: presentation.id },
+            data: {
+              savedVersionId: versionId,
+              savedSlideVersions:
+                savedSlideVersions as unknown as Prisma.InputJsonValue,
+            },
+          });
+
+          // Fire-and-forget thumbnail render. Dedup id matches the
+          // /save route's convention so a quick user-click on Save
+          // right after generation doesn't double-fire (Inngest
+          // dedupes events sharing the same id within a short
+          // window). Errors here don't fail the generation — the
+          // dashboard tile falls back to a placeholder until the
+          // user explicitly saves again.
+          await inngest
+            .send({
+              id: `thumbnails:${projectId}:${versionId}`,
+              name: "deck.thumbnails.render",
+              data: {
+                projectId,
+                savedVersionId: versionId,
+              },
+            })
+            .catch((err) => {
+              logger.warn("auto_thumbnails_dispatch_failed", {
+                projectId,
+                versionId,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
+        }
       }
 
       // /projects filter columns — frozen on FIRST successful

@@ -478,10 +478,15 @@ export function DeckView({
   //     the current direction.
   //   • Direction change OR idle for WHEEL_IDLE_RESET_MS resets the
   //     accumulator so the next swipe starts fresh.
-  //   • The wheel handler preventDefault()s only events it consumes,
-  //     so native scrolling inside the slide-nav sidebar (and any
-  //     popover that does its own scroll) is untouched — gated by
-  //     checking the event target against the canvas wrapper ref.
+  //   • Wheel events ONLY apply when the cursor is over the canvas
+  //     (we reuse `gridRef`, which already points to the hero
+  //     `motion.div` wrapper). Outside the canvas — sidebar list,
+  //     toolbar, comments panel — native scroll runs normally.
+  //   • `preventDefault` runs on every wheel event the canvas
+  //     consumes (regardless of whether this event flips a slide).
+  //     Below-threshold deltas would otherwise leak to native page
+  //     scroll while we were quietly accumulating, dragging the
+  //     hero element a few pixels before the next flip lands.
   // Gates (all of these block both wheel + keyboard):
   //   - commentMode (user drawing / typing comments)
   //   - applying (regen in flight, manifest is mid-swap)
@@ -493,7 +498,6 @@ export function DeckView({
   //   ArrowRight           → EN: next, AR: prev (RTL reading flow)
   //   ArrowLeft            → EN: prev, AR: next
   //   Home / End           → first / last slide
-  const wheelTargetRef = useRef<HTMLElement | null>(null);
   const wheelAccumRef = useRef(0);
   const wheelDirRef = useRef<-1 | 0 | 1>(0);
   const wheelIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -540,11 +544,28 @@ export function DeckView({
     };
 
     const handleWheel = (e: WheelEvent) => {
-      if (isNavBlocked()) return;
-      // Only intercept wheel events targeting the canvas / page chrome
-      // — let the slide-nav sidebar's own overflow scroll work.
+      // Only intercept wheel events targeting the hero canvas. The
+      // sidebar's overflow-y scroll, the comments panel, popover
+      // bodies — all keep native wheel behavior. `gridRef` is the
+      // existing canvas-wrapper motion.div used by HeroCommentOverlay
+      // for measurement; reusing it keeps the "what counts as the
+      // canvas?" question single-sourced.
+      const canvas = gridRef.current;
       const target = e.target as Node | null;
-      if (target && !wheelTargetRef.current?.contains(target)) return;
+      if (!canvas || !target || !canvas.contains(target)) return;
+
+      // Gating runs AFTER the canvas-hover check — outside the canvas
+      // we don't want to silently swallow scrolls even when blocked.
+      if (isNavBlocked()) return;
+
+      // Wheel-over-canvas always blocks page scroll. Sub-threshold
+      // accumulating deltas (e.g. a slow trackpad scroll before the
+      // first flip lands) would otherwise drag the hero element by a
+      // few pixels before the navigation kicks in (user-reported
+      // 2026-05-20 "canvas drags a bit"). Calling preventDefault on
+      // every consumed wheel event keeps the canvas pinned in place
+      // throughout the entire swipe.
+      e.preventDefault();
 
       const dir: 1 | -1 = e.deltaY > 0 ? 1 : -1;
       // Direction change resets the accumulator — switching from
@@ -559,12 +580,6 @@ export function DeckView({
       const slidesToFlip = Math.floor(wheelAccumRef.current / PX_PER_SLIDE);
       if (slidesToFlip > 0) {
         wheelAccumRef.current -= slidesToFlip * PX_PER_SLIDE;
-        // We're consuming the wheel for navigation; prevent the
-        // browser from also scrolling the page. Only call this
-        // when we're actually flipping a slide so small sub-
-        // threshold scrolls don't suppress legitimate native
-        // behavior (none today, but defensive).
-        e.preventDefault();
         goto(dir * slidesToFlip);
       }
 
@@ -1527,7 +1542,6 @@ export function DeckView({
   })();
   return (
     <section
-      ref={wheelTargetRef}
       dir={manifest!.direction}
       className="relative"
       style={{ marginRight: SLIDE_NAV_WIDTH }}
