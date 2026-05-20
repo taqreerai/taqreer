@@ -109,15 +109,38 @@ export default function SettingsPage() {
     if (error) {
       setProfileMsg({ type: "error", text: "حدث خطأ أثناء الحفظ" });
     } else {
+      // Supabase auth name was updated; user-sync mirrors that into
+      // the Prisma User row. Previously the catch only caught
+      // transport errors — a 500 from /api/auth/user-sync would
+      // resolve as a normal Response and we'd flash a success toast
+      // while the Prisma row stayed stale (dashboard greeting reads
+      // the OLD name). Inspect response.ok to keep the message
+      // truthful and the discrepancy surfaceable.
+      let syncOk = false;
       try {
-        await fetch("/api/auth/user-sync", { method: "POST" });
+        const res = await fetch("/api/auth/user-sync", { method: "POST" });
+        syncOk = res.ok;
+        if (!res.ok) {
+          console.error("[settings] user-sync failed", { status: res.status });
+        }
       } catch (err) {
         // Sync failure leaves the Prisma User out-of-sync with the
         // Supabase auth `full_name` change. Log so the discrepancy
         // is traceable when the dashboard greeting reads stale.
         console.error("[settings] user-sync failed", err);
       }
-      setProfileMsg({ type: "success", text: "تم حفظ التغييرات بنجاح" });
+      if (syncOk) {
+        setProfileMsg({ type: "success", text: "تم حفظ التغييرات بنجاح" });
+      } else {
+        // Auth name was updated even though the Prisma mirror failed
+        // — be honest about the partial-success state so the user
+        // can retry. They aren't blocked; the next save (or any
+        // subsequent /api/auth/user-sync) will reconcile.
+        setProfileMsg({
+          type: "error",
+          text: "تم تحديث الاسم، لكن تعذّرت مزامنته داخل التطبيق",
+        });
+      }
     }
     setSaving(false);
   };

@@ -53,13 +53,31 @@ export default function LoginPage() {
       if (signInError) {
         setError(toArabicError(signInError.message));
       } else {
+        // user-sync upserts the Prisma User row from the Supabase
+        // session. Both branches matter:
+        //   - Transport error (offline, DNS, abort) → catch fires.
+        //   - Non-2xx response (500 from /api/auth/user-sync) → fetch
+        //     resolves normally; we MUST inspect response.ok.
+        // Previously only the transport branch was guarded, so a 500
+        // silently let the user reach /dashboard with no Prisma row,
+        // surfacing later as 404s on dashboard/preview routes (the
+        // inline comment below has been calling this out for a while).
+        let syncOk = false;
         try {
-          await fetch("/api/auth/user-sync", { method: "POST" });
+          const res = await fetch("/api/auth/user-sync", { method: "POST" });
+          syncOk = res.ok;
+          if (!res.ok) {
+            console.error("[login] user-sync failed", { status: res.status });
+          }
         } catch (err) {
           // Sync failure leaves the user without a Prisma row →
           // surfaces later as 404s on dashboard/preview. Log so the
           // root cause is traceable when those reports come in.
           console.error("[login] user-sync failed", err);
+        }
+        if (!syncOk) {
+          setError("تعذر تجهيز الحساب. يرجى المحاولة مرة أخرى");
+          return;
         }
         router.push(templateId ? `${nextUrl}?template=${templateId}` : nextUrl);
         router.refresh();

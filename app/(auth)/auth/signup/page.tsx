@@ -61,13 +61,25 @@ export default function SignupPage() {
       if (signUpError) {
         setError(toArabicError(signUpError.message));
       } else if (data.session) {
-        // Email confirmation disabled — session returned immediately
+        // Email confirmation disabled — session returned immediately.
+        // user-sync upserts the Prisma User row; both transport AND
+        // non-2xx responses must block the redirect, otherwise the
+        // user lands on /dashboard with no Prisma row → 404 cascade.
+        let syncOk = false;
         try {
-          await fetch("/api/auth/user-sync", { method: "POST" });
+          const res = await fetch("/api/auth/user-sync", { method: "POST" });
+          syncOk = res.ok;
+          if (!res.ok) {
+            console.error("[signup] user-sync failed", { status: res.status });
+          }
         } catch (err) {
           // Sync failure leaves no Prisma User → surfaces later as
           // 404s on dashboard. Log so reports are traceable.
           console.error("[signup] user-sync failed", err);
+        }
+        if (!syncOk) {
+          setError("تعذر تجهيز الحساب. يرجى المحاولة مرة أخرى");
+          return;
         }
         router.push("/dashboard");
         router.refresh();

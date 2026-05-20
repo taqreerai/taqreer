@@ -284,9 +284,15 @@ export function ColorPickerPopover({
           className="absolute bottom-full z-30 mb-2"
           style={{ ...positionStyle, width: 240 }}
         >
-        {/* Glass surface — pattern #3 from the design-system block
-            in globals.css (popovers / menus / pickers all share this
-            recipe so backdrop blur + tint track the user's preset). */}
+        {/* Glass surface — `.glass-card` is the canonical white-tint
+            recipe (background = rgba(255,255,255,var(--glass-opacity)),
+            border = var(--tq-border-glass), backdrop-filter wired
+            to the user's preset). Replaces an inline rgba pair that
+            duplicated the class — same visual, design-system
+            compliant. `backdrop-blur-glass` + the saturate utility
+            stay on the element so the Tailwind layer wins
+            composition over .glass-card's raw backdrop-filter
+            (memory: feedback_tw_glass_system). */}
         <motion.div
           ref={wrapperRef}
           initial={{ opacity: 0, scale: 0.9, y: 6 }}
@@ -294,11 +300,7 @@ export function ColorPickerPopover({
           exit={{ opacity: 0, scale: 0.9, y: 6 }}
           transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
-          className="backdrop-blur-glass rounded-2xl border p-3 shadow-2xl"
-          style={{
-            background: "rgba(255, 255, 255, var(--glass-opacity))",
-            borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-          }}
+          className="glass-card backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] rounded-2xl p-3 shadow-2xl"
         >
           {/* SV plane — saturation on X, value on Y. The base layer
               is a solid pure-hue colour; a left-to-right white

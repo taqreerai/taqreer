@@ -53,8 +53,46 @@ export async function POST(
   }
 
   const { id: projectId, slideKey } = await params;
-  const body = (await request.json().catch(() => ({}))) as RegenPayload;
-  const replay = body.replay === true;
+  // Body is OPTIONAL — most callers fire `{ replay: false }` and the
+  // legacy clean-regen path omitted the body entirely. We need to
+  // distinguish "no body" (default to replay=false) from "malformed
+  // body" (return 400). Previously `request.json().catch(() => ({}))`
+  // collapsed both into `{}`, so a syntactically-broken request
+  // silently queued a clean regen — a bug a partner integration could
+  // hit. Now:
+  //   no body / Content-Length 0   → replay=false
+  //   malformed JSON                → 400
+  //   { replay: <non-boolean> }     → 400
+  //   { replay: true | false }      → use it
+  // Same contract the lock route enforces.
+  const rawText = await request.text();
+  let body: RegenPayload | null = null;
+  if (rawText.trim().length > 0) {
+    try {
+      body = JSON.parse(rawText) as RegenPayload;
+    } catch {
+      return NextResponse.json(
+        { error: "Request body must be valid JSON" },
+        { status: 400 },
+      );
+    }
+    if (body !== null && typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Request body must be a JSON object" },
+        { status: 400 },
+      );
+    }
+    if (
+      body?.replay !== undefined &&
+      typeof body.replay !== "boolean"
+    ) {
+      return NextResponse.json(
+        { error: "replay must be a boolean" },
+        { status: 400 },
+      );
+    }
+  }
+  const replay = body?.replay === true;
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, user: { supabaseUserId: user.id } },
