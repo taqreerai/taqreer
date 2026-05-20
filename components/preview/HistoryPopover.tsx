@@ -70,13 +70,20 @@ export function HistoryPopover({
 
   // Close on outside click / Esc — matches the bell dropdown
   // affordances. Outside click is gated to the surface AND the
-  // trigger button (so clicking the trigger again toggles via
-  // the parent rather than instantly reopening).
+  // trigger button (any element with `data-history-trigger`): the
+  // trigger owns its own toggle handler in the parent (DeckView's
+  // onOpenHistory). If we close here on mousedown, the following
+  // `click` hits the trigger which re-opens the popover — the user
+  // sees "click = always open" instead of toggle. The earlier
+  // comment claimed the exclusion existed but the code didn't
+  // actually do it (user-flagged 2026-05-20).
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
+      const target = e.target as Element | null;
+      if (!target) return;
       if (surfaceRef.current?.contains(target)) return;
+      if (target.closest?.("[data-history-trigger]")) return;
       onClose();
     };
     const onKey = (e: KeyboardEvent) => {

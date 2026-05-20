@@ -21,11 +21,13 @@ type DashboardEmptyStateProps = {
 export function DashboardWidgetHeader({ title, href, actionLabel = "عرض الكل" }: DashboardWidgetHeaderProps) {
   return (
     <div className="flex items-center justify-between">
-      {/* tq-h1 is typography only — no built-in margin. The
-          DashboardWidget section spaces children via `space-y-3`.
-          Kept as <h2> for semantic structure: the dashboard page's
-          actual h1 lives elsewhere — these are subsection titles. */}
-      <h2 className="tq-h1">{title}</h2>
+      {/* `.tq-widget-title` is 18 px — smaller than the page-level
+          `.tq-h1` (24 px) so widget headers don't compete with the
+          page title. Kept as <h2> for semantic structure: these are
+          subsection titles. Bottom breathing room is provided by the
+          parent `DashboardWidget`'s `space-y-5` so widget headers
+          stay visually anchored to their content row. */}
+      <h2 className="tq-widget-title">{title}</h2>
       {href ? (
         <Link className="tq-widget-link no-underline" href={href}>
           {actionLabel}
@@ -53,5 +55,10 @@ export function DashboardEmptyState({ icon, title, description, className = "", 
 }
 
 export function DashboardWidget({ children }: { children: ReactNode }) {
-  return <section className="space-y-3">{children}</section>;
+  // `space-y-5` (20 px) puts breathing room below the widget header
+  // before the tiles row. Previously `space-y-3` (12 px) sat too
+  // tight under the 24 px `.tq-h1`; now that the header is 18 px
+  // `.tq-widget-title`, the bigger gap restores the intended
+  // hierarchy (header reads as label, tiles read as content).
+  return <section className="space-y-5">{children}</section>;
 }

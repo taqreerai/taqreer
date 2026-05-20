@@ -143,6 +143,12 @@ export function SlidePill({
           variant="glass"
           disabled={!canOpenHistory}
           buttonRef={historyBtnRef}
+          // `data-history-trigger` lets HistoryPopover's outside-click
+          // handler skip closing when the user clicks this button —
+          // the parent's onOpenHistory owns the toggle. Without the
+          // exclusion the mousedown closes the popover, then the
+          // click re-opens it, breaking second-click-to-dismiss.
+          dataAttr={{ "data-history-trigger": "true" }}
           onClick={() => {
             onOpenHistory?.(
               historyBtnRef.current?.getBoundingClientRect() ?? null,
@@ -167,6 +173,7 @@ function PillButton({
   variant,
   disabled,
   buttonRef,
+  dataAttr,
   onClick,
 }: {
   icon: string;
@@ -176,6 +183,10 @@ function PillButton({
   // Optional — only used by the History button so the parent can
   // measure the trigger and anchor a popover under it.
   buttonRef?: React.RefObject<HTMLButtonElement | null>;
+  // Optional data-* attributes spread onto the underlying <button>.
+  // Used to stamp `data-history-trigger` so HistoryPopover can
+  // exclude this button from its outside-click handler.
+  dataAttr?: Record<string, string>;
   onClick?: () => void;
 }) {
   // Class composition per variant:
@@ -208,6 +219,7 @@ function PillButton({
         disabled={disabled}
         aria-label={label}
         className={`${BUTTON_BASE} ${variantClass}`}
+        {...(dataAttr ?? {})}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
           {icon}

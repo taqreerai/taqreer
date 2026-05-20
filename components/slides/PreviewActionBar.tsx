@@ -71,18 +71,21 @@ function ToolButton({
   // Two coordinated visual transitions on hover:
   //   - icon: muted (white/60) → white
   //   - border: dim (white/15) → bright (white/40)
-  // Active = always at the bright end (white icon + brighter border + raised
-  // glass background). Inline-style is only used for the bg (which depends
-  // on --glass-opacity CSS var); border + text colours are pure Tailwind so
-  // :hover transitions work without state plumbing. Gradient variant
-  // bypasses the glass system entirely — its visuals come from
-  // `.btn-gradient-anim` (animated linear gradient + brand glow).
-  const baseBg = active
-    ? "rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6))"
-    : "rgba(255, 255, 255, var(--glass-opacity))";
+  // Idle = TRANSPARENT background (the toolbar sits on a `.glass-card`
+  // surface; stacking another glass tint on top reads as a solid chip,
+  // which is wrong — same rule as `.btn-pill` in globals.css). Active
+  // raises the glass intensity as the sole state indicator (e.g.
+  // commentMode on, isSaved). Gradient variant bypasses the glass
+  // system — its visuals come from `.btn-gradient-anim`.
   const colorClasses = active
     ? "border-white/40 text-white"
     : "border-white/15 text-white/60 hover:border-white/40 hover:text-white";
+  // Only paint a background when active. Inline because the alpha
+  // multiplies the preset-linked --glass-opacity var. Idle = no bg
+  // at all → fully transparent over the parent's .glass-card tint.
+  const activeBg = active
+    ? { background: "rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6))" }
+    : undefined;
   return (
     <div className="group relative">
       <button
@@ -92,11 +95,12 @@ function ToolButton({
         aria-label={label}
         aria-pressed={active}
         // Non-gradient (glass) variant: bg via preset-linked alpha
-        // (inline because `baseBg` is computed per-button-state),
+        // (inline because `activeBg` is computed per-button-state),
         // blur via Tailwind `backdrop-blur-glass` utility (memory:
         // feedback_tw_glass_system — raw `backdrop-filter:` loses
-        // to Tailwind's compositional rule).
-        style={gradient ? undefined : { background: baseBg }}
+        // to Tailwind's compositional rule). Idle leaves bg unset
+        // so the parent .glass-card tint shows through unobstructed.
+        style={gradient ? undefined : activeBg}
         className={
           gradient
             ? `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-xl transition-shadow ${

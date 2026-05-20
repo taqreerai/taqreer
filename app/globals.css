@@ -121,6 +121,12 @@
  *                            margin — compose `mb-6` inline on
  *                            standalone-page h1s; omit for widget
  *                            headers inside space-y sections.
+ *    .tq-widget-title        Dashboard widget / subsection title
+ *                            (18 px bold white). Smaller than .tq-h1
+ *                            so widget headers (أحدث المشاريع,
+ *                            قوالبي) don't compete with page titles.
+ *                            NO built-in margin — parent supplies
+ *                            breathing room via space-y.
  *    .tq-subhead             Descriptive paragraph paired under a
  *                            `.tq-h1`. 14 px muted + tight 4 px gap
  *                            from h1 + 24 px below. Use when an
@@ -242,6 +248,19 @@ button, a, [role="button"] {
   color: var(--tq-text-primary);
   font-size: 1.5rem;
   line-height: 2rem;
+  font-weight: 700;
+}
+
+/* ─── Widget / subsection title ─── */
+/* Smaller than `.tq-h1`. Used on dashboard widget headers and any
+   in-page subsection where the page-level h1 already owns the 24 px
+   slot. Same color + weight so the visual language stays consistent;
+   only size differs. No built-in margin — DashboardWidget's
+   `space-y-5` provides breathing room to the rows beneath. */
+.tq-widget-title {
+  color: var(--tq-text-primary);
+  font-size: 1.125rem;
+  line-height: 1.75rem;
   font-weight: 700;
 }
 

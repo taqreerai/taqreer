@@ -376,7 +376,21 @@ export default function CreateContentPage() {
       title="ما هو موضوع عرضك التقديمي؟"
       subtitle="قم بتزويد الذكاء الاصطناعي بالمحتوى الأساسي. ارفع ملفاً أو الصق نصاً وسنقوم نحن بالباقي."
       bottomBar={
-        <div className="flex items-center justify-end">
+        // Error message lives in the bottom bar so its appearance
+        // doesn't grow the cards section and push the button down.
+        // The `<p>` is always rendered with `min-h` matching its
+        // own line height; the message visibility is toggled via
+        // text content alone so the slot reserves space whether
+        // there's an error or not.
+        <div className="flex items-center justify-between gap-4">
+          <p
+            className="text-sm text-red-400"
+            role="alert"
+            aria-live="polite"
+            style={{ minHeight: "1.25rem" }}
+          >
+            {error || " "}
+          </p>
           <PillButton
             variant="primary"
             onClick={handleNext}
@@ -391,12 +405,18 @@ export default function CreateContentPage() {
     >
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* File upload card — visual right in RTL since it's first
-            in DOM order and the row inherits dir="rtl". */}
-        <div
-          className={`glass-card flex flex-col gap-3 rounded-2xl p-5 transition-opacity ${
-            !file && text.trim().length > 0 ? "opacity-60" : ""
-          }`}
-        >
+            in DOM order and the row inherits dir="rtl". Opacity-dim
+            is scoped to the upload-source region only (header +
+            picker + file chip). The SlideSizeFields row below stays
+            at full opacity even when the user has already typed text
+            on the right — slide size is an output control, not an
+            input source, so muting it confused users. */}
+        <div className="glass-card flex flex-col gap-3 rounded-2xl p-5">
+          <div
+            className={`flex flex-col gap-3 transition-opacity ${
+              !file && text.trim().length > 0 ? "opacity-60" : ""
+            }`}
+          >
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
               <span
@@ -500,22 +520,30 @@ export default function CreateContentPage() {
               </button>
             </div>
           ) : null}
+          </div>
 
           {/* Slide size lives here on row 1 — moved 2026-05-19 from
               row 2's CanvasCard so step 1's total height matches
               step 2's. CanvasCard now only carries the persistent
-              overlay. */}
+              overlay. Sits OUTSIDE the dim-wrapper above so this
+              output control stays at full opacity even when the
+              upload source is dimmed (text is filled). */}
           <div className="border-t border-white/[0.08] pt-3">
             <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} />
           </div>
         </div>
 
-        {/* Free-text card */}
-        <div
-          className={`glass-card flex flex-col gap-3 rounded-2xl p-5 transition-opacity ${
-            file && text.trim().length === 0 ? "opacity-60" : ""
-          }`}
-        >
+        {/* Free-text card. Same scoping rule as the upload card:
+            opacity-dim only the textarea + char counter (input
+            source). The generation toggles below stay at full
+            opacity because they're output controls, not part of
+            the source the user has bypassed. */}
+        <div className="glass-card flex flex-col gap-3 rounded-2xl p-5">
+          <div
+            className={`flex flex-1 flex-col gap-3 transition-opacity ${
+              file && text.trim().length === 0 ? "opacity-60" : ""
+            }`}
+          >
           <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
               <span
@@ -548,12 +576,13 @@ export default function CreateContentPage() {
               {text.length.toLocaleString("en-US")} / 5000 حرف
             </span>
           </div>
+          </div>
           {/* Generation-rule toggles live HERE on row 1's free-text
               card (since 2026-05-19). They used to be on row 2's
               المحتوى card; moving them up balances row 1's height
               with the file-upload card on the left and lets row 2
-              drop a bit. Two-column flex so both toggles fit on a
-              single line without wrapping at default breakpoints. */}
+              drop a bit. Sits OUTSIDE the dim-wrapper above —
+              same reason as SlideSizeFields on the left card. */}
           <div className="grid grid-cols-2 gap-3 border-t border-white/[0.08] pt-3">
             <Toggle label="تصحيح الأخطاء" value={fixTypos} onChange={setFixTypos} />
             <Toggle label="ترقيم الشرائح" value={pagination} onChange={setPagination} />
@@ -589,7 +618,9 @@ export default function CreateContentPage() {
         />
       </div>
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {/* Error message lives in `bottomBar` — see CreateShell call
+          above. Rendering it here grew the cards section and pushed
+          the button down on every validation miss. */}
     </CreateShell>
   );
 }
