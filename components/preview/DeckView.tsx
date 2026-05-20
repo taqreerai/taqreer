@@ -1014,6 +1014,51 @@ export function DeckView({
     }
   }, [projectId, router]);
 
+  // Bulk lock / unlock — driven by the SlideNavSidebar footer pill.
+  // Walks the current manifest's slide list, builds an optimistic
+  // snapshot with every slide's lockedAt flipped, then POSTs the
+  // bulk endpoint. On error we leave the optimistic state in place
+  // and log — the alternative ("revert every row") would mask the
+  // failure and let the user think the action succeeded; logging
+  // matches the single-slide lock toggle's error policy. Idempotent
+  // server-side (re-lock keeps original lockedAt; re-unlock no-ops).
+  const bulkSetLock = useCallback(
+    async (lock: boolean) => {
+      if (!manifest) return;
+      const nowIso = new Date().toISOString();
+      setSlideStates((prev) => {
+        const next: Record<string, InitialSlideState> = { ...prev };
+        for (const slide of manifest.slides) {
+          const current = prev[slide.slideId];
+          next[slide.slideId] = {
+            slideKey: slide.slideId,
+            currentVersionNumber: current?.currentVersionNumber ?? 1,
+            hasCachedComments: current?.hasCachedComments ?? false,
+            // On lock: keep existing lockedAt if already set (matches
+            // server idempotency); otherwise stamp now.
+            // On unlock: always null.
+            lockedAt: lock ? (current?.lockedAt ?? nowIso) : null,
+          };
+        }
+        return next;
+      });
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/slides/lock-all`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ locked: lock }),
+          },
+        );
+        if (!res.ok) throw new Error(`lock-all: ${res.status}`);
+      } catch (err) {
+        console.error("bulk lock failed", err);
+      }
+    },
+    [manifest, projectId],
+  );
+
   const placeholders = useMemo(
     () => Array.from({ length: Math.max(slideCount, 1) }),
     [slideCount],
@@ -1162,6 +1207,11 @@ export function DeckView({
           manifest={previewManifestForNav}
           format={initialFormat ?? "16:9"}
           mainSidebarWidth={mainSidebarWidth}
+          // Generating-branch language signal — sourced from the
+          // brief (streamLanguage) up-thread, NOT the manifest
+          // (which doesn't exist yet). EN decks need this so the
+          // sidebar reads LTR even before the first slide closes.
+          language={streamingLanguage}
         />
         {/* Canvas row — hero centered in the remaining width. Same
             shape as the completed branch so the shell doesn't reflow
@@ -1374,6 +1424,12 @@ export function DeckView({
               format={manifest!.format ?? initialFormat ?? "16:9"}
               title={manifest!.title}
               mainSidebarWidth={mainSidebarWidth}
+              // Sidebar reading direction follows the deck's language —
+              // EN decks flip to LTR so the visual #1 lands on the left
+              // (user feedback 2026-05-20). Defaults to "ar" if missing.
+              language={manifest!.language === "en" ? "en" : "ar"}
+              onLockAll={() => bulkSetLock(true)}
+              onUnlockAll={() => bulkSetLock(false)}
             />
           </motion.div>
         )}
