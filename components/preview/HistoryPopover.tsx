@@ -85,66 +85,77 @@ export function HistoryPopover({
   }, [open, onClose]);
 
   if (typeof document === "undefined") return null;
-  if (!open || !triggerRect) return null;
 
   // Right-anchored: the popover's right edge lines up with the
   // History button's right edge (the visual-right corner under
   // the icon in RTL). Drops down-and-left from the trigger
   // rather than centred — feels less "menu-bar" and more like a
   // chip flag tied to the button.
-  const left = Math.max(
-    VIEWPORT_EDGE_INSET_PX,
-    Math.min(
-      triggerRect.right - POPOVER_WIDTH,
-      window.innerWidth - POPOVER_WIDTH - VIEWPORT_EDGE_INSET_PX,
-    ),
-  );
-  const top = triggerRect.bottom + ANCHOR_GAP_PX;
+  // Coordinates are 0/0 when triggerRect is null (initial mount)
+  // — the conditional render below keeps the surface unmounted in
+  // that case, so the zero coords never paint.
+  const left = triggerRect
+    ? Math.max(
+        VIEWPORT_EDGE_INSET_PX,
+        Math.min(
+          triggerRect.right - POPOVER_WIDTH,
+          window.innerWidth - POPOVER_WIDTH - VIEWPORT_EDGE_INSET_PX,
+        ),
+      )
+    : 0;
+  const top = triggerRect ? triggerRect.bottom + ANCHOR_GAP_PX : 0;
 
   return createPortal(
-    <div
-      ref={surfaceRef}
-      dir="rtl"
-      data-history-popover
-      className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
-      style={{ top, left, width: POPOVER_WIDTH }}
-    >
-      <motion.div
-        key="history-content"
-        initial={{ opacity: 0, y: -6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <header className="border-b border-white/[0.08] px-3 py-2">
-          <p className="text-xs font-semibold text-white">سجل الإصدارات</p>
-        </header>
-        <ul className="flex flex-col">
-          <AnimatePresence initial={false}>
-            {versions.map((row) => (
-              <motion.li
-                key={row.versionNumber}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12 }}
-              >
-                <HistoryItem
-                  row={row}
-                  isCurrent={row.versionNumber === currentVersionNumber}
-                  disabled={busy}
-                  onClick={() => onRestore(row.versionNumber)}
-                />
-              </motion.li>
-            ))}
-          </AnimatePresence>
-          {versions.length === 0 ? (
-            <li className="px-4 py-3 text-xs text-white/50">
-              لا توجد إصدارات سابقة.
-            </li>
-          ) : null}
-        </ul>
-      </motion.div>
-    </div>,
+    // AnimatePresence wraps the conditional so the popover
+    // animates OUT smoothly when `open` flips to false (e.g.
+    // after a restore commits and the parent clears
+    // historyAnchor). Without this, the popover unmounted
+    // instantly — visible glitch the user flagged 2026-05-20.
+    <AnimatePresence>
+      {open && triggerRect ? (
+        <motion.div
+          key="history-popover"
+          ref={surfaceRef}
+          dir="rtl"
+          data-history-popover
+          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -6, scale: 0.98 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+          style={{ top, left, width: POPOVER_WIDTH }}
+        >
+          <header className="border-b border-white/[0.08] px-3 py-2">
+            <p className="text-xs font-semibold text-white">سجل الإصدارات</p>
+          </header>
+          <ul className="flex flex-col">
+            <AnimatePresence initial={false}>
+              {versions.map((row) => (
+                <motion.li
+                  key={row.versionNumber}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                >
+                  <HistoryItem
+                    row={row}
+                    isCurrent={row.versionNumber === currentVersionNumber}
+                    disabled={busy}
+                    onClick={() => onRestore(row.versionNumber)}
+                  />
+                </motion.li>
+              ))}
+            </AnimatePresence>
+            {versions.length === 0 ? (
+              <li className="px-4 py-3 text-xs text-white/50">
+                لا توجد إصدارات سابقة.
+              </li>
+            ) : null}
+          </ul>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
     document.body,
   );
 }
