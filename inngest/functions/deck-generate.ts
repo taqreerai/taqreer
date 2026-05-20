@@ -1051,8 +1051,23 @@ export const deckGenerate = inngest.createFunction(
           for (const s of seededStates) {
             savedSlideVersions[s.slideKey] = s.currentVersionNumber;
           }
-          await prisma.presentation.update({
-            where: { id: presentation.id },
+          // Atomic promotion via `updateMany` with the savedVersionId
+          // == null guard in the WHERE clause. Replaces an
+          // unconditional `update` that read savedVersionId, then
+          // wrote — if two generation jobs for the same project
+          // finished close together they could BOTH observe null
+          // and the later one would clobber the first's pinned
+          // snapshot. `updateMany` with the null guard makes the
+          // write conditional at the database layer: only the first
+          // commit that wins the race actually flips savedVersionId,
+          // and only that branch dispatches the thumbnail render
+          // (count === 1 → we won; count === 0 → someone else
+          // already promoted, nothing to do here).
+          const promoted = await prisma.presentation.updateMany({
+            where: {
+              id: presentation.id,
+              savedVersionId: null,
+            },
             data: {
               savedVersionId: versionId,
               savedSlideVersions:
@@ -1060,29 +1075,31 @@ export const deckGenerate = inngest.createFunction(
             },
           });
 
-          // Fire-and-forget thumbnail render. Dedup id matches the
-          // /save route's convention so a quick user-click on Save
-          // right after generation doesn't double-fire (Inngest
-          // dedupes events sharing the same id within a short
-          // window). Errors here don't fail the generation — the
-          // dashboard tile falls back to a placeholder until the
-          // user explicitly saves again.
-          await inngest
-            .send({
-              id: `thumbnails:${projectId}:${versionId}`,
-              name: "deck.thumbnails.render",
-              data: {
-                projectId,
-                savedVersionId: versionId,
-              },
-            })
-            .catch((err) => {
-              logger.warn("auto_thumbnails_dispatch_failed", {
-                projectId,
-                versionId,
-                error: err instanceof Error ? err.message : String(err),
+          if (promoted.count === 1) {
+            // Fire-and-forget thumbnail render. Dedup id matches the
+            // /save route's convention so a quick user-click on Save
+            // right after generation doesn't double-fire (Inngest
+            // dedupes events sharing the same id within a short
+            // window). Errors here don't fail the generation — the
+            // dashboard tile falls back to a placeholder until the
+            // user explicitly saves again.
+            await inngest
+              .send({
+                id: `thumbnails:${projectId}:${versionId}`,
+                name: "deck.thumbnails.render",
+                data: {
+                  projectId,
+                  savedVersionId: versionId,
+                },
+              })
+              .catch((err) => {
+                logger.warn("auto_thumbnails_dispatch_failed", {
+                  projectId,
+                  versionId,
+                  error: err instanceof Error ? err.message : String(err),
+                });
               });
-            });
+          }
         }
       }
 

@@ -396,10 +396,9 @@ export default function CreateContentPage() {
         // there's an error or not.
         <div className="flex items-center justify-between gap-4">
           <p
-            className="text-sm text-red-400"
-            role="alert"
-            aria-live="polite"
-            style={{ minHeight: "1.25rem" }}
+            className="min-h-5 text-sm text-red-400"
+            role={error ? "alert" : undefined}
+            aria-live={error ? "polite" : undefined}
           >
             {error || " "}
           </p>

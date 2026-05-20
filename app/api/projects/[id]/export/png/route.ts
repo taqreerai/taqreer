@@ -144,13 +144,22 @@ export async function POST(
   const zip = new JSZip();
   try {
     const page = await browser.newPage();
-    // Viewport STRICTLY LARGER than any single-slide clip — Chrome
-    // blanks out when `page.screenshot({ clip })` exactly matches the
-    // viewport. Same trick the thumbnail pipeline uses; pad by one
-    // extra slide-height so a 1-slide deck still avoids the edge.
+    // Viewport sized to a SINGLE slide + 1 px pad on the height.
+    // Was `canvasH * (slides+1)` — that grew linearly with deck
+    // length and crossed Chromium's hard 16,384 px screenshot
+    // limit on long 9:16 decks (>7 slides) and long 16:9 decks
+    // (>14 slides). Beyond that limit Chrome silently returns
+    // blank PNGs OR crashes the print pipeline. With a single-
+    // slide viewport, each `page.screenshot({ clip })` runs
+    // safely regardless of deck length — we just scroll the
+    // target slide into view before each shot (see below).
+    // The +1 pad keeps the viewport strictly LARGER than the
+    // clip rect, dodging Chrome's clip-equals-viewport blank-
+    // output edge case (the bug that prompted the original
+    // padding trick on a 1-slide deck).
     await page.setViewport({
       width: canvasW,
-      height: canvasH * (manifest.slides.length + 1),
+      height: canvasH + 1,
       deviceScaleFactor: 1,
     });
     await page.setContent(html, {
@@ -174,9 +183,15 @@ export async function POST(
     // exceeded 30 slides.
     for (let i = 0; i < manifest.slides.length; i++) {
       const slide = manifest.slides[i];
+      // Scroll the target slide into view BEFORE measuring/shooting.
+      // The document is N×canvasH tall; only the slide currently
+      // at the top of the viewport will measure as (x: 0, y: 0).
+      // scrollIntoView with `block: "start"` + the post-scroll bbox
+      // ensures the clip rect lands on the slide's visible position.
       const bbox = await page.evaluate((escaped) => {
         const el = document.querySelector(`[data-slide-id="${escaped}"]`);
         if (!el) return null;
+        el.scrollIntoView({ block: "start", inline: "start" });
         const r = el.getBoundingClientRect();
         return { x: r.x, y: r.y, width: r.width, height: r.height };
       }, cssEscape(slide.slideId));

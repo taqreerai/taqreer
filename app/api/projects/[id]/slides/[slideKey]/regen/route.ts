@@ -76,7 +76,11 @@ export async function POST(
         { status: 400 },
       );
     }
-    if (body !== null && typeof body !== "object") {
+    // Reject null + arrays explicitly. `typeof body !== "object"`
+    // alone lets both through (null AND arrays are typeof "object"),
+    // so a malformed payload like `null` or `[true]` would fall
+    // through to `replay=false` and silently queue a clean regen.
+    if (body === null || Array.isArray(body) || typeof body !== "object") {
       return NextResponse.json(
         { error: "Request body must be a JSON object" },
         { status: 400 },

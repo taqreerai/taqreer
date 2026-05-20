@@ -250,6 +250,18 @@ export function PreviewActionBar({
   const [exportHtml, setExportHtml] = useState<ButtonState>({ status: "idle" });
   const [exportPng, setExportPng] = useState<ButtonState>({ status: "idle" });
   const [exportPdf, setExportPdf] = useState<ButtonState>({ status: "idle" });
+  // Shared "any export running" flag. Each export individually
+  // guards its own status, but without a shared flag the user can
+  // click PPTX → PDF → PNG → HTML in quick succession and spin up
+  // four parallel Puppeteer / dom-to-pptx pipelines at once
+  // (CPU + memory spike, all exports get slower / less reliable).
+  // Disabling the whole export group while any single export runs
+  // serialises the work cleanly.
+  const exportBusy =
+    exportPptx.status === "running" ||
+    exportHtml.status === "running" ||
+    exportPng.status === "running" ||
+    exportPdf.status === "running";
   const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
   const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
 
@@ -325,7 +337,7 @@ export function PreviewActionBar({
   // entirely in the browser — no Inngest job, no Supabase upload, no
   // polling. Replaces the previous server-side PptxGenJS pipeline.
   const handleExport = async () => {
-    if (exportPptx.status === "running") return;
+    if (exportBusy) return;
     setExportPptx({ status: "running", message: "جارٍ التصدير..." });
     try {
       // Prefer the manifest's title — it's the freshly regenerated value
@@ -359,7 +371,10 @@ export function PreviewActionBar({
   // for 16:9, portrait 1080×1920 for 9:16). Same UX as PNG: button
   // spins, blob downloads, no toast on success.
   const handleExportPdf = async () => {
-    if (exportPdf.status === "running") return;
+    // Shared `exportBusy` check (not just exportPdf) so another
+    // export already in flight blocks this one too — prevents
+    // multi-Puppeteer concurrent runs.
+    if (exportBusy) return;
     setExportPdf({ status: "running", message: "جارٍ تصدير PDF..." });
     try {
       const response = await fetch(`/api/projects/${projectId}/export/pdf`, {
@@ -397,7 +412,7 @@ export function PreviewActionBar({
   // and no toast surfaces — the browser's own download UI is the
   // success signal, matching the PPTX + HTML buttons' pattern.
   const handleExportPng = async () => {
-    if (exportPng.status === "running") return;
+    if (exportBusy) return;
     setExportPng({ status: "running", message: "جارٍ تصدير الصور..." });
     try {
       const response = await fetch(`/api/projects/${projectId}/export/png`, {
@@ -440,7 +455,7 @@ export function PreviewActionBar({
   // 9:16) so the user can open it in a browser and screenshot. No
   // dom-to-pptx, no BiDi post-process; this is the raw rendered preview.
   const handleDownloadHtml = () => {
-    if (exportHtml.status === "running") return;
+    if (exportBusy) return;
     setExportHtml({ status: "running", message: "جارٍ التحميل..." });
     try {
       const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
@@ -638,28 +653,28 @@ export function PreviewActionBar({
           label="تصدير PPTX"
           running={exportPptx.status === "running"}
           onClick={handleExport}
-          disabled={applying}
+          disabled={applying || exportBusy}
         />
         <ToolButton
           icon="picture_as_pdf"
           label="تصدير PDF"
           running={exportPdf.status === "running"}
           onClick={handleExportPdf}
-          disabled={applying}
+          disabled={applying || exportBusy}
         />
         <ToolButton
           icon="image"
           label="تصدير PNG"
           running={exportPng.status === "running"}
           onClick={handleExportPng}
-          disabled={applying}
+          disabled={applying || exportBusy}
         />
         <ToolButton
           icon="code"
           label="تصدير HTML"
           running={exportHtml.status === "running"}
           onClick={handleDownloadHtml}
-          disabled={applying}
+          disabled={applying || exportBusy}
         />
       </div>
 

@@ -129,17 +129,18 @@ export const thumbnailRender = inngest.createFunction(
       });
       try {
         const page = await browser.newPage();
-        // Viewport must be STRICTLY LARGER than every individual clip
-        // we'll request below. Chrome has an edge case where a
-        // `page.screenshot({ clip })` whose rect exactly matches the
-        // viewport returns a blank image — verified empirically with
-        // a 1-slide deck where viewport == single slide produced the
-        // all-white WebP that landed in storage on the first run.
-        // Padding by a single slide height keeps the viewport
-        // generously larger than any one slide's bbox.
+        // Viewport sized to a SINGLE slide + 1 px pad. The earlier
+        // `canvasH * (slides+1)` recipe crossed Chromium's hard
+        // 16,384 px screenshot limit on long decks — at 9:16 that
+        // happens at >7 slides; at 16:9 at >14 slides — producing
+        // blank thumbnails or crashing the print pipeline.
+        // We now scroll each slide into view before clipping (see
+        // the per-slide loop below). The +1 pad keeps viewport
+        // strictly larger than any single-slide clip rect, dodging
+        // Chrome's clip-equals-viewport blank-output edge case.
         await page.setViewport({
           width: canvasW,
-          height: canvasH * (ctx.manifest.slides.length + 1),
+          height: canvasH + 1,
           deviceScaleFactor: 1,
         });
         await page.setContent(html, {
@@ -169,6 +170,10 @@ export const thumbnailRender = inngest.createFunction(
           const bbox = await page.evaluate((escaped) => {
             const el = document.querySelector(`[data-slide-id="${escaped}"]`);
             if (!el) return null;
+            // Scroll the target slide into view before measuring —
+            // the doc is N×canvasH tall and only the visible slot
+            // ever measures inside the (now-single-slide) viewport.
+            el.scrollIntoView({ block: "start", inline: "start" });
             const r = el.getBoundingClientRect();
             return { x: r.x, y: r.y, width: r.width, height: r.height };
           }, cssEscape(slide.slideId));

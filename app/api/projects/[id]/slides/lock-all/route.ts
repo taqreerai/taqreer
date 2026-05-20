@@ -143,42 +143,40 @@ export async function POST(
     return NextResponse.json({ ok: true, count: result.count });
   }
 
-  // Lock path: idempotent per-row. Existing locked rows keep their
-  // original lockedAt; unlocked rows get bumped to "now"; missing
-  // rows get created. Done in a transaction so a partial failure
-  // doesn't leave half the deck locked. Read-then-act on the row
-  // set we already have (slideKeys) — avoids a streaming upsert
-  // with a per-slide round-trip.
-  const existing = await prisma.slideState.findMany({
-    where: { presentationId, slideKey: { in: slideKeys } },
-    select: { id: true, slideKey: true, lockedAt: true },
-  });
-  const existingByKey = new Map(existing.map((s) => [s.slideKey, s]));
+  // Lock path: idempotent + race-safe.
+  // Was: read-then-create — two concurrent calls would both see the
+  // same "missing keys" set and both try to `create` them, blowing
+  // up on the unique constraint. Now collapsed to two bulk ops in
+  // a transaction:
+  //   1. updateMany   — flip every unlocked row's lockedAt to "now"
+  //                     (rows that are already locked stay
+  //                     unchanged because the WHERE filters on
+  //                     lockedAt: null, preserving idempotency)
+  //   2. createMany   — insert rows for slide keys that don't exist
+  //                     yet, with skipDuplicates: true so a
+  //                     concurrent call that already inserted the
+  //                     same row doesn't throw
+  // Both run inside $transaction so a partial failure rolls back.
   const now = new Date();
-  await prisma.$transaction([
-    // Update existing unlocked rows.
-    ...existing
-      .filter((s) => s.lockedAt == null)
-      .map((s) =>
-        prisma.slideState.update({
-          where: { id: s.id },
-          data: { lockedAt: now },
-        }),
-      ),
-    // Create rows for slides that have never been touched.
-    ...slideKeys
-      .filter((k) => !existingByKey.has(k))
-      .map((slideKey) =>
-        prisma.slideState.create({
-          data: {
-            presentationId,
-            slideKey,
-            currentVersionNumber: 1,
-            lockedAt: now,
-          },
-        }),
-      ),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    await tx.slideState.updateMany({
+      where: {
+        presentationId,
+        slideKey: { in: slideKeys },
+        lockedAt: null,
+      },
+      data: { lockedAt: now },
+    });
+    await tx.slideState.createMany({
+      data: slideKeys.map((slideKey) => ({
+        presentationId,
+        slideKey,
+        currentVersionNumber: 1,
+        lockedAt: now,
+      })),
+      skipDuplicates: true,
+    });
+  });
 
   return NextResponse.json({ ok: true, count: slideKeys.length });
 }

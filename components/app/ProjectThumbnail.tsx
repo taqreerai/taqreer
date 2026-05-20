@@ -191,7 +191,8 @@ export function ProjectThumbnail({
   const closeMenu = () => setMenuRect(null);
 
   const handleToggleFavorite = async () => {
-    const next = !favoriteState;
+    const previous = favoriteState;
+    const next = !previous;
     setFavoriteState(next);
     try {
       const res = await fetch(`/api/projects/${projectId}/favorite`, {
@@ -203,9 +204,14 @@ export function ProjectThumbnail({
       const data = (await res.json()) as { isFavorite: boolean };
       setFavoriteState(data.isFavorite);
     } catch (err) {
+      // Revert the optimistic flip on failure. The dashboard has no
+      // toast / retry chrome for this action, so without a revert
+      // the tile silently keeps the wrong star until reload —
+      // which is exactly the "user thinks it worked, server says
+      // it didn't" desync we don't want. Flipping back makes the
+      // failure visible (icon doesn't change → next click retries).
+      setFavoriteState(previous);
       console.error("favorite toggle failed", err);
-      // Leave the optimistic value — see component docstring for
-      // the rationale (rare error + better-than-flicker UX).
     }
   };
 

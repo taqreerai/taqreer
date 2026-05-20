@@ -206,9 +206,22 @@ export async function DELETE(
   // Hard delete — cascades to Presentation (and its Versions /
   // SlideStates / SlideVersions), Jobs, Files, Comments, and
   // ProjectShares (when the share model lands in step 15).
-  await prisma.project.delete({
-    where: { id: projectId },
+  // `deleteMany` with the owner constraint instead of plain
+  // `delete({ where: { id } })` closes a TOCTOU gap: if ownership
+  // somehow flipped between the findFirst check above and this
+  // write, deleting solely by id could drop a project that's
+  // no longer ours. The where clause makes the destructive write
+  // atomic on (id, owner) — count=0 if either changed, and we
+  // 404 instead of silently destroying state.
+  const deleted = await prisma.project.deleteMany({
+    where: {
+      id: projectId,
+      user: { supabaseUserId: user.id },
+    },
   });
+  if (deleted.count === 0) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
 
   return NextResponse.json({ ok: true });
 }
