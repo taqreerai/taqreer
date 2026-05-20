@@ -526,6 +526,11 @@ export default function CreateSummaryPage() {
               value={content?.text ?? ""}
               keepVerbatim={content?.keepVerbatim !== false}
               editing={contentEditing}
+              // Pass the deck language from the stored output blob so
+              // the textarea direction matches what the /create/content
+              // pill was set to. Legacy blobs without `language` (or
+              // with a retired "bi" value) fall through to AR/RTL.
+              language={output?.language === "en" ? "en" : "ar"}
               onCommit={(next) => {
                 if (!content) return;
                 const updated: ContentState = { ...content, text: next };
@@ -699,6 +704,7 @@ function SummaryContentEditor({
   value,
   keepVerbatim,
   editing,
+  language,
   onCommit,
 }: {
   value: string;
@@ -707,6 +713,10 @@ function SummaryContentEditor({
   // flips this. Read-only when false; on transition to false we also
   // commit any pending draft.
   editing: boolean;
+  // Drives the textarea direction so English content edits land
+  // left-aligned. Optional — falls back to "ar" (RTL) for callers
+  // that predate the language picker.
+  language?: "ar" | "en";
   onCommit: (next: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
@@ -749,6 +759,10 @@ function SummaryContentEditor({
           if (draft !== value) onCommit(draft);
         }}
         readOnly={!editing}
+        // Direction follows the deck language pick so an EN deck's
+        // inline content edit reads left-aligned. Matches the
+        // /create/content textarea's behavior.
+        dir={language === "en" ? "ltr" : "rtl"}
         placeholder="اكتب أو الصق محتوى عرضك هنا..."
         className={`input-dark min-h-[200px] flex-1 resize-none leading-7 ${
           editing ? "" : "cursor-default opacity-90"

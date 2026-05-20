@@ -579,6 +579,15 @@ export default function CreateContentPage() {
           <textarea
             value={text}
             onChange={(event) => onTextChange(event.target.value)}
+            // Direction follows the language pill so English content
+            // types left-to-right and Arabic right-to-left. Without
+            // this the textarea inherits dir="rtl" from CreateShell
+            // and English content visually anchors to the right edge
+            // — typing reads correctly thanks to Unicode BiDi but the
+            // empty-state placeholder and caret position look wrong.
+            // Placeholder text itself stays Arabic; that's chrome,
+            // not user content, and matches the rest of the UI.
+            dir={language === "en" ? "ltr" : "rtl"}
             className="input-dark min-h-[120px] flex-1 resize-none leading-7"
             placeholder="اكتب أو الصق أفكارك، النقاط الرئيسية، أو المقال الذي تريد تحويله إلى عرض تقديمي هنا..."
             maxLength={5000}
@@ -618,6 +627,7 @@ export default function CreateContentPage() {
           persistentPosition={persistentPosition}
           persistentExcludeCover={persistentExcludeCover}
           persistentExcludeClosing={persistentExcludeClosing}
+          language={language}
           onPersistentText={setPersistentText}
           onPersistentPosition={setPersistentPosition}
           onPersistentExcludeCover={setPersistentExcludeCover}

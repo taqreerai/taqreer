@@ -26,6 +26,14 @@ const CORNER_OPTIONS: { value: CornerPosition; icon: string; label: string }[] =
   { value: "bottom-right", icon: "south_east", label: "أسفل يمين" },
 ];
 
+// Canonical corner ordering used by callers that need to walk the
+// 6-corner space programmatically (e.g. picking a fallback corner
+// when the user's preferred one is reserved by other chrome).
+// Re-exported so consumers don't have to redeclare the literal.
+export const CORNER_POSITIONS: ReadonlyArray<CornerPosition> = CORNER_OPTIONS.map(
+  (c) => c.value,
+);
+
 // Pill — shared chooser primitive. Two states:
 //   • idle   — matches the dashboard bell button: glass surface,
 //              border-white/15, text-white/60 → border-white/40 +
@@ -76,23 +84,45 @@ export function PositionPicker({
   value,
   onChange,
   disabled,
+  disabledValues,
+  disabledTooltip,
 }: {
   value: CornerPosition;
   onChange: (next: CornerPosition) => void;
   disabled?: boolean;
+  // Per-button exclusions. Used when a picker shares the 6-corner
+  // space with another chrome element — e.g. on /create/brand the
+  // logo position picker disables whatever corner the persistent
+  // overlay text already claimed on /create/content, so the two
+  // never overlap visually. Each entry renders that specific
+  // button in the disabled visual treatment, independent of the
+  // whole-picker `disabled` flag.
+  disabledValues?: CornerPosition[];
+  // Optional tooltip text shown when hovering a button disabled by
+  // `disabledValues` (NOT the whole-picker `disabled` case — that
+  // already keeps the button's default option label as the title).
+  // Lets the caller say WHY the corner is reserved.
+  disabledTooltip?: string;
 }) {
   return (
     <div className="grid grid-cols-3 gap-2" dir="ltr">
       {CORNER_OPTIONS.map((option) => {
         const active = value === option.value;
+        const lockedByValue = disabledValues?.includes(option.value) ?? false;
+        const isDisabled = disabled || lockedByValue;
         return (
           <button
             key={option.value}
             type="button"
-            disabled={disabled}
+            disabled={isDisabled}
             onClick={() => onChange(option.value)}
             aria-label={option.label}
-            title={option.label}
+            // Per-button title: when value-locked + the caller passed
+            // a tooltip, use it. Otherwise fall back to the corner's
+            // own label (default behavior for all other states).
+            title={
+              lockedByValue && disabledTooltip ? disabledTooltip : option.label
+            }
             // Same idle/active vocabulary as `Pill`: glass surface
             // always, stroke + text bump to full-white when active
             // (no purple gradient).

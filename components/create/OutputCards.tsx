@@ -297,6 +297,7 @@ export function CanvasCard({
   persistentPosition,
   persistentExcludeCover,
   persistentExcludeClosing,
+  language,
   onPersistentText,
   onPersistentPosition,
   onPersistentExcludeCover,
@@ -306,6 +307,11 @@ export function CanvasCard({
   persistentPosition: PersistentPosition;
   persistentExcludeCover: boolean;
   persistentExcludeClosing: boolean;
+  // Optional — drives the persistent-text input's direction so the
+  // typed chrome string sits on the visually-correct side. Falls
+  // back to "ar" (RTL) for back-compat with any caller that
+  // predates the picker.
+  language?: StoredOutputLanguage;
   onPersistentText: (s: string) => void;
   onPersistentPosition: (p: PersistentPosition) => void;
   onPersistentExcludeCover: (b: boolean) => void;
@@ -320,6 +326,10 @@ export function CanvasCard({
           value={persistentText}
           onChange={(e) => onPersistentText(e.target.value)}
           placeholder="مثل: التاريخ، الموقع الإلكتروني"
+          // Direction follows the deck language pill so English
+          // overlay text (e.g. "© 2026 · taqreer.ai") types LTR
+          // and Arabic ("جميع الحقوق محفوظة") types RTL.
+          dir={language === "en" ? "ltr" : "rtl"}
           className="input-dark"
         />
         <div className="grid grid-cols-2 gap-3 pt-1">
@@ -440,6 +450,7 @@ export function LogoPositionFields({
   onExcludeCover,
   onExcludeClosing,
   disabled = false,
+  reservedPositions,
 }: {
   position: LogoPosition;
   excludeCover: boolean;
@@ -451,6 +462,13 @@ export function LogoPositionFields({
   // (so the card height doesn't jump on upload) but greys it out — the
   // PositionPicker + Pills internally support `disabled`.
   disabled?: boolean;
+  // Corners already claimed by other slide chrome (today: the
+  // persistent overlay text from /create/content). Each entry
+  // disables that specific button in the position picker so the
+  // logo can't be placed in the same corner — two chrome elements
+  // would otherwise overlap. Empty array / undefined → all 6
+  // corners are available.
+  reservedPositions?: LogoPosition[];
 }) {
   return (
     <div className="space-y-2 border-t border-white/[0.06] pt-3">
@@ -460,6 +478,8 @@ export function LogoPositionFields({
           value={position}
           onChange={onPosition}
           disabled={disabled}
+          disabledValues={reservedPositions}
+          disabledTooltip="محجوز للنص الثابت"
         />
         <div className="flex flex-col gap-1.5">
           <Pill

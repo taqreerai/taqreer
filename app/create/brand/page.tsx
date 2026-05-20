@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // brand hex (e.g. #BBF54B stays #BBF54B instead of #69F954).
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
-import { Pill } from "@/components/create/controls";
+import { CORNER_POSITIONS, Pill } from "@/components/create/controls";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
 import type { CornerPosition } from "@/components/create/controls";
@@ -953,6 +953,15 @@ export default function CreateBrandPage() {
   const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
   const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(false);
   const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
+  // Corner reserved by the persistent overlay text from step 1
+  // (taqreer:create:output.rules.persistent.position). Used to
+  // disable that specific button in the logo position picker —
+  // logo and persistent text are separate slide-chrome elements
+  // that would overlap if they shared a corner. Null when the
+  // user didn't set a persistent text (or set it with empty
+  // content, in which case the position isn't actually claimed).
+  const [reservedLogoCorner, setReservedLogoCorner] =
+    useState<CornerPosition | null>(null);
 
   // SVG-only logo policy (2026-05-15). Raster formats (PNG/JPG) are rejected
   // because we can't recolor them per slide for contrast — see context.md
@@ -1065,7 +1074,36 @@ export default function CreateBrandPage() {
       const raw = window.sessionStorage.getItem("taqreer:create:output");
       if (!raw) return;
       const out = JSON.parse(raw) as StoredOutput;
-      if (out.logo?.position) setLogoPosition(out.logo.position);
+
+      // Persistent overlay text claims a corner — but ONLY if the
+      // text itself is non-empty. The /create/content auto-save
+      // already gates persistent.text on a non-empty trim, but we
+      // re-check here defensively in case a legacy blob carries a
+      // position with an empty text field.
+      const persistentText = out.rules?.persistent?.text?.trim() ?? "";
+      const claimed = persistentText
+        ? (out.rules?.persistent?.position as CornerPosition | undefined) ??
+          null
+        : null;
+      setReservedLogoCorner(claimed ?? null);
+
+      // Resolve initial logo position: respect the user's stored
+      // pick if any, BUT never let it land on a corner claimed by
+      // the persistent overlay. The auto-move fallback walks the
+      // canonical CORNER_POSITIONS order and picks the first free
+      // corner. Falls back to "top-right" only as the unreachable
+      // safety net if every corner ends up reserved (impossible
+      // with a single claimer + 6 slots).
+      const storedPos = out.logo?.position as CornerPosition | undefined;
+      const desired = storedPos ?? "top-right";
+      if (claimed && desired === claimed) {
+        const fallback =
+          CORNER_POSITIONS.find((c) => c !== claimed) ?? "top-right";
+        setLogoPosition(fallback);
+      } else {
+        setLogoPosition(desired);
+      }
+
       if (typeof out.logo?.excludeCover === "boolean") {
         setLogoExcludeCover(out.logo.excludeCover);
       }
@@ -2177,6 +2215,12 @@ export default function CreateBrandPage() {
               onExcludeCover={setLogoExcludeCover}
               onExcludeClosing={setLogoExcludeClosing}
               disabled={!(logo || loadedLogoMeta)}
+              // Persistent overlay text (step 1) reserves its
+              // corner so the logo can't overlap it. Empty array
+              // when no persistent text was set.
+              reservedPositions={
+                reservedLogoCorner ? [reservedLogoCorner] : undefined
+              }
             />
           </div>
         </div>
