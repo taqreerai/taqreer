@@ -41,12 +41,17 @@ export const DESIGN_STYLE_OPTIONS = [
 // Content language — user-picked on /create/content. Drives:
 //   • Project.language + Presentation.language (filter-accuracy on
 //     /projects, and the Phase B/C work below)
-//   • Presentation.direction (ar/bi → rtl, en → ltr)
-//   • Phase B (TBD): prompt selection (Arabic vs English system prompt)
+//   • Presentation.direction (ar → rtl, en → ltr)
+//   • Phase B (shipped 2026-05-20): user-message directive in
+//     buildUserMessage gates output language
 //   • Phase C (TBD): BiDi post-processor gating + rendered HTML dir
 // Default "ar" matches the historical hardcoded value, so existing
-// stored blobs without a language field keep working as-is.
-export type StoredOutputLanguage = "ar" | "en" | "bi";
+// stored blobs without a language field keep working as-is. The "bi"
+// (bilingual) bucket was retired the same day — the existing AR
+// prompt already handles inline mixed-script runs cleanly, and a
+// separate BI bucket added complexity without UX gain for the
+// Middle East target audience.
+export type StoredOutputLanguage = "ar" | "en";
 
 export type StoredOutput = {
   slideSize?: SlideSize;

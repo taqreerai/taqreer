@@ -63,10 +63,12 @@ type StoredOutput = {
     excludeClosing?: boolean;
   };
   // User-picked on /create/content (2026-05-20). Drives Project.language
-  // + Presentation.direction (ar/bi → rtl, en → ltr). Optional here
+  // + Presentation.direction (ar → rtl, en → ltr). Optional here
   // because legacy stored blobs predate the picker — the consumer
-  // falls back to "ar".
-  language?: "ar" | "en" | "bi";
+  // falls back to "ar". Note: an earlier-on-2026-05-20 version of the
+  // picker had a "bi" bucket which has since been retired; legacy
+  // "bi" values collapse to "ar" on read.
+  language?: "ar" | "en";
   rules?: {
     designStyle?: string | null;
     fixTypos?: boolean;
@@ -257,13 +259,12 @@ export default function CreateSummaryPage() {
           : null;
 
       // User-picked content language. Defaults to "ar" if the stored
-      // blob predates the picker — preserves the historical baseline.
-      // Server validates the union strictly; anything off-axis would
-      // 400 (same contract as lock/regen/favorite).
-      const language: "ar" | "en" | "bi" =
-        output?.language === "en" || output?.language === "bi"
-          ? output.language
-          : "ar";
+      // blob predates the picker or carries a legacy "bi" value (which
+      // collapses to "ar"). Server tolerates anything off-axis by also
+      // falling back to "ar" — language is a UX detail, not a security
+      // boundary, so we don't 400 on stale values.
+      const language: "ar" | "en" =
+        output?.language === "en" ? "en" : "ar";
 
       const response = await fetch("/api/projects", {
         method: "POST",

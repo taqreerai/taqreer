@@ -161,9 +161,14 @@ export function Toggle({
   );
 }
 
-// Three-pill segmented control for content language: AR / EN / BI.
-// Lives next to a Toggle on /create/content's right card. Active
-// pill = brighter border + white text (matches `.btn-pill:hover`).
+// Two-pill segmented control for content language. The Middle East
+// audience consumes mixed Arabic + English content naturally, so a
+// dedicated "bilingual" bucket added complexity without a meaningful
+// user-facing difference — the existing prompt already handles
+// inline mixed-script runs under either RTL or LTR root. Scope locked
+// to two options 2026-05-20.
+//
+// Active pill = brighter border + white text (matches `.btn-pill:hover`).
 // Idle pill = `.btn-pill` resting state.
 //
 // Why we INLINE the pill styles instead of using `.btn-pill`:
@@ -171,13 +176,12 @@ export function Toggle({
 // beats any Tailwind `text-white`/`border-white/40` utility we'd add
 // to flip the active state. Already burned by this with `.text-muted`
 // — sidestepping the layer-cascade fight is cheaper than re-shuffling
-// globals.css for a 3-button control.
-export type LanguageCode = "ar" | "en" | "bi";
+// globals.css for a 2-button control.
+export type LanguageCode = "ar" | "en";
 
 const LANGUAGE_OPTIONS: ReadonlyArray<{ code: LanguageCode; label: string }> = [
-  { code: "ar", label: "AR" },
-  { code: "en", label: "EN" },
-  { code: "bi", label: "BI" },
+  { code: "ar", label: "العربية" },
+  { code: "en", label: "الإنجليزية" },
 ];
 
 export function LanguagePills({

@@ -156,18 +156,21 @@ type CreateProjectPayload = {
   slideCount?: number | null;
   quality?: Quality | null;
   // User-picked on /create/content (2026-05-20). Drives Project.language
-  // + Presentation.direction (ar/bi → rtl, en → ltr) + the brief sent
-  // to deck-generate. Missing → defaults to "ar" so legacy clients +
-  // bookmarklets keep working as-is.
-  language?: "ar" | "en" | "bi";
+  // + Presentation.direction (ar → rtl, en → ltr) + the brief sent to
+  // deck-generate. Missing → defaults to "ar" so legacy clients +
+  // bookmarklets keep working as-is. Legacy "bi" payloads (from the
+  // brief 3-bucket period earlier 2026-05-20) collapse to "ar" via
+  // the guard below — same behavior the AR prompt has always
+  // produced for mixed content.
+  language?: "ar" | "en";
 };
 
 // Whitelist-validated language → direction mapping. Centralised so
 // every persistence site (Project.language, Presentation.language +
 // direction, brief.language + direction) reads from the same source.
-type ContentLanguage = "ar" | "en" | "bi";
+type ContentLanguage = "ar" | "en";
 function isContentLanguage(v: unknown): v is ContentLanguage {
-  return v === "ar" || v === "en" || v === "bi";
+  return v === "ar" || v === "en";
 }
 function directionForLanguage(lang: ContentLanguage): "rtl" | "ltr" {
   return lang === "en" ? "ltr" : "rtl";

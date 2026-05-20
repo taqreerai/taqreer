@@ -483,6 +483,24 @@ function buildUserMessage(event: DeckGenerateEvent) {
   // verbatim into top:Npx / left:Npx / right:Npx on the content div.
   const sideInsetPx = SIDE_INSET_PX[format];
 
+  // Resolve the user-picked content language up-front so the
+  // directive block sits at the TOP of the user message (high
+  // attention budget). The brief itself also carries language /
+  // direction inside its JSON dump — this prose block is the
+  // belt-and-suspenders signal so the model doesn't have to lift
+  // a structural decision out of a nested field. Falls back to
+  // "ar" + "rtl" if anything is missing / malformed (mirrors the
+  // /api/projects route's tolerance — language is a UX detail,
+  // not a security boundary).
+  const briefLang =
+    (event.brief as { language?: "ar" | "en" } | null)?.language === "en"
+      ? "en"
+      : "ar";
+  const briefDir =
+    (event.brief as { direction?: "rtl" | "ltr" } | null)?.direction === "ltr"
+      ? "ltr"
+      : "rtl";
+
   const lines = [
     `Generate a slide manifest for this presentation.`,
     ``,
@@ -496,9 +514,34 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // right/left edges line up visually with the chrome below.
     `Content side+top inset: ${sideInsetPx}px (use EXACTLY this value for top / left / right on the content layer; bottom stays 140 px).`,
     ``,
+    // LANGUAGE directive — user-picked on /create/content. The
+    // system prompt is already bilingual-aware (LANGUAGE & DIRECTION
+    // section), so this block doesn't replace those mechanics; it
+    // STATES which mode this specific deck runs in so the model
+    // produces deck text in the chosen language even when the
+    // input content itself is ambiguous (e.g. all numbers, code
+    // samples, or stripped headlines). The OUTPUT JSON
+    // `language` + `direction` fields must mirror these values.
+    ...(briefLang === "en"
+      ? [
+          `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
+          `Direction: \`dir="ltr"\` on every slide root. Skip Arabic font fallbacks (Cairo / Tajawal / etc.) — use the Latin font sourcing rules from the system prompt's TYPOGRAPHY section. Inline mixed-script handling (\`<span dir="rtl">\` around any incidental Arabic run) still applies the same way RTL mode handles incidental Latin.`,
+          `Manifest output: \`"language": "en"\`, \`"direction": "ltr"\`.`,
+        ]
+      : [
+          `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default. The brief's content may carry inline English runs (URLs, brand names, version numbers, code identifiers) — preserve those verbatim and wrap them in \`<span dir="ltr">\` per the system prompt's LANGUAGE & DIRECTION rules. Don't translate the inline English away.`,
+          `Direction: \`dir="rtl"\` on every slide root. Use the Arabic font stack from the system prompt's TYPOGRAPHY section.`,
+          `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
+        ]),
+    ``,
     `Brief:`,
     JSON.stringify(event.brief, null, 2),
   ];
+  // `briefDir` is consumed implicitly via the brief JSON dump above
+  // and the directive lines that reference dir literally — the local
+  // binding stays so future branches (e.g. mixed-mode 9:16 chrome)
+  // can read it without re-parsing the brief.
+  void briefDir;
 
   if (event.type === "enhance" && event.enhance) {
     lines.push(``, `Enhancement settings:`, JSON.stringify(event.enhance, null, 2));
@@ -691,16 +734,14 @@ export const deckGenerate = inngest.createFunction(
       let streamingTheme: unknown = null;
       // Direction + language carried through the brief — surface them
       // on the live-preview path so DeckView's SlideRenderer + nav
-      // manifest aren't hardcoded to "rtl"/"ar". Since the
-      // 2026-05-20 language picker landed, the brief now carries
-      // the user's pick: "ar" / "en" / "bi". The streaming preview
-      // collapses "bi" → "ar" because mixed content reads correctly
-      // under RTL with Arabic-leaning typography (Phase B will
-      // refine this when the English prompt ships).
+      // manifest aren't hardcoded to "rtl"/"ar". The 2026-05-20
+      // language picker resolves to "ar" or "en" only; the briefly-
+      // lived "bi" bucket was retired same day (legacy "bi" payloads
+      // collapse to "ar" upstream in /api/projects).
       const briefForStream =
         (data.brief as {
           direction?: "rtl" | "ltr";
-          language?: "ar" | "en" | "bi";
+          language?: "ar" | "en";
         } | null) ?? null;
       const streamDirection: "rtl" | "ltr" =
         briefForStream?.direction === "ltr" ? "ltr" : "rtl";

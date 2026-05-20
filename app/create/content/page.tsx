@@ -150,8 +150,11 @@ export default function CreateContentPage() {
         if (out.rules?.designStyle !== undefined) setDesignStyle(out.rules.designStyle);
         // Language hydrate — older stored blobs (pre-2026-05-20) won't
         // have this field; we fall through to the "ar" default in that
-        // case via the state initialiser above.
-        if (out.language === "ar" || out.language === "en" || out.language === "bi") {
+        // case via the state initialiser above. Legacy "bi" values
+        // (from the brief 3-bucket period earlier on 2026-05-20)
+        // collapse to "ar" — the AR prompt already handles bilingual
+        // content cleanly.
+        if (out.language === "ar" || out.language === "en") {
           setLanguage(out.language);
         }
         if (typeof out.rules?.pagination === "boolean") setPagination(out.rules.pagination);
