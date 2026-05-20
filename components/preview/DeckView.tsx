@@ -1365,16 +1365,24 @@ export function DeckView({
           // fades to opacity:1 over 1 s and the slow drift resumes.
           // Crosshair cursor signals "click + drag to draw" while in
           // commentMode; reverts to default outside it.
-          className={`canvas-gradient-border group/canvas relative overflow-hidden rounded-xl p-0 shadow-2xl${
+          //
+          // NO `overflow-hidden` here — the ring's `::after` is now
+          // drawn at `inset:-5px`, halo-style OUTSIDE the canvas, so
+          // any ancestor clip would chop the halo. The clip needed
+          // for the SlideRenderer's scaled content moved down to
+          // the inner wrapper below.
+          className={`canvas-gradient-border group/canvas relative rounded-xl p-0 shadow-2xl${
             commentMode ? " cursor-crosshair" : ""
           }`}
           data-active={commentMode ? "true" : "false"}
         >
           {/* Slide content. Heavily blurred while THIS slide is being
               regenerated; the regenerating overlay sits on top in sharp
-              focus. */}
+              focus. `overflow-hidden` lives here so the scaled
+              SlideRenderer can't bleed past the canvas while the
+              outer halo ring extends freely. */}
           <div
-            className="h-full w-full transition-[filter] duration-300"
+            className="h-full w-full overflow-hidden rounded-xl transition-[filter] duration-300"
             style={isFocusedRegenerating ? { filter: "blur(20px)" } : undefined}
           >
             <SlideRenderer

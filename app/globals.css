@@ -729,11 +729,16 @@ body {
 .canvas-gradient-border::after {
   content: '';
   position: absolute;
-  inset: 0;
+  /* OUTSIDE the canvas — extends 5 px past every edge so the mesh
+     ring sits as a halo around the slide, not a band inset into
+     it. The parent must NOT have `overflow:hidden` for this to
+     render; the JSX moves the clip down to the slide wrapper. */
+  inset: -5px;
   border-radius: inherit;
-  /* 3 px ring — bumped from the button's 2 px so the gradient reads
-     clearly at canvas-scale. Tweak to 4 px if 3 still feels thin. */
-  padding: 3px;
+  /* 5 px stroke — thicker than the previous 3 px inset version so
+     the gradient reads clearly at canvas scale even from across
+     the page. */
+  padding: 5px;
   background:
     radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
