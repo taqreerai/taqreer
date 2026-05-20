@@ -89,6 +89,66 @@ User-visible value first, Share modal last (deepest backend work).
 
 ---
 
+## Route split — `/preview/<id>` ↔ `/project/<id>` (locked 2026-05-21)
+
+Status: ⏳ planned for the NEXT PR after #28 merges to main.
+
+**Why a new PR**: #28 is already large + has a 9-file conflict with
+`c2fac6e` (main's "adaptive runtime / live preview / CR fixes"
+commit). Doing the route split on the same branch grows the conflict
+surface. Cleaner to land #28, merge to main, then open a focused PR
+for: route split + tile-click navigation + template lightbox CTA.
+
+### What changes
+
+1. **`/preview/<id>`** — generation phase ONLY. Streaming UI,
+   progress bars, "Claude is designing slide 3 of 8…", placeholder
+   cards. When status flips to `completed`, SSR returns a 307
+   redirect to `/project/<id>` so bookmarks / notifications /
+   shared links keep working.
+2. **`/project/<id>`** — NEW route. The working session: slide pill
+   (regen / history / lock), comments, save, exports, lightbox.
+   Canonical share/bookmark URL for a completed deck.
+3. **Dashboard + /projects tile click** → navigates to
+   `/project/<id>` (today opens the lightbox).
+4. **Template tiles** → click opens the ProjectLightbox component
+   (reused, NOT deleted). Future template-flow PR adds the
+   "استخدم هذا القالب" CTA inside.
+
+### Code-split approach (locked: option A)
+
+Cut DeckView in half:
+- **DeckView** stays in `components/preview/` — generation-only
+  rendering, used by `/preview/<id>`.
+- **ProjectView** is a NEW component in `components/project/` —
+  the `status === "completed"` code path lifted out, used by
+  `/project/<id>`.
+
+Net effect: each file roughly halved (DeckView is ~1800 lines
+today). Easier to navigate while debugging — `/preview` route
+debugging never opens working-session code, and vice versa.
+
+### Updates that ride along
+
+- Bell notifications, `Copy link` action in the 3-dots menu,
+  Share modal preview URLs — all currently use `/preview/<id>`,
+  switch to `/project/<id>` post-split.
+- The Save / export buttons in DeckView's current "completed"
+  branch move to ProjectView intact (no behavior change).
+- Lightbox stays a shared component (used by templates now;
+  could be used by other browseable-content surfaces later).
+
+### Deferred (for the template-flow PR, not this one)
+
+- The lightbox's "Use this template" CTA + the actual `/create/
+  from-template/[templateId]` route. The lightbox component
+  itself is preserved; only the CTA + destination route are
+  deferred. Tile-click → lightbox-open for templates can still
+  ship in this PR without the CTA wired (button stays
+  disabled / coming-soon until the templates flow PR).
+
+---
+
 ## Status
 
 | Phase | What | State |
