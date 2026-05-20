@@ -469,6 +469,165 @@ export function DeckView({
     setCurrentSlideIndex(streamingPreview.length - 1);
   }, [status, streamingPreview.length]);
 
+  // Wheel + keyboard slide navigation. Velocity-aware: a fast trackpad
+  // swipe consumes many pixels of deltaY in a short window and flips
+  // multiple slides in one motion; a slow scroll flips one at a time.
+  // Implementation:
+  //   • Accumulate `Math.abs(deltaY)` across wheel events.
+  //   • Each PX_PER_SLIDE of accumulated delta = one slide flip in
+  //     the current direction.
+  //   • Direction change OR idle for WHEEL_IDLE_RESET_MS resets the
+  //     accumulator so the next swipe starts fresh.
+  //   • The wheel handler preventDefault()s only events it consumes,
+  //     so native scrolling inside the slide-nav sidebar (and any
+  //     popover that does its own scroll) is untouched — gated by
+  //     checking the event target against the canvas wrapper ref.
+  // Gates (all of these block both wheel + keyboard):
+  //   - commentMode (user drawing / typing comments)
+  //   - applying (regen in flight, manifest is mid-swap)
+  //   - history popover open
+  //   - text input / textarea / contentEditable focused
+  // Keyboard mapping:
+  //   ArrowDown / PageDown → next   (always, both languages)
+  //   ArrowUp / PageUp     → prev
+  //   ArrowRight           → EN: next, AR: prev (RTL reading flow)
+  //   ArrowLeft            → EN: prev, AR: next
+  //   Home / End           → first / last slide
+  const wheelTargetRef = useRef<HTMLElement | null>(null);
+  const wheelAccumRef = useRef(0);
+  const wheelDirRef = useRef<-1 | 0 | 1>(0);
+  const wheelIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (status !== "completed") return;
+    if (!manifest) return;
+    const totalSlides = manifest.slides.length;
+    if (totalSlides <= 1) return;
+
+    // Tunables. PX_PER_SLIDE is the "scroll throttle" — lower = more
+    // sensitive (one slide per smaller swipe), higher = slower flip
+    // for the same scroll. 80px lands at "1 trackpad click ≈ 1 slide,
+    // a fast swipe ≈ 4-8 slides" in practice.
+    const PX_PER_SLIDE = 80;
+    const WHEEL_IDLE_RESET_MS = 220;
+
+    // Treat the deck language as authoritative for arrow-key mapping:
+    // RTL reading flow makes ArrowLeft → advance natural for AR.
+    const isLtr = (manifest.language ?? "ar") === "en";
+
+    const isNavBlocked = (): boolean => {
+      if (commentMode) return true;
+      if (applying != null) return true;
+      if (historyAnchor != null) return true;
+      // Text inputs / textareas / contentEditable: let the user type
+      // / Backspace-delete without trapping the cursor on a slide flip.
+      const active = document.activeElement as HTMLElement | null;
+      if (
+        active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          active.isContentEditable)
+      ) {
+        return true;
+      }
+      return false;
+    };
+
+    const goto = (delta: number) => {
+      setCurrentSlideIndex((prev) => {
+        const next = prev + delta;
+        return Math.max(0, Math.min(totalSlides - 1, next));
+      });
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (isNavBlocked()) return;
+      // Only intercept wheel events targeting the canvas / page chrome
+      // — let the slide-nav sidebar's own overflow scroll work.
+      const target = e.target as Node | null;
+      if (target && !wheelTargetRef.current?.contains(target)) return;
+
+      const dir: 1 | -1 = e.deltaY > 0 ? 1 : -1;
+      // Direction change resets the accumulator — switching from
+      // scrolling down to scrolling up shouldn't carry leftover
+      // momentum into the reverse flip.
+      if (wheelDirRef.current !== 0 && wheelDirRef.current !== dir) {
+        wheelAccumRef.current = 0;
+      }
+      wheelDirRef.current = dir;
+      wheelAccumRef.current += Math.abs(e.deltaY);
+
+      const slidesToFlip = Math.floor(wheelAccumRef.current / PX_PER_SLIDE);
+      if (slidesToFlip > 0) {
+        wheelAccumRef.current -= slidesToFlip * PX_PER_SLIDE;
+        // We're consuming the wheel for navigation; prevent the
+        // browser from also scrolling the page. Only call this
+        // when we're actually flipping a slide so small sub-
+        // threshold scrolls don't suppress legitimate native
+        // behavior (none today, but defensive).
+        e.preventDefault();
+        goto(dir * slidesToFlip);
+      }
+
+      if (wheelIdleTimerRef.current) {
+        clearTimeout(wheelIdleTimerRef.current);
+      }
+      wheelIdleTimerRef.current = setTimeout(() => {
+        wheelAccumRef.current = 0;
+        wheelDirRef.current = 0;
+      }, WHEEL_IDLE_RESET_MS);
+    };
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (isNavBlocked()) return;
+      // Modifier keys → leave for native shortcuts (refresh, devtools, etc.)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      switch (e.key) {
+        case "ArrowDown":
+        case "PageDown":
+          e.preventDefault();
+          goto(1);
+          return;
+        case "ArrowUp":
+        case "PageUp":
+          e.preventDefault();
+          goto(-1);
+          return;
+        case "ArrowRight":
+          e.preventDefault();
+          goto(isLtr ? 1 : -1);
+          return;
+        case "ArrowLeft":
+          e.preventDefault();
+          goto(isLtr ? -1 : 1);
+          return;
+        case "Home":
+          e.preventDefault();
+          setCurrentSlideIndex(0);
+          return;
+        case "End":
+          e.preventDefault();
+          setCurrentSlideIndex(totalSlides - 1);
+          return;
+        default:
+          return;
+      }
+    };
+
+    // `passive: false` so preventDefault works on the wheel handler.
+    // Without it Chrome treats touchpad wheel listeners as passive
+    // by default and our preventDefault is a no-op.
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("keydown", handleKey);
+      if (wheelIdleTimerRef.current) {
+        clearTimeout(wheelIdleTimerRef.current);
+        wheelIdleTimerRef.current = null;
+      }
+    };
+  }, [status, manifest, commentMode, applying, historyAnchor]);
+
   // Realtime — Inngest writes the version → Supabase emits → we parse + render.
   // Scoped to this presentation via a server-side filter so other projects'
   // updates can't overwrite our local state. Active during EITHER full
@@ -1368,6 +1527,7 @@ export function DeckView({
   })();
   return (
     <section
+      ref={wheelTargetRef}
       dir={manifest!.direction}
       className="relative"
       style={{ marginRight: SLIDE_NAV_WIDTH }}
