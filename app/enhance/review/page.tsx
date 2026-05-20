@@ -23,8 +23,8 @@ const defaultPalette = {
 
 function selectedClass(isSelected: boolean) {
   return isSelected
-    ? "border-2 border-[#370BF4] bg-[#370BF4]/10"
-    : "border border-[rgba(42,36,59,0.8)]";
+    ? "border-2 border-[var(--tq-blue)] bg-[var(--tq-blue)]/10"
+    : "border border-white/[var(--glass-border-opacity)]";
 }
 
 function formatFileSize(size?: number) {
@@ -49,7 +49,7 @@ function Swatch({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="h-12 w-12 rounded-full border border-[rgba(42,36,59,0.8)]"
+        className="h-12 w-12 rounded-full border border-white/[var(--glass-border-opacity)]"
         style={{ backgroundColor: value }}
         aria-label={label}
       />
@@ -60,7 +60,7 @@ function Swatch({
         onChange={(event) => onChange(event.target.value)}
         className="hidden"
       />
-      <span className="text-xs text-[#9A94A8]">{label}</span>
+      <span className="text-xs text-muted">{label}</span>
     </div>
   );
 }
@@ -145,16 +145,16 @@ export default function EnhanceReviewPage() {
     <section dir="rtl" className="space-y-6">
       <div>
         <h1 className="font-headline-lg text-[36px] font-bold text-white">راجع إعدادات التحسين</h1>
-        <p className="mt-2 text-[#9A94A8]">حدد كيف تريد تحسين عرضك</p>
+        <p className="mt-2 text-muted">حدد كيف تريد تحسين عرضك</p>
       </div>
 
       <div className="glass-card rounded-xl p-6 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-[#7D2DFF]">description</span>
+            <span className="material-symbols-outlined text-[var(--tq-violet)]">description</span>
             <div>
               <p className="font-semibold text-white">{upload?.fileName}</p>
-              <p className="text-sm text-[#9A94A8]">{formatFileSize(upload?.fileSize)}</p>
+              <p className="text-sm text-muted">{formatFileSize(upload?.fileSize)}</p>
             </div>
           </div>
           <button
@@ -183,7 +183,7 @@ export default function EnhanceReviewPage() {
                 className={`rounded-xl p-4 text-right transition-colors ${selectedClass(level === item.value)}`}
               >
                 <span className="block font-semibold text-white">{item.label}</span>
-                <span className="mt-2 block text-sm leading-6 text-[#9A94A8]">{item.subtitle}</span>
+                <span className="mt-2 block text-sm leading-6 text-muted">{item.subtitle}</span>
               </button>
             ))}
           </div>
@@ -198,7 +198,7 @@ export default function EnhanceReviewPage() {
             className="flex w-full items-center justify-between text-right text-white"
           >
             <span className="font-semibold">الهوية البصرية</span>
-            <span className={`material-symbols-outlined text-[20px] text-[#9A94A8] transition-transform ${brandOpen ? "rotate-180" : ""}`}>
+            <span className={`material-symbols-outlined text-[20px] text-muted transition-transform ${brandOpen ? "rotate-180" : ""}`}>
               expand_more
             </span>
           </button>
@@ -257,7 +257,7 @@ export default function EnhanceReviewPage() {
                 {upload.keepColors ? <span className="badge-purple">الحفاظ على الألوان الأصلية</span> : null}
                 {upload.keepFonts ? <span className="badge-purple">الحفاظ على الخطوط الأصلية</span> : null}
               </div>
-              {upload.instructions ? <p className="text-sm leading-7 text-[#9A94A8]">{upload.instructions}</p> : null}
+              {upload.instructions ? <p className="text-sm leading-7 text-muted">{upload.instructions}</p> : null}
             </div>
           </>
         ) : null}

@@ -109,7 +109,14 @@ export default function SettingsPage() {
     if (error) {
       setProfileMsg({ type: "error", text: "حدث خطأ أثناء الحفظ" });
     } else {
-      try { await fetch("/api/auth/user-sync", { method: "POST" }); } catch {}
+      try {
+        await fetch("/api/auth/user-sync", { method: "POST" });
+      } catch (err) {
+        // Sync failure leaves the Prisma User out-of-sync with the
+        // Supabase auth `full_name` change. Log so the discrepancy
+        // is traceable when the dashboard greeting reads stale.
+        console.error("[settings] user-sync failed", err);
+      }
       setProfileMsg({ type: "success", text: "تم حفظ التغييرات بنجاح" });
     }
     setSaving(false);
@@ -150,7 +157,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="page-container">
-        <p className="text-[#9A94A8]">جاري التحميل...</p>
+        <p className="text-muted">جاري التحميل...</p>
       </div>
     );
   }
@@ -204,7 +211,7 @@ export default function SettingsPage() {
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="أحمد محمد" className="input-dark" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-[#9A94A8]">البريد الإلكتروني</label>
+              <label className="block text-sm font-medium mb-2 text-muted">البريد الإلكتروني</label>
               <input type="email" value={user?.email ?? ""} disabled className="input-dark" />
             </div>
             <StatusMsg msg={profileMsg} />
@@ -274,7 +281,7 @@ export default function SettingsPage() {
                 className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer ${
                   glassPreset === key
                     ? 'border-[rgba(55,11,244,0.7)] bg-[rgba(55,11,244,0.15)] text-white'
-                    : 'border-white/[0.08] bg-white/[0.03] text-[#9A94A8] hover:border-white/20 hover:text-white'
+                    : 'border-white/[0.08] bg-white/[0.03] text-muted hover:border-white/20 hover:text-white'
                 }`}
               >
                 <span className="material-symbols-outlined text-[18px]">
@@ -304,7 +311,7 @@ export default function SettingsPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="glass-modal backdrop-blur-glass backdrop-saturate-150 rounded-2xl p-8 max-w-md w-full mt-[20vh] shadow-2xl"
+              className="glass-modal backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] rounded-2xl p-8 max-w-md w-full mt-[20vh] shadow-2xl"
             >
               <h3 className="text-xl font-bold mb-2 text-white">حذف الحساب</h3>
               <p className="text-muted text-sm mb-8">هل أنت متأكد؟ هذا الإجراء لا يمكن التراجع عنه وسيُحذف حسابك وجميع بياناتك نهائياً.</p>

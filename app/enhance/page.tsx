@@ -92,7 +92,7 @@ export default function EnhancePage() {
     <section className="space-y-6" dir="rtl">
       <div>
         <h1 className="font-headline-lg text-[36px] font-bold text-white">حسّن عرضك التقديمي</h1>
-        <p className="mt-2 text-[#9A94A8]">
+        <p className="mt-2 text-muted">
           ارفع ملف PowerPoint وسيعيد تقرير تصميمه بالكامل مع الحفاظ على محتواك
         </p>
       </div>
@@ -121,20 +121,20 @@ export default function EnhancePage() {
             }}
             className={`flex min-h-[240px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
               dragging
-                ? "border-[#7D2DFF] bg-[#7D2DFF]/10"
-                : "border-[#370BF4]/60 bg-[#03030D]/40 hover:border-[#7D2DFF]"
+                ? "border-[var(--tq-violet)] bg-[var(--tq-violet)]/10"
+                : "border-[var(--tq-blue)]/60 bg-[var(--tq-bg)]/40 hover:border-[var(--tq-violet)]"
             }`}
           >
-            <span className="material-symbols-outlined mb-3 text-[42px] text-[#7D2DFF]">upload_file</span>
+            <span className="material-symbols-outlined mb-3 text-[42px] text-[var(--tq-violet)]">upload_file</span>
             <span className="text-lg font-semibold text-white">اسحب ملف PowerPoint هنا أو انقر للاختيار</span>
-            <span className="mt-3 text-sm text-[#9A94A8]">PPTX فقط</span>
+            <span className="mt-3 text-sm text-muted">PPTX فقط</span>
           </button>
 
           {file ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/50 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[var(--glass-border-opacity)] bg-[var(--tq-bg)]/50 px-4 py-3">
               <div>
                 <p className="font-semibold text-white">{file.name}</p>
-                <p className="text-sm text-[#9A94A8]">{formatFileSize(file.size)}</p>
+                <p className="text-sm text-muted">{formatFileSize(file.size)}</p>
               </div>
               <button
                 type="button"
@@ -148,14 +148,14 @@ export default function EnhancePage() {
           ) : null}
         </div>
 
-        <div className="mt-6 rounded-xl border border-[rgba(42,36,59,0.8)]">
+        <div className="mt-6 rounded-xl border border-white/[var(--glass-border-opacity)]">
           <button
             type="button"
             onClick={() => setAdvancedOpen((current) => !current)}
             className="flex w-full items-center justify-between px-4 py-3 text-right text-white"
           >
             <span className="font-semibold">خيارات متقدمة</span>
-            <span className={`material-symbols-outlined text-[20px] text-[#9A94A8] transition-transform ${advancedOpen ? "rotate-180" : ""}`}>
+            <span className={`material-symbols-outlined text-[20px] text-muted transition-transform ${advancedOpen ? "rotate-180" : ""}`}>
               expand_more
             </span>
           </button>
@@ -166,7 +166,7 @@ export default function EnhancePage() {
                   type="checkbox"
                   checked={keepColors}
                   onChange={(event) => setKeepColors(event.target.checked)}
-                  className="h-4 w-4 accent-[#370BF4]"
+                  className="h-4 w-4 accent-[var(--tq-blue)]"
                 />
                 الحفاظ على الألوان الأصلية
               </label>
@@ -175,7 +175,7 @@ export default function EnhancePage() {
                   type="checkbox"
                   checked={keepFonts}
                   onChange={(event) => setKeepFonts(event.target.checked)}
-                  className="h-4 w-4 accent-[#370BF4]"
+                  className="h-4 w-4 accent-[var(--tq-blue)]"
                 />
                 الحفاظ على الخطوط الأصلية
               </label>
@@ -191,7 +191,7 @@ export default function EnhancePage() {
         </div>
 
         {loading && file ? (
-          <div className="mt-6 space-y-3 rounded-xl border border-[rgba(42,36,59,0.8)] bg-[#03030D]/40 p-4">
+          <div className="mt-6 space-y-3 rounded-xl border border-white/[var(--glass-border-opacity)] bg-[var(--tq-bg)]/40 p-4">
             {[
               { step: 1, label: "جارٍ قراءة الملف..." },
               { step: 2, label: "جارٍ تحليل المحتوى..." },
@@ -200,7 +200,7 @@ export default function EnhancePage() {
                 {progressStep === item.step ? (
                   <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
                 ) : (
-                  <span className="material-symbols-outlined text-[18px] text-[#9A94A8]">check_circle</span>
+                  <span className="material-symbols-outlined text-[18px] text-muted">check_circle</span>
                 )}
                 <span>{item.label}</span>
               </div>

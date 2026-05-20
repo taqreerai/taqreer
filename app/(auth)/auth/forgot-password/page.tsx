@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
       >
         <div>
           <h1 className="text-3xl font-bold mb-2">✓ تحقق من بريدك</h1>
-          <p className="text-[#9A94A8]">أرسلنا لك رابط لاستعادة كلمة المرور</p>
+          <p className="text-muted">أرسلنا لك رابط لاستعادة كلمة المرور</p>
         </div>
         <div className="bg-blue-500/20 border border-blue-500/40 rounded-xl p-4">
           <p className="text-blue-200 text-sm">
@@ -76,7 +76,7 @@ export default function ForgotPasswordPage() {
     >
       <motion.div {...fadeUp(0)} className="text-center">
         <h1 className="text-3xl font-bold mb-2">استعادة كلمة المرور</h1>
-        <p className="text-[#9A94A8]">أدخل بريدك الإلكتروني لاستعادة كلمة المرور</p>
+        <p className="text-muted">أدخل بريدك الإلكتروني لاستعادة كلمة المرور</p>
       </motion.div>
 
       {error && (
@@ -94,13 +94,13 @@ export default function ForgotPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="example@email.com"
             required
-            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-xl px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition cursor-text"
+            className="input-dark cursor-text"
           />
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-[#370BF4] to-[#E036B8] hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-xl px-4 py-3 transition cursor-pointer"
+          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? "جاري الإرسال..." : "إرسال رابط الاستعادة"}
         </button>

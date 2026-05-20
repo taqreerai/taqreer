@@ -5,7 +5,7 @@ import { BellDropdown } from "@/components/app/BellDropdown";
 export function Header({ isCollapsed }: { isCollapsed?: boolean }) {
   return (
     <header
-      className={`header-bg backdrop-blur-glass backdrop-saturate-150 fixed top-0 left-0 z-40 h-20 flex items-center px-8 transition-all duration-300 ease-in-out ${
+      className={`header-bg backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] fixed top-0 left-0 z-40 h-20 flex items-center px-8 transition-all duration-300 ease-in-out ${
         isCollapsed ? "right-[80px]" : "right-[260px]"
       }`}
     >

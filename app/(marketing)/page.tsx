@@ -3,10 +3,12 @@ import { ComingSoonContent } from "@/components/marketing/ComingSoonContent";
 
 export default async function ComingSoon() {
   const supabase = await createClient();
+  // Verified auth check (round-trips to Supabase) — `getSession()`
+  // reads the cookie only and can be spoofed.
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const isLoggedIn = !!session;
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isLoggedIn = !!user;
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 relative glow-effect overflow-hidden bg-brand-dark">

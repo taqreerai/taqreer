@@ -622,6 +622,34 @@ before any visual work.)
 - ✅ **`/create/from/[projectId]`**: option (a) — content-only page,
   pre-filled brand from source.
 
+## Deferred refactors (low-priority, called out by the 2026-05-20 audit)
+
+Documented here so they're not lost; not on the active build order.
+
+- **File splits**: `app/create/brand/page.tsx` (2190 lines) → extract
+  `ScreenshotExtractionPane`, `CompactUploadZone`, `FontUploadSlot`,
+  `BrandColorRow`, `extractDominantColors`, persistence helpers.
+  `components/preview/DeckView.tsx` (1785 lines) → extract
+  `useDeckRealtime`, `useSaveProject`, `useSlideHistory` hooks.
+  `lib/export/bidi-postprocess.ts` (1122 lines) → split passes
+  into `lib/export/bidi/{pass-1,...}.ts`. `inngest/functions/
+  deck-generate.ts` (1056 lines) → move `SYSTEM_PROMPT` to
+  `inngest/prompts/deck-system.ts`.
+- **API route helper migration**: `lib/api/project-context.ts`
+  exists (steps 7+ use the inline pattern); migrate the existing
+  10 `/api/projects/[id]/*` routes one at a time when touching
+  them for other reasons. Risky to do all in one pass.
+- **Z-index centralisation**: layers in use are 30 / 40 / 50 /
+  1000-1001 / 1050 / 1099 / 1100 / 2000-2001 / 9999. Settings
+  modal (z-50) renders behind Sidebar profile dropdown (z-9999) —
+  cosmetic bug. Centralise in `lib/ui/z-index.ts` or as CSS tokens
+  when the layering causes a real issue.
+- **Spike pages**: `/spike`, `/spike-pills` are publicly routable.
+  Either move under `app/_spike/` (Next ignores `_`-prefixed
+  private folders → harness becomes inaccessible — not useful) OR
+  gate via NODE_ENV guard → 404 in prod. Pick a strategy when the
+  team is sure the harnesses don't need prod debugging.
+
 ## Still open (ask before coding)
 
 1. **Rename UX** — inline edit on the dashboard tile, or modal?

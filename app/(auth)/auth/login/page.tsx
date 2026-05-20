@@ -53,11 +53,19 @@ export default function LoginPage() {
       if (signInError) {
         setError(toArabicError(signInError.message));
       } else {
-        try { await fetch("/api/auth/user-sync", { method: "POST" }); } catch {}
+        try {
+          await fetch("/api/auth/user-sync", { method: "POST" });
+        } catch (err) {
+          // Sync failure leaves the user without a Prisma row →
+          // surfaces later as 404s on dashboard/preview. Log so the
+          // root cause is traceable when those reports come in.
+          console.error("[login] user-sync failed", err);
+        }
         router.push(templateId ? `${nextUrl}?template=${templateId}` : nextUrl);
         router.refresh();
       }
-    } catch {
+    } catch (err) {
+      console.error("[login] sign-in error", err);
       setError("حدث خطأ. يرجى المحاولة مرة أخرى");
     } finally {
       setLoading(false);
@@ -93,7 +101,7 @@ export default function LoginPage() {
     >
       <motion.div {...fadeUp(0)} className="text-center">
         <h1 className="text-3xl font-bold mb-2">تسجيل الدخول</h1>
-        <p className="text-[#9A94A8]">مرحباً بك في تقرير</p>
+        <p className="text-muted">مرحباً بك في تقرير</p>
       </motion.div>
 
       {deleted && (
@@ -117,7 +125,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="example@email.com"
             required
-            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-xl px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition cursor-text"
+            className="input-dark cursor-text"
           />
         </div>
         <div>
@@ -133,13 +141,13 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             required
-            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-xl px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition cursor-text"
+            className="input-dark cursor-text"
           />
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-[#370BF4] to-[#E036B8] hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-xl px-4 py-3 transition cursor-pointer"
+          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? "جاري الدخول..." : "تسجيل الدخول"}
         </button>
@@ -147,10 +155,10 @@ export default function LoginPage() {
 
       <motion.div {...fadeUp(0.2)} className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[rgba(42,36,59,0.8)]" />
+          <div className="w-full border-t border-white/[var(--glass-border-opacity)]" />
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-[#03030D] text-[#9A94A8]">أو</span>
+          <span className="px-2 bg-[var(--tq-bg)] text-muted">أو</span>
         </div>
       </motion.div>
 
@@ -158,7 +166,7 @@ export default function LoginPage() {
         {...fadeUp(0.25)}
         onClick={handleGoogleLogin}
         disabled={loading}
-        className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] hover:bg-white/5 disabled:opacity-50 text-white font-medium rounded-xl px-4 py-3 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+        className="input-dark hover:bg-white/5 disabled:opacity-50 text-white font-medium px-4 py-3 transition-colors flex items-center justify-center gap-2 cursor-pointer"
       >
         {googleIcon}
         تسجيل الدخول بجوجل

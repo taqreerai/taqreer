@@ -45,6 +45,24 @@ const TOP_N = 5;
 // Keep in sync with NotificationRow's compact={false} padding.
 const TOAST_SLOT_HEIGHT = 84;
 
+// New-notification freshness window — notifications older than this
+// when they arrive in `items` don't pop a toast (they've been seen
+// in the bell already on a previous mount).
+const TOAST_FRESHNESS_MS = 5_000;
+
+// Auto-dismiss each toast after this many ms. User can close earlier
+// via the X. Stack is also capped at 3 (see TOP_N usage above) so
+// the 4th arrival evicts the oldest.
+const TOAST_AUTO_DISMISS_MS = 15_000;
+
+// Gap (px) between the bell's bottom edge and the top of the
+// popover. Tuned so the popover floats clear of the header chrome.
+const BELL_ANCHOR_GAP_PX = 25;
+
+// Width (px) of the bell popover + every stacked toast. Used in
+// both the inline style and the on-resize positioning math.
+const POPOVER_WIDTH_PX = 320;
+
 export function BellDropdown() {
   const router = useRouter();
   const items = useNotifications();
@@ -108,7 +126,10 @@ export function BellDropdown() {
       const rect = el.getBoundingClientRect();
       // 25 px gap below the bell so the popover floats clear of the
       // header's bottom edge.
-      setBellRect({ top: rect.bottom + 25, centerX: rect.left + rect.width / 2 });
+      setBellRect({
+        top: rect.bottom + BELL_ANCHOR_GAP_PX,
+        centerX: rect.left + rect.width / 2,
+      });
     };
     measure();
     window.addEventListener("resize", measure);
@@ -182,7 +203,7 @@ export function BellDropdown() {
       seenIdsRef.current.add(n.id);
       if (open) continue; // popover is showing them; no toast
       const age = now - new Date(n.createdAt).getTime();
-      if (age > 5000) continue; // old persisted item — skip toast
+      if (age > TOAST_FRESHNESS_MS) continue; // old persisted item — skip toast
       queued.push(n);
     }
     if (queued.length === 0) return;
@@ -201,7 +222,7 @@ export function BellDropdown() {
     // cancelled either when dismissToast runs (X click / overflow
     // eviction / popover open) or when the component unmounts.
     for (const n of queued) {
-      const t = window.setTimeout(() => dismissToast(n.id), 15_000);
+      const t = window.setTimeout(() => dismissToast(n.id), TOAST_AUTO_DISMISS_MS);
       timersRef.current.set(n.id, t);
     }
     if (toEvict.length > 0) {
@@ -283,24 +304,22 @@ export function BellDropdown() {
         onClick={() => setOpen((v) => !v)}
         aria-label="الإشعارات"
         aria-expanded={open}
-        // Glass icon button — matches the rest of the dashboard's
-        // muted/idle → white/hover treatment. No blue hover-tint from
-        // the legacy `.btn-icon`.
+        // Glass icon button — bg via preset-linked alpha, blur via
+        // the Tailwind `backdrop-blur-glass` utility (memory:
+        // feedback_tw_glass_system — raw `backdrop-filter:` loses
+        // to Tailwind's compositional rule).
         style={{
           background: "rgba(255, 255, 255, var(--glass-opacity))",
-          backdropFilter:
-            "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-          WebkitBackdropFilter:
-            "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
         }}
-        className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+        className="backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 text-white/60 transition-colors hover:border-white/40 hover:text-white"
       >
         <span className="material-symbols-outlined text-[22px]">notifications</span>
         {unread > 0 ? (
-          <span
-            className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none text-white shadow"
-            style={{ background: "var(--tq-blue)" }}
-          >
+          // Sky-blue info chip. Tailwind `bg-blue-500` (#3B82F6) —
+          // brand `--tq-blue` is violet-leaning at badge size; same
+          // rule as PreviewActionBar / SlideNavSidebar comment-count
+          // chips (memory: feedback_badge_blue).
+          <span className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
@@ -319,7 +338,7 @@ export function BellDropdown() {
             <div
               dir="rtl"
               data-bell-popover
-              className="glass-popover backdrop-blur-glass backdrop-saturate-150 fixed z-[1100] w-80 overflow-hidden rounded-2xl shadow-2xl"
+              className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] fixed z-[1100] w-80 overflow-hidden rounded-2xl shadow-2xl"
               style={{
                 top: bellRect.top,
                 left: Math.max(
@@ -337,10 +356,8 @@ export function BellDropdown() {
             <div className="flex items-center justify-between px-4 py-3">
               <p className="text-sm font-semibold text-white">الإشعارات</p>
               {unread > 0 ? (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-medium leading-none text-white"
-                  style={{ background: "var(--tq-blue)" }}
-                >
+                // Sky-blue info chip — see badge color note above.
+                <span className="rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-medium leading-none text-white">
                   {unread} جديد
                 </span>
               ) : null}
@@ -472,7 +489,7 @@ function BellToast({
       // Absolute positioning so each toast is anchored only by its
       // animated transform — no flex/layout interaction. Same glass
       // surface treatment as the bell popover.
-      className="glass-popover backdrop-blur-glass backdrop-saturate-150 pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl shadow-2xl"
+      className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl shadow-2xl"
     >
       <NotificationRow n={n} onClick={onClick} compact={false} showTime={false} />
       <button
@@ -572,9 +589,9 @@ export function NotificationRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           {!n.read ? (
+            // Sky-blue unread dot — see badge color note above.
             <span
-              className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
-              style={{ background: "var(--tq-blue)" }}
+              className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"
               aria-hidden
             />
           ) : null}

@@ -232,8 +232,8 @@ type UploadedAsset = {
 
 function selectedClass(isSelected: boolean) {
   return isSelected
-    ? "border-2 border-[#370BF4] bg-[#370BF4]/10"
-    : "border border-[rgba(42,36,59,0.8)]";
+    ? "border-2 border-[#370BF4] bg-[var(--tq-blue)]/10"
+    : "border border-white/[var(--glass-border-opacity)]";
 }
 
 async function uploadAsset(bucket: "brand-assets", folder: string, file: File | null): Promise<UploadedAsset> {
@@ -1810,15 +1810,13 @@ export default function CreateBrandPage() {
           // variant used by السابق / الخطوة التالية — keeps the
           // bottom-bar visually one row of pills instead of one
           // rounded-rect + two pills.
+          // bg via preset-linked alpha; blur via Tailwind utility
+          // (memory: feedback_tw_glass_system).
           style={{
             background: "rgba(255, 255, 255, var(--glass-opacity))",
-            backdropFilter:
-              "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-            WebkitBackdropFilter:
-              "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
             borderRadius: 9999,
           }}
-          className={`group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
+          className={`backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] group relative inline-flex h-11 items-center gap-2 border px-5 text-sm font-medium transition-colors ${
             saveBrandState === "saved"
               ? "border-white/40 text-white cursor-default"
               : saveBrandState === "saving"

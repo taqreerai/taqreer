@@ -91,23 +91,18 @@ function ToolButton({
         disabled={isDisabled}
         aria-label={label}
         aria-pressed={active}
-        style={
-          gradient
-            ? undefined
-            : {
-                background: baseBg,
-                backdropFilter:
-                  "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-                WebkitBackdropFilter:
-                  "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-              }
-        }
+        // Non-gradient (glass) variant: bg via preset-linked alpha
+        // (inline because `baseBg` is computed per-button-state),
+        // blur via Tailwind `backdrop-blur-glass` utility (memory:
+        // feedback_tw_glass_system — raw `backdrop-filter:` loses
+        // to Tailwind's compositional rule).
+        style={gradient ? undefined : { background: baseBg }}
         className={
           gradient
             ? `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-xl transition-shadow ${
                 isDisabled ? "" : "hover:scale-[1.02]"
               }`
-            : `relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${colorClasses} ${
+            : `backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${colorClasses} ${
                 isDisabled ? "opacity-40" : ""
               }`
         }

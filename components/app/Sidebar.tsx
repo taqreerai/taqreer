@@ -52,8 +52,18 @@ export function Sidebar({
         setProfileOpen(false);
       }
     }
+    // Match the affordance every other dropdown / popover in the
+    // app supports (HistoryPopover, BellDropdown, ProjectLightbox,
+    // AllNotificationsModal). Esc closes the profile menu.
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setProfileOpen(false);
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, []);
 
   const handleProfileClick = () => {
@@ -89,10 +99,18 @@ export function Sidebar({
     path: string;
     comingSoon?: boolean;
   }> = [
-    { label: 'إنشاء', icon: 'add_circle', color: '#370BF4', glow: 'rgba(55,11,244,0.4)', path: '/create' },
-    { label: 'تحسين', icon: 'auto_fix_high', color: '#E036B8', glow: 'rgba(224,54,184,0.4)', path: '/enhance' },
-    { label: 'محاكاة', icon: 'content_copy', color: '#9326C9', glow: 'rgba(147,38,201,0.4)', path: '/mimic' },
-    { label: 'من قالب', icon: 'grid_view', color: '#7D2DFF', glow: 'rgba(125,45,255,0.4)', path: '/templates' },
+    // Brand palette + glow alphas, sourced from the design-system
+    // tokens (--tq-blue / --tq-magenta / --tq-lavender / --tq-violet)
+    // and their *-rgb companions where defined. The data-deck cyan
+    // doesn't have a token yet — flagged inline. When that flow
+    // un-stubs, add `--tq-cyan` to globals.css and route the entry
+    // through it.
+    { label: 'إنشاء', icon: 'add_circle', color: 'var(--tq-blue)', glow: 'rgba(var(--tq-blue-rgb), 0.4)', path: '/create' },
+    { label: 'تحسين', icon: 'auto_fix_high', color: 'var(--tq-magenta)', glow: 'rgba(var(--tq-magenta-rgb), 0.4)', path: '/enhance' },
+    { label: 'محاكاة', icon: 'content_copy', color: 'var(--tq-lavender)', glow: 'rgba(147,38,201,0.4)', path: '/mimic' },
+    { label: 'من قالب', icon: 'grid_view', color: 'var(--tq-violet)', glow: 'rgba(var(--tq-violet-rgb), 0.4)', path: '/templates' },
+    // Data-deck entry uses a cyan accent — no design-system token
+    // yet. Inline hex flagged for follow-up when the flow ships.
     { label: 'من بيانات', icon: 'dataset', color: '#36B8E0', glow: 'rgba(54,184,224,0.4)', path: '/datasheet', comingSoon: true },
   ];
 
@@ -168,7 +186,7 @@ export function Sidebar({
               <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
                 <span
                   className={`${iconClass} nav-icon transition-colors duration-200`}
-                  style={{ color: pathname === '/dashboard' ? '#ffffff' : 'var(--tq-muted)' }}
+                  style={{ color: pathname === '/dashboard' ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
                 >
                   home
                 </span>
@@ -205,7 +223,7 @@ export function Sidebar({
                   <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
                     <span
                       className={`${iconClass} nav-icon transition-colors duration-200`}
-                      style={{ color: isActive ? '#ffffff' : 'var(--tq-muted)' }}
+                      style={{ color: isActive ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
                     >
                       {btn.icon}
                     </span>
@@ -216,7 +234,7 @@ export function Sidebar({
                     {btn.label}
                   </span>
                   {btn.comingSoon && !isCollapsed && (
-                    <span className="ml-auto mr-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#9A94A8]">
+                    <span className="ml-auto mr-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
                       قريباً
                     </span>
                   )}
@@ -245,7 +263,7 @@ export function Sidebar({
                   <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
                     <span
                       className={`${iconClass} nav-icon transition-colors duration-200`}
-                      style={{ color: active ? '#ffffff' : 'var(--tq-muted)' }}
+                      style={{ color: active ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
                     >
                       {item.icon}
                     </span>
@@ -307,7 +325,7 @@ export function Sidebar({
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pr-1'
             }`}>
               <span className="font-medium text-white text-sm leading-tight truncate">{name}</span>
-              <span className="text-[#9A94A8] text-[11px] truncate">{email}</span>
+              <span className="text-muted text-[11px] truncate">{email}</span>
             </div>
           </button>
         </div>

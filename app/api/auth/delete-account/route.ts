@@ -1,59 +1,85 @@
+// POST /api/auth/delete-account
+//
+// GDPR-compliant account deletion. Removes the Prisma User row +
+// every owned record (cascades via `onDelete: Cascade` on every
+// FK), then removes the authoritative Supabase Auth row.
+//
+// Order matters: Prisma first, Supabase Auth second. If the Prisma
+// delete fails, the auth row stays alive so the user can retry
+// (vs. orphaned auth with no Prisma data). If Prisma succeeds but
+// Supabase Auth delete fails, the user is effectively wiped from
+// the app (no Prisma row → no projects, no presentations) but the
+// auth row lingers — the next sign-in would re-create a clean
+// Prisma User via `/api/auth/user-sync`.
+//
+// HISTORY: the previous implementation used `supabase.from(table).
+// delete().eq(...)` against snake_case table names that don't exist
+// in our schema (Prisma uses PascalCase singular tables with no
+// @@map), all wrapped in empty try/catches → every delete silently
+// no-op'd, leaving orphaned Project / Presentation / Version /
+// SlideState / Comment rows after the auth row was wiped. Replaced
+// 2026-05-20 with the Prisma-cascade path.
+
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function POST() {
   try {
     const supabase = await createServerClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    // `getUser()` (not `getSession()`) — round-trips to Supabase
+    // auth so a forged / stale cookie can't trigger a destructive
+    // delete.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const supabaseUserId = user.id;
 
-    // Admin client uses the service role key to bypass RLS
+    // Prisma cascade — `User.onDelete: Cascade` propagates to
+    // Project (and its Presentation / Versions / SlideStates /
+    // SlideVersions / Jobs / Files / Comments via their own
+    // cascades), BrandKit, Folder, Subscription, UsageEvent.
+    // `deleteMany` returns count=0 if there's no Prisma row for
+    // this Supabase user — acceptable; we still want to proceed
+    // to the auth-row delete so a half-baked sign-up can be wiped.
+    await prisma.user.deleteMany({
+      where: { supabaseUserId },
+    });
+
+    // Admin client (service role) — required to call
+    // `auth.admin.deleteUser`.
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
+      { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    // Delete user data in FK-safe order (ignore errors for tables not yet created)
-    const tables = [
-      "usage_events",
-      "comments",
-      "jobs",
-      "files",
-      "presentation_versions",
-      "presentations",
-      "projects",
-      "brand_kits",
-      "subscriptions",
-    ];
-
-    for (const table of tables) {
-      try {
-        await admin.from(table).delete().eq("user_id", userId);
-      } catch {}
-    }
-
-    // Delete from the users sync table
-    try {
-      await admin.from("users").delete().eq("supabase_user_id", userId);
-    } catch {}
-
-    // Remove from Supabase Auth — this is the authoritative deletion
-    const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
+    const { error: deleteError } = await admin.auth.admin.deleteUser(
+      supabaseUserId,
+    );
     if (deleteError) {
-      console.error("Auth delete error:", deleteError);
-      return NextResponse.json({ error: "Failed to delete account" }, { status: 500 });
+      console.error("[delete-account] auth.admin.deleteUser failed", {
+        supabaseUserId,
+        error: deleteError.message,
+      });
+      return NextResponse.json(
+        { error: "Failed to delete authentication record" },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("Delete account error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("[delete-account] unexpected error", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

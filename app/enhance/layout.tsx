@@ -31,10 +31,8 @@ export default function EnhanceLayout({ children }: { children: React.ReactNode 
                   <div
                     className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition-colors ${
                       isActive
-                        ? "border-[#370BF4] bg-[#370BF4] text-white"
-                        : isComplete
-                          ? "border-[rgba(42,36,59,0.8)] text-[#9A94A8]"
-                          : "border-[rgba(42,36,59,0.8)] text-[#9A94A8]"
+                        ? "border-[var(--tq-blue)] bg-[var(--tq-blue)] text-white"
+                        : "border-white/[var(--glass-border-opacity)] text-muted"
                     }`}
                   >
                     {isComplete ? (
@@ -45,7 +43,7 @@ export default function EnhanceLayout({ children }: { children: React.ReactNode 
                     <span>{item.label}</span>
                   </div>
                   {index < steps.length - 1 ? (
-                    <span className="hidden h-px w-8 bg-[rgba(42,36,59,0.8)] md:block" />
+                    <span className="hidden h-px w-8 bg-white/[var(--glass-border-opacity)] md:block" />
                   ) : null}
                 </div>
               );

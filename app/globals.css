@@ -140,7 +140,6 @@
  *
  *  Misc
  *    .tq-thumbnail           Dark bg for project/template thumbnail areas
- *    .tq-card-divider        Hairline separator inside a card
  *    .badge-purple           Small pill badge
  *    .plan-banner            Plan usage section (gradient stroke border)
  *    .progress-track /
@@ -229,13 +228,6 @@ button, a, [role="button"] {
   font-weight: 600;
   font-size: 0.875rem;
   margin-bottom: 12px;
-}
-
-.cards-title {
-  color: white;
-  font-size: 1.5rem;
-  line-height: 2rem;
-  font-weight: 700;
 }
 
 /* ─── Canonical H1 ─── */
@@ -1147,7 +1139,12 @@ body {
 
 /* ─── Muted Text ─── */
 .text-muted {
-  color: var(--tq-muted);
+  /* `--tq-text-muted` is the canonical declared token in :root
+     (line 170). A second `--tq-muted` alias also exists inside
+     `@theme inline` to satisfy Tailwind utility generation; the
+     two resolve to the same value (#9A94A8). Using the :root
+     token directly keeps the dependency one-step. */
+  color: var(--tq-text-muted);
 }
 
 /* ─── Icon Button ─── */
@@ -1189,18 +1186,6 @@ body {
 /* ─── Sidebar Usage Bar ─── */
 .sidebar-usage {
   border-bottom: 1px solid rgba(42, 36, 59, 0.6);
-}
-
-/* ─── Template Card Thumbnail ─── */
-.template-thumbnail {
-  background: rgba(26, 20, 35, 0.8);
-}
-
-/* ─── Template Card Hover Overlay ─── */
-.template-overlay {
-  background: rgba(3, 3, 13, 0.75);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 
 /* ─── Hide Scrollbar ─── */
@@ -1337,18 +1322,7 @@ body {
   background: var(--tq-bg);
 }
 
-/* ─── Card Divider ─── */
-.tq-card-divider {
-  border-top: 1px solid var(--tq-border-subtle);
-}
-
-/* ─── Widget Header ─── */
-.tq-widget-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--tq-text-primary);
-}
-
+/* ─── Widget header link ─── */
 .tq-widget-link {
   font-size: 0.75rem;
   color: var(--tq-text-muted);

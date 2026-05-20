@@ -52,7 +52,7 @@ export function QuickActions() {
             dir="rtl"
           >
             {card.comingSoon && (
-              <span className="absolute top-3 left-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#9A94A8]">
+              <span className="absolute top-3 left-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
                 قريباً
               </span>
             )}

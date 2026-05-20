@@ -6,9 +6,10 @@
 //
 // Why these tables exist (see prisma/schema.prisma):
 // - SlideState carries lock + comment cache per slide.
-// - SlideVersion is per-slide append-only history capped at 10
-//   rows so the user can Undo / browse versions without the table
-//   growing unbounded under heavy iteration.
+// - SlideVersion is per-slide append-only history capped at 5
+//   rows (see MAX_VERSIONS_PER_SLIDE below) so the user can browse
+//   versions without the table growing unbounded under heavy
+//   iteration.
 //
 // Idempotency: both helpers are designed to be safe under Inngest
 // step retries — `seed*` uses upsert keyed on (presentationId,

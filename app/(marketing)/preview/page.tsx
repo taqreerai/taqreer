@@ -13,10 +13,11 @@ export default async function PreviewPage(props: { searchParams: Promise<{ [key:
   }
 
   const supabase = await createClient();
+  // Verified auth (see comments on layout.tsx + (marketing)/page.tsx).
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const isLoggedIn = !!session;
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isLoggedIn = !!user;
 
   return (
     <main>

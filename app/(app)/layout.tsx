@@ -20,11 +20,14 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
+  // `getUser()` round-trips to Supabase auth so a forged / stale
+  // cookie can't pass the protected-layout gate. `getSession()`
+  // reads the cookie only (unverified).
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     redirect("/auth/login?next=/dashboard");
   }
 

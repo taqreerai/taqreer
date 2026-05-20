@@ -62,14 +62,21 @@ export default function SignupPage() {
         setError(toArabicError(signUpError.message));
       } else if (data.session) {
         // Email confirmation disabled — session returned immediately
-        try { await fetch("/api/auth/user-sync", { method: "POST" }); } catch {}
+        try {
+          await fetch("/api/auth/user-sync", { method: "POST" });
+        } catch (err) {
+          // Sync failure leaves no Prisma User → surfaces later as
+          // 404s on dashboard. Log so reports are traceable.
+          console.error("[signup] user-sync failed", err);
+        }
         router.push("/dashboard");
         router.refresh();
       } else {
         // Email confirmation required
         setSuccess(true);
       }
-    } catch {
+    } catch (err) {
+      console.error("[signup] sign-up error", err);
       setError("حدث خطأ. يرجى المحاولة مرة أخرى");
     } finally {
       setLoading(false);
@@ -104,7 +111,7 @@ export default function SignupPage() {
       >
         <div>
           <h1 className="text-3xl font-bold mb-2">✓ تم إنشاء الحساب</h1>
-          <p className="text-[#9A94A8]">شكراً لك على التسجيل</p>
+          <p className="text-muted">شكراً لك على التسجيل</p>
         </div>
         <div className="bg-green-500/20 border border-green-500/40 rounded-xl p-4">
           <p className="text-green-200 text-sm">
@@ -129,7 +136,7 @@ export default function SignupPage() {
     >
       <motion.div {...fadeUp(0)} className="text-center">
         <h1 className="text-3xl font-bold mb-2">إنشاء حساب جديد</h1>
-        <p className="text-[#9A94A8]">انضم إلى تقرير الآن</p>
+        <p className="text-muted">انضم إلى تقرير الآن</p>
       </motion.div>
 
       {error && (
@@ -147,7 +154,7 @@ export default function SignupPage() {
             onChange={(e) => setName(e.target.value)}
             placeholder="أحمد محمد"
             required
-            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-xl px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition cursor-text"
+            className="input-dark cursor-text"
           />
         </div>
         <div>
@@ -158,7 +165,7 @@ export default function SignupPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="example@email.com"
             required
-            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-xl px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition cursor-text"
+            className="input-dark cursor-text"
           />
         </div>
         <div>
@@ -169,14 +176,14 @@ export default function SignupPage() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             required
-            className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] rounded-xl px-4 py-3 text-white placeholder-[#9A94A8] focus:outline-none focus:border-[#370BF4] transition cursor-text"
+            className="input-dark cursor-text"
           />
-          <p className="text-xs text-[#9A94A8] mt-1">8 أحرف على الأقل</p>
+          <p className="text-xs text-muted mt-1">8 أحرف على الأقل</p>
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-[#370BF4] to-[#E036B8] hover:opacity-90 disabled:opacity-50 text-white font-medium rounded-xl px-4 py-3 transition cursor-pointer"
+          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? "جاري الإنشاء..." : "إنشاء الحساب"}
         </button>
@@ -184,10 +191,10 @@ export default function SignupPage() {
 
       <motion.div {...fadeUp(0.2)} className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[rgba(42,36,59,0.8)]" />
+          <div className="w-full border-t border-white/[var(--glass-border-opacity)]" />
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-[#03030D] text-[#9A94A8]">أو</span>
+          <span className="px-2 bg-[var(--tq-bg)] text-muted">أو</span>
         </div>
       </motion.div>
 
@@ -195,7 +202,7 @@ export default function SignupPage() {
         {...fadeUp(0.25)}
         onClick={handleGoogleSignup}
         disabled={loading}
-        className="w-full bg-[#0F0B1E] border border-[rgba(42,36,59,0.8)] hover:bg-white/5 disabled:opacity-50 text-white font-medium rounded-xl px-4 py-3 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+        className="input-dark hover:bg-white/5 disabled:opacity-50 text-white font-medium px-4 py-3 transition-colors flex items-center justify-center gap-2 cursor-pointer"
       >
         {googleIcon}
         التسجيل بجوجل

@@ -23,7 +23,10 @@ import {
 
 export type SlideSize = "16:9" | "9:16";
 export type SlideCountMode = "auto" | "custom";
-export type LogoPosition = CornerPosition;
+// File-local alias — used by LogoPlacementCard below. Not exported
+// because no external consumer uses it (callers pass `CornerPosition`
+// directly).
+type LogoPosition = CornerPosition;
 export type PersistentPosition = CornerPosition;
 
 export const DESIGN_STYLE_OPTIONS = [

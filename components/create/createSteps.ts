@@ -51,11 +51,3 @@ export const CREATE_STEPS: ReadonlyArray<CreateStep> = [
   },
 ];
 
-// Convenience lookup — fails loud (throws) if a caller passes an id
-// that isn't in the step list, so a typo doesn't silently render an
-// undefined step.
-export function getCreateStep(id: CreateStepId): CreateStep {
-  const step = CREATE_STEPS.find((s) => s.id === id);
-  if (!step) throw new Error(`Unknown create step: ${id}`);
-  return step;
-}

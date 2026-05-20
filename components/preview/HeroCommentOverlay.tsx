@@ -332,13 +332,10 @@ function GlassIconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      style={{
-        background: baseBg,
-        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-        WebkitBackdropFilter:
-          "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-      }}
-      className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${colorClasses} ${
+      // bg inline (state-driven); blur via Tailwind utility (memory:
+      // feedback_tw_glass_system).
+      style={{ background: baseBg }}
+      className={`backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${colorClasses} ${
         disabled ? "opacity-40" : ""
       }`}
     >
@@ -409,7 +406,7 @@ function CommentEditor({
       dir={direction}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
-      className="glass-modal backdrop-blur-glass backdrop-saturate-150 pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      className="glass-modal backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
       style={{ left, top, width: POPOVER_W }}
     >
       {error ? (
@@ -428,11 +425,8 @@ function CommentEditor({
             onClick={() => appendChip(chip.text)}
             style={{
               background: "rgba(255, 255, 255, var(--glass-opacity))",
-              backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-              WebkitBackdropFilter:
-                "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
             }}
-            className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-white/60 transition-colors hover:border-white/40 hover:text-white"
+            className="backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] rounded-full border border-white/15 px-2.5 py-1 text-xs text-white/60 transition-colors hover:border-white/40 hover:text-white"
           >
             {chip.label}
           </button>
@@ -456,11 +450,8 @@ function CommentEditor({
         style={{
           background: "rgba(255, 255, 255, var(--glass-opacity))",
           borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-          backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-          WebkitBackdropFilter:
-            "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
         }}
-        className="w-full resize-none rounded-xl border px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/40"
+        className="backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] w-full resize-none rounded-xl border px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/40"
       />
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="flex gap-1">

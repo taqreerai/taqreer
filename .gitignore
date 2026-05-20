@@ -16,3 +16,8 @@ slide-debug.json
 comments.txt
 .cr_issues/
 .cr_threads.json
+
+# Dev artifacts in public/ — debug HTML dumps + test fixtures. Not
+# committed, and they'd ship to clients if served.
+public/_test/
+public/raw-deck-*.html

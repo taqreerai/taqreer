@@ -542,11 +542,13 @@ export async function exportManifestAsPptx(
     // <a:gradFill> built from the recipe.
     const intents = extractGradientIntents(slideNodes);
 
-    // Diagnostic — log to console so the user can compare against PPT output.
-    if (typeof console !== "undefined") {
+    // Diagnostic — dev only. Helps compare offscreen render against
+    // PPT output during BiDi / layout debugging. Production builds
+    // strip this branch via the NODE_ENV guard.
+    if (process.env.NODE_ENV !== "production") {
       const firstRect = slideNodes[0].getBoundingClientRect();
       console.log(
-        `[html-export] ${slideNodes.length} slides, first rect ${firstRect.width}x${firstRect.height}, ${images.length} images, fonts ready`
+        `[html-export] ${slideNodes.length} slides, first rect ${firstRect.width}x${firstRect.height}, ${images.length} images, fonts ready`,
       );
     }
 
@@ -610,7 +612,7 @@ export async function exportManifestAsPptx(
       });
       if (res.ok) {
         fontEmbeddedBlob = await res.blob();
-        if (typeof console !== "undefined") {
+        if (process.env.NODE_ENV !== "production") {
           const embedded = res.headers.get("x-embed-stats") ?? "?";
           console.log(`[html-export] font-embed: ${embedded}`);
         }

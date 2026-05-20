@@ -31,6 +31,9 @@ export default function ConfirmedPage() {
         <svg width="96" height="96" viewBox="0 0 96 96" fill="none" aria-hidden="true">
           <defs>
             <linearGradient id="confirmed-grad" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+              {/* SVG gradient stops can't read CSS vars via `stopColor` —
+                  these are intentionally inlined and mirror
+                  --tq-blue / --tq-magenta. */}
               <stop offset="0%" stopColor="#370BF4" />
               <stop offset="100%" stopColor="#E036B8" />
             </linearGradient>
@@ -72,7 +75,7 @@ export default function ConfirmedPage() {
         <h1 className="text-2xl font-bold text-white mb-3">
           تم التحقق من بريدك الإلكتروني ✓
         </h1>
-        <p className="text-[#9A94A8] text-sm">جارٍ تحويلك إلى لوحة التحكم...</p>
+        <p className="text-muted text-sm">جارٍ تحويلك إلى لوحة التحكم...</p>
       </motion.div>
 
       {/* Progress line filling over 2 seconds */}
@@ -82,9 +85,9 @@ export default function ConfirmedPage() {
         transition={{ delay: 0.5 }}
         className="w-full"
       >
-        <div className="w-full h-px bg-[rgba(42,36,59,0.6)] rounded-full overflow-hidden">
+        <div className="w-full h-px bg-white/[var(--glass-border-opacity)] rounded-full overflow-hidden">
           <motion.div
-            className="h-full bg-gradient-to-l from-[#370BF4] to-[#E036B8]"
+            className="h-full bg-gradient-to-l from-[var(--tq-blue)] to-[var(--tq-magenta)]"
             initial={{ width: "0%" }}
             animate={{ width: "100%" }}
             transition={{ duration: 2.0, delay: 0.55, ease: "linear" }}

@@ -16,12 +16,12 @@ export default function GlobalError({
 
   return (
     <html dir="rtl" lang="ar">
-      <body className="page-container flex min-h-screen flex-col items-center justify-center gap-4 bg-[#03030D] text-white font-cairo">
+      <body className="page-container flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--tq-bg)] text-white font-cairo">
         <h2 className="text-2xl">حدث خطأ غير متوقع</h2>
         <p className="text-muted">تم إبلاغ فريقنا تلقائياً</p>
         <button
           onClick={reset}
-          className="rounded-lg bg-[#370BF4] px-6 py-3 text-base text-white cursor-pointer"
+          className="rounded-lg bg-[var(--tq-blue)] px-6 py-3 text-base text-white cursor-pointer"
         >
           حاول مجدداً
         </button>

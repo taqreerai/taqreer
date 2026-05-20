@@ -304,6 +304,11 @@ export async function POST(request: Request) {
         ? estimateSlideCountFromText(payload.content.text)
         : null);
 
+    // Arabic-first product baseline. Once the create form grows a
+    // language picker (Phase: bilingual support), thread the picked
+    // value through `payload.language` and derive direction
+    // (`ar/he/ur/fa → rtl`, else `ltr`). The Inngest prompts +
+    // BiDi post-processor already handle both directions.
     const brief = {
       title,
       language: "ar",
@@ -412,6 +417,7 @@ export async function POST(request: Request) {
         },
       });
 
+      // Arabic-first baseline (same TODO as above on the brief).
       const presentation = await tx.presentation.create({
         data: {
           projectId: project.id,
