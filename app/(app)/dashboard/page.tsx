@@ -49,6 +49,17 @@ export default async function DashboardPage() {
       where: { userId: dbUser.id },
       orderBy: { updatedAt: "desc" },
       take: 6,
+      // Pinned columns only — keeps the SSR payload small and makes
+      // the RecentProjects `Project` type the canonical contract.
+      // `thumbnailUrls` + `format` are required by the new tile
+      // (hover scrub + aspect-ratio crop).
+      select: {
+        id: true,
+        title: true,
+        format: true,
+        thumbnailUrls: true,
+        createdAt: true,
+      },
     }),
     prisma.template.findMany({
       where: { ownerId: dbUser.id },

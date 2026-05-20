@@ -1,38 +1,58 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
-import { ar } from "date-fns/locale";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { DashboardEmptyState, DashboardWidget, DashboardWidgetHeader } from "@/components/app/DashboardWidget";
+// Dashboard widget: "أحدث المشاريع" (Recent Projects).
+//
+// Layout: 3-column grid, max 6 items (2 rows × 3 cols). The dashboard
+// page caps the query at `take: 6` newest-first.
+//
+// Each tile is a full-bleed `ProjectThumbnail`:
+//   • Default state: just the WebP thumbnail of slide 1.
+//   • On hover: thumbnail dims, title + creation date appear at
+//     bottom-end, 3-dots menu trigger appears at top-end.
+//   • Click thumbnail → opens the project lightbox.
+//   • Click 3-dots → opens the actions menu (built in step 9f).
+//
+// The lightbox lives one level up (here, NOT inside the tile) so we
+// keep a single instance for the whole widget — opening tile A and
+// then tile B reuses the same modal instead of mounting per-tile
+// modals (Framer Motion would treat them as separate trees and
+// double-fade).
+//
+// The 3-dots menu state ALSO lives here (step 9f will hook in). For
+// now `onOpenMenu` is a no-op placeholder; the next step wires the
+// actual `<ProjectActionsMenu>` portal.
+
+import { useState } from "react";
+import {
+  DashboardEmptyState,
+  DashboardWidget,
+  DashboardWidgetHeader,
+} from "@/components/app/DashboardWidget";
+import { ProjectThumbnail } from "@/components/app/ProjectThumbnail";
+import { ProjectLightbox } from "@/components/app/ProjectLightbox";
+import type { SlideFormat } from "@/lib/schema/slide";
 
 type Project = {
   id: string;
   title: string;
-  type: string;
-  updatedAt: Date | string;
-  thumbnail: string | null;
+  createdAt: Date | string;
+  // Per-slide WebPs (step 8 thumbnail pipeline). Newest save wins.
+  // Empty array → tile renders the placeholder icon.
+  thumbnailUrls: string[];
+  // Slide format set at /create time. Drives the 16:9 vs 9:16 crop
+  // behaviour in ProjectThumbnail + the lightbox aspect ratio.
+  format: string;
 };
 
-const projectTypeLabels: Record<string, string> = {
-  create: "عرض تقديمي",
-  enhance: "تحسين",
-  mimic: "محاكاة",
-  custom: "مخصص",
-  presentation: "عرض تقديمي",
-  report: "تقرير",
-};
+function toFormat(v: string): SlideFormat {
+  return v === "9:16" ? "9:16" : "16:9";
+}
 
 export function RecentProjects({ projects }: { projects: Project[] }) {
-  const router = useRouter();
-
-  const handleDownload = (projectId: string) => {
-    window.location.assign(`/api/projects/${projectId}/download`);
-  };
-
-  const handleMoreClick = (projectId: string) => {
-    router.push(`/projects?project=${projectId}`);
-  };
+  // Currently-open lightbox project, or null. Holding the whole
+  // project object (not just id) so closing → reopening a different
+  // tile doesn't flash placeholder state mid-transition.
+  const [openProject, setOpenProject] = useState<Project | null>(null);
 
   return (
     <DashboardWidget>
@@ -46,63 +66,31 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
           action={{ label: "إنشاء مشروع", href: "/create" }}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-x-3 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
-            <div key={project.id} className="glass-card rounded-[14px] overflow-hidden group">
-              <div className="relative h-[88px] tq-thumbnail">
-                {project.thumbnail ? (
-                  <img
-                    alt={project.title}
-                    src={project.thumbnail}
-                    className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-300"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[26px] text-muted opacity-25">image</span>
-                  </div>
-                )}
-                <div className="absolute top-2 right-2">
-                  <span className="badge-purple">{projectTypeLabels[project.type] ?? project.type}</span>
-                </div>
-              </div>
-
-              <div className="px-3 py-2.5">
-                <h4 className="text-[13px] font-semibold text-white truncate leading-snug">{project.title}</h4>
-                <p className="text-[11px] text-muted mt-0.5">
-                  {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true, locale: ar })}
-                </p>
-
-                <div className="flex items-center justify-between mt-2.5 pt-2 tq-card-divider">
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(project.id)}
-                      aria-label="تحميل"
-                      className="btn-icon"
-                    >
-                      <span className="material-symbols-outlined text-[15px]">download</span>
-                    </button>
-                    <Link
-                      href={`/preview/${project.id}`}
-                      className="btn-icon inline-flex items-center justify-center"
-                    >
-                      <span className="material-symbols-outlined text-[15px]">edit</span>
-                    </Link>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleMoreClick(project.id)}
-                    aria-label="المزيد"
-                    className="btn-icon"
-                  >
-                    <span className="material-symbols-outlined text-[15px]">more_vert</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            <ProjectThumbnail
+              key={project.id}
+              slides={project.thumbnailUrls}
+              format={toFormat(project.format)}
+              title={project.title}
+              createdAt={project.createdAt}
+              onOpen={() => setOpenProject(project)}
+              // Step 9f will wire the actions menu here. Placeholder
+              // for now so the 3-dots button still renders and is
+              // ready to receive the menu's open/closed state.
+              onOpenMenu={() => undefined}
+            />
           ))}
         </div>
       )}
+
+      <ProjectLightbox
+        open={openProject !== null}
+        slides={openProject?.thumbnailUrls ?? []}
+        format={openProject ? toFormat(openProject.format) : "16:9"}
+        title={openProject?.title ?? ""}
+        onClose={() => setOpenProject(null)}
+      />
     </DashboardWidget>
   );
 }
