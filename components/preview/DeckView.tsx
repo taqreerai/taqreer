@@ -43,10 +43,22 @@ type Props = {
   presentationId: string | null;
   initialProjectStatus: string;
   initialVersionStatus: string | null;
-  // Used by the parent page only — included here so the `{...data}` spread
-  // doesn't trigger an extra-prop TS error. DeckView itself doesn't read
-  // this prop; remount on version change is driven by the parent's `key`.
+  // Used by the parent page for `key` (forces remount on version change)
+  // AND passed through to PreviewActionBar as `currentVersionId` so the
+  // Save Project button can compare against `savedVersionId`.
   initialVersionId?: string | null;
+  // Pinned canonical version pointer (Presentation.savedVersionId). Null
+  // when the project has never been saved. Drives the Save Project
+  // button's saved/unsaved indicator. Local state in DeckView mirrors
+  // this — successful saves update it without a router.refresh.
+  initialSavedVersionId?: string | null;
+  // Per-slide snapshot taken at save time — { slideKey → versionNumber }.
+  // Needed because per-slide restore mutates PresentationVersion.slideJson
+  // in place WITHOUT bumping currentVersionId, so the Save button has to
+  // compare each slide's live currentVersionNumber against this snapshot
+  // (not just the version pointer). Null when the project has never been
+  // saved or pre-dates the column.
+  initialSavedSlideVersions?: Record<string, number> | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
   // Per-slide state for the pill (lock / version count / cached
@@ -176,6 +188,9 @@ export function DeckView({
   presentationId,
   initialProjectStatus,
   initialVersionStatus,
+  initialVersionId,
+  initialSavedVersionId,
+  initialSavedSlideVersions,
   initialManifest,
   initialSlideCount,
   initialSlideStates = [],
@@ -261,6 +276,23 @@ export function DeckView({
   };
   const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
+  // Pinned canonical version pointer. Seeded from SSR; mutated by the
+  // Save Project button's onSaved callback. Compared against
+  // `initialVersionId` in PreviewActionBar to drive the saved/unsaved
+  // indicator. Parent remount on version change reseeds this from
+  // fresh SSR data, so partial-regen completion auto-flips the
+  // button back to "unsaved" without explicit plumbing.
+  const [savedVersionId, setSavedVersionId] = useState<string | null>(
+    initialSavedVersionId ?? null,
+  );
+  // Per-slide snapshot { slideKey → versionNumber } taken on Save.
+  // Restore mutates the active manifest in place without bumping
+  // currentVersionId, so this is the only signal that lets the Save
+  // button re-arm on restore — and re-detect "saved" when the user
+  // restores BACK to whatever versions were active at save time.
+  const [savedSlideVersions, setSavedSlideVersions] = useState<
+    Record<string, number> | null
+  >(initialSavedSlideVersions ?? null);
   const [slideCount, setSlideCount] = useState(initialSlideCount);
   const [progress, setProgress] = useState<Progress | null>(null);
   // Live-preview slides parsed out of Claude's streaming buffer by
@@ -1254,6 +1286,36 @@ export function DeckView({
   //   • the row's full width (side panels are fixed-positioned
   //     outside the section, so the row reserves nothing).
   const heroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
+
+  // Saved-state comparator. Two halves, both required for "saved":
+  //   1. Version pointer matches (catches partial regen + full regen,
+  //      which both bump currentVersionId).
+  //   2. Every live SlideState.currentVersionNumber matches the
+  //      snapshot taken at save time (catches per-slide restore,
+  //      which mutates PresentationVersion.slideJson IN PLACE and
+  //      leaves currentVersionId untouched).
+  // Slides that exist in slideStates but NOT in the snapshot count
+  // as mismatches — defensive against a SlideState being created
+  // post-save (which shouldn't happen in normal flow but would
+  // otherwise read as "saved" silently).
+  const isSaved = (() => {
+    if (savedVersionId == null) return false;
+    if (initialVersionId == null) return false;
+    if (savedVersionId !== initialVersionId) return false;
+    if (savedSlideVersions == null) {
+      // Project was saved before the per-slide snapshot column
+      // landed — fall back to the pointer-only comparison. New
+      // saves populate the snapshot, so this branch dies off
+      // naturally once the user clicks save again.
+      return true;
+    }
+    for (const [slideKey, state] of Object.entries(slideStates)) {
+      if (savedSlideVersions[slideKey] !== state.currentVersionNumber) {
+        return false;
+      }
+    }
+    return true;
+  })();
   return (
     <section
       dir={manifest!.direction}
@@ -1352,6 +1414,12 @@ export function DeckView({
                   onFirePartialRegen={handleFirePartialRegen}
                   applying={!!applying}
                   formatFallback={initialFormat}
+                  currentVersionId={initialVersionId ?? null}
+                  isSaved={isSaved}
+                  onSaved={(payload) => {
+                    setSavedVersionId(payload.savedVersionId);
+                    setSavedSlideVersions(payload.savedSlideVersions);
+                  }}
                 />
               </div>
             </motion.div>,

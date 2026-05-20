@@ -45,6 +45,18 @@ type InitialState = {
   initialProjectStatus: string;
   initialVersionStatus: string | null;
   initialVersionId: string | null;
+  // Pinned canonical version (set by Save Project). Null when
+  // the project has never been saved. Compared against
+  // initialVersionId in the Save button to drive its saved /
+  // unsaved indicator.
+  initialSavedVersionId: string | null;
+  // Per-slide snapshot taken at save time — { slideKey → versionNumber }.
+  // Drives the second half of the saved/unsaved comparison (the first
+  // half is currentVersionId === savedVersionId). Needed because
+  // per-slide restore mutates PresentationVersion.slideJson in place,
+  // leaving the version pointer untouched. Null when never saved or
+  // when an older save row didn't populate it.
+  initialSavedSlideVersions: Record<string, number> | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
   initialSlideStates: InitialSlideState[];
@@ -53,6 +65,24 @@ type InitialState = {
   // yet) so the cards have the correct orientation from the first paint.
   initialFormat: SlideFormat;
 };
+
+// Normalises Presentation.savedSlideVersions JSON into a
+// Record<slideKey, versionNumber>. The column is Prisma `Json`, so the
+// value lands as `unknown` — guard each entry, drop anything malformed
+// rather than throwing (legacy saves before the column existed land as
+// null, which we collapse to null too).
+function parseSavedSlideVersions(
+  value: unknown,
+): Record<string, number> | null {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const result: Record<string, number> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === "number" && Number.isFinite(v)) result[k] = v;
+  }
+  return result;
+}
 
 function readSlideCountHint(aiPrompt: string | null): number | null {
   if (!aiPrompt) return null;
@@ -93,7 +123,17 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
       // orientation BEFORE the manifest finishes streaming.
       format: true,
       presentation: {
-        select: { id: true, currentVersionId: true },
+        select: {
+          id: true,
+          currentVersionId: true,
+          // Pinned canonical version pointer (set by the
+          // "حفظ المشروع" toolbar action). Used to drive the
+          // Save button's saved/unsaved indicator.
+          savedVersionId: true,
+          // Per-slide snapshot taken at save time — drives the
+          // restore-aware portion of the saved/unsaved check.
+          savedSlideVersions: true,
+        },
       },
     },
   });
@@ -176,6 +216,10 @@ async function loadProject(projectId: string): Promise<InitialState | null> {
     initialProjectStatus: project.status,
     initialVersionStatus: version?.status ?? null,
     initialVersionId: version?.id ?? null,
+    initialSavedVersionId: project.presentation?.savedVersionId ?? null,
+    initialSavedSlideVersions: parseSavedSlideVersions(
+      project.presentation?.savedSlideVersions ?? null,
+    ),
     initialManifest: manifest,
     initialSlideCount,
     initialSlideStates,

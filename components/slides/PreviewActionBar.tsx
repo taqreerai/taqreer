@@ -152,6 +152,9 @@ export function PreviewActionBar({
   onFirePartialRegen,
   applying,
   formatFallback,
+  currentVersionId,
+  isSaved,
+  onSaved,
 }: {
   projectId: string;
   projectTitle: string;
@@ -176,12 +179,26 @@ export function PreviewActionBar({
   // started stamping `format`) export at the correct aspect ratio.
   // DeckView passes the project-level `Project.format` here.
   formatFallback?: SlideFormat;
+  // Save-Project state. `currentVersionId` gates the save button
+  // (can't save while there's no version to pin). `isSaved` is the
+  // precomputed display flag — DeckView owns the comparison
+  // (version pointer + per-slide snapshot) so the button can react
+  // to per-slide restores too. `onSaved` ferries the server's
+  // response back to DeckView's local mirrors of both the pinned
+  // version id and the per-slide snapshot.
+  currentVersionId: string | null;
+  isSaved: boolean;
+  onSaved: (payload: {
+    savedVersionId: string;
+    savedSlideVersions: Record<string, number>;
+  }) => void;
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
   const [exportPptx, setExportPptx] = useState<ButtonState>({ status: "idle" });
   const [exportHtml, setExportHtml] = useState<ButtonState>({ status: "idle" });
   const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
+  const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
 
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [templateTitle, setTemplateTitle] = useState(projectTitle);
@@ -201,6 +218,52 @@ export function PreviewActionBar({
       setRegen({
         status: "error",
         message: error instanceof Error ? error.message : "تعذر إعادة التصميم",
+      });
+    }
+  };
+
+  // Save Project — pins Presentation.savedVersionId to the version the
+  // deck is currently rendering AND snapshots every slide's
+  // currentVersionNumber, so a later restore can re-arm the button.
+  // Idempotent on the server (re-saving an already-saved version is a
+  // no-op). After success, DeckView's local savedVersionId +
+  // savedSlideVersions are updated via `onSaved` so the button morphs
+  // to its "saved" check without a router.refresh.
+  //
+  // First-save side effects (server-side): freezes Project.slideCount
+  // and Project.dominantColor for the /projects filter columns. Step 8
+  // also dispatches the thumbnail render job from this route.
+  const handleSaveProject = async () => {
+    if (saveProject.status === "running") return;
+    if (!currentVersionId) {
+      setSaveProject({ status: "error", message: "لا يوجد إصدار للحفظ" });
+      return;
+    }
+    setSaveProject({ status: "running", message: "جارٍ حفظ المشروع..." });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/save`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "Save failed");
+      }
+      const data = (await response.json()) as {
+        ok: true;
+        savedVersionId: string;
+        savedSlideVersions: Record<string, number>;
+      };
+      onSaved({
+        savedVersionId: data.savedVersionId,
+        savedSlideVersions: data.savedSlideVersions,
+      });
+      setSaveProject({ status: "success", message: "تم حفظ المشروع" });
+    } catch (error) {
+      setSaveProject({
+        status: "error",
+        message: error instanceof Error ? error.message : "تعذر حفظ المشروع",
       });
     }
   };
@@ -291,11 +354,16 @@ export function PreviewActionBar({
   // enough signal that an export is in flight, and exports settle back
   // to "idle" once the file is dispatched. Only ERRORS (for any action)
   // and the regen / save-template running + success states make it through.
+  // Save Project never surfaces running / success in the toast — the
+  // button's spinner + save→check icon morph is enough signal on its
+  // own; the extra toast read as noise. Errors still bubble up so the
+  // user sees auth / 4xx failures.
   const visibleMessage =
     regen.status === "error" ? { text: regen.message, kind: "error" as const } :
     exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :
     exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
     saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
+    saveProject.status === "error" ? { text: saveProject.message, kind: "error" as const } :
     saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
     regen.status === "running" ? { text: regen.message, kind: "info" as const } :
     saveTpl.status === "success" ? { text: saveTpl.message, kind: "success" as const } :
@@ -350,6 +418,35 @@ export function PreviewActionBar({
           active={commentMode}
           disabled={applying}
           countBadge={draftCommentCount}
+        />
+        {/* Save Project — pins the canonical version. Icon morphs
+            save → check once the current version matches
+            savedVersionId. `active` brightens the glass when saved
+            so the state reads at a glance, without breaking the
+            toolbar's neutral-glass language. Re-clicking when
+            already saved still hits the API (idempotent) so the
+            button feels responsive on every click. */}
+        <ToolButton
+          icon={isSaved ? "check" : "save"}
+          label={isSaved ? "محفوظ" : "حفظ المشروع"}
+          running={saveProject.status === "running"}
+          onClick={handleSaveProject}
+          active={isSaved}
+          disabled={applying || commentMode || !currentVersionId}
+          iconNode={
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={isSaved ? "saved" : "unsaved"}
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={{ duration: 0.25 }}
+                className="material-symbols-outlined text-[22px]"
+              >
+                {isSaved ? "check" : "save"}
+              </motion.span>
+            </AnimatePresence>
+          }
         />
         <ToolButton
           icon="download"

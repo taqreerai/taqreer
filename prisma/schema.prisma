@@ -98,6 +98,16 @@ model Presentation {
   // thumbnails, /projects filter data, and template exports.
   // null until the user clicks "حفظ المشروع" for the first time.
   savedVersionId   String?
+  // Per-slide content snapshot taken at save time: a JSON object
+  // mapping slideKey → SlideState.currentVersionNumber. Necessary
+  // because per-slide restore mutates PresentationVersion.slideJson
+  // IN PLACE (see lib/db/slide-versioning.ts:spliceSlideIntoActive
+  // Manifest) without bumping `currentVersionId`, so the
+  // saved/unsaved indicator can't rely on the PresentationVersion
+  // pointer alone — it also has to compare every slide's live
+  // version pointer against this snapshot. Null whenever
+  // savedVersionId is null (never saved).
+  savedSlideVersions Json?
   title            String
   language         String                @default("ar")
   direction        String                @default("rtl")
