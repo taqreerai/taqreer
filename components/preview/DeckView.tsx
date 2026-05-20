@@ -1410,9 +1410,6 @@ export function DeckView({
               currentVersionNumber={
                 slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
               }
-              hasCachedComments={
-                slideStates[focusedSlide.slideId]?.hasCachedComments ?? false
-              }
               isLocked={
                 slideStates[focusedSlide.slideId]?.lockedAt != null
               }
@@ -1530,50 +1527,6 @@ export function DeckView({
                   });
                 } catch (err) {
                   console.error("regen failed", err);
-                  setApplying(null);
-                }
-              }}
-              onTryAgain={async () => {
-                // Replay cached comments through a fresh partial
-                // regen. Pill already disables this when the slide
-                // has no cache, but the server defends too.
-                if (applying) return;
-                if (slideStates[focusedSlide.slideId]?.lockedAt != null)
-                  return;
-                if (!slideStates[focusedSlide.slideId]?.hasCachedComments)
-                  return;
-                setApplying({
-                  versionId: "__pending__",
-                  targetSlideIds: [focusedSlide.slideId],
-                });
-                try {
-                  const res = await fetch(
-                    `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/regen`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ replay: true }),
-                    },
-                  );
-                  if (!res.ok) {
-                    const errorBody = (await res.json().catch(() => null)) as
-                      | { error?: string }
-                      | null;
-                    throw new Error(errorBody?.error ?? "try-again failed");
-                  }
-                  const data = (await res.json()) as {
-                    versionId: string;
-                    targetSlideIds: string[];
-                  };
-                  setApplying({
-                    versionId: data.versionId,
-                    targetSlideIds: data.targetSlideIds,
-                  });
-                  // Cache stays in place — replay is meant to be
-                  // repeatable. Server-side recordSlidePartialRegen
-                  // re-writes the same payload anyway.
-                } catch (err) {
-                  console.error("try-again failed", err);
                   setApplying(null);
                 }
               }}

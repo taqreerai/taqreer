@@ -5,14 +5,20 @@
 // mouse leaves the canvas. Owns the per-slide actions that operate
 // on the currently-focused slide:
 //
-//   ⟳ Try again  Replay cached comments through partial regen  [AI]
 //   ↻ Regen      Clean partial regen (no comments)              [AI]
 //   ⌛ History   Open the version list popover
 //   🔒 Lock      Lock this slide against full-deck regen        [CTA when active]
 //
-// Undo was removed 2026-05-20 — History + Restore handle every
-// "go back" path non-destructively, and the destructive Undo
-// muddled the mental model. See log.md.
+// History notes:
+// - Undo removed 2026-05-20 — History + Restore handle every "go
+//   back" path non-destructively, and the destructive Undo
+//   muddled the mental model.
+// - Try Again (replay cached comments) removed 2026-05-20 —
+//   narrow utility for the complexity it added. Users iterate by
+//   adjusting comments via the comment bar, not by re-rolling
+//   identical comments hoping for different output. The server-
+//   side cache infrastructure (SlideState.cachedComments + /regen
+//   replay flag) is kept dormant for now; no UI surfaces it.
 //
 // STYLING (matches globals.css design vocabulary):
 //   - Try again + Regen use `.btn-gradient-anim` (Pattern 4 — AI
@@ -31,11 +37,9 @@
 //   - History is always visible; popover shows what rows exist
 
 import { useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 
 export type SlidePillState = {
   currentVersionNumber: number;
-  hasCachedComments: boolean;
   isLocked: boolean;
   // Disables every button (including Lock + Regen) while a regen
   // is mid-flight for this slide. Avoids double-clicks while the
@@ -44,7 +48,6 @@ export type SlidePillState = {
 };
 
 export type SlidePillProps = SlidePillState & {
-  onTryAgain?: () => void;
   onRegen?: () => void;
   // Receives the History trigger button's DOMRect so the parent
   // (DeckView) can anchor the popover under it. The parent owns
@@ -79,11 +82,9 @@ type PillButtonVariant = "glass" | "ai" | "cta";
 
 export function SlidePill({
   currentVersionNumber: _currentVersionNumber,
-  hasCachedComments,
   isLocked,
   busy = false,
   popoverOpen = false,
-  onTryAgain,
   onRegen,
   onOpenHistory,
   onToggleLock,
@@ -98,11 +99,10 @@ export function SlidePill({
   const historyBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Per the product spec: Lock + Regen are always available.
-  // Try again only when there's a cached comment payload. History
-  // is always available (popover shows whatever rows exist) —
-  // gating on a version count would have blocked the redo-after-
-  // restore path (rows survive a non-destructive restore).
-  const canTryAgain = hasCachedComments && !isLocked && !busy;
+  // History is always available (popover shows whatever rows
+  // exist) — gating on a version count would have blocked the
+  // redo-after-restore path (rows survive a non-destructive
+  // restore).
   const canRegen = !isLocked && !busy;
   const canOpenHistory = !busy;
   const canLock = !busy;
@@ -120,7 +120,7 @@ export function SlidePill({
       }`}
       style={{ top: 30 }}
     >
-      <motion.div
+      <div
         // Pattern 3 (Layout surface) via `.glass-popover` — the
         // canonical dark-tinted glass popover defined in globals.css.
         // Tailwind utilities supply the blur + saturate as required
@@ -128,40 +128,8 @@ export function SlidePill({
         // would lose to Tailwind's compositional rule. Bg + border
         // come from the class so we stay preset-aware without
         // hardcoding any colour or alpha.
-        //
-        // `layout` lets the pill resize smoothly when conditional
-        // buttons (Try Again) mount/unmount — without it the width
-        // would snap instantly as the child set changes.
-        layout
-        transition={{ layout: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } }}
         className="glass-popover backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)] flex items-center gap-2.5 rounded-full px-2.5 py-2"
       >
-        {/* Try Again — visible ONLY when the slide has a cached
-            comment payload. Wrapped in AnimatePresence + motion.div
-            so it scales/fades in on mount and out on unmount, and
-            the pill container's `layout` prop animates the width
-            change in lock-step. */}
-        <AnimatePresence initial={false} mode="popLayout">
-          {hasCachedComments ? (
-            <motion.div
-              key="try-again"
-              layout
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.6 }}
-              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="inline-flex"
-            >
-              <PillButton
-                icon="replay"
-                label="إعادة التصميم بالتعليقات"
-                variant="ai"
-                disabled={!canTryAgain}
-                onClick={onTryAgain}
-              />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
         <PillButton
           icon="autorenew"
           label="أعد تصميم الشريحة"
@@ -188,7 +156,7 @@ export function SlidePill({
           disabled={!canLock}
           onClick={onToggleLock}
         />
-      </motion.div>
+      </div>
     </div>
   );
 }
