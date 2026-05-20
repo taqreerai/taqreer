@@ -249,6 +249,7 @@ export function PreviewActionBar({
   const [exportPptx, setExportPptx] = useState<ButtonState>({ status: "idle" });
   const [exportHtml, setExportHtml] = useState<ButtonState>({ status: "idle" });
   const [exportPng, setExportPng] = useState<ButtonState>({ status: "idle" });
+  const [exportPdf, setExportPdf] = useState<ButtonState>({ status: "idle" });
   const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
   const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
 
@@ -346,6 +347,44 @@ export function PreviewActionBar({
       setExportPptx({
         status: "error",
         message: error instanceof Error ? error.message : "تعذر التصدير",
+      });
+    }
+  };
+
+  // PDF export — server-side, sync. POST /api/projects/[id]/export/pdf
+  // returns a multi-page PDF rendered by Puppeteer's `page.pdf()`.
+  // Page size is driven by the @page CSS rule emitted by
+  // buildHtmlDocumentServer({ printPageBreaks: true }) so the PDF
+  // pages match the canvas dimensions exactly (landscape 1920×1080
+  // for 16:9, portrait 1080×1920 for 9:16). Same UX as PNG: button
+  // spins, blob downloads, no toast on success.
+  const handleExportPdf = async () => {
+    if (exportPdf.status === "running") return;
+    setExportPdf({ status: "running", message: "جارٍ تصدير PDF..." });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/export/pdf`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "PDF export failed");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${baseFileName(manifest.title || projectTitle)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportPdf({ status: "idle" });
+    } catch (error) {
+      setExportPdf({
+        status: "error",
+        message: error instanceof Error ? error.message : "تعذر تصدير PDF",
       });
     }
   };
@@ -461,6 +500,7 @@ export function PreviewActionBar({
     exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :
     exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
     exportPng.status === "error" ? { text: exportPng.message, kind: "error" as const } :
+    exportPdf.status === "error" ? { text: exportPdf.message, kind: "error" as const } :
     saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
     saveProject.status === "error" ? { text: saveProject.message, kind: "error" as const } :
     saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
@@ -603,8 +643,9 @@ export function PreviewActionBar({
         <ToolButton
           icon="picture_as_pdf"
           label="تصدير PDF"
-          badge="قريباً"
-          disabled
+          running={exportPdf.status === "running"}
+          onClick={handleExportPdf}
+          disabled={applying}
         />
         <ToolButton
           icon="image"

@@ -11,9 +11,14 @@
 // errors on the Node side. This module mirrors the same template but
 // routes each slide through `sanitizeSlideHtmlServer` (JSDOM-backed).
 //
-// Currently the ONLY caller is the thumbnail-render Inngest function
+// Callers today:
+//   • thumbnail-render Inngest function (per-slide PNG → WebP)
+//   • PNG export route (per-slide PNG, zipped)
+//   • PDF export route (multi-page PDF — passes `{ printPageBreaks }`
+//     so Puppeteer's `page.pdf()` paginates one slide per page at the
+//     canvas dimensions)
 // (lib/export/html-document.ts stays the source of truth for the
-// "download as HTML" button — different lifecycle, different env).
+// "download as HTML" button — different lifecycle, different env.)
 // Keep the two templates in lockstep: a divergence between this and
 // the browser variant would produce thumbnails that don't match the
 // live preview.
@@ -23,7 +28,21 @@ import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtmlServer } from "@/lib/export/sanitize-server";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 
-export function buildHtmlDocumentServer(manifest: SlideManifest): string {
+export type HtmlDocumentServerOptions = {
+  // When true, emit `@page { size: <canvas-dims>; margin: 0 }` +
+  // `.hx-slide { page-break-after: always }`. Puppeteer's `page.pdf()`
+  // honours these so the resulting PDF is one slide per page at the
+  // exact canvas dimensions (1920×1080 landscape or 1080×1920
+  // portrait). Default false because thumbnail / PNG callers want a
+  // single long page they screenshot from, not paginated print
+  // output.
+  printPageBreaks?: boolean;
+};
+
+export function buildHtmlDocumentServer(
+  manifest: SlideManifest,
+  options: HtmlDocumentServerOptions = {},
+): string {
   const { width: canvasW, height: canvasH } = dimensionsForFormat(
     manifest.format,
   );
@@ -54,6 +73,31 @@ export function buildHtmlDocumentServer(manifest: SlideManifest): string {
     )
     .join("\n\n");
 
+  // Pagination rules — emitted only when the caller asks for them.
+  // Only `page-break-after` is set here; the actual PDF page size is
+  // driven from `page.pdf({ width, height })` in the route (`@page
+  // size` declarations turned out to conflict with the explicit
+  // dimensions on 9:16 portrait — Chrome's print path produced
+  // 0-byte / blank PDFs when both were set, user-flagged
+  // 2026-05-21). `margin: 0` on @page still helps belt-and-suspender
+  // edge-to-edge layout. The `break-after: page` line is the
+  // modern alias of the legacy `page-break-after: always` —
+  // shipping both for compat across Chromium versions.
+  const pageBreakCss = options.printPageBreaks
+    ? `
+  @page {
+    margin: 0;
+  }
+  .hx-slide {
+    page-break-after: always;
+    break-after: page;
+  }
+  .hx-slide:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }`
+    : "";
+
   return `<!DOCTYPE html>
 <html dir="${manifest.direction}" lang="${manifest.language}">
 <head>
@@ -77,7 +121,7 @@ ${cssVars}
     background: var(--brand-bg);
     position: relative;
     overflow: hidden;
-  }
+  }${pageBreakCss}
 </style>
 </head>
 <body>

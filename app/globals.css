@@ -180,14 +180,13 @@
   --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
   --tq-border-subtle: rgba(255, 255, 255, 0.05);
   --tq-border-danger: rgba(239, 68, 68, 0.22);
-  /* Neutral focus / "active border" — brighter than the resting
-     muted border but still neutral (not brand-blue). Used on
-     `.input-dark:focus`, and any future control that wants a
-     visible "you're interacting with this" cue without leaning on
-     brand colour. Matches the `border-white/40` value the
-     `.btn-pill:hover` rule already uses, just behind a named
-     token. */
-  --tq-border-focus:  rgba(255, 255, 255, 0.4);
+  /* Neutral focus / "active border". Sits between the resting
+     muted border (~white/0.09) and a too-bright white/0.4; user-
+     locked at #ffffff42 (≈ white/0.26) on 2026-05-21 after both
+     earlier values read wrong. Single token consumed by
+     `.input-dark:focus` + `.input-search:focus` so a future
+     adjustment lands in one place. */
+  --tq-border-focus:  #ffffff42;
 
   /* 5. Gradients */
   --tq-gradient-brand:  linear-gradient(135deg, #370BF4 0%, #7D2DFF 100%);
@@ -1232,13 +1231,11 @@ body {
 
 .input-search:focus {
   outline: none;
-  /* Neutral focus border + halo via `--tq-border-focus` so the
-     header search reads "focused" without the brand-violet ring.
-     Same token + rationale as `.input-dark:focus`. The box-shadow
-     halo uses a lower alpha (rgba 0.2) for a subtle outer glow
-     instead of a saturated ring. */
+  /* Neutral focus border via `--tq-border-focus`. Matches
+     `.input-dark:focus` — single border swap, no box-shadow halo
+     (the previous halo read as a second adjacent border at
+     1 px-offset, user-flagged 2026-05-21). */
   border-color: var(--tq-border-focus);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .input-search::placeholder {

@@ -49,6 +49,20 @@ function safeFileName(raw: string, fallback: string): string {
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
+// Builds an RFC 6266 Content-Disposition header that survives
+// non-ASCII filenames (Arabic deck titles in particular). HTTP
+// headers are ByteStrings (every char ≤ 255), so a raw Arabic
+// `filename="..."` throws on header construction (caught us via
+// the PDF route 2026-05-21). Modern browsers prefer the UTF-8
+// percent-encoded `filename*`; the ASCII fallback covers any
+// ancient client that doesn't.
+function contentDispositionAttachment(displayName: string): string {
+  const ascii = displayName.replace(/[^\x20-\x7E]+/g, "_");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(
+    displayName,
+  )}`;
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -207,7 +221,7 @@ export async function POST(
     status: 200,
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": contentDispositionAttachment(filename),
       // No-store on this exact response so a browser sharing the
       // same /export/png URL across two projects doesn't serve a
       // stale ZIP (the URL has the project id so collision is
