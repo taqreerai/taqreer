@@ -62,23 +62,17 @@ export type SlidePillProps = SlidePillState & {
 // class (`btn-gradient-anim`, `btn-gradient`, or the neutral glass
 // recipe below). Centralised so the five buttons stay pixel-
 // identical regardless of variant.
-// Base geometry only — per-variant classes paint the text colour
-// so the glass variant can run the muted→hover treatment without
-// being overridden by a base `text-white`.
+// Base geometry only — fixed 36 × 36 square, padding zeroed so
+// `.btn-pill`'s default 6 × 12 padding doesn't crop the centred
+// icon. Per-variant classes paint colour + (for AI/CTA) surface.
 const BUTTON_BASE =
-  "relative inline-flex h-9 w-9 items-center justify-center rounded-full transition-all disabled:cursor-not-allowed disabled:opacity-40";
+  "relative inline-flex h-9 w-9 items-center justify-center rounded-full p-0! transition-all disabled:cursor-not-allowed disabled:opacity-40";
 
-// Neutral glass surface — matches the normal-button treatment in
-// PreviewActionBar so the pill reads as part of the same button
-// vocabulary. Bg from the user's glass preset; border + text fade
-// from muted (white/15, white/60) to bright (white/40, white)
-// on hover. No raw `backdrop-filter` inline — the blur comes from
-// the Tailwind `backdrop-blur-glass` utility (globals.css §3).
-const NEUTRAL_GLASS_STYLE = {
-  background: "rgba(255, 255, 255, var(--glass-opacity))",
-} as const;
-const NEUTRAL_GLASS_CLASSES =
-  "border border-white/15 text-white/60 hover:border-white/40 hover:text-white";
+// Glass-variant buttons consume the canonical `.btn-pill` class
+// (globals.css §"Normal-button surface"). It's transparent +
+// muted-border + muted-text, fading to bright on hover. Lives in
+// globals.css as the single source of truth — DO NOT inline a
+// custom border / text recipe here.
 
 type PillButtonVariant = "glass" | "ai" | "cta";
 
@@ -198,19 +192,16 @@ function PillButton({
   //   cta   → `.btn-gradient` (solid brand gradient fill + shadow).
   //           Active "locked" state for the Lock button. Pure class
   //           styling, no inline override.
-  // Glass variant composes the preset-linked blur via the Tailwind
-  // `backdrop-blur-glass` utility (NOT raw `backdrop-filter` — see
-  // globals.css §3 / Pattern 3) AND the muted→hover treatment from
-  // PreviewActionBar so the pill reads as part of the same button
-  // vocabulary. AI + CTA variants paint their own surfaces via the
-  // global classes and ship as white text.
+  // Variant chrome — all three pull from globals.css classes:
+  //   glass → `.btn-pill` (transparent normal-button, Pattern 1)
+  //   ai    → `.btn-gradient-anim` (animated mesh-stroke, Pattern 4)
+  //   cta   → `.btn-gradient` (brand gradient + shadow, Pattern 2)
   const variantClass =
     variant === "ai"
       ? "btn-gradient-anim text-white hover:scale-[1.03]"
       : variant === "cta"
         ? "btn-gradient text-white"
-        : `backdrop-blur-glass ${NEUTRAL_GLASS_CLASSES}`;
-  const variantStyle = variant === "glass" ? NEUTRAL_GLASS_STYLE : undefined;
+        : "btn-pill";
   return (
     // Named `group/btn` so the tooltip's `group-hover/btn:` matches
     // THIS wrapper specifically, leaving the outer `group/canvas`
@@ -223,7 +214,6 @@ function PillButton({
         disabled={disabled}
         aria-label={label}
         className={`${BUTTON_BASE} ${variantClass}`}
-        style={variantStyle}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
           {icon}

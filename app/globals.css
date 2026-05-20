@@ -797,15 +797,21 @@ body {
   }
 }
 
+/* Normal-button surface (Pattern 1). Transparent — buttons sit on
+   top of glass surfaces (.glass-card, .glass-popover, .glass-modal,
+   .glass-dropdown) and inherit the tint from the surface. Stacking
+   the button's own glass over the surface's glass reads as a solid
+   chip, which is wrong (user feedback 2026-05-20). Affordance comes
+   from the muted border + text colour fading to bright on hover.
+   If a future button needs to sit on a non-glass area, add a
+   variant class with bg rather than putting glass back on the base. */
 .btn-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   color: rgba(255, 255, 255, 0.6);
   border-radius: 9999px;
   padding: 0.375rem 0.75rem;
