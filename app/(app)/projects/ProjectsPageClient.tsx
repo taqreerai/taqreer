@@ -135,15 +135,17 @@ export function ProjectsPageClient({
   }, [search, format, language, favOnly, colorHex]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  // Clamp the page index when the filtered list shrinks. Without
-  // this, deleting items from the last page can leave the user on
-  // a now-empty page even though earlier pages still have content.
-  useEffect(() => {
-    setPage((prev) => Math.min(prev, pageCount - 1));
-  }, [pageCount]);
+  // Clamp the page index when the filtered list shrinks (derived
+  // value during render, not a setState in an effect — earlier
+  // attempt tripped `react-hooks/set-state-in-effect` per CR
+  // 2026-05-21). Without the clamp, deleting items from the last
+  // page leaves the user on a now-empty page even though earlier
+  // pages still have content.
+  const activePage = Math.max(0, Math.min(page, pageCount - 1));
   const paginated = useMemo(
-    () => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [filtered, page],
+    () =>
+      filtered.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE),
+    [filtered, activePage],
   );
 
   const filtersActive =
@@ -189,7 +191,7 @@ export function ProjectsPageClient({
         // from). Pagination is the only operation where the entire
         // page-worth of tiles is fresh content, so the cascade
         // there is correct.
-        staggerKey={page}
+        staggerKey={activePage}
         gridClassName="grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
         onDeleted={(id) =>
           setDeletedIds((prev) => {
@@ -243,7 +245,7 @@ export function ProjectsPageClient({
           )
         }
       />
-      <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+      <Pagination page={activePage} pageCount={pageCount} onChange={setPage} />
     </>
   );
 }

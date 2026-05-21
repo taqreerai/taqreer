@@ -14,7 +14,7 @@
 // layout animation for tiles whose position changes (delete /
 // un-favorite / page flip).
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ProjectsGrid,
@@ -49,17 +49,16 @@ export function FavoritesGrid({
     [projects, deletedIds, unfavoritedIds],
   );
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  // Clamp the page index when the filtered list shrinks below the
-  // current page. Without this, deleting / un-favouriting items
-  // from the last page can leave the user staring at an empty grid
-  // even though earlier pages still have content. Effect runs only
-  // when pageCount changes — most renders are a no-op.
-  useEffect(() => {
-    setPage((prev) => Math.min(prev, pageCount - 1));
-  }, [pageCount]);
+  // Derived clamp (NOT a setState in an effect — same
+  // `react-hooks/set-state-in-effect` lint as ProjectsPageClient).
+  // Computes during render so a shrinking list (delete /
+  // un-favourite) immediately reflects on the visible page,
+  // without forcing a follow-up render via setPage.
+  const activePage = Math.max(0, Math.min(page, pageCount - 1));
   const paginated = useMemo(
-    () => visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [visible, page],
+    () =>
+      visible.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE),
+    [visible, activePage],
   );
 
   return (
@@ -67,7 +66,7 @@ export function FavoritesGrid({
       <ProjectsGrid
         projects={paginated}
         padTo={PAGE_SIZE}
-        staggerKey={page}
+        staggerKey={activePage}
         gridClassName="grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
         onDeleted={(id) =>
           setDeletedIds((prev) => {
@@ -105,7 +104,7 @@ export function FavoritesGrid({
           </div>
         }
       />
-      <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+      <Pagination page={activePage} pageCount={pageCount} onChange={setPage} />
     </>
   );
 }
