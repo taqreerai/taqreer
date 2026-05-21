@@ -183,17 +183,30 @@ export async function POST(
     // exceeded 30 slides.
     for (let i = 0; i < manifest.slides.length; i++) {
       const slide = manifest.slides[i];
-      // Scroll the target slide into view BEFORE measuring/shooting.
-      // The document is N×canvasH tall; only the slide currently
-      // at the top of the viewport will measure as (x: 0, y: 0).
-      // scrollIntoView with `block: "start"` + the post-scroll bbox
-      // ensures the clip rect lands on the slide's visible position.
+      // Scroll the target slide into view BEFORE measuring/shooting
+      // so Chrome paints it inside the single-slide viewport.
+      //
+      // Coord-space gotcha (root-caused 2026-05-21 via the
+      // thumbnail-render pipeline reporting "slide 1 × N" for every
+      // saved deck): `getBoundingClientRect()` is VIEWPORT-relative
+      // — slide N scrolled to top reads (0, 0). Puppeteer's
+      // `page.screenshot({ clip })` interprets clip in DOCUMENT
+      // coords (captureBeyondViewport defaults to true when a clip
+      // is set), so a viewport-relative (0, 0) clip always
+      // captured document (0, 0) — slide 1 — regardless of which
+      // slide was scrolled to. Adding `window.scrollX/Y` converts
+      // viewport rect → document rect.
       const bbox = await page.evaluate((escaped) => {
         const el = document.querySelector(`[data-slide-id="${escaped}"]`);
         if (!el) return null;
         el.scrollIntoView({ block: "start", inline: "start" });
         const r = el.getBoundingClientRect();
-        return { x: r.x, y: r.y, width: r.width, height: r.height };
+        return {
+          x: r.x + window.scrollX,
+          y: r.y + window.scrollY,
+          width: r.width,
+          height: r.height,
+        };
       }, cssEscape(slide.slideId));
       if (!bbox) {
         throw new Error(
