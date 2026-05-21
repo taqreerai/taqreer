@@ -65,55 +65,79 @@ export const COLOR_BUCKETS = [
   "#FFFFFF", // white
 ] as const;
 
-// Maps any hex into its canonical bucket. Returns one of the
-// COLOR_BUCKETS entries above.
+// Maps a hex to the set of buckets it perceptually belongs to.
+// Returns 1-2 buckets — most colors land cleanly in one, but
+// colors near a hue boundary appear in BOTH adjacent buckets so
+// the filter UX matches how humans perceive ambiguity ("almost a
+// purple" → show under blue AND purple, not strictly one).
 //
-// Classification order matters:
-//   1. Lightness extremes (very dark / very light) → black/white,
-//      regardless of nominal hue. Catches `#020807` (h=170 but
-//      visually black).
-//   2. Greyscale (sat < 0.15) → grey. Distinct from black/white now
-//      that grey is its own bucket per the 10-color taxonomy.
-//   3. Brown — dark warm chromatic (hue 15–50°, lightness < 0.45).
-//      Catches darkened oranges + dark yellows like #964B00 that
-//      read as brown to most users. Dark REDS (hue 0–15°) keep
-//      their identity as red, not brown.
-//   4. Standard hue buckets for the remaining chromatics. Blue and
-//      purple have widened ranges (cyan folds into blue, pink folds
-//      into purple) so the user's 10-color list is the exhaustive
-//      taxonomy.
-export function bucketize(hex: string): string {
-  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return "#000000"; // defensive
+// Classification order:
+//   1. Lightness/saturation gates (black / white / grey / brown)
+//      are SHARP — there's no perceptual ambiguity between "is
+//      this black or red" at l=0.05. Single bucket only.
+//   2. Chromatic hue is FUZZY — each bucket's hue range gets
+//      extended by ±HUE_FUZZ at each boundary. A color whose hue
+//      sits in the overlap zone lands in BOTH adjacent buckets.
+//      Caught the `#630EE1` (h=264.2°) case where the original
+//      sharp 265° cutoff put it in blue only, even though it's
+//      visually right between blue and purple.
+//
+// Returns COLOR_BUCKETS entries (canonical hexes). Dedupe + order
+// in the caller's swatch picker.
+// Hue fuzz tuned against the user's actual library 2026-05-21:
+//   • ±10° was too generous — a `#D4C1E5` lavender (5° past purple)
+//     and a `#F4DC0B` yellow (9° past orange) both leaked into the
+//     wrong neighbouring bucket, making "all decks appear under
+//     all colors."
+//   • ±3° keeps the boundary-overlap UX (e.g. `#630EE1` at h=264°,
+//     1° below the purple cutoff, still shows up under BOTH blue
+//     AND purple) while keeping anything more than 3° past a
+//     boundary firmly in its own bucket.
+const HUE_FUZZ = 3;
+type HueRange = { color: string; min: number; max: number; wraps?: boolean };
+const HUE_RANGES: HueRange[] = [
+  { color: "#EF4444", min: 345, max: 15, wraps: true }, // red (wraps 0)
+  { color: "#F97316", min: 15, max: 45 },               // orange
+  { color: "#EAB308", min: 45, max: 75 },               // yellow
+  { color: "#22C55E", min: 75, max: 165 },              // green
+  { color: "#3B82F6", min: 165, max: 265 },             // blue (incl. cyan)
+  { color: "#A855F7", min: 265, max: 345 },             // purple (incl. pink)
+];
+
+function hueInRange(h: number, r: HueRange, fuzz: number): boolean {
+  const min = r.min - fuzz;
+  const max = r.max + fuzz;
+  if (r.wraps) {
+    // Red wraps 0 — range is [345, 360) ∪ [0, 15). With fuzz, also
+    // [335, 360) ∪ [0, 25). Two segments to check.
+    return h >= min || h < max;
+  }
+  return h >= min && h < max;
+}
+
+export function bucketize(hex: string): string[] {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return ["#000000"]; // defensive
   const { h, s, l } = hexToHsl(hex.toUpperCase());
-  if (l < LIGHT_MIN) return "#000000";
-  if (l > LIGHT_MAX) return "#FFFFFF";
-  if (s < SAT_MIN) return "#9CA3AF"; // grey
-  // Brown — warm hue that's EITHER dark (saturated dark browns
-  // like saddle-brown `#8B4513`) OR muted (tans, beiges, creams
-  // like `#E3DBCA`). Both are perceived as "earth tone / brown
-  // family" by users even though their HSL coordinates differ
-  // wildly. Without the saturation gate, a cream `#E3DBCA`
-  // (h=41, s=0.31, l=0.84) leaks into orange because it sits
-  // above the dark-lightness threshold despite reading as brown
-  // visually. With it, bright saturated saffron (`#F4AA0B`, s=0.91)
-  // stays in orange — only the muted warms route here.
-  if (h >= 15 && h < 50 && (l < 0.45 || s < 0.5)) return "#92400E";
-  if (h < 15 || h >= 345) return "#EF4444"; // red (wraps the wheel)
-  if (h < 45) return "#F97316"; // orange
-  if (h < 75) return "#EAB308"; // yellow
-  if (h < 165) return "#22C55E"; // green
-  // Blue/purple boundary at 265°. Tuned against the actual hex
-  // landscape after two user-reports:
-  //   • `#D4C1E5` lavender (h≈270) should be purple — it is.
-  //   • `#370BF4` (the codebase's `--tq-blue`, h=251) should be
-  //     blue — it is. At 250° it WAS being misclassified as purple.
-  //   • Tailwind `violet-500` (#8B5CF6, h=258) lives in BLUE under
-  //     this cutoff. Despite its name, h=258 reads as borderline
-  //     blue-violet to most users; if a brand genuinely wants
-  //     purple they tend to pick something past h=270 (Tailwind's
-  //     `purple-500` `#A855F7` at h=271, for instance).
-  if (h < 265) return "#3B82F6"; // blue (includes cyan/teal)
-  return "#A855F7"; // purple (includes pink/magenta/lavender)
+  // Sharp gates (no perceptual ambiguity at these extremes).
+  if (l < LIGHT_MIN) return ["#000000"];
+  if (l > LIGHT_MAX) return ["#FFFFFF"];
+  if (s < SAT_MIN) return ["#9CA3AF"]; // grey
+  // Brown — warm hue that's EITHER dark OR muted. Sharp gate too:
+  // a cream is unambiguously brown-family, not "almost orange and
+  // almost brown." Single bucket.
+  if (h >= 15 && h < 50 && (l < 0.45 || s < 0.5)) return ["#92400E"];
+
+  // Chromatic hue — fuzzy. Walk every range; collect every one
+  // whose extended range contains h. In practice a color lands in
+  // 1 (core of a band) or 2 (boundary zone) buckets.
+  const out: string[] = [];
+  for (const r of HUE_RANGES) {
+    if (hueInRange(h, r, HUE_FUZZ)) out.push(r.color);
+  }
+  // Defensive fallback — if the ranges somehow missed h (impossible
+  // when covering 0-360 contiguously, but defensive against bad
+  // input). Return red as the wrap-around catch.
+  return out.length > 0 ? out : ["#EF4444"];
 }
 
 // Pure (testable) function — no Prisma access. Imported by

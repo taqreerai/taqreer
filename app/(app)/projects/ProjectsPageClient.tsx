@@ -82,27 +82,21 @@ export function ProjectsPageClient({
   // covered even if their recent save happens to land on page 2.
   useRefreshWhileThumbnailsPending(projects);
 
-  // Bucketed swatch list. Every `colorTags` entry is mapped through
-  // `bucketize` to one of 10 canonical buckets (8 hue + black +
-  // white — see `lib/project/derive-color-tags.ts`). The strip
-  // then renders only the buckets actually present in the user's
-  // library, in canonical rainbow order (red → pink → black/white).
-  //
-  // Pre-step-color-tags rows have an empty colorTags array; skipped
-  // upstream by the loop's iteration over the array (zero entries =
-  // no contribution).
+  // Bucketed swatch list. Each `colorTags` entry expands to 1-2
+  // canonical buckets via `bucketize` (returns multiple for colors
+  // near a hue boundary — perceptual overlap). The strip renders
+  // only the buckets actually present in the user's library, in
+  // canonical rainbow order.
   const swatchColors = useMemo(() => {
     const present = new Set<string>();
     for (const p of projects) {
       for (const hex of p.colorTags ?? []) {
         if (!hex) continue;
-        present.add(bucketize(hex));
+        for (const bucket of bucketize(hex)) {
+          present.add(bucket);
+        }
       }
     }
-    // Filter the canonical order list to only buckets present in the
-    // library. Preserves the rainbow ordering AND keeps the swatch
-    // count tied to "what the user actually uses" — a library with
-    // no oranges doesn't show an orange swatch.
     return COLOR_BUCKETS.filter((b) => present.has(b));
   }, [projects]);
 
@@ -113,14 +107,16 @@ export function ProjectsPageClient({
       if (format !== null && p.format !== format) return false;
       if (language !== null && p.language !== language) return false;
       if (favOnly && !p.isFavorite) return false;
-      // Color filter — bucket each tag and check membership of the
-      // selected bucket. A deck with brand colour `#F4AA0B` (a
-      // saffron orange) matches the yellow bucket; a greyscale deck
-      // (tags `[#000000, #FFFFFF]`) matches both the black and the
-      // white bucket. Using `.some(bucket=…)` instead of
-      // `.includes(exactHex)` is what enables the "merge shades into
-      // 10 buckets" behaviour from a flat tag array.
-      if (colorHex && !(p.colorTags ?? []).some((t) => bucketize(t) === colorHex)) {
+      // Color filter — a deck matches if ANY of its colorTags
+      // perceptually belongs to the selected bucket. `bucketize`
+      // returns 1-2 buckets per hex (boundary colours land in
+      // both adjacent ones), so a deck with `#630EE1` (h=264,
+      // blue-purple) matches the filter under EITHER blue OR
+      // purple — same as how a human perceives it.
+      if (
+        colorHex &&
+        !(p.colorTags ?? []).some((t) => bucketize(t).includes(colorHex))
+      ) {
         return false;
       }
       if (q && !p.title.toLowerCase().includes(q)) return false;
