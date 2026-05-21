@@ -92,8 +92,15 @@ export function bucketize(hex: string): string {
   if (h < 45) return "#F97316"; // orange
   if (h < 75) return "#EAB308"; // yellow
   if (h < 165) return "#22C55E"; // green
-  if (h < 285) return "#3B82F6"; // blue (includes cyan/teal)
-  return "#8B5CF6"; // purple (includes pink/magenta)
+  // Blue/purple boundary at 250° — below that, sky blue + royal
+  // blue + indigo edge cases. Above that, indigo-violet + violet +
+  // lavender + pink-magenta all read as purple to the human eye.
+  // Was at 285° initially; a light lavender (`#D4C1E5`, hue 271°)
+  // was leaking into blue (user-reported 2026-05-21). 250° puts
+  // the canonical Tailwind violet-500 (`#8B5CF6`, hue 258°) firmly
+  // in purple, matching its name.
+  if (h < 250) return "#3B82F6"; // blue (includes cyan/teal)
+  return "#8B5CF6"; // purple (includes pink/magenta/lavender)
 }
 
 // Pure (testable) function — no Prisma access. Imported by
