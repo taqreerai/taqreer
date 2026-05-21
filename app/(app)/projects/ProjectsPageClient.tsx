@@ -173,10 +173,16 @@ export function ProjectsPageClient({
       <ProjectsGrid
         projects={paginated}
         padTo={PAGE_SIZE}
-        // Drives the staggered domino fade-in when navigating
-        // between pages. Delete + filter don't change it (page
-        // stays the same), so those mutations only trigger the
-        // per-tile layout animation.
+        // ONLY page changes trigger the staggered fade cascade.
+        // Filter / search changes use Framer's `layout` prop on
+        // each tile for smooth position transitions — but that
+        // only works if tiles STAY MOUNTED across the render
+        // (stable `key={projectId}`). A composite key that
+        // remounts the outer wrapper on every filter click kills
+        // the layout animation (no "before" position to animate
+        // from). Pagination is the only operation where the entire
+        // page-worth of tiles is fresh content, so the cascade
+        // there is correct.
         staggerKey={page}
         gridClassName="grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
         onDeleted={(id) =>

@@ -138,6 +138,16 @@ export function ProjectsGrid({
         // for a 15-tile page.
         <motion.div
           key={project.id}
+          // `layout` animates position changes when the rendered
+          // set is mutated in place (delete backfill, filter narrow,
+          // search refine). Without it, surviving tiles snap to
+          // their new grid positions instantly while filtered-out
+          // tiles disappear — jarring. WITH it, Framer measures
+          // each tile's before/after position and tweens transform
+          // smoothly (~300 ms spring). Composes with the per-tile
+          // initial/animate cascade above: fresh mounts fade in
+          // with stagger, surviving tiles reflow with layout.
+          layout
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{
