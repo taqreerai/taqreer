@@ -529,6 +529,22 @@ body {
   font-variation-settings: "FILL" 1, "wght" 200, "GRAD" 0, "opsz" 24;
 }
 
+/* ─── Material-symbols size utilities ───
+   Chained-selector classes that pin a Material Symbols glyph to a
+   specific font-size. Required because Google Fonts ships its own
+   `.material-symbols-outlined { font-size: 24 px }` rule in the
+   cross-origin webfont stylesheet, which loads later than our
+   globals.css and silently overrides any Tailwind `text-[Npx]`
+   utility on the JSX (same cascade trap documented for
+   `.tq-fav-indicator`). Chaining both class selectors gives us
+   (0,0,2,0) specificity — beats Google's (0,0,1,0) deterministically.
+   Use these any time a Material Symbols icon needs a non-24-px size.
+   Add new sizes here as the design system grows; never inline
+   `style={{ fontSize }}` in JSX (hardcoded magic number). */
+.material-symbols-outlined.tq-icon-sm {
+  font-size: 14px;
+}
+
 /* ─── Text Gradient ─── */
 .text-gradient {
   background: linear-gradient(90deg, #E879F9 0%, #A855F7 50%, #3B82F6 100%);

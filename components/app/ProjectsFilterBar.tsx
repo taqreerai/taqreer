@@ -145,12 +145,15 @@ export function ProjectsFilterBar({
           onClick={() => onFavOnlyChange(!favOnly)}
           className={pillClass(favOnly)}
         >
-          {/* Chip-scale star — inline FILL axis swap, doesn't reuse
-              the `.tq-fav-indicator` recipe (that's tuned for the
-              18×18 thumbnail badge, not chip-scale). */}
+          {/* Chip-scale star — `.tq-icon-sm` pins font-size to 14 px
+              via the chained-selector cascade fix. Without it the
+              icon defaults to Google Fonts' 24 px rule and the pill
+              grows ~8 px taller than its text-only siblings. FILL
+              axis stays inline because it toggles with the pill's
+              pressed state. */}
           <span
             aria-hidden
-            className="material-symbols-outlined text-[14px]"
+            className="material-symbols-outlined tq-icon-sm"
             style={{ fontVariationSettings: favOnly ? '"FILL" 1' : '"FILL" 0' }}
           >
             star
@@ -163,10 +166,10 @@ export function ProjectsFilterBar({
           wide viewports via `ms-auto`. Wraps below the chip row on
           medium widths. Only rendered when the user has at least one
           deck with a frozen dominantColor (pre-step-8b legacy decks
-          are null and skipped upstream). */}
+          are null and skipped upstream). No leading label — the
+          coloured circles read as "filter by colour" on sight. */}
       {swatchColors.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 ms-auto">
-          <span className="text-xs text-muted">صفّ حسب اللون:</span>
           {swatchColors.map((hex) => {
             const selected = selectedColor === hex;
             return (
