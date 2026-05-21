@@ -90,13 +90,23 @@ export const thumbnailRender = inngest.createFunction(
       if (!supabaseUserId) {
         throw new Error(`Project ${projectId} owner has no supabaseUserId`);
       }
-      const version = await prisma.presentationVersion.findUnique({
-        where: { id: savedVersionId },
+      // Validate savedVersionId BELONGS to this projectId. Without
+      // the cross-check, a malformed event payload (or upstream
+      // bug) could point us at another deck's version row and the
+      // pipeline would render thumbnails for the wrong project +
+      // upload them to THIS project's storage path. The `findFirst`
+      // joins through `presentation.projectId` so a version from a
+      // different project resolves to null → throw.
+      const version = await prisma.presentationVersion.findFirst({
+        where: {
+          id: savedVersionId,
+          presentation: { projectId },
+        },
         select: { slideJson: true },
       });
       if (!version) {
         throw new Error(
-          `PresentationVersion ${savedVersionId} not found (save ordering bug?)`,
+          `PresentationVersion ${savedVersionId} not found OR doesn't belong to project ${projectId} (save ordering bug or cross-project event)?`,
         );
       }
       const parsed = SlideManifestSchema.safeParse(version.slideJson);

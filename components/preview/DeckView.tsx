@@ -1192,15 +1192,21 @@ export function DeckView({
   // Walks the current manifest's slide list, builds an optimistic
   // snapshot with every slide's lockedAt flipped, then POSTs the
   // bulk endpoint. On error we leave the optimistic state in place
-  // and log — the alternative ("revert every row") would mask the
-  // failure and let the user think the action succeeded; logging
-  // matches the single-slide lock toggle's error policy. Idempotent
-  // server-side (re-lock keeps original lockedAt; re-unlock no-ops).
+  // Revert on failure (user-flagged via CR 2026-05-21): the sidebar
+  // pill label flips based on the global locked count, and per-slide
+  // `locked` badges drive UI everywhere. If the bulk API errors and
+  // we leave the optimistic flip in place, the deck appears locked
+  // while the server says otherwise — the user can't tell. Capturing
+  // the previous state before the optimistic update and restoring it
+  // in the catch path keeps UI honest on failure. Idempotent server-
+  // side still (re-lock keeps original lockedAt; re-unlock no-ops).
   const bulkSetLock = useCallback(
     async (lock: boolean) => {
       if (!manifest) return;
       const nowIso = new Date().toISOString();
+      let previousStates: Record<string, InitialSlideState> | null = null;
       setSlideStates((prev) => {
+        previousStates = prev;
         const next: Record<string, InitialSlideState> = { ...prev };
         for (const slide of manifest.slides) {
           const current = prev[slide.slideId];
@@ -1227,6 +1233,11 @@ export function DeckView({
         );
         if (!res.ok) throw new Error(`lock-all: ${res.status}`);
       } catch (err) {
+        // Restore the previous state so the sidebar's "All locked /
+        // Lock all" label + per-slide badges reflect server truth.
+        if (previousStates) {
+          setSlideStates(previousStates);
+        }
         console.error("bulk lock failed", err);
       }
     },
@@ -1942,6 +1953,15 @@ export function DeckView({
         onRestore={async (versionNumber) => {
           if (!historySlideKey) return;
           const targetSlideKey = historySlideKey;
+          // Capture the slide's pre-optimistic version BEFORE the
+          // setSlideStates call below mutates it — fixes a CR-flagged
+          // bug where the catch path was reading `current` AFTER the
+          // optimistic write and "reverting" to the same value that
+          // was just set, making the rollback a no-op. Now `prevVersionNumber`
+          // holds the original currentVersionNumber and the catch path
+          // restores it for real.
+          const prevVersionNumber =
+            slideStates[targetSlideKey]?.currentVersionNumber ?? null;
           // CLOSE THE POPOVER FIRST — start the exit animation
           // immediately so the click feels responsive. The async
           // work below splices the slide into the manifest after.
@@ -1987,26 +2007,24 @@ export function DeckView({
             applyRestoredSlide(targetSlideKey, data);
           } catch (err) {
             console.error("restore failed", err);
-            // Revert the optimistic pointer update on error.
-            setSlideStates((prev) => {
-              const current = prev[targetSlideKey];
-              if (!current) return prev;
-              return {
-                ...prev,
-                [targetSlideKey]: {
-                  ...current,
-                  // We don't know the actual prior versionNumber
-                  // since we overwrote it optimistically — best
-                  // we can do is refetch from the server, but for
-                  // now revert to the cached row's current value
-                  // BEFORE the optimistic write (which we lost).
-                  // In practice errors here are network-only and
-                  // rare; the next History open will refetch and
-                  // reconcile.
-                  currentVersionNumber: current.currentVersionNumber,
-                },
-              };
-            });
+            // Revert to the version captured BEFORE the optimistic
+            // write (now in `prevVersionNumber`). If the slide had
+            // no SlideState row to begin with (prevVersionNumber ==
+            // null) we leave the row alone — there was nothing to
+            // restore to that didn't exist before.
+            if (prevVersionNumber != null) {
+              setSlideStates((prev) => {
+                const current = prev[targetSlideKey];
+                if (!current) return prev;
+                return {
+                  ...prev,
+                  [targetSlideKey]: {
+                    ...current,
+                    currentVersionNumber: prevVersionNumber,
+                  },
+                };
+              });
+            }
           }
         }}
       />

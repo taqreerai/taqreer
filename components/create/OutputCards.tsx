@@ -186,6 +186,10 @@ function SlideCountStepper({
           const n = Number(event.target.value);
           onChange(Number.isFinite(n) ? clamp(n) : min);
         }}
+        // a11y: screen readers announce field purpose. Custom input
+        // sits between − / + buttons with no visible <label>, so the
+        // programmatic name comes from aria-label.
+        aria-label="عدد الشرائح"
         className="input-dark no-spinner text-center text-sm"
         style={{ width: 52, height: 32, padding: "0 8px" }}
       />
@@ -326,6 +330,10 @@ export function CanvasCard({
           value={persistentText}
           onChange={(e) => onPersistentText(e.target.value)}
           placeholder="مثل: التاريخ، الموقع الإلكتروني"
+          // a11y: SectionLabel above is visual only; programmatic
+          // name comes from aria-label so screen readers announce
+          // field purpose.
+          aria-label="نص ثابت على كل الشرائح"
           // Direction follows the deck language pill so English
           // overlay text (e.g. "© 2026 · taqreer.ai") types LTR
           // and Arabic ("جميع الحقوق محفوظة") types RTL.

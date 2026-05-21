@@ -521,7 +521,7 @@ Simplified — Taqreer's version is ONE single view, no tabs.
 
 **Layout** (top to bottom):
 
-```
+```text
 Share <project title>                            [X]
 ─────────────────────────────────────────────────────
 

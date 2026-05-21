@@ -79,7 +79,17 @@ function parseSavedSlideVersions(
   }
   const result: Record<string, number> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof v === "number" && Number.isFinite(v)) result[k] = v;
+    // Saved-slide-version numbers are 1-indexed positive integers
+    // (see SlideState.currentVersionNumber). Fractional or negative
+    // values shouldn't reach this Json column — but if a corrupt
+    // payload ever lands here, accepting it would skew the
+    // saved/unsaved comparator in DeckView (which does an
+    // equality check against live SlideState.currentVersionNumber,
+    // also an integer). Narrow to non-negative integers; anything
+    // off-axis gets silently dropped from the snapshot.
+    if (typeof v === "number" && Number.isInteger(v) && v >= 0) {
+      result[k] = v;
+    }
   }
   return result;
 }

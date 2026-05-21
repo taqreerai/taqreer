@@ -771,37 +771,40 @@ If you're a fresh agent picking this up, read in this order:
 
 ### Branch + PR strategy (locked 2026-05-21)
 
-**Single-developer setup. Existing branches only — never create new ones.**
-
-Branches that exist on `origin`:
+**`dev` is the only working branch. Two branches total. No feature branches, no hotfix branches, no test branches. EVER.**
 
 | Branch | Purpose |
 |---|---|
-| `hotfix/thinking-config-adaptive` | Active working branch. All new code goes here. |
-| `dev` | Production-track. Updated by force-pushing `hotfix/...` over it (see flow below). |
+| `dev` | The ONE working branch. All commits land here. |
 | `main` | Released. Updated via `dev → main` PR (CR-reviewed). |
-| `dev-backup-YYYY-MM-DD`, `main-backup-YYYY-MM-DD` | Snapshots created before each force-replace of dev/main. Preserves prior history. Keep ~30 days. |
+| `dev-backup-YYYY-MM-DD`, `main-backup-YYYY-MM-DD` | Dated snapshots, only created before an unavoidable destructive remote write. Keep ~30 days. |
 
-**Why we don't create new feature branches:**
-The previous "branch per feature" attempt produced an 82-commit / 51-commit divergence between `hotfix/...` and `dev` that took a destructive force-replace to reconcile (2026-05-21). Solo developer + GitHub branch protection are doing different jobs; we don't need both layers of indirection.
+**Why no feature branches:** the previous `hotfix/thinking-config-adaptive` branch produced an 82-commit / 51-commit divergence with `dev` (same files edited on both sides). Recovery required a destructive force-replace of `dev` + safety backups on 2026-05-21. Solo developer doesn't need a second branch layer.
 
 **The workflow:**
-1. Code goes on `hotfix/thinking-config-adaptive` (local + push).
-2. Periodically, the user says "promote to dev" — we tag the current state (`stable-YYYY-MM-DD`), create `dev-backup-YYYY-MM-DD` branch on origin (preserves dev's then-current state), then **`git push origin hotfix/thinking-config-adaptive:dev --force`**. Dev now equals hotfix.
-3. Open `gh pr create --base main --head dev` for the CodeRabbit review pass.
-4. Address CR findings on `hotfix/...` → push → re-push to dev with `:dev --force` → CR re-reviews.
-5. When CR is clean, merge PR → `main = dev = hotfix`.
+1. Local checkout: `dev`. ALWAYS. `git branch --show-current` should always print `dev`.
+2. Edit, commit, push to `origin/dev`. That's it.
+3. When the user says "open PR" → `gh pr create --base main --head dev` → CodeRabbit reviews.
+4. CR findings → fix on `dev` → push → CR re-reviews.
+5. Merge PR → `main = dev`.
 
-**Rules to keep this clean:**
-- **Never `git checkout -b new-branch`.** If you think a new branch is warranted, ask first.
-- **Tag before any force-push.** `git tag stable-YYYY-MM-DD && git push origin stable-YYYY-MM-DD`.
-- **Backup the branch you're overwriting.** `git push origin refs/remotes/origin/dev:refs/heads/dev-backup-YYYY-MM-DD` before `--force`.
+**Hard rules (memory: `feedback_no_new_branches.md`):**
+- **Never `git checkout -b <anything>`.** No experiments, no "let me try something on a side branch", nothing.
+- **Self-check before every commit:** `git branch --show-current` must return `dev`. If it returns anything else, stop, switch to `dev`, ask the user how that branch ended up checked out.
 - **Don't auto-push.** Commit freely; push only on user request or a meaningful milestone (>3 commits is the usual threshold).
 
-**Restoring from backup if a force-push goes wrong:**
+**The destructive escape hatch (almost never needed):**
+
+If a force-push to `dev` is ever truly unavoidable, create the safety nets FIRST:
+```bash
+git push origin refs/remotes/origin/dev:refs/heads/dev-backup-YYYY-MM-DD
+git tag stable-YYYY-MM-DD && git push origin stable-YYYY-MM-DD
+# only THEN: git push origin dev --force-with-lease
+```
+
+Restoring from backup if it goes wrong:
 ```bash
 git push origin dev-backup-YYYY-MM-DD:dev --force
-# dev is restored to the backup state
 ```
 
 ### Memory pointers
@@ -816,17 +819,13 @@ The Claude Code auto-memory at `~/.claude/projects/-Users-osama-taqreer/memory/`
 - `project_local_dev.md` — DATABASE_URL → docker compose, Supabase is auth+storage only.
 
 **Workflow rules (treat as non-negotiable):**
-- `feedback_design_system_discipline.md` — never hardcode, always read globals.css header, never guess. User has flagged this 3+ times.
-- `feedback_tw_glass_system.md` — Tailwind v4 backdrop-blur-glass utility, never raw `backdrop-filter:`.
+- `feedback_no_new_branches.md` — **‼️ hard rule.** `dev` is the only working branch. Never `git checkout -b`. Self-check before any commit. User flagged this after the hotfix-branch divergence incident.
+- `feedback_design_system_discipline.md` — never hardcode, always read globals.css header, never guess. The full design system lives in `app/globals.css` (token catalog + class patterns); CodeRabbit flags violations. User has flagged this 3+ times.
 - `feedback_discuss_before_coding.md` — paraphrase, propose, wait for go.
 - `feedback_never_guess.md` — context/log is source of truth.
 - `feedback_delete_failed_fixes.md` — revert before trying the next; never accumulate dead paths.
 - `feedback_push_rhythm.md` — don't auto-push; batch commits before pushing.
-- `feedback_badge_blue.md` — info chips use Tailwind `bg-blue-500`, not `--tq-blue`.
 - `feedback_verify_api_features.md` — WebFetch Anthropic docs before claiming behaviour.
-
-**Quick reference:**
-- `reference_docs.md` — MAC_MIGRATION.md + context paths + globals.css tokens.
 
 ### Local dev — one-pager
 

@@ -1115,10 +1115,6 @@ export const deckGenerate = inngest.createFunction(
       // first-save — that path has been removed; capture is now
       // exclusively here (per the product call: "we get the slide
       // count on generation complete").
-      const projectFreezeState = await prisma.project.findUnique({
-        where: { id: projectId },
-        select: { slideCount: true, dominantColor: true },
-      });
       const slideCountFromManifest = manifest.slides.length;
       let dominantColorFromBrief: string | null = null;
       const briefBrandColors = (data.brief as {
@@ -1136,22 +1132,36 @@ export const deckGenerate = inngest.createFunction(
       // the Presentation (also used for new versions). The truncated paste
       // that seeded the row at /api/projects time is now replaced by a real
       // human-readable title.
+      //
+      // Status + title are always updated (no race concern — both
+      // are unconditional writes that overwrite whatever was there).
       await prisma.project.update({
         where: { id: projectId },
         data: {
           status: "completed",
           title: manifest.title,
-          // Freeze-on-first conditional spread. Same pattern the
-          // /save route used to use.
-          ...(projectFreezeState?.slideCount == null
-            ? { slideCount: slideCountFromManifest }
-            : {}),
-          ...(projectFreezeState?.dominantColor == null &&
-          dominantColorFromBrief != null
-            ? { dominantColor: dominantColorFromBrief }
-            : {}),
         },
       });
+
+      // Freeze-on-first metadata (slideCount + dominantColor) — atomic
+      // updateMany guarded by `= null` so concurrent generations can't
+      // both observe null and race to overwrite each other. Fixes the
+      // earlier read-then-conditional-write pattern that had the same
+      // race as the savedVersionId promotion (PR #29 CR finding).
+      // Two separate updateMany calls so each field freezes
+      // independently — if slideCount was already set but
+      // dominantColor wasn't, only the latter writes. Both calls are
+      // no-ops once the column is non-null on a subsequent run.
+      await prisma.project.updateMany({
+        where: { id: projectId, slideCount: null },
+        data: { slideCount: slideCountFromManifest },
+      });
+      if (dominantColorFromBrief != null) {
+        await prisma.project.updateMany({
+          where: { id: projectId, dominantColor: null },
+          data: { dominantColor: dominantColorFromBrief },
+        });
+      }
       await prisma.presentation
         .update({
           where: { projectId },

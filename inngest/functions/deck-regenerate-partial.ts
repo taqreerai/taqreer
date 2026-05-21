@@ -246,6 +246,14 @@ export const deckRegeneratePartial = inngest.createFunction(
     // worst case the later write wins with consistent content.
     // Best-effort; failures don't block the regen.
     const totalTargets = targetSlideIds.length;
+    // Phase ordering for the monotonic guard below — later phases
+    // win over earlier ones even if they fire while currentSlide
+    // hasn't advanced past the prior heartbeat's value.
+    const PHASE_ORDER: Record<string, number> = {
+      designing: 0,
+      validating: 1,
+      saving: 2,
+    };
     const heartbeat = async (
       currentSlide: number,
       stage: "designing" | "validating" | "saving",
@@ -257,20 +265,45 @@ export const deckRegeneratePartial = inngest.createFunction(
         });
         const existing =
           (current?.slideJson as Record<string, unknown> | null) ?? {};
-        await prisma.presentationVersion.update({
-          where: { id: versionId },
-          data: {
-            slideJson: {
-              ...existing,
-              status: "regenerating",
-              progress: {
-                stage,
-                currentSlide,
-                estimatedTotal: totalTargets,
-              },
-            } as never,
-          },
-        });
+        // MONOTONIC PROGRESS GUARD (CR-flagged 2026-05-21):
+        // The per-slide heartbeats fire concurrently from the
+        // Promise.all below. Each does its own read-then-write on
+        // `slideJson.progress` — without this guard, two heartbeats
+        // racing through the read/write window can land out of
+        // order and the user sees progress flicker backwards (e.g.
+        // 1 → 3 → 2 → 4). Drop any heartbeat that would REGRESS the
+        // currently-stored progress, EXCEPT when the new heartbeat
+        // is advancing to a later phase (validating / saving over
+        // designing) — those phases naturally cross a phase
+        // boundary and bypass the slide-number comparison.
+        const existingProgress = existing.progress as
+          | { stage?: string; currentSlide?: number }
+          | undefined;
+        const existingPhaseOrder =
+          PHASE_ORDER[existingProgress?.stage ?? "designing"] ?? 0;
+        const newPhaseOrder = PHASE_ORDER[stage] ?? 0;
+        const sameOrLaterPhase = newPhaseOrder >= existingPhaseOrder;
+        const advancesSlide =
+          currentSlide >= (existingProgress?.currentSlide ?? 0);
+        if (sameOrLaterPhase && (advancesSlide || newPhaseOrder > existingPhaseOrder)) {
+          await prisma.presentationVersion.update({
+            where: { id: versionId },
+            data: {
+              slideJson: {
+                ...existing,
+                status: "regenerating",
+                progress: {
+                  stage,
+                  currentSlide,
+                  estimatedTotal: totalTargets,
+                },
+              } as never,
+            },
+          });
+        }
+        // Else: out-of-order heartbeat or backwards regression;
+        // drop it silently. The next in-order heartbeat will
+        // catch up the poller.
       } catch {
         /* heartbeat failure doesn't fail the regen */
       }

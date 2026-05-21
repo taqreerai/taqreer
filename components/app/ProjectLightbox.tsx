@@ -107,6 +107,14 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
 
   // Reset to slide 0 on every fresh open. Closing + reopening the
   // same project keeps state; acceptable, costs nothing.
+  //
+  // `react-hooks/set-state-in-effect` flags this in strict configs
+  // (the rule prefers external sync over self-driving state). It's
+  // legitimate here — the index is internal to the lightbox and
+  // needs to reset on the open transition; lifting it to the
+  // parent would push lightbox-internal concerns into RecentProjects.
+  // Document + disable for this line specifically.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (open) setIndex(0);
   }, [open]);

@@ -57,8 +57,14 @@ export function RecentProjects({ projects }: { projects: Project[] }) {
   // state and is fine to lose on reload.
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
 
+  // Cap to 6 tiles locally even if the upstream query ever drifts
+  // past `take: 6`. The dashboard layout is a 3×2 grid; a 7th tile
+  // would wrap to a half-empty third row and break the visual
+  // contract. Defense in depth — the page-level query already
+  // limits to 6, but enforcing here makes the component invariant
+  // independent of caller behaviour.
   const visibleProjects = useMemo(
-    () => projects.filter((p) => !deletedIds.has(p.id)),
+    () => projects.filter((p) => !deletedIds.has(p.id)).slice(0, 6),
     [projects, deletedIds],
   );
 
