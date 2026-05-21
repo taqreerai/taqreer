@@ -33,17 +33,20 @@ import { useRouter } from "next/navigation";
 const FIRST_RETRY_MS = 3_000;
 const SECOND_RETRY_MS = 8_000;
 
-type ThumbnailLike = { thumbnailUrls: readonly string[] };
+type ThumbnailLike = { thumbnailsPending: boolean };
 
 export function useRefreshWhileThumbnailsPending(
   projects: readonly ThumbnailLike[],
 ): void {
   const router = useRouter();
   useEffect(() => {
-    const anyMissing = projects.some(
-      (p) => !p.thumbnailUrls || p.thumbnailUrls.length === 0,
-    );
-    if (!anyMissing) return;
+    // ONLY refresh for genuinely-pending tiles (deck was saved, but
+    // the Inngest render job hasn't written thumbnails yet). Legacy
+    // decks (`thumbnailsPending: false` even with empty thumbnails)
+    // don't trigger refreshes — they'll never resolve, so polling
+    // is wasted bandwidth.
+    const anyPending = projects.some((p) => p.thumbnailsPending);
+    if (!anyPending) return;
     const t1 = setTimeout(() => router.refresh(), FIRST_RETRY_MS);
     const t2 = setTimeout(() => router.refresh(), SECOND_RETRY_MS);
     return () => {

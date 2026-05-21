@@ -70,6 +70,14 @@ type Props = {
   title: string;
   createdAt: Date | string;
   isFavorite: boolean;
+  // True when the thumbnail-render Inngest job has been queued (deck
+  // is saved) but its output hasn't landed in `slides` yet. Drives
+  // the loading spinner overlay so users see "thumbnails are coming"
+  // instead of a stale-looking placeholder. Always false for legacy
+  // decks that have never been saved — those get the static
+  // placeholder icon (spinner that never resolves would be worse UX
+  // than acknowledging "no thumbnails available").
+  thumbnailsPending?: boolean;
   // Optional click-override. Default behaviour (post route split,
   // 2026-05-21) is to navigate to `/project/<id>` — the canonical
   // working-session route. Pass `onOpen` to opt back into a
@@ -103,6 +111,7 @@ export function ProjectThumbnail({
   title,
   createdAt,
   isFavorite,
+  thumbnailsPending = false,
   onOpen,
   onDeleted,
   onRenamed,
@@ -381,6 +390,23 @@ export function ProjectThumbnail({
               decoding="async"
               draggable={false}
             />
+          ) : thumbnailsPending ? (
+            // Deck just saved — Inngest thumbnail job in flight.
+            // `progress_activity` is Material Symbols' canonical
+            // circular loader glyph; `animate-spin` provides the
+            // rotation. `.tq-icon-lg` pins the font-size at 32 px
+            // (chained-selector override of the global FILL=0 +
+            // font-size:1em rules — same cascade fix family as
+            // `.tq-fav-indicator`).
+            <span
+              role="status"
+              aria-label="جاري إنشاء المعاينة"
+              className="flex h-full w-full items-center justify-center"
+            >
+              <span className="material-symbols-outlined tq-icon-lg animate-spin text-white/60">
+                progress_activity
+              </span>
+            </span>
           ) : (
             <span className="flex h-full w-full items-center justify-center">
               <span className="material-symbols-outlined text-[28px] text-muted opacity-25">

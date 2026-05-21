@@ -54,8 +54,20 @@ export default async function FavoritesPage() {
       thumbnailUrls: true,
       createdAt: true,
       isFavorite: true,
+      // Drives the pending-spinner state on each tile — see
+      // /projects/page.tsx for the rationale.
+      presentation: { select: { savedVersionId: true } },
     },
   });
+
+  const projectsWithPending = projects.map(
+    ({ presentation, ...rest }) => ({
+      ...rest,
+      thumbnailsPending:
+        (presentation?.savedVersionId ?? null) !== null &&
+        rest.thumbnailUrls.length === 0,
+    }),
+  );
 
   return (
     <div className="page-container">
@@ -65,7 +77,7 @@ export default async function FavoritesPage() {
           مشاريعك التي وضعت عليها نجمة من قائمة الخيارات.
         </p>
       </header>
-      <FavoritesGrid projects={projects} />
+      <FavoritesGrid projects={projectsWithPending} />
     </div>
   );
 }

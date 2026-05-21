@@ -545,6 +545,10 @@ body {
   font-size: 14px;
 }
 
+.material-symbols-outlined.tq-icon-lg {
+  font-size: 32px;
+}
+
 /* ─── Text Gradient ─── */
 .text-gradient {
   background: linear-gradient(90deg, #E879F9 0%, #A855F7 50%, #3B82F6 100%);

@@ -47,6 +47,14 @@ export type ProjectsGridProject = {
   thumbnailUrls: string[];
   format: string;
   isFavorite: boolean;
+  // True when the deck has been saved (so the thumbnail-render
+  // Inngest job WAS queued) but `thumbnailUrls` is still empty —
+  // the job hasn't written its output yet. Drives the loading
+  // spinner overlay on the tile (replacing the static placeholder
+  // icon). Legacy decks that were never saved have this false even
+  // with empty thumbnailUrls, so they get the static placeholder
+  // instead of a spinner-that-never-resolves.
+  thumbnailsPending: boolean;
 };
 
 type Props = {
@@ -144,6 +152,7 @@ export function ProjectsGrid({
             title={project.title}
             createdAt={project.createdAt}
             isFavorite={project.isFavorite}
+            thumbnailsPending={project.thumbnailsPending}
             // No `onOpen` — tiles navigate to /project/<id> on click
             // (the default in ProjectThumbnail post route-split).
             // Templates can pass `onOpen` later to opt into the

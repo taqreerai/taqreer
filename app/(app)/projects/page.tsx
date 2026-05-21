@@ -64,8 +64,27 @@ export default async function ProjectsPage() {
       // greyscale-only decks + multi-accent palettes correctly).
       dominantColor: true,
       colorTags: true,
+      // `savedVersionId` drives the tile's pending-spinner state.
+      // Non-null AND empty thumbnailUrls means "save fired, Inngest
+      // job in flight" → spinner. Null + empty means legacy
+      // (never saved) → static placeholder. The presentation
+      // relation is optional so the null-coalesce handles legacy
+      // projects without a presentation row at all.
+      presentation: { select: { savedVersionId: true } },
     },
   });
+
+  // Compute pending state once on the server so the client doesn't
+  // need to read the presentation relation. Sheds the relation from
+  // the row + flattens to a single boolean.
+  const projectsWithPending = projects.map(
+    ({ presentation, ...rest }) => ({
+      ...rest,
+      thumbnailsPending:
+        (presentation?.savedVersionId ?? null) !== null &&
+        rest.thumbnailUrls.length === 0,
+    }),
+  );
 
   return (
     <div className="page-container">
@@ -75,7 +94,7 @@ export default async function ProjectsPage() {
           كل مشاريعك في مكان واحد. ابحث، صفّ، أو اختر لوناً من شريط الألوان أدناه.
         </p>
       </header>
-      <ProjectsPageClient projects={projects} />
+      <ProjectsPageClient projects={projectsWithPending} />
     </div>
   );
 }
