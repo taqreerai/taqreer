@@ -121,7 +121,14 @@ export function bucketize(hex: string): string[] {
   // Sharp gates (no perceptual ambiguity at these extremes).
   if (l < LIGHT_MIN) return ["#000000"];
   if (l > LIGHT_MAX) return ["#FFFFFF"];
-  if (s < SAT_MIN) return ["#9CA3AF"]; // grey
+  // `<=` (not `<`) so the threshold boundary matches `classify`
+  // below — that function uses `s > SAT_MIN` for "chromatic", which
+  // means s === SAT_MIN is GREY. Without the inclusive comparison
+  // here, a color exactly at SAT_MIN persisted via deriveColorTags
+  // (which delegates to `classify`) would be tagged as a chromatic
+  // hex but bucketize-into a hue bucket here — divergent paths for
+  // the same input. CR caught 2026-05-21.
+  if (s <= SAT_MIN) return ["#9CA3AF"]; // grey
   // Brown — warm hue that's EITHER dark OR muted. Sharp gate too:
   // a cream is unambiguously brown-family, not "almost orange and
   // almost brown." Single bucket.

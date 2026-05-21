@@ -14,7 +14,7 @@
 // layout animation for tiles whose position changes (delete /
 // un-favorite / page flip).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ProjectsGrid,
@@ -49,6 +49,14 @@ export function FavoritesGrid({
     [projects, deletedIds, unfavoritedIds],
   );
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  // Clamp the page index when the filtered list shrinks below the
+  // current page. Without this, deleting / un-favouriting items
+  // from the last page can leave the user staring at an empty grid
+  // even though earlier pages still have content. Effect runs only
+  // when pageCount changes — most renders are a no-op.
+  useEffect(() => {
+    setPage((prev) => Math.min(prev, pageCount - 1));
+  }, [pageCount]);
   const paginated = useMemo(
     () => visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
     [visible, page],

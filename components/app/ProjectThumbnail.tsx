@@ -153,16 +153,18 @@ export function ProjectThumbnail({
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashBusy, setTrashBusy] = useState(false);
 
-  // Preload every slide thumbnail on mount. The displayed `<img>`
-  // src swaps as the user scrubs across the tile, so without
-  // preloading the FIRST hover triggers a cold fetch — visible as
-  // a brief blank flash while the network request resolves. Firing
-  // `new Image().src` for each URL hands the browser the full list
-  // up front; subsequent src swaps hit the cache and render
-  // instantly. Cheap: thumbnails are 30-80 KB each, fetched once
-  // per tile mount, cached for the page's lifetime.
+  // Eagerly preload the FIRST FEW slide thumbnails on mount so the
+  // initial hover-scrub feels instant. Bounded to the first
+  // `EAGER_PRELOAD_LIMIT` (a 6-tile dashboard × 8 slides each ==
+  // 48 simultaneous image fetches on first paint without the cap;
+  // the cap drops that to 18 — caught by CR 2026-05-21). Slides
+  // beyond the cap will fetch on first hover (single ~80 KB
+  // request; cheap, and the brief blank-flash is acceptable for a
+  // less-likely interaction). Cached for the page's lifetime once
+  // fetched.
+  const EAGER_PRELOAD_LIMIT = 3;
   useEffect(() => {
-    for (const url of slides) {
+    for (const url of slides.slice(0, EAGER_PRELOAD_LIMIT)) {
       if (!url) continue;
       const img = new Image();
       img.src = url;
@@ -403,7 +405,7 @@ export function ProjectThumbnail({
               aria-label="جاري إنشاء المعاينة"
               className="flex h-full w-full items-center justify-center"
             >
-              <span className="material-symbols-outlined tq-icon-lg animate-spin text-white/60">
+              <span className="material-symbols-outlined tq-icon-lg animate-spin text-muted">
                 progress_activity
               </span>
             </span>

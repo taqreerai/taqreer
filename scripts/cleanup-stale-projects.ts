@@ -162,27 +162,24 @@ async function passA_backfill(prisma: PrismaClient, inngest: Inngest) {
 
 async function passB_deleteZombies(prisma: PrismaClient) {
   const cutoff = new Date(Date.now() - ZOMBIE_AGE_MIN * 60 * 1000);
-  // Zombie = current version is NOT completed AND created > cutoff
-  // ago. Excludes recent in-flight generations (last 30 min).
+  // Zombie = no completed version exists AND at least one
+  // non-completed version is older than the cutoff. Both conditions
+  // ride on the SAME `versions` key so we don't silently overwrite
+  // one with the other (the earlier `{ some: ... }` + `{ every: ... }`
+  // sibling keys in the same object literal silently dropped the
+  // age check — JS object-literal duplicate-key semantics. Critical
+  // bug CR caught 2026-05-21: without the age check Pass B could
+  // delete decks still legitimately generating in the last 30 min).
   const candidates = await prisma.project.findMany({
     where: {
       presentation: {
-        OR: [
-          {
-            versions: {
-              some: {
-                status: { in: ["queued", "failed"] },
-                createdAt: { lt: cutoff },
-              },
-            },
-            // The current version is one of those stale non-completed
-            // ones. Without this filter we'd nuke projects mid-regen
-            // that have an old failed version + a fresh completed one.
-            versions: {
-              every: { status: { not: "completed" } },
-            },
+        versions: {
+          every: { status: { not: "completed" } },
+          some: {
+            status: { in: ["queued", "failed"] },
+            createdAt: { lt: cutoff },
           },
-        ],
+        },
       },
     },
     select: {

@@ -135,6 +135,12 @@ export function ProjectsPageClient({
   }, [search, format, language, favOnly, colorHex]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Clamp the page index when the filtered list shrinks. Without
+  // this, deleting items from the last page can leave the user on
+  // a now-empty page even though earlier pages still have content.
+  useEffect(() => {
+    setPage((prev) => Math.min(prev, pageCount - 1));
+  }, [pageCount]);
   const paginated = useMemo(
     () => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
     [filtered, page],
