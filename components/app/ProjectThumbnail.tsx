@@ -137,6 +137,22 @@ export function ProjectThumbnail({
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashBusy, setTrashBusy] = useState(false);
 
+  // Preload every slide thumbnail on mount. The displayed `<img>`
+  // src swaps as the user scrubs across the tile, so without
+  // preloading the FIRST hover triggers a cold fetch — visible as
+  // a brief blank flash while the network request resolves. Firing
+  // `new Image().src` for each URL hands the browser the full list
+  // up front; subsequent src swaps hit the cache and render
+  // instantly. Cheap: thumbnails are 30-80 KB each, fetched once
+  // per tile mount, cached for the page's lifetime.
+  useEffect(() => {
+    for (const url of slides) {
+      if (!url) continue;
+      const img = new Image();
+      img.src = url;
+    }
+  }, [slides]);
+
   // Focus + select the input when entering rename mode. useEffect
   // (not a callback ref) because the input only exists conditionally;
   // when renameMode flips on, we wait for the next paint then focus.

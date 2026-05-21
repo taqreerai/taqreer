@@ -296,11 +296,25 @@ button, a, [role="button"] {
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
   color: white;
-  border-radius: 12px;
-  padding: 12px 16px;
+  /* Fully rounded ends — visual rhyme with `.btn-pill` so inputs +
+     buttons read as the same family. Padding bumped horizontally
+     so glyphs/text don't sit against the curved edge. Applies to
+     single-line inputs only; the `textarea` override below keeps
+     multi-line fields softly rounded (a tall pill reads as a
+     squashed badge, not a text field). */
+  border-radius: 9999px;
+  padding: 12px 20px;
   width: 100%;
   outline: none;
   transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+/* Textareas using .input-dark — keep them rectangular-ish so multi-
+   line content doesn't sit inside a pill silhouette. 14 px matches
+   the resting glass-card radius elsewhere in the system. */
+textarea.input-dark {
+  border-radius: 14px;
+  padding: 12px 16px;
 }
 
 /* Strip the native `<input type="number">` spinner so step controls
@@ -1242,7 +1256,14 @@ body {
 /* ─── Search Input ─── */
 .input-search {
   width: 100%;
-  border-radius: 0.5rem;
+  /* Fully rounded so search inputs read as the same family as
+     `.btn-pill` + `.input-dark` (both pill). Previously 0.5rem
+     (8 px), which — because `.input-search` is unlayered and
+     `rounded-full` lives in @layer utilities — silently overrode
+     any Tailwind `rounded-full` written on the JSX too (cascade
+     trap, same one documented for `.tq-fav-indicator` + Google
+     Fonts' material-symbols rule). */
+  border-radius: 9999px;
   padding: 0.5rem 2.5rem 0.5rem 1rem;
   color: white;
   background: rgba(255, 255, 255, var(--glass-opacity));
