@@ -55,7 +55,11 @@ export const COLOR_BUCKETS = [
   "#EAB308", // yellow
   "#22C55E", // green
   "#3B82F6", // blue    (also catches cyan/teal — hue 165–285)
-  "#8B5CF6", // purple  (also catches pink/magenta — hue 255–345)
+  "#A855F7", // purple  (also catches pink/magenta — hue 265–345; using
+             // Tailwind purple-500 instead of violet-500 since
+             // violet-500 itself is hue ~258 — borderline blue
+             // visually and lives in the BLUE bucket under the
+             // 265° cutoff)
   "#9CA3AF", // grey    (mid-lightness low-saturation)
   "#000000", // black
   "#FFFFFF", // white
@@ -98,15 +102,18 @@ export function bucketize(hex: string): string {
   if (h < 45) return "#F97316"; // orange
   if (h < 75) return "#EAB308"; // yellow
   if (h < 165) return "#22C55E"; // green
-  // Blue/purple boundary at 250° — below that, sky blue + royal
-  // blue + indigo edge cases. Above that, indigo-violet + violet +
-  // lavender + pink-magenta all read as purple to the human eye.
-  // Was at 285° initially; a light lavender (`#D4C1E5`, hue 271°)
-  // was leaking into blue (user-reported 2026-05-21). 250° puts
-  // the canonical Tailwind violet-500 (`#8B5CF6`, hue 258°) firmly
-  // in purple, matching its name.
-  if (h < 250) return "#3B82F6"; // blue (includes cyan/teal)
-  return "#8B5CF6"; // purple (includes pink/magenta/lavender)
+  // Blue/purple boundary at 265°. Tuned against the actual hex
+  // landscape after two user-reports:
+  //   • `#D4C1E5` lavender (h≈270) should be purple — it is.
+  //   • `#370BF4` (the codebase's `--tq-blue`, h=251) should be
+  //     blue — it is. At 250° it WAS being misclassified as purple.
+  //   • Tailwind `violet-500` (#8B5CF6, h=258) lives in BLUE under
+  //     this cutoff. Despite its name, h=258 reads as borderline
+  //     blue-violet to most users; if a brand genuinely wants
+  //     purple they tend to pick something past h=270 (Tailwind's
+  //     `purple-500` `#A855F7` at h=271, for instance).
+  if (h < 265) return "#3B82F6"; // blue (includes cyan/teal)
+  return "#A855F7"; // purple (includes pink/magenta/lavender)
 }
 
 // Pure (testable) function — no Prisma access. Imported by
