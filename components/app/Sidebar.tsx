@@ -117,7 +117,7 @@ export function Sidebar({
     { path: '/templates', icon: 'grid_view', label: 'القوالب' },
     { path: '/brand-kits', icon: 'id_card', label: 'هوية الشركة' },
     { path: '/folders', icon: 'folder_copy', label: 'المجلدات' },
-    { path: '/features', icon: 'stars', label: 'المميزات' },
+    { path: '/favorites', icon: 'star', label: 'المفضلة' },
     { path: '/settings', icon: 'settings', label: 'الإعدادات' },
   ];
 

@@ -80,6 +80,14 @@ type Props = {
   // its own local title optimistically; this exists so other
   // surfaces showing the same title (none today) can sync.
   onRenamed?: (projectId: string, newTitle: string) => void;
+  // Optional: notify parent of a confirmed favorite-state change
+  // (server response landed). Used by /favorites to drop the tile
+  // immediately when the user un-stars — without this, un-starring
+  // a tile on the favorites view leaves it sitting there until the
+  // user reloads, because the SSR `projects` array still has it.
+  // RecentProjects doesn't pass this prop (dashboard tiles stay
+  // regardless of star state) so behaviour there is unchanged.
+  onFavoriteChange?: (projectId: string, isFavorite: boolean) => void;
 };
 
 export function ProjectThumbnail({
@@ -92,6 +100,7 @@ export function ProjectThumbnail({
   onOpen,
   onDeleted,
   onRenamed,
+  onFavoriteChange,
 }: Props) {
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -203,6 +212,7 @@ export function ProjectThumbnail({
       if (!res.ok) throw new Error(`favorite: ${res.status}`);
       const data = (await res.json()) as { isFavorite: boolean };
       setFavoriteState(data.isFavorite);
+      onFavoriteChange?.(projectId, data.isFavorite);
     } catch (err) {
       // Revert the optimistic flip on failure. The dashboard has no
       // toast / retry chrome for this action, so without a revert
@@ -350,6 +360,21 @@ export function ProjectThumbnail({
             {hoverIndex + 1} / {slides.length}
           </span>
         ) : null}
+
+        {/* Favorited indicator — top-start corner. Diagonal-opposite
+            of the scrub counter so the two never crowd. Matches the
+            counter's bg-black/70 chrome so the star reads against
+            any slide content (light or dark). Inline FILL=1 because
+            the global material-symbols-outlined rule sets FILL=0;
+            without this the glyph would render as an outline. */}
+        {favoriteState ? (
+          <span
+            aria-label="مشروع مفضّل"
+            className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-white"
+          >
+            star
+          </span>
+        ) : null}
       </div>
 
       {/* Info row — title (or rename input) + creation date on the
@@ -407,7 +432,12 @@ export function ProjectThumbnail({
           aria-label="خيارات المشروع"
           aria-haspopup="menu"
           aria-expanded={menuRect !== null}
-          data-project-menu-trigger
+          // The value (not just the attribute presence) carries the
+          // projectId so the menu's outside-click handler can tell
+          // "this same tile's trigger" apart from "some OTHER tile's
+          // trigger" — clicking tile B's 3-dots now closes tile A's
+          // open menu instead of leaving both popped.
+          data-project-menu-trigger={projectId}
           onClick={(e) => {
             e.stopPropagation();
             // Toggle: closed → open at current rect, open → close.
@@ -420,9 +450,13 @@ export function ProjectThumbnail({
           }}
           className="btn-icon -mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors"
           style={{
-            color: thumbHovered
-              ? "var(--tq-text-primary)"
-              : "var(--tq-text-muted)",
+            // Stays white when favorited (even idle) so the tile reads
+            // as "starred" at a glance, paired with the filled-star
+            // indicator next to it. Hover behaviour unchanged.
+            color:
+              thumbHovered || favoriteState
+                ? "var(--tq-text-primary)"
+                : "var(--tq-text-muted)",
           }}
         >
           <span className="material-symbols-outlined text-[18px]">more_vert</span>
@@ -432,6 +466,7 @@ export function ProjectThumbnail({
       <ProjectActionsMenu
         open={menuRect !== null}
         triggerRect={menuRect}
+        projectId={projectId}
         isFavorite={favoriteState}
         onClose={closeMenu}
         onShare={handleShare}

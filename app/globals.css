@@ -132,7 +132,7 @@
  *                            from h1 + 24 px below. Use when an
  *                            h1 has a descriptive line beneath.
  *    text-white              Primary text  (Tailwind utility)
- *    .text-muted             Secondary text (#9A94A8)
+ *    .text-muted             Secondary text (#b4b4b4)
  *
  *  Form
  *    .input-dark             Text / email / password field
@@ -173,8 +173,8 @@
 
   /* 3. Text */
   --tq-text-primary: #ffffff;
-  --tq-text-muted:   #9A94A8;
-  --tq-text-dim:     rgba(154, 148, 168, 0.4);
+  --tq-text-muted:   #b4b4b4;
+  --tq-text-dim:     rgba(180, 180, 180, 0.4);
 
   /* 4. Borders */
   --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
@@ -341,7 +341,7 @@ button, a, [role="button"] {
 .input-dark::placeholder {
   /* Use the canonical muted token so a future palette tweak in
      :root flows through here automatically — previously the same
-     `#9A94A8` was inlined and would drift if --tq-text-muted ever
+     `#b4b4b4` was inlined and would drift if --tq-text-muted ever
      changed. */
   color: var(--tq-text-muted);
 }
@@ -434,7 +434,7 @@ button, a, [role="button"] {
   --tq-bg: #0A0A0F;
   --tq-surface: #050510;
   --tq-border: rgba(42, 36, 59, 0.8);
-  --tq-muted: #9A94A8;
+  --tq-muted: #b4b4b4;
   --tq-white: #FFFFFF;
 
   --font-headline-md: "Cairo", sans-serif;
@@ -490,6 +490,29 @@ body {
 
 .font-cairo {
   font-family: Cairo, var(--font-cairo), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Favorited-project corner badge ───
+   Composed on a `.material-symbols-outlined` span. The chained
+   selector below (`.material-symbols-outlined.tq-fav-indicator`)
+   is deliberate — same-specificity rules can't reliably override
+   `.material-symbols-outlined` here because Google Fonts SHIPS its
+   own copy of `.material-symbols-outlined { font-size: 24px; display:
+   inline-block; ... }` in the cross-origin webfont stylesheet, which
+   is loaded LATER than this file and is CORS-blocked from sheet-level
+   editing. With matching specificity (0,0,1,0) Google's rule won the
+   cascade by source-order tiebreak — making the glyph render at 24px
+   block-level inside our 18×18 badge container and "leak" out of the
+   circle. Chaining both class selectors here bumps specificity to
+   (0,0,2,0) so we beat the Google rule deterministically, regardless
+   of load order. (Confirmed via runtime probe: only `!important`
+   beat the Google rule under the single-class selector.) */
+.material-symbols-outlined.tq-fav-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-variation-settings: "FILL" 1, "wght" 200, "GRAD" 0, "opsz" 24;
 }
 
 /* ─── Text Gradient ─── */
@@ -1198,7 +1221,7 @@ body {
   /* `--tq-text-muted` is the canonical declared token in :root
      (line 170). A second `--tq-muted` alias also exists inside
      `@theme inline` to satisfy Tailwind utility generation; the
-     two resolve to the same value (#9A94A8). Using the :root
+     two resolve to the same value (#b4b4b4). Using the :root
      token directly keeps the dependency one-step. */
   color: var(--tq-text-muted);
 }
