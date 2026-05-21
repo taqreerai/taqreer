@@ -19,6 +19,15 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { ProjectsPageClient } from "./ProjectsPageClient";
 
+// Force a fresh server fetch on every navigation. Without this,
+// Next.js may serve a cached render that pre-dates the Inngest
+// thumbnail-render job's completion — users would see placeholder
+// tiles even though `thumbnailUrls` is now populated server-side.
+// The client also schedules a `router.refresh()` if any tile has
+// empty thumbnails, so a save → navigate flow recovers within a
+// few seconds without a manual page reload.
+export const dynamic = "force-dynamic";
+
 export default async function ProjectsPage() {
   const supabase = await createClient();
   const {
@@ -49,7 +58,12 @@ export default async function ProjectsPage() {
       thumbnailUrls: true,
       createdAt: true,
       isFavorite: true,
+      // Swatch picker source. `dominantColor` (single hex) is kept
+      // around for legacy use; `colorTags` (multi-hex) is the
+      // canonical filter source post 2026-05-21 (handles
+      // greyscale-only decks + multi-accent palettes correctly).
       dominantColor: true,
+      colorTags: true,
     },
   });
 

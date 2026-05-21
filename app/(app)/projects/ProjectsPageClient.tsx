@@ -22,6 +22,11 @@ import {
   type LanguageFilter,
 } from "@/components/app/ProjectsFilterBar";
 import { Pagination } from "@/components/app/Pagination";
+import {
+  COLOR_BUCKETS,
+  bucketize,
+} from "@/lib/project/derive-color-tags";
+import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
 
 // 5 columns × 3 rows = 15 tiles per page. The grid component sets
 // the breakpoint at lg:grid-cols-5; on smaller viewports the grid
@@ -30,12 +35,17 @@ import { Pagination } from "@/components/app/Pagination";
 // current-page UX doesn't shift when a user resizes their window.
 const PAGE_SIZE = 15;
 
-// Server passes the same shape as ProjectsGridProject + the two
-// filter columns (`language`, `dominantColor`). Kept as an extended
-// type so the grid component's contract stays minimal.
+// Server passes the same shape as ProjectsGridProject + the filter
+// columns the page needs but the grid doesn't (language for the
+// language pills, colorTags for the swatch picker). Kept as an
+// extended type so the grid's contract stays minimal.
+// `dominantColor` is included for legacy reasons; the canonical
+// swatch source is `colorTags` (post 2026-05-21 — handles
+// greyscale-only decks and multi-accent palettes correctly).
 export type ProjectsPageProject = ProjectsGridProject & {
   language: string;
   dominantColor: string | null;
+  colorTags: string[];
 };
 
 export function ProjectsPageClient({
@@ -59,35 +69,64 @@ export function ProjectsPageClient({
   // (effect below) so the user lands on the first slice of the
   // newly-filtered set, not page-N-of-the-old-result-set.
   const [page, setPage] = useState(0);
+  // Optimistic-delete tracking lives here (NOT inside ProjectsGrid)
+  // so the filter runs BEFORE the pagination slice — without this
+  // ordering deleting a tile would leave a hole on the current
+  // page instead of the 16th project sliding up into view.
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
 
-  // Distinct dominantColor values across the user's deck library,
-  // sorted by frequency desc → most-used colours appear first in
-  // the swatch strip. `null` / empty colours skipped — pre-frozen
-  // projects (created before step 8b's dominantColor freeze)
-  // shouldn't pollute the picker.
+  // Recovers from the save → navigate-too-fast race: if any project
+  // has no thumbnails yet, schedule router.refresh() at 3 s and 8 s
+  // to pick up the Inngest job's eventual write. Scoped to the
+  // FULL projects list, not just the current page, so the user is
+  // covered even if their recent save happens to land on page 2.
+  useRefreshWhileThumbnailsPending(projects);
+
+  // Bucketed swatch list. Every `colorTags` entry is mapped through
+  // `bucketize` to one of 10 canonical buckets (8 hue + black +
+  // white — see `lib/project/derive-color-tags.ts`). The strip
+  // then renders only the buckets actually present in the user's
+  // library, in canonical rainbow order (red → pink → black/white).
+  //
+  // Pre-step-color-tags rows have an empty colorTags array; skipped
+  // upstream by the loop's iteration over the array (zero entries =
+  // no contribution).
   const swatchColors = useMemo(() => {
-    const counts = new Map<string, number>();
+    const present = new Set<string>();
     for (const p of projects) {
-      const c = p.dominantColor?.trim();
-      if (!c) continue;
-      counts.set(c, (counts.get(c) ?? 0) + 1);
+      for (const hex of p.colorTags ?? []) {
+        if (!hex) continue;
+        present.add(bucketize(hex));
+      }
     }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([hex]) => hex);
+    // Filter the canonical order list to only buckets present in the
+    // library. Preserves the rainbow ordering AND keeps the swatch
+    // count tied to "what the user actually uses" — a library with
+    // no oranges doesn't show an orange swatch.
+    return COLOR_BUCKETS.filter((b) => present.has(b));
   }, [projects]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return projects.filter((p) => {
+      if (deletedIds.has(p.id)) return false;
       if (format !== null && p.format !== format) return false;
       if (language !== null && p.language !== language) return false;
       if (favOnly && !p.isFavorite) return false;
-      if (colorHex && p.dominantColor !== colorHex) return false;
+      // Color filter — bucket each tag and check membership of the
+      // selected bucket. A deck with brand colour `#F4AA0B` (a
+      // saffron orange) matches the yellow bucket; a greyscale deck
+      // (tags `[#000000, #FFFFFF]`) matches both the black and the
+      // white bucket. Using `.some(bucket=…)` instead of
+      // `.includes(exactHex)` is what enables the "merge shades into
+      // 10 buckets" behaviour from a flat tag array.
+      if (colorHex && !(p.colorTags ?? []).some((t) => bucketize(t) === colorHex)) {
+        return false;
+      }
       if (q && !p.title.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [projects, search, format, language, favOnly, colorHex]);
+  }, [projects, deletedIds, search, format, language, favOnly, colorHex]);
 
   // Filter change → reset to page 0. Without this a user on page 4
   // would stay on a now-empty offset after narrowing the set; the
@@ -138,7 +177,19 @@ export function ProjectsPageClient({
       <ProjectsGrid
         projects={paginated}
         padTo={PAGE_SIZE}
+        // Drives the staggered domino fade-in when navigating
+        // between pages. Delete + filter don't change it (page
+        // stays the same), so those mutations only trigger the
+        // per-tile layout animation.
+        staggerKey={page}
         gridClassName="grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+        onDeleted={(id) =>
+          setDeletedIds((prev) => {
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+          })
+        }
         emptyState={
           projects.length === 0 ? (
             // True empty — user has no projects yet. Funnel to /create.

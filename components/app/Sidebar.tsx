@@ -113,10 +113,14 @@ export function Sidebar({
   ];
 
   const navLinks = [
-    { path: '/projects', icon: 'folder_managed', label: 'مشاريعي' },
-    { path: '/templates', icon: 'grid_view', label: 'القوالب' },
+    // `/templates` sits in the top "Create" group as "من قالب" (above) —
+    // the standalone "القوالب" entry here was a duplicate and got
+    // removed 2026-05-21 alongside the `/folders` retirement.
+    // `/projects` takes the `folder_copy` icon (formerly /folders')
+    // — projects ARE the folder metaphor at the user level; we don't
+    // need a separate folders concept.
+    { path: '/projects', icon: 'folder_copy', label: 'مشاريعي' },
     { path: '/brand-kits', icon: 'id_card', label: 'هوية الشركة' },
-    { path: '/folders', icon: 'folder_copy', label: 'المجلدات' },
     { path: '/favorites', icon: 'star', label: 'المفضلة' },
     { path: '/settings', icon: 'settings', label: 'الإعدادات' },
   ];

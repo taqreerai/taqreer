@@ -15,6 +15,10 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { FavoritesGrid } from "./FavoritesGrid";
 
+// Same caching dance as /projects + /dashboard — fresh SSR plus
+// client-side refresh-when-thumbnails-missing in the grid component.
+export const dynamic = "force-dynamic";
+
 export default async function FavoritesPage() {
   const supabase = await createClient();
   const {

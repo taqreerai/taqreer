@@ -345,28 +345,30 @@ export function ProjectThumbnail({
         <button
           ref={rootRef}
           type="button"
-          // Tile click default → navigate to /project/<id>. If the
-          // caller passes `onOpen`, it wins (templates use this to
-          // open the ProjectLightbox preview instead of navigating
-          // away). When the tile has no slides yet (still
-          // generating, no thumbnails saved), clicks are no-op so
-          // users don't bounce to a 404-ish working session for an
-          // unsaved deck.
-          onClick={
-            hasSlides
-              ? onOpen ?? (() => router.push(`/project/${projectId}`))
-              : undefined
+          // Tile click → navigate to /project/<id> by default; if
+          // the caller passes `onOpen`, that wins (templates open
+          // the ProjectLightbox preview instead of navigating).
+          //
+          // Always clickable — including tiles without thumbnails.
+          // Pre-step-8b decks (and any deck whose thumbnail render
+          // failed) have `thumbnailUrls: []`, so the previous
+          // `disabled={!hasSlides}` gate made them unreachable from
+          // the dashboard. After the route split that's wrong:
+          // the working session at /project/<id> is valid regardless
+          // of whether thumbnails were generated, so the click
+          // should still navigate.
+          onClick={() =>
+            onOpen ? onOpen() : router.push(`/project/${projectId}`)
           }
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
-          disabled={!hasSlides}
           aria-label={
             hasSlides
-              ? `معاينة ${titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
-              : `${titleState} — لا توجد معاينة`
+              ? `افتح ${titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
+              : `افتح ${titleState}`
           }
           className={`absolute inset-0 block ${
-            hasSlides ? "cursor-zoom-in" : "cursor-default"
+            onOpen ? "cursor-zoom-in" : "cursor-pointer"
           }`}
         >
           {src ? (

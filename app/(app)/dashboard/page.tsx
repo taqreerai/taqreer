@@ -7,6 +7,13 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getStartOfMonthUTC } from "@/lib/utils";
 
+// Fresh SSR every navigation. Without this Next.js may serve a
+// cached render from before the Inngest thumbnail-render job
+// completed → placeholder tiles even after thumbnails are ready.
+// The RecentProjects client component also schedules a
+// `router.refresh()` if any tile has empty thumbnails.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
