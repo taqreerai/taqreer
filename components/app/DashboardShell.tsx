@@ -109,7 +109,12 @@ export function DashboardShell({
   //   • pr-[40px]  = 40 px gap to the slide-nav's left edge
   // Must match DeckView's HERO_VERTICAL_PADDING_PX (160 total).
   const pathname = usePathname() ?? "";
-  const isFullWidthRoute = pathname.startsWith("/preview/");
+  // Post route-split: both /preview (generation) and /project
+  // (working session) use the same full-width chrome — the
+  // generating placeholder grid and the live DeckView need the
+  // same horizontal real estate.
+  const isFullWidthRoute =
+    pathname.startsWith("/preview/") || pathname.startsWith("/project/");
   const contentClasses = isFullWidthRoute
     ? "pt-[120px] pb-[40px] pl-[120px] pr-[40px]"
     : "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16";

@@ -48,6 +48,7 @@
 //   to it. The /favorites page will fetch fresh.
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SlideFormat } from "@/lib/schema/slide";
@@ -69,9 +70,14 @@ type Props = {
   title: string;
   createdAt: Date | string;
   isFavorite: boolean;
-  // Click anywhere on the thumbnail surface opens the lightbox.
-  // Parent owns lightbox state.
-  onOpen: () => void;
+  // Optional click-override. Default behaviour (post route split,
+  // 2026-05-21) is to navigate to `/project/<id>` — the canonical
+  // working-session route. Pass `onOpen` to opt back into a
+  // callback-driven flow (e.g. the templates page renders the
+  // ProjectLightbox preview instead of navigating). Project tiles
+  // on /dashboard, /favorites, /projects don't pass it and use
+  // the navigate default.
+  onOpen?: () => void;
   // Fires AFTER the DELETE round-trip succeeds. Parent uses this
   // to drop the tile from its rendered list (we don't unmount
   // ourselves — the parent owns the projects array).
@@ -102,6 +108,7 @@ export function ProjectThumbnail({
   onRenamed,
   onFavoriteChange,
 }: Props) {
+  const router = useRouter();
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -242,7 +249,12 @@ export function ProjectThumbnail({
   };
 
   const handleCopyLink = async () => {
-    const url = `${window.location.origin}/preview/${projectId}`;
+    // Canonical working-session URL post route-split. /preview/<id>
+    // still works (it just SSR-redirects to /project/<id> for any
+    // completed deck) but /project is the URL we share / bookmark
+    // so the recipient lands on the right route without a
+    // redirect hop.
+    const url = `${window.location.origin}/project/${projectId}`;
     try {
       await navigator.clipboard.writeText(url);
     } catch (err) {
@@ -333,7 +345,18 @@ export function ProjectThumbnail({
         <button
           ref={rootRef}
           type="button"
-          onClick={hasSlides ? onOpen : undefined}
+          // Tile click default → navigate to /project/<id>. If the
+          // caller passes `onOpen`, it wins (templates use this to
+          // open the ProjectLightbox preview instead of navigating
+          // away). When the tile has no slides yet (still
+          // generating, no thumbnails saved), clicks are no-op so
+          // users don't bounce to a 404-ish working session for an
+          // unsaved deck.
+          onClick={
+            hasSlides
+              ? onOpen ?? (() => router.push(`/project/${projectId}`))
+              : undefined
+          }
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           disabled={!hasSlides}

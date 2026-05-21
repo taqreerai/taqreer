@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: "/preview/",
+      disallow: ["/preview/", "/project/"],
     },
     sitemap: "https://taqreer.ai/sitemap.xml",
   };

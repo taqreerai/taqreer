@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   SlideManifestSchema,
@@ -197,6 +197,7 @@ export function DeckView({
   initialFormat,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   // Initial state seeds from server props. The parent (re)keys this component
   // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);
@@ -276,6 +277,28 @@ export function DeckView({
   };
   const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
+
+  // Stream-complete navigation. When this DeckView instance is
+  // mounted on /preview/<id> and the version status transitions
+  // (via polling) to "completed", flip the URL over to /project/<id>
+  // so the user lands on the canonical working-session route —
+  // matching what they'd see if they reloaded after completion.
+  //
+  // ONLY forward (preview → project). The inverse direction
+  // (project → preview when status is no longer "completed") is
+  // handled SSR-side at page load; doing it client-side would
+  // produce a jarring URL flip during full regens (the status
+  // briefly transitions through generating before re-completing).
+  // The SSR redirect's job is bookmarks / stale URLs; here we just
+  // forward the post-generation transition.
+  useEffect(() => {
+    if (
+      versionStatus === "completed" &&
+      pathname?.startsWith("/preview/")
+    ) {
+      router.replace(`/project/${projectId}`);
+    }
+  }, [versionStatus, pathname, projectId, router]);
   // Pinned canonical version pointer. Seeded from SSR; mutated by the
   // Save Project button's onSaved callback. Compared against
   // `initialVersionId` in PreviewActionBar to drive the saved/unsaved
@@ -879,7 +902,13 @@ export function DeckView({
         kind: "warning",
         title: "تعذر تطبيق التعليقات",
         desc: `${projectTitle} — ${message}`,
-        href: `/preview/${projectId}`,
+        // /project is the canonical working-session URL post route
+        // split. A "apply comments failed" notification dropped via
+        // bell links the user back to where they can retry — that's
+        // the working session, never /preview (which only serves
+        // mid-stream generations + SSR-redirects to /project when
+        // the deck is ready).
+        href: `/project/${projectId}`,
       });
     };
     const tick = async () => {
