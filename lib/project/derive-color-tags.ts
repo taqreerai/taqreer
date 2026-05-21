@@ -84,10 +84,16 @@ export function bucketize(hex: string): string {
   if (l < LIGHT_MIN) return "#000000";
   if (l > LIGHT_MAX) return "#FFFFFF";
   if (s < SAT_MIN) return "#9CA3AF"; // grey
-  // Brown — dark warm chromatic, intercepts BEFORE the standard
-  // hue buckets so a dark orange like #964B00 doesn't end up as
-  // bright orange.
-  if (h >= 15 && h < 50 && l < 0.45) return "#92400E";
+  // Brown — warm hue that's EITHER dark (saturated dark browns
+  // like saddle-brown `#8B4513`) OR muted (tans, beiges, creams
+  // like `#E3DBCA`). Both are perceived as "earth tone / brown
+  // family" by users even though their HSL coordinates differ
+  // wildly. Without the saturation gate, a cream `#E3DBCA`
+  // (h=41, s=0.31, l=0.84) leaks into orange because it sits
+  // above the dark-lightness threshold despite reading as brown
+  // visually. With it, bright saturated saffron (`#F4AA0B`, s=0.91)
+  // stays in orange — only the muted warms route here.
+  if (h >= 15 && h < 50 && (l < 0.45 || s < 0.5)) return "#92400E";
   if (h < 15 || h >= 345) return "#EF4444"; // red (wraps the wheel)
   if (h < 45) return "#F97316"; // orange
   if (h < 75) return "#EAB308"; // yellow
