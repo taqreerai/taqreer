@@ -48,6 +48,7 @@
 //   to it. The /favorites page will fetch fresh.
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SlideFormat } from "@/lib/schema/slide";
@@ -69,9 +70,22 @@ type Props = {
   title: string;
   createdAt: Date | string;
   isFavorite: boolean;
-  // Click anywhere on the thumbnail surface opens the lightbox.
-  // Parent owns lightbox state.
-  onOpen: () => void;
+  // True when the thumbnail-render Inngest job has been queued (deck
+  // is saved) but its output hasn't landed in `slides` yet. Drives
+  // the loading spinner overlay so users see "thumbnails are coming"
+  // instead of a stale-looking placeholder. Always false for legacy
+  // decks that have never been saved — those get the static
+  // placeholder icon (spinner that never resolves would be worse UX
+  // than acknowledging "no thumbnails available").
+  thumbnailsPending?: boolean;
+  // Optional click-override. Default behaviour (post route split,
+  // 2026-05-21) is to navigate to `/project/<id>` — the canonical
+  // working-session route. Pass `onOpen` to opt back into a
+  // callback-driven flow (e.g. the templates page renders the
+  // ProjectLightbox preview instead of navigating). Project tiles
+  // on /dashboard, /favorites, /projects don't pass it and use
+  // the navigate default.
+  onOpen?: () => void;
   // Fires AFTER the DELETE round-trip succeeds. Parent uses this
   // to drop the tile from its rendered list (we don't unmount
   // ourselves — the parent owns the projects array).
@@ -80,6 +94,14 @@ type Props = {
   // its own local title optimistically; this exists so other
   // surfaces showing the same title (none today) can sync.
   onRenamed?: (projectId: string, newTitle: string) => void;
+  // Optional: notify parent of a confirmed favorite-state change
+  // (server response landed). Used by /favorites to drop the tile
+  // immediately when the user un-stars — without this, un-starring
+  // a tile on the favorites view leaves it sitting there until the
+  // user reloads, because the SSR `projects` array still has it.
+  // RecentProjects doesn't pass this prop (dashboard tiles stay
+  // regardless of star state) so behaviour there is unchanged.
+  onFavoriteChange?: (projectId: string, isFavorite: boolean) => void;
 };
 
 export function ProjectThumbnail({
@@ -89,10 +111,13 @@ export function ProjectThumbnail({
   title,
   createdAt,
   isFavorite,
+  thumbnailsPending = false,
   onOpen,
   onDeleted,
   onRenamed,
+  onFavoriteChange,
 }: Props) {
+  const router = useRouter();
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -127,6 +152,24 @@ export function ProjectThumbnail({
   // Trash confirmation dialog open + in-flight flag for the DELETE.
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashBusy, setTrashBusy] = useState(false);
+
+  // Eagerly preload the FIRST FEW slide thumbnails on mount so the
+  // initial hover-scrub feels instant. Bounded to the first
+  // `EAGER_PRELOAD_LIMIT` (a 6-tile dashboard × 8 slides each ==
+  // 48 simultaneous image fetches on first paint without the cap;
+  // the cap drops that to 18 — caught by CR 2026-05-21). Slides
+  // beyond the cap will fetch on first hover (single ~80 KB
+  // request; cheap, and the brief blank-flash is acceptable for a
+  // less-likely interaction). Cached for the page's lifetime once
+  // fetched.
+  const EAGER_PRELOAD_LIMIT = 3;
+  useEffect(() => {
+    for (const url of slides.slice(0, EAGER_PRELOAD_LIMIT)) {
+      if (!url) continue;
+      const img = new Image();
+      img.src = url;
+    }
+  }, [slides]);
 
   // Focus + select the input when entering rename mode. useEffect
   // (not a callback ref) because the input only exists conditionally;
@@ -203,6 +246,7 @@ export function ProjectThumbnail({
       if (!res.ok) throw new Error(`favorite: ${res.status}`);
       const data = (await res.json()) as { isFavorite: boolean };
       setFavoriteState(data.isFavorite);
+      onFavoriteChange?.(projectId, data.isFavorite);
     } catch (err) {
       // Revert the optimistic flip on failure. The dashboard has no
       // toast / retry chrome for this action, so without a revert
@@ -216,7 +260,12 @@ export function ProjectThumbnail({
   };
 
   const handleCopyLink = async () => {
-    const url = `${window.location.origin}/preview/${projectId}`;
+    // Canonical working-session URL post route-split. /preview/<id>
+    // still works (it just SSR-redirects to /project/<id> for any
+    // completed deck) but /project is the URL we share / bookmark
+    // so the recipient lands on the right route without a
+    // redirect hop.
+    const url = `${window.location.origin}/project/${projectId}`;
     try {
       await navigator.clipboard.writeText(url);
     } catch (err) {
@@ -307,17 +356,30 @@ export function ProjectThumbnail({
         <button
           ref={rootRef}
           type="button"
-          onClick={hasSlides ? onOpen : undefined}
+          // Tile click → navigate to /project/<id> by default; if
+          // the caller passes `onOpen`, that wins (templates open
+          // the ProjectLightbox preview instead of navigating).
+          //
+          // Always clickable — including tiles without thumbnails.
+          // Pre-step-8b decks (and any deck whose thumbnail render
+          // failed) have `thumbnailUrls: []`, so the previous
+          // `disabled={!hasSlides}` gate made them unreachable from
+          // the dashboard. After the route split that's wrong:
+          // the working session at /project/<id> is valid regardless
+          // of whether thumbnails were generated, so the click
+          // should still navigate.
+          onClick={() =>
+            onOpen ? onOpen() : router.push(`/project/${projectId}`)
+          }
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
-          disabled={!hasSlides}
           aria-label={
             hasSlides
-              ? `معاينة ${titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
-              : `${titleState} — لا توجد معاينة`
+              ? `افتح ${titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
+              : `افتح ${titleState}`
           }
           className={`absolute inset-0 block ${
-            hasSlides ? "cursor-zoom-in" : "cursor-default"
+            onOpen ? "cursor-zoom-in" : "cursor-pointer"
           }`}
         >
           {src ? (
@@ -330,6 +392,23 @@ export function ProjectThumbnail({
               decoding="async"
               draggable={false}
             />
+          ) : thumbnailsPending ? (
+            // Deck just saved — Inngest thumbnail job in flight.
+            // `progress_activity` is Material Symbols' canonical
+            // circular loader glyph; `animate-spin` provides the
+            // rotation. `.tq-icon-lg` pins the font-size at 32 px
+            // (chained-selector override of the global FILL=0 +
+            // font-size:1em rules — same cascade fix family as
+            // `.tq-fav-indicator`).
+            <span
+              role="status"
+              aria-label="جاري إنشاء المعاينة"
+              className="flex h-full w-full items-center justify-center"
+            >
+              <span className="material-symbols-outlined tq-icon-lg animate-spin text-muted">
+                progress_activity
+              </span>
+            </span>
           ) : (
             <span className="flex h-full w-full items-center justify-center">
               <span className="material-symbols-outlined text-[28px] text-muted opacity-25">
@@ -348,6 +427,21 @@ export function ProjectThumbnail({
             className="pointer-events-none absolute bottom-2 end-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white"
           >
             {hoverIndex + 1} / {slides.length}
+          </span>
+        ) : null}
+
+        {/* Favorited indicator — top-start corner. Diagonal-opposite
+            of the scrub counter so the two never crowd. Matches the
+            counter's bg-black/70 chrome so the star reads against
+            any slide content (light or dark). Inline FILL=1 because
+            the global material-symbols-outlined rule sets FILL=0;
+            without this the glyph would render as an outline. */}
+        {favoriteState ? (
+          <span
+            aria-label="مشروع مفضّل"
+            className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-white"
+          >
+            star
           </span>
         ) : null}
       </div>
@@ -407,7 +501,12 @@ export function ProjectThumbnail({
           aria-label="خيارات المشروع"
           aria-haspopup="menu"
           aria-expanded={menuRect !== null}
-          data-project-menu-trigger
+          // The value (not just the attribute presence) carries the
+          // projectId so the menu's outside-click handler can tell
+          // "this same tile's trigger" apart from "some OTHER tile's
+          // trigger" — clicking tile B's 3-dots now closes tile A's
+          // open menu instead of leaving both popped.
+          data-project-menu-trigger={projectId}
           onClick={(e) => {
             e.stopPropagation();
             // Toggle: closed → open at current rect, open → close.
@@ -420,9 +519,13 @@ export function ProjectThumbnail({
           }}
           className="btn-icon -mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors"
           style={{
-            color: thumbHovered
-              ? "var(--tq-text-primary)"
-              : "var(--tq-text-muted)",
+            // Stays white when favorited (even idle) so the tile reads
+            // as "starred" at a glance, paired with the filled-star
+            // indicator next to it. Hover behaviour unchanged.
+            color:
+              thumbHovered || favoriteState
+                ? "var(--tq-text-primary)"
+                : "var(--tq-text-muted)",
           }}
         >
           <span className="material-symbols-outlined text-[18px]">more_vert</span>
@@ -432,6 +535,7 @@ export function ProjectThumbnail({
       <ProjectActionsMenu
         open={menuRect !== null}
         triggerRect={menuRect}
+        projectId={projectId}
         isFavorite={favoriteState}
         onClose={closeMenu}
         onShare={handleShare}

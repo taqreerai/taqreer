@@ -73,6 +73,20 @@ model Project {
   // not updated by regen / partial-regen / save (per product req).
   slideCount    Int?
   dominantColor String?
+  // Color buckets the deck "identifies as" for the /projects swatch
+  // picker. Multi-valued because a brand can mix multiple accents
+  // AND because greyscale-only decks intentionally tag with BOTH
+  // #000000 and #FFFFFF so they surface under either filter.
+  // Derivation lives in `lib/project/derive-color-tags.ts`:
+  //   • chromatic siblings (saturation > 0.15)  → take them all,
+  //     drop b/w/grey in the same palette as chrome, not identity
+  //   • all-greyscale palette → ["#000000", "#FFFFFF"]
+  //   • empty palette (Claude-decides) → fall back to the
+  //     generated manifest's theme.brand.colors; then last-resort
+  //     ["#000000", "#FFFFFF"]
+  // Frozen on first generation alongside slideCount /
+  // dominantColor. Empty array == "not yet computed" (default).
+  colorTags     String[]      @default([])
   isFavorite    Boolean       @default(false)
   folderId      String?
   templateId    String?

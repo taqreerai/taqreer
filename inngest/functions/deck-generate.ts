@@ -12,6 +12,7 @@ import {
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
+import { deriveColorTags } from "@/lib/project/derive-color-tags";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -1106,27 +1107,41 @@ export const deckGenerate = inngest.createFunction(
       // /projects filter columns — frozen on FIRST successful
       // deck-generate completion, never updated afterwards.
       //   slideCount    ← manifest.slides.length
-      //   dominantColor ← brief.brand.colors[0] (validated hex)
-      // Read existing values first; only write when currently null
-      // so a full-deck regen (which also fires `deck.generate.
-      // requested`) doesn't overwrite the original values. Partial
-      // regen runs in `deck-regenerate-partial.ts` and never hits
-      // this path. NOTE: the /save route used to capture these on
-      // first-save — that path has been removed; capture is now
-      // exclusively here (per the product call: "we get the slide
-      // count on generation complete").
+      //   dominantColor ← brief.brand.colors[0] (legacy single-tag,
+      //                   kept temporarily for backward compat —
+      //                   colorTags is the canonical filter source)
+      //   colorTags     ← deriveColorTags(brief.brand.colors,
+      //                   manifest.theme.palette as fallback)
+      // Read existing values first; only write when currently null /
+      // empty so a full-deck regen (which also fires
+      // `deck.generate.requested`) doesn't overwrite the original
+      // values. Partial regen runs in `deck-regenerate-partial.ts`
+      // and never hits this path. NOTE: the /save route used to
+      // capture these on first-save — that path has been removed;
+      // capture is now exclusively here (per the product call:
+      // "we get the slide count on generation complete").
       const slideCountFromManifest = manifest.slides.length;
-      let dominantColorFromBrief: string | null = null;
-      const briefBrandColors = (data.brief as {
+      const briefBrandColorsRaw = (data.brief as {
         brand?: { colors?: unknown[] };
       } | null)?.brand?.colors;
-      const firstColor = briefBrandColors?.[0];
+      const briefBrandColors = Array.isArray(briefBrandColorsRaw)
+        ? briefBrandColorsRaw.filter((c): c is string => typeof c === "string")
+        : [];
+      let dominantColorFromBrief: string | null = null;
+      const firstColor = briefBrandColors[0];
       if (
         typeof firstColor === "string" &&
         /^#[0-9A-Fa-f]{6}$/.test(firstColor)
       ) {
         dominantColorFromBrief = firstColor.toUpperCase();
       }
+      // colorTags handles the brand-decides + Claude-decides cases
+      // uniformly: brief palette first, manifest theme palette as
+      // fallback, [#000000, #FFFFFF] as last-resort.
+      const colorTagsFromBrief = deriveColorTags(
+        briefBrandColors,
+        manifest.theme.palette,
+      );
 
       // Promote Claude's generated title to the Project (dashboard name) and
       // the Presentation (also used for new versions). The truncated paste
@@ -1162,6 +1177,14 @@ export const deckGenerate = inngest.createFunction(
           data: { dominantColor: dominantColorFromBrief },
         });
       }
+      // colorTags freeze — empty-array guard ensures we only write
+      // on the FIRST completion. Postgres String[] default is `[]`
+      // for existing rows; the WHERE filter is the equivalent of
+      // `colorTags IS EMPTY` guarded against re-writes from regens.
+      await prisma.project.updateMany({
+        where: { id: projectId, colorTags: { isEmpty: true } },
+        data: { colorTags: colorTagsFromBrief },
+      });
       await prisma.presentation
         .update({
           where: { projectId },

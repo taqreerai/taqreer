@@ -7,6 +7,13 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getStartOfMonthUTC } from "@/lib/utils";
 
+// Fresh SSR every navigation. Without this Next.js may serve a
+// cached render from before the Inngest thumbnail-render job
+// completed → placeholder tiles even after thumbnails are ready.
+// The RecentProjects client component also schedules a
+// `router.refresh()` if any tile has empty thumbnails.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
@@ -61,6 +68,9 @@ export default async function DashboardPage() {
         thumbnailUrls: true,
         createdAt: true,
         isFavorite: true,
+        // Drives the tile's pending-spinner state — see
+        // /projects/page.tsx for full rationale.
+        presentation: { select: { savedVersionId: true } },
       },
     }),
     prisma.template.findMany({
@@ -80,11 +90,22 @@ export default async function DashboardPage() {
     }),
   ]);
 
+  // Flatten the presentation relation into a single boolean. See
+  // /projects/page.tsx for the pending/legacy rationale.
+  const projectsWithPending = projects.map(
+    ({ presentation, ...rest }) => ({
+      ...rest,
+      thumbnailsPending:
+        (presentation?.savedVersionId ?? null) !== null &&
+        rest.thumbnailUrls.length === 0,
+    }),
+  );
+
   return (
     <div className="page-container space-y-8">
       <QuickActions />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RecentProjects projects={projects} />
+        <RecentProjects projects={projectsWithPending} />
         <MyTemplates templates={templates} />
       </div>
       <PlanUsage

@@ -44,6 +44,7 @@ export type ProjectActionsMenuActions = {
 export function ProjectActionsMenu({
   open,
   triggerRect,
+  projectId,
   isFavorite,
   onClose,
   onShare,
@@ -56,6 +57,11 @@ export function ProjectActionsMenu({
 }: {
   open: boolean;
   triggerRect: DOMRect | null;
+  // Identifies WHICH tile owns this menu so the outside-click
+  // handler can tell its OWN trigger (legitimate toggle, ignore)
+  // apart from ANOTHER tile's trigger (genuine outside-click,
+  // close). Stamped on the trigger as data-project-menu-trigger.
+  projectId: string;
   isFavorite: boolean;
   onClose: () => void;
   // Fires once AnimatePresence finishes exiting. Parent uses this
@@ -66,17 +72,26 @@ export function ProjectActionsMenu({
 } & ProjectActionsMenuActions) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
-  // Outside click + Esc to close. The trigger button is excluded
-  // via data-project-menu-trigger so clicking it again toggles via
-  // the parent rather than instantly reopening (see HistoryPopover
-  // for the bug this avoids).
+  // Outside click + Esc to close. The OWN trigger is excluded so
+  // clicking it again toggles via the parent rather than instantly
+  // reopening (see HistoryPopover for the bug this avoids). The
+  // exclusion was previously selector-only (`closest('[data-…]')`)
+  // which matched ANY tile's trigger — meaning clicking tile B's
+  // 3-dots while tile A's menu was open did not close tile A. We
+  // now compare the trigger's data value against THIS menu's
+  // projectId, so other tiles' triggers count as genuine outside
+  // clicks and trigger a close (their own click handler then opens
+  // their menu on the same gesture).
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       const target = e.target as Element | null;
       if (!target) return;
       if (surfaceRef.current?.contains(target)) return;
-      if (target.closest?.("[data-project-menu-trigger]")) return;
+      const trigger = target.closest?.(
+        "[data-project-menu-trigger]",
+      ) as HTMLElement | null;
+      if (trigger?.dataset.projectMenuTrigger === projectId) return;
       onClose();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -88,7 +103,7 @@ export function ProjectActionsMenu({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open, onClose, projectId]);
 
   if (typeof document === "undefined") return null;
 
@@ -141,6 +156,7 @@ export function ProjectActionsMenu({
             />
             <MenuItem
               icon={isFavorite ? "star" : "star_outline"}
+              iconFilled={isFavorite}
               label={isFavorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"}
               onClick={onToggleFavorite}
               closeAfter
@@ -192,6 +208,7 @@ export function ProjectActionsMenu({
 
 function MenuItem({
   icon,
+  iconFilled,
   label,
   onClick,
   disabled,
@@ -200,6 +217,12 @@ function MenuItem({
   onClose,
 }: {
   icon: string;
+  // Optional. Forces the Material Symbols FILL axis to 1 for this
+  // icon (the global rule sets FILL=0, so even glyph names like
+  // `star` render as outlines without this). Used for the favorite
+  // item when the project is starred — visual reinforcement that
+  // the toggle is in the "ON" state.
+  iconFilled?: boolean;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
@@ -235,7 +258,12 @@ function MenuItem({
       >
         <span
           className="material-symbols-outlined"
-          style={{ fontSize: 18 }}
+          style={{
+            fontSize: 18,
+            ...(iconFilled
+              ? { fontVariationSettings: '"FILL" 1' }
+              : null),
+          }}
           aria-hidden
         >
           {icon}

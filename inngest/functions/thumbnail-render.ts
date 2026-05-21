@@ -177,15 +177,33 @@ export const thumbnailRender = inngest.createFunction(
           // that triggered the same blank-output bug as a too-tight
           // clip; passing an explicit `{ x, y, width, height }` to
           // page.screenshot is the robust path.
+          //
+          // Coord-space gotcha (root-caused 2026-05-21 after every
+          // saved deck rendered "slide 1 × N"): scrollIntoView keeps
+          // Chrome painting one slide at a time inside the single-
+          // slide viewport, BUT `getBoundingClientRect()` returns
+          // VIEWPORT-relative coords (so slide N at viewport top is
+          // (0, 0)). Puppeteer's `page.screenshot({ clip })` reads
+          // clip in DOCUMENT coords (captureBeyondViewport defaults
+          // to true with a clip, so the doc-coord interpretation
+          // wins). Passing the raw viewport rect therefore always
+          // captured document (0, 0) — slide 1 — regardless of which
+          // slide we scrolled to. Add scrollX/Y back so the clip is
+          // in document space.
           const bbox = await page.evaluate((escaped) => {
             const el = document.querySelector(`[data-slide-id="${escaped}"]`);
             if (!el) return null;
             // Scroll the target slide into view before measuring —
-            // the doc is N×canvasH tall and only the visible slot
-            // ever measures inside the (now-single-slide) viewport.
+            // ensures Chrome has painted the slide before the
+            // capture extends beyond the original viewport.
             el.scrollIntoView({ block: "start", inline: "start" });
             const r = el.getBoundingClientRect();
-            return { x: r.x, y: r.y, width: r.width, height: r.height };
+            return {
+              x: r.x + window.scrollX,
+              y: r.y + window.scrollY,
+              width: r.width,
+              height: r.height,
+            };
           }, cssEscape(slide.slideId));
           if (!bbox) {
             throw new Error(
