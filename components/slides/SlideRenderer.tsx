@@ -66,13 +66,31 @@ export function SlideRenderer({
     setSanitized(sanitizeSlideHtml(slide.html));
   }, [slide.html]);
 
+  // NO inset buffer (was attempted 2026-05-23 then reverted same
+  // day). The buffer-ring approach assumed the slide's own root bg
+  // matched `theme.background`, but Claude-generated slides
+  // routinely override the root bg (e.g. a hero slide with dark
+  // root inside a light-theme deck). The result was a visible
+  // theme-coloured frame around darker slides in the
+  // SlideNavSidebar thumbnails — the user reported "thumbnails
+  // don't fit the frame, there is padding inside" 2026-05-23.
+  //
+  // Trade-off: slide-edge strokes (full-width dividers / borders
+  // at the canvas edges) may get sub-pixel-aliased at low scales
+  // (thumbnails). Accepting that for now — visible padding is the
+  // worse defect. A proper fix would either (a) snapshot
+  // thumbnails to PNG so sub-pixel rendering applies once
+  // server-side, or (b) detect the actual slide-root bg and feed
+  // it into the outer wrapper instead of `theme.background`.
   return (
     <div
       style={{
         width: width * scale,
         height: height * scale,
         position: "relative",
-        overflow: "hidden",
+        // No `overflow: hidden` on either wrapper. The CONSUMER owns
+        // the visual clip (hero canvas + thumbnail button both wrap
+        // SlideRenderer in their own overflow-hidden box).
         flexShrink: 0,
         background: theme.background,
       }}
@@ -85,15 +103,12 @@ export function SlideRenderer({
           ...cssVars,
           width,
           height,
-          // `position: absolute` + `left: 0; top: 0` pins the scaled
-          // child to the outer wrapper's top-left corner regardless
-          // of any ancestor's direction. Without this, an unscaled
-          // box that is wider than its outer wrapper (always true:
-          // 1080px content scaled to ~100px thumbnail) sits at
-          // overflow's start edge — which is `right` in RTL flow
-          // and `left` in LTR — so the matching `transform-origin`
-          // would have to flip too. Pinning to top-left lets us use
-          // a single `transform-origin: top left` everywhere.
+          // `position: absolute` + a small `EDGE_STROKE_BUFFER_PX`
+          // offset on left/top pins the scaled child to the outer
+          // wrapper's top-left corner, INSET by the buffer amount.
+          // The transform-origin: top-left means the scaled content
+          // starts at exactly the buffer offset, ending at
+          // `BUFFER + width·adjustedScale = outerWidth − BUFFER`.
           position: "absolute",
           left: 0,
           top: 0,
@@ -101,7 +116,6 @@ export function SlideRenderer({
           transformOrigin: "top left",
           color: theme.text,
           fontFamily: `var(--font-body)`,
-          overflow: "hidden",
         }}
         dangerouslySetInnerHTML={{ __html: sanitized }}
       />

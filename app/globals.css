@@ -164,6 +164,11 @@
   --tq-blue:        #370BF4;
   --tq-blue-rgb:    55, 11, 244;
   --tq-magenta:     #E036B8;
+  /* Bright neon magenta, hotter than `--tq-magenta`. Added 2026-05-23
+     for the SlideNavSidebar active-thumbnail ring; available for any
+     other "selected" indicator that needs to read brighter than the
+     muted brand-magenta. */
+  --tq-magenta-hot: #F900FF;
   --tq-violet:      #7D2DFF;
   --tq-violet-rgb:  125, 45, 255;
   --tq-lavender:    #9326C9;
@@ -184,6 +189,12 @@
   /* 4. Borders */
   --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
   --tq-border-danger: rgba(239, 68, 68, 0.22);
+  /* Glass surface fill — matches `.glass-card` / `.qa-card` /
+     `.glass-popover` bg recipe (white at `--glass-opacity` alpha).
+     Lets consumers reference the same fill via a single token
+     instead of re-typing the rgba inline. Added 2026-05-23 when
+     SlideNavSidebar called this out as a hardcoded CSS smell. */
+  --tq-bg-glass: rgba(255, 255, 255, var(--glass-opacity));
   /* Neutral focus / "active border". Sits between the resting
      muted border (~white/0.09) and a too-bright white/0.4; user-
      locked at #ffffff42 (≈ white/0.26) on 2026-05-21 after both
@@ -1481,6 +1492,24 @@ body {
 .glass-popover {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
+}
+
+/* ─── Slide overlay pill (in-slide chrome) ──────────────────────────
+   Marker class on the per-slide control pill (regen / history /
+   lock). Kept around for future selector hooks, but the bg-color
+   and transition are now ENTIRELY component-owned:
+     • SlidePill.tsx sets `background-color` via inline style (so
+       it can't be beaten by `.glass-popover { background:
+       transparent }` source-order races).
+     • The fade animation rides on Tailwind's `transition-opacity
+       duration-150` class on the same element — DO NOT add a
+       `transition: …` rule here. A previous version added
+       `transition: background-color 150ms` which silently replaced
+       (not extended) Tailwind's opacity transition because both
+       used the same `.slides_pill` selector — opacity stopped
+       animating and the blur snapped on/off on hover. */
+.slides_pill {
+  /* intentionally empty — see header comment */
 }
 
 /* ─── Modal dim overlay ───────────────────────────────────────────

@@ -453,8 +453,12 @@ export function ProjectThumbnail({
 
       {/* Info row — title (or rename input) + creation date on the
           start side (right in RTL), 3-dots menu trigger on the end
-          side (left in RTL). Always visible, no hover gating. */}
-      <div dir="rtl" className="flex items-start justify-between gap-2 px-0.5">
+          side (left in RTL). Always visible, no hover gating.
+          No horizontal padding so the 3-dots button can align flush
+          with the thumbnail's visual-left edge (see button's `-me-3`
+          for the offset that cancels the glyph's intrinsic padding).
+          Same alignment as TemplateTile. */}
+      <div dir="rtl" className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           {/* Title + 3-dots color is driven by INLINE style (not
               Tailwind `text-white`/`text-muted` utilities) because
@@ -528,7 +532,21 @@ export function ProjectThumbnail({
           // tile — user feedback flagged it as visually heavy. The
           // 3-dots wants to feel invisible until you reach for it
           // and then just brighten.
-          className="-mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:text-white"
+          //
+          // `-me-3` (margin-inline-end: −12 px) pulls the button
+          // leftward in RTL by exactly the glyph's intrinsic visual
+          // offset (5 px centering padding + 7 px `more_vert` glyph
+          // padding within its 18 px font box) so the visible 3 dots
+          // sit flush with the thumbnail's left edge. Same alignment
+          // formula used in TemplateTile.
+          //
+          // `hover:text-white!` (Tailwind v4 important modifier) is
+          // REQUIRED because the inline `style.color` below sets a
+          // color on every render, and inline styles beat unlayered
+          // utility rules in normal specificity. Without `!` the
+          // muted color held even when the cursor was on the
+          // button — user reported "no hover on projects" 2026-05-23.
+          className="-mt-0.5 -me-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:text-white!"
           style={{
             // Stays white when favorited (even idle) so the tile reads
             // as "starred" at a glance, paired with the filled-star
