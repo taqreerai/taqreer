@@ -214,6 +214,28 @@ function googleFontUrl(family: string): string {
   return `https://fonts.googleapis.com/css2?family=${encoded}:wght@400;700&display=swap`;
 }
 
+// Sample-text picker for the font preview slots (added 2026-05-22).
+//
+// Latin-only Google fonts (Inter / Poppins / etc., flagged
+// `arabic: false` above) can't render Arabic — so showing them next
+// to "أبجد هوز" / "النص الأساسي يُستخدم في فقرات المحتوى." just
+// produces tofu glyphs. Swap to Latin samples in that case so the
+// user actually sees what their picked font looks like.
+//
+// Upload-mode fonts default to the Arabic samples — we don't know
+// the uploaded font's glyph coverage, and the brand identity is
+// Arabic-first.
+const HEADING_SAMPLE_AR = "أبجد هوز";
+const HEADING_SAMPLE_LATIN = "Aa Bb Cc";
+const BODY_SAMPLE_AR = "النص الأساسي يُستخدم في فقرات المحتوى.";
+const BODY_SAMPLE_LATIN = "The quick brown fox jumps over the lazy dog.";
+
+function isLatinOnlyGoogleFont(family: string | null | undefined): boolean {
+  if (!family) return false;
+  const entry = GOOGLE_FONTS.find((f) => f.family === family);
+  return entry !== undefined && entry.arabic === false;
+}
+
 const DESIGN_STYLE_OPTIONS = ["إبداعي", "بسيط", "احترافي", "مرح", "صحفي", "جريء", "كلاسيكي"];
 
 type StoredContent = {
@@ -586,7 +608,16 @@ function FontUploadSlot({
           <span className="text-[10px] text-white/40">— WOFF / TTF / OTF</span>
         </button>
       )}
-      <p className={`${sampleSizeClass} text-right text-white${family ? ` ${family}` : ""}`}>
+      <p
+        // `dir="auto"` + `text-start` so Latin sample text (when the
+        // picked font is Latin-only — added 2026-05-22) reads
+        // left-aligned + L→R, while Arabic samples keep their
+        // right-aligned RTL flow. Without this the paragraph
+        // hardcoded `text-right` inside a dir="rtl" parent, which
+        // looked wrong for Latin previews.
+        dir="auto"
+        className={`${sampleSizeClass} text-start text-white${family ? ` ${family}` : ""}`}
+      >
         {sampleText}
       </p>
     </div>
@@ -769,7 +800,12 @@ function GoogleFontSlot({
         </div>
       ) : null}
       <p
-        className={`${sampleSizeClass} text-right text-white`}
+        // `dir="auto"` + `text-start` so Latin samples (when the
+        // picked Google family is flagged `arabic: false` — added
+        // 2026-05-22) align left and read L→R; Arabic samples keep
+        // their right-aligned RTL flow.
+        dir="auto"
+        className={`${sampleSizeClass} text-start text-white`}
         style={selected ? { fontFamily: `"${selected}", system-ui, sans-serif` } : undefined}
       >
         {sampleText}
@@ -2036,7 +2072,10 @@ export default function CreateBrandPage() {
                   label="ارفع خط العناوين"
                   file={headingFontSlot.uploadFile}
                   family={headingFontSlot.uploadFamily}
-                  sampleText="أبجد هوز"
+                  // Upload mode — we don't know the uploaded font's
+                  // glyph coverage, so default to Arabic samples
+                  // (brand identity is Arabic-first).
+                  sampleText={HEADING_SAMPLE_AR}
                   sampleSizeClass="text-2xl"
                   onSelect={(file) => onUploadFont("heading", file)}
                   onRemove={() => onRemoveUploadFont("heading")}
@@ -2045,7 +2084,11 @@ export default function CreateBrandPage() {
                 <GoogleFontSlot
                   label="خط العناوين"
                   selected={headingFontSlot.googleFamily}
-                  sampleText="أبجد هوز"
+                  sampleText={
+                    isLatinOnlyGoogleFont(headingFontSlot.googleFamily)
+                      ? HEADING_SAMPLE_LATIN
+                      : HEADING_SAMPLE_AR
+                  }
                   sampleSizeClass="text-2xl"
                   onSelect={(family) => onSelectGoogleFont("heading", family)}
                 />
@@ -2074,7 +2117,7 @@ export default function CreateBrandPage() {
                   label="ارفع خط النص"
                   file={bodyFontSlot.uploadFile}
                   family={bodyFontSlot.uploadFamily}
-                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleText={BODY_SAMPLE_AR}
                   sampleSizeClass="text-base"
                   onSelect={(file) => onUploadFont("body", file)}
                   onRemove={() => onRemoveUploadFont("body")}
@@ -2083,7 +2126,11 @@ export default function CreateBrandPage() {
                 <GoogleFontSlot
                   label="خط النص"
                   selected={bodyFontSlot.googleFamily}
-                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleText={
+                    isLatinOnlyGoogleFont(bodyFontSlot.googleFamily)
+                      ? BODY_SAMPLE_LATIN
+                      : BODY_SAMPLE_AR
+                  }
                   sampleSizeClass="text-base"
                   onSelect={(family) => onSelectGoogleFont("body", family)}
                 />

@@ -28,6 +28,7 @@ import {
   bucketize,
 } from "@/lib/project/derive-color-tags";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import { seedFromTemplate } from "@/lib/create/seed-from-template";
 import type { SlideFormat } from "@/lib/schema/slide";
 import type { TemplateForBrowse } from "./types";
 
@@ -60,6 +61,28 @@ export function TemplatesPageClient({
   // Lightbox target. null = closed. Drives both TemplateLightbox
   // `open` and the slides/title/format props.
   const [preview, setPreview] = useState<TemplateForBrowse | null>(null);
+  // "Use this template" busy gate — blocks double-clicks while the
+  // seed request is in flight. Cleared either by a successful
+  // navigation (no need; the page unmounts) or by the catch on
+  // failure (releases the gate so the user can retry).
+  const [useBusy, setUseBusy] = useState(false);
+
+  const handleUseTemplate = async () => {
+    if (!preview || useBusy) return;
+    setUseBusy(true);
+    try {
+      await seedFromTemplate(preview.id);
+      // Hard navigation so the destination page's lazy initialisers +
+      // stepper mount-effect read the fresh templateSeed marker on
+      // first render. Target is the parallel /create-from-template
+      // tree (Phase D 2026-05-22) — keeps the normal /create flow
+      // untouched.
+      window.location.assign("/create-from-template/content");
+    } catch (err) {
+      console.warn("[TemplatesPageClient] seedFromTemplate failed", err);
+      setUseBusy(false);
+    }
+  };
 
   // Bucketed swatches across every visible template. Each palette
   // entry expands to 1-2 buckets via `bucketize` (boundary hex values
@@ -234,6 +257,8 @@ export function TemplatesPageClient({
         format={previewFormat}
         title={preview?.title ?? ""}
         onClose={() => setPreview(null)}
+        onUseTemplate={preview ? handleUseTemplate : undefined}
+        useBusy={useBusy}
       />
     </>
   );

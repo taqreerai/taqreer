@@ -7,11 +7,11 @@
 //
 //   1. اجعله عاماً / اجعله خاصاً  — toggles isPublic via PATCH
 //                                   /api/templates/[id]/visibility
-//   2. استخدامه كقالب              — DISABLED placeholder (Phase D
-//                                   "use this template" flow not yet
-//                                   wired; the menu item stays so the
-//                                   surface is greppable + the affordance
-//                                   visible)
+//   2. استخدامه كقالب              — Phase D "use this template" (wired
+//                                   2026-05-22). Calls onUseAsTemplate
+//                                   which seeds the create flow from
+//                                   the template's BrandSnapshot and
+//                                   navigates to /create/content.
 //   3. حذف القالب                  — destructive. Parent opens a confirm
 //                                   dialog before firing DELETE.
 //
@@ -34,14 +34,14 @@ const VIEWPORT_EDGE_INSET_PX = 12;
 
 export type TemplateActionsMenuActions = {
   onToggleVisibility?: () => void;
+  onUseAsTemplate?: () => void;
   onDelete?: () => void;
 };
 
-// (`onUseAsTemplate` + `onExitComplete` props were removed 2026-05-22.
-// The use-as-template item is a disabled placeholder until Phase D;
-// when that ships, re-add the prop here AND drop `disabled` from the
-// MenuItem below. `onExitComplete` mirrored ProjectActionsMenu's
-// contract but no consumer ever passed it for template menus.)
+// Phase D shipped `onUseAsTemplate` on 2026-05-22. `onExitComplete`
+// stays absent — it mirrored ProjectActionsMenu's contract but no
+// template-menu consumer ever needed the exit-animation completion
+// hook.
 
 export function TemplateActionsMenu({
   open,
@@ -50,6 +50,7 @@ export function TemplateActionsMenu({
   isPublic,
   onClose,
   onToggleVisibility,
+  onUseAsTemplate,
   onDelete,
 }: {
   open: boolean;
@@ -148,14 +149,17 @@ export function TemplateActionsMenu({
               closeAfter
               onClose={onClose}
             />
-            {/* Use-as-template — disabled placeholder. No onClick, no
-                tooltip; the row is visible so the affordance is greppable
-                and the menu shape stays stable for when Phase D wires
-                this. */}
+            {/* Use-as-template (Phase D wired 2026-05-22). When the
+                parent doesn't pass onUseAsTemplate, falls back to the
+                disabled placeholder so the row stays greppable + the
+                menu's vertical rhythm is stable. */}
             <MenuItem
               icon="dashboard_customize"
               label="استخدامه كقالب"
-              disabled
+              onClick={onUseAsTemplate}
+              disabled={!onUseAsTemplate}
+              closeAfter
+              onClose={onClose}
             />
             <li aria-hidden className="my-1 h-px bg-white/[0.08]" />
             <MenuItem

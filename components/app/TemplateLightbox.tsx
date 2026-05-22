@@ -42,9 +42,26 @@ type Props = {
   format: SlideFormat;
   title: string;
   onClose: () => void;
+  // Phase D: handler for "Use this template" footer CTA. When provided
+  // the button is enabled and clicking fires it (the caller seeds the
+  // create flow + navigates). When omitted (older callers) the button
+  // stays disabled as a visible placeholder.
+  onUseTemplate?: () => void;
+  // Soft-disable the CTA while the parent's seedFromTemplate request
+  // is in flight. The button stays visible (with reduced opacity) so
+  // the user gets feedback that their click registered.
+  useBusy?: boolean;
 };
 
-export function TemplateLightbox({ open, slides, format, title, onClose }: Props) {
+export function TemplateLightbox({
+  open,
+  slides,
+  format,
+  title,
+  onClose,
+  onUseTemplate,
+  useBusy,
+}: Props) {
   const [index, setIndex] = useState(0);
   const total = slides.length;
   const isPortrait = format === "9:16";
@@ -259,15 +276,19 @@ export function TemplateLightbox({ open, slides, format, title, onClose }: Props
                 </div>
               ) : null}
 
-              {/* Footer CTA — "Use this template" (Phase D). Visible
-                  and styled but DISABLED for now — clicking does
-                  nothing. The button stays in place so the affordance
-                  is greppable and the footer's vertical rhythm is
-                  established for when Phase D wires this. */}
+              {/* Footer CTA — "Use this template" (Phase D wired
+                  2026-05-22). If the parent doesn't pass an
+                  onUseTemplate handler, the button falls back to the
+                  pre-Phase-D disabled placeholder so the footer's
+                  vertical rhythm stays consistent across consumers.
+                  When the parent's seed request is in flight,
+                  `useBusy` dims the button + swaps the icon to a
+                  spinner glyph so the user sees the click registered. */}
               <footer className="flex items-center justify-end border-t border-white/[0.08] px-5 py-3">
                 <button
                   type="button"
-                  disabled
+                  onClick={onUseTemplate}
+                  disabled={!onUseTemplate || useBusy}
                   className="btn-gradient inline-flex items-center gap-2 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span
@@ -275,7 +296,7 @@ export function TemplateLightbox({ open, slides, format, title, onClose }: Props
                     style={{ fontSize: 16 }}
                     aria-hidden
                   >
-                    dashboard_customize
+                    {useBusy ? "progress_activity" : "dashboard_customize"}
                   </span>
                   استخدامه كقالب
                 </button>

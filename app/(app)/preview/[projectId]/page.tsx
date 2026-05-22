@@ -14,11 +14,18 @@
 // `router.replace("/project/<id>")` the moment its stream-complete
 // hook fires.
 
+import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { DeckView } from "@/components/preview/DeckView";
 import { loadProject, isDeckReady } from "@/lib/project/load-project";
 
 export const dynamic = "force-dynamic";
+
+// Match DashboardShell's `sidebarCookieKey`. SSR-read here so the
+// SlideNavSidebar's `right:` value is correct on first paint — no
+// flash of 260 → 80 on refresh when the user has the main sidebar
+// collapsed.
+const SIDEBAR_COOKIE = "tq_sidebar_collapsed";
 
 export default async function PreviewPage({
   params,
@@ -37,11 +44,22 @@ export default async function PreviewPage({
     redirect(`/project/${projectId}`);
   }
 
+  const cookieStore = await cookies();
+  const isCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
+  const initialMainSidebarWidth = isCollapsed ? 80 : 260;
+
   // Key DeckView on the version id + status so partial-regen completion
   // (currentVersionId flips from v_n → v_n+1) remounts the component and
   // reseeds from the new manifest. Without the version id in the key, a
   // completed→completed transition leaves the key unchanged and DeckView
   // keeps its prior `manifest` state (initialised lazily from old props).
   const deckKey = `${data.initialVersionId ?? "none"}:${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
-  return <DeckView key={deckKey} projectId={projectId} {...data} />;
+  return (
+    <DeckView
+      key={deckKey}
+      projectId={projectId}
+      initialMainSidebarWidth={initialMainSidebarWidth}
+      {...data}
+    />
+  );
 }

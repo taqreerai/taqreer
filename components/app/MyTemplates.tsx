@@ -25,6 +25,7 @@ import {
 } from "@/components/app/TemplateTile";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import { seedFromTemplate } from "@/lib/create/seed-from-template";
 import type { SlideFormat } from "@/lib/schema/slide";
 
 export type MyTemplatesTemplate = TemplateTileData & {
@@ -47,6 +48,27 @@ export function MyTemplates({
 }) {
   // null = lightbox closed; a template object = open at that template.
   const [preview, setPreview] = useState<MyTemplatesTemplate | null>(null);
+  // Gate the "Use this template" CTA so a double-click can't fire
+  // two seed requests + two navigations. Mirrors TemplateTile's
+  // useBusy state — same UX contract, different surface.
+  const [useBusy, setUseBusy] = useState(false);
+
+  const handleUseTemplate = async () => {
+    if (!preview || useBusy) return;
+    setUseBusy(true);
+    try {
+      await seedFromTemplate(preview.id);
+      // Full navigation (not router.push) so the destination page's
+      // lazy initialisers + stepper mount-effect see the fresh
+      // sessionStorage on their first render. Target is the parallel
+      // /create-from-template route tree — keeps the normal /create
+      // flow untouched.
+      window.location.assign("/create-from-template/content");
+    } catch (err) {
+      console.warn("[MyTemplates] seedFromTemplate failed", err);
+      setUseBusy(false);
+    }
+  };
 
   // Auto-refresh on freshly-saved templates so the user's just-saved
   // tile picks up its 3 showcase PNGs without a manual reload.
@@ -109,6 +131,8 @@ export function MyTemplates({
         format={previewFormat}
         title={preview?.title ?? ""}
         onClose={() => setPreview(null)}
+        onUseTemplate={preview ? handleUseTemplate : undefined}
+        useBusy={useBusy}
       />
     </DashboardWidget>
   );

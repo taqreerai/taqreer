@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
+import { seedFromTemplate } from "@/lib/create/seed-from-template";
 
 export type TemplateTileBrand = {
   background: string;
@@ -76,6 +77,30 @@ export function TemplateTile({
   // Delete-confirm dialog state.
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+
+  // Use-as-template busy gate. Prevents a double-click from firing
+  // two seed requests + two router.push calls (which would race the
+  // sessionStorage write against the next page's hydrate).
+  const [useBusy, setUseBusy] = useState(false);
+
+  const handleUseAsTemplate = async () => {
+    if (useBusy) return;
+    setUseBusy(true);
+    try {
+      await seedFromTemplate(id);
+      // Hard navigation rather than router.push so the destination
+      // page's lazy initialisers + stepper mount-effect read the
+      // fresh sessionStorage on first render. Target is the parallel
+      // /create-from-template route tree (Phase D 2026-05-22) so the
+      // normal /create flow stays untouched by template-mode logic.
+      window.location.assign("/create-from-template/content");
+    } catch (err) {
+      // No toast infra yet — surface to console + release the gate so
+      // the user can retry. Matches the rest of TemplateTile's error UX.
+      console.warn("[TemplateTile] seedFromTemplate failed", err);
+      setUseBusy(false);
+    }
+  };
 
   const { brand, title, isMine, id } = template;
   const primary = brand.palette[0] ?? brand.text;
@@ -212,16 +237,24 @@ export function TemplateTile({
     <div className="flex flex-col gap-3">
       {clickableTile}
 
-      {/* Caption row — title + format on start side, 3-dots on end
-          (only when the user owns the template). Mirrors
-          ProjectThumbnail's caption row signature so the two libraries
-          read as the same family. */}
-      <div dir="rtl" className="flex items-start justify-between gap-2 px-0.5">
+      {/* Caption row — title on the start side (RTL: visual-right),
+          3-dots flush with the thumbnail's visual-LEFT edge. Format
+          ratio subhead was removed 2026-05-22: templates work on
+          both 16:9 and 9:16 so showing the source-deck ratio under
+          each title was misleading. Mirrors ProjectThumbnail's
+          caption row signature so the two libraries read as the
+          same family.
+          NO horizontal padding so the 3-dots button's bounding box
+          starts exactly at the thumbnail's left edge — the icon
+          itself sits at justify-start INSIDE the button so the
+          visible glyph hugs that edge too (a centered 28-px button
+          would leave the icon visually inset from the thumbnail
+          edge by ~5 px). */}
+      <div dir="rtl" className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-semibold leading-tight text-white">
             {title}
           </p>
-          <p className="mt-0.5 text-[10px] text-muted">{brand.format}</p>
         </div>
 
         {isMine ? (
@@ -243,9 +276,33 @@ export function TemplateTile({
                 setMenuRect(triggerRef.current.getBoundingClientRect());
               }
             }}
-            // Color-only hover (no bg). Same convention as
-            // ProjectThumbnail's 3-dots after the bg-tint fix.
-            className="-mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[color:var(--tq-text-muted)] transition-colors hover:text-white"
+            // Alignment math for the 3-dots glyph flush with the
+            // thumbnail's visual-LEFT edge (RTL):
+            //
+            //   • The button is 28 × 28 (h-7 w-7) for a comfortable
+            //     click target; the material-symbols `more_vert` glyph
+            //     is rendered at 18 px font-size. Inside an 18 × 18
+            //     glyph box the visible 3 dots are ~4 px wide centered
+            //     → ~7 px transparent padding on each side.
+            //
+            //   • `justify-center` puts the glyph at button x=5..23.
+            //     Visible dots at x=12..16 → 12 px inset from the
+            //     button's LEFT edge.
+            //
+            //   • `marginInlineEnd: -12 px` (= `-me-3`) in RTL pulls
+            //     the button's bounding box 12 px LEFT (margin-end is
+            //     the LEFT side in RTL). Net effect: visible dots'
+            //     left edge sits exactly at the thumbnail's left edge.
+            //
+            //   • Click area extends slightly past the row's left
+            //     boundary; harmless — the bounding box still catches
+            //     mouse events.
+            //
+            // Color-only hover (no bg) — matches ProjectThumbnail's
+            // 3-dots convention. The muted→white transition is the
+            // affordance signal; a bg tint reads as a chunky chip
+            // (user feedback 2026-05-23).
+            className="-mt-0.5 -me-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[color:var(--tq-text-muted)] transition-colors hover:text-white"
           >
             <span className="material-symbols-outlined text-[18px]">more_vert</span>
           </button>
@@ -261,6 +318,7 @@ export function TemplateTile({
             isPublic={isPublicLocal}
             onClose={closeMenu}
             onToggleVisibility={handleToggleVisibility}
+            onUseAsTemplate={handleUseAsTemplate}
             onDelete={() => setDeleteOpen(true)}
           />
           <TemplateDeleteConfirmDialog

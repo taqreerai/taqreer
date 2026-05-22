@@ -70,6 +70,16 @@ type Props = {
   // as the fallback for placeholder cards during generation, when there's
   // no manifest yet to read `format` from.
   initialFormat?: SlideFormat;
+  // Width of the main app sidebar (80 collapsed, 260 expanded). Read
+  // SSR-side from the `tq_sidebar_collapsed` cookie by the page that
+  // mounts DeckView and passed in here so the SlideNavSidebar's
+  // `right:` value is correct on first paint — without this prop the
+  // sidebar defaulted to 260, then re-rendered to 80 once
+  // localStorage was read in an effect, producing a visible
+  // slide-in animation ("SlideNavSidebar slides ltr on refresh",
+  // user report 2026-05-23). Optional + defaults to 260 so callers
+  // that haven't wired the prop still work.
+  initialMainSidebarWidth?: number;
 };
 
 type DerivedStatus = "generating" | "completed" | "failed";
@@ -195,6 +205,7 @@ export function DeckView({
   initialSlideCount,
   initialSlideStates = [],
   initialFormat,
+  initialMainSidebarWidth = 260,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -416,10 +427,14 @@ export function DeckView({
   // Main app sidebar width — drives the slide-nav's `right` offset
   // so it docks against the main sidebar's inner edge. Mirrors the
   // source of truth in DashboardShell.tsx (localStorage +
-  // `taqreer_sidebar_collapsed_changed` custom event). Default to
-  // the expanded width (260) for SSR; the effect below replaces it
-  // with the stored value on mount.
-  const [mainSidebarWidth, setMainSidebarWidth] = useState<number>(260);
+  // `taqreer_sidebar_collapsed_changed` custom event). Initial value
+  // comes from the SSR-read cookie via `initialMainSidebarWidth` so
+  // first paint already has the correct width — no flash where the
+  // SlideNavSidebar starts at right:260 and snaps to right:80 (or
+  // vice-versa) after the localStorage read fires in the effect
+  // below. The localStorage sync is still kept so toggles from
+  // other tabs propagate.
+  const [mainSidebarWidth, setMainSidebarWidth] = useState<number>(initialMainSidebarWidth);
   useEffect(() => {
     const readWidth = (): number => {
       try {
@@ -1402,7 +1417,14 @@ export function DeckView({
     const genHeroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
     return (
       <section
-        dir="rtl"
+        // `dir={streamingDirection}` (was hardcoded "rtl") so an EN
+        // deck's generating layout flows LTR — the previous hardcoded
+        // RTL produced thumbnails that read right-aligned inside the
+        // hero canvas and got visually clipped against the LTR slide
+        // content. The completed-state branch below already uses
+        // `dir={manifest!.direction}`; this brings the generating
+        // branch into parity.
+        dir={streamingDirection}
         className="relative"
         style={{ marginRight: SLIDE_NAV_WIDTH }}
       >

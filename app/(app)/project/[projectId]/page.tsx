@@ -20,11 +20,17 @@
 // slim DeckView down to its generation-only path; that's pure code
 // reorg and doesn't change route semantics.
 
+import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { DeckView } from "@/components/preview/DeckView";
 import { loadProject, isDeckReady } from "@/lib/project/load-project";
 
 export const dynamic = "force-dynamic";
+
+// Same cookie name DashboardShell reads in app/(app)/layout.tsx —
+// SSR-read here too so the SlideNavSidebar's `right:` value is
+// correct on first paint and the panel doesn't slide on refresh.
+const SIDEBAR_COOKIE = "tq_sidebar_collapsed";
 
 export default async function ProjectPage({
   params,
@@ -43,6 +49,17 @@ export default async function ProjectPage({
     redirect(`/preview/${projectId}`);
   }
 
+  const cookieStore = await cookies();
+  const isCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
+  const initialMainSidebarWidth = isCollapsed ? 80 : 260;
+
   const deckKey = `${data.initialVersionId ?? "none"}:${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
-  return <DeckView key={deckKey} projectId={projectId} {...data} />;
+  return (
+    <DeckView
+      key={deckKey}
+      projectId={projectId}
+      initialMainSidebarWidth={initialMainSidebarWidth}
+      {...data}
+    />
+  );
 }
