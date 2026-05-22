@@ -28,7 +28,7 @@ import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhi
 import type { SlideFormat } from "@/lib/schema/slide";
 
 export type MyTemplatesTemplate = TemplateTileData & {
-  // The 4 showcase PNGs the lightbox renders. Empty array = render
+  // The 3 showcase PNGs the lightbox renders. Empty array = render
   // still pending or failed; tile click in that case is a no-op
   // (we skip opening the lightbox).
   thumbnailUrls: string[];
@@ -49,7 +49,7 @@ export function MyTemplates({
   const [preview, setPreview] = useState<MyTemplatesTemplate | null>(null);
 
   // Auto-refresh on freshly-saved templates so the user's just-saved
-  // tile picks up its 4 showcase PNGs without a manual reload.
+  // tile picks up its 3 showcase PNGs without a manual reload.
   useRefreshWhileThumbnailsPending(templates);
 
   // Eager-load every unique heading-font URL across the visible

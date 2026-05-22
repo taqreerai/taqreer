@@ -1,14 +1,15 @@
-// Render the 4 brand-showcase PNGs for a Template.
+// Render the 3 brand-showcase PNGs for a Template.
 //
 // Triggered by `inngest.send({ name: "template.showcase.render", … })`
 // from POST /api/projects/[id]/save-as-template once the Template row
 // has been written. The function loads Template.brand (a BrandSnapshot
-// validated against BrandSnapshotSchema), builds the 4-slide showcase
-// HTML via `buildShowcaseHtml`, drives Puppeteer to screenshot each
-// slide individually, resizes + re-encodes via `sharp` (PNG → WebP at
-// THUMBNAIL_WIDTH_PX wide, quality 82), uploads to the public
-// `slide-previews` bucket, and writes the resulting URL list back to
-// Template.thumbnailUrls in slide-id order.
+// validated against BrandSnapshotSchema), builds the 3-slide showcase
+// HTML via `buildShowcaseHtml` (cover + typography + palette — the
+// 4th layout slide was retired 2026-05-22), drives Puppeteer to
+// screenshot each slide individually, resizes + re-encodes via
+// `sharp` (PNG → WebP at THUMBNAIL_WIDTH_PX wide, quality 82),
+// uploads to the public `slide-previews` bucket, and writes the
+// resulting URL list back to Template.thumbnailUrls in slide-id order.
 //
 // Mirrors thumbnail-render.ts deliberately so the two pipelines share
 // the same operational characteristics (concurrency cap, retries,
@@ -92,7 +93,7 @@ export const templateShowcaseRender = inngest.createFunction(
       return { supabaseUserId, brand: parsed.data, title: tpl.title };
     });
 
-    // ─── Step 2: render + upload all 4 showcase slides ──────────────
+    // ─── Step 2: render + upload all 3 showcase slides ──────────────
     const showcaseUrls = await step.run("render-and-upload", async () => {
       const html = buildShowcaseHtml(ctx.brand, ctx.title);
       const { width: canvasW, height: canvasH } = dimensionsForFormat(

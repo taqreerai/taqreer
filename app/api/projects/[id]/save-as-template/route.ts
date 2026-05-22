@@ -33,12 +33,13 @@
 //
 // Side effects:
 //   1. INSERT INTO Template (owner, title, brand, sourceProjectId,
-//      isPublic, publishedAt, language, direction, slideCount=4,
+//      isPublic, publishedAt, language, direction, slideCount=3,
 //      thumbnailUrls=[]).
 //   2. fire `template.showcase.render` Inngest event. The function
-//      renders the 4 brand-showcase PNGs in the background and writes
-//      thumbnailUrls back. Until then the template renders as a
-//      placeholder tile on /templates.
+//      renders the 3 brand-showcase PNGs in the background (cover +
+//      typography + palette — the abstract layout slide was retired
+//      2026-05-22) and writes thumbnailUrls back. Until then the
+//      template renders as a placeholder tile on /templates.
 //
 // Failure isolation: the Inngest dispatch is wrapped in a catch — a
 // dispatch failure logs but does not abort the response, because the

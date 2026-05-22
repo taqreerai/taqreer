@@ -24,7 +24,7 @@
 // retired because its geometric blocks competed with the cover's
 // composition without adding distinct information about the brand.)
 //
-// All four slides:
+// All three slides:
 //   • Render at the brand's exact canvas size (no resize, so the PNGs
 //     are screenshot-accurate at 1920×1080 or 1080×1920).
 //   • Honour the brand's direction (rtl/ltr) on the root element so

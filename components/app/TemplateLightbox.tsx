@@ -5,7 +5,7 @@
 // Smaller, modal-wrapped sibling of ProjectLightbox. The full-screen
 // ProjectLightbox blew up the showcase PNGs to 1920-ish on a desktop
 // and made the ~800 px source images look low-res. Templates also
-// have only 4 slides (vs. a deck's 12-20) — so the wide stage was
+// have only 3 slides (vs. a deck's 12-20) — so the wide stage was
 // dead pixels. This component:
 //
 //   • Renders in a glass-popover modal (same chrome as the Bell

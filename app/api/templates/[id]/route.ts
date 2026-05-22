@@ -4,7 +4,7 @@
 // DELETE in structure:
 //   1. Owner check via Prisma (findFirst with the user.id constraint)
 //      so we don't leak existence of templates owned by others.
-//   2. Best-effort storage cleanup of the 4 showcase PNGs the
+//   2. Best-effort storage cleanup of the 3 showcase PNGs the
 //      Inngest job wrote to the slide-previews bucket — log + carry
 //      on if storage flakes; an orphaned PNG is preferable to "DB
 //      row gone but tile still rendering because storage 500'd".
