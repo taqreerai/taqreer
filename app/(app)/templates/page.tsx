@@ -116,7 +116,12 @@ function narrow(
       palette: Array.isArray(brand.palette)
         ? brand.palette.filter((v): v is string => typeof v === "string")
         : [],
-      format: typeof brand.format === "string" ? brand.format : "16:9",
+      // Constrain to the two valid SLIDE_FORMATS values — `narrow()`
+      // was previously `typeof === "string"` which accepted arbitrary
+      // strings from legacy/malformed Template.brand JSON. Unsupported
+      // formats falling through to the client would break the
+      // TemplateTile aspect-video math + the lightbox aspect calc.
+      format: brand.format === "9:16" ? "9:16" : "16:9",
     },
   };
 }

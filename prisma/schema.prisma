@@ -281,7 +281,7 @@ model Template {
   title           String
   language        String    @default("ar")
   direction       String    @default("rtl")
-  slideCount      Int       @default(4)
+  slideCount      Int       @default(3)
   brand           Json      @default("{}")
   sourceProjectId String?
   thumbnailUrls   String[]

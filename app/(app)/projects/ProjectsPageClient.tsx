@@ -10,7 +10,7 @@
 // canonical "all projects" list and we never re-fetch. Trade-off
 // noted in page.tsx — URL state is a v2 add.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ProjectsGrid,
@@ -124,15 +124,31 @@ export function ProjectsPageClient({
     });
   }, [projects, deletedIds, search, format, language, favOnly, colorHex]);
 
-  // Filter change → reset to page 0. Without this a user on page 4
-  // would stay on a now-empty offset after narrowing the set; the
-  // empty-state copy would fire incorrectly. Watching the filter
-  // primitives (not `filtered.length`) so toggling a filter that
-  // happens to leave the count unchanged still resets — matches
-  // user mental model "I changed a filter → start at the top."
-  useEffect(() => {
+  // Filter change → reset to page 0. Wired through per-filter
+  // handlers (not a useEffect) because `setState` inside an effect
+  // trips `react-hooks/set-state-in-effect` — a CI hard fail. Same
+  // pattern applied to TemplatesPageClient (CR finding 2026-05-22).
+  // Matches user mental model "I changed a filter → start at the top."
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
     setPage(0);
-  }, [search, format, language, favOnly, colorHex]);
+  };
+  const handleFormatChange = (value: FormatFilter) => {
+    setFormat(value);
+    setPage(0);
+  };
+  const handleLanguageChange = (value: LanguageFilter) => {
+    setLanguage(value);
+    setPage(0);
+  };
+  const handleFavOnlyChange = (value: boolean) => {
+    setFavOnly(value);
+    setPage(0);
+  };
+  const handleColorChange = (value: string | null) => {
+    setColorHex(value);
+    setPage(0);
+  };
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamp the page index when the filtered list shrinks (derived
@@ -161,22 +177,23 @@ export function ProjectsPageClient({
     setLanguage(null);
     setFavOnly(false);
     setColorHex(null);
+    setPage(0);
   };
 
   return (
     <>
       <ProjectsFilterBar
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={handleSearchChange}
         format={format}
-        onFormatChange={setFormat}
+        onFormatChange={handleFormatChange}
         language={language}
-        onLanguageChange={setLanguage}
+        onLanguageChange={handleLanguageChange}
         favOnly={favOnly}
-        onFavOnlyChange={setFavOnly}
+        onFavOnlyChange={handleFavOnlyChange}
         swatchColors={swatchColors}
         selectedColor={colorHex}
-        onColorChange={setColorHex}
+        onColorChange={handleColorChange}
       />
       <ProjectsGrid
         projects={paginated}

@@ -29,12 +29,16 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 const MENU_WIDTH = 240;
-// Approximate menu height — 6 items × ~38 px + 12 px vertical
-// padding. Used only for "would the menu overflow the bottom of the
-// viewport" detection (flip to above when yes), so a conservative
-// estimate is fine — the actual popover sizes to content via
-// `glass-popover` + flex column.
-const MENU_HEIGHT_ESTIMATE_PX = 260;
+// Approximate menu height — 7 items × ~38 px + divider + 12 px
+// vertical padding ≈ 320 px. Used only as a conservative threshold
+// for "would the menu overflow the bottom of the viewport" → flip
+// above; the actual height is determined by the popover at render
+// time. When flipping, we anchor with `bottom` rather than computing
+// a `top` from this estimate (see `top`/`bottom` derivation below) —
+// so even if this constant is off by a few pixels the menu remains
+// pinned to the trigger's top edge, never cropped. Bumped from
+// 260 → 320 on 2026-05-22 after a CR flagged the stale value.
+const MENU_HEIGHT_ESTIMATE_PX = 320;
 // Distance from the trigger button. Matches HistoryPopover's
 // ANCHOR_GAP_PX so menus across the app feel like one family.
 const ANCHOR_GAP_PX = 8;
@@ -147,11 +151,25 @@ export function ProjectActionsMenu({
     // the menu visible).
     triggerRect.top - ANCHOR_GAP_PX - MENU_HEIGHT_ESTIMATE_PX >= 0
   );
-  const top = triggerRect
-    ? shouldFlipAbove
-      ? triggerRect.top - ANCHOR_GAP_PX - MENU_HEIGHT_ESTIMATE_PX
-      : triggerRect.bottom + ANCHOR_GAP_PX
-    : 0;
+  // Position the menu against the trigger:
+  //   • below (default): anchor `top` to the trigger's bottom edge,
+  //     `bottom` undefined. Menu grows downward.
+  //   • above (flipped):  anchor `bottom` to the trigger's top edge,
+  //     `top` undefined. Menu grows upward — pinned to the trigger,
+  //     so the height estimate doesn't need to be exact (any
+  //     additional rows just push the menu's TOP further up, never
+  //     past the trigger).
+  // The CR finding 2026-05-22 — anchoring `top` via the height estimate
+  // could leave the menu's bottom partially off-screen when the menu
+  // had more rows than the estimate predicted.
+  const top =
+    triggerRect && !shouldFlipAbove
+      ? triggerRect.bottom + ANCHOR_GAP_PX
+      : undefined;
+  const bottom =
+    triggerRect && shouldFlipAbove
+      ? window.innerHeight - triggerRect.top + ANCHOR_GAP_PX
+      : undefined;
 
   return createPortal(
     <AnimatePresence onExitComplete={onExitComplete}>
@@ -172,7 +190,7 @@ export function ProjectActionsMenu({
           exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
-          style={{ top, left, width: MENU_WIDTH }}
+          style={{ top, bottom, left, width: MENU_WIDTH }}
         >
           <ul className="flex flex-col p-1.5">
             <MenuItem
@@ -290,9 +308,9 @@ function MenuItem({
         disabled={disabled}
         className={`dropdown-item ${
           destructive
-            ? "text-red-300 hover:!bg-red-500/10 hover:!text-red-200"
+            ? "text-red-300 hover:bg-red-500/10! hover:text-red-200!"
             : ""
-        } ${disabled ? "cursor-not-allowed opacity-40 hover:!bg-transparent hover:!text-[color:var(--tq-text-muted)]" : ""}`}
+        } ${disabled ? "cursor-not-allowed opacity-40 hover:bg-transparent! hover:text-[color:var(--tq-text-muted)]!" : ""}`}
       >
         <span
           className="material-symbols-outlined"

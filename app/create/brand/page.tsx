@@ -393,6 +393,28 @@ function CompactUploadZone({
   compact?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Native `<input accept>` filters the OS picker but drag-drop bypasses
+  // it — caller passes the same accept string here so we can validate
+  // a dropped file by extension before forwarding. Empty / wildcard
+  // accept = accept anything.
+  const acceptDropped = (dropped: File | undefined) => {
+    if (!dropped) return;
+    if (accept.trim() && accept !== "*") {
+      const exts = accept.split(",").map((s) => s.trim().toLowerCase());
+      const mime = dropped.type.toLowerCase();
+      const name = dropped.name.toLowerCase();
+      const matches = exts.some((ext) => {
+        if (ext.startsWith(".")) return name.endsWith(ext);
+        // MIME pattern (e.g. "image/*", "image/svg+xml")
+        if (ext.endsWith("/*")) return mime.startsWith(ext.slice(0, -1));
+        return mime === ext;
+      });
+      if (!matches) return;
+    }
+    onSelect(dropped);
+  };
 
   return (
     <div>
@@ -410,12 +432,25 @@ function CompactUploadZone({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        // Tall dropzone for logo + colour-from-screenshot uploads —
-        // these are user-attention features (one-tap of the brand
-        // identity), so they keep room to breathe. White/15 dashed
-        // border matches the step 1 + font upload vocabulary; glass-
-        // circle icon hierarchy mirrors رفع ملفات السياق.
-        className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 text-center transition-colors hover:border-white/30 ${compact ? "gap-1.5 p-2.5" : "p-4"}`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          acceptDropped(event.dataTransfer.files?.[0]);
+        }}
+        // 1 px dashed border (unified with every other upload zone
+        // in the app since 2026-05-22 — was `border-2`). Dragging
+        // brightens the border + adds a faint brand wash for clear
+        // drop-target affordance.
+        className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 text-center transition-colors ${
+          dragging
+            ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
+            : "border-white/15 hover:border-white/30"
+        } ${compact ? "gap-1.5 p-2.5" : "p-4"}`}
         style={{ minHeight: compact ? 72 : 100 }}
       >
         <span
@@ -440,6 +475,8 @@ function CompactUploadZone({
   );
 }
 
+const FONT_ACCEPT_EXTS = [".woff2", ".woff", ".ttf", ".otf"];
+
 function FontUploadSlot({
   label,
   file,
@@ -458,6 +495,17 @@ function FontUploadSlot({
   onRemove: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Drag-drop validator. Native `<input accept>` filters the OS
+  // picker but drag-drop bypasses it, so we check the extension here
+  // before forwarding the file.
+  const acceptDroppedFont = (dropped: File | undefined) => {
+    if (!dropped) return;
+    const name = dropped.name.toLowerCase();
+    if (!FONT_ACCEPT_EXTS.some((ext) => name.endsWith(ext))) return;
+    onSelect(dropped);
+  };
 
   return (
     <div className="space-y-3">
@@ -507,11 +555,25 @@ function FontUploadSlot({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            acceptDroppedFont(event.dataTransfer.files?.[0]);
+          }}
           // Compact dropzone — horizontal layout (icon + label inline)
           // so the slot stays the same height as the Google-fonts
-          // combobox input. Same dashed white/15 surface as step 1
-          // (just shorter), so the design vocabulary stays consistent.
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 px-3 py-2 text-center transition-colors hover:border-white/30"
+          // combobox input. 1 px dashed border (was 2 px, unified
+          // 2026-05-22 with every other upload area).
+          className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 py-2 text-center transition-colors ${
+            dragging
+              ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
+              : "border-white/15 hover:border-white/30"
+          }`}
           style={{ height: 44 }}
         >
           <span

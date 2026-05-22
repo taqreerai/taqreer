@@ -41,6 +41,13 @@ const BrandFont = z.object({
   url: z.string().url().optional(),
 });
 
+// Hex color (3 or 6 nybble). Constrains brand color fields to a real
+// color format before persistence so arbitrary CSS tokens can't leak
+// into Template.brand and later get interpolated into the showcase
+// HTML/CSS (renderer-side injection vector). Matches the
+// `HexColor` schema in lib/schema/slide.ts.
+const HexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+
 export const BrandSnapshotSchema = z.object({
   schemaVersion: z.literal(BRAND_SNAPSHOT_VERSION),
   language: z.enum(["ar", "en"]),
@@ -49,9 +56,9 @@ export const BrandSnapshotSchema = z.object({
   // Min 3 / max 8 mirrors ThemeSchema.palette — keeps Template.brand
   // a valid input to the renderer if we ever round-trip it back into
   // a manifest seed (Phase D "use this template" flow).
-  palette: z.array(z.string()).min(3).max(8),
-  background: z.string(),
-  text: z.string(),
+  palette: z.array(HexColor).min(3).max(8),
+  background: HexColor,
+  text: HexColor,
   fontHeading: BrandFont,
   fontBody: BrandFont,
 });

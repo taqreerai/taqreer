@@ -92,7 +92,11 @@ export function SaveAsTemplateDialog({
     if (!open || !projectId) return;
     setPreview(null);
     setPreviewError(null);
-    setIsPublic(false);
+    // Reset to the SAME default the initial useState uses — `true`.
+    // Was previously `setIsPublic(false)` which contradicted the
+    // "default ON" intent: every reopen after the first one landed
+    // with the toggle silently flipped off.
+    setIsPublic(true);
     setSaveError(null);
 
     let cancelled = false;

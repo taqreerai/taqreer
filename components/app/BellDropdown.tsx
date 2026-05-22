@@ -28,14 +28,16 @@ import {
 } from "@/lib/notifications/store";
 import { AllNotificationsModal } from "@/components/app/AllNotificationsModal";
 
-// Icon glyph + tint per notification kind. No square background — the
-// icon stands alone in the row.
-const KIND_VISUAL: Record<NotificationKind, { icon: string; color: string }> = {
-  error:   { icon: "error",        color: "rgb(254, 202, 202)" },
-  warning: { icon: "warning",      color: "rgb(255, 213, 175)" },
-  info:    { icon: "info",         color: "rgb(189, 178, 255)" },
-  success: { icon: "check_circle", color: "rgb(167, 243, 208)" },
-  promo:   { icon: "campaign",     color: "rgb(248, 187, 220)" },
+// Icon glyph per notification kind. Was `{ icon, color }` until
+// 2026-05-22 — the `color` field was never consumed (notification
+// rows render the icon at the row's default text colour). Dropped
+// to keep the shape minimal.
+const KIND_VISUAL: Record<NotificationKind, { icon: string }> = {
+  error:   { icon: "error"        },
+  warning: { icon: "warning"      },
+  info:    { icon: "info"         },
+  success: { icon: "check_circle" },
+  promo:   { icon: "campaign"     },
 };
 
 const TOP_N = 5;
@@ -304,14 +306,12 @@ export function BellDropdown() {
         onClick={() => setOpen((v) => !v)}
         aria-label="الإشعارات"
         aria-expanded={open}
-        // Glass icon button — bg via preset-linked alpha, blur via
-        // the Tailwind `backdrop-blur-glass` utility (memory:
-        // feedback_tw_glass_system — raw `backdrop-filter:` loses
-        // to Tailwind's compositional rule).
-        style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
-        }}
-        className="backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+        // Glass icon button — NO background at any state. The hover
+        // affordance is the BORDER (white/15 → white) and the TEXT
+        // (white/60 → white) brightening. The previous `hover:bg-white/10`
+        // was removed 2026-05-22 because the user wants pure
+        // transparent buttons (border + backdrop-blur only — no fill).
+        className="backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/60 transition-colors hover:border-white/60 hover:text-white"
       >
         <span className="material-symbols-outlined text-[22px]">notifications</span>
         {unread > 0 ? (

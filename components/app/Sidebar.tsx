@@ -175,7 +175,10 @@ export function Sidebar({
           {/* Burger */}
           <button
             onClick={toggleSidebar}
-            className="nav-item flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] mb-1"
+            // `rounded-full` to match the other nav items now that
+            // `.nav-item` no longer carries `border-radius` in CSS
+            // (single-source-of-truth pattern: JSX className owns shape).
+            className="nav-item flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] mb-1 rounded-full"
             aria-label="Toggle sidebar"
           >
             <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
@@ -195,7 +198,7 @@ export function Sidebar({
           <div className="relative group w-full">
             <Link
               href="/dashboard"
-              className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl ${
+              className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full ${
                 pathname === '/dashboard' ? 'nav-active' : 'nav-item'
               }`}
             >
@@ -233,7 +236,7 @@ export function Sidebar({
                   // every sidebar item shares one active vocabulary.
                   // No per-flow background-color or boxShadow — see
                   // actionButtons docstring above for the rationale.
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl relative ${
+                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full relative ${
                     isActive ? 'nav-active' : 'nav-item'
                   }`}
                 >
@@ -273,7 +276,7 @@ export function Sidebar({
               <div key={item.path} className="relative group w-full">
                 <Link
                   href={item.path}
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl ${
+                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full ${
                     active ? 'nav-active' : 'nav-item'
                   }`}
                 >
@@ -365,7 +368,13 @@ export function Sidebar({
                   width: dropdownPos.width,
                   zIndex: 9999,
                 }}
-                className="glass-dropdown rounded-2xl shadow-2xl p-2"
+                // `.glass-dropdown` is background-free now (no own tint).
+                // Blur comes from the Tailwind utilities so it participates
+                // in v4's compositional `backdrop-filter` rule — without
+                // these utilities the dropdown is completely see-through
+                // (no blur), since the CSS class only sets border. See
+                // globals.css `.glass-dropdown` for full reasoning.
+                className="glass-dropdown backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl shadow-2xl p-2"
               >
                 <div className="px-3 py-2">
                   <p className="font-semibold text-white text-sm truncate">{name}</p>

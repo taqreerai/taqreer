@@ -89,14 +89,20 @@ Good example outputs: "Golden Desert", "Dawn Mist", "Royal Magenta", "Arctic Nig
 Return ONLY the name.`;
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      temperature: TEMPERATURE,
-      messages: [{ role: "user", content: prompt }],
-    });
-    // First text block, trimmed. Strip surrounding quotes if Claude
-    // included them despite the instruction — defensive.
+    // 15s per-request timeout — Haiku name generation runs in two
+    // hot paths (deck-generate's freeze step + the backfill script)
+    // and a provider hang would block both. `{ timeout }` is the
+    // SDK's RequestOptions API; on expiry the SDK aborts the request
+    // and throws (caught below → null return → caller falls back).
+    const response = await client.messages.create(
+      {
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
+        messages: [{ role: "user", content: prompt }],
+      },
+      { timeout: 15_000 },
+    );
     // First text block, trimmed. Strip surrounding quotes if Claude
     // included them despite the instruction — defensive.
     const block = response.content.find((b) => b.type === "text");

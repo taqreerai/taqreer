@@ -15,7 +15,7 @@
 // 3-dots button at all — those actions don't apply to someone else's
 // template.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
@@ -59,8 +59,14 @@ export function TemplateTile({
 
   // Optimistic copy of isPublic — the menu chip label flips
   // instantly on click for UX snappiness, even before router.refresh
-  // pulls the canonical value back.
+  // pulls the canonical value back. Resync from props whenever
+  // the canonical value changes (e.g. after a sibling tile flips
+  // visibility + the dashboard's SSR re-fetch propagates a fresh
+  // template prop down here) so the local state never drifts stale.
   const [isPublicLocal, setIsPublicLocal] = useState(template.isPublic);
+  useEffect(() => {
+    setIsPublicLocal(template.isPublic);
+  }, [template.isPublic]);
 
   // Menu trigger state. menuRect = null means menu closed.
   const triggerRef = useRef<HTMLButtonElement | null>(null);

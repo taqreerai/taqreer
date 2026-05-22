@@ -13,7 +13,7 @@
 // canonical "all visible templates" list (own + community, deduped)
 // and we never re-fetch.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { TemplatesGrid } from "@/components/app/TemplatesGrid";
 import {
   TemplatesFilterBar,
@@ -99,10 +99,31 @@ export function TemplatesPageClient({
     });
   }, [templates, search, format, language, owner, colorHex]);
 
-  // Filter change → page 0 (same UX rule as /projects).
-  useEffect(() => {
+  // Filter change → page 0. Driven by per-handler resets instead of
+  // a useEffect because `setState` inside an effect trips the
+  // `react-hooks/set-state-in-effect` rule (CR finding #2) — a CI
+  // hard fail. The page-clamp at line 108 still guards against
+  // shrinking filtered counts (e.g. after delete).
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
     setPage(0);
-  }, [search, format, language, owner, colorHex]);
+  };
+  const handleFormatChange = (value: FormatFilter) => {
+    setFormat(value);
+    setPage(0);
+  };
+  const handleLanguageChange = (value: LanguageFilter) => {
+    setLanguage(value);
+    setPage(0);
+  };
+  const handleOwnerChange = (value: OwnerFilter) => {
+    setOwner(value);
+    setPage(0);
+  };
+  const handleColorChange = (value: string | null) => {
+    setColorHex(value);
+    setPage(0);
+  };
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.max(0, Math.min(page, pageCount - 1));
@@ -125,6 +146,7 @@ export function TemplatesPageClient({
     setLanguage(null);
     setOwner("own");
     setColorHex(null);
+    setPage(0);
   };
 
   const previewFormat: SlideFormat =
@@ -142,18 +164,18 @@ export function TemplatesPageClient({
 
         <TemplatesFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={handleSearchChange}
           format={format}
-          onFormatChange={setFormat}
+          onFormatChange={handleFormatChange}
           language={language}
-          onLanguageChange={setLanguage}
+          onLanguageChange={handleLanguageChange}
           owner={owner}
-          onOwnerChange={setOwner}
+          onOwnerChange={handleOwnerChange}
           ownCount={ownCount}
           communityCount={communityCount}
           swatchColors={swatchColors}
           selectedColor={colorHex}
-          onColorChange={setColorHex}
+          onColorChange={handleColorChange}
         />
 
         <TemplatesGrid

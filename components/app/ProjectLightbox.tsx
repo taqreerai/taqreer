@@ -13,9 +13,10 @@
 // non-portalled z-index):
 //
 //   Portal to <body>:
-//     1. Dim overlay  → solid `var(--tq-surface-modal)`, NO blur.
-//        Kills the dashboard's colors so the glass strips above
-//        have a quiet base to blur against. Click → close.
+//     1. Dim overlay → `.modal-dim` + `backdrop-brightness-75`
+//        (Tailwind utility) — darkens the page via backdrop-filter so
+//        the glass strips above can still blur the page through it.
+//        Click → close.
 //     2. Content layer (sibling of dim) — `pointer-events-none`
 //        wrapper with `pointer-events-auto` re-enabled on each
 //        interactive child. Lets the dim's onClick swallow any

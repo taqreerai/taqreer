@@ -34,9 +34,14 @@ const VIEWPORT_EDGE_INSET_PX = 12;
 
 export type TemplateActionsMenuActions = {
   onToggleVisibility?: () => void;
-  onUseAsTemplate?: () => void; // Phase D placeholder — disabled today
   onDelete?: () => void;
 };
+
+// (`onUseAsTemplate` + `onExitComplete` props were removed 2026-05-22.
+// The use-as-template item is a disabled placeholder until Phase D;
+// when that ships, re-add the prop here AND drop `disabled` from the
+// MenuItem below. `onExitComplete` mirrored ProjectActionsMenu's
+// contract but no consumer ever passed it for template menus.)
 
 export function TemplateActionsMenu({
   open,
@@ -45,9 +50,7 @@ export function TemplateActionsMenu({
   isPublic,
   onClose,
   onToggleVisibility,
-  onUseAsTemplate, // eslint-disable-line @typescript-eslint/no-unused-vars
   onDelete,
-  onExitComplete,
 }: {
   open: boolean;
   triggerRect: DOMRect | null;
@@ -58,7 +61,6 @@ export function TemplateActionsMenu({
   templateId: string;
   isPublic: boolean;
   onClose: () => void;
-  onExitComplete?: () => void;
 } & TemplateActionsMenuActions) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
@@ -110,14 +112,20 @@ export function TemplateActionsMenu({
       window.innerHeight &&
     triggerRect.top - ANCHOR_GAP_PX - MENU_HEIGHT_ESTIMATE_PX >= 0
   );
-  const top = triggerRect
-    ? shouldFlipAbove
-      ? triggerRect.top - ANCHOR_GAP_PX - MENU_HEIGHT_ESTIMATE_PX
-      : triggerRect.bottom + ANCHOR_GAP_PX
-    : 0;
+  // See ProjectActionsMenu for the full reasoning — anchor `top`
+  // when below, `bottom` when flipped above. Avoids tying the
+  // menu's vertical position to a stale height estimate.
+  const top =
+    triggerRect && !shouldFlipAbove
+      ? triggerRect.bottom + ANCHOR_GAP_PX
+      : undefined;
+  const bottom =
+    triggerRect && shouldFlipAbove
+      ? window.innerHeight - triggerRect.top + ANCHOR_GAP_PX
+      : undefined;
 
   return createPortal(
-    <AnimatePresence onExitComplete={onExitComplete}>
+    <AnimatePresence>
       {open && triggerRect ? (
         <motion.div
           key="template-actions-menu"
@@ -130,7 +138,7 @@ export function TemplateActionsMenu({
           exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
-          style={{ top, left, width: MENU_WIDTH }}
+          style={{ top, bottom, left, width: MENU_WIDTH }}
         >
           <ul className="flex flex-col p-1.5">
             <MenuItem
@@ -202,9 +210,9 @@ function MenuItem({
         disabled={disabled}
         className={`dropdown-item ${
           destructive
-            ? "text-red-300 hover:!bg-red-500/10 hover:!text-red-200"
+            ? "text-red-300 hover:bg-red-500/10! hover:text-red-200!"
             : ""
-        } ${disabled ? "cursor-not-allowed opacity-40 hover:!bg-transparent hover:!text-[color:var(--tq-text-muted)]" : ""}`}
+        } ${disabled ? "cursor-not-allowed opacity-40 hover:bg-transparent! hover:text-[color:var(--tq-text-muted)]!" : ""}`}
       >
         <span
           className="material-symbols-outlined"

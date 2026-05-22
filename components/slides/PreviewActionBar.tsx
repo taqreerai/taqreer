@@ -46,13 +46,10 @@ function ToolButton({
   iconFilled,
 }: {
   icon: string;
-  // Optional custom icon node — overrides the material-symbols icon when
-  // provided. Used by the regen button so we can render an AnimatePresence
-  // icon morph (autorenew ↔ check with continuous rotation) instead of a
-  // static glyph.
   // Optional custom icon node — overrides the material-symbols icon
-  // when provided. Reserved for future use; the morph that used it
-  // was removed in step 2b.
+  // when provided. Used by the regen button to render an
+  // AnimatePresence icon morph (autorenew ↔ check with continuous
+  // rotation) instead of a static glyph.
   iconNode?: React.ReactNode;
   label: string;
   badge?: string;
@@ -87,15 +84,15 @@ function ToolButton({
   // raises the glass intensity as the sole state indicator (e.g.
   // commentMode on, isSaved). Gradient variant bypasses the glass
   // system — its visuals come from `.btn-gradient-anim`.
+  // State-driven appearance — NO BACKGROUND at any state. Hover +
+  // active feedback comes from the border (white/15 → white/60) and
+  // the text (white/60 → white) brightening. Pure-white borders
+  // read as too thick at 1px on a dark page; white/60 gives a
+  // clearly-defined ring without the chunky feel (user feedback
+  // 2026-05-22 after the first all-white attempt).
   const colorClasses = active
-    ? "border-white/40 text-white"
-    : "border-white/15 text-white/60 hover:border-white/40 hover:text-white";
-  // Only paint a background when active. Inline because the alpha
-  // multiplies the preset-linked --glass-opacity var. Idle = no bg
-  // at all → fully transparent over the parent's .glass-card tint.
-  const activeBg = active
-    ? { background: "rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6))" }
-    : undefined;
+    ? "border-white/60 text-white"
+    : "border-white/15 text-white/60 hover:border-white/60 hover:text-white";
   return (
     <div className="group relative">
       <button
@@ -104,19 +101,24 @@ function ToolButton({
         disabled={isDisabled}
         aria-label={label}
         aria-pressed={active}
-        // Non-gradient (glass) variant: bg via preset-linked alpha
-        // (inline because `activeBg` is computed per-button-state),
-        // blur via Tailwind `backdrop-blur-glass` utility (memory:
-        // feedback_tw_glass_system — raw `backdrop-filter:` loses
-        // to Tailwind's compositional rule). Idle leaves bg unset
-        // so the parent .glass-card tint shows through unobstructed.
-        style={gradient ? undefined : activeBg}
+        // No inline style anymore — both hover + active backgrounds
+        // come from Tailwind utilities in `colorClasses` above. The
+        // blur still comes from `backdrop-blur-glass` so the button
+        // participates in v4's compositional backdrop-filter rule.
         className={
           gradient
-            ? `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-xl transition-shadow ${
+            ? // `rounded-full` makes the 44×44 button a perfect circle.
+              // `btn-gradient-anim::before` uses `border-radius: inherit`
+              // so its mesh ring follows automatically — no separate
+              // edit needed for the animated border.
+              `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-full transition-shadow ${
                 isDisabled ? "" : "hover:scale-[1.02]"
               }`
-            : `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${colorClasses} ${
+            : // Glass variant — same circle treatment. The brand-system
+              // rule is: small icon-only buttons are circles. The bell +
+              // collapsed sidebar are larger square chrome (intentionally
+              // rounded-rect, not in scope here).
+              `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${colorClasses} ${
                 isDisabled ? "opacity-40" : ""
               }`
         }
@@ -177,17 +179,17 @@ function ToolButton({
   );
 }
 
-// Hairline separator between toolbar categories. Full-width 1 px
-// line at white/12 alpha with vertical breathing room — earlier
-// w-7 / my-0.5 / white/8 read as "did this divider exist?" against
-// the glass card. Now sits at my-2 (8 px top + bottom) and spans
-// the toolbar's inner width so the category boundary is
-// unambiguous.
+// Hairline separator between toolbar categories. Narrow (w-6) so it
+// doesn't extend into the parent pill's curved edges — full-width
+// rounded-rect parents could afford `w-full`, but the new
+// `rounded-full` container has rounded corners that would clip a
+// full-bleed divider into a partial line. w-6 centred under the
+// 44 px buttons reads as a clean category boundary without bleeding.
 function ToolbarDivider() {
   return (
     <div
       aria-hidden
-      className="my-2 h-px w-full bg-white/[0.12]"
+      className="my-2 h-px w-6 bg-white/[0.12]"
     />
   );
 }
@@ -262,11 +264,13 @@ export function PreviewActionBar({
     exportHtml.status === "running" ||
     exportPng.status === "running" ||
     exportPdf.status === "running";
-  const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
   const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
-
-  const [showSaveForm, setShowSaveForm] = useState(false);
-  const [templateTitle, setTemplateTitle] = useState(projectTitle);
+  // Legacy `saveTpl` state + `showSaveForm` popover + `templateTitle`
+  // input were removed 2026-05-22. The canonical "Save as template"
+  // flow lives in SaveAsTemplateDialog, opened from a project tile's
+  // 3-dots menu. The server route now derives the title from
+  // `Project.templateName` and ignores any client-supplied title, so
+  // the inline form's POST was silently no-op'ing on the title field.
 
   const handleRegenerate = async () => {
     if (regen.status === "running") return;
@@ -473,33 +477,8 @@ export function PreviewActionBar({
     }
   };
 
-  const handleSaveAsTemplate = async () => {
-    if (saveTpl.status === "running") return;
-    const trimmed = templateTitle.trim();
-    if (!trimmed) {
-      setSaveTpl({ status: "error", message: "أدخل اسماً للقالب" });
-      return;
-    }
-    setSaveTpl({ status: "running", message: "جارٍ الحفظ..." });
-    try {
-      const response = await fetch(`/api/projects/${projectId}/save-as-template`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: trimmed }),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Save failed");
-      }
-      setSaveTpl({ status: "success", message: "تم الحفظ في مكتبة القوالب" });
-      setShowSaveForm(false);
-    } catch (error) {
-      setSaveTpl({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر الحفظ",
-      });
-    }
-  };
+  // `handleSaveAsTemplate` was removed 2026-05-22 alongside the
+  // inline UI — see the saveProject useState comment above.
 
   // Status toast under the toolbar. Export download progress + success
   // are intentionally NOT surfaced — the browser's own download UI is
@@ -516,11 +495,8 @@ export function PreviewActionBar({
     exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
     exportPng.status === "error" ? { text: exportPng.message, kind: "error" as const } :
     exportPdf.status === "error" ? { text: exportPdf.message, kind: "error" as const } :
-    saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
     saveProject.status === "error" ? { text: saveProject.message, kind: "error" as const } :
-    saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
     regen.status === "running" ? { text: regen.message, kind: "info" as const } :
-    saveTpl.status === "success" ? { text: saveTpl.message, kind: "success" as const } :
     null;
 
   return (
@@ -537,7 +513,14 @@ export function PreviewActionBar({
           header / footer borders so the toolbar reads as part of
           the same chrome family. */}
       <div
-        className="glass-card flex flex-col items-center gap-1.5 rounded-2xl p-2"
+        // Pill shape — `rounded-full` on a vertical flex column with
+        // square (44 × 44) circle children produces a stadium
+        // silhouette (curves at top + bottom edges, straight sides).
+        // Matches the "icon-only buttons live in a pill" pattern used
+        // by the design system for compact tool clusters; the bell
+        // and collapsed-sidebar icons stay rounded-rect because they
+        // host larger square chrome, not a cluster.
+        className="glass-card flex flex-col items-center gap-1.5 rounded-full p-2"
       >
         {/* ── Category 1: AI / Edit ─────────────────────────────── */}
         {/* Regen button — two roles depending on state:
@@ -631,13 +614,11 @@ export function PreviewActionBar({
             </AnimatePresence>
           }
         />
-        <ToolButton
-          icon="bookmark_add"
-          label="حفظ كقالب"
-          running={saveTpl.status === "running"}
-          onClick={() => setShowSaveForm((v) => !v)}
-          disabled={applying}
-        />
+        {/* "حفظ كقالب" toolbar button removed 2026-05-22 — Save-as-
+            template now lives in the project tile's 3-dots menu
+            (opens SaveAsTemplateDialog). Saving from inside the
+            preview itself can come back if requested, but via the
+            modal, not an inline form. */}
 
         <ToolbarDivider />
 
@@ -678,53 +659,22 @@ export function PreviewActionBar({
         />
       </div>
 
-      {/* Status toast below the toolbar */}
+      {/* Status toast below the toolbar — error (red) or info (muted).
+          The `success` variant was only set by the legacy save-template
+          flow that was removed 2026-05-22; dropped here too. */}
       {visibleMessage?.text ? (
         <div
           className={`rounded-lg px-3 py-1.5 text-xs ${
             visibleMessage.kind === "error"
               ? "bg-red-500/10 text-red-300"
-              : visibleMessage.kind === "success"
-                ? "bg-emerald-500/10 text-emerald-300"
-                : "bg-white/5 text-muted"
+              : "bg-white/5 text-muted"
           }`}
         >
           {visibleMessage.text}
         </div>
       ) : null}
 
-      {/* Save-as-template popover — floats to the right of the toolbar */}
-      {showSaveForm ? (
-        <div
-          dir="rtl"
-          className="glass-card absolute z-40 flex items-center gap-2 rounded-xl p-3"
-          style={{ left: "100%", top: 0, marginLeft: "12px", width: "320px" }}
-        >
-          <input
-            type="text"
-            value={templateTitle}
-            onChange={(event) => setTemplateTitle(event.target.value)}
-            placeholder="اسم القالب"
-            className="input-dark flex-1"
-          />
-          <button
-            type="button"
-            onClick={handleSaveAsTemplate}
-            disabled={saveTpl.status === "running"}
-            className="btn-gradient px-4 py-2 text-sm disabled:opacity-60"
-          >
-            {saveTpl.status === "running" ? "..." : "حفظ"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowSaveForm(false)}
-            aria-label="إلغاء"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      ) : null}
+      {/* Legacy save-as-template inline popover removed 2026-05-22. */}
     </div>
   );
 }

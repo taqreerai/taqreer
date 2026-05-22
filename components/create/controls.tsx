@@ -160,23 +160,29 @@ export function PositionPicker({
 // small enough to inline — keep the className strings IDENTICAL to
 // the markup below so visual consistency stays automatic.
 //
-// `label` is optional. Pass it for the standard inline-label layout;
-// omit it for label-less use (parent renders the label structure
-// externally). aria-label still required for screen readers — uses
-// the label prop OR the explicit ariaLabel prop.
+// Discriminated union — EITHER `label` is provided (renders inline
+// text next to the switch + uses it as the aria-label) OR `ariaLabel`
+// is required (parent renders the visible label externally). The
+// type system makes an unlabeled switch impossible (a11y requirement:
+// every role="switch" needs a non-empty accessible name).
+type ToggleSharedProps = {
+  value: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+};
+type ToggleProps =
+  | (ToggleSharedProps & { label: string; ariaLabel?: string })
+  | (ToggleSharedProps & { label?: undefined; ariaLabel: string });
+
 export function Toggle({
   label,
   ariaLabel,
   value,
   onChange,
   disabled,
-}: {
-  label?: string;
-  ariaLabel?: string;
-  value: boolean;
-  onChange: (next: boolean) => void;
-  disabled?: boolean;
-}) {
+}: ToggleProps) {
+  // After the discriminated union both branches guarantee a non-empty
+  // accessible name — ariaLabel when no label, label otherwise.
   const accessibleLabel = ariaLabel ?? label ?? "";
   const switchEl = (
     <button

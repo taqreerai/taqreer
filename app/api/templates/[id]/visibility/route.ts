@@ -52,6 +52,21 @@ export async function PATCH(
   }
   const nextPublic = body.isPublic;
 
+  // Idempotency note: we only stamp `publishedAt` on the FALSE→TRUE
+  // transition, not on every isPublic=true request. Re-PATCHing
+  // `{ isPublic: true }` on an already-public template used to rewrite
+  // publishedAt and silently bump it to the head of the community feed
+  // (publishedAt DESC ordering) without an actual visibility change.
+  // Read current state first; pick `undefined` (= "don't touch the
+  // column") when already public.
+  const current = await prisma.template.findFirst({
+    where: { id: templateId, owner: { supabaseUserId: user.id } },
+    select: { isPublic: true },
+  });
+  if (!current) {
+    return NextResponse.json({ error: "Template not found" }, { status: 404 });
+  }
+
   // Owner-scoped update — `updateMany` instead of `update({ where:
   // { id } })` makes the write atomic on (id, owner). count=0 if the
   // template doesn't exist OR isn't owned by the user → 404, no
@@ -63,7 +78,12 @@ export async function PATCH(
     },
     data: {
       isPublic: nextPublic,
-      publishedAt: nextPublic ? new Date() : null,
+      publishedAt: nextPublic
+        ? // false → true: stamp now. true → true: leave as-is.
+          current.isPublic
+          ? undefined
+          : new Date()
+        : null, // true/false → false: clear.
     },
   });
   if (result.count === 0) {
