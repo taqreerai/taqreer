@@ -4,7 +4,7 @@ import {
   deckGenerate,
   deckRegeneratePartial,
   brandAnalyze,
-  templateSave,
+  templateShowcaseRender,
   thumbnailRender,
 } from "@/inngest/index";
 
@@ -14,7 +14,7 @@ export const { GET, POST, PUT } = serve({
     deckGenerate,
     deckRegeneratePartial,
     brandAnalyze,
-    templateSave,
+    templateShowcaseRender,
     thumbnailRender,
   ],
 });

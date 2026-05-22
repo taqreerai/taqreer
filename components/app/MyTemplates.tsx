@@ -1,15 +1,80 @@
 "use client";
 
-import { DashboardEmptyState, DashboardWidget, DashboardWidgetHeader } from "@/components/app/DashboardWidget";
+// Dashboard widget: "قوالبي" (My Templates).
+//
+// Same grid as RecentProjects so the two widgets sit as a coherent
+// pair. Tile rendering delegated to the shared TemplateTile component
+// (used by /templates page too) — keeps the visual identity locked
+// across both consumers.
+//
+// Click behaviour: clicking a tile opens the in-place TemplateLightbox
+// instead of navigating to /templates. Users browsing the dashboard
+// expect to peek at a template's slides without losing their place.
+// The widget header still links to /templates for the full library
+// browse + filter experience.
 
-type Template = {
-  id: string;
-  title: string;
+import { useEffect, useState } from "react";
+import {
+  DashboardEmptyState,
+  DashboardWidget,
+  DashboardWidgetHeader,
+} from "@/components/app/DashboardWidget";
+import {
+  TemplateTile,
+  type TemplateTileData,
+} from "@/components/app/TemplateTile";
+import { TemplateLightbox } from "@/components/app/TemplateLightbox";
+import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import type { SlideFormat } from "@/lib/schema/slide";
+
+export type MyTemplatesTemplate = TemplateTileData & {
+  // The 4 showcase PNGs the lightbox renders. Empty array = render
+  // still pending or failed; tile click in that case is a no-op
+  // (we skip opening the lightbox).
   thumbnailUrls: string[];
-  category: string;
+  // True while Inngest is still rendering. Drives the shared refresh
+  // hook so a fresh save picks up its PNGs without a manual reload.
+  thumbnailsPending: boolean;
+  brand: TemplateTileData["brand"] & {
+    fontHeading: { name: string; url?: string };
+  };
 };
 
-export function MyTemplates({ templates }: { templates: Template[] }) {
+export function MyTemplates({
+  templates,
+}: {
+  templates: MyTemplatesTemplate[];
+}) {
+  // null = lightbox closed; a template object = open at that template.
+  const [preview, setPreview] = useState<MyTemplatesTemplate | null>(null);
+
+  // Auto-refresh on freshly-saved templates so the user's just-saved
+  // tile picks up its 4 showcase PNGs without a manual reload.
+  useRefreshWhileThumbnailsPending(templates);
+
+  // Eager-load every unique heading-font URL across the visible
+  // templates so any tile that wants to render in the brand's actual
+  // font (lightbox header, modal preview) finds the font already in
+  // the document. Dedup via the data-tpl-font marker.
+  useEffect(() => {
+    const seen = new Set<string>();
+    for (const t of templates) {
+      const url = t.brand.fontHeading?.url;
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      if (document.querySelector(`link[data-tpl-font="${url}"]`)) continue;
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = url;
+      link.crossOrigin = "anonymous";
+      link.dataset.tplFont = url;
+      document.head.appendChild(link);
+    }
+  }, [templates]);
+
+  const previewFormat: SlideFormat =
+    preview?.brand.format === "9:16" ? "9:16" : "16:9";
+
   return (
     <DashboardWidget>
       <DashboardWidgetHeader title="قوالبي" href="/templates" />
@@ -21,45 +86,30 @@ export function MyTemplates({ templates }: { templates: Template[] }) {
           description="عند حفظ عرض كقالب، سيظهر هنا لتستخدمه في عروضك القادمة."
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {templates.map((template) => {
-            const thumbnail = template.thumbnailUrls[0] ?? null;
-
-            return (
-              <div key={template.id} className="glass-card rounded-[14px] overflow-hidden group">
-                <div className="relative h-[88px] tq-thumbnail">
-                  {thumbnail ? (
-                    <img
-                      alt={template.title}
-                      src={thumbnail}
-                      className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[26px] text-muted/25">add_photo_alternate</span>
-                    </div>
-                  )}
-
-                  <div className="absolute top-2 right-2">
-                    <span className="badge-purple">{template.category}</span>
-                  </div>
-
-                  <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <span className="text-white text-xs px-3 py-1 rounded-lg bg-white/10">
-                      قالب محفوظ
-                    </span>
-                  </div>
-                </div>
-
-                <div className="px-3 py-2.5">
-                  <h4 className="text-[13px] font-semibold text-white truncate leading-snug">{template.title}</h4>
-                  <p className="text-[11px] text-muted mt-0.5">{template.category}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <ul className="grid grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+          {templates.map((tpl) => (
+            <li key={tpl.id}>
+              <TemplateTile
+                template={tpl}
+                onClick={() => {
+                  // Skip if showcase render hasn't completed yet —
+                  // opening the lightbox would show an empty stage.
+                  if (tpl.thumbnailUrls.length === 0) return;
+                  setPreview(tpl);
+                }}
+              />
+            </li>
+          ))}
+        </ul>
       )}
+
+      <TemplateLightbox
+        open={!!preview}
+        slides={preview?.thumbnailUrls ?? []}
+        format={previewFormat}
+        title={preview?.title ?? ""}
+        onClose={() => setPreview(null)}
+      />
     </DashboardWidget>
   );
 }

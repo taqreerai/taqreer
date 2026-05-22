@@ -164,9 +164,12 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
     <AnimatePresence>
       {open ? (
         <>
-          {/* Dim overlay — solid dark, no own backdrop-filter so
-              the glass strips on top can still see + blur the
-              dashboard underneath through it. */}
+          {/* Dim overlay — `.modal-dim` combines a light tint + a
+              backdrop-filter brightness so the glass strips ABOVE this
+              (toolbar, thumb strip) sample a darkened-page composite
+              and their own backdrop-blur has actual page content to
+              blur. The earlier "solid 0.88 dark" implementation made
+              those strips' blur effect invisible. See globals.css. */}
           <motion.div
             key="dim"
             onClick={onClose}
@@ -174,8 +177,7 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            style={{ background: "var(--tq-surface-modal)" }}
-            className="fixed inset-0 z-[2000]"
+            className="modal-dim backdrop-brightness-75 fixed inset-0 z-[2000]"
           />
 
           {/* Content layer — sibling of the dim, fills the viewport

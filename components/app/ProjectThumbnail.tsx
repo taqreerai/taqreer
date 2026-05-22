@@ -54,6 +54,7 @@ import { ar } from "date-fns/locale";
 import type { SlideFormat } from "@/lib/schema/slide";
 import { ProjectActionsMenu } from "@/components/app/ProjectActionsMenu";
 import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";
+import { SaveAsTemplateDialog } from "@/components/app/SaveAsTemplateDialog";
 
 // Pixels of cursor travel required to consider the user actually
 // scrubbing (not just hovering at rest). ~2 trackpad ticks.
@@ -152,6 +153,10 @@ export function ProjectThumbnail({
   // Trash confirmation dialog open + in-flight flag for the DELETE.
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashBusy, setTrashBusy] = useState(false);
+  // Save-as-template modal — opens when the user picks "حفظ نسخة كقالب"
+  // from the actions menu. The modal handles its own preview fetch +
+  // save POST; we just track open/closed here.
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
 
   // Eagerly preload the FIRST FEW slide thumbnails on mount so the
   // initial hover-scrub feels instant. Bounded to the first
@@ -517,11 +522,18 @@ export function ProjectThumbnail({
               openMenu();
             }
           }}
-          className="btn-icon -mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors"
+          // Color-only hover (no background tint). The previous
+          // `.btn-icon` class added `background: rgba(55,11,244,.18)`
+          // on hover which read as a chunky purple chip on every
+          // tile — user feedback flagged it as visually heavy. The
+          // 3-dots wants to feel invisible until you reach for it
+          // and then just brighten.
+          className="-mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:text-white"
           style={{
             // Stays white when favorited (even idle) so the tile reads
             // as "starred" at a glance, paired with the filled-star
-            // indicator next to it. Hover behaviour unchanged.
+            // indicator next to it. Hover behaviour: idle muted →
+            // white on hover (via the className above).
             color:
               thumbHovered || favoriteState
                 ? "var(--tq-text-primary)"
@@ -543,7 +555,21 @@ export function ProjectThumbnail({
         onToggleFavorite={handleToggleFavorite}
         onCopyLink={handleCopyLink}
         onUseAsTemplate={handleUseAsTemplate}
+        onSaveAsTemplate={() => setSaveTemplateOpen(true)}
         onSendToTrash={() => setTrashOpen(true)}
+      />
+
+      <SaveAsTemplateDialog
+        open={saveTemplateOpen}
+        projectId={projectId}
+        onCancel={() => setSaveTemplateOpen(false)}
+        onSaved={() => {
+          // Modal closes immediately; the brand-showcase render runs
+          // in the background and the new template appears in
+          // /templates once thumbnails settle. No tile-level state
+          // changes here — the template is a separate entity.
+          setSaveTemplateOpen(false);
+        }}
       />
 
       <TrashConfirmDialog

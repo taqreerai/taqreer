@@ -192,7 +192,7 @@ export function ProjectsPageClient({
         // page-worth of tiles is fresh content, so the cascade
         // there is correct.
         staggerKey={activePage}
-        gridClassName="grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+        gridClassName="grid-cols-2 gap-x-10 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
         onDeleted={(id) =>
           setDeletedIds((prev) => {
             const next = new Set(prev);

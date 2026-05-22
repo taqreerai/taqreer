@@ -11,7 +11,9 @@
 //                       in step 13 — for now the link is rendered
 //                       but the destination 404s, which is the
 //                       documented contract for 9f)
-//   6. Save copy as template — DISABLED + no handler (locked by user)
+//   6. Save copy as template — parent opens SaveAsTemplateDialog;
+//                       the modal handles preview + isPublic toggle
+//                       + POST /api/projects/<id>/save-as-template
 //   7. Send to trash  — destructive; parent opens TrashConfirmDialog
 //
 // Anchoring + open/close mirror HistoryPopover.tsx (which mirrors
@@ -27,6 +29,12 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 const MENU_WIDTH = 240;
+// Approximate menu height — 6 items × ~38 px + 12 px vertical
+// padding. Used only for "would the menu overflow the bottom of the
+// viewport" detection (flip to above when yes), so a conservative
+// estimate is fine — the actual popover sizes to content via
+// `glass-popover` + flex column.
+const MENU_HEIGHT_ESTIMATE_PX = 260;
 // Distance from the trigger button. Matches HistoryPopover's
 // ANCHOR_GAP_PX so menus across the app feel like one family.
 const ANCHOR_GAP_PX = 8;
@@ -38,6 +46,7 @@ export type ProjectActionsMenuActions = {
   onToggleFavorite?: () => void;
   onCopyLink?: () => void;
   onUseAsTemplate?: () => void;
+  onSaveAsTemplate?: () => void;
   onSendToTrash?: () => void;
 };
 
@@ -52,6 +61,7 @@ export function ProjectActionsMenu({
   onToggleFavorite,
   onCopyLink,
   onUseAsTemplate,
+  onSaveAsTemplate,
   onSendToTrash,
   onExitComplete,
 }: {
@@ -121,7 +131,27 @@ export function ProjectActionsMenu({
         ),
       )
     : 0;
-  const top = triggerRect ? triggerRect.bottom + ANCHOR_GAP_PX : 0;
+  // Vertical placement — default below the trigger; flip above when
+  // there isn't enough viewport room below (e.g. bottom-row tiles on
+  // the /projects grid would otherwise have the menu cropped under
+  // the browser chrome, hiding the destructive "send to trash"
+  // action). User-reported 2026-05-22. The MENU_HEIGHT_ESTIMATE
+  // is a conservative ~260 px — slight over-estimate is harmless,
+  // we just flip a few pixels earlier than strictly needed.
+  const shouldFlipAbove = !!(
+    triggerRect &&
+    triggerRect.bottom + ANCHOR_GAP_PX + MENU_HEIGHT_ESTIMATE_PX >
+      window.innerHeight &&
+    // Only flip if there's room ABOVE — otherwise stick with below
+    // (the clamp at the viewport edge will at least keep the top of
+    // the menu visible).
+    triggerRect.top - ANCHOR_GAP_PX - MENU_HEIGHT_ESTIMATE_PX >= 0
+  );
+  const top = triggerRect
+    ? shouldFlipAbove
+      ? triggerRect.top - ANCHOR_GAP_PX - MENU_HEIGHT_ESTIMATE_PX
+      : triggerRect.bottom + ANCHOR_GAP_PX
+    : 0;
 
   return createPortal(
     <AnimatePresence onExitComplete={onExitComplete}>
@@ -132,9 +162,14 @@ export function ProjectActionsMenu({
           dir="rtl"
           role="menu"
           aria-label="خيارات المشروع"
-          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          // Animation origin flips to match the menu's position:
+          // when anchored ABOVE the trigger, the menu slides UP from
+          // a y-offset of +6; when anchored BELOW, it slides DOWN
+          // from -6. Otherwise the entry feels like it's swimming
+          // against the layout when the menu is above.
+          initial={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -6, scale: 0.98 }}
+          exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
           style={{ top, left, width: MENU_WIDTH }}
@@ -176,13 +211,16 @@ export function ProjectActionsMenu({
               closeAfter
               onClose={onClose}
             />
-            {/* "Save copy as template" — rendered intentionally
-                disabled per user lock. No onClick, no toast, no
-                "coming soon" badge — it just doesn't activate. */}
+            {/* "Save copy as template" — opens SaveAsTemplateDialog
+                via the parent's onSaveAsTemplate handler. The modal
+                fetches /template-preview, renders the live brand
+                preview, then POSTs save-as-template on confirm. */}
             <MenuItem
               icon="bookmark_add"
               label="حفظ نسخة كقالب"
-              disabled
+              onClick={onSaveAsTemplate}
+              closeAfter
+              onClose={onClose}
             />
             {/* Divider before the destructive action so the row
                 reads as visually separated from the rest. */}

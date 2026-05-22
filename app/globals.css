@@ -169,7 +169,16 @@
   /* 2. Surfaces */
   --tq-bg:              #03030D;
   --tq-surface-overlay: rgba(3, 3, 13, 0.75);
-  --tq-surface-modal:   rgba(3, 3, 13, 0.88);
+  /* Modal dim tint — used ONLY by the legacy `.glass-modal` recipe.
+     The new modals (lightbox, save-as-template, notifications,
+     project lightbox) use `.modal-dim` instead, which has NO solid
+     background at all and darkens the page purely via Tailwind's
+     `backdrop-brightness-*` utility. The dual-darken approach
+     (0.35 solid + brightness) we shipped briefly on 2026-05-22 was
+     reverted because the two darkening layers compounded and made
+     the panel's own backdrop-blur invisible against the over-dim
+     backdrop. */
+  --tq-surface-modal:   rgba(3, 3, 13, 0.55);
 
   /* 3. Text */
   --tq-text-primary: #ffffff;
@@ -665,9 +674,13 @@ body {
 /* ─── Buttons ─── */
 .btn-gradient {
   background: var(--tq-gradient-brand);
-  box-shadow: var(--tq-shadow-brand);
   color: var(--tq-text-primary);
-  transition: box-shadow 0.2s ease;
+  /* No `box-shadow` and no shadow transition — the button system
+     was de-shadowed app-wide on 2026-05-22 (user feedback: flat
+     surfaces only, the shadows competed with the glass chrome and
+     made the brand surface feel like a bevelled overlay). The
+     `--tq-shadow-brand` token still exists for any future non-button
+     consumer that needs it. */
   /* Pill shape across the create flow + dashboard CTAs. Previously
      10 px (square-rounded) which drifted away from the .btn-pill
      vocabulary used by every other button on the page; the PillButton
@@ -680,9 +693,10 @@ body {
   font-weight: 500;
 }
 
-.btn-gradient:hover {
-  box-shadow: var(--tq-shadow-brand-strong);
-}
+/* No :hover shadow — see resting-state comment above. The hover
+   feedback still reads through the background gradient's contrast
+   shift on darker browsers; on lighter ones we lean on the cursor
+   change. */
 
 /* ─── Animated Mesh-Gradient Button ─────────────────────────────────
    Multiple radial-gradient colour blobs (the full brand palette: blue,
@@ -744,7 +758,10 @@ body {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   color: white;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
+  /* No shadow transition — the button system is flat app-wide
+     (2026-05-22). Background transition stays so the hover fill
+     still crossfades smoothly. */
+  transition: background 0.3s ease;
   animation:
     mx1 1.0s ease-in-out infinite alternate,
     my1 1.6s ease-in-out infinite alternate,
@@ -803,7 +820,9 @@ body {
     radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 60%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 35%),
     #3300FF;
-  box-shadow: var(--tq-shadow-brand-strong);
+  /* No `box-shadow` on hover — buttons are flat app-wide. The
+     full mesh fill + brightness shift already give the hover
+     state strong enough affordance. */
 }
 
 .btn-gradient-anim:hover::before { opacity: 0; }
@@ -812,7 +831,8 @@ body {
   animation-play-state: paused;
   opacity: 0.4;
   cursor: default;
-  box-shadow: none;
+  /* No `box-shadow: none` override — the resting + hover states
+     no longer set a shadow, so disabled doesn't need to clear it. */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1418,6 +1438,42 @@ body {
 .glass-popover {
   background: rgba(10, 10, 20, calc(0.4 + var(--glass-opacity) * 4));
   border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
+}
+
+/* ─── Modal dim overlay ───────────────────────────────────────────
+   Shared base class for the full-screen darkening layer behind every
+   modal panel (lightbox, save-as-template, notifications, project
+   lightbox).
+
+   The class is now a STRUCTURAL marker only — no background, no
+   filter. Consumers MUST pair it with the `backdrop-brightness-*`
+   Tailwind utility for the actual page-darkening (e.g.
+   `backdrop-brightness-75`). The class still exists so future
+   modal pairs can be grepped, and so any cross-cutting fix
+   (animation, click-target hit area, anything) lives in one
+   place again later if needed.
+
+   WHY no solid background:
+   A semi-transparent dark background (the 2026-05-22 attempt) AND a
+   backdrop-filter brightness compound — the page ends up nearly
+   black behind the panel, and the panel's own backdrop-blur has no
+   colour left to blur with. Visually the modal looks like a flat
+   dark card with no glass effect. Removing the bg means the dim
+   is purely a "darken what's behind via backdrop-filter brightness"
+   layer; the panel above it then blurs a darkened-but-vivid page
+   correctly.
+
+   WHY the brightness MUST come from a Tailwind utility, not raw
+   CSS: Tailwind v4 ships a universal reset that initialises
+   `--tw-backdrop-*` vars on every element + composes them into a
+   single `backdrop-filter: var(--tw-backdrop-blur)
+   var(--tw-backdrop-brightness) …` rule. Raw `backdrop-filter:
+   brightness(…)` in this class loses to that composition. Same
+   gotcha that drives the existing `--backdrop-blur-glass` token. */
+.modal-dim {
+  /* Intentionally empty — see header comment. The class is kept as
+     a marker so modal dims are greppable + future cross-cutting
+     concerns have a home. */
 }
 
 /* ─── Card Danger Variant ─── */

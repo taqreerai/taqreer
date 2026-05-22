@@ -54,7 +54,7 @@ export function RecentProjects({
       <DashboardWidgetHeader title="أحدث المشاريع" href="/projects" />
       <ProjectsGrid
         projects={visible}
-        gridClassName="grid-cols-1 gap-x-3 gap-y-6 sm:grid-cols-2 lg:grid-cols-3"
+        gridClassName="grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3"
         onDeleted={(id) =>
           setDeletedIds((prev) => {
             const next = new Set(prev);

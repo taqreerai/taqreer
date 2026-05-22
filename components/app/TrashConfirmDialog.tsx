@@ -59,7 +59,7 @@ export function TrashConfirmDialog({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-[1200] flex items-start justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className="modal-dim backdrop-brightness-75 fixed inset-0 z-[1200] flex items-start justify-center p-4"
           onClick={(e) => {
             // Click on the dim overlay (NOT a descendant) cancels.
             // `e.target === e.currentTarget` is how the settings

@@ -58,7 +58,7 @@ export function ComingSoonContent({ isLoggedIn }: { isLoggedIn: boolean }) {
         >
           <Link
             href="/dashboard"
-            className="bg-button-gradient hover:opacity-90 transition-opacity text-white font-bold rounded-full px-8 py-4 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+            className="bg-button-gradient hover:opacity-90 transition-opacity text-white font-bold rounded-full px-8 py-4"
           >
             لوحة التحكم
           </Link>
@@ -70,7 +70,7 @@ export function ComingSoonContent({ isLoggedIn }: { isLoggedIn: boolean }) {
         >
           <Link
             href="/auth/signup"
-            className="bg-button-gradient hover:opacity-90 transition-opacity text-white font-bold rounded-full px-8 py-4 whitespace-nowrap shadow-[0_0_20px_rgba(168,85,247,0.3)] text-center"
+            className="bg-button-gradient hover:opacity-90 transition-opacity text-white font-bold rounded-full px-8 py-4 whitespace-nowrap text-center"
           >
             ابدأ مجاناً
           </Link>

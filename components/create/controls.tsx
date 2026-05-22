@@ -151,16 +151,53 @@ export function PositionPicker({
 
 // RTL-aware switch — knob anchored to the right edge in the OFF
 // state, slides to the left edge when ON. Wraps the global
-// `.tq-switch-on` class for the active background gradient.
+// Canonical switch style: solid brand-blue track when on, soft white-
+// on-glass when off, white knob. Set as the default app-wide on
+// 2026-05-22 (user feedback — the previous gradient-fill `tq-switch-on`
+// version was retired). New consumers: use this component when you
+// have a label inline; for layouts where the label needs more freedom
+// (e.g. label + description block stacked vertically) the markup is
+// small enough to inline — keep the className strings IDENTICAL to
+// the markup below so visual consistency stays automatic.
+//
+// `label` is optional. Pass it for the standard inline-label layout;
+// omit it for label-less use (parent renders the label structure
+// externally). aria-label still required for screen readers — uses
+// the label prop OR the explicit ariaLabel prop.
 export function Toggle({
   label,
+  ariaLabel,
   value,
   onChange,
+  disabled,
 }: {
-  label: string;
+  label?: string;
+  ariaLabel?: string;
   value: boolean;
   onChange: (next: boolean) => void;
+  disabled?: boolean;
 }) {
+  const accessibleLabel = ariaLabel ?? label ?? "";
+  const switchEl = (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      disabled={disabled}
+      role="switch"
+      aria-checked={value}
+      aria-label={accessibleLabel}
+      className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+        value ? "bg-[var(--tq-blue)]" : "bg-white/10"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+          value ? "right-[22px]" : "right-0.5"
+        }`}
+      />
+    </button>
+  );
+  if (!label) return switchEl;
   // `inline-flex` (not `flex`) so the Toggle takes natural width when
   // placed in a parent that uses `justify-between` (e.g. the
   // pagination ↔ language-pills row on /create/content). With
@@ -171,22 +208,7 @@ export function Toggle({
   return (
     <div className="inline-flex items-center justify-between gap-3">
       <span className="text-sm text-white">{label}</span>
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        role="switch"
-        aria-checked={value}
-        aria-label={label}
-        className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors ${
-          value ? "tq-switch-on" : "bg-white/10"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            value ? "right-[22px]" : "right-0.5"
-          }`}
-        />
-      </button>
+      {switchEl}
     </div>
   );
 }
