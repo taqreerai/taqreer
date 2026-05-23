@@ -292,22 +292,33 @@ export default function CreateFromTemplateContentPage() {
     logoExcludeClosing,
   ]);
 
-  // Auto-save text drafts.
+  // Auto-save text drafts. All sessionStorage accesses wrapped in
+  // try/catch so a blocked-storage / quota error in private-browsing
+  // mode doesn't propagate out of the effect (matches the guarded
+  // pattern used by every other persistence path in the create flow).
   useEffect(() => {
     if (!mounted) return;
     if (typeof window === "undefined") return;
     if (!text.trim()) {
-      if (window.sessionStorage.getItem(CONTENT_KEY)) {
-        window.sessionStorage.removeItem(CONTENT_KEY);
-        notifyCreateStateChange();
+      try {
+        if (window.sessionStorage.getItem(CONTENT_KEY)) {
+          window.sessionStorage.removeItem(CONTENT_KEY);
+          notifyCreateStateChange();
+        }
+      } catch {
+        /* storage blocked — skip the autosave-remove */
       }
       return;
     }
-    window.sessionStorage.setItem(
-      CONTENT_KEY,
-      JSON.stringify({ type: "text", text, keepVerbatim }),
-    );
-    notifyCreateStateChange();
+    try {
+      window.sessionStorage.setItem(
+        CONTENT_KEY,
+        JSON.stringify({ type: "text", text, keepVerbatim }),
+      );
+      notifyCreateStateChange();
+    } catch {
+      /* storage blocked / quota — keep the in-memory draft, skip persist */
+    }
   }, [text, mounted, keepVerbatim]);
 
   const selectFile = (nextFile?: File) => {
@@ -375,6 +386,13 @@ export default function CreateFromTemplateContentPage() {
   // Logo pick — validates SVG-only (raster can't be recoloured per
   // slide; same policy as the brand page). Uploads on pick so
   // handleNext stays trivial.
+  //
+  // State updates are ATOMIC against the upload: we snapshot the
+  // previously-committed logo on entry, only commit new state on
+  // success, restore the snapshot on failure. Previous version wrote
+  // preview/file/name straight to state BEFORE the network call —
+  // when upload failed it wiped every logo field (including any
+  // logo the user had picked successfully before), which lost work.
   const handleLogoPick = async (next: File) => {
     const isSvgMime = next.type === "image/svg+xml";
     const isSvgExt = next.name.toLowerCase().endsWith(".svg");
@@ -384,12 +402,15 @@ export default function CreateFromTemplateContentPage() {
       );
       return;
     }
+    // Snapshot the current logo state — restored on upload failure.
+    const prevLogoFile = logoFile;
+    const prevLogoName = logoName;
+    const prevLogoPreview = logoPreview;
+    const prevLogoStorageUrl = logoStorageUrl;
+
     setLogoError(null);
-    setLogoFile(next);
-    setLogoName(next.name);
-    const objectUrl = URL.createObjectURL(next);
-    setLogoPreview(objectUrl);
     setLogoUploading(true);
+    const objectUrl = URL.createObjectURL(next);
     try {
       const formData = new FormData();
       formData.append("bucket", "brand-assets");
@@ -406,6 +427,11 @@ export default function CreateFromTemplateContentPage() {
         throw new Error(data?.error ?? "تعذر رفع الشعار");
       }
       const asset = (await res.json()) as { storageUrl: string };
+
+      // Upload succeeded — commit to state.
+      setLogoFile(next);
+      setLogoName(next.name);
+      setLogoPreview(objectUrl);
       setLogoStorageUrl(asset.storageUrl);
 
       // Read-modify-write the brand slot so colours + fonts (seeded
@@ -427,11 +453,13 @@ export default function CreateFromTemplateContentPage() {
       setLogoError(
         err instanceof Error ? err.message : "تعذر رفع الشعار. حاول مرة أخرى.",
       );
+      // Restore the pre-pick snapshot. Revoke the new object URL we
+      // never showed to the user.
       URL.revokeObjectURL(objectUrl);
-      setLogoFile(null);
-      setLogoName(null);
-      setLogoPreview("");
-      setLogoStorageUrl(null);
+      setLogoFile(prevLogoFile);
+      setLogoName(prevLogoName);
+      setLogoPreview(prevLogoPreview);
+      setLogoStorageUrl(prevLogoStorageUrl);
     } finally {
       setLogoUploading(false);
     }
@@ -588,7 +616,7 @@ export default function CreateFromTemplateContentPage() {
             >
               <span
                 className="flex h-12 w-12 items-center justify-center rounded-full"
-                style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+                style={{ background: "var(--tq-bg-glass)" }}
               >
                 {extracting === "success" ? (
                   <RosetteDiscountCheckIcon
@@ -620,8 +648,8 @@ export default function CreateFromTemplateContentPage() {
               <div
                 className="flex items-center justify-between gap-3 rounded-xl border p-3"
                 style={{
-                  background: "rgba(255, 255, 255, var(--glass-opacity))",
-                  borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+                  background: "var(--tq-bg-glass)",
+                  borderColor: "var(--tq-border-glass)",
                 }}
               >
                 <div className="min-w-0 flex-1">
@@ -677,8 +705,8 @@ export default function CreateFromTemplateContentPage() {
               <span
                 className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none text-white/70"
                 style={{
-                  background: "rgba(255, 255, 255, var(--glass-opacity))",
-                  borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+                  background: "var(--tq-bg-glass)",
+                  borderColor: "var(--tq-border-glass)",
                 }}
               >
                 موصى به للسرعة
@@ -728,8 +756,8 @@ export default function CreateFromTemplateContentPage() {
           <div
             className="flex items-center justify-between gap-3 rounded-xl border p-3"
             style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-              borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+              background: "var(--tq-bg-glass)",
+              borderColor: "var(--tq-border-glass)",
             }}
           >
             <div className="flex min-w-0 items-center gap-3">
@@ -870,7 +898,7 @@ function LogoUploadZone({ onPick }: { onPick: (file: File) => void }) {
       >
         <span
           className="flex h-10 w-10 items-center justify-center rounded-full"
-          style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+          style={{ background: "var(--tq-bg-glass)" }}
         >
           <span
             className="material-symbols-outlined text-white/80"

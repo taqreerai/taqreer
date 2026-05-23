@@ -34,6 +34,7 @@
 // shows a placeholder tile in the meantime.
 
 import { inngest } from "@/inngest/client";
+import { NonRetriableError } from "inngest";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import puppeteer from "puppeteer";
 import sharp from "sharp";
@@ -77,16 +78,26 @@ export const templateShowcaseRender = inngest.createFunction(
           owner: { select: { supabaseUserId: true } },
         },
       });
-      if (!tpl) throw new Error(`Template ${templateId} not found`);
+      // Template missing → owner deleted it before / during render
+      // pickup. Throw `NonRetriableError` so Inngest doesn't loop
+      // forever (the row will never come back, and a retry would
+      // upload PNGs into a prefix that DELETE already cleaned up,
+      // leaving them orphaned in `slide-previews`). Also covers the
+      // case where the user creates + immediately trashes a draft.
+      if (!tpl) {
+        throw new NonRetriableError(
+          `Template ${templateId} no longer exists; aborting showcase render`,
+        );
+      }
       const supabaseUserId = tpl.owner.supabaseUserId;
       if (!supabaseUserId) {
-        throw new Error(
+        throw new NonRetriableError(
           `Template ${templateId} owner has no supabaseUserId`,
         );
       }
       const parsed = BrandSnapshotSchema.safeParse(tpl.brand);
       if (!parsed.success) {
-        throw new Error(
+        throw new NonRetriableError(
           `Template.brand failed BrandSnapshotSchema validation: ${JSON.stringify(parsed.error.issues).slice(0, 400)}`,
         );
       }
@@ -188,12 +199,54 @@ export const templateShowcaseRender = inngest.createFunction(
     });
 
     // ─── Step 3: write URLs back to Template ────────────────────────
+    //
+    // `updateMany` (not `update`) so a missing row doesn't throw —
+    // we want to detect deletion-during-render explicitly via
+    // `count === 0` and clean up our just-uploaded files instead
+    // of letting Inngest retry (which would race delete cleanup
+    // and re-orphan the PNGs we just wrote).
     await step.run("write-showcase-urls", async () => {
       const { prisma } = await import("@/lib/prisma");
-      await prisma.template.update({
+      const result = await prisma.template.updateMany({
         where: { id: templateId },
         data: { thumbnailUrls: showcaseUrls },
       });
+      if (result.count === 0) {
+        // Template was deleted between Step 1's snapshot and now.
+        // Best-effort cleanup of the PNGs Step 2 just uploaded so
+        // they don't sit as orphans in `slide-previews` (the
+        // DELETE handler's cleanup pass already ran, before our
+        // uploads landed). NonRetriableError after cleanup so
+        // Inngest stops retrying.
+        try {
+          const admin = createSupabaseAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            { auth: { autoRefreshToken: false, persistSession: false } },
+          );
+          const prefix = `${ctx.supabaseUserId}/templates/${templateId}`;
+          const filePaths = SHOWCASE_SLIDE_IDS.map(
+            (slideId) => `${prefix}/${slideId}.webp`,
+          );
+          const { error } = await admin.storage
+            .from(BUCKET)
+            .remove(filePaths);
+          if (error) {
+            logger.warn(
+              "template-showcase-render: orphan cleanup failed",
+              { templateId, error: error.message },
+            );
+          }
+        } catch (err) {
+          logger.warn("template-showcase-render: orphan cleanup threw", {
+            templateId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+        throw new NonRetriableError(
+          `Template ${templateId} was deleted mid-render; uploaded showcase files cleaned up`,
+        );
+      }
     });
 
     return { templateId, slideCount: showcaseUrls.length };

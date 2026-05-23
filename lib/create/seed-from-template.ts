@@ -46,7 +46,25 @@
 // but we don't actively wipe in case they had drafted something
 // they wanted to keep across the seed.
 
-import type { BrandSnapshot } from "@/lib/template/derive-brand";
+import { BrandSnapshotSchema, type BrandSnapshot } from "@/lib/template/derive-brand";
+import { z } from "zod";
+
+// Wire shape returned by POST /api/templates/[id]/use. Schema lives
+// here (not imported from the route) because the API and the client
+// run in different bundles; co-locating the schema with the client
+// keeps both the response-parsing and the storage-rehydrate paths
+// validating against the same definition.
+const UseTemplateResponseSchema = z.object({
+  title: z.string().min(1),
+  brand: BrandSnapshotSchema,
+  useCount: z.number().int().nonnegative(),
+});
+
+const TemplateSeedSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  brand: BrandSnapshotSchema,
+});
 
 export const TEMPLATE_SEED_KEY = "taqreer:create:templateSeed";
 export const CREATE_BRAND_KEY = "taqreer:create:brand";
@@ -58,11 +76,9 @@ export type TemplateSeed = {
   brand: BrandSnapshot;
 };
 
-export type UseTemplateResponse = {
-  title: string;
-  brand: BrandSnapshot;
-  useCount: number;
-};
+// Inferred from the schema so the type stays in lockstep with the
+// runtime validator (single source of truth).
+export type UseTemplateResponse = z.infer<typeof UseTemplateResponseSchema>;
 
 /**
  * Fire the POST /api/templates/[id]/use endpoint, get the snapshot,
@@ -86,8 +102,20 @@ export async function seedFromTemplate(
       data?.error ?? `تعذر استخدام القالب (${response.status})`,
     );
   }
-  const data = (await response.json()) as UseTemplateResponse;
-  const { brand, title } = data;
+  // Validate the response shape at runtime — the API returns this
+  // contract today, but a deploy mismatch (older client, newer
+  // server response with a missing field) would otherwise propagate
+  // garbage into sessionStorage and crash the create flow downstream.
+  // Fail fast here so the caller's error toast surfaces a meaningful
+  // message instead of a "cannot read brand.palette" later.
+  const rawBody = await response.json().catch(() => null);
+  const parsed = UseTemplateResponseSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    throw new Error(
+      `تعذر قراءة بيانات القالب (${parsed.error.issues[0]?.message ?? "invalid response"})`,
+    );
+  }
+  const { brand, title } = parsed.data;
 
   // ─── Write taqreer:create:templateSeed ─────────────────────────────
   const seed: TemplateSeed = { id: templateId, title, brand };
@@ -158,15 +186,22 @@ export async function seedFromTemplate(
 
 /**
  * Read the templateSeed marker. Returns null if not in template mode,
- * or if the blob is missing/corrupt. Safe to call during SSR (returns
- * null when sessionStorage is unavailable).
+ * the blob is missing/corrupt, OR fails schema validation. Safe to
+ * call during SSR (returns null when sessionStorage is unavailable).
+ *
+ * Validation matters even though we wrote the blob ourselves — a
+ * BrandSnapshot schema bump or a stray edit in another tab could
+ * leave a stale-shaped blob in storage. Returning null here makes the
+ * /create-from-template pages bounce to the normal /create flow,
+ * which is the right fallback for an unreadable seed.
  */
 export function readTemplateSeed(): TemplateSeed | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(TEMPLATE_SEED_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as TemplateSeed;
+    const parsed = TemplateSeedSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }

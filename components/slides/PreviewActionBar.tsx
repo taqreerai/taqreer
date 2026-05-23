@@ -111,7 +111,12 @@ function ToolButton({
               // `btn-gradient-anim::before` uses `border-radius: inherit`
               // so its mesh ring follows automatically — no separate
               // edit needed for the animated border.
-              `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-full transition-shadow ${
+              //
+              // No `transition-shadow` (removed 2026-05-23 per CR) —
+              // toolbox icon buttons sit under the no-shadow-motion
+              // contract; the scale hover is the only motion this
+              // variant gets.
+              `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-full ${
                 isDisabled ? "" : "hover:scale-[1.02]"
               }`
             : // Glass variant — same circle treatment. The brand-system

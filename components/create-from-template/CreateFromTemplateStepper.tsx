@@ -107,8 +107,8 @@ export function CreateFromTemplateStepper({
       className="backdrop-blur-glass relative flex flex-none flex-col gap-5 self-stretch rounded-2xl border p-5"
       style={{
         width: CREATE_FROM_TEMPLATE_STEPPER_WIDTH,
-        background: "rgba(255, 255, 255, var(--glass-opacity))",
-        borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+        background: "var(--tq-bg-glass)",
+        borderColor: "var(--tq-border-glass)",
       }}
     >
       {/* From-template pill — anchors at the top of the aside so the
@@ -118,8 +118,8 @@ export function CreateFromTemplateStepper({
       <div
         className="inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium text-white"
         style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
-          borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+          background: "var(--tq-bg-glass)",
+          borderColor: "var(--tq-border-glass)",
         }}
       >
         <span
@@ -219,11 +219,11 @@ function StepPill({ state }: { state: "current" | "done" | "pending" }) {
         background:
           state === "done"
             ? "rgba(16, 185, 129, 0.12)"
-            : "rgba(255, 255, 255, var(--glass-opacity))",
+            : "var(--tq-bg-glass)",
         borderColor:
           state === "done"
             ? "rgba(16, 185, 129, 0.3)"
-            : "rgba(255, 255, 255, var(--glass-border-opacity))",
+            : "var(--tq-border-glass)",
       }}
     >
       {label}

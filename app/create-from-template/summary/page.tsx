@@ -354,7 +354,7 @@ export default function CreateFromTemplateSummaryPage() {
             aria-hidden
             className="my-2 w-px"
             style={{
-              background: "rgba(255, 255, 255, var(--glass-border-opacity))",
+              background: "var(--tq-border-glass)",
             }}
           />
           <button
@@ -387,8 +387,8 @@ export default function CreateFromTemplateSummaryPage() {
               dir="rtl"
               className="backdrop-blur-glass absolute right-0 bottom-full z-30 mb-2 w-56 overflow-hidden rounded-2xl border shadow-2xl"
               style={{
-                background: "rgba(255, 255, 255, var(--glass-opacity))",
-                borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+                background: "var(--tq-bg-glass)",
+                borderColor: "var(--tq-border-glass)",
               }}
             >
               <div className="px-3 py-2 text-[11px] text-white/40">
