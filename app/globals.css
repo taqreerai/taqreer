@@ -214,10 +214,26 @@
      `.input-dark:focus` + `.input-search:focus` so a future
      adjustment lands in one place. */
   --tq-border-focus:  #ffffff42;
+  /* Hairline ring around overlapping avatar chips (presence stacks,
+     comment author rows). Slightly brighter than `--tq-border-focus`
+     (white/0.4 vs white/0.26) so the ring reads against the bright
+     brand-gradient backgrounds the chips sit on. Single source for
+     both the avatar ring shadow and the +N overflow chip shadow in
+     SlidePresenceStack (added 2026-05-23 — was an inline rgba). */
+  --tq-avatar-ring:   rgba(255, 255, 255, 0.4);
 
   /* 5. Gradients */
   --tq-gradient-brand:  linear-gradient(135deg, #370BF4 0%, #7D2DFF 100%);
   --tq-gradient-full:   linear-gradient(135deg, #370BF4 0%, #7D2DFF 50%, #E036B8 100%);
+  /* Canonical fallback when JS-side per-user gradient picker isn't
+     available (e.g. SSR before client hydration, legacy class-only
+     consumers). Per-user variants are NOT defined as CSS vars
+     anymore — they live as literal `linear-gradient(...)` strings
+     in `lib/util/avatar-gradient.ts` and are applied via inline
+     `style={{ backgroundImage }}`. The CSS-var indirection silently
+     failed to paint in some Chrome paint paths (gradient resolved
+     fine in the OM but rendered as transparent fill at composite
+     time); inlining the literal bypasses that. */
   --tq-gradient-avatar: linear-gradient(135deg, #370BF4 0%, #E036B8 100%);
 
   /* 6. Border Radius */

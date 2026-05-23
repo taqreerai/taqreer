@@ -25,6 +25,7 @@ import { notFound, redirect } from "next/navigation";
 import { DeckView } from "@/components/preview/DeckView";
 import { loadProject, isDeckReady } from "@/lib/project/load-project";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,15 @@ export default async function ProjectPage({
   const isCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
   const initialMainSidebarWidth = isCollapsed ? 80 : 260;
 
+  // Phase 16.B presence — same profile fetch as /preview's page. Null
+  // for anonymous public-view (skips presence tracking entirely).
+  const profile = access.user.prismaId
+    ? await prisma.user.findUnique({
+        where: { id: access.user.prismaId },
+        select: { name: true, image: true },
+      })
+    : null;
+
   const deckKey = `${data.initialVersionId ?? "none"}:${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
   return (
     <DeckView
@@ -71,6 +81,8 @@ export default async function ProjectPage({
       // Optional chain — anonymous public-view callers may have a
       // ProjectAccessContext where access.user is { id: null, prismaId: null }.
       currentUserId={access.user?.prismaId ?? null}
+      currentUserName={profile?.name ?? null}
+      currentUserImage={profile?.image ?? null}
       initialMainSidebarWidth={initialMainSidebarWidth}
       {...data}
     />

@@ -21,10 +21,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { SlidePresenceStack } from "@/components/preview/SlidePresenceStack";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
+import type { PresenceViewer } from "@/lib/realtime/project-channel";
 
-export const SLIDE_NAV_WIDTH = 260;
+export const SLIDE_NAV_WIDTH = 320;
 
 type PlaceholderState = "done" | "current" | "pending";
 
@@ -68,6 +70,12 @@ export function SlideNavSidebar({
   // `slideStates` source of truth across all UI that reads it.
   onLockAll,
   onUnlockAll,
+  // Phase 16.B presence — viewers currently focused on each slide
+  // (already filtered to NOT-self by the caller). Map slideIndex →
+  // array, empty / missing index means no avatars rendered for
+  // that thumbnail. Optional so consumers that haven't wired
+  // realtime yet keep working.
+  viewersBySlide,
 }: {
   items: NavItem[];
   currentIndex: number | null;
@@ -91,6 +99,7 @@ export function SlideNavSidebar({
   // e.g. during generation, when no SlideState rows exist yet.
   onLockAll?: () => void | Promise<void>;
   onUnlockAll?: () => void | Promise<void>;
+  viewersBySlide?: Record<number, PresenceViewer[]>;
 }) {
   const { width: canvasW, height: canvasH } = dimensionsForFormat(format);
   const aspectRatio = `${canvasW} / ${canvasH}`;
@@ -314,7 +323,7 @@ export function SlideNavSidebar({
               // brighter at `white/80`) so keyboard users still get a
               // clear tab-focus indicator — that's an a11y requirement,
               // not a hover decoration.
-              className="relative w-full overflow-hidden rounded-md text-start outline-none transition-all focus-visible:ring-1 focus-visible:ring-white/80"
+              className="relative w-full overflow-hidden text-start outline-none transition-all focus-visible:ring-1 focus-visible:ring-white/80"
               style={{ aspectRatio, ...ringStyle }}
             >
               {/* Thumbnail content — placeholder pulse + state icon, or
@@ -382,6 +391,16 @@ export function SlideNavSidebar({
                     lock
                   </span>
                 </div>
+              ) : null}
+
+              {/* Presence avatars — viewers currently focused on
+                  this slide. Mounted at logical top-start (RTL: top-
+                  right corner, LTR: top-left). Caller filters out
+                  self; the stack itself caps at 2 visible + a "+N"
+                  glass chip. `pointer-events: none` so the avatars
+                  never block the thumbnail click. */}
+              {viewersBySlide && viewersBySlide[item.index]?.length ? (
+                <SlidePresenceStack viewers={viewersBySlide[item.index]} />
               ) : null}
 
               {/* Comment-count badge — physical TOP-RIGHT corner

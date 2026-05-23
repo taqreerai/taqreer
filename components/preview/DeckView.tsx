@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   useCallback,
@@ -9,7 +10,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
@@ -36,6 +36,12 @@ import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
 import { createClient } from "@/lib/supabase/client";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { notificationStore } from "@/lib/notifications/store";
+import {
+  openProjectChannel,
+  type PresenceViewer,
+  type ProjectChannelHandle,
+  type ViewerPresence,
+} from "@/lib/realtime/project-channel";
 
 import type { ProjectRole } from "@/lib/api/project-access";
 
@@ -54,6 +60,13 @@ type Props = {
   // routes still enforce via their own auth checks (defense in
   // depth); this prop is for UX, not security.
   currentUserId: string | null;
+  // Caller's display name + avatar URL — used for Phase 16.B presence
+  // broadcast so other viewers see this user's name/avatar overlaid on
+  // the slide thumbnail they're currently focused on. null for
+  // anonymous public-view callers (no presence tracked in that case
+  // — the user isn't identifiable).
+  currentUserName?: string | null;
+  currentUserImage?: string | null;
   projectTitle: string;
   presentationId: string | null;
   initialProjectStatus: string;
@@ -211,6 +224,8 @@ export function DeckView({
   projectId,
   role,
   currentUserId,
+  currentUserName,
+  currentUserImage,
   projectTitle,
   presentationId,
   initialProjectStatus,
@@ -490,6 +505,16 @@ export function DeckView({
     };
   }, []);
 
+  // Toolbar is portal'd to document.body so its z-index isn't trapped
+  // by any ancestor's stacking context (transform, filter, isolation,
+  // opacity != 1, etc.). `bodyMounted` gates the createPortal call so
+  // we don't touch document during SSR.
+  const [bodyMounted, setBodyMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBodyMounted(true);
+  }, []);
+
   // Currently-focused slide in the hero canvas. Default to 0; resets
   // when a new manifest arrives (e.g. after regen) to keep the user on
   // the first slide rather than a potentially-out-of-range index.
@@ -502,15 +527,124 @@ export function DeckView({
     );
   }, [manifest]);
 
-  // Toolbar is portal'd to document.body so its z-index isn't trapped
-  // by any ancestor's stacking context (transform, filter, isolation,
-  // opacity != 1, etc.). `bodyMounted` gates the createPortal call so
-  // we don't touch document during SSR.
-  const [bodyMounted, setBodyMounted] = useState(false);
+
+  // ─── Phase 16.B presence ────────────────────────────────────────────
+  // Track which collaborators are online + which slide each is focused
+  // on. Skip for anonymous public-view callers (no prisma id — they're
+  // not identifiable enough to render as another viewer's avatar). The
+  // channel itself stays open across slide-index changes; we just
+  // re-`track` the same payload with the new slideIndex / tabActive.
+  const [presence, setPresence] = useState<ViewerPresence>({});
+  const presenceHandleRef = useRef<ProjectChannelHandle | null>(null);
+  // Mirror the live slide index in a ref so the initial-open track
+  // call (inside an async effect body) sees the latest value without
+  // adding currentSlideIndex to the open-channel effect's deps (which
+  // would re-open the channel on every navigation).
+  const slideIndexRef = useRef(currentSlideIndex);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBodyMounted(true);
-  }, []);
+    slideIndexRef.current = currentSlideIndex;
+  }, [currentSlideIndex]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    let cancelled = false;
+    let localHandle: ProjectChannelHandle | null = null;
+    (async () => {
+      // Pre-flight auth gate. Cheap (~1 row prisma lookup via
+      // resolveProjectAccess); avoids opening a socket for viewers
+      // who lost access between SSR + mount.
+      try {
+        const tokenRes = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/realtime-token`,
+          { credentials: "same-origin" },
+        );
+        if (!tokenRes.ok) return;
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+      // Supabase presence key MUST be unique per viewer (prisma User.id
+      // works) — otherwise everyone's metas collide into one bucket
+      // and the dispatcher only surfaces the most-recent tracker, so
+      // one viewer sees the other but not vice-versa.
+      localHandle = openProjectChannel(projectId, currentUserId);
+      localHandle.onPresenceSync((state) => {
+        if (!cancelled) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape; the channel is what owns the state, this just mirrors it into React
+          setPresence(state);
+        }
+      });
+      presenceHandleRef.current = localHandle;
+      // Initial track with current slide / visibility — the re-track
+      // effect below also fires on mount but races the async open;
+      // tracking here makes the user appear to others immediately
+      // when the channel joins. `.catch` (not try/catch around the
+      // await) because Supabase's channel.track() can reject on a
+      // socket hiccup mid-open; presence is non-critical so we just
+      // log and let the next re-track on slide / visibility change
+      // recover.
+      await localHandle
+        .track({
+          userId: currentUserId,
+          name: currentUserName ?? null,
+          avatar: currentUserImage ?? null,
+          slideIndex: slideIndexRef.current,
+          tabActive:
+            typeof document !== "undefined"
+              ? document.visibilityState !== "hidden"
+              : true,
+        })
+        .catch((err) => {
+          console.warn("[realtime] initial track failed", err);
+        });
+    })();
+    return () => {
+      cancelled = true;
+      presenceHandleRef.current = null;
+      localHandle?.close();
+    };
+  }, [projectId, currentUserId, currentUserName, currentUserImage]);
+
+  // Re-track on slide change + tab-visibility flip. Reads through the
+  // ref so a no-op when the channel hasn't finished opening yet —
+  // the initial-open path above handles the first track.
+  useEffect(() => {
+    if (!currentUserId) return;
+    const fire = () => {
+      // Track is async + fire-and-forget here — re-track is a UX
+      // courtesy, not a contract, so failures just log. Without the
+      // `.catch` Node / browser would surface an unhandled-rejection
+      // warning every time the socket hiccups mid-track.
+      presenceHandleRef.current
+        ?.track({
+          userId: currentUserId,
+          name: currentUserName ?? null,
+          avatar: currentUserImage ?? null,
+          slideIndex: currentSlideIndex,
+          tabActive: document.visibilityState !== "hidden",
+        })
+        .catch((err) => {
+          console.warn("[realtime] re-track failed", err);
+        });
+    };
+    fire();
+    document.addEventListener("visibilitychange", fire);
+    return () => document.removeEventListener("visibilitychange", fire);
+  }, [currentSlideIndex, currentUserId, currentUserName, currentUserImage]);
+
+  // Per-slide viewer arrays consumed by SlideNavSidebar. Filters out
+  // self (own avatar doesn't appear on own sidebar — the active-
+  // thumbnail border already signals "you are here") and groups
+  // every other viewer by their currently-focused slideIndex.
+  const viewersBySlide = useMemo(() => {
+    const out: Record<number, PresenceViewer[]> = {};
+    for (const viewer of Object.values(presence)) {
+      if (viewer.userId === currentUserId) continue;
+      const bucket = out[viewer.slideIndex] ?? (out[viewer.slideIndex] = []);
+      bucket.push(viewer);
+    }
+    return out;
+  }, [presence, currentUserId]);
 
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
@@ -1223,7 +1357,7 @@ export function DeckView({
         target.closest('[aria-label^="الشريحة"]') || // Hero motion.div
         target.closest('aside[aria-label="لوحة التعليقات"]') || // Comments panel
         target.closest('aside[aria-label="شريط الشرائح"]') || // SlideNav (transient during fade)
-        target.closest(".glass-card.flex-col") || // Toolbar column (portal'd to body)
+        target.closest('[data-preview-toolbar="true"]') || // PreviewActionBar wrapper
         target.closest(".glass-modal") || // Editor popover
         target.closest("header") || // App header
         target.closest('aside[aria-label="Sidebar"]') // Main app sidebar
@@ -1480,6 +1614,7 @@ export function DeckView({
           // (which doesn't exist yet). EN decks need this so the
           // sidebar reads LTR even before the first slide closes.
           language={streamingLanguage}
+          viewersBySlide={viewersBySlide}
         />
         {/* Canvas row — hero centered in the remaining width. Same
             shape as the completed branch so the shell doesn't reflow
@@ -1491,7 +1626,7 @@ export function DeckView({
         >
           <div
             ref={gridRef}
-            className="glass-card relative flex items-center justify-center overflow-hidden rounded-2xl"
+            className="glass-card relative flex items-center justify-center overflow-hidden"
             style={{ aspectRatio, width: genHeroWidthCss }}
           >
             {/* Live preview hero — renders whichever slide the user is
@@ -1702,6 +1837,7 @@ export function DeckView({
               // which checks canEdit before firing onToggleLock.
               onLockAll={canEdit ? () => bulkSetLock(true) : undefined}
               onUnlockAll={canEdit ? () => bulkSetLock(false) : undefined}
+              viewersBySlide={viewersBySlide}
             />
           </motion.div>
         )}
@@ -1712,6 +1848,19 @@ export function DeckView({
           filter, isolation, opacity != 1, etc.). pointer-events-none
           on the full-height fixed strip so it never intercepts clicks
           outside the toolbar's actual buttons. */}
+      {/* Toolbar — portal'd to document.body as a vertical fixed-left
+          strip. Portal pattern guarantees its z-index isn't trapped
+          by any ancestor's stacking context (transform, filter,
+          isolation, opacity != 1, etc.). pointer-events-none on the
+          full-height fixed strip so it never intercepts clicks
+          outside the toolbar's actual buttons.
+          Briefly experimented (2026-05-23) with moving the toolbar
+          into the canvas column as a horizontal pill above the
+          slide, hoping the canvas could reclaim the left margin.
+          The recovered space turned out to be negligible because the
+          canvas was already viewport-height-constrained, not width-
+          constrained, on a typical desktop — so the toolbar moved
+          back to its original vertical-left position. */}
       {bodyMounted
         ? createPortal(
             <motion.div
@@ -1784,7 +1933,7 @@ export function DeckView({
           // any ancestor clip would chop the halo. The clip needed
           // for the SlideRenderer's scaled content moved down to
           // the inner wrapper below.
-          className={`canvas-gradient-border group/canvas relative rounded-xl p-0 shadow-2xl${
+          className={`canvas-gradient-border group/canvas relative p-0 shadow-2xl${
             commentMode ? " cursor-crosshair" : ""
           }`}
           data-active={commentMode ? "true" : "false"}
@@ -1795,7 +1944,7 @@ export function DeckView({
               SlideRenderer can't bleed past the canvas while the
               outer halo ring extends freely. */}
           <div
-            className="h-full w-full overflow-hidden rounded-xl transition-[filter] duration-300"
+            className="h-full w-full overflow-hidden transition-[filter] duration-300"
             style={isFocusedRegenerating ? { filter: "blur(20px)" } : undefined}
           >
             <SlideRenderer
