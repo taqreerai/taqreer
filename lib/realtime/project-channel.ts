@@ -276,15 +276,22 @@ export function openProjectChannel(
     async track(viewer) {
       // Supabase requires subscribe() to have resolved before track().
       // The channel may be SUBSCRIBED or still SUBSCRIBING — poll briefly.
+      // Break early on terminal states (`errored`, `closed`) so a
+      // failed subscribe doesn't burn the full 3 s before giving up.
+      const TERMINAL_STATES = ["errored", "closed"];
       const start = Date.now();
-      while (channel.state !== "joined" && Date.now() - start < 3000) {
+      while (
+        channel.state !== "joined" &&
+        !TERMINAL_STATES.includes(channel.state) &&
+        Date.now() - start < 3000
+      ) {
         await new Promise((r) => setTimeout(r, 50));
       }
       if (channel.state !== "joined") {
         // Don't throw — presence is non-critical; just log + skip so
         // the UI keeps working with broadcasts only.
         console.warn(
-          "[realtime] track() skipped — channel not joined within 3s",
+          "[realtime] track() skipped — channel not joined",
           { topic, state: channel.state },
         );
         return;

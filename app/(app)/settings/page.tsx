@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { PlanUsage } from "@/components/app/PlanUsage";
+import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import type { User } from "@supabase/supabase-js";
 
 type Msg = { type: "success" | "error"; text: string } | null;
@@ -215,10 +216,25 @@ export default function SettingsPage() {
                 alt={displayName}
                 width={64}
                 height={64}
+                // `no-referrer` for Google profile pics — see
+                // components/common/Avatar.tsx for the full rationale.
+                referrerPolicy="no-referrer"
                 className="rounded-full object-cover w-16 h-16 tq-avatar-ring"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full tq-avatar-fallback text-xl">
+              <div
+                // Per-user gradient — same picker the dashboard
+                // sidebar + presence avatars use, so the same person
+                // gets the same colour everywhere they appear. Inline
+                // `backgroundImage` overrides the canonical single-
+                // gradient `background` set on `.tq-avatar-fallback`.
+                className="w-16 h-16 rounded-full tq-avatar-fallback text-xl"
+                style={{
+                  backgroundImage: avatarGradientForSeed(
+                    user?.id ?? user?.email ?? displayName,
+                  ),
+                }}
+              >
                 {displayName.charAt(0).toUpperCase()}
               </div>
             )}

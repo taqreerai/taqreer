@@ -48,18 +48,18 @@ export async function broadcastToProject<E extends ProjectBroadcastEvent>(
     console.warn("[realtime] broadcastToProject skipped — Supabase env missing");
     return;
   }
+  const admin = createSupabaseAdminClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    realtime: {
+      // Server-side: we open, send, close. No need to keep heartbeats.
+      params: { eventsPerSecond: 10 },
+    },
+  });
+  const topic = `project:${projectId}`;
+  const channel = admin.channel(topic, {
+    config: { broadcast: { self: false, ack: false } },
+  });
   try {
-    const admin = createSupabaseAdminClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      realtime: {
-        // Server-side: we open, send, close. No need to keep heartbeats.
-        params: { eventsPerSecond: 10 },
-      },
-    });
-    const topic = `project:${projectId}`;
-    const channel = admin.channel(topic, {
-      config: { broadcast: { self: false, ack: false } },
-    });
     // The Supabase JS client requires subscribe() before send() even
     // for the service-role broadcast case. Wait for subscription to
     // succeed (or fail) before emitting.
@@ -90,14 +90,25 @@ export async function broadcastToProject<E extends ProjectBroadcastEvent>(
         state: channel.state,
       });
     }
-    // Tear down the transient channel + socket so we don't leak
-    // websocket connections from short-lived server invocations.
-    await admin.removeChannel(channel);
   } catch (err) {
     console.warn("[realtime] broadcastToProject failed", {
       projectId,
       event,
       error: err instanceof Error ? err.message : String(err),
     });
+  } finally {
+    // Tear down the transient channel + socket so we don't leak
+    // websocket connections from short-lived server invocations.
+    // The `finally` ensures cleanup runs even if `subscribe()` or
+    // `send()` threw — otherwise we'd accumulate open channels every
+    // time a broadcast hit a network blip.
+    try {
+      await admin.removeChannel(channel);
+    } catch (removeErr) {
+      console.warn("[realtime] removeChannel failed during cleanup", {
+        projectId,
+        error: removeErr instanceof Error ? removeErr.message : String(removeErr),
+      });
+    }
   }
 }

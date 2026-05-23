@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase/client";
+import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 
 function Tooltip({ isCollapsed, text }: { isCollapsed: boolean; text: string }) {
   if (!isCollapsed) return null;
@@ -29,7 +30,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { avatarUrl, name, email } = useUser();
+  const { user, avatarUrl, name, email } = useUser();
   const supabase = createClient();
   const [profileOpen, setProfileOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{
@@ -333,10 +334,34 @@ export function Sidebar({
                   alt={name}
                   width={36}
                   height={36}
+                  // `no-referrer` for Google profile pics — without
+                  // it `lh3.googleusercontent.com` 403s in incognito
+                  // because the global `Referrer-Policy: origin-when-
+                  // cross-origin` from next.config triggers Google's
+                  // hotlink-defence path. Same fix shipped to
+                  // components/common/Avatar.tsx + the Settings page.
+                  referrerPolicy="no-referrer"
                   className="w-[36px] h-[36px] rounded-full object-cover tq-avatar-ring"
                 />
               ) : (
-                <div className="w-[36px] h-[36px] rounded-full tq-avatar-fallback text-sm">
+                <div
+                  // Per-user gradient via hash(seed) — same picker the
+                  // presence avatars in SlideNavSidebar use, so the
+                  // dashboard and the editor render the same person
+                  // the same colour. Inline `backgroundImage` overrides
+                  // the canonical single-gradient `background` set on
+                  // `.tq-avatar-fallback`. Seed prefers the supabase
+                  // user id (stable across sessions, matches what
+                  // presence broadcasts use) and falls back to email
+                  // / name so a logged-out preview render still gets
+                  // a stable colour.
+                  className="w-[36px] h-[36px] rounded-full tq-avatar-fallback text-sm"
+                  style={{
+                    backgroundImage: avatarGradientForSeed(
+                      user?.id ?? email ?? name,
+                    ),
+                  }}
+                >
                   {name.charAt(0).toUpperCase()}
                 </div>
               )}

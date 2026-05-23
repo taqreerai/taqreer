@@ -578,17 +578,25 @@ export function DeckView({
       // Initial track with current slide / visibility — the re-track
       // effect below also fires on mount but races the async open;
       // tracking here makes the user appear to others immediately
-      // when the channel joins.
-      await localHandle.track({
-        userId: currentUserId,
-        name: currentUserName ?? null,
-        avatar: currentUserImage ?? null,
-        slideIndex: slideIndexRef.current,
-        tabActive:
-          typeof document !== "undefined"
-            ? document.visibilityState !== "hidden"
-            : true,
-      });
+      // when the channel joins. `.catch` (not try/catch around the
+      // await) because Supabase's channel.track() can reject on a
+      // socket hiccup mid-open; presence is non-critical so we just
+      // log and let the next re-track on slide / visibility change
+      // recover.
+      await localHandle
+        .track({
+          userId: currentUserId,
+          name: currentUserName ?? null,
+          avatar: currentUserImage ?? null,
+          slideIndex: slideIndexRef.current,
+          tabActive:
+            typeof document !== "undefined"
+              ? document.visibilityState !== "hidden"
+              : true,
+        })
+        .catch((err) => {
+          console.warn("[realtime] initial track failed", err);
+        });
     })();
     return () => {
       cancelled = true;
@@ -603,13 +611,21 @@ export function DeckView({
   useEffect(() => {
     if (!currentUserId) return;
     const fire = () => {
-      presenceHandleRef.current?.track({
-        userId: currentUserId,
-        name: currentUserName ?? null,
-        avatar: currentUserImage ?? null,
-        slideIndex: currentSlideIndex,
-        tabActive: document.visibilityState !== "hidden",
-      });
+      // Track is async + fire-and-forget here — re-track is a UX
+      // courtesy, not a contract, so failures just log. Without the
+      // `.catch` Node / browser would surface an unhandled-rejection
+      // warning every time the socket hiccups mid-track.
+      presenceHandleRef.current
+        ?.track({
+          userId: currentUserId,
+          name: currentUserName ?? null,
+          avatar: currentUserImage ?? null,
+          slideIndex: currentSlideIndex,
+          tabActive: document.visibilityState !== "hidden",
+        })
+        .catch((err) => {
+          console.warn("[realtime] re-track failed", err);
+        });
     };
     fire();
     document.addEventListener("visibilitychange", fire);

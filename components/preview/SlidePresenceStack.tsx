@@ -56,7 +56,12 @@ export function SlidePresenceStack({ viewers }: { viewers: PresenceViewer[] }) {
     >
       {visible.map((viewer, idx) => (
         <div
-          key={viewer.userId}
+          // Compound key (userId + idx) so React stays stable if two
+          // viewers ever ended up with the same userId in the visible
+          // array (e.g. presence-collision edge cases mid-reconnect).
+          // userId-only would collapse them into a single React node
+          // and the second avatar's mount would skip.
+          key={`${viewer.userId}-${idx}`}
           // `display: flex` on the wrapper (not the default `block`)
           // so the Avatar inside is a flex item, NOT an inline-level
           // element. Inline-level <img> baselines = bottom of image
@@ -86,7 +91,7 @@ export function SlidePresenceStack({ viewers }: { viewers: PresenceViewer[] }) {
             // White ring separates overlapping chips. 40 % opacity is
             // dim enough to not compete with the gradients but visible
             // against any slide colour underneath.
-            ringColor="rgba(255, 255, 255, 0.4)"
+            ringColor="var(--tq-avatar-ring)"
           />
         </div>
       ))}
@@ -98,7 +103,7 @@ export function SlidePresenceStack({ viewers }: { viewers: PresenceViewer[] }) {
             width: AVATAR_PX,
             height: AVATAR_PX,
             fontSize: 9,
-            boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.4)",
+            boxShadow: "0 0 0 1px var(--tq-avatar-ring)",
           }}
         >
           +{overflow}

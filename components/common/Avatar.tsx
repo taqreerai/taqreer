@@ -64,13 +64,29 @@ export function Avatar({
         alt=""
         width={size}
         height={size}
+        // `no-referrer` so `lh3.googleusercontent.com` (Google profile
+        // pics) and other privacy-sensitive image hosts don't 403 the
+        // request. Our next.config sets a `Referrer-Policy: origin-
+        // when-cross-origin` header for the whole site, which Google's
+        // CDN sometimes flags as a hotlink in incognito (no Google
+        // session cookie → strict mode). The user's profile pic IS
+        // public when they sign in with Google, so removing the
+        // referrer is the correct way to load it.
+        referrerPolicy="no-referrer"
         className="rounded-full object-cover"
         style={{ ...sizeStyle, ...dim, ...ring }}
       />
     );
   }
-  const seed = (name || seedId || "?").trim();
-  const initial = seed.charAt(0).toUpperCase() || "?";
+  // Initial is derived ONLY from `name` (never from `seedId`) — a
+  // prisma cuid like `cmphc9dwh0008zbs08vphcafc` would otherwise
+  // surface a meaningless "C" or "1" as the chip's letter. When
+  // name is missing we fall back to "?" so the chip still has
+  // something to render; the gradient still differentiates rows
+  // visually even when the letter is the same fallback.
+  // Gradient picker still consumes `seedId ?? name` so two users
+  // with the same fallback "?" letter get different colours.
+  const initial = name?.trim()?.charAt(0).toUpperCase() || "?";
   const gradient = avatarGradientForSeed(seedId ?? name ?? null);
   return (
     <div
@@ -90,15 +106,13 @@ export function Avatar({
         // Font size scales roughly with the chip — 10/24 ≈ 0.42, so
         // a 20-px chip lands at ~8.5 px, a 28-px chip at ~12 px.
         fontSize: Math.round(size * 0.42),
-        // Explicit longhand — the `background` shorthand with a CSS
-        // var that resolves to `linear-gradient(...)` is flaky in
-        // Safari + some Chrome paint paths; targeting `backgroundImage`
-        // directly always paints the gradient. The solid
-        // `backgroundColor` is a fallback so even if `--tq-gradient-
-        // avatar-N` somehow fails to resolve (HMR / stale Turbopack
-        // cache / SSR mismatch), the chip still has a visible fill
-        // instead of a transparent ring + floating initial.
-        backgroundColor: "var(--tq-blue)",
+        // Literal `linear-gradient(...)` string from
+        // `avatarGradientForSeed` — bypasses the CSS-var indirection
+        // that silently failed to paint as a background-image in
+        // some Chrome paint paths (the symptom: chip rendered with
+        // a transparent fill, only the white ring + initial showed).
+        // Longhand `backgroundImage` (not `background` shorthand)
+        // keeps any future `backgroundColor` override predictable.
         backgroundImage: gradient,
       }}
     >

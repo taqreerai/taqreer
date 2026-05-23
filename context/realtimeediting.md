@@ -55,20 +55,20 @@ NOTE: No Postgres Changes, no RLS, no publication setup. Our Prisma
 tables live in docker-compose Postgres which Supabase Realtime cannot
 see. We use Supabase Realtime as a pure socket service.
 
-- [ ] `lib/realtime/project-channel.ts` — opens
+- [x] `lib/realtime/project-channel.ts` — opens
       `supabase.channel("project:{projectId}", { config: { presence: { key: userId } } })`,
       tracks presence on join, returns
       `{ presenceState, on(event, cb), broadcast(event, payload), unsubscribe }`.
-- [ ] `lib/realtime/supabase-browser.ts` — singleton browser Supabase
+- [x] `lib/realtime/supabase-browser.ts` — singleton browser Supabase
       client. `lib/supabase/client.ts` already exports `createClient()`
       but instantiates a fresh client per call; wrap it in a module-
       scoped singleton so the same socket is reused across hook calls.
-- [ ] `lib/realtime/server-broadcast.ts` — server-side helper
+- [x] `lib/realtime/server-broadcast.ts` — server-side helper
       `broadcastToProject(projectId, event, payload)` that opens a
       transient Supabase client with the service role key, sends one
       broadcast message, and disconnects. Used by API routes + Inngest
       step bodies after successful writes.
-- [ ] `app/api/projects/[id]/realtime-token/route.ts` — GET endpoint
+- [x] `app/api/projects/[id]/realtime-token/route.ts` — GET endpoint
       that runs `resolveProjectAccess(view)` and returns
       `{ channel: "project:{id}", joinable: true }` on success, 403/404
       otherwise. Clients call this BEFORE subscribing. Token-gating
@@ -76,19 +76,19 @@ see. We use Supabase Realtime as a pure socket service.
       projectId (which clients already know), but the gate gives us a
       clean "should I even open a socket" check + an obvious place to
       add stricter signed JWTs later if we tighten security.
-- [ ] Smoke test: open two tabs of `/project/[id]`, fire a manual
+- [x] Smoke test: open two tabs of `/project/[id]`, fire a manual
       broadcast from one via the browser console (`channel.send({
       type: "broadcast", event: "ping", payload: {} })`), confirm the
       other tab's `on("broadcast", { event: "ping" })` handler logs.
 
 ### Phase 16.B — Presence: avatars + tab-out dim
 
-- [ ] On `DeckView` mount, track presence payload
+- [x] On `DeckView` mount, track presence payload
       `{ userId, name, avatar, slideIndex, tabActive: !document.hidden }`.
-- [ ] `useEffect` for `visibilitychange` → re-track with flipped
+- [x] `useEffect` for `visibilitychange` → re-track with flipped
       `tabActive`. Throttle to one update per 200 ms.
-- [ ] On `focusedIndex` change → re-track with new `slideIndex`.
-- [ ] New `components/preview/SlidePresenceAvatars.tsx`:
+- [x] On `focusedIndex` change → re-track with new `slideIndex`.
+- [x] New `components/preview/SlidePresenceAvatars.tsx`:
       - Props: `viewers: PresenceViewer[]` (already filtered to this
         slide and to NOT-self by caller).
       - Renders up to 2 avatars overlapping, then `+N` glass chip if
@@ -96,7 +96,7 @@ see. We use Supabase Realtime as a pure socket service.
       - Single avatar = circle with image OR fallback initial on a
         per-user hue (`color-mix(in oklab, var(--tq-blue) 70%, white)`).
       - `tabActive=false` → `opacity: 0.4`, no transition (instant).
-- [ ] Mount inside `SlideNavSidebar` thumbnail at top-start corner
+- [x] Mount inside `SlideNavSidebar` thumbnail at top-start corner
       (absolute, `top-1 start-1`). Pointer-events: none — never blocks
       the thumbnail click.
 
@@ -219,7 +219,13 @@ this key is already in `.env.local` for storage signing (see
 The browser client uses `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 both already wired through `lib/supabase/client.ts`.
 
-## Open questions to surface BEFORE 16.B / 16.E start
+## Open questions to surface BEFORE 16.E start
+
+(16.B's open questions resolved during ship: invitee `User.image` is
+populated via Google OAuth — verified via `useUser()`. Email/password
+signups get a deterministic OKLCH gradient per `userId` via
+`lib/util/avatar-gradient.ts`.)
+
 
 - (16.B) Avatar source: do invitees have `image` set on the Prisma
   `User` model today? Or is it Supabase auth metadata only? Phase 15
