@@ -90,6 +90,7 @@ export function SaveAsTemplateDialog({
   // Without this, switching from A to B would leak A's preview into B.
   useEffect(() => {
     if (!open || !projectId) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- canonical "reset modal-local state on prop change" shape */
     setPreview(null);
     setPreviewError(null);
     // Reset to the SAME default the initial useState uses — `true`.
@@ -98,6 +99,7 @@ export function SaveAsTemplateDialog({
     // with the toggle silently flipped off.
     setIsPublic(true);
     setSaveError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     let cancelled = false;
     (async () => {

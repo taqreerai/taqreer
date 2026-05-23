@@ -74,11 +74,15 @@ export async function POST(
     await sendInngestEventWithRetry({
       name: "deck.generate.requested",
       data: {
+        // Spread original inputJson FIRST so the explicit IDs below
+        // win the merge. The old order let a stale / tampered
+        // `inputJson.projectId` (etc.) shadow the canonical project
+        // ID we just resolved, sending the regen to the wrong place.
+        ...inputJson,
         projectId: project.id,
         presentationId: project.presentation.id,
         versionId: latestVersion?.id,
         jobId: latestJob?.id,
-        ...inputJson,
       },
     });
   } catch (error) {

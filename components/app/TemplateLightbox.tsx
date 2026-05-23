@@ -77,9 +77,10 @@ export function TemplateLightbox({
     ? TEMPLATE_STAGE_PX
     : Math.round(TEMPLATE_STAGE_PX * (9 / 16));
 
-  // Reset to slide 0 on each fresh open.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Reset to slide 0 on each fresh open — canonical "reset on prop
+  // change" shape.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setIndex(0);
   }, [open]);
 

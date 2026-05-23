@@ -64,7 +64,7 @@ export default async function PreviewPage({
       key={deckKey}
       projectId={projectId}
       role={access.role}
-      currentUserId={access.user.prismaId}
+      currentUserId={access.user?.prismaId ?? null}
       initialMainSidebarWidth={initialMainSidebarWidth}
       {...data}
     />

@@ -129,12 +129,22 @@ export async function POST(
     return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   }
 
-  let body: ShareBody;
+  // `request.json()` happily returns null / arrays / primitives,
+  // which then crash on `"key" in body` further down (TypeError →
+  // 500). Refuse anything that isn't a plain object up-front.
+  let raw: unknown;
   try {
-    body = (await request.json()) as ShareBody;
+    raw = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return NextResponse.json(
+      { error: "Body must be a JSON object" },
+      { status: 400 },
+    );
+  }
+  const body = raw as ShareBody;
 
   // Validate before any mutation. The combined "public-access + add
   // invitee" path needs BOTH to be valid before either commits.
@@ -189,47 +199,71 @@ export async function POST(
       inviteToken: string | null;
     };
     if (inviteEmail !== null && isAccessLevel(body.accessLevel)) {
-      // Lock the project's public link to view-only the first time
-      // any share is created. Locked-once policy (user direction
-      // 2026-05-23): the moment the deck becomes shared, the link
-      // is meant to be copy-able to anyone with view permission —
-      // we don't expose a UI to flip this off / up. If the owner
-      // explicitly disables the public link later we can add a
-      // setter, but for now any share => publicAccessLevel = "view".
-      await tx.project.updateMany({
-        where: { id: projectId, publicAccessLevel: null },
+      // Lock the project's public link to view-only on EVERY share
+      // write (locked-once policy per user direction 2026-05-23: any
+      // share existing => publicAccessLevel = "view"). Critically,
+      // this `update` (not the previous `updateMany where null`)
+      // overrides anything the mixed-body branch above set — closes
+      // the bypass where `{publicAccessLevel: "comment", email, ...}`
+      // could persist a non-view link.
+      await tx.project.update({
+        where: { id: projectId },
         data: { publicAccessLevel: "view" },
       });
-      // Upsert by (projectId, email). Re-inviting the same email
-      // changes their accessLevel + regenerates the token (old token
-      // becomes inert because we overwrite it). Token regenerate is
-      // intentional — the previous email link might be in someone
-      // else's inbox after a forward; rotating on every owner action
-      // gives the owner a clean "kick + re-invite" workflow.
-      const upserted = await tx.projectShare.upsert({
+      // Detect role-only updates so we don't kick already-accepted
+      // collaborators. Owner changing "view" → "comment" on an
+      // existing accepted share should ONLY flip accessLevel; we
+      // keep their inviteToken / acceptedAt / userId intact so the
+      // user doesn't have to re-accept. Brand-new invites (no row)
+      // and re-invites to an existing-but-not-yet-accepted email
+      // still rotate the token + clear acceptedAt — that's the
+      // owner's "kick + re-invite" workflow.
+      const existing = await tx.projectShare.findUnique({
         where: { projectId_email: { projectId, email: inviteEmail } },
-        create: {
-          projectId,
-          email: inviteEmail,
-          accessLevel: body.accessLevel,
-          invitedBy: ctx.project.user.id,
-          inviteToken: generateInviteToken(),
-        },
-        update: {
-          accessLevel: body.accessLevel,
-          inviteToken: generateInviteToken(),
-          // `acceptedAt` reset so a re-invited user has to re-accept.
-          acceptedAt: null,
-          userId: null,
-        },
-        select: {
-          id: true,
-          email: true,
-          accessLevel: true,
-          inviteToken: true,
-        },
+        select: { id: true, accessLevel: true, acceptedAt: true },
       });
-      newShare = upserted;
+
+      if (existing && existing.acceptedAt) {
+        // Role change on an accepted user — non-destructive.
+        const updated = await tx.projectShare.update({
+          where: { id: existing.id },
+          data: { accessLevel: body.accessLevel },
+          select: {
+            id: true,
+            email: true,
+            accessLevel: true,
+            inviteToken: true,
+          },
+        });
+        newShare = updated;
+      } else {
+        // New invite OR re-invite of a pending row — rotate token,
+        // reset acceptedAt + userId (the new link supersedes any
+        // forwarded copy of the old one).
+        const upserted = await tx.projectShare.upsert({
+          where: { projectId_email: { projectId, email: inviteEmail } },
+          create: {
+            projectId,
+            email: inviteEmail,
+            accessLevel: body.accessLevel,
+            invitedBy: ctx.project.user.id,
+            inviteToken: generateInviteToken(),
+          },
+          update: {
+            accessLevel: body.accessLevel,
+            inviteToken: generateInviteToken(),
+            acceptedAt: null,
+            userId: null,
+          },
+          select: {
+            id: true,
+            email: true,
+            accessLevel: true,
+            inviteToken: true,
+          },
+        });
+        newShare = upserted;
+      }
     }
     return { newShare };
   });

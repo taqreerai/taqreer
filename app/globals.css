@@ -169,6 +169,18 @@
      other "selected" indicator that needs to read brighter than the
      muted brand-magenta. */
   --tq-magenta-hot: #F900FF;
+
+  /* Per-format export-icon accent tints — used by the Export tab in
+     ShareDialog (and any future "pick a file format" surface) to
+     colour the small icon tile next to each format name. Picked to
+     evoke each app's brand chip without literally cloning their
+     palettes: muted, glassy, low-alpha so the surrounding glass
+     chrome still reads as part of our system. Lifted out of TSX
+     literals on 2026-05-23. */
+  --tq-export-pdf:        rgba(239, 68, 68, 0.18);   /* PDF — red */
+  --tq-export-pptx:       rgba(255, 159, 64, 0.20);  /* PowerPoint — orange */
+  --tq-export-html:       rgba(125, 45, 255, 0.22);  /* HTML — violet */
+  --tq-export-png:        rgba(147, 38, 201, 0.20);  /* PNGs — magenta */
   --tq-violet:      #7D2DFF;
   --tq-violet-rgb:  125, 45, 255;
   --tq-lavender:    #9326C9;
@@ -1510,6 +1522,23 @@ body {
        animating and the blur snapped on/off on hover. */
 .slides_pill {
   /* intentionally empty — see header comment */
+}
+
+/* ─── In-slide popover dim ──────────────────────────────────────────
+   Shared darken recipe for any chrome that floats on top of the
+   rendered slide canvas (per-slide pill, comment-editor popover).
+   Slides can be any background — white templates would make a
+   transparent glass surface unreadable. Mix `--tq-bg` (the page
+   background token) at 55 % alpha against the underlying slide via
+   oklab (the same colour space as the modal-dim) so the dim reads
+   neutral on any palette behind it.
+
+   Consumers add `backdrop-blur-glass` separately when they need
+   the blur — this class is dim-only so a component that wants the
+   tint without the blur (e.g. for performance on a long list)
+   doesn't pay for it. */
+.in-slide-dim {
+  background-color: color-mix(in srgb, var(--tq-bg) 55%, transparent);
 }
 
 /* ─── Modal dim overlay ───────────────────────────────────────────

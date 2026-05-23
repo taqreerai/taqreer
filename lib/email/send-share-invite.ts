@@ -48,17 +48,19 @@ export async function sendShareInvite(
   const client = getClient();
 
   // No Resend env configured — log + return ok so dev flows don't
-  // break. The share row is still created with the token; the owner
-  // can copy the accept URL from the logs if they need to test the
-  // accept flow locally.
+  // break. Redacted: we never write the recipient email or the
+  // redeemable accept URL to the log. Both are sensitive (PII +
+  // bearer credential respectively) and routine server logs are a
+  // notorious credential-leak surface (CI scrapers, Sentry, Vercel
+  // log retention). The owner already has the same data in their
+  // own modal state if they need to manually retry locally.
   if (!client || !from) {
     console.info(
       "[share-invite] Resend not configured — stubbed send",
       JSON.stringify({
-        to: input.toEmail,
         projectTitle: input.projectTitle,
         accessLevel: input.accessLevel,
-        acceptUrl,
+        tokenHint: `…${input.inviteToken.slice(-4)}`,
       }),
     );
     return { ok: true, provider: "stub" };

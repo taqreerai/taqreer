@@ -68,7 +68,9 @@ export default async function ProjectPage({
       key={deckKey}
       projectId={projectId}
       role={access.role}
-      currentUserId={access.user.prismaId}
+      // Optional chain — anonymous public-view callers may have a
+      // ProjectAccessContext where access.user is { id: null, prismaId: null }.
+      currentUserId={access.user?.prismaId ?? null}
       initialMainSidebarWidth={initialMainSidebarWidth}
       {...data}
     />

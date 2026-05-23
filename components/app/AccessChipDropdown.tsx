@@ -82,6 +82,13 @@ export function AccessChipDropdown({
   // trigger would close first, then the subsequent click would
   // immediately re-open, producing a flicker with no visible state
   // change. Same exclusion pattern ProjectActionsMenu uses.
+  //
+  // Keyboard handlers (a11y per WAI-ARIA APG menu pattern):
+  //   • Escape         → close, return focus to trigger
+  //   • ArrowDown/Up   → move focus to next/prev menuitemradio
+  //                      (wraps at the ends)
+  //   • Home / End     → first / last menuitemradio
+  // Activation (Enter / Space) is handled natively by the buttons.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -91,8 +98,56 @@ export function AccessChipDropdown({
       if (triggerRef.current?.contains(target)) return;
       setOpen(false);
     };
+    const moveFocus = (delta: 1 | -1 | "first" | "last") => {
+      const surface = surfaceRef.current;
+      if (!surface) return;
+      const items = Array.from(
+        surface.querySelectorAll<HTMLButtonElement>(
+          '[role="menuitemradio"]',
+        ),
+      );
+      if (items.length === 0) return;
+      const active = document.activeElement as HTMLElement | null;
+      const currentIndex = items.findIndex((el) => el === active);
+      let nextIndex: number;
+      if (delta === "first") nextIndex = 0;
+      else if (delta === "last") nextIndex = items.length - 1;
+      else if (currentIndex === -1) {
+        // Nothing in the menu focused yet — Down enters at top, Up at bottom.
+        nextIndex = delta === 1 ? 0 : items.length - 1;
+      } else {
+        nextIndex =
+          (currentIndex + delta + items.length) % items.length;
+      }
+      items[nextIndex]?.focus();
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        moveFocus(1);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        moveFocus(-1);
+        return;
+      }
+      if (e.key === "Home") {
+        e.preventDefault();
+        moveFocus("first");
+        return;
+      }
+      if (e.key === "End") {
+        e.preventDefault();
+        moveFocus("last");
+        return;
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -100,6 +155,26 @@ export function AccessChipDropdown({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
+  }, [open]);
+
+  // On open, focus the currently-selected role's menu item so
+  // keyboard users land somewhere meaningful. requestAnimationFrame
+  // ensures the popover's portal + animation initial render has
+  // committed before we try to focus a button inside it.
+  useEffect(() => {
+    if (!open) return;
+    const raf = requestAnimationFrame(() => {
+      const items = surfaceRef.current?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]',
+      );
+      if (!items || items.length === 0) return;
+      const activeIdx = Array.from(items).findIndex(
+        (el) => el.getAttribute("aria-checked") === "true",
+      );
+      const target = items[activeIdx >= 0 ? activeIdx : 0];
+      target?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
   }, [open]);
 
   // Position the popover. Right-anchored (matches RTL reading

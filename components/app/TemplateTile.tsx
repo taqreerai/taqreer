@@ -66,6 +66,7 @@ export function TemplateTile({
   // template prop down here) so the local state never drifts stale.
   const [isPublicLocal, setIsPublicLocal] = useState(template.isPublic);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "resync local mirror when canonical prop changes" shape; useMemo can't store mutable local state for the optimistic toggle case
     setIsPublicLocal(template.isPublic);
   }, [template.isPublic]);
 

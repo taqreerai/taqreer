@@ -98,7 +98,10 @@ export async function GET(
     orderBy: { createdAt: "asc" },
     include: {
       author: {
-        select: { id: true, name: true, email: true, image: true },
+        // Email omitted on purpose — anyone with `comment` access
+        // hits this route, and exposing the email turns the panel
+        // into a PII directory. Name + image is all the UI renders.
+        select: { id: true, name: true, image: true },
       },
     },
   });
@@ -125,6 +128,19 @@ export async function POST(
     );
   }
 
+  // Refuse to create a comment we can't later authorize for its
+  // author. PATCH/DELETE gate ownership on `comment.authorId`, so a
+  // null author would orphan the comment — its creator wouldn't be
+  // able to edit or delete it. This branch only fires when the
+  // prisma user row hasn't been provisioned yet (user-sync race),
+  // which the layout's auth gate should already have prevented.
+  if (!ctx.authorPrismaUserId) {
+    return NextResponse.json(
+      { error: "Author not yet provisioned — try again in a moment" },
+      { status: 409 },
+    );
+  }
+
   const created = await prisma.comment.create({
     data: {
       presentationId: ctx.presentationId,
@@ -133,14 +149,16 @@ export async function POST(
       content: parsed.data.content,
       boundsJson: toJson(parsed.data.boundsJson),
       status: "draft",
-      // Stamp authorship at create-time. Null for the rare case the
-      // user has no prisma row yet (user-sync hasn't fired) — the
-      // comment still saves; the panel just renders "غير معروف".
+      // Required (see guard above) — non-null guarantees the
+      // creator can later edit / delete their own comment.
       authorId: ctx.authorPrismaUserId,
     },
     include: {
       author: {
-        select: { id: true, name: true, email: true, image: true },
+        // Email omitted on purpose — anyone with `comment` access
+        // hits this route, and exposing the email turns the panel
+        // into a PII directory. Name + image is all the UI renders.
+        select: { id: true, name: true, image: true },
       },
     },
   });

@@ -934,6 +934,28 @@ export default function CreateBrandPage() {
   // on the server; the `useLayoutEffect` below restores the user's
   // saved colours before paint (no flash).
   const [colors, setColors] = useState<string[]>(DEFAULT_COLORS);
+  // Fonts: each slot has a mode (upload | google) and corresponding
+  // state. The upload File object can't be serialised back from
+  // sessionStorage, so these always start blank; the user re-picks
+  // if they came back. Declared BEFORE the restore-from-storage
+  // useLayoutEffect so the effect's setter references aren't
+  // use-before-declare (ESLint pre-existing finding 2026-05-23).
+  const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>({
+    mode: "upload",
+    uploadFile: null,
+    uploadName: null,
+    uploadStorageUrl: null,
+    uploadFamily: "",
+    googleFamily: null,
+  });
+  const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>({
+    mode: "upload",
+    uploadFile: null,
+    uploadName: null,
+    uploadStorageUrl: null,
+    uploadFamily: "",
+    googleFamily: null,
+  });
   // Restore colours + font selections from sessionStorage post-hydration.
   // useLayoutEffect (not useEffect) so the swap happens BEFORE the browser
   // paints — user never sees the default-palette / empty-font-selectors
@@ -1019,25 +1041,10 @@ export default function CreateBrandPage() {
     | { kind: "error"; message: string };
   const [extraction, setExtraction] = useState<ExtractionState>({ kind: "idle" });
 
-  // Fonts: each slot has a mode (upload | google) and corresponding state.
-  // The upload File object can't be serialised back from sessionStorage, so
-  // these always start blank; the user re-picks if they came back.
-  const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>({
-    mode: "upload",
-    uploadFile: null,
-    uploadName: null,
-    uploadStorageUrl: null,
-    uploadFamily: "",
-    googleFamily: null,
-  });
-  const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>({
-    mode: "upload",
-    uploadFile: null,
-    uploadName: null,
-    uploadStorageUrl: null,
-    uploadFamily: "",
-    googleFamily: null,
-  });
+  // `headingFontSlot` + `bodyFontSlot` moved above the restore
+  // useLayoutEffect (~line 944) so the effect's setter references
+  // aren't use-before-declare. Same hooks, same defaults — just the
+  // declaration order changed.
 
   const [logo, setLogo] = useState<File | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -1387,6 +1394,7 @@ export default function CreateBrandPage() {
       return;
     }
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "hydrate state from sessionStorage on mount" shape; useLayoutEffect is required to land BEFORE first paint to avoid a flash of default content
       setContent(JSON.parse(rawContent) as StoredContent);
     } catch {
       // Corrupt session payload — bounce to step 1 instead of crashing
@@ -1446,6 +1454,7 @@ export default function CreateBrandPage() {
   useEffect(() => {
     if (!logo) return;
     const url = URL.createObjectURL(logo);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- url is derived from the File object lifecycle (revoked in cleanup); useMemo can't manage the lifecycle here
     setLogoPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [logo]);

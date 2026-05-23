@@ -432,19 +432,13 @@ function CommentEditor({
       dir={direction}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
-      className="glass-modal backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
-      style={{
-        left,
-        top,
-        width: POPOVER_W,
-        // Dark dim — same trick SlidePill uses so in-slide chrome
-        // stays readable against any slide background (white / light
-        // palette decks would otherwise erase the popover into the
-        // canvas). `--tq-bg` is the page background token; mixing it
-        // at 55% gives a dim tint that the panel's own backdrop-blur
-        // can still saturate the slide's colours through.
-        background: "color-mix(in srgb, var(--tq-bg) 55%, transparent)",
-      }}
+      // `.in-slide-dim` carries the shared `--tq-bg`-mix background so
+      // the popover stays readable on white slides — same recipe the
+      // SlidePill uses. Class lives in globals.css so future palette
+      // changes propagate; inline style only carries layout values
+      // (left/top/width) that depend on the click location.
+      className="in-slide-dim glass-modal backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      style={{ left, top, width: POPOVER_W }}
     >
       {error ? (
         <div

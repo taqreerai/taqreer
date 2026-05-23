@@ -16,7 +16,10 @@ export type CommentBounds = {
 export type CommentAuthor = {
   id: string;
   name: string | null;
-  email: string;
+  // Email intentionally NOT in the wire shape — exposing it to
+  // every commenter on the deck would turn the panel into a PII
+  // directory. Name + image is all the UI renders; falls back to
+  // `?` initial when name is null.
   image: string | null;
 };
 

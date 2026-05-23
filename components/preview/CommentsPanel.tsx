@@ -167,7 +167,10 @@ function CommentMeta({
   author: CommentAuthor | null;
   createdAt: string;
 }) {
-  const displayName = author?.name?.trim() || author?.email || "غير معروف";
+  // Email is intentionally not in the wire shape (PII). When a user
+  // has no display name set we fall back to "غير معروف" — visually
+  // the gradient-initial avatar still differentiates rows.
+  const displayName = author?.name?.trim() || "غير معروف";
   return (
     <div className="flex items-center gap-2">
       <Avatar author={author} />
@@ -202,7 +205,7 @@ function Avatar({ author }: { author: CommentAuthor | null }) {
       />
     );
   }
-  const seed = (author?.name || author?.email || "?").trim();
+  const seed = (author?.name || "?").trim();
   const initial = seed.charAt(0).toUpperCase() || "?";
   return (
     <div

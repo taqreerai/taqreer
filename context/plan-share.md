@@ -36,7 +36,7 @@ duplication into the modal). Branch: `dev`. Owner: Osama. Drafted
 
 ## Roles + capability ladder
 
-```
+```text
 view  <  comment  <  edit  ≤  owner
 ```
 

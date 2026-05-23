@@ -888,8 +888,15 @@ export function DeckView({
   // presentation's currentVersionId, so refetching on manifest swap (after
   // a partial regen completes) brings up the new version's drafts (zero,
   // since drafts get applied during regen and the new version starts clean).
+  //
+  // Phase 15.A — gated on `canComment`. View-only viewers never see the
+  // comment UI; skipping the fetch saves a round-trip on every public-
+  // view load (also, the server now rejects view callers on the
+  // comments routes — without the gate the request would 403/404 and
+  // spam the console with errors).
   useEffect(() => {
     if (status !== "completed") return;
+    if (!canComment) return;
     let cancelled = false;
     (async () => {
       try {
@@ -908,7 +915,7 @@ export function DeckView({
     return () => {
       cancelled = true;
     };
-  }, [projectId, status, manifest?.presentationId]);
+  }, [projectId, status, manifest?.presentationId, canComment]);
 
   // While applying, poll project status. The user must hear about
   // ANY disconnect — Inngest cancellations don't flip the DB row to

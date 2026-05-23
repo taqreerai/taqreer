@@ -114,9 +114,14 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
   // legitimate here — the index is internal to the lightbox and
   // needs to reset on the open transition; lifting it to the
   // parent would push lightbox-internal concerns into RecentProjects.
-  // Document + disable for this line specifically.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Reset to slide 0 every time the lightbox reopens — canonical
+  // "reset derived state on prop change" shape. The lint rule
+  // misfires because reading via render-time `useMemo` would also
+  // require the parent to mirror open state in a key, which is
+  // heavier than this single state nudge. Disable on the actual
+  // setState line.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setIndex(0);
   }, [open]);
 

@@ -5,25 +5,61 @@
 // PreviewActionBar 2026-05-23 so the new ShareDialog Export tab
 // can drive the SAME handlers + share their busy / error state.
 //
-// Why a hook (not a context): the toolbar and the modal mount
-// independently in different React subtrees, but they need
-// coordinated busy state — clicking PPTX in the toolbar while
-// the modal is open should disable the modal's PPTX row too.
-// Both consumers call `useExportActions(...)` with the same
-// projectId; React's batching + the shared `exportBusy` flag
-// already serialise correctly because each hook instance owns
-// its own state but the handlers throw if `busy` was set since
-// the click. (We don't share state across instances; instead the
-// PreviewActionBar instance owns the toolbar's spinners + the
-// ShareDialog instance owns the modal's. Cross-instance lockout
-// isn't needed because each pipeline is idempotent server-side
-// and the worst case is a duplicate Puppeteer run, which the
-// server can absorb.)
+// Cross-instance busy serialisation
+// ---------------------------------
+// Both PreviewActionBar (toolbar) and ShareDialog (modal Export tab)
+// instantiate this hook with the same `projectId`. Each instance
+// keeps LOCAL per-pipeline state (`exportPptx` etc.) for its own
+// spinner / inline error toast, but the `busy` flag is read from a
+// module-scoped store keyed by projectId. So clicking PPTX in the
+// toolbar disables PNG/PDF/HTML in the modal too — no parallel
+// Puppeteer runs from the same user kicking the deck twice.
+//
+// Implementation: `useSyncExternalStore` subscribes each instance
+// to the store; the runners flip the shared bit on entry and reset
+// on exit (try/finally). The store is a module-scoped Map so it
+// survives across the React tree without a Context provider.
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { exportManifestAsPptx } from "@/lib/export/html-export";
 import { downloadHtmlDocument } from "@/lib/export/html-document";
+
+// ─── Shared cross-instance busy store ───────────────────────────────
+
+type BusyEntry = { busy: boolean; subscribers: Set<() => void> };
+const busyByProjectId = new Map<string, BusyEntry>();
+
+function getOrCreateEntry(projectId: string): BusyEntry {
+  let entry = busyByProjectId.get(projectId);
+  if (!entry) {
+    entry = { busy: false, subscribers: new Set() };
+    busyByProjectId.set(projectId, entry);
+  }
+  return entry;
+}
+
+function subscribeBusy(projectId: string, cb: () => void): () => void {
+  const entry = getOrCreateEntry(projectId);
+  entry.subscribers.add(cb);
+  return () => {
+    entry.subscribers.delete(cb);
+  };
+}
+
+function readBusy(projectId: string): boolean {
+  // Don't auto-create on read — initial render before any export
+  // has run should report `false` without leaking an empty entry
+  // into the map.
+  return busyByProjectId.get(projectId)?.busy ?? false;
+}
+
+function setBusy(projectId: string, value: boolean): void {
+  const entry = getOrCreateEntry(projectId);
+  if (entry.busy === value) return;
+  entry.busy = value;
+  entry.subscribers.forEach((cb) => cb());
+}
 
 export type ExportStatus = "idle" | "running" | "success" | "error";
 export type ExportButtonState = { status: ExportStatus; message?: string };
@@ -79,15 +115,16 @@ export function useExportActions({
     status: "idle",
   });
 
-  // Shared "any export running" flag — same serialisation reasoning
-  // PreviewActionBar already documented: prevents a user from
-  // chaining PPTX→PDF→PNG→HTML in quick succession and spinning up
-  // four parallel Puppeteer/dom-to-pptx pipelines at once.
-  const busy =
-    exportPptx.status === "running" ||
-    exportPdf.status === "running" ||
-    exportPng.status === "running" ||
-    exportHtml.status === "running";
+  // Cross-instance busy — subscribes both this instance (which sets
+  // it inside each runner) AND any OTHER `useExportActions` hook
+  // mounted with the same projectId. So the toolbar's PPTX click
+  // also disables the modal's row, and vice versa. Local pipeline
+  // states above stay per-instance for spinner / error display.
+  const busy = useSyncExternalStore(
+    (cb) => subscribeBusy(projectId, cb),
+    () => readBusy(projectId),
+    () => false,
+  );
 
   // Common manifest patch — back-fills `format` from the project-
   // level fallback for legacy manifests where deck-generate hadn't
@@ -99,90 +136,105 @@ export function useExportActions({
     format: manifest.format ?? formatFallback ?? "16:9",
   };
 
-  // ── PPTX (client-side via dom-to-pptx + BiDi post-processor) ─────
-  const runPptx = async () => {
-    if (busy) return;
-    setExportPptx({ status: "running", message: "جارٍ التصدير..." });
+  // Tiny helper that wraps each runner's body so the shared lock
+  // is always flipped on entry + released on exit (try/finally).
+  // `read` consults the store directly — `busy` snapshot from
+  // useSyncExternalStore could be stale by the time the user
+  // clicks twice quickly, but the store is authoritative.
+  const guard = async (work: () => Promise<void>) => {
+    if (readBusy(projectId)) return;
+    setBusy(projectId, true);
     try {
-      const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
-      await exportManifestAsPptx(exportManifest, fileName);
-      setExportPptx({ status: "idle" });
-    } catch (error) {
-      setExportPptx({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر التصدير",
-      });
+      await work();
+    } finally {
+      setBusy(projectId, false);
     }
   };
+
+  // ── PPTX (client-side via dom-to-pptx + BiDi post-processor) ─────
+  const runPptx = () =>
+    guard(async () => {
+      setExportPptx({ status: "running", message: "جارٍ التصدير..." });
+      try {
+        const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
+        await exportManifestAsPptx(exportManifest, fileName);
+        setExportPptx({ status: "idle" });
+      } catch (error) {
+        setExportPptx({
+          status: "error",
+          message: error instanceof Error ? error.message : "تعذر التصدير",
+        });
+      }
+    });
 
   // ── PDF (server-side Puppeteer) ──────────────────────────────────
-  const runPdf = async () => {
-    if (busy) return;
-    setExportPdf({ status: "running", message: "جارٍ تصدير PDF..." });
-    try {
-      const response = await fetch(`/api/projects/${projectId}/export/pdf`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? "PDF export failed");
+  const runPdf = () =>
+    guard(async () => {
+      setExportPdf({ status: "running", message: "جارٍ تصدير PDF..." });
+      try {
+        const response = await fetch(`/api/projects/${projectId}/export/pdf`, {
+          method: "POST",
+        });
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(data?.error ?? "PDF export failed");
+        }
+        const blob = await response.blob();
+        downloadBlob(blob, `${baseFileName(manifest.title || projectTitle)}.pdf`);
+        setExportPdf({ status: "idle" });
+      } catch (error) {
+        setExportPdf({
+          status: "error",
+          message: error instanceof Error ? error.message : "تعذر تصدير PDF",
+        });
       }
-      const blob = await response.blob();
-      downloadBlob(blob, `${baseFileName(manifest.title || projectTitle)}.pdf`);
-      setExportPdf({ status: "idle" });
-    } catch (error) {
-      setExportPdf({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر تصدير PDF",
-      });
-    }
-  };
+    });
 
   // ── PNG (server-side Puppeteer, ZIP of canvas-native PNGs) ───────
-  const runPng = async () => {
-    if (busy) return;
-    setExportPng({ status: "running", message: "جارٍ تصدير الصور..." });
-    try {
-      const response = await fetch(`/api/projects/${projectId}/export/png`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? "PNG export failed");
+  const runPng = () =>
+    guard(async () => {
+      setExportPng({ status: "running", message: "جارٍ تصدير الصور..." });
+      try {
+        const response = await fetch(`/api/projects/${projectId}/export/png`, {
+          method: "POST",
+        });
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(data?.error ?? "PNG export failed");
+        }
+        const blob = await response.blob();
+        downloadBlob(
+          blob,
+          `${baseFileName(manifest.title || projectTitle)}-pngs.zip`,
+        );
+        setExportPng({ status: "idle" });
+      } catch (error) {
+        setExportPng({
+          status: "error",
+          message: error instanceof Error ? error.message : "تعذر تصدير الصور",
+        });
       }
-      const blob = await response.blob();
-      downloadBlob(
-        blob,
-        `${baseFileName(manifest.title || projectTitle)}-pngs.zip`,
-      );
-      setExportPng({ status: "idle" });
-    } catch (error) {
-      setExportPng({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر تصدير الصور",
-      });
-    }
-  };
+    });
 
   // ── HTML (client-side, raw standalone bundle) ────────────────────
-  const runHtml = async () => {
-    if (busy) return;
-    setExportHtml({ status: "running", message: "جارٍ التحميل..." });
-    try {
-      const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
-      downloadHtmlDocument(exportManifest, fileName);
-      setExportHtml({ status: "idle" });
-    } catch (error) {
-      setExportHtml({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر التحميل",
-      });
-    }
-  };
+  const runHtml = () =>
+    guard(async () => {
+      setExportHtml({ status: "running", message: "جارٍ التحميل..." });
+      try {
+        const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
+        downloadHtmlDocument(exportManifest, fileName);
+        setExportHtml({ status: "idle" });
+      } catch (error) {
+        setExportHtml({
+          status: "error",
+          message: error instanceof Error ? error.message : "تعذر التحميل",
+        });
+      }
+    });
 
   // First error across pipelines — caller can surface as a toast.
   // Order matches the toolbar's visibleMessage precedence so the

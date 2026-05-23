@@ -379,8 +379,42 @@ export function ShareDialog({
   );
 
   // ─── Copy link ───────────────────────────────────────────────────
+  //
+  // Side-effect on the server: if the project's `publicAccessLevel`
+  // is still `null` (no shares + never copied before), the URL we're
+  // about to put on the clipboard wouldn't actually grant access to
+  // recipients — they'd hit a 404 on /project. We POST a public-view
+  // lock first so the link is functional the moment the owner pastes
+  // it. Idempotent — already-view stays view. If the lock fails we
+  // skip the copy and surface the error via the modal's fetch error
+  // path; copying a broken link silently would be worse.
   const copyLink = useCallback(async () => {
     if (!projectId) return;
+    if (!state || state.publicAccessLevel !== "view") {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/share`,
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ publicAccessLevel: "view" }),
+          },
+        );
+        if (!res.ok) {
+          setFetchError("تعذر تفعيل الرابط العام");
+          return;
+        }
+        // Mirror the lock in local state so subsequent copies skip
+        // the round-trip.
+        setState((s) =>
+          s ? { ...s, publicAccessLevel: "view" } : s,
+        );
+      } catch {
+        setFetchError("تعذر تفعيل الرابط العام");
+        return;
+      }
+    }
     const url = `${window.location.origin}/project/${projectId}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -389,7 +423,7 @@ export function ShareDialog({
     } catch {
       /* clipboard blocked — silent for now */
     }
-  }, [projectId]);
+  }, [projectId, state]);
 
   if (typeof window === "undefined") return null;
 
@@ -991,9 +1025,12 @@ function ExportTabBody({
     <div className="space-y-4">
       <h3 className="text-sm font-medium text-white">صيغة التصدير</h3>
       <ul className="space-y-2">
+        {/* Format accents come from `--tq-export-*` tokens in
+            globals.css so future palette tweaks propagate without
+            grepping for component-local rgba literals. */}
         <ExportRow
           icon="picture_as_pdf"
-          accent="rgba(239, 68, 68, 0.18)"
+          accent="var(--tq-export-pdf)"
           label="PDF"
           sub="ملف PDF متعدد الصفحات"
           running={actions.states.pdf.status === "running"}
@@ -1002,7 +1039,7 @@ function ExportTabBody({
         />
         <ExportRow
           icon="slideshow"
-          accent="rgba(255, 159, 64, 0.2)"
+          accent="var(--tq-export-pptx)"
           label="PowerPoint"
           sub="ملف PPTX قابل للتحرير"
           running={actions.states.pptx.status === "running"}
@@ -1011,7 +1048,7 @@ function ExportTabBody({
         />
         <ExportRow
           icon="code"
-          accent="rgba(125, 45, 255, 0.22)"
+          accent="var(--tq-export-html)"
           label="HTML"
           sub="ملف HTML مستقل"
           running={actions.states.html.status === "running"}
@@ -1020,7 +1057,7 @@ function ExportTabBody({
         />
         <ExportRow
           icon="image"
-          accent="rgba(147, 38, 201, 0.2)"
+          accent="var(--tq-export-png)"
           label="PNGs"
           sub="مجلد صور مضغوط"
           running={actions.states.png.status === "running"}
@@ -1103,7 +1140,15 @@ function LinkedInShareButton({ projectId }: { projectId: string }) {
   const open = () => {
     const url = `${window.location.origin}/project/${projectId}`;
     const linkedIn = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
-    window.open(linkedIn, "share-linkedin", "width=600,height=600");
+    // `noopener,noreferrer` severs the popup's reference to
+    // `window.opener` so the third-party page can't navigate or
+    // script the original app tab — small but free reverse-tabnab
+    // hardening on any cross-origin window.open.
+    window.open(
+      linkedIn,
+      "share-linkedin",
+      "width=600,height=600,noopener,noreferrer",
+    );
   };
   return (
     <button
