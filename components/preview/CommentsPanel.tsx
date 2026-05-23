@@ -14,11 +14,12 @@
 // while drafts exist, see PreviewActionBar).
 
 import type { CommentAuthor, CommentRow } from "@/lib/types/comment";
+import { Avatar } from "@/components/common/Avatar";
 
 // Same nominal width as SlideNavSidebar — both panels share the
 // fixed slot against the main sidebar's inner edge, so swapping
 // between them must not change the section's reserved gutter.
-export const COMMENTS_PANEL_WIDTH = 260;
+export const COMMENTS_PANEL_WIDTH = 320;
 
 export function CommentsPanel({
   comments,
@@ -173,7 +174,12 @@ function CommentMeta({
   const displayName = author?.name?.trim() || "غير معروف";
   return (
     <div className="flex items-center gap-2">
-      <Avatar author={author} />
+      <Avatar
+        name={author?.name ?? null}
+        image={author?.image ?? null}
+        seedId={author?.id ?? null}
+        size={24}
+      />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[11px] font-medium text-white" dir="auto">
           {displayName}
@@ -186,36 +192,6 @@ function CommentMeta({
       >
         {formatRelativeArabic(createdAt)}
       </time>
-    </div>
-  );
-}
-
-function Avatar({ author }: { author: CommentAuthor | null }) {
-  // Image when available, otherwise first letter of name/email on a
-  // brand-gradient fallback. 24×24 keeps the row compact while still
-  // being visually distinct from the comment body.
-  if (author?.image) {
-    return (
-      <img
-        src={author.image}
-        alt=""
-        width={24}
-        height={24}
-        className="h-6 w-6 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  const seed = (author?.name || "?").trim();
-  const initial = seed.charAt(0).toUpperCase() || "?";
-  return (
-    <div
-      aria-hidden
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-      style={{
-        background: "linear-gradient(135deg, #370BF4, #E036B8)",
-      }}
-    >
-      {initial}
     </div>
   );
 }

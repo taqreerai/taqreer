@@ -219,6 +219,18 @@
   --tq-gradient-brand:  linear-gradient(135deg, #370BF4 0%, #7D2DFF 100%);
   --tq-gradient-full:   linear-gradient(135deg, #370BF4 0%, #7D2DFF 50%, #E036B8 100%);
   --tq-gradient-avatar: linear-gradient(135deg, #370BF4 0%, #E036B8 100%);
+  /* Per-user fallback-avatar palette. Selected by hash(userId) % 4
+     in lib/util/avatar-gradient.ts. Stays brand-adjacent (all four
+     rotate the existing brand tokens) so two concurrent collaborators
+     visually disambiguate without introducing colors outside the
+     palette. The first entry is intentionally identical to
+     `--tq-gradient-avatar` so a single-user view (CommentsPanel pre-
+     presence) reads the same as before. Added 2026-05-23 for Phase
+     16.B presence avatars. */
+  --tq-gradient-avatar-0: linear-gradient(135deg, #370BF4 0%, #E036B8 100%);  /* blue → magenta (canonical) */
+  --tq-gradient-avatar-1: linear-gradient(135deg, #E036B8 0%, #7D2DFF 100%);  /* magenta → violet */
+  --tq-gradient-avatar-2: linear-gradient(135deg, #7D2DFF 0%, #370BF4 100%);  /* violet → blue */
+  --tq-gradient-avatar-3: linear-gradient(135deg, #F900FF 0%, #370BF4 100%);  /* hot magenta → blue */
 
   /* 6. Border Radius */
   /* Single consumed radius token (`.btn-pill` etc.). The full

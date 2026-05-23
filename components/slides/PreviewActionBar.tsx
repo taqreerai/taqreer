@@ -109,14 +109,14 @@ function ToolButton({
               // toolbox icon buttons sit under the no-shadow-motion
               // contract; the scale hover is the only motion this
               // variant gets.
-              `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-full ${
+              `btn-gradient-anim relative flex h-9 w-9 items-center justify-center rounded-full ${
                 isDisabled ? "" : "hover:scale-[1.02]"
               }`
             : // Glass variant — same circle treatment. The brand-system
               // rule is: small icon-only buttons are circles. The bell +
               // collapsed sidebar are larger square chrome (intentionally
               // rounded-rect, not in scope here).
-              `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${colorClasses} ${
+              `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${colorClasses} ${
                 isDisabled ? "opacity-40" : ""
               }`
         }
@@ -127,7 +127,7 @@ function ToolButton({
           <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
         ) : (
           <span
-            className="material-symbols-outlined text-[22px]"
+            className="material-symbols-outlined text-[18px]"
             // `font-variation-settings` replaces the WHOLE shorthand,
             // not just one axis — so when we want FILL=1 we have to
             // re-state every axis the base `.material-symbols-outlined`
@@ -156,15 +156,16 @@ function ToolButton({
         ) : null}
       </button>
       {/* Tooltip — appears to the right of the toolbar (toward content).
-          `dir="auto"` so the FIRST strong directional character of
-          the label drives reading direction. Without it the tooltip
-          inherits the toolbar wrapper's outer dir="ltr" (chosen so
-          the icon stack centres correctly), and Arabic labels like
-          "تصدير PPTX" render bidi-flipped — Arabic glyph order
-          stays correct (Unicode BiDi handles it) but the inline
-          "PPTX" lands on the wrong side of the Arabic word. With
-          dir="auto" the tooltip reads RTL for Arabic labels and LTR
-          for any pure-Latin label, no per-button decision needed. */}
+          `dir="auto"` so the FIRST
+          strong directional character of the label drives reading
+          direction. Without it the tooltip inherits the toolbar
+          wrapper's outer dir="ltr" (chosen so the icon row layout
+          centres correctly), and Arabic labels like "تصدير PPTX"
+          render bidi-flipped — Arabic glyph order stays correct
+          (Unicode BiDi handles it) but the inline "PPTX" lands on
+          the wrong side of the Arabic word. With dir="auto" the
+          tooltip reads RTL for Arabic labels and LTR for any pure-
+          Latin label, no per-button decision needed. */}
       <div
         dir="auto"
         className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-3 py-1.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -178,11 +179,10 @@ function ToolButton({
 }
 
 // Hairline separator between toolbar categories. Narrow (w-6) so it
-// doesn't extend into the parent pill's curved edges — full-width
-// rounded-rect parents could afford `w-full`, but the new
-// `rounded-full` container has rounded corners that would clip a
-// full-bleed divider into a partial line. w-6 centred under the
-// 44 px buttons reads as a clean category boundary without bleeding.
+// doesn't extend into the parent pill's curved edges — full-bleed
+// dividers would clip against the `rounded-full` container's curves.
+// w-6 centred between the 36 px buttons reads as a clean category
+// boundary without bleeding.
 function ToolbarDivider() {
   return (
     <div
@@ -389,7 +389,17 @@ export function PreviewActionBar({
     null;
 
   return (
-    <div dir="ltr" className="flex flex-col items-center gap-3">
+    <div
+      dir="ltr"
+      // Stable selector for DeckView's click-outside handler to
+      // recognise the toolbar — class-based selectors broke when the
+      // toolbar's flex direction changed (flex-col → flex-row-reverse
+      // in 2026-05-23). data-* lives outside CSS layout concerns so
+      // future re-layouts won't accidentally trip the click handler
+      // into killing comment mode on toolbar clicks.
+      data-preview-toolbar="true"
+      className="flex flex-col items-center gap-3"
+    >
       {/* Toolbar column — Photoshop-style icon stack, grouped into
           three visual categories by horizontal dividers. Categories
           (top → bottom):
@@ -403,13 +413,13 @@ export function PreviewActionBar({
           the same chrome family. */}
       <div
         // Pill shape — `rounded-full` on a vertical flex column with
-        // square (44 × 44) circle children produces a stadium
+        // square (36 × 36) circle children produces a stadium
         // silhouette (curves at top + bottom edges, straight sides).
         // Matches the "icon-only buttons live in a pill" pattern used
         // by the design system for compact tool clusters; the bell
         // and collapsed-sidebar icons stay rounded-rect because they
         // host larger square chrome, not a cluster.
-        className="glass-card flex flex-col items-center gap-1.5 rounded-full p-2"
+        className="glass-card flex flex-col items-center gap-1 rounded-full p-1.5"
       >
         {/* ── Category 1: AI / Edit ─────────────────────────────── */}
         {/* Regen — owners / edit only. The AI pair (regen + comment
@@ -427,7 +437,7 @@ export function PreviewActionBar({
               <motion.div
                 animate={{ rotate: commentsArmed ? 360 : 0 }}
                 transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
-                className="flex h-[22px] w-[22px] items-center justify-center"
+                className="flex h-[18px] w-[18px] items-center justify-center"
               >
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.span
@@ -436,7 +446,7 @@ export function PreviewActionBar({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.6 }}
                     transition={{ duration: 0.25 }}
-                    className="material-symbols-outlined text-[22px]"
+                    className="material-symbols-outlined text-[18px]"
                   >
                     {commentsArmed ? "auto_awesome" : "autorenew"}
                   </motion.span>
@@ -491,7 +501,7 @@ export function PreviewActionBar({
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.6 }}
                   transition={{ duration: 0.25 }}
-                  className="material-symbols-outlined text-[22px]"
+                  className="material-symbols-outlined text-[18px]"
                 >
                   {isSaved ? "check" : "save"}
                 </motion.span>

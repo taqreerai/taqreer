@@ -19,6 +19,7 @@ import { notFound, redirect } from "next/navigation";
 import { DeckView } from "@/components/preview/DeckView";
 import { loadProject, isDeckReady } from "@/lib/project/load-project";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,16 @@ export default async function PreviewPage({
   const isCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
   const initialMainSidebarWidth = isCollapsed ? 80 : 260;
 
+  // Phase 16.B presence — surface the viewer's name + avatar so other
+  // viewers' SlideNavSidebar can render their chip. Skipped for
+  // anonymous public-view (no prismaId → DeckView won't track them).
+  const profile = access.user.prismaId
+    ? await prisma.user.findUnique({
+        where: { id: access.user.prismaId },
+        select: { name: true, image: true },
+      })
+    : null;
+
   // Key DeckView on the version id + status so partial-regen completion
   // (currentVersionId flips from v_n → v_n+1) remounts the component and
   // reseeds from the new manifest. Without the version id in the key, a
@@ -65,6 +76,8 @@ export default async function PreviewPage({
       projectId={projectId}
       role={access.role}
       currentUserId={access.user?.prismaId ?? null}
+      currentUserName={profile?.name ?? null}
+      currentUserImage={profile?.image ?? null}
       initialMainSidebarWidth={initialMainSidebarWidth}
       {...data}
     />
