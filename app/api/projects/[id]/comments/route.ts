@@ -6,6 +6,7 @@ import {
   resolveProjectAccess,
   type ProjectRole,
 } from "@/lib/api/project-access";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
 // Drag-box coordinates are persisted in slide-space — slide width/height
 // depending on the deck's format. 16:9 → 1920×1080; 9:16 → 1080×1920.
@@ -81,8 +82,25 @@ export async function GET(
   }
 
   // Optional ?versionId=… override — defaults to current version.
+  // Optional ?ids=foo,bar dereferences specific comment ids — used by
+  // the Phase 16.C realtime channel: when a `comment.created` broadcast
+  // arrives, the receiving client GETs only the new id(s) instead of
+  // re-fetching the full draft list. IDs are filtered through a
+  // length + character whitelist so we don't pass arbitrary user
+  // input straight into prisma's `IN (…)`. Empty `ids=` (missing or
+  // all-rejected) falls through to the normal full-list path so the
+  // page-load seed still works.
   const url = new URL(request.url);
   const requestedVersionId = url.searchParams.get("versionId") ?? ctx.versionId;
+  const idsParam = url.searchParams.get("ids");
+  const requestedIds = idsParam
+    ? idsParam
+        .split(",")
+        .map((s) => s.trim())
+        // Prisma cuids are alphanumeric + `_`; cap at 64 chars so a
+        // malicious `?ids=` with megabytes can't blow up the SQL.
+        .filter((s) => s.length > 0 && s.length <= 64 && /^[a-zA-Z0-9_]+$/.test(s))
+    : null;
 
   // Drafts only — applied comments are immutable history (the prompt
   // that was actually sent to Claude) and shouldn't surface to the
@@ -94,6 +112,9 @@ export async function GET(
       presentationId: ctx.presentationId,
       versionId: requestedVersionId,
       status: "draft",
+      ...(requestedIds && requestedIds.length > 0
+        ? { id: { in: requestedIds } }
+        : {}),
     },
     orderBy: { createdAt: "asc" },
     include: {
@@ -161,6 +182,18 @@ export async function POST(
         select: { id: true, name: true, image: true },
       },
     },
+  });
+
+  // Phase 16.C — emit a Realtime broadcast so concurrent viewers of
+  // the same project see the new comment without refreshing. Payload
+  // is pointers-only (commentId, slideId, actorPrismaUserId); the
+  // receiving client GETs the full row via `?ids=`. Best-effort —
+  // `broadcastToProject` swallows its own errors so a Supabase outage
+  // can't roll back a successful Prisma write.
+  await broadcastToProject(id, "comment.created", {
+    commentId: created.id,
+    slideId: created.slideId,
+    actorPrismaUserId: ctx.authorPrismaUserId,
   });
 
   return NextResponse.json({ comment: created }, { status: 201 });

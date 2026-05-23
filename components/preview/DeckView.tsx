@@ -441,6 +441,12 @@ export function DeckView({
   //                Inngest completes). Targeted slides get a
   //                "regenerating" overlay; the Apply button locks.
   const [commentMode, setCommentMode] = useState(false);
+  // True while the read-only marker preview popup (HeroCommentOverlay
+  // sub-component) is open. Drives chrome that would otherwise compete
+  // with the popup — the per-slide pill (regen / history / lock) hides
+  // while a preview is showing so the popup reads as the primary
+  // focus.
+  const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [applying, setApplying] = useState<{
     versionId: string;
@@ -574,6 +580,58 @@ export function DeckView({
           setPresence(state);
         }
       });
+
+      // Phase 16.C — live comment sync. On `comment.created` the
+      // payload is pointer-only (commentId + slideId + actorPrismaUserId),
+      // so dereference via `GET ?ids={id}` for the full row before
+      // merging. The original poster's tab already has the comment
+      // from its POST response — de-dup by id in the setter handles
+      // that. Best-effort: a failed dereference just leaves the
+      // comment out of view-only sessions until they refresh.
+      localHandle.on("comment.created", (payload) => {
+        if (cancelled || !canComment) return;
+        // Skip echo from our own write — the POST handler already
+        // optimistically set local state for us; the broadcast is
+        // just a redundancy net for OTHER viewers.
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        (async () => {
+          try {
+            const res = await fetch(
+              `/api/projects/${encodeURIComponent(projectId)}/comments?ids=${encodeURIComponent(payload.commentId)}`,
+              { credentials: "same-origin" },
+            );
+            if (!res.ok || cancelled) return;
+            const data = (await res.json()) as { comments?: CommentRow[] };
+            const incoming = data.comments?.[0];
+            if (!incoming || cancelled) return;
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape; the channel is the source of truth, this just mirrors fresh rows in
+            setComments((prev) =>
+              prev.some((c) => c.id === incoming.id)
+                ? prev
+                : [...prev, incoming],
+            );
+          } catch {
+            /* network blip — viewer will pick the row up on next refresh */
+          }
+        })();
+      });
+      localHandle.on("comment.deleted", (payload) => {
+        if (cancelled || !canComment) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape
+        setComments((prev) => prev.filter((c) => c.id !== payload.commentId));
+      });
+
       presenceHandleRef.current = localHandle;
       // Initial track with current slide / visibility — the re-track
       // effect below also fires on mount but races the async open;
@@ -603,7 +661,18 @@ export function DeckView({
       presenceHandleRef.current = null;
       localHandle?.close();
     };
-  }, [projectId, currentUserId, currentUserName, currentUserImage]);
+    // `canComment` is read inside the broadcast handlers; including it
+    // in deps reopens the channel when a role upgrade lands so the
+    // listener gate flips on without a refresh. In practice role
+    // changes mid-session are rare (Phase 15.E re-invite flow),
+    // but keeping the dep set honest avoids the stale-closure trap.
+  }, [
+    projectId,
+    currentUserId,
+    currentUserName,
+    currentUserImage,
+    canComment,
+  ]);
 
   // Re-track on slide change + tab-visibility flip. Reads through the
   // ref so a no-op when the channel hasn't finished opening yet —
@@ -1938,15 +2007,16 @@ export function DeckView({
           }`}
           data-active={commentMode ? "true" : "false"}
         >
-          {/* Slide content. Heavily blurred while THIS slide is being
-              regenerated; the regenerating overlay sits on top in sharp
-              focus. `overflow-hidden` lives here so the scaled
-              SlideRenderer can't bleed past the canvas while the
-              outer halo ring extends freely. */}
-          <div
-            className="h-full w-full overflow-hidden transition-[filter] duration-300"
-            style={isFocusedRegenerating ? { filter: "blur(20px)" } : undefined}
-          >
+          {/* Slide content. `overflow-hidden` clips the scaled
+              SlideRenderer so it can't bleed past the canvas while
+              the outer halo ring extends freely. The previous
+              `filter: blur(20px)` during regen was replaced with a
+              full-canvas dim overlay (sibling below) per direction
+              2026-05-23 — the blur left white slides bright and
+              required a separate dark chip behind the spinner; a
+              flat dim gives the spinner readable contrast against
+              any slide background without an extra chrome chip. */}
+          <div className="h-full w-full overflow-hidden">
             <SlideRenderer
               slide={focusedSlide}
               theme={manifest!.theme}
@@ -1967,7 +2037,7 @@ export function DeckView({
               the user is in comment mode (the comment overlay
               owns the canvas; the pill would steal cursor focus
               from drag-to-draw). */}
-          {!isFocusedRegenerating && !commentMode && canEdit ? (
+          {!isFocusedRegenerating && !commentMode && !markerPreviewOpen && canEdit ? (
             <SlidePill
               currentVersionNumber={
                 slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
@@ -2131,15 +2201,31 @@ export function DeckView({
             />
           ) : null}
 
-          {/* Regenerating overlay. */}
+          {/* Regenerating overlay — full-canvas dim + clean spinner.
+              The dim layer uses `var(--tq-bg-dim)` (the same 55 %
+              dark token the popovers use) so the white spinner reads
+              cleanly on any slide background, including bright /
+              white ones, without needing a separate chip chrome
+              behind it. Replaces the previous filter:blur(20px) on
+              the slide content + dim-chip combo (direction
+              2026-05-23). */}
           {isFocusedRegenerating ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
-              <div className="flex flex-col items-center gap-2 text-center">
-                <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
-                <span className="text-xs font-medium">
-                  جارٍ إعادة التصميم...
-                </span>
-              </div>
+            <div
+              // `dir="rtl"` so the trailing ASCII `...` lands on the
+              // visual LEFT (end of an RTL line) instead of the
+              // visual RIGHT. Without it the overlay inherits the
+              // canvas row's `dir="ltr"`, the Unicode BiDi algorithm
+              // treats `...` as a neutral run at line start, and the
+              // dots render at the visual LEFT BEFORE the Arabic
+              // ("... جارٍ إعادة التصميم") instead of after it.
+              dir="rtl"
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white"
+              style={{ backgroundColor: "var(--tq-bg-dim)" }}
+            >
+              <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
+              <span className="text-xs font-medium">
+                جارٍ إعادة التصميم...
+              </span>
             </div>
           ) : null}
 
@@ -2147,7 +2233,22 @@ export function DeckView({
               Only mounted while commentMode is on so its mouse
               capture doesn't intercept regular interactions outside
               the commenting flow. */}
-          {commentMode ? (
+          {/* Always mounted (Phase 16.C) so READ-ONLY pins render
+              for the slide regardless of whether THIS viewer is in
+              comment mode. Otherwise tab B (just observing) wouldn't
+              see markers when tab A creates a comment, defeating the
+              live-comment broadcast we wired up. Interactivity (drag
+              to create, click pin to edit) is still gated via the
+              `commentMode` prop — pins are visual-only when off.
+              Gated overall on `canComment` so pure view-only viewers
+              don't even see the markers. */}
+          {/* Hide the overlay entirely during a partial regen on
+              this slide — otherwise the orange pins sit on top of
+              the blur layer and read as decorative debris over the
+              regenerating slide. The blur + spinner own the visual
+              during that window; markers come back as soon as the
+              new version lands and `isFocusedRegenerating` clears. */}
+          {canComment && !isFocusedRegenerating ? (
             <HeroCommentOverlay
               slideId={focusedSlide.slideId}
               comments={comments}
@@ -2163,6 +2264,17 @@ export function DeckView({
               // owner / edit see delete on everything (moderation).
               canModerate={canEdit}
               currentUserId={currentUserId}
+              commentMode={commentMode}
+              // Fires when the user clicks "Edit" inside the read-
+              // only marker preview popup. HeroCommentOverlay has
+              // already opened its `editor` state on the chosen
+              // comment; we just flip commentMode so the editor
+              // popover actually renders (gated on `isInteractive`
+              // there).
+              onRequestCommentMode={
+                canComment ? () => setCommentMode(true) : undefined
+              }
+              onPreviewOpenChange={setMarkerPreviewOpen}
             />
           ) : null}
         </motion.div>

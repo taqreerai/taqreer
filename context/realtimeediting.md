@@ -102,19 +102,28 @@ see. We use Supabase Realtime as a pure socket service.
 
 ### Phase 16.C — Live comments via Broadcast
 
-- [ ] `POST /api/projects/[id]/comments` after the Prisma INSERT calls
+- [x] `POST /api/projects/[id]/comments` after the Prisma INSERT calls
       `broadcastToProject(projectId, "comment.created", { commentId, slideId, actorPrismaUserId })`.
-- [ ] `DELETE /api/projects/[id]/comments/[commentId]` after the Prisma
+- [x] `DELETE /api/projects/[id]/comments/[commentId]` after the Prisma
       DELETE calls `broadcastToProject(projectId, "comment.deleted", { commentId, slideId, actorPrismaUserId })`.
-- [ ] `DeckView` subscribes via the channel helper. On `comment.created`
-      it GETs `/api/projects/[id]/comments?ids={commentId}` (new query-
-      param) and merges into local state. De-dup by id — the original
-      poster's tab already has the row from its own POST response.
-- [ ] On `comment.deleted` drop by id from local state.
-- [ ] `HeroCommentOverlay` markers + `CommentsPanel` list both consume
-      from the same state — no duplicate subscriptions.
-- [ ] Keep the initial GET on DeckView mount as the seed; remove the
-      open-comment-mode refetch effect now that broadcasts own freshness.
+      `authoriseProject` extended to surface `slideId` + `callerPrismaUserId`
+      BEFORE the delete so we have the broadcast payload when the row's gone.
+- [x] `DeckView` subscribes via the same channel handle that presence
+      uses. On `comment.created` it GETs
+      `/api/projects/[id]/comments?ids={commentId}` (new query-param,
+      filters with a `^[a-zA-Z0-9_]+$` whitelist and 64-char cap) and
+      merges into local state. De-dup by id; skips broadcasts whose
+      `actorPrismaUserId === currentUserId` to avoid echoing our own
+      POST back into state.
+- [x] On `comment.deleted` drop by id from local state (same self-echo
+      skip).
+- [x] `HeroCommentOverlay` markers + `CommentsPanel` list already
+      consume the same `comments` state — no duplicate subscriptions
+      needed.
+- [x] Initial GET on DeckView mount kept as the seed. No open-comment-
+      mode refetch effect existed to remove — turned out to be a
+      ghost item from a pre-Phase-15 doc; the existing fetch only
+      runs once on mount with deps `[projectId, status, presentationId, canComment]`.
 
 ### Phase 16.D — Live regen status via Broadcast
 

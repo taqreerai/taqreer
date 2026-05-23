@@ -15,6 +15,7 @@
 
 import type { CommentAuthor, CommentRow } from "@/lib/types/comment";
 import { Avatar } from "@/components/common/Avatar";
+import { formatRelativeArabic } from "@/lib/util/relative-time";
 
 // Same nominal width as SlideNavSidebar — both panels share the
 // fixed slot against the main sidebar's inner edge, so swapping
@@ -112,8 +113,13 @@ export function CommentsPanel({
                   createdAt={c.createdAt}
                 />
                 <div
+                  // NO `dir="auto"` — inherit the panel's RTL flow.
+                  // `dir="auto"` would flip a comment starting with
+                  // a Latin char ("Make the title…") to LTR locally,
+                  // misaligning the block against the RTL panel
+                  // chrome. The Unicode BiDi engine still handles
+                  // glyph order inside the line based on script.
                   className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-white/90"
-                  dir="auto"
                 >
                   {c.content}
                 </div>
@@ -154,12 +160,17 @@ export function CommentsPanel({
 
 // ─── Per-comment metadata row ────────────────────────────────────
 //
-// Avatar (or initials fallback) + name + relative-time createdAt.
-// Under `dir="rtl"` the row reads right-to-left visually: avatar on
-// the visual right, then name, with the date floating to the left.
-// `Intl.RelativeTimeFormat` produces a localised relative string
-// ("منذ 3 دقائق") so commenters and viewers across the deck see the
-// same wording regardless of their browser locale.
+// New layout (2026-05-23): avatar on the visual-right (logical-start
+// in the RTL CommentsPanel), name + relative-time stacked vertically
+// on the visual-left (logical-end). Comment content is rendered by
+// the caller BELOW this row. Same shape used by
+// `MarkerPreviewPopup` in HeroCommentOverlay so both surfaces read
+// identically.
+//
+// Why the stack: showing the time UNDER the name (instead of beside
+// it) frees horizontal room for longer names without truncating the
+// timestamp, and reads more naturally in RTL where two short fields
+// flowing horizontally compete with the comment body below.
 
 function CommentMeta({
   author,
@@ -174,49 +185,36 @@ function CommentMeta({
   const displayName = author?.name?.trim() || "غير معروف";
   return (
     <div className="flex items-center gap-2">
+      {/* First child = logical-start = visual-right under RTL parent. */}
       <Avatar
         name={author?.name ?? null}
         image={author?.image ?? null}
         seedId={author?.id ?? null}
-        size={24}
+        size={28}
       />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[11px] font-medium text-white" dir="auto">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* NO `dir="auto"` on the name — the panel is RTL, so the
+            span should inherit RTL flow and text-align: start (right
+            visually). `dir="auto"` would flip a Latin name like
+            "Osama" to LTR locally, snapping the text to visual-left
+            inside an RTL panel — exactly the misalignment users
+            complained about. BiDi glyph order is still handled
+            correctly by the parent's RTL context. */}
+        <span className="truncate text-[11px] font-medium leading-tight text-white">
           {displayName}
-        </div>
+        </span>
+        <time
+          className="text-[10px] leading-tight text-white/40"
+          dateTime={createdAt}
+          title={new Date(createdAt).toLocaleString("ar")}
+        >
+          {formatRelativeArabic(createdAt)}
+        </time>
       </div>
-      <time
-        className="shrink-0 text-[10px] text-white/40"
-        dateTime={createdAt}
-        title={new Date(createdAt).toLocaleString("ar")}
-      >
-        {formatRelativeArabic(createdAt)}
-      </time>
     </div>
   );
 }
 
-// Compact Arabic relative-time. Falls back to a short date for
-// anything older than ~30 days where "منذ شهرين" reads weirder than
-// a date stamp. Uses Intl APIs for the locale-correct plural forms.
-function formatRelativeArabic(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) return "";
-  const now = Date.now();
-  const diffSec = Math.round((then - now) / 1000);
-  const absSec = Math.abs(diffSec);
-
-  const rtf = new Intl.RelativeTimeFormat("ar", { numeric: "auto" });
-  if (absSec < 60) return rtf.format(diffSec, "second");
-  if (absSec < 3600) return rtf.format(Math.round(diffSec / 60), "minute");
-  if (absSec < 86_400) return rtf.format(Math.round(diffSec / 3600), "hour");
-  if (absSec < 86_400 * 30) {
-    return rtf.format(Math.round(diffSec / 86_400), "day");
-  }
-  // Beyond a month: absolute date is clearer than "منذ X شهراً".
-  return new Date(iso).toLocaleDateString("ar", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
+// `formatRelativeArabic` lives in `lib/util/relative-time.ts` — see
+// the import at the top of the file. Shared with HeroCommentOverlay's
+// MarkerPreviewPopup so wording stays locked across surfaces.

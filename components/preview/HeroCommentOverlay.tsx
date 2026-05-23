@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
+import { Avatar } from "@/components/common/Avatar";
+import { formatRelativeArabic } from "@/lib/util/relative-time";
 
 // Minimum drag size in slide-space pixels. Smaller drags are treated
 // as misfired clicks and discarded — keeps stray mousedowns from
@@ -48,11 +50,22 @@ export function HeroCommentOverlay({
   onDelete,
   canModerate,
   currentUserId,
+  commentMode,
+  onRequestCommentMode,
+  onPreviewOpenChange,
 }: {
   slideId: string;
   // ALL drafts — filtered to this slide internally so the caller
   // doesn't recompute on every keystroke.
   comments: CommentRow[];
+  // When true: full drag-to-create + click-pin-to-edit + editor
+  // popover. When false: pins still render (read-only, so viewers
+  // who aren't in comment mode can SEE that comments exist on this
+  // slide — important once Phase 16.C wired live broadcasts), but
+  // the overlay doesn't intercept mouse events and pins are visual-
+  // only. The component is always mounted regardless; this prop is
+  // the interaction gate. Optional + defaults true for existing
+  // callers that always wrapped the overlay in `{commentMode ? ...}`.
   // Hero pixels per slide-space pixel (heroWidth / canvasW). Same
   // value SlideRenderer takes.
   scale: number;
@@ -71,10 +84,47 @@ export function HeroCommentOverlay({
   // Null for anonymous public-view (they don't reach commentMode
   // anyway, but the type allows the prop to be omitted upstream).
   currentUserId: string | null;
+  commentMode?: boolean;
+  // Fires when the user clicks "Edit" inside the read-only marker
+  // preview popup. Parent (DeckView) flips its `commentMode` state
+  // to true; this component's `editor` state is already set to the
+  // chosen comment so the editor popover opens automatically once
+  // `commentMode` propagates back as `isInteractive`. Optional —
+  // omitting it disables the Edit affordance in the popup.
+  onRequestCommentMode?: () => void;
+  // Notifies DeckView when the read-only marker preview popup
+  // opens / closes. DeckView uses this to hide chrome that would
+  // otherwise compete with the popup (the per-slide pill — regen /
+  // history / lock — sits at the top edge of the canvas and reads
+  // as visual noise behind the comment preview).
+  onPreviewOpenChange?: (open: boolean) => void;
 }) {
+  // Defaults true so the historical callers that gated the whole
+  // mount on `{commentMode ? <HeroCommentOverlay /> : null}` keep
+  // working without passing the prop.
+  const isInteractive = commentMode !== false;
   const [drag, setDrag] = useState<DragState>(null);
   const [editor, setEditor] = useState<EditorState>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
+  // Read-only preview popup state. Tracks the comment id being
+  // previewed AND the click coordinates (overlay-space pixels) so
+  // the popup anchors at the cursor instead of the marker bounds
+  // — user wanted "the corner of the mouse click, not far away".
+  // Mutually exclusive with `editor` — opening the editor (Edit
+  // button) clears this; opening this clears `editor`.
+  const [previewState, setPreviewState] = useState<{
+    commentId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const previewCommentId = previewState?.commentId ?? null;
+  // Editor in-flight states — the check / trash icons morph to
+  // spinners while their requests are pending. Same pattern the
+  // marker preview popup's delete uses, lifted up to the parent so
+  // BOTH the new-comment POST and the existing-comment
+  // PATCH/DELETE paths share the same gate.
+  const [savingEditor, setSavingEditor] = useState(false);
+  const [deletingEditor, setDeletingEditor] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const slideComments = comments.filter((c) => c.slideId === slideId);
@@ -85,7 +135,30 @@ export function HeroCommentOverlay({
     setDrag(null);
     setEditor(null);
     setEditorError(null);
+    setPreviewState(null);
+    setSavingEditor(false);
+    setDeletingEditor(false);
   }, [slideId]);
+
+  // When the viewer flips INTO comment mode (e.g. via clicking Edit
+  // in the preview popup), close the read-only preview — its job is
+  // done and the editor popover takes over.
+  useEffect(() => {
+    if (isInteractive && previewCommentId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPreviewState(null);
+    }
+  }, [isInteractive, previewCommentId]);
+
+  // Bubble preview open/close up to the parent so chrome that
+  // would compete with the popup (the per-slide pill — regen /
+  // history / lock) can hide itself while the popup is visible.
+  // Ref-stable callback comparison would be cleaner, but the
+  // parent's handler is stable across renders via useCallback so
+  // including it in deps doesn't re-fire spuriously.
+  useEffect(() => {
+    onPreviewOpenChange?.(previewCommentId !== null);
+  }, [previewCommentId, onPreviewOpenChange]);
 
   // Viewport coords → slide-space coords via the overlay's bounding
   // rect + the current scale. Clamped to canvas so persisted values
@@ -162,9 +235,11 @@ export function HeroCommentOverlay({
 
   const handleSave = async () => {
     if (!editor) return;
+    if (savingEditor) return; // Re-entry guard against a fast double-click.
     const trimmed = editor.content.trim();
     if (!trimmed) return;
     setEditorError(null);
+    setSavingEditor(true);
     try {
       if (editor.kind === "new") {
         await onCreate({ slideId, bounds: editor.bounds, content: trimmed });
@@ -178,25 +253,36 @@ export function HeroCommentOverlay({
       setEditor(null);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "تعذر حفظ التعليق.");
+    } finally {
+      // `finally` not `else` — on success the editor closes (above)
+      // but we still want the in-flight flag reset for the next
+      // open. React's reconciler is fine clearing state on an
+      // already-null `editor`.
+      setSavingEditor(false);
     }
   };
 
   const handleDelete = async () => {
     if (!editor || editor.kind !== "existing") return;
+    if (deletingEditor) return;
     setEditorError(null);
+    setDeletingEditor(true);
     try {
       await onDelete(editor.commentId);
       setEditor(null);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "تعذر حذف التعليق.");
+    } finally {
+      setDeletingEditor(false);
     }
   };
 
-  // Esc closes the editor (or clears the live drag) — does NOT exit
-  // commentMode. That's owned by DeckView's own Esc handler, which
-  // skips if our editor is open (Esc cascades).
+  // Esc closes the editor (or clears the live drag, or closes the
+  // read-only marker preview popup) — does NOT exit commentMode.
+  // That's owned by DeckView's own Esc handler, which skips if our
+  // editor / preview / drag is active (Esc cascades).
   useEffect(() => {
-    if (!editor && !drag) return;
+    if (!editor && !drag && !previewCommentId) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -204,6 +290,8 @@ export function HeroCommentOverlay({
       if (editor) {
         setEditor(null);
         setEditorError(null);
+      } else if (previewCommentId) {
+        setPreviewState(null);
       } else if (drag) {
         setDrag(null);
       }
@@ -211,7 +299,7 @@ export function HeroCommentOverlay({
     // Capture so we beat DeckView's keydown listener.
     window.addEventListener("keydown", handler, { capture: true });
     return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [editor, drag]);
+  }, [editor, drag, previewCommentId]);
 
   // Live drag rect in slide-space — feeds both the dashed preview
   // and (after mouseup) the editor anchor.
@@ -233,18 +321,65 @@ export function HeroCommentOverlay({
       // and LTR slides (the slide content itself flips, not the
       // bounds coordinate origin).
       dir="ltr"
-      className="absolute inset-0 overflow-hidden"
+      // Read-only mode (`!isInteractive`): wrapper has no pointer
+      // events so it doesn't swallow clicks meant for the canvas
+      // below, AND there's no drag handler. Pins below opt back in
+      // via their own pointer-events when interactive.
+      className={`absolute inset-0 overflow-hidden ${isInteractive ? "" : "pointer-events-none"}`}
       // High enough to sit above the SlideRenderer (z-auto) but BELOW
       // the canvas-gradient-border's ::after (z:2).
       style={{ zIndex: 1 }}
-      onMouseDown={handleStartDrag}
+      onMouseDown={isInteractive ? handleStartDrag : undefined}
     >
       {/* Existing pins. Hidden when their comment is being edited so
-          the editor's solid anchor box doesn't double up on a pin. */}
+          the editor's solid anchor box doesn't double up on a pin.
+          In read-only mode (`!isInteractive`) pins render as plain
+          divs (no click handler, no hover state) so they're purely
+          visual indicators — important for viewers NOT in comment
+          mode who need to SEE that someone else commented but
+          shouldn't be able to open the editor on someone else's
+          markers. */}
       {slideComments.map((c) => {
         if (!c.boundsJson) return null;
         if (editor?.kind === "existing" && editor.commentId === c.id) return null;
         const b = c.boundsJson;
+        const style: React.CSSProperties = {
+          left: b.x * scale,
+          top: b.y * scale,
+          width: b.w * scale,
+          height: b.h * scale,
+        };
+        if (!isInteractive) {
+          // Read-only marker — clickable to open the preview popup
+          // (avatar / name / time / content / edit+delete). The
+          // parent overlay is `pointer-events-none` in this mode so
+          // the slide content underneath stays interactive; the pin
+          // opts back in to catch its own clicks. Hidden when the
+          // popup is open ON this comment to avoid double-drawing
+          // the rectangle behind the popup's anchor.
+          if (previewCommentId === c.id) return null;
+          return (
+            <button
+              type="button"
+              key={c.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Capture click coords in overlay-pixel-space so the
+                // popup anchors at the cursor (user wanted "the
+                // corner of the mouse click", not the marker bounds
+                // — the previous bounds-anchored math placed the
+                // popup arbitrarily far from where the user clicked).
+                const rect = overlayRef.current?.getBoundingClientRect();
+                const localX = rect ? e.clientX - rect.left : 0;
+                const localY = rect ? e.clientY - rect.top : 0;
+                setPreviewState({ commentId: c.id, x: localX, y: localY });
+              }}
+              aria-label="عرض التعليق"
+              className="pointer-events-auto absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
+              style={style}
+            />
+          );
+        }
         return (
           <button
             type="button"
@@ -256,18 +391,15 @@ export function HeroCommentOverlay({
             onMouseDown={(e) => e.stopPropagation()}
             aria-label="تعديل التعليق"
             className="absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
-            style={{
-              left: b.x * scale,
-              top: b.y * scale,
-              width: b.w * scale,
-              height: b.h * scale,
-            }}
+            style={style}
           />
         );
       })}
 
-      {/* Live drag rect — dashed while the user is dragging. */}
-      {liveBounds ? (
+      {/* Live drag rect — dashed while the user is dragging.
+          Skipped entirely in read-only mode (no drag state can
+          exist there anyway, but explicit guard reads cleaner). */}
+      {isInteractive && liveBounds ? (
         <div
           className="pointer-events-none absolute rounded-md border border-dashed border-orange-400 bg-orange-400/10"
           style={{
@@ -279,8 +411,11 @@ export function HeroCommentOverlay({
         />
       ) : null}
 
-      {/* Editor anchor rect — solid box around the active editor. */}
-      {editor ? (
+      {/* Editor anchor rect — solid box around the active editor.
+          Same guard as the drag rect — `editor` state can't be set
+          in read-only mode but the explicit check makes intent
+          obvious. */}
+      {isInteractive && editor ? (
         <div
           className="pointer-events-none absolute rounded-md border border-orange-400 bg-orange-400/15"
           style={{
@@ -325,25 +460,91 @@ export function HeroCommentOverlay({
               setEditorError(null);
             }}
             onDelete={canDeleteThis ? handleDelete : undefined}
+            saving={savingEditor}
+            deleting={deletingEditor}
           />
         );
       })() : null}
+
+      {/* Read-only marker preview popup. Opens when a non-commenting
+          viewer clicks a marker pin. Contents mirror the new
+          CommentsPanel row layout (avatar visual-right, name+time
+          stacked visual-left, content below) so both surfaces read
+          identically. Edit button flips DeckView into commentMode +
+          pre-opens this same comment in the editor; Delete fires
+          the existing onDelete handler. Both buttons gated by the
+          standard author-or-moderator rules. */}
+      {!isInteractive && previewState
+        ? (() => {
+            const comment = slideComments.find((c) => c.id === previewState.commentId);
+            if (!comment || !comment.boundsJson) return null;
+            const isAuthor =
+              currentUserId !== null && comment.authorId === currentUserId;
+            const canEditThis = isAuthor;
+            const canDeleteThis = canModerate || isAuthor;
+            return (
+              <MarkerPreviewPopup
+                comment={comment}
+                anchorX={previewState.x}
+                anchorY={previewState.y}
+                canvasW={canvasW}
+                canvasH={canvasH}
+                scale={scale}
+                canEdit={canEditThis && !!onRequestCommentMode}
+                canDelete={canDeleteThis}
+                onClose={() => setPreviewState(null)}
+                onEdit={() => {
+                  if (!onRequestCommentMode || !comment.boundsJson) return;
+                  // Open the editor state on this comment BEFORE
+                  // flipping commentMode. Once `isInteractive` flips
+                  // to true on the next render, the existing
+                  // `{isInteractive && editor ? <CommentEditor … /> :
+                  // null}` branch renders the editor automatically.
+                  setEditor({
+                    kind: "existing",
+                    commentId: comment.id,
+                    bounds: comment.boundsJson,
+                    content: comment.content,
+                  });
+                  setPreviewState(null);
+                  onRequestCommentMode();
+                }}
+                onDelete={async () => {
+                  try {
+                    await onDelete(comment.id);
+                    setPreviewState(null);
+                  } catch {
+                    // Keep the popup open on failure so the user can
+                    // retry — same error UX the in-mode editor uses.
+                  }
+                }}
+              />
+            );
+          })()
+        : null}
     </div>
   );
 }
 
 // Glass icon button — same neutral surface language as the toolbar.
+// `loading` swaps the icon for a spinner AND disables the click —
+// universal pattern for "anything that writes to the database shows
+// a loading wheel" (user direction 2026-05-23). Disabling-during-
+// loading also guards against a fast double-click queuing a
+// duplicate request.
 function GlassIconButton({
   icon,
   label,
   active,
   disabled,
+  loading,
   onClick,
 }: {
   icon: string;
   label: string;
   active?: boolean;
   disabled?: boolean;
+  loading?: boolean;
   onClick: () => void;
 }) {
   const baseBg = active
@@ -352,20 +553,29 @@ function GlassIconButton({
   const colorClasses = active
     ? "border-white/40 text-white"
     : "border-white/15 text-white/60 hover:border-white/40 hover:text-white";
+  const isDisabled = disabled || loading;
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
+      disabled={isDisabled}
       aria-label={label}
+      aria-busy={loading}
       // bg inline (state-driven); blur via Tailwind utility (memory:
       // feedback_tw_glass_system).
       style={{ background: baseBg }}
       className={`backdrop-blur-glass backdrop-saturate-(--glass-saturation) flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${colorClasses} ${
-        disabled ? "opacity-40" : ""
+        isDisabled ? "opacity-40" : ""
       }`}
     >
-      <span className="material-symbols-outlined text-[18px]">{icon}</span>
+      {loading ? (
+        <span
+          aria-hidden
+          className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white"
+        />
+      ) : (
+        <span className="material-symbols-outlined text-[18px]">{icon}</span>
+      )}
     </button>
   );
 }
@@ -385,6 +595,8 @@ function CommentEditor({
   onCancel,
   onDelete,
   error,
+  saving,
+  deleting,
 }: {
   editor: NonNullable<EditorState>;
   scale: number;
@@ -396,6 +608,13 @@ function CommentEditor({
   onCancel: () => void;
   onDelete?: () => void;
   error: string | null;
+  // In-flight flags lifted up to the parent (`HeroCommentOverlay`)
+  // so the save and delete icons can morph to spinners while their
+  // requests are pending. POST/PATCH/DELETE comments all take
+  // ~1-2 s end-to-end; without spinners the user reads the click
+  // as "nothing happened" and double-fires.
+  saving?: boolean;
+  deleting?: boolean;
 }) {
   const POPOVER_W = 360;
   const POPOVER_GAP = 8;
@@ -429,7 +648,14 @@ function CommentEditor({
 
   return (
     <div
-      dir={direction}
+      // Always RTL — this is app chrome, not slide content. The
+      // `direction` prop on this component is the slide's reading
+      // direction, but the editor popover is part of the editor UI
+      // and follows the app's Arabic-first conventions (matches the
+      // MarkerPreviewPopup). The textarea inside uses `dir="auto"`
+      // so a comment that starts with a Latin word still flows LTR
+      // visually while the chrome stays RTL.
+      dir="rtl"
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       // `.in-slide-dim` carries the shared `--tq-bg`-mix background so
@@ -437,7 +663,25 @@ function CommentEditor({
       // SlidePill uses. Class lives in globals.css so future palette
       // changes propagate; inline style only carries layout values
       // (left/top/width) that depend on the click location.
-      className="in-slide-dim glass-modal backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      // NO `.glass-modal` class — it sets `background: transparent`
+      // via the SHORTHAND, which Safari's cascade was treating as
+      // winning over any class-based `background-color` longhand
+      // including `.in-slide-dim`'s. Replaced with inline values so
+      // the background-color has no competing shorthand to lose
+      // against. The inline value is a pre-composed `var(--tq-bg-dim)`
+      // token (not `rgba(var(--tq-bg-rgb), 0.55)`) because Safari
+      // has a long-standing bug where a `var()` holding a comma-
+      // separated value fails to split back into `rgba()`'s argument
+      // list, the whole declaration becomes invalid, and the bg
+      // falls back to transparent. Border uses `--tq-border-glass`
+      // (single token, no nested function), which Safari handles
+      // cleanly.
+      // `.in-slide-popover` carries the dim + hairline border. Class-
+      // based bg (literal rgba in globals.css) so Safari's
+      // backdrop-filter compositor sees a fully-resolved background
+      // colour — inline `var()` references kept rendering transparent
+      // for both popovers on Safari despite valid token definitions.
+      className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
       style={{ left, top, width: POPOVER_W }}
     >
       {error ? (
@@ -487,7 +731,12 @@ function CommentEditor({
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="flex gap-1">
           {onDelete ? (
-            <GlassIconButton icon="delete" label="حذف التعليق" onClick={onDelete} />
+            <GlassIconButton
+              icon="delete"
+              label="حذف التعليق"
+              onClick={onDelete}
+              loading={deleting}
+            />
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -498,9 +747,270 @@ function CommentEditor({
             active
             onClick={onSave}
             disabled={!editor.content.trim()}
+            loading={saving}
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+// Read-only popup that opens when a viewer clicks a marker outside
+// comment mode. Anchored at the CLICK position (overlay-space px)
+// so the popup appears right at the cursor — user feedback was
+// "on the corner of the mouse click, not far away". Clamped to the
+// canvas so the popup never extends off-screen; flips above the
+// click if it would clip the bottom edge.
+//
+// Closes on Esc (handled by the parent's existing keydown listener),
+// outside-click, or after Edit/Delete fires. The popup itself is
+// always RTL (app chrome convention) regardless of slide direction;
+// the comment body inside uses `dir="auto"` so mixed-script content
+// gets the right BiDi treatment per first strong character.
+function MarkerPreviewPopup({
+  comment,
+  anchorX,
+  anchorY,
+  canvasW,
+  canvasH,
+  scale,
+  canEdit,
+  canDelete,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  comment: CommentRow;
+  // Overlay-space pixel coordinates of the click point. The popup's
+  // top-left corner anchors here (with clamps + flip-above).
+  anchorX: number;
+  anchorY: number;
+  canvasW: number;
+  canvasH: number;
+  scale: number;
+  canEdit: boolean;
+  canDelete: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => Promise<void> | void;
+}) {
+  const POPOVER_W = 320;
+  const POPOVER_GAP = 8;
+  // Conservative estimate covering header (~36 px) + content
+  // (~3 lines ≈ 60 px) + footer (~40 px) + paddings (~32 px).
+  // Used only for the "would I clip the bottom edge?" check —
+  // actual layout flows freely so a shorter / taller comment
+  // still renders correctly.
+  const POPOVER_ESTIMATED_H = 180;
+  const heroH = canvasH * scale;
+  const heroW = canvasW * scale;
+  // Flip above the click if anchoring below would clip the canvas
+  // bottom. Either way the popup hugs the click position vertically.
+  const flipAbove = anchorY + POPOVER_ESTIMATED_H + POPOVER_GAP > heroH;
+  const top = flipAbove
+    ? Math.max(POPOVER_GAP, anchorY - POPOVER_ESTIMATED_H - POPOVER_GAP)
+    : anchorY + POPOVER_GAP;
+  // Clamp horizontally so the popover never extends off-canvas.
+  // In RTL chrome the popup grows toward the visual-left from the
+  // click; in LTR toward visual-right. Either way, just clamp the
+  // top-left within the canvas envelope.
+  const left = Math.max(
+    POPOVER_GAP,
+    Math.min(heroW - POPOVER_W - POPOVER_GAP, anchorX),
+  );
+
+  const popoverRef = useRef<HTMLDivElement>(null);
+  // Local deleting-in-flight state. The DELETE round-trip + the
+  // upstream broadcast + the React re-render that drops the row can
+  // take ~1-2 s; without a spinner the user reads it as a "nothing
+  // happened" tap and double-fires the click. setting `isDeleting`
+  // also disables the button so a fast second click doesn't queue
+  // a duplicate request.
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Outside-click closes the popup. Listen on `mousedown` (not
+  // `click`) so the close fires BEFORE any nested button's onClick —
+  // closing on click would race against Edit/Delete and could close
+  // before the action fires.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!(e.target instanceof Node)) return;
+      if (popoverRef.current?.contains(e.target)) return;
+      // Don't close on clicks landing on a marker pin — the parent
+      // will swap `previewCommentId` and we'd race.
+      if (e.target instanceof Element && e.target.closest("[aria-label='عرض التعليق']")) {
+        return;
+      }
+      onClose();
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  const displayName = comment.author?.name?.trim() || "غير معروف";
+
+  const handleDeleteClick = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await onDelete();
+      // On success the parent closes the popup → this component
+      // unmounts before the next render. No need to flip
+      // `isDeleting` back; if we DID get here the unmount race
+      // means React drops the state anyway.
+    } catch {
+      // Caller already keeps the popup open on failure so the user
+      // can retry. Re-enable the button.
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <div
+      ref={popoverRef}
+      // Always RTL — this is app chrome (Arabic-first product), not
+      // slide content. Slide direction is irrelevant here. The
+      // comment body div below uses `dir="auto"` so mixed-script
+      // content still flows correctly per first strong character.
+      dir="rtl"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      // Same glass + dim recipe the editor uses — readable on white
+      // slides (via `.in-slide-dim`), border ring from `.glass-modal`,
+      // backdrop blur via Tailwind v4 compositional utility.
+      // NO `.glass-modal` class — it sets `background: transparent`
+      // via the SHORTHAND, which Safari's cascade was treating as
+      // winning over any class-based `background-color` longhand
+      // including `.in-slide-dim`'s. Replaced with inline values so
+      // the background-color has no competing shorthand to lose
+      // against. The inline value is a pre-composed `var(--tq-bg-dim)`
+      // token (not `rgba(var(--tq-bg-rgb), 0.55)`) because Safari
+      // has a long-standing bug where a `var()` holding a comma-
+      // separated value fails to split back into `rgba()`'s argument
+      // list, the whole declaration becomes invalid, and the bg
+      // falls back to transparent. Border uses `--tq-border-glass`
+      // (single token, no nested function), which Safari handles
+      // cleanly.
+      // `.in-slide-popover` carries the dim + hairline border. Class-
+      // based bg (literal rgba in globals.css) so Safari's
+      // backdrop-filter compositor sees a fully-resolved background
+      // colour — inline `var()` references kept rendering transparent
+      // for both popovers on Safari despite valid token definitions.
+      className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      style={{ left, top, width: POPOVER_W }}
+    >
+      {/* Header — avatar visual-right, name+time stacked visual-left
+          under the parent's RTL direction. Matches the new
+          CommentsPanel row layout exactly. */}
+      <div className="flex items-center gap-2">
+        <Avatar
+          name={comment.author?.name ?? null}
+          image={comment.author?.image ?? null}
+          seedId={comment.author?.id ?? null}
+          size={28}
+        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span
+            // NO `dir="auto"` — the popup is forced RTL chrome.
+            // `dir="auto"` would flip a Latin display name (e.g.
+            // "Osama") to LTR locally and the name would snap to
+            // visual-LEFT inside the RTL popup, misaligning the
+            // header row.
+            className="truncate text-xs font-semibold leading-tight text-white"
+          >
+            {displayName}
+          </span>
+          <time
+            className="text-[10px] leading-tight text-white/40"
+            dateTime={comment.createdAt}
+            title={new Date(comment.createdAt).toLocaleString("ar")}
+          >
+            {formatRelativeArabic(comment.createdAt)}
+          </time>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="إغلاق"
+          className="ms-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <span className="material-symbols-outlined text-[16px]">close</span>
+        </button>
+      </div>
+
+      {/* Comment content — preserves user line breaks. Inherits
+          the popup's RTL chrome (NO `dir="auto"`) so the block
+          stays right-aligned even when the comment opens with a
+          Latin word like "Make the title bigger". Unicode BiDi
+          still handles inline glyph order inside the line. */}
+      <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-white/90">
+        {comment.content}
+      </div>
+
+      {/* Footer — Edit + Delete buttons, gated by authorship. Empty
+          (no row at all) when the viewer can do neither, so a
+          comment-only user looking at someone else's marker just
+          sees the read-only window. */}
+      {canEdit || canDelete ? (
+        <div className="mt-3 flex items-center justify-end gap-2 border-t border-white/[0.08] pt-3">
+          {/* Both buttons use `.btn-pill` — the design-system normal-
+              button surface (glass, white text, no brand colour). The
+              earlier red-tinted delete read as a destructive emphasis
+              that the design system doesn't elsewhere use for inline
+              actions (only the dashboard's `TrashConfirmDialog` keeps
+              the red, and only on its confirm CTA). Edit + Delete
+              here are siblings — same visual weight, action
+              identified by glyph + label. */}
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={() => {
+                void handleDeleteClick();
+              }}
+              disabled={isDeleting}
+              aria-busy={isDeleting}
+              className="btn-pill inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {/* Icon morphs to a spinner while the DELETE request is
+                  in flight — same recipe as the toolbar's running-
+                  state spinner. The trash icon disappears so the user
+                  reads the button as "in progress" not "double-click
+                  me". */}
+              {isDeleting ? (
+                <span
+                  aria-hidden
+                  className="spinner h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white"
+                />
+              ) : (
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 14 }}
+                  aria-hidden
+                >
+                  delete
+                </span>
+              )}
+              حذف
+            </button>
+          ) : null}
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="btn-pill inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 14 }}
+                aria-hidden
+              >
+                edit
+              </span>
+              تعديل
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
