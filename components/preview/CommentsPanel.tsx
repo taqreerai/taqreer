@@ -13,7 +13,7 @@
 // fired by the toolbar's regen button (which morphs to an AI icon
 // while drafts exist, see PreviewActionBar).
 
-import type { CommentRow } from "@/lib/types/comment";
+import type { CommentAuthor, CommentRow } from "@/lib/types/comment";
 
 // Same nominal width as SlideNavSidebar — both panels share the
 // fixed slot against the main sidebar's inner edge, so swapping
@@ -30,9 +30,13 @@ export function CommentsPanel({
   comments: CommentRow[];
   slideId: string;
   onClose: () => void;
-  // Click handler for the sticky-footer Apply button. Just exits
-  // comment mode — drafts persist; the toolbar's AI-icon regen
-  // button fires the actual partial regen.
+  // Click handler for the sticky-footer "finish commenting" button.
+  // Despite the historical `onApply` name, this never actually
+  // triggers regen — it just exits comment mode. Drafts persist as
+  // drafts; the toolbar's regen button is what fires the partial
+  // regen for owner / edit. Comment-only viewers also see this
+  // button because their flow is identical: write comments, close
+  // the panel. The owner gets notified separately.
   onApply: () => void;
   // Width of the main app sidebar (80 collapsed, 260 expanded).
   // Same prop SlideNavSidebar takes — keeps the panel docked
@@ -100,9 +104,18 @@ export function CommentsPanel({
             {slideComments.map((c) => (
               <li
                 key={c.id}
-                className="rounded-md border border-white/10 bg-white/5 p-2 text-xs leading-relaxed text-white/90"
+                className="rounded-md border border-white/10 bg-white/5 p-2.5"
               >
-                {c.content}
+                <CommentMeta
+                  author={c.author}
+                  createdAt={c.createdAt}
+                />
+                <div
+                  className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-white/90"
+                  dir="auto"
+                >
+                  {c.content}
+                </div>
               </li>
             ))}
           </ul>
@@ -114,23 +127,117 @@ export function CommentsPanel({
           drafts persist as drafts. The toolbar's regen button takes
           over from here (shows the AI icon and fires the partial
           regen on click). */}
-      {totalDrafts > 0 ? (
-        <div className="border-t border-white/[0.08] pt-3">
-          <button
-            type="button"
-            onClick={onApply}
-            className="btn-gradient flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold"
+      {/* "إنهاء التعليق" — always visible while comment-mode is
+          active. Clicking just exits comment mode; drafts persist.
+          Normal pill (not gradient) because this doesn't trigger a
+          model call — that's the toolbar's regen button. */}
+      <div className="border-t border-white/[0.08] pt-3">
+        <button
+          type="button"
+          onClick={onApply}
+          className="btn-pill flex w-full items-center justify-center gap-2 text-sm"
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "18px" }}
+            aria-hidden
           >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "18px" }}
-            >
-              check
-            </span>
-            تطبيق التعليقات ({totalDrafts})
-          </button>
-        </div>
-      ) : null}
+            check
+          </span>
+          إنهاء التعليق
+        </button>
+      </div>
     </aside>
   );
+}
+
+// ─── Per-comment metadata row ────────────────────────────────────
+//
+// Avatar (or initials fallback) + name + relative-time createdAt.
+// Under `dir="rtl"` the row reads right-to-left visually: avatar on
+// the visual right, then name, with the date floating to the left.
+// `Intl.RelativeTimeFormat` produces a localised relative string
+// ("منذ 3 دقائق") so commenters and viewers across the deck see the
+// same wording regardless of their browser locale.
+
+function CommentMeta({
+  author,
+  createdAt,
+}: {
+  author: CommentAuthor | null;
+  createdAt: string;
+}) {
+  const displayName = author?.name?.trim() || author?.email || "غير معروف";
+  return (
+    <div className="flex items-center gap-2">
+      <Avatar author={author} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[11px] font-medium text-white" dir="auto">
+          {displayName}
+        </div>
+      </div>
+      <time
+        className="shrink-0 text-[10px] text-white/40"
+        dateTime={createdAt}
+        title={new Date(createdAt).toLocaleString("ar")}
+      >
+        {formatRelativeArabic(createdAt)}
+      </time>
+    </div>
+  );
+}
+
+function Avatar({ author }: { author: CommentAuthor | null }) {
+  // Image when available, otherwise first letter of name/email on a
+  // brand-gradient fallback. 24×24 keeps the row compact while still
+  // being visually distinct from the comment body.
+  if (author?.image) {
+    return (
+      <img
+        src={author.image}
+        alt=""
+        width={24}
+        height={24}
+        className="h-6 w-6 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  const seed = (author?.name || author?.email || "?").trim();
+  const initial = seed.charAt(0).toUpperCase() || "?";
+  return (
+    <div
+      aria-hidden
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+      style={{
+        background: "linear-gradient(135deg, #370BF4, #E036B8)",
+      }}
+    >
+      {initial}
+    </div>
+  );
+}
+
+// Compact Arabic relative-time. Falls back to a short date for
+// anything older than ~30 days where "منذ شهرين" reads weirder than
+// a date stamp. Uses Intl APIs for the locale-correct plural forms.
+function formatRelativeArabic(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const now = Date.now();
+  const diffSec = Math.round((then - now) / 1000);
+  const absSec = Math.abs(diffSec);
+
+  const rtf = new Intl.RelativeTimeFormat("ar", { numeric: "auto" });
+  if (absSec < 60) return rtf.format(diffSec, "second");
+  if (absSec < 3600) return rtf.format(Math.round(diffSec / 60), "minute");
+  if (absSec < 86_400) return rtf.format(Math.round(diffSec / 3600), "hour");
+  if (absSec < 86_400 * 30) {
+    return rtf.format(Math.round(diffSec / 86_400), "day");
+  }
+  // Beyond a month: absolute date is clearer than "منذ X شهراً".
+  return new Date(iso).toLocaleDateString("ar", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }

@@ -19,7 +19,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 import { inngest } from "@/inngest/client";
 
 type SaveResponse =
@@ -38,18 +38,15 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<SaveResponse>> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id: projectId } = await params;
+  // Phase 15.A — edit access required.
+  const access = await resolveProjectAccess(projectId, "edit");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
-  const { id: projectId } = await params;
-
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, user: { supabaseUserId: user.id } },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     select: {
       id: true,
       presentation: {

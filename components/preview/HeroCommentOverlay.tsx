@@ -46,6 +46,8 @@ export function HeroCommentOverlay({
   onCreate,
   onUpdate,
   onDelete,
+  canModerate,
+  currentUserId,
 }: {
   slideId: string;
   // ALL drafts — filtered to this slide internally so the caller
@@ -60,6 +62,15 @@ export function HeroCommentOverlay({
   onCreate: (input: { slideId: string; bounds: CommentBounds; content: string }) => Promise<void>;
   onUpdate: (input: { commentId: string; content?: string; bounds?: CommentBounds }) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
+  // True when the viewer is owner / edit — they can delete any
+  // comment (moderation). False for comment-only viewers, who can
+  // only delete comments they authored. Phase 15.D.
+  canModerate: boolean;
+  // Current viewer's prisma User row id, used to compare against
+  // each comment's authorId for the per-row delete affordance.
+  // Null for anonymous public-view (they don't reach commentMode
+  // anyway, but the type allows the prop to be omitted upstream).
+  currentUserId: string | null;
 }) {
   const [drag, setDrag] = useState<DragState>(null);
   const [editor, setEditor] = useState<EditorState>(null);
@@ -281,27 +292,42 @@ export function HeroCommentOverlay({
         />
       ) : null}
 
-      {/* Editor popover — anchored to the bounds. */}
-      {editor ? (
-        <CommentEditor
-          editor={editor}
-          scale={scale}
-          canvasW={canvasW}
-          canvasH={canvasH}
-          direction={direction}
-          error={editorError}
-          onContentChange={(content) => {
-            if (editorError) setEditorError(null);
-            setEditor((prev) => (prev ? { ...prev, content } : prev));
-          }}
-          onSave={handleSave}
-          onCancel={() => {
-            setEditor(null);
-            setEditorError(null);
-          }}
-          onDelete={editor.kind === "existing" ? handleDelete : undefined}
-        />
-      ) : null}
+      {/* Editor popover — anchored to the bounds.
+          Per-comment delete affordance is gated by authorship:
+            • owner / edit (canModerate) → see delete on any comment
+            • comment-only → see delete ONLY on their own comments
+          New-comment editor (kind === "new") has no delete button by
+          construction (nothing to delete yet). The server route also
+          enforces the same rule as defense-in-depth. */}
+      {editor ? (() => {
+        const isExisting = editor.kind === "existing";
+        const isAuthor =
+          isExisting &&
+          currentUserId !== null &&
+          comments.find((c) => c.id === editor.commentId)?.authorId ===
+            currentUserId;
+        const canDeleteThis = isExisting && (canModerate || isAuthor);
+        return (
+          <CommentEditor
+            editor={editor}
+            scale={scale}
+            canvasW={canvasW}
+            canvasH={canvasH}
+            direction={direction}
+            error={editorError}
+            onContentChange={(content) => {
+              if (editorError) setEditorError(null);
+              setEditor((prev) => (prev ? { ...prev, content } : prev));
+            }}
+            onSave={handleSave}
+            onCancel={() => {
+              setEditor(null);
+              setEditorError(null);
+            }}
+            onDelete={canDeleteThis ? handleDelete : undefined}
+          />
+        );
+      })() : null}
     </div>
   );
 }
@@ -407,7 +433,18 @@ function CommentEditor({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       className="glass-modal backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
-      style={{ left, top, width: POPOVER_W }}
+      style={{
+        left,
+        top,
+        width: POPOVER_W,
+        // Dark dim — same trick SlidePill uses so in-slide chrome
+        // stays readable against any slide background (white / light
+        // palette decks would otherwise erase the popover into the
+        // canvas). `--tq-bg` is the page background token; mixing it
+        // at 55% gives a dim tint that the panel's own backdrop-blur
+        // can still saturate the slide's colours through.
+        background: "color-mix(in srgb, var(--tq-bg) 55%, transparent)",
+      }}
     >
       {error ? (
         <div

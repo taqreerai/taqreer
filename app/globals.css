@@ -1514,38 +1514,24 @@ body {
 
 /* ─── Modal dim overlay ───────────────────────────────────────────
    Shared base class for the full-screen darkening layer behind every
-   modal panel (lightbox, save-as-template, notifications, project
-   lightbox).
+   modal panel (lightbox, save-as-template, share, notifications,
+   project lightbox).
 
-   The class is now a STRUCTURAL marker only — no background, no
-   filter. Consumers MUST pair it with the `backdrop-brightness-*`
-   Tailwind utility for the actual page-darkening (e.g.
-   `backdrop-brightness-75`). The class still exists so future
-   modal pairs can be grepped, and so any cross-cutting fix
-   (animation, click-target hit area, anything) lives in one
-   place again later if needed.
+   Single canonical tint (user-locked 2026-05-23):
+     color-mix(in oklab, var(--color-black) 70%, transparent)
+   = 70% opaque black mixed in oklab gamma space, alpha 0.7. oklab
+   gives a perceptually-uniform darken across any hue behind the
+   panel — neutral against the brand magenta + violet aurora that
+   the dashboard renders. Every modal in the app should consume this
+   class instead of inlining a black/30 / brightness-50 / etc.
+   variant — the dim contract is global, not per-modal.
 
-   WHY no solid background:
-   A semi-transparent dark background (the 2026-05-22 attempt) AND a
-   backdrop-filter brightness compound — the page ends up nearly
-   black behind the panel, and the panel's own backdrop-blur has no
-   colour left to blur with. Visually the modal looks like a flat
-   dark card with no glass effect. Removing the bg means the dim
-   is purely a "darken what's behind via backdrop-filter brightness"
-   layer; the panel above it then blurs a darkened-but-vivid page
-   correctly.
-
-   WHY the brightness MUST come from a Tailwind utility, not raw
-   CSS: Tailwind v4 ships a universal reset that initialises
-   `--tw-backdrop-*` vars on every element + composes them into a
-   single `backdrop-filter: var(--tw-backdrop-blur)
-   var(--tw-backdrop-brightness) …` rule. Raw `backdrop-filter:
-   brightness(…)` in this class loses to that composition. Same
-   gotcha that drives the existing `--backdrop-blur-glass` token. */
+   No backdrop-filter is composed here. The dim is a flat tint, the
+   panel above provides the glass blur on its own surface; layering
+   filters here would compound darkening with the panel's blur and
+   wash out the brand visuals it's supposed to sample. */
 .modal-dim {
-  /* Intentionally empty — see header comment. The class is kept as
-     a marker so modal dims are greppable + future cross-cutting
-     concerns have a home. */
+  background-color: color-mix(in oklab, var(--color-black) 70%, transparent);
 }
 
 /* ─── Card Danger Variant ─── */

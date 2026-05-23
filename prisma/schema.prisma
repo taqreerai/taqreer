@@ -27,6 +27,8 @@ model User {
   sessions       Session[]
   subscriptions  Subscription[]
   usageEvents    UsageEvent[]
+  projectShares  ProjectShare[]
+  comments       Comment[]
 }
 
 model Account {
@@ -102,6 +104,21 @@ model Project {
   templateId    String?
   brandKitId    String?
   aiPrompt      String?
+  // Share state. Phase 15.1 (2026-05-23).
+  //
+  // `publicAccessLevel` enables "anyone with the link" semantics —
+  // null means the link is private (owner + per-invitee shares
+  // only). When set, any authenticated user reading via the public
+  // route gets at most that role (`view` / `comment` / `edit`).
+  // Anonymous (signed-out) callers cap at `view`, never above —
+  // enforced server-side, not from the column.
+  //
+  // `hideBrandingBadge` is a paid-tier toggle for white-labelling
+  // the embedded preview chrome. Field exists from day one so the
+  // share modal can show/disable the control behind a future
+  // entitlement check.
+  publicAccessLevel ProjectAccessLevel?
+  hideBrandingBadge Boolean       @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -109,8 +126,61 @@ model Project {
   presentation  Presentation?
   files         File[]
   jobs          Job[]
+  shares        ProjectShare[]
 
   @@index([userId, isFavorite])
+}
+
+// "Anyone with the link" + per-invitee role on a Project. Three
+// levels: read-only (`view`), can comment (`comment`), and full
+// edit (`edit`). `edit` triggers auto-clone on accept — the
+// invitee gets their OWN copy of the deck, not a shared editable
+// pointer; see /invitations/[token]/accept handler.
+enum ProjectAccessLevel {
+  view
+  comment
+  edit
+}
+
+// Per-invitee share row. Created on owner action via
+// POST /api/projects/[id]/share; resolved (userId populated,
+// acceptedAt stamped) when the invitee opens the invite URL +
+// matches the token to their logged-in email. `inviteToken` is
+// the one-time URL component (`/invitations/[token]/accept`)
+// emailed via Resend; nullable because revoked rows keep the
+// historical row but drop the token to prevent re-acceptance.
+model ProjectShare {
+  id           String              @id @default(cuid())
+  projectId    String
+  email        String
+  // Resolved on accept. Stays null until the invitee actually
+  // opens the invite URL — bare invites without a matching
+  // Supabase account still surface in the share modal but have
+  // no user yet.
+  userId       String?
+  accessLevel  ProjectAccessLevel
+  // The owner's User.id at invite time. Distinct from
+  // Project.userId so audit trails survive an ownership transfer
+  // (a feature we don't have yet — preserves the option).
+  invitedBy    String
+  invitedAt    DateTime            @default(now())
+  acceptedAt   DateTime?
+  // One-time URL token. Set on creation, nulled on revoke so a
+  // stale email link can't grant access after the owner kicks
+  // someone out. `@unique` enforces collision-free generation.
+  inviteToken  String?             @unique
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // The user who accepted the invite — null until accept. Cascade
+  // on user delete so we don't keep dangling rows pointing at
+  // deleted accounts (the share's email field still preserves the
+  // audit trail of "X was once invited" via the email column).
+  user         User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Owner can have one row per invitee — re-inviting the same
+  // email upserts (changes accessLevel) rather than stacking
+  // rows.
+  @@unique([projectId, email])
+  @@index([userId])
 }
 
 model Presentation {
@@ -217,6 +287,12 @@ model Comment {
   presentationId String
   versionId      String
   slideId        String
+  // Comment author. Set on create from the authenticated user (the
+  // route looks up the prisma user via supabaseUserId). Nullable
+  // because pre-existing rows from before Phase 15.B don't have an
+  // author — we backfill on read by rendering "غير معروف" instead
+  // of breaking the panel. New comments always have authorId set.
+  authorId       String?
   areaId         String?
   elementIds     String[]
   boundsJson     Json?
@@ -226,9 +302,15 @@ model Comment {
   createdAt      DateTime            @default(now())
   presentation   Presentation        @relation(fields: [presentationId], references: [id], onDelete: Cascade)
   version        PresentationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  // Set onDelete: SetNull so deleting an account preserves the
+  // comment's content (slide review history still readable to the
+  // owner) but anonymises the author row. Same policy ProjectShare
+  // uses on its userId relation.
+  author         User?               @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([presentationId, versionId, status])
   @@index([slideId])
+  @@index([authorId])
 }
 
 model Job {

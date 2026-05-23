@@ -23,7 +23,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 import { isQuality, type Quality } from "@/lib/types/quality";
 
 type RegenPayload = {
@@ -44,15 +44,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; slideKey: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id: projectId, slideKey } = await params;
+  // Phase 15.A — edit access required.
+  const access = await resolveProjectAccess(projectId, "edit");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
   // Body is OPTIONAL — most callers fire `{ replay: false }` and the
   // legacy clean-regen path omitted the body entirely. We need to
   // distinguish "no body" (default to replay=false) from "malformed
@@ -98,8 +95,8 @@ export async function POST(
   }
   const replay = body?.replay === true;
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, user: { supabaseUserId: user.id } },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     include: {
       presentation: {
         include: {

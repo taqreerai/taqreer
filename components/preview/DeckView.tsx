@@ -37,8 +37,23 @@ import { createClient } from "@/lib/supabase/client";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { notificationStore } from "@/lib/notifications/store";
 
+import type { ProjectRole } from "@/lib/api/project-access";
+
 type Props = {
   projectId: string;
+  // Role of the current viewer (Phase 15.B). "owner" / "edit" = full
+  // editor UI. "comment" = view + comments + flat (non-AI) comment
+  // button, no regen / save / lock. "view" = pure read-only — no
+  // toolbar mutation buttons, no comments, no slide-pill mutations.
+  // Driven server-side in the page via resolveProjectAccess.
+  role: ProjectRole;
+  // Caller's prisma User row id — null for anonymous public-view
+  // (no login). Used for client-side authorship comparisons:
+  // currently the per-comment delete affordance hides for comment-
+  // only users when comment.authorId !== currentUserId. Server
+  // routes still enforce via their own auth checks (defense in
+  // depth); this prop is for UX, not security.
+  currentUserId: string | null;
   projectTitle: string;
   presentationId: string | null;
   initialProjectStatus: string;
@@ -194,6 +209,8 @@ const TOOLBAR_POSITION_SPRING = { type: "spring" as const, stiffness: 180, dampi
 
 export function DeckView({
   projectId,
+  role,
+  currentUserId,
   projectTitle,
   presentationId,
   initialProjectStatus,
@@ -207,6 +224,14 @@ export function DeckView({
   initialFormat,
   initialMainSidebarWidth = 260,
 }: Props) {
+  // Capability flags derived from role — passed/used wherever the
+  // UI gates a mutation affordance. View-only sees the deck and
+  // can export; comment can also create comments; edit/owner can
+  // do anything (regen, save, lock, restore, lock-all). Computing
+  // once here keeps the descendants from needing to know about the
+  // role taxonomy.
+  const canEdit = role === "owner" || role === "edit";
+  const canComment = canEdit || role === "comment";
   const router = useRouter();
   const pathname = usePathname();
   // Initial state seeds from server props. The parent (re)keys this component
@@ -1664,8 +1689,12 @@ export function DeckView({
               // EN decks flip to LTR so the visual #1 lands on the left
               // (user feedback 2026-05-20). Defaults to "ar" if missing.
               language={manifest!.language === "en" ? "en" : "ar"}
-              onLockAll={() => bulkSetLock(true)}
-              onUnlockAll={() => bulkSetLock(false)}
+              // Bulk lock pill is hidden for non-edit roles (SlideNavSidebar
+              // already auto-hides when both callbacks are omitted). Same
+              // gating logic as the per-slide lock toggle in NavItem,
+              // which checks canEdit before firing onToggleLock.
+              onLockAll={canEdit ? () => bulkSetLock(true) : undefined}
+              onUnlockAll={canEdit ? () => bulkSetLock(false) : undefined}
             />
           </motion.div>
         )}
@@ -1691,6 +1720,7 @@ export function DeckView({
               <div className="pointer-events-auto">
                 <PreviewActionBar
                   projectId={projectId}
+                  role={role}
                   projectTitle={projectTitle}
                   manifest={manifest!}
                   commentMode={commentMode}
@@ -1781,7 +1811,7 @@ export function DeckView({
               the user is in comment mode (the comment overlay
               owns the canvas; the pill would steal cursor focus
               from drag-to-draw). */}
-          {!isFocusedRegenerating && !commentMode ? (
+          {!isFocusedRegenerating && !commentMode && canEdit ? (
             <SlidePill
               currentVersionNumber={
                 slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
@@ -1972,6 +2002,11 @@ export function DeckView({
               onCreate={handleCreateComment}
               onUpdate={handleUpdateComment}
               onDelete={handleDeleteComment}
+              // For per-comment delete affordance gating: a viewer
+              // who's NOT canEdit can only delete their own comments.
+              // owner / edit see delete on everything (moderation).
+              canModerate={canEdit}
+              currentUserId={currentUserId}
             />
           ) : null}
         </motion.div>

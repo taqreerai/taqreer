@@ -58,7 +58,7 @@ export function TemplateDeleteConfirmDialog({
             onClick={() => {
               if (!busy) onCancel();
             }}
-            className="modal-dim backdrop-brightness-75 fixed inset-0 z-[1200]"
+            className="modal-dim fixed inset-0 z-[1200]"
           />
 
           {/* Panel wrapper — sibling of the dim. NOT animated (the

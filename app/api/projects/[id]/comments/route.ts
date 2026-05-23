@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import {
+  resolveProjectAccess,
+  type ProjectRole,
+} from "@/lib/api/project-access";
 
 // Drag-box coordinates are persisted in slide-space — slide width/height
 // depending on the deck's format. 16:9 → 1920×1080; 9:16 → 1080×1920.
@@ -31,27 +34,39 @@ function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
 
-// Resolve an authed user + project + current version in one shot. Returns
-// null when the project isn't visible to the caller — caller emits 401/404.
-async function resolveContext(projectId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" as const, status: 401 };
-
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, user: { supabaseUserId: user.id } },
-    include: {
-      presentation: { select: { id: true, currentVersionId: true } },
-    },
+// Resolve authed user + role + presentation/version in one shot. Phase
+// 15.A: gated by the minimum required role (comment for create / read /
+// delete in this file; "view" callers don't see comments at all).
+// The `authorPrismaUserId` field is needed by POST to stamp the
+// new comment with its author (Phase 15.D author display).
+async function resolveContext(projectId: string, requiredRole: ProjectRole) {
+  const access = await resolveProjectAccess(projectId, requiredRole);
+  if ("error" in access) {
+    return { error: access.error, status: access.status };
+  }
+  const presentation = await prisma.presentation.findUnique({
+    where: { projectId },
+    select: { id: true, currentVersionId: true },
   });
-  if (!project || !project.presentation || !project.presentation.currentVersionId) {
-    return { error: "Project not found" as const, status: 404 };
+  if (!presentation || !presentation.currentVersionId) {
+    return { error: "Project not found" as const, status: 404 as const };
+  }
+  // Translate the supabase userId on `access.user.id` into the
+  // prisma User row's id. The two are distinct: supabaseUserId is
+  // the auth.users foreign key; we want the application User row.
+  let authorPrismaUserId: string | null = null;
+  if (access.user.id) {
+    const prismaUser = await prisma.user.findUnique({
+      where: { supabaseUserId: access.user.id },
+      select: { id: true },
+    });
+    authorPrismaUserId = prismaUser?.id ?? null;
   }
   return {
-    presentationId: project.presentation.id,
-    versionId: project.presentation.currentVersionId,
+    role: access.role,
+    presentationId: presentation.id,
+    versionId: presentation.currentVersionId,
+    authorPrismaUserId,
   };
 }
 
@@ -60,7 +75,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const ctx = await resolveContext(id);
+  const ctx = await resolveContext(id, "comment");
   if ("error" in ctx) {
     return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   }
@@ -70,7 +85,10 @@ export async function GET(
   const requestedVersionId = url.searchParams.get("versionId") ?? ctx.versionId;
 
   // Drafts only — applied comments are immutable history (the prompt
-  // that was actually sent to Claude) and shouldn't surface to the editor.
+  // that was actually sent to Claude) and shouldn't surface to the
+  // editor. JOIN the author for the panel's per-row display
+  // (name / avatar / createdAt). Author is null for pre-Phase-15.D
+  // rows; the UI shows "غير معروف" in that case.
   const comments = await prisma.comment.findMany({
     where: {
       presentationId: ctx.presentationId,
@@ -78,6 +96,11 @@ export async function GET(
       status: "draft",
     },
     orderBy: { createdAt: "asc" },
+    include: {
+      author: {
+        select: { id: true, name: true, email: true, image: true },
+      },
+    },
   });
 
   return NextResponse.json({ comments, versionId: requestedVersionId });
@@ -88,7 +111,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const ctx = await resolveContext(id);
+  const ctx = await resolveContext(id, "comment");
   if ("error" in ctx) {
     return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   }
@@ -110,6 +133,15 @@ export async function POST(
       content: parsed.data.content,
       boundsJson: toJson(parsed.data.boundsJson),
       status: "draft",
+      // Stamp authorship at create-time. Null for the rare case the
+      // user has no prisma row yet (user-sync hasn't fired) — the
+      // comment still saves; the panel just renders "غير معروف".
+      authorId: ctx.authorPrismaUserId,
+    },
+    include: {
+      author: {
+        select: { id: true, name: true, email: true, image: true },
+      },
     },
   });
 

@@ -140,7 +140,7 @@ export function AllNotificationsModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="modal-dim backdrop-brightness-75 fixed inset-0 z-[1000]"
+            className="modal-dim fixed inset-0 z-[1000]"
           />
           {/* Panel wrapper — motion.div so AnimatePresence tracks
               its enter/exit and the panel fades with the dim instead

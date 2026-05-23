@@ -18,7 +18,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 
 type LockPayload = {
   locked?: boolean;
@@ -28,16 +28,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; slideKey: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id: projectId, slideKey } = await params;
+  // Phase 15.A — edit access required.
+  const access = await resolveProjectAccess(projectId, "edit");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
-  const { id: projectId, slideKey } = await params;
   const body = (await request.json().catch(() => null)) as LockPayload | null;
   // Malformed / missing payload returns 400 instead of falling
   // through. Previously `({})` default + `body.locked === true`
@@ -51,12 +48,9 @@ export async function POST(
   }
   const shouldLock = body.locked;
 
-  // Verify ownership AND grab presentation id in one round-trip.
-  const project = await prisma.project.findFirst({
-    where: {
-      id: projectId,
-      user: { supabaseUserId: user.id },
-    },
+  // Grab presentation id (access already verified).
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     include: {
       presentation: { select: { id: true } },
     },

@@ -24,6 +24,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { DeckView } from "@/components/preview/DeckView";
 import { loadProject, isDeckReady } from "@/lib/project/load-project";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,14 @@ export default async function ProjectPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
+  // Role-aware gate (Phase 15.A). Owner, accepted invitee (any role),
+  // or public-view link viewer pass. Anyone else gets the same 404
+  // the layout serves for non-existent projects — never leaks the
+  // existence of a private deck. The resolved `role` is threaded
+  // into DeckView so the editor can hide save / regen / lock / etc.
+  // affordances for non-edit viewers (Phase 15.B).
+  const access = await resolveProjectAccess(projectId, "view");
+  if ("error" in access) notFound();
   const data = await loadProject(projectId);
   if (!data) notFound();
 
@@ -58,6 +67,8 @@ export default async function ProjectPage({
     <DeckView
       key={deckKey}
       projectId={projectId}
+      role={access.role}
+      currentUserId={access.user.prismaId}
       initialMainSidebarWidth={initialMainSidebarWidth}
       {...data}
     />

@@ -137,7 +137,7 @@ export function TemplateLightbox({
             // brightness so the panel's own backdrop-blur has actual
             // page content (darkened) to sample. See globals.css
             // for the full reasoning.
-            className="modal-dim backdrop-brightness-75 fixed inset-0 z-[2000]"
+            className="modal-dim fixed inset-0 z-[2000]"
           />
 
           {/* Panel wrapper — `motion.div` so AnimatePresence tracks

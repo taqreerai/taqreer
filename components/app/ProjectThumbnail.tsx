@@ -55,6 +55,7 @@ import type { SlideFormat } from "@/lib/schema/slide";
 import { ProjectActionsMenu } from "@/components/app/ProjectActionsMenu";
 import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";
 import { SaveAsTemplateDialog } from "@/components/app/SaveAsTemplateDialog";
+import { ShareDialog } from "@/components/app/ShareDialog";
 
 // Pixels of cursor travel required to consider the user actually
 // scrubbing (not just hovering at rest). ~2 trackpad ticks.
@@ -157,6 +158,10 @@ export function ProjectThumbnail({
   // from the actions menu. The modal handles its own preview fetch +
   // save POST; we just track open/closed here.
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  // Share modal — opens when the user picks "مشاركة" from the actions
+  // menu. ShareDialog handles its own fetch + mutations against
+  // /api/projects/[id]/share; we just track open/closed here.
+  const [shareOpen, setShareOpen] = useState(false);
 
   // Eagerly preload the FIRST FEW slide thumbnails on mount so the
   // initial hover-scrub feels instant. Bounded to the first
@@ -286,9 +291,7 @@ export function ProjectThumbnail({
   };
 
   const handleShare = () => {
-    // Placeholder for step 15. Logged so a stray click on a
-    // pre-modal build doesn't look broken-silent.
-    console.info("[share] modal not implemented yet (step 15)");
+    setShareOpen(true);
   };
 
   // Rename ↔ submit flow. Enter / blur commits, Escape cancels.
@@ -598,6 +601,13 @@ export function ProjectThumbnail({
           if (!trashBusy) setTrashOpen(false);
         }}
         onConfirm={handleConfirmTrash}
+      />
+
+      <ShareDialog
+        open={shareOpen}
+        projectId={projectId}
+        projectTitle={titleState}
+        onClose={() => setShareOpen(false)}
       />
     </div>
   );

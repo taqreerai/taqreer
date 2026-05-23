@@ -184,7 +184,7 @@ debugging never opens working-session code, and vice versa.
 | 12b | Wire isFavorite toggle from 3-dots menu | ✅ shipped |
 | 14 | Wire "Save copy as template" menu item | ✅ shipped (Phase A → D of templates flow, see §"Templates feature" below) |
 | 8b | Move `slideCount` + `dominantColor` capture from `/save` route → deck-generate completion | ⏳ next |
-| **13** | **`/create/from/[projectId]` content-only page** — clone an existing project's content into a fresh create flow. Different from templates (which carry only brand): "create from project" carries the CONTENT (brief / text) so the user can re-roll the same source through a new brand. | ⏳ **next up** |
+| 13 | `/create/from/[projectId]` content-only page (clone an existing project's content into a fresh create flow). **Dropped 2026-05-23** — the regen flow on an open project already covers the "I want a variation" use case (user opens deck, clicks regen, gets a new generation pass against the same content). Adding a separate "create from project" path would add menu clutter for a niche need. | 🚫 dropped |
 
 ---
 

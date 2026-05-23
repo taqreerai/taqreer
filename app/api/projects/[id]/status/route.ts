@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 
 type Progress = {
   stage: "thinking" | "designing" | "validating" | "saving";
@@ -49,16 +49,12 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id } = await params;
+  // Phase 15.A — view access required (poller runs for all viewers).
+  const access = await resolveProjectAccess(id, "view");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
   // Optional ?versionId= — when provided, the poller wants the status of
   // a SPECIFIC version (e.g. the partial-regen target). Without it, two
   // close-together partial regens could let `take: 1` mask completion of
@@ -75,13 +71,8 @@ export async function GET(
         take: 1,
         select: { id: true, status: true, slideJson: true },
       };
-  const project = await prisma.project.findFirst({
-    where: {
-      id,
-      user: {
-        supabaseUserId: user.id,
-      },
-    },
+  const project = await prisma.project.findUnique({
+    where: { id },
     select: {
       status: true,
       presentation: {

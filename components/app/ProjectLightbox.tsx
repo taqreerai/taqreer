@@ -178,7 +178,7 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="modal-dim backdrop-brightness-75 fixed inset-0 z-[2000]"
+            className="modal-dim fixed inset-0 z-[2000]"
           />
 
           {/* Content layer — sibling of the dim, fills the viewport
