@@ -64,7 +64,17 @@ export type ProjectBroadcastEvent =
   | "slide.regen.started"
   | "slide.regen.finished"
   | "deck.regen.started"
-  | "deck.regen.finished";
+  | "deck.regen.finished"
+  // Per-slide lock toggle fired by /slides/[slideKey]/lock. Single
+  // slide pulse — bulk lock/unlock uses `slides.locks.bulk-changed`
+  // to avoid spamming N broadcasts when the user lock-alls a 20-slide
+  // deck.
+  | "slide.lock.changed"
+  // Bulk lock-all / unlock-all from /slides/lock-all. Single event
+  // applies to every slide in the deck — clients flip their entire
+  // slideStates map's `lockedAt` to a fresh timestamp (when
+  // `allLocked: true`) or null (when false).
+  | "slides.locks.bulk-changed";
 
 const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "comment.created",
@@ -73,6 +83,8 @@ const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "slide.regen.finished",
   "deck.regen.started",
   "deck.regen.finished",
+  "slide.lock.changed",
+  "slides.locks.bulk-changed",
 ];
 
 // Wire payload shapes. Server-broadcast helper enforces the same shapes.
@@ -99,6 +111,24 @@ export type ProjectBroadcastPayloadMap = {
     actorPrismaUserId: string | null;
   };
   "deck.regen.finished": {
+    actorPrismaUserId: string | null;
+  };
+  "slide.lock.changed": {
+    slideKey: string;
+    // ISO timestamp when newly locked, null when unlocked.
+    lockedAt: string | null;
+    actorPrismaUserId: string | null;
+  };
+  "slides.locks.bulk-changed": {
+    // Applies to every slide in the deck.
+    //   true  → set lockedAt to the broadcast's `lockedAt` field
+    //   false → clear lockedAt on every row
+    allLocked: boolean;
+    // ISO timestamp the server used as the bulk lock-at value.
+    // Null when allLocked is false (no point sending a timestamp
+    // for unlock). Clients trust this rather than minting their own
+    // so the value matches what's persisted server-side.
+    lockedAt: string | null;
     actorPrismaUserId: string | null;
   };
 };
@@ -191,6 +221,8 @@ export function openProjectChannel(
     "slide.regen.finished": [],
     "deck.regen.started": [],
     "deck.regen.finished": [],
+    "slide.lock.changed": [],
+    "slides.locks.bulk-changed": [],
   };
   const presenceSubscribers: Array<(state: ViewerPresence) => void> = [];
 

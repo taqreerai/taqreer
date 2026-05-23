@@ -162,6 +162,36 @@ export async function POST(
     );
   }
 
+  // Lock check — a locked slide is a "finalised" slide; the product
+  // contract is that lock freezes the slide against further
+  // modifications, including new comment markers. The client gates
+  // the comment overlay on `slideStates[slideKey].lockedAt` already,
+  // but we ALSO enforce server-side so a stale tab (slide locked by
+  // a peer mid-session, broadcast not yet received) can't slip a
+  // comment through.
+  //
+  // 423 = Locked. The fetch closer in DeckView's optimistic create
+  // path surfaces this via `throwApiError` — matching the 409 / 401
+  // / 404 handling pattern already there. Falls through to the
+  // generic Arabic fallback if neither side surfaces a specific
+  // string, but the response shape includes a message for explicit
+  // handling.
+  const lockState = await prisma.slideState.findUnique({
+    where: {
+      presentationId_slideKey: {
+        presentationId: ctx.presentationId,
+        slideKey: parsed.data.slideId,
+      },
+    },
+    select: { lockedAt: true },
+  });
+  if (lockState?.lockedAt) {
+    return NextResponse.json(
+      { error: "Slide is locked — unlock it before adding comments." },
+      { status: 423 },
+    );
+  }
+
   const created = await prisma.comment.create({
     data: {
       presentationId: ctx.presentationId,

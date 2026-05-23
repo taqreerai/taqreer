@@ -484,7 +484,7 @@ export async function POST(request: Request) {
         },
       });
 
-      return { project, presentation, version, job };
+      return { project, presentation, version, job, dbUser };
     });
 
     try {
@@ -495,6 +495,12 @@ export async function POST(request: Request) {
           presentationId: result.presentation.id,
           versionId: result.version.id,
           jobId: result.job.id,
+          // Phase 16.D — actor for `deck.regen.{started,finished}`.
+          // On initial create no other collaborator can be on the
+          // project yet (it was just created); the broadcast still
+          // fires harmlessly and the field's there for downstream
+          // notification fan-out (Phase 16.E will reuse it).
+          actorPrismaUserId: result.dbUser.id,
           ...eventPayload,
         },
       });

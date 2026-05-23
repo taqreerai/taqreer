@@ -14,6 +14,7 @@ import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
 import { generateTemplateName } from "@/lib/template/generate-name";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -145,6 +146,12 @@ type DeckGenerateEvent = {
   // User-picked generation quality preset. Maps to model + thinking +
   // effort below. Optional / unknown values fall back to "medium".
   quality?: "fast" | "medium" | "quality" | "extreme";
+  // Prisma User row id of the viewer who triggered the run. Plumbed
+  // into Phase 16.D `deck.regen.{started,finished}` broadcasts so
+  // each receiving client can skip its own self-echo. Optional for
+  // backwards compat + the initial-create path where no collaborator
+  // can possibly be listening yet (broadcast still fires harmlessly).
+  actorPrismaUserId?: string | null;
 };
 
 function extractJson(text: string): string {
@@ -672,6 +679,14 @@ export const deckGenerate = inngest.createFunction(
   async ({ event, step, logger }) => {
     const data = event.data as DeckGenerateEvent;
     const { projectId, versionId, jobId } = data;
+    const actorPrismaUserId = data.actorPrismaUserId ?? null;
+
+    // Phase 16.D revised — NO `deck.regen.started` broadcast for
+    // the same reason as the partial regen: keeping observers
+    // productive on the previous version of the deck during the
+    // generate window. Only the finished broadcast (below) fires
+    // the router.refresh that swaps them onto the new version.
+
     // Resolve quality preset → model + thinking + effort. Falls back
     // to "medium" via paramsForQuality's default branch when missing
     // (older queued jobs predating this field).
@@ -1242,6 +1257,19 @@ export const deckGenerate = inngest.createFunction(
             logger.warn("job_update_failed", { jobId, error: String(error) });
           });
       }
+    });
+
+    // Phase 16.D — fire `deck.regen.finished` WITHOUT awaiting (same
+    // reason as the started broadcast above). The Inngest function
+    // returns, the broadcast finishes asynchronously, and observers
+    // pick up the new project status via their `router.refresh()`
+    // handler.
+    broadcastToProject(projectId, "deck.regen.finished", {
+      actorPrismaUserId,
+    }).catch((err) => {
+      logger.warn("broadcast deck.regen.finished failed", {
+        error: String(err),
+      });
     });
 
     return { success: true, projectId };

@@ -13,6 +13,7 @@
 // chrome (header + "see all" link + empty state) around the grid.
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   DashboardEmptyState,
   DashboardWidget,
@@ -33,10 +34,13 @@ export function RecentProjects({
 }) {
   // Optimistic-delete tracking lives here (NOT inside ProjectsGrid)
   // so the filter runs BEFORE the cap — without this ordering a
-  // delete would leave a hole. The dashboard query is already capped
-  // at 6 on the server, so deletes naturally trim to 5/4/3/...
-  // without a backfill seventh item. Acceptable; users see fewer
-  // tiles until they navigate away and back.
+  // delete would leave a hole. The dashboard query is server-capped
+  // at 6; the optimistic set hides the deleted tile immediately
+  // while `router.refresh()` re-runs the SSR query and backfills
+  // the 7th-most-recent project into the empty slot. Without the
+  // refresh the grid would stick at 5 tiles until next navigation
+  // (the bug user flagged 2026-05-24).
+  const router = useRouter();
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
 
   const visible = projects
@@ -55,13 +59,20 @@ export function RecentProjects({
       <ProjectsGrid
         projects={visible}
         gridClassName="grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3"
-        onDeleted={(id) =>
+        onDeleted={(id) => {
+          // Two-step: (1) optimistic hide via the local set so the
+          // tile disappears INSTANTLY (no flash of the deleted card
+          // while the SSR round-trip is in flight); (2) router.refresh
+          // re-runs the dashboard's projects query — the deleted row
+          // is gone server-side, and the next-most-recent project
+          // moves into slot 6, filling the hole.
           setDeletedIds((prev) => {
             const next = new Set(prev);
             next.add(id);
             return next;
-          })
-        }
+          });
+          router.refresh();
+        }}
         emptyState={
           <DashboardEmptyState
             icon="add_circle"

@@ -208,6 +208,9 @@ export async function POST(
         })),
         quality: originalQuality,
         jobId: regenJob.id,
+        // Phase 16.D — actor for `slide.regen.{started,finished}`
+        // self-echo skip in DeckView's broadcast handlers.
+        actorPrismaUserId: access.user.prismaId,
       },
     });
   } catch (error) {

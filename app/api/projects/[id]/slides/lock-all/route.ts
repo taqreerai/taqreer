@@ -30,6 +30,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { SlideManifestSchema } from "@/lib/schema/slide";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
 const BodySchema = z.object({
   locked: z.boolean(),
@@ -134,6 +135,15 @@ export async function POST(
       where: { presentationId },
       data: { lockedAt: null },
     });
+    // Realtime fan-out — see single-slide lock route for the
+    // fire-and-forget rationale.
+    broadcastToProject(projectId, "slides.locks.bulk-changed", {
+      allLocked: false,
+      lockedAt: null,
+      actorPrismaUserId: access.user.prismaId,
+    }).catch(() => {
+      /* socket blip — peers fall back to visibility-regain refetch */
+    });
     return NextResponse.json({ ok: true, count: result.count });
   }
 
@@ -170,6 +180,16 @@ export async function POST(
       })),
       skipDuplicates: true,
     });
+  });
+
+  // Realtime fan-out — peers flip every slide's lock pill in lockstep
+  // (no per-slide spam). Fire-and-forget.
+  broadcastToProject(projectId, "slides.locks.bulk-changed", {
+    allLocked: true,
+    lockedAt: now.toISOString(),
+    actorPrismaUserId: access.user.prismaId,
+  }).catch(() => {
+    /* socket blip — peers fall back to visibility-regain refetch */
   });
 
   return NextResponse.json({ ok: true, count: slideKeys.length });

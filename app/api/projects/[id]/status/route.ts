@@ -59,7 +59,25 @@ export async function GET(
   // a SPECIFIC version (e.g. the partial-regen target). Without it, two
   // close-together partial regens could let `take: 1` mask completion of
   // the version the client is actually waiting on.
-  const targetVersionId = new URL(request.url).searchParams.get("versionId");
+  const url = new URL(request.url);
+  const targetVersionId = url.searchParams.get("versionId");
+  // Optional ?includeManifest=true — when truthy, callers receive the
+  // latest completed version's full slide manifest in the response.
+  // Used by DeckView's realtime broadcast handlers to swap canvas
+  // content in-place after another viewer's regen lands, INSTEAD of
+  // calling `router.refresh()` (which triggers a visible RSC re-render
+  // cycle). Adds 30-200 KB to the response so it's strictly opt-in;
+  // pollers that only need the progress/status payload don't pay the
+  // cost.
+  const includeManifest = url.searchParams.get("includeManifest") === "true";
+  // Optional ?includeSlideStates=true — when truthy, the response
+  // carries the per-slide pill state (lock + currentVersionNumber +
+  // version history rows). Paired with includeManifest by realtime
+  // broadcast handlers so a peer's regen lands with both the new
+  // canvas AND the new metadata (lock pill bumps, history-popover
+  // row prepends) in a single round-trip. Adds ~250 B per slide so
+  // it's also opt-in; the polling path doesn't request it.
+  const includeSlideStates = url.searchParams.get("includeSlideStates") === "true";
   const versionsQuery = targetVersionId
     ? {
         where: { id: targetVersionId },
@@ -77,6 +95,10 @@ export async function GET(
       status: true,
       presentation: {
         select: {
+          // `id` needed only on the includeSlideStates path — selected
+          // unconditionally to keep the query shape simple; the column
+          // is a cuid, negligible payload.
+          id: true,
           versions: versionsQuery,
         },
       },
@@ -132,18 +154,76 @@ export async function GET(
       ? slideJson.streamingLanguage
       : null;
 
-  // Include the FULL slide manifest on the response when the caller
-  // pinned a versionId AND that version is completed. DeckView's
-  // partial-regen poll-success path uses this to swap the spliced
-  // slides in WITHOUT needing Supabase Realtime (which doesn't
-  // broadcast from the local docker Postgres — no
-  // `supabase_realtime` publication) and WITHOUT relying on
-  // `router.refresh()` to repopulate RSC cleanly. The poll loop
-  // stops after first "completed" response, so the manifest payload
-  // is sent at most once per regen. Returned unchanged; DeckView
-  // re-validates with `SlideManifestSchema` before calling setManifest.
+  // Include the FULL slide manifest on the response in either of two cases:
+  //
+  //   1. Caller pinned a versionId AND that version is completed.
+  //      DeckView's partial-regen poll-success path uses this to swap
+  //      the spliced slides in WITHOUT needing Supabase Realtime
+  //      (local docker Postgres doesn't publish to it) AND WITHOUT
+  //      relying on `router.refresh()` to repopulate RSC cleanly.
+  //      Poll loop stops after first "completed" response, so this
+  //      manifest payload is sent at most once per regen.
+  //
+  //   2. Caller passed `?includeManifest=true` AND the latest version
+  //      is completed. Broadcast handlers use this to swap canvas
+  //      content in-place when a peer's regen lands. They don't pin
+  //      because they don't know the target versionId — they just
+  //      want "give me whatever's current."
+  //
+  // Returned unchanged; DeckView re-validates with SlideManifestSchema
+  // before calling setManifest.
   const manifest =
-    targetVersionId && latestVersion?.status === "completed" ? slideJson : null;
+    latestVersion?.status === "completed" &&
+    (targetVersionId || includeManifest)
+      ? slideJson
+      : null;
+
+  // Per-slide pill state. Mirrors the SSR-hydration shape in
+  // `lib/project/load-project.ts:200-235` so DeckView's broadcast
+  // handlers can drop the response into `setSlideStates` /
+  // `setHistoryVersions` without any client-side reshaping. Only
+  // fired on opt-in; idle pollers don't pay the round-trip.
+  let slideStates: Array<{
+    slideKey: string;
+    currentVersionNumber: number;
+    lockedAt: string | null;
+    hasCachedComments: boolean;
+    versions: Array<{
+      versionNumber: number;
+      source: string;
+      createdAt: string;
+    }>;
+  }> | null = null;
+  if (includeSlideStates && project.presentation?.id) {
+    const states = await prisma.slideState.findMany({
+      where: { presentationId: project.presentation.id },
+      select: {
+        slideKey: true,
+        currentVersionNumber: true,
+        lockedAt: true,
+        cachedComments: true,
+        versions: {
+          orderBy: { versionNumber: "desc" },
+          select: {
+            versionNumber: true,
+            source: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+    slideStates = states.map((s) => ({
+      slideKey: s.slideKey,
+      currentVersionNumber: s.currentVersionNumber,
+      lockedAt: s.lockedAt ? s.lockedAt.toISOString() : null,
+      hasCachedComments: s.cachedComments != null,
+      versions: s.versions.map((v) => ({
+        versionNumber: v.versionNumber,
+        source: v.source,
+        createdAt: v.createdAt.toISOString(),
+      })),
+    }));
+  }
 
   return NextResponse.json({
     status: inferredStatus,
@@ -160,5 +240,6 @@ export async function GET(
     versionId: latestVersion?.id ?? null,
     versionStatus: latestVersion?.status ?? null,
     manifest,
+    slideStates,
   });
 }

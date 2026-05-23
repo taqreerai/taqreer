@@ -70,6 +70,15 @@ export default async function DashboardPage() {
         isFavorite: true,
         // Drives the tile's pending-spinner state — see
         // /projects/page.tsx for full rationale.
+        // `status` covers the FIRST-generation window (queued /
+        // generating) so a deck that's still in the Inngest pipeline
+        // also shows the spinner — without this, the tile renders
+        // the static placeholder icon while the user waits for the
+        // initial deck-generate run to finish (user reported
+        // 2026-05-24: came back to dashboard during a long extreme-
+        // preset generation and saw a placeholder instead of "still
+        // working" feedback).
+        status: true,
         presentation: { select: { savedVersionId: true } },
       },
     }),
@@ -107,12 +116,25 @@ export default async function DashboardPage() {
 
   // Flatten the presentation relation into a single boolean. See
   // /projects/page.tsx for the pending/legacy rationale.
+  //
+  // Two cases produce a pending tile:
+  //   1. Initial deck-generate run is still in flight — `status` is
+  //      "queued" or "generating" (deck-generate writes "completed"
+  //      on success / "failed" on terminal error).
+  //   2. Deck is saved but the thumbnail-render Inngest job hasn't
+  //      finished yet — `savedVersionId` is non-null but
+  //      `thumbnailUrls` is empty.
+  // Both surface the same spinner glyph in the tile; the
+  // useRefreshWhileThumbnailsPending hook on the client polls
+  // `router.refresh()` to swap to the rendered PNGs when ready.
   const projectsWithPending = projects.map(
-    ({ presentation, ...rest }) => ({
+    ({ presentation, status, ...rest }) => ({
       ...rest,
       thumbnailsPending:
-        (presentation?.savedVersionId ?? null) !== null &&
-        rest.thumbnailUrls.length === 0,
+        status === "queued" ||
+        status === "generating" ||
+        ((presentation?.savedVersionId ?? null) !== null &&
+          rest.thumbnailUrls.length === 0),
     }),
   );
 

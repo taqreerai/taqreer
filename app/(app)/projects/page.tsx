@@ -70,6 +70,11 @@ export default async function ProjectsPage() {
       // (never saved) → static placeholder. The presentation
       // relation is optional so the null-coalesce handles legacy
       // projects without a presentation row at all.
+      // `status` ALSO drives the spinner — "queued" / "generating"
+      // means deck-generate is still in flight, so the tile shows
+      // the same loader instead of a placeholder. See dashboard
+      // page for the full rationale.
+      status: true,
       presentation: { select: { savedVersionId: true } },
     },
   });
@@ -77,12 +82,20 @@ export default async function ProjectsPage() {
   // Compute pending state once on the server so the client doesn't
   // need to read the presentation relation. Sheds the relation from
   // the row + flattens to a single boolean.
+  //
+  // Pending fires in either case:
+  //   1. status is "queued" / "generating" — initial deck-generate
+  //      run is still in flight.
+  //   2. savedVersionId is non-null AND thumbnailUrls is empty —
+  //      deck saved but thumbnail-render Inngest job hasn't landed.
   const projectsWithPending = projects.map(
-    ({ presentation, ...rest }) => ({
+    ({ presentation, status, ...rest }) => ({
       ...rest,
       thumbnailsPending:
-        (presentation?.savedVersionId ?? null) !== null &&
-        rest.thumbnailUrls.length === 0,
+        status === "queued" ||
+        status === "generating" ||
+        ((presentation?.savedVersionId ?? null) !== null &&
+          rest.thumbnailUrls.length === 0),
     }),
   );
 

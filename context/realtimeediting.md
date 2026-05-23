@@ -127,23 +127,48 @@ see. We use Supabase Realtime as a pure socket service.
 
 ### Phase 16.D — Live regen status via Broadcast
 
-- [ ] Inngest function `regenerate-slide.ts` adds two new steps that
-      call `broadcastToProject(projectId, "slide.regen.started", { slideId, actorPrismaUserId })`
-      at start and `slide.regen.finished` at success. The Inngest run
-      is server-side so it imports `lib/realtime/server-broadcast.ts`.
-- [ ] Inngest function `regenerate-presentation.ts` (full deck) does
-      the same with `deck.regen.started` + `deck.regen.finished`.
-- [ ] `DeckView` listens for `slide.regen.started` — when the
-      `slideId` matches the currently-focused slide, set the same
-      `isFocusedRegenerating` flag DeckView already uses; the
-      existing blur overlay starts working for other viewers for free.
-- [ ] On `slide.regen.finished` clear the flag + refetch the slide's
-      latest version via the existing slide-versions route.
-- [ ] On `deck.regen.started` mount the existing generating screen
-      (`renderGeneratingState` in DeckView). On `deck.regen.finished`
-      refetch manifest + back to editor.
+- [x] `inngest/functions/deck-regenerate-partial.ts` — two new
+      `step.run` blocks: `broadcast-regen-started` (Promise.all over
+      `targetSlideIds`, emits `slide.regen.started` per id) at entry
+      and `broadcast-regen-finished` at function exit. `RegenPartialEvent`
+      type extended with optional `actorPrismaUserId`.
+- [x] `inngest/functions/deck-generate.ts` — same shape with
+      `deck.regen.started` at entry, `deck.regen.finished` at exit.
+      Always emits — initial-create has no listeners so it's a no-op
+      there. `DeckGenerateEvent` type extended with optional
+      `actorPrismaUserId`.
+- [x] Five route dispatches updated to include `actorPrismaUserId:
+      access.user.prismaId` in the event payload:
+      `/api/projects/[id]/regenerate-partial`,
+      `/api/projects/[id]/slides/[slideKey]/regen`,
+      `/api/projects/[id]/regenerate`,
+      `/api/projects/[id]/retry`,
+      `POST /api/projects` (initial create — uses the prisma user id
+      already resolved in the transaction).
+- [x] `DeckView` listens for `slide.regen.started` — sets the new
+      `remoteRegenSlideIds: Set<string>` state. The derived
+      `isFocusedRegenerating` flag now reads from EITHER local
+      `applying` (actor's tab) OR `remoteRegenSlideIds.has(...)`
+      (observers). Same dim+spinner overlay renders without any
+      change to the existing render code.
+- [x] On `slide.regen.finished` clears from the set + calls
+      `router.refresh()` — Next re-runs the page's server data fetch
+      and the new slide content lands. Cheaper than wiring a
+      manifest-refetch endpoint specifically for the broadcast path.
+- [x] On `deck.regen.{started,finished}` calls `router.refresh()` —
+      the page's status-based route gate (`/project` ↔ `/preview`
+      redirect) auto-handles the navigation. Observers on `/project`
+      jump to `/preview` when a full-deck regen starts and back to
+      `/project` when it finishes.
+- [x] Self-echo skip in all four handlers (`actorPrismaUserId ===
+      currentUserId` returns early) so the actor's tab doesn't
+      re-trigger router.refresh on its own click — their apply-poller
+      already picks up the new version smoothly.
 - [ ] Polling path stays as a 30-s fallback if the channel hasn't
-      connected yet.
+      connected yet. (Existing apply-poller covers the actor's
+      tab. For observers, the broadcast IS the only signal —
+      acceptable for MVP; if Realtime is down a manual refresh
+      recovers them.)
 
 ### Phase 16.E — Notification table + bell
 

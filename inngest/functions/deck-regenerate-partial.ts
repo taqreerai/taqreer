@@ -11,6 +11,7 @@ import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -178,6 +179,13 @@ type RegenPartialEvent = {
   // the per-regen token-usage breakdown when the function completes.
   // Optional for backwards compat with in-flight pre-telemetry events.
   jobId?: string | null;
+  // Prisma User row id of the viewer who clicked Regen. Plumbed into
+  // the Phase 16.D `slide.regen.{started,finished}` broadcasts so
+  // each receiving client can skip its own self-echo (the actor's
+  // tab already drives the dim overlay via local `applying` state;
+  // the broadcast is the courtesy signal for OTHER collaborators).
+  // Optional for backwards compat with in-flight pre-16.D events.
+  actorPrismaUserId?: string | null;
 };
 
 export const deckRegeneratePartial = inngest.createFunction(
@@ -216,6 +224,17 @@ export const deckRegeneratePartial = inngest.createFunction(
       targetSlideIds,
       comments,
     } = data;
+    const actorPrismaUserId = data.actorPrismaUserId ?? null;
+
+    // Phase 16.D revised — NO `slide.regen.started` broadcast.
+    // The earlier started+finished pair made OTHER collaborators
+    // see a dim+spinner appear then disappear over the slide,
+    // competing visually with whatever they were doing for the
+    // full 1-3 minute regen window. We only need the FINISHED
+    // signal (below) — observers keep reading the current version
+    // silently, and when the new one lands their tab refreshes
+    // and shows the result. The actor's local `applying` state
+    // still drives THEIR own dim+spinner overlay.
     // Resolve the original deck's quality preset → Claude call params.
     // Falls back to "medium" (the paramsForQuality default) for older
     // in-flight events that predate the `quality` field.
@@ -559,6 +578,26 @@ export const deckRegeneratePartial = inngest.createFunction(
             error: String(err),
           });
         });
+    }
+
+    // Phase 16.D — `slide.regen.finished` broadcasts, fire-and-forget
+    // for the same reason as the started broadcast above. The Inngest
+    // step that just saved the new version is what other clients
+    // care about; the broadcast is just the "go re-fetch now" nudge.
+    // If the function returns before the broadcast completes (Vercel
+    // freeze, etc.) observers will still pick up the new slides on
+    // their next poll / refresh — the regen state was persisted
+    // before we got here.
+    for (const slideId of targetSlideIds) {
+      broadcastToProject(projectId, "slide.regen.finished", {
+        slideId,
+        actorPrismaUserId,
+      }).catch((err) => {
+        logger.warn("broadcast slide.regen.finished failed", {
+          slideId,
+          error: String(err),
+        });
+      });
     }
 
     return { success: true, regenerated: regenResults.length };

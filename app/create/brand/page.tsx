@@ -956,6 +956,31 @@ export default function CreateBrandPage() {
     uploadFamily: "",
     googleFamily: null,
   });
+  // Gate flag for the colours / fonts auto-save effect (declared further
+  // down). Flipped to `true` only by code paths that run AFTER autosave's
+  // first useEffect invocation:
+  //   1. Auto-fetch useEffect — rawBrand-exists / no-kit / error paths
+  //      (declared after autosave; runs on the same useEffect tick)
+  //   2. hydrateFromBrandKit — async kit fetch resolved (runs later)
+  //
+  // It is NOT flipped from the restore useLayoutEffect (above), even
+  // though that effect runs first chronologically. The reason is
+  // subtle: autosave's first invocation fires AFTER paint with a
+  // closure captured from render 1 (the lazy-init `DEFAULT_COLORS`),
+  // even though `setColors(saved)` from the layout effect has already
+  // landed in render 2. The ref, being mutable and shared, would
+  // already read `true` at that point — so autosave would pass its
+  // gate and write the STALE closure's `DEFAULT_COLORS` into
+  // sessionStorage. StrictMode's double-mount then re-reads the
+  // poisoned blob on the next pass and the saved user edits are gone.
+  //
+  // The safe ordering is: useLayoutEffect restores state silently
+  // → autosave fires once with `ref=false` and returns early →
+  // auto-fetch useEffect runs next on the same tick, flips the ref →
+  // future user edits trigger autosave with `ref=true` and a fresh
+  // closure containing the actual edited values. Ref (not state) so
+  // flipping it doesn't trigger a re-render.
+  const hasHydratedRef = useRef(false);
   // Restore colours + font selections from sessionStorage post-hydration.
   // useLayoutEffect (not useEffect) so the swap happens BEFORE the browser
   // paints — user never sees the default-palette / empty-font-selectors
@@ -1023,6 +1048,17 @@ export default function CreateBrandPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setBodyFontSlot(body);
     }
+    // NOTE: do NOT flip `hasHydratedRef.current` here — even though
+    // `s` exists, the autosave useEffect (declared further down)
+    // fires with a STALE closure from render 1 (the lazy-init
+    // `DEFAULT_COLORS`), not render 2 (post-setColors). The ref is
+    // global to the component instance, so flipping it here makes
+    // autosave's first invocation pass its gate AND write the stale
+    // DEFAULT_COLORS to sessionStorage — defeating the entire fix.
+    // The ref is flipped instead by the auto-fetch useEffect below
+    // (declared AFTER autosave so its synchronous early-return for
+    // the rawBrand-exists branch lands after autosave's first run
+    // has already returned early).
   }, []);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("manual");
   const [paletteScreenshot, setPaletteScreenshot] = useState<File | null>(null);
@@ -1223,7 +1259,22 @@ export default function CreateBrandPage() {
   // Auto-save logo placement back into the output blob whenever any
   // of its three fields change. Read-modify-write so step 1's slide
   // size / count / rules are preserved across edits here.
+  //
+  // Gated on `hasHydratedRef.current` for the same reason as the
+  // colours/fonts autosave further down: this effect's FIRST
+  // invocation on mount fires with a stale render-1 closure
+  // (`logoPosition = "top-right"` default) BEFORE the
+  // layout-effect-triggered restore from `taqreer:create:output`
+  // settles. Without the gate, the autosave clobbers the user's
+  // saved position with the default on every mount, and a back →
+  // forward navigation visibly resets the logo-position picker.
+  // The auto-fetch useEffect below is the one that flips
+  // `hasHydratedRef.current = true`, and since it's declared
+  // AFTER this effect, its flip lands AFTER this effect's first
+  // run has already returned early — exactly the ordering we
+  // need to suppress the stale write.
   useEffect(() => {
+    if (!hasHydratedRef.current) return;
     if (typeof window === "undefined") return;
     try {
       const raw = window.sessionStorage.getItem("taqreer:create:output");
@@ -1239,6 +1290,67 @@ export default function CreateBrandPage() {
       /* best-effort persistence */
     }
   }, [logoPosition, logoExcludeCover, logoExcludeClosing]);
+
+  // Auto-save colours + font slots to sessionStorage on change so a
+  // back-then-forward navigation doesn't lose the user's edits.
+  // Previously, only `handleNext` persisted these (line ~1880+) — so a
+  // user who tweaked the palette and clicked "back" would land on the
+  // brand page fresh on return, have the auto-fetch effect re-load
+  // the saved BrandKit, and watch their edits get overwritten.
+  //
+  // Gated on `hasHydratedRef.current` so the first pre-hydration
+  // render (useState defaults — DEFAULT_COLORS + empty font slots)
+  // doesn't clobber a real sessionStorage blob. The auto-fetch
+  // effect below skips the kit fetch when sessionStorage already has
+  // data, so writing defaults too early would suppress the kit auto-
+  // load entirely.
+  //
+  // Read-modify-write preserves the `logo` slot that `acceptLogo`
+  // (and handleNext) write separately. Upload-mode font slots persist
+  // only what's already in state — `storageUrl` is null until handleNext
+  // runs the upload, and `restoreSlot` returns null for that case,
+  // so a freshly-picked uploaded font that hasn't been Next'd yet
+  // won't round-trip across navigation. Acceptable gap — same as
+  // pre-fix behaviour.
+  useEffect(() => {
+    if (!hasHydratedRef.current) return;
+    if (typeof window === "undefined") return;
+    const persistFontSlotForStorage = (slot: FontSlotState) => {
+      if (slot.mode === "google" && slot.googleFamily) {
+        return {
+          name: slot.googleFamily,
+          storageUrl: null,
+          url: googleFontUrl(slot.googleFamily),
+          family: slot.googleFamily,
+        };
+      }
+      if (slot.uploadStorageUrl || slot.uploadName || slot.uploadFamily) {
+        return {
+          name: slot.uploadName,
+          storageUrl: slot.uploadStorageUrl,
+          url: null,
+          family: slot.uploadFamily || null,
+        };
+      }
+      return null;
+    };
+    try {
+      const raw = window.sessionStorage.getItem("taqreer:create:brand");
+      const blob = raw ? JSON.parse(raw) : {};
+      blob.colors = colors;
+      blob.fonts = {
+        heading: persistFontSlotForStorage(headingFontSlot),
+        body: persistFontSlotForStorage(bodyFontSlot),
+      };
+      window.sessionStorage.setItem(
+        "taqreer:create:brand",
+        JSON.stringify(blob),
+      );
+      notifyCreateStateChange();
+    } catch {
+      /* best-effort persistence */
+    }
+  }, [colors, headingFontSlot, bodyFontSlot]);
 
   // Constants + helpers hoisted above hydrateFromBrandKit so they're
   // accessible (the original declarations sat farther down the component
@@ -1343,6 +1455,44 @@ export default function CreateBrandPage() {
       });
       // Logo position + excludes now live on /create/output; the
       // brand-page no longer reads or sets them.
+      //
+      // Also persist the loaded logo into the sessionStorage brand
+      // blob so a step-2 → step-1 → step-2 round-trip restores it
+      // via the logo-restore useLayoutEffect (which reads
+      // `s.logo.storageUrl`). Without this, the colors+fonts
+      // auto-save effect writes a blob WITHOUT the logo slot, the
+      // next mount sees `rawBrand` exists → skips the kit auto-fetch
+      // → logo-restore finds no logo entry → preview goes blank.
+      // Best-effort: a quota failure leaves the in-memory logo state
+      // intact but the next mount will need to re-fetch the kit.
+      if (typeof window !== "undefined") {
+        try {
+          const raw = window.sessionStorage.getItem("taqreer:create:brand");
+          const blob = raw ? JSON.parse(raw) : {};
+          // `previewDataUrl` is the field the logo-restore useLayoutEffect
+          // reads to feed `setLogoPreview` on the next mount. Capture the
+          // SAME URL we just handed to `setLogoPreview` above (signed
+          // displayUrl preferred, base64 fallback, raw storageUrl as
+          // last resort). Misnomer — the field name says "data URL" but
+          // a signed HTTPS URL works identically as an `<img src>`. The
+          // alternative would be re-fetching a signed URL inside the
+          // logo-restore effect; this avoids the round-trip.
+          blob.logo = {
+            name: (savedLogo as { name?: string }).name ?? "logo",
+            storageUrl: savedLogo.storageUrl,
+            previewDataUrl:
+              savedLogo.displayUrl ||
+              savedLogo.previewDataUrl ||
+              savedLogo.storageUrl,
+          };
+          window.sessionStorage.setItem(
+            "taqreer:create:brand",
+            JSON.stringify(blob),
+          );
+        } catch {
+          /* best-effort persistence */
+        }
+      }
     }
 
     // Compute the fingerprint over the values we just set and persist it
@@ -1380,6 +1530,12 @@ export default function CreateBrandPage() {
       /* quota — best effort */
     }
     setSaveBrandState("saved");
+    // Kit values are now in state — enable auto-save so subsequent
+    // user edits persist into sessionStorage. Without this, changing
+    // a colour and navigating back would lose the change (the
+    // auto-fetch effect would re-pull the kit on the next mount,
+    // overwriting the user's edits).
+    hasHydratedRef.current = true;
   };
 
   // ─── Initial load ───────────────────────────────────────────────────────
@@ -1408,12 +1564,24 @@ export default function CreateBrandPage() {
     // initializers already rehydrated state from sessionStorage; we don't
     // override that.
     const rawBrand = sessionStorage.getItem("taqreer:create:brand");
-    if (rawBrand) return;
+    if (rawBrand) {
+      // sessionStorage already has data — the useLayoutEffect above
+      // restored state from it. Mark hydration complete so subsequent
+      // user edits flow back into sessionStorage via the auto-save
+      // effect (defensive: useLayoutEffect already set this when `s`
+      // existed, but a malformed blob could skip its setters while
+      // we still want to allow auto-save to overwrite it cleanly).
+      hasHydratedRef.current = true;
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch("/api/brand-kits");
-        if (!res.ok || cancelled) return;
+        if (!res.ok || cancelled) {
+          if (!cancelled) hasHydratedRef.current = true;
+          return;
+        }
         const data = (await res.json()) as {
           kits?: Array<{
             id: string;
@@ -1425,10 +1593,16 @@ export default function CreateBrandPage() {
           }>;
         };
         const kit = data.kits?.[0];
-        if (!kit || cancelled) return;
+        if (!kit || cancelled) {
+          if (!cancelled) hasHydratedRef.current = true;
+          return;
+        }
         hydrateFromBrandKit(kit);
+        // hydrateFromBrandKit sets hasHydratedRef.current = true at
+        // its tail — nothing more to do here.
       } catch {
         /* offline / network — silently fall back to defaults */
+        if (!cancelled) hasHydratedRef.current = true;
       }
     })();
     return () => {
@@ -2268,7 +2442,18 @@ export default function CreateBrandPage() {
                   <img
                     src={logoPreview}
                     alt="معاينة الشعار"
-                    className="max-h-[60px] max-w-32 object-contain"
+                    // `brightness(0) invert(1)` flattens any colored SVG
+                    // to solid white so the preview reads cleanly against
+                    // the dark brand-page chrome — without it a black
+                    // wordmark logo disappears into the surface tint.
+                    // PREVIEW ONLY: the saved SVG bytes are untouched,
+                    // so deck-generate's per-slide contrast logic still
+                    // picks the right fill per slide background. Caveat:
+                    // polychrome (multi-colour) logos flatten to white
+                    // here too; the exported deck still renders them
+                    // correctly per the polychrome guard in the
+                    // deck-generate prompt.
+                    className="max-h-[60px] max-w-32 object-contain [filter:brightness(0)_invert(1)]"
                   />
                 ) : (
                   <span className="material-symbols-outlined text-white/60">image</span>

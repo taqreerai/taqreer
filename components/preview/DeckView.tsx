@@ -399,6 +399,14 @@ export function DeckView({
   const [retryError, setRetryError] = useState("");
   // Polling sets this when it sees a failed status arrive after mount.
   const [polledFailure, setPolledFailure] = useState(false);
+  // Polling sets this when the generation finishes on the server. Used
+  // to flip the derived status from "generating" to "completed" without
+  // a `router.refresh()` — the parent SSR still believes the project
+  // is queued/generating until the user navigates, but DeckView reads
+  // the manifest + this flag locally and renders the completed view
+  // immediately. Avoids the visible flash + transient-client-state
+  // loss that an SSR re-render cycle causes mid-generation completion.
+  const [polledCompleted, setPolledCompleted] = useState(false);
 
   // Generation-clock state. SLOW threshold (6 min) flips an in-page
   // caption ("الخادم تحت ضغط عالٍ حالياً") so the user sees the run
@@ -632,6 +640,136 @@ export function DeckView({
         setComments((prev) => prev.filter((c) => c.id !== payload.commentId));
       });
 
+      // Phase 16.D revised — only `.finished` events fire here.
+      // The `.started` broadcasts were dropped from the Inngest
+      // functions: a 1-3 minute dim+spinner over an observer's
+      // canvas competed with whatever they were doing during the
+      // regen. Observers now stay silent on the previous version
+      // until the new one is ready, then a single router.refresh
+      // swaps the content. Self-echo skip — the actor's tab
+      // already has the new version locally via the apply-poller.
+      // Peer-regen broadcasts pull the canonical manifest + per-slide
+      // state in a single round-trip and apply both in-place. We don't
+      // router.refresh() because that re-runs the parent SSR and
+      // re-mounts DeckView, dropping transient client state (scroll
+      // position, focus, popovers, hover hints) every time another
+      // viewer regenerates a slide.
+      //
+      // What we sync from the response:
+      //   • setManifest         → canvas + nav thumbnails reflect the
+      //                            regen output immediately.
+      //   • setSlideStates      → lock pills + currentVersionNumber
+      //                            bumps land without staleness; a peer
+      //                            regen on a slide the local viewer is
+      //                            focused on now shows the right pill
+      //                            state on the toolbar.
+      //   • setHistoryVersions  → the History popover's row list stays
+      //                            current (newest-first per the server
+      //                            ordering), so opening it right after
+      //                            a peer regen shows the new entry on
+      //                            first render — no fetch glitch.
+      const fetchAndSwapState = async () => {
+        try {
+          const res = await fetch(
+            `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+            { credentials: "same-origin" },
+          );
+          if (!res.ok || cancelled) return;
+          const data = (await res.json()) as {
+            manifest?: unknown;
+            slideStates?: InitialSlideState[] | null;
+          };
+          if (cancelled) return;
+          if (data.manifest) {
+            const parsed = SlideManifestSchema.safeParse(data.manifest);
+            if (parsed.success) setManifest(parsed.data);
+          }
+          if (Array.isArray(data.slideStates)) {
+            const nextStates: Record<string, InitialSlideState> = {};
+            const nextVersions: Record<string, HistoryRow[]> = {};
+            for (const s of data.slideStates) {
+              nextStates[s.slideKey] = s;
+              nextVersions[s.slideKey] = s.versions ?? [];
+            }
+            setSlideStates(nextStates);
+            setHistoryVersions(nextVersions);
+          }
+        } catch {
+          /* network blip — viewer keeps the previous state visible */
+        }
+      };
+      localHandle.on("slide.regen.finished", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        void fetchAndSwapState();
+      });
+      localHandle.on("deck.regen.finished", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        void fetchAndSwapState();
+      });
+
+      // Lock pulses — flip slideStates[slideKey].lockedAt in-place
+      // when a peer (un)locks a slide. No fetch needed; the broadcast
+      // payload carries the canonical ISO timestamp the server
+      // persisted. Self-echo skip: the actor's own POST already
+      // applied the optimistic update.
+      localHandle.on("slide.lock.changed", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        setSlideStates((prev) => {
+          const current = prev[payload.slideKey];
+          // No row yet — synthesise a minimal one. currentVersionNumber
+          // defaults to 1 here; if a peer regen also lands the
+          // visibility-regain refetch or a later slide.regen.finished
+          // broadcast will reconcile the full row.
+          const next: InitialSlideState = current
+            ? { ...current, lockedAt: payload.lockedAt }
+            : {
+                slideKey: payload.slideKey,
+                currentVersionNumber: 1,
+                lockedAt: payload.lockedAt,
+                hasCachedComments: false,
+              };
+          return { ...prev, [payload.slideKey]: next };
+        });
+      });
+
+      // Bulk lock-all / unlock-all from a peer. Server sends ONE event
+      // for the whole deck (vs. N per-slide events) and we apply it
+      // uniformly across every slideStates row we currently know about.
+      localHandle.on("slides.locks.bulk-changed", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        setSlideStates((prev) => {
+          const next: Record<string, InitialSlideState> = {};
+          for (const [key, state] of Object.entries(prev)) {
+            next[key] = { ...state, lockedAt: payload.lockedAt };
+          }
+          return next;
+        });
+      });
+
       presenceHandleRef.current = localHandle;
       // Initial track with current slide / visibility — the re-track
       // effect below also fires on mount but races the async open;
@@ -673,6 +811,85 @@ export function DeckView({
     currentUserImage,
     canComment,
   ]);
+
+  // Re-sync everything that's normally pushed via Supabase Realtime
+  // whenever the tab regains visibility. WebKit (Safari, iOS) and
+  // recent Chrome both throttle / pause WebSocket activity in
+  // backgrounded tabs aggressively — events that fired while the tab
+  // was hidden (a peer's `comment.created`, `slide.regen.finished`,
+  // etc.) are NOT replayed when the socket wakes up. Without this
+  // refresh, a viewer who alt-tabs out for a minute sees a stale
+  // canvas + missing comments + stale lock pills until they manually
+  // reload. Per user report 2026-05-24: added a comment in Chrome,
+  // switched to Safari → comment didn't appear until refresh.
+  //
+  // What we pull in one shot:
+  //   • /comments        → fresh draft comments (covers missed
+  //                         `comment.created` / `comment.deleted`)
+  //   • /status?...=true → fresh manifest + slideStates (covers missed
+  //                         `slide.regen.finished` / `deck.regen.finished`)
+  //
+  // Presence (avatars) auto-syncs when the Supabase channel reattaches
+  // — we don't need to do anything here for that bucket.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handler = () => {
+      if (document.visibilityState !== "visible") return;
+      // Comments — gated on canComment so we don't grant view-only
+      // viewers a side-channel into reading comments.
+      if (canComment) {
+        (async () => {
+          try {
+            const res = await fetch(
+              `/api/projects/${encodeURIComponent(projectId)}/comments`,
+              { credentials: "same-origin" },
+            );
+            if (!res.ok) return;
+            const data = (await res.json()) as { comments?: CommentRow[] };
+            if (Array.isArray(data.comments)) {
+              setComments(data.comments.filter((c) => c.status === "draft"));
+            }
+          } catch {
+            /* network blip — viewer keeps the previous comments */
+          }
+        })();
+      }
+      // Manifest + slideStates — fire regardless of canComment. Even
+      // view-only viewers need fresh slide content when a peer regens
+      // the deck while they're in another tab.
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+            { credentials: "same-origin" },
+          );
+          if (!res.ok) return;
+          const data = (await res.json()) as {
+            manifest?: unknown;
+            slideStates?: InitialSlideState[] | null;
+          };
+          if (data.manifest) {
+            const parsed = SlideManifestSchema.safeParse(data.manifest);
+            if (parsed.success) setManifest(parsed.data);
+          }
+          if (Array.isArray(data.slideStates)) {
+            const nextStates: Record<string, InitialSlideState> = {};
+            const nextVersions: Record<string, HistoryRow[]> = {};
+            for (const s of data.slideStates) {
+              nextStates[s.slideKey] = s;
+              nextVersions[s.slideKey] = s.versions ?? [];
+            }
+            setSlideStates(nextStates);
+            setHistoryVersions(nextVersions);
+          }
+        } catch {
+          /* network blip — viewer keeps the previous state */
+        }
+      })();
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [projectId, canComment]);
 
   // Re-track on slide change + tab-visibility flip. Reads through the
   // ref so a no-op when the channel hasn't finished opening yet —
@@ -717,7 +934,7 @@ export function DeckView({
 
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
-    : manifest && isCompleted(projectStatus, versionStatus)
+    : manifest && (polledCompleted || isCompleted(projectStatus, versionStatus))
       ? "completed"
       : "generating";
 
@@ -982,7 +1199,15 @@ export function DeckView({
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/status`);
+        // `includeManifest=true` so the completion branch below has
+        // the canonical manifest in-hand and can swap it via
+        // setManifest without a `router.refresh()` cycle. The
+        // server only attaches the manifest payload when the latest
+        // version is completed, so the polling path during
+        // "generating" pays no extra bandwidth.
+        const res = await fetch(
+          `/api/projects/${projectId}/status?includeManifest=true`,
+        );
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as {
           status: string;
@@ -992,6 +1217,7 @@ export function DeckView({
           streamingTheme?: unknown;
           streamingDirection?: "rtl" | "ltr" | null;
           streamingLanguage?: "ar" | "en" | null;
+          manifest?: unknown;
         };
         if (data.progress && isProgress(data.progress)) {
           setProgress(data.progress);
@@ -1034,7 +1260,27 @@ export function DeckView({
           return;
         }
         if (data.status === "completed" || data.status === "complete") {
-          router.refresh();
+          // Swap manifest in-place if the server attached it (it
+          // does so when latestVersion?.status === "completed"),
+          // then flip the local `polledCompleted` flag so the
+          // derived status escapes "generating" without a
+          // router.refresh(). The parent SSR still believes the
+          // project is queued/generating until the next user-driven
+          // navigation, but DeckView renders the completed canvas
+          // immediately — no flash, no transient-client-state loss.
+          if (data.manifest) {
+            const parsed = SlideManifestSchema.safeParse(data.manifest);
+            if (parsed.success) setManifest(parsed.data);
+          }
+          setPolledCompleted(true);
+          // Stop polling — completion is terminal. The interval
+          // clearInterval lives in the cleanup function; setting
+          // cancelled aborts any in-flight tick, and the
+          // polledCompleted state flip will re-render → the effect
+          // re-evaluates `status !== "generating"` and returns
+          // early on the next render, leaving the cleanup to clear
+          // the interval.
+          cancelled = true;
         }
       } catch {
         /* network blip */
@@ -1046,7 +1292,7 @@ export function DeckView({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [projectId, status, router]);
+  }, [projectId, status]);
 
   // Start the generation clock when we first enter `generating`. Prefer
   // the server-persisted `progress.genStartedAt` (ISO from the Inngest
@@ -1130,20 +1376,35 @@ export function DeckView({
   //   1. Pinned version status === "completed" → success.
   //   2. Pinned version status === "failed" / project "failed" →
   //      explicit backend failure.
-  //   3. No `progress` advancement for 60 s while pinned & queued →
+  //   3. No `progress` advancement for 240 s while pinned & queued →
   //      treat as stuck / cancelled (Inngest-cancelled case).
   //   4. ≥5 consecutive fetch failures → server / network disconnect.
-  //   5. Hard 5-min cap as a final fallback.
+  //   5. Hard 10-min cap as a final fallback.
+  //
+  // The 240 s stuck threshold (bumped from 60 s on 2026-05-24) reflects
+  // the all-Opus thinking tiers landed earlier today: Opus 4.7 on
+  // adaptive thinking can routinely spend 60-180 s in the thinking
+  // phase before the model emits its first JSON token, and during
+  // that window NEITHER `stage` nor `currentSlide` advances — so the
+  // old 60 s watchdog false-positived a perfectly healthy regen and
+  // tore down the poller mid-flight. Side effect of that tear-down
+  // (which the user reported the same day): when the regen actually
+  // finished, no poller was alive to see versionStatus flip to
+  // "completed", so the manifest never swapped in-place and the user
+  // had to refresh. Treating `thinkingTokens` advancement as a
+  // heartbeat below additionally covers the full-deck case where
+  // thinking is throttled-updated ~1×/sec.
   useEffect(() => {
     if (!applying) return;
     let cancelled = false;
     const applyStartedAt = Date.now();
-    const APPLY_TIMEOUT_MS = 5 * 60 * 1000;
-    const STUCK_NO_PROGRESS_MS = 60 * 1000;
+    const APPLY_TIMEOUT_MS = 10 * 60 * 1000;
+    const STUCK_NO_PROGRESS_MS = 240 * 1000;
     const MAX_CONSECUTIVE_ERRORS = 5;
     let lastProgressMs = Date.now();
     let lastProgressSlide = 0;
     let lastProgressStage: string | null = null;
+    let lastThinkingTokens = 0;
     let consecutiveErrors = 0;
     const failApply = (message: string) => {
       if (cancelled) return;
@@ -1181,7 +1442,17 @@ export function DeckView({
           status: string;
           versionId: string | null;
           versionStatus: string | null;
-          progress: { stage: string; currentSlide: number } | null;
+          // `thinkingTokens` rides along in the same JSON column slot
+          // even though the status route's Progress type guard doesn't
+          // declare it — `deck-generate.ts` writes it via the `extra`
+          // spread on each thinking delta. We read it here as a
+          // heartbeat signal during the thinking phase, where neither
+          // `currentSlide` nor `stage` advances.
+          progress: {
+            stage: string;
+            currentSlide: number;
+            thinkingTokens?: number;
+          } | null;
           // Status route returns the full manifest alongside the version
           // status when (a) the caller pinned a versionId and (b) that
           // version is completed. Used here to swap in the spliced
@@ -1203,10 +1474,16 @@ export function DeckView({
         if (isPinned && data.versionStatus === "completed") {
           // Splice the new manifest in directly from the status
           // response. Local-dev parity: Supabase Realtime doesn't
-          // broadcast from the docker Postgres, and `router.refresh()`
-          // alone has been flaky for swapping the manifest in-place.
-          // Schema-validate before assigning so a malformed payload
-          // can't corrupt the visible deck.
+          // broadcast from the docker Postgres, so we couldn't lean
+          // on a `slide.regen.finished` broadcast to do the swap for
+          // the OWN-actor path. Schema-validate before assigning so
+          // a malformed payload can't corrupt the visible deck.
+          // We no longer call `router.refresh()` after — setManifest
+          // updates the canvas in-place, and the SSR re-render is
+          // unnecessary (per-slide pill state ride along on the
+          // applied-slide payload from `apply-comments`; the parent's
+          // initialSlideStates may stay slightly stale but it doesn't
+          // affect what the user sees).
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) setManifest(parsed.data);
@@ -1214,7 +1491,6 @@ export function DeckView({
           setApplying(null);
           setComments([]);
           setCommentMode(false);
-          router.refresh();
           return;
         }
         // 2. Explicit failure.
@@ -1226,15 +1502,30 @@ export function DeckView({
           return;
         }
 
-        // Update progress watermark if it advanced.
+        // Update progress watermark if it advanced. Three signals
+        // qualify as "the run is alive":
+        //   (a) `currentSlide` ticked up — a slide closed in the stream
+        //   (b) `stage` transitioned (thinking → designing → validating
+        //       → saving)
+        //   (c) `thinkingTokens` advanced — deck-generate writes this
+        //       on each thinking delta (~1×/sec). Critical for Opus
+        //       which can spend minutes in adaptive-thinking before
+        //       (a) or (b) ever change. Partial regen doesn't emit
+        //       thinkingTokens today; for that path the 240 s stuck
+        //       threshold above is the safety net.
         if (
           data.progress &&
           (data.progress.currentSlide !== lastProgressSlide ||
-            data.progress.stage !== lastProgressStage)
+            data.progress.stage !== lastProgressStage ||
+            (typeof data.progress.thinkingTokens === "number" &&
+              data.progress.thinkingTokens > lastThinkingTokens))
         ) {
           lastProgressMs = Date.now();
           lastProgressSlide = data.progress.currentSlide;
           lastProgressStage = data.progress.stage;
+          if (typeof data.progress.thinkingTokens === "number") {
+            lastThinkingTokens = data.progress.thinkingTokens;
+          }
         }
 
         // 3. Stuck — pinned + queued + no progress in 60 s. Covers
@@ -1285,6 +1576,13 @@ export function DeckView({
       message = "انتهت الجلسة، أعد تسجيل الدخول.";
     } else if (status === 404) {
       message = "التعليق غير موجود.";
+    } else if (status === 423) {
+      // Server-side lock guard from POST /comments. Fires when a peer
+      // locked the slide before the local optimistic create made it
+      // to the server — the client gate hides comment-mode on locked
+      // slides but a stale broadcast leaves a small window where the
+      // local view still thinks the slide is unlocked.
+      message = "هذه الشريحة مقفلة — قم بفك القفل قبل إضافة تعليقات.";
     } else {
       message = fallback;
     }
@@ -1799,6 +2097,10 @@ export function DeckView({
     regenerating: !!applying?.targetSlideIds.includes(slide.slideId),
     locked: slideStates[slide.slideId]?.lockedAt != null,
   }));
+  // Phase 16.D revised — only the local actor sees the dim+spinner
+  // overlay. Observers stay on the previous version silently and
+  // refresh at the END of the regen via `slide.regen.finished`.
+  // Simpler state model, no UI churn for non-actor viewers.
   const isFocusedRegenerating = !!applying?.targetSlideIds.includes(
     focusedSlide.slideId,
   );
@@ -1951,6 +2253,16 @@ export function DeckView({
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
                   draftCommentCount={comments.length}
+                  // Locked focused slide → PreviewActionBar disables
+                  // the Comment button (only the toggle-out path
+                  // stays live if commentMode is already on; see
+                  // its prop-doc). Mirrors the HeroCommentOverlay
+                  // gate further down — same source of truth, just
+                  // surfaced in the toolbar too so the user knows
+                  // why "+ comment" doesn't work before clicking.
+                  focusedSlideLocked={
+                    slideStates[focusedSlide.slideId]?.lockedAt != null
+                  }
                   // Armed = drafts exist, user has exited comment
                   // mode, and no apply is in flight → the regen
                   // button morphs to the AI icon and now triggers
@@ -2264,7 +2576,19 @@ export function DeckView({
               // owner / edit see delete on everything (moderation).
               canModerate={canEdit}
               currentUserId={currentUserId}
-              commentMode={commentMode}
+              // Locked slides are "finalised" per the product
+              // contract — no new comment markers are allowed on
+              // them. We override `commentMode` to false on the
+              // focused slide when it's locked so the overlay stays
+              // in its read-only mode (existing markers still visible
+              // + clickable for the preview popup; click-to-create is
+              // suppressed). Switching to an unlocked slide restores
+              // interactivity without leaving / re-entering comment
+              // mode on the toolbar.
+              commentMode={
+                commentMode &&
+                slideStates[focusedSlide.slideId]?.lockedAt == null
+              }
               // Fires when the user clicks "Edit" inside the read-
               // only marker preview popup. HeroCommentOverlay has
               // already opened its `editor` state on the chosen
