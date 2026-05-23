@@ -28,7 +28,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 import { SlideManifestSchema } from "@/lib/schema/slide";
 
 const BodySchema = z.object({
@@ -39,15 +39,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id: projectId } = await params;
+  // Phase 15.A — edit access required.
+  const access = await resolveProjectAccess(projectId, "edit");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
 
   // Strict body validation — matches the contract enforced by
   // /lock, /regen, /favorite.
@@ -79,11 +76,8 @@ export async function POST(
   // Resolve ownership + grab the current manifest so we know which
   // slide keys exist. The slide list lives in the active version's
   // slideJson — there's no separate "slides" table.
-  const project = await prisma.project.findFirst({
-    where: {
-      id: projectId,
-      user: { supabaseUserId: user.id },
-    },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     include: {
       presentation: {
         select: {

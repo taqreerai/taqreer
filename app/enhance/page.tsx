@@ -119,7 +119,11 @@ export default function EnhancePage() {
               setDragging(false);
               selectFile(event.dataTransfer.files?.[0]);
             }}
-            className={`flex min-h-[240px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+            // Border width unified to 1px across every upload area
+            // in the app (was `border-2` — 2 px read as heavy chrome
+            // against the page; 1 px matches the rest of the input
+            // border vocabulary).
+            className={`flex min-h-[240px] w-full flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center transition-colors ${
               dragging
                 ? "border-[var(--tq-violet)] bg-[var(--tq-violet)]/10"
                 : "border-[var(--tq-blue)]/60 bg-[var(--tq-bg)]/40 hover:border-[var(--tq-violet)]"

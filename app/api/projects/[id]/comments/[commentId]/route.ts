@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 
 // Same envelope as POST — 1920 on both axes covers 16:9 (1920×1080) and
 // 9:16 (1080×1920). Format-specific tightening is the lightbox's job.
@@ -29,27 +29,54 @@ function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
 
-// Authorise the caller against the project owning this comment WITHOUT
-// reading the comment's current status — the write itself (below) does
-// the draft-status check atomically to close the read-then-write TOCTOU
-// window.
+// Phase 15.A / 15.D auth helper.
+//
+// Project-level gate: caller must have at least `comment` access
+// (owner / edit-share / comment-share). View-only callers can't
+// touch comments.
+//
+// Per-comment authorship gate: edit + delete a comment is only
+// allowed when EITHER
+//   • caller is the comment's author, OR
+//   • caller is the project owner (moderation power — they can
+//     prune any comment on their own deck)
+//
+// Anything else (comment-share trying to delete someone else's
+// comment) gets 403. The write itself (below) does the draft-
+// status check atomically to close the read-then-write TOCTOU
+// window for the lifecycle transition draft→applied.
 async function authoriseProject(projectId: string, commentId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" as const, status: 401 };
+  const access = await resolveProjectAccess(projectId, "comment");
+  if ("error" in access) return { error: access.error, status: access.status };
+
+  // Resolve the caller's prisma user id for the authorship check.
+  let callerPrismaUserId: string | null = null;
+  if (access.user.id) {
+    const u = await prisma.user.findUnique({
+      where: { supabaseUserId: access.user.id },
+      select: { id: true },
+    });
+    callerPrismaUserId = u?.id ?? null;
+  }
 
   const comment = await prisma.comment.findFirst({
     where: {
       id: commentId,
-      presentation: {
-        project: { id: projectId, user: { supabaseUserId: user.id } },
-      },
+      presentation: { project: { id: projectId } },
     },
-    select: { id: true },
+    select: { id: true, authorId: true },
   });
-  if (!comment) return { error: "Comment not found" as const, status: 404 };
+  if (!comment) {
+    return { error: "Comment not found" as const, status: 404 as const };
+  }
+
+  const isOwner = access.role === "owner";
+  const isAuthor =
+    callerPrismaUserId !== null && comment.authorId === callerPrismaUserId;
+  if (!isOwner && !isAuthor) {
+    return { error: "Forbidden" as const, status: 403 as const };
+  }
+
   return { commentId: comment.id };
 }
 

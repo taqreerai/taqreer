@@ -54,6 +54,8 @@ import { ar } from "date-fns/locale";
 import type { SlideFormat } from "@/lib/schema/slide";
 import { ProjectActionsMenu } from "@/components/app/ProjectActionsMenu";
 import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";
+import { SaveAsTemplateDialog } from "@/components/app/SaveAsTemplateDialog";
+import { ShareDialog } from "@/components/app/ShareDialog";
 
 // Pixels of cursor travel required to consider the user actually
 // scrubbing (not just hovering at rest). ~2 trackpad ticks.
@@ -152,6 +154,14 @@ export function ProjectThumbnail({
   // Trash confirmation dialog open + in-flight flag for the DELETE.
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashBusy, setTrashBusy] = useState(false);
+  // Save-as-template modal — opens when the user picks "حفظ نسخة كقالب"
+  // from the actions menu. The modal handles its own preview fetch +
+  // save POST; we just track open/closed here.
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  // Share modal — opens when the user picks "مشاركة" from the actions
+  // menu. ShareDialog handles its own fetch + mutations against
+  // /api/projects/[id]/share; we just track open/closed here.
+  const [shareOpen, setShareOpen] = useState(false);
 
   // Eagerly preload the FIRST FEW slide thumbnails on mount so the
   // initial hover-scrub feels instant. Bounded to the first
@@ -281,9 +291,7 @@ export function ProjectThumbnail({
   };
 
   const handleShare = () => {
-    // Placeholder for step 15. Logged so a stray click on a
-    // pre-modal build doesn't look broken-silent.
-    console.info("[share] modal not implemented yet (step 15)");
+    setShareOpen(true);
   };
 
   // Rename ↔ submit flow. Enter / blur commits, Escape cancels.
@@ -448,8 +456,12 @@ export function ProjectThumbnail({
 
       {/* Info row — title (or rename input) + creation date on the
           start side (right in RTL), 3-dots menu trigger on the end
-          side (left in RTL). Always visible, no hover gating. */}
-      <div dir="rtl" className="flex items-start justify-between gap-2 px-0.5">
+          side (left in RTL). Always visible, no hover gating.
+          No horizontal padding so the 3-dots button can align flush
+          with the thumbnail's visual-left edge (see button's `-me-3`
+          for the offset that cancels the glyph's intrinsic padding).
+          Same alignment as TemplateTile. */}
+      <div dir="rtl" className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           {/* Title + 3-dots color is driven by INLINE style (not
               Tailwind `text-white`/`text-muted` utilities) because
@@ -517,11 +529,32 @@ export function ProjectThumbnail({
               openMenu();
             }
           }}
-          className="btn-icon -mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors"
+          // Color-only hover (no background tint). The previous
+          // `.btn-icon` class added `background: rgba(55,11,244,.18)`
+          // on hover which read as a chunky purple chip on every
+          // tile — user feedback flagged it as visually heavy. The
+          // 3-dots wants to feel invisible until you reach for it
+          // and then just brighten.
+          //
+          // `-me-3` (margin-inline-end: −12 px) pulls the button
+          // leftward in RTL by exactly the glyph's intrinsic visual
+          // offset (5 px centering padding + 7 px `more_vert` glyph
+          // padding within its 18 px font box) so the visible 3 dots
+          // sit flush with the thumbnail's left edge. Same alignment
+          // formula used in TemplateTile.
+          //
+          // `hover:text-white!` (Tailwind v4 important modifier) is
+          // REQUIRED because the inline `style.color` below sets a
+          // color on every render, and inline styles beat unlayered
+          // utility rules in normal specificity. Without `!` the
+          // muted color held even when the cursor was on the
+          // button — user reported "no hover on projects" 2026-05-23.
+          className="-mt-0.5 -me-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:text-white!"
           style={{
             // Stays white when favorited (even idle) so the tile reads
             // as "starred" at a glance, paired with the filled-star
-            // indicator next to it. Hover behaviour unchanged.
+            // indicator next to it. Hover behaviour: idle muted →
+            // white on hover (via the className above).
             color:
               thumbHovered || favoriteState
                 ? "var(--tq-text-primary)"
@@ -543,7 +576,21 @@ export function ProjectThumbnail({
         onToggleFavorite={handleToggleFavorite}
         onCopyLink={handleCopyLink}
         onUseAsTemplate={handleUseAsTemplate}
+        onSaveAsTemplate={() => setSaveTemplateOpen(true)}
         onSendToTrash={() => setTrashOpen(true)}
+      />
+
+      <SaveAsTemplateDialog
+        open={saveTemplateOpen}
+        projectId={projectId}
+        onCancel={() => setSaveTemplateOpen(false)}
+        onSaved={() => {
+          // Modal closes immediately; the brand-showcase render runs
+          // in the background and the new template appears in
+          // /templates once thumbnails settle. No tile-level state
+          // changes here — the template is a separate entity.
+          setSaveTemplateOpen(false);
+        }}
       />
 
       <TrashConfirmDialog
@@ -554,6 +601,13 @@ export function ProjectThumbnail({
           if (!trashBusy) setTrashOpen(false);
         }}
         onConfirm={handleConfirmTrash}
+      />
+
+      <ShareDialog
+        open={shareOpen}
+        projectId={projectId}
+        projectTitle={titleState}
+        onClose={() => setShareOpen(false)}
       />
     </div>
   );

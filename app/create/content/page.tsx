@@ -459,7 +459,8 @@ export default function CreateContentPage() {
               setDragging(false);
               selectFile(event.dataTransfer.files?.[0]);
             }}
-            className={`flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 text-center transition-colors ${
+            // Unified 1 px border across all upload areas (was 2 px).
+            className={`flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors ${
               dragging
                 ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
                 : fileActive

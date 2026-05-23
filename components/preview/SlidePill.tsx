@@ -109,26 +109,43 @@ export function SlidePill({
 
   return (
     <div
-      // top: 30px overlay above the slide; centered horizontally;
-      // pointer-events:auto so child clicks land (parent canvas may
-      // have crosshair cursor during comment mode — we don't want
-      // the pill to take that styling).
-      className={`pointer-events-auto absolute left-1/2 z-20 -translate-x-1/2 transition-opacity duration-150 ${
-        popoverOpen
-          ? "opacity-100"
-          : "opacity-0 group-hover/canvas:opacity-100"
-      }`}
+      // Outer = positioning only. NO opacity transition here (was
+      // here originally; moved to the inner element with the
+      // backdrop-filter on 2026-05-23). With opacity on an ancestor
+      // of a backdrop-filter element, the browser keeps the filter
+      // fully computed until opacity hits exactly 0, then drops it
+      // in a jump — so the blur "doesn't fade out", which is what
+      // the user reported. Putting opacity on the SAME element as
+      // backdrop-filter (option b in the TemplateLightbox header
+      // note) lets the browser correlate the two: as opacity drops,
+      // the filter is implicitly faded with it.
+      //
+      // `pointer-events-none` here so clicks fall through the
+      // invisible bounding box; the inner re-enables pointer-events
+      // only when actually visible (see its className).
+      className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2"
       style={{ top: 30 }}
     >
       <div
-        // Pattern 3 (Layout surface) via `.glass-popover` — the
-        // canonical dark-tinted glass popover defined in globals.css.
-        // Tailwind utilities supply the blur + saturate as required
-        // by globals.css §"backdrop-filter"; raw `backdrop-filter`
-        // would lose to Tailwind's compositional rule. Bg + border
-        // come from the class so we stay preset-aware without
-        // hardcoding any colour or alpha.
-        className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) flex items-center gap-2.5 rounded-full px-2.5 py-2"
+        // Inner = bg + blur + content + opacity transition. Blur
+        // restored here (was stripped in the previous attempt
+        // because backdrop-filter wouldn't fade with an
+        // ancestor-driven opacity; now opacity is on this same
+        // element so the fade works). 0.55 alpha on var(--tq-bg)
+        // (#0E0E18) keeps the pill visible against white slides.
+        //
+        // `pointer-events-auto` is gated on visibility so the pill
+        // only catches clicks when the canvas is hovered (or the
+        // history popover is open). Without this gating, clicks
+        // would silently land on an invisible pill.
+        className={`glass-popover slides_pill backdrop-blur-glass backdrop-saturate-(--glass-saturation) flex items-center gap-2.5 rounded-full px-2.5 py-2 transition-opacity duration-150 ${
+          popoverOpen
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0 group-hover/canvas:pointer-events-auto group-hover/canvas:opacity-100"
+        }`}
+        style={{
+          backgroundColor: "rgba(14, 14, 24, 0.55)",
+        }}
       >
         <PillButton
           icon="autorenew"

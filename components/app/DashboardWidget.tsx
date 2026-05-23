@@ -55,10 +55,10 @@ export function DashboardEmptyState({ icon, title, description, className = "", 
 }
 
 export function DashboardWidget({ children }: { children: ReactNode }) {
-  // `space-y-5` (20 px) puts breathing room below the widget header
-  // before the tiles row. Previously `space-y-3` (12 px) sat too
-  // tight under the 24 px `.tq-h1`; now that the header is 18 px
-  // `.tq-widget-title`, the bigger gap restores the intended
-  // hierarchy (header reads as label, tiles read as content).
-  return <section className="space-y-5">{children}</section>;
+  // `space-y-6` (24 px) — one step on the 8pt grid above the previous
+  // 20 px. Cleaner label→content hierarchy under the 18 px widget
+  // header glyph. The earlier 20 px sat at an awkward in-between
+  // value (not on the 8pt scale); 24 px aligns the widget rhythm
+  // with the page-level `space-y-16` cadence wrapping the section.
+  return <section className="space-y-6">{children}</section>;
 }

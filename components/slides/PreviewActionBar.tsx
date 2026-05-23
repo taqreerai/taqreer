@@ -4,17 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
-import { exportManifestAsPptx } from "@/lib/export/html-export";
-import { downloadHtmlDocument } from "@/lib/export/html-document";
+import { useExportActions } from "@/lib/preview/use-export-actions";
+import { ShareDialog } from "@/components/app/ShareDialog";
 
 type Status = "idle" | "running" | "success" | "error";
-
-function baseFileName(title: string): string {
-  return (
-    title.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").slice(0, 80) ||
-    "presentation"
-  );
-}
 
 type ButtonState = {
   status: Status;
@@ -46,13 +39,10 @@ function ToolButton({
   iconFilled,
 }: {
   icon: string;
-  // Optional custom icon node — overrides the material-symbols icon when
-  // provided. Used by the regen button so we can render an AnimatePresence
-  // icon morph (autorenew ↔ check with continuous rotation) instead of a
-  // static glyph.
   // Optional custom icon node — overrides the material-symbols icon
-  // when provided. Reserved for future use; the morph that used it
-  // was removed in step 2b.
+  // when provided. Used by the regen button to render an
+  // AnimatePresence icon morph (autorenew ↔ check with continuous
+  // rotation) instead of a static glyph.
   iconNode?: React.ReactNode;
   label: string;
   badge?: string;
@@ -87,15 +77,15 @@ function ToolButton({
   // raises the glass intensity as the sole state indicator (e.g.
   // commentMode on, isSaved). Gradient variant bypasses the glass
   // system — its visuals come from `.btn-gradient-anim`.
+  // State-driven appearance — NO BACKGROUND at any state. Hover +
+  // active feedback comes from the border (white/15 → white/60) and
+  // the text (white/60 → white) brightening. Pure-white borders
+  // read as too thick at 1px on a dark page; white/60 gives a
+  // clearly-defined ring without the chunky feel (user feedback
+  // 2026-05-22 after the first all-white attempt).
   const colorClasses = active
-    ? "border-white/40 text-white"
-    : "border-white/15 text-white/60 hover:border-white/40 hover:text-white";
-  // Only paint a background when active. Inline because the alpha
-  // multiplies the preset-linked --glass-opacity var. Idle = no bg
-  // at all → fully transparent over the parent's .glass-card tint.
-  const activeBg = active
-    ? { background: "rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6))" }
-    : undefined;
+    ? "border-white/60 text-white"
+    : "border-white/15 text-white/60 hover:border-white/60 hover:text-white";
   return (
     <div className="group relative">
       <button
@@ -104,19 +94,29 @@ function ToolButton({
         disabled={isDisabled}
         aria-label={label}
         aria-pressed={active}
-        // Non-gradient (glass) variant: bg via preset-linked alpha
-        // (inline because `activeBg` is computed per-button-state),
-        // blur via Tailwind `backdrop-blur-glass` utility (memory:
-        // feedback_tw_glass_system — raw `backdrop-filter:` loses
-        // to Tailwind's compositional rule). Idle leaves bg unset
-        // so the parent .glass-card tint shows through unobstructed.
-        style={gradient ? undefined : activeBg}
+        // No inline style anymore — both hover + active backgrounds
+        // come from Tailwind utilities in `colorClasses` above. The
+        // blur still comes from `backdrop-blur-glass` so the button
+        // participates in v4's compositional backdrop-filter rule.
         className={
           gradient
-            ? `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-xl transition-shadow ${
+            ? // `rounded-full` makes the 44×44 button a perfect circle.
+              // `btn-gradient-anim::before` uses `border-radius: inherit`
+              // so its mesh ring follows automatically — no separate
+              // edit needed for the animated border.
+              //
+              // No `transition-shadow` (removed 2026-05-23 per CR) —
+              // toolbox icon buttons sit under the no-shadow-motion
+              // contract; the scale hover is the only motion this
+              // variant gets.
+              `btn-gradient-anim relative flex h-11 w-11 items-center justify-center rounded-full ${
                 isDisabled ? "" : "hover:scale-[1.02]"
               }`
-            : `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${colorClasses} ${
+            : // Glass variant — same circle treatment. The brand-system
+              // rule is: small icon-only buttons are circles. The bell +
+              // collapsed sidebar are larger square chrome (intentionally
+              // rounded-rect, not in scope here).
+              `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${colorClasses} ${
                 isDisabled ? "opacity-40" : ""
               }`
         }
@@ -177,23 +177,24 @@ function ToolButton({
   );
 }
 
-// Hairline separator between toolbar categories. Full-width 1 px
-// line at white/12 alpha with vertical breathing room — earlier
-// w-7 / my-0.5 / white/8 read as "did this divider exist?" against
-// the glass card. Now sits at my-2 (8 px top + bottom) and spans
-// the toolbar's inner width so the category boundary is
-// unambiguous.
+// Hairline separator between toolbar categories. Narrow (w-6) so it
+// doesn't extend into the parent pill's curved edges — full-width
+// rounded-rect parents could afford `w-full`, but the new
+// `rounded-full` container has rounded corners that would clip a
+// full-bleed divider into a partial line. w-6 centred under the
+// 44 px buttons reads as a clean category boundary without bleeding.
 function ToolbarDivider() {
   return (
     <div
       aria-hidden
-      className="my-2 h-px w-full bg-white/[0.12]"
+      className="my-2 h-px w-6 bg-white/[0.12]"
     />
   );
 }
 
 export function PreviewActionBar({
   projectId,
+  role,
   projectTitle,
   manifest,
   commentMode,
@@ -208,6 +209,11 @@ export function PreviewActionBar({
   onSaved,
 }: {
   projectId: string;
+  // Phase 15.B — viewer's role on this project. Drives which toolbar
+  // affordances are visible. "owner"/"edit" → full toolbar. "comment"
+  // → comments + exports only (no regen/save/lock). "view" → exports
+  // + share, no comments at all.
+  role: "owner" | "edit" | "comment" | "view";
   projectTitle: string;
   manifest: SlideManifest;
   // Comment-mode state — owned by DeckView. Apply lives inside the
@@ -246,27 +252,48 @@ export function PreviewActionBar({
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
-  const [exportPptx, setExportPptx] = useState<ButtonState>({ status: "idle" });
-  const [exportHtml, setExportHtml] = useState<ButtonState>({ status: "idle" });
-  const [exportPng, setExportPng] = useState<ButtonState>({ status: "idle" });
-  const [exportPdf, setExportPdf] = useState<ButtonState>({ status: "idle" });
-  // Shared "any export running" flag. Each export individually
-  // guards its own status, but without a shared flag the user can
-  // click PPTX → PDF → PNG → HTML in quick succession and spin up
-  // four parallel Puppeteer / dom-to-pptx pipelines at once
-  // (CPU + memory spike, all exports get slower / less reliable).
-  // Disabling the whole export group while any single export runs
-  // serialises the work cleanly.
-  const exportBusy =
-    exportPptx.status === "running" ||
-    exportHtml.status === "running" ||
-    exportPng.status === "running" ||
-    exportPdf.status === "running";
-  const [saveTpl, setSaveTpl] = useState<ButtonState>({ status: "idle" });
+  // Export pipelines + their busy/error state live in a shared hook
+  // (`useExportActions`) so the new ShareDialog Export tab drives the
+  // SAME four handlers without duplicating logic. Both consumers
+  // instantiate their own hook with the same projectId; per-instance
+  // state is fine because exports are idempotent server-side and the
+  // worst case of double-click is a redundant Puppeteer run.
+  const exportActions = useExportActions({
+    projectId,
+    projectTitle,
+    manifest,
+    formatFallback,
+  });
+  const exportBusy = exportActions.busy;
+  const exportPptx = exportActions.states.pptx;
+  const exportPdf = exportActions.states.pdf;
+  const exportPng = exportActions.states.png;
+  const exportHtml = exportActions.states.html;
+  const handleExport = exportActions.runPptx;
+  const handleExportPdf = exportActions.runPdf;
+  const handleExportPng = exportActions.runPng;
+  const handleDownloadHtml = exportActions.runHtml;
   const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
+  // Share modal — opens to the Share tab by default. The same modal
+  // hosts the Export tab so the user can copy a link / invite people
+  // OR export to PPTX/PDF/HTML/PNG without leaving the editor. The
+  // toolbar's own 4 export buttons remain as quick-access; the modal
+  // is for the deliberate "I'm distributing this" workflow.
+  const [shareOpen, setShareOpen] = useState<boolean>(false);
 
-  const [showSaveForm, setShowSaveForm] = useState(false);
-  const [templateTitle, setTemplateTitle] = useState(projectTitle);
+  // Capability flags from role (Phase 15.B). Edit/owner sees all
+  // mutation buttons. Comment sees only the Comment toggle (flat,
+  // non-gradient because regen isn't available to them). View
+  // sees neither — pure read-only toolbar = exports + share.
+  const canEdit = role === "owner" || role === "edit";
+  const canComment = canEdit || role === "comment";
+
+  // Legacy `saveTpl` state + `showSaveForm` popover + `templateTitle`
+  // input were removed 2026-05-22. The canonical "Save as template"
+  // flow lives in SaveAsTemplateDialog, opened from a project tile's
+  // 3-dots menu. The server route now derives the title from
+  // `Project.templateName` and ignores any client-supplied title, so
+  // the inline form's POST was silently no-op'ing on the title field.
 
   const handleRegenerate = async () => {
     if (regen.status === "running") return;
@@ -333,173 +360,14 @@ export function PreviewActionBar({
     }
   };
 
-  // Client-side export via dom-to-pptx + our BiDi post-processor. Runs
-  // entirely in the browser — no Inngest job, no Supabase upload, no
-  // polling. Replaces the previous server-side PptxGenJS pipeline.
-  const handleExport = async () => {
-    if (exportBusy) return;
-    setExportPptx({ status: "running", message: "جارٍ التصدير..." });
-    try {
-      // Prefer the manifest's title — it's the freshly regenerated value
-      // (cover headline + dashboard label). `projectTitle` is the cached
-      // server-side prop captured at SSR; if the user has just regenerated
-      // and changed direction/topic, the manifest title is more current.
-      const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
-      // Back-fill format from the project-level fallback for legacy
-      // manifests whose `format` field wasn't stamped at generation
-      // time. Without this, exportManifestAsPptx falls through to the
-      // 16:9 default and a 9:16 deck exports as a landscape PPT.
-      const exportManifest = {
-        ...manifest,
-        format: manifest.format ?? formatFallback ?? "16:9",
-      };
-      await exportManifestAsPptx(exportManifest, fileName);
-      setExportPptx({ status: "idle" });
-    } catch (error) {
-      setExportPptx({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر التصدير",
-      });
-    }
-  };
+  // Export pipelines + their busy/error states are owned by the
+  // shared `useExportActions` hook (handlers + states aliased above
+  // when the hook was instantiated). The dom-to-pptx + BiDi post-
+  // processor wiring, the Puppeteer fetch calls, and the HTML bundle
+  // download all live in lib/preview/use-export-actions.ts now.
 
-  // PDF export — server-side, sync. POST /api/projects/[id]/export/pdf
-  // returns a multi-page PDF rendered by Puppeteer's `page.pdf()`.
-  // Page size is driven by the @page CSS rule emitted by
-  // buildHtmlDocumentServer({ printPageBreaks: true }) so the PDF
-  // pages match the canvas dimensions exactly (landscape 1920×1080
-  // for 16:9, portrait 1080×1920 for 9:16). Same UX as PNG: button
-  // spins, blob downloads, no toast on success.
-  const handleExportPdf = async () => {
-    // Shared `exportBusy` check (not just exportPdf) so another
-    // export already in flight blocks this one too — prevents
-    // multi-Puppeteer concurrent runs.
-    if (exportBusy) return;
-    setExportPdf({ status: "running", message: "جارٍ تصدير PDF..." });
-    try {
-      const response = await fetch(`/api/projects/${projectId}/export/pdf`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? "PDF export failed");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${baseFileName(manifest.title || projectTitle)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setExportPdf({ status: "idle" });
-    } catch (error) {
-      setExportPdf({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر تصدير PDF",
-      });
-    }
-  };
-
-  // PNG export — server-side, sync. POST /api/projects/[id]/export/png
-  // returns a ZIP of canvas-native PNGs (1920×1080 / 1080×1920) rendered
-  // by Puppeteer + the same JSDOM-backed HTML builder the thumbnail
-  // pipeline uses. The endpoint streams the ZIP back as a single blob
-  // (~3-10s for 5-25 slides); the button just spins for the duration
-  // and no toast surfaces — the browser's own download UI is the
-  // success signal, matching the PPTX + HTML buttons' pattern.
-  const handleExportPng = async () => {
-    if (exportBusy) return;
-    setExportPng({ status: "running", message: "جارٍ تصدير الصور..." });
-    try {
-      const response = await fetch(`/api/projects/${projectId}/export/png`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? "PNG export failed");
-      }
-      // Stream the blob into a download. Same anchor-click trick the
-      // dom-to-pptx export uses (`saveAs` from file-saver wraps this
-      // internally); inlined here since we only need it for the ZIP
-      // and don't want to pull file-saver as a dep just for that.
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${baseFileName(manifest.title || projectTitle)}-pngs.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Defer revoke so Safari's download flow has a tick to read
-      // the blob URL — premature revoke aborts the download in some
-      // browsers. 1 s is conservative; the download has long latched
-      // onto the blob by then.
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setExportPng({ status: "idle" });
-    } catch (error) {
-      setExportPng({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر تصدير الصور",
-      });
-    }
-  };
-
-  // HTML download — bundles all slides into one standalone .html file at
-  // the manifest's canvas dimensions (1920×1080 for 16:9, 1080×1920 for
-  // 9:16) so the user can open it in a browser and screenshot. No
-  // dom-to-pptx, no BiDi post-process; this is the raw rendered preview.
-  const handleDownloadHtml = () => {
-    if (exportBusy) return;
-    setExportHtml({ status: "running", message: "جارٍ التحميل..." });
-    try {
-      const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
-      const exportManifest = {
-        ...manifest,
-        format: manifest.format ?? formatFallback ?? "16:9",
-      };
-      downloadHtmlDocument(exportManifest, fileName);
-      setExportHtml({ status: "idle" });
-    } catch (error) {
-      setExportHtml({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر التحميل",
-      });
-    }
-  };
-
-  const handleSaveAsTemplate = async () => {
-    if (saveTpl.status === "running") return;
-    const trimmed = templateTitle.trim();
-    if (!trimmed) {
-      setSaveTpl({ status: "error", message: "أدخل اسماً للقالب" });
-      return;
-    }
-    setSaveTpl({ status: "running", message: "جارٍ الحفظ..." });
-    try {
-      const response = await fetch(`/api/projects/${projectId}/save-as-template`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: trimmed }),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Save failed");
-      }
-      setSaveTpl({ status: "success", message: "تم الحفظ في مكتبة القوالب" });
-      setShowSaveForm(false);
-    } catch (error) {
-      setSaveTpl({
-        status: "error",
-        message: error instanceof Error ? error.message : "تعذر الحفظ",
-      });
-    }
-  };
+  // `handleSaveAsTemplate` was removed 2026-05-22 alongside the
+  // inline UI — see the saveProject useState comment above.
 
   // Status toast under the toolbar. Export download progress + success
   // are intentionally NOT surfaced — the browser's own download UI is
@@ -516,11 +384,8 @@ export function PreviewActionBar({
     exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
     exportPng.status === "error" ? { text: exportPng.message, kind: "error" as const } :
     exportPdf.status === "error" ? { text: exportPdf.message, kind: "error" as const } :
-    saveTpl.status === "error" ? { text: saveTpl.message, kind: "error" as const } :
     saveProject.status === "error" ? { text: saveProject.message, kind: "error" as const } :
-    saveTpl.status === "running" ? { text: saveTpl.message, kind: "info" as const } :
     regen.status === "running" ? { text: regen.message, kind: "info" as const } :
-    saveTpl.status === "success" ? { text: saveTpl.message, kind: "success" as const } :
     null;
 
   return (
@@ -537,109 +402,122 @@ export function PreviewActionBar({
           header / footer borders so the toolbar reads as part of
           the same chrome family. */}
       <div
-        className="glass-card flex flex-col items-center gap-1.5 rounded-2xl p-2"
+        // Pill shape — `rounded-full` on a vertical flex column with
+        // square (44 × 44) circle children produces a stadium
+        // silhouette (curves at top + bottom edges, straight sides).
+        // Matches the "icon-only buttons live in a pill" pattern used
+        // by the design system for compact tool clusters; the bell
+        // and collapsed-sidebar icons stay rounded-rect because they
+        // host larger square chrome, not a cluster.
+        className="glass-card flex flex-col items-center gap-1.5 rounded-full p-2"
       >
         {/* ── Category 1: AI / Edit ─────────────────────────────── */}
-        {/* Regen button — two roles depending on state:
-              • Idle / no drafts: full-deck regenerate (autorenew).
-              • Armed (drafts exist + commentMode off): partial regen
-                on drafted slides (auto_awesome — the AI sparkles).
-            Disabled while in comment mode (user is still authoring)
-            and while a partial regen is already in flight. Icon
-            morphs via a 360° rotation + crossfade on the same axis. */}
-        <ToolButton
-          icon={commentsArmed ? "auto_awesome" : "autorenew"}
-          label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد التصميم"}
-          gradient
-          running={regen.status === "running"}
-          onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
-          disabled={applying || commentMode}
-          iconNode={
-            <motion.div
-              animate={{ rotate: commentsArmed ? 360 : 0 }}
-              transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
-              className="flex h-[22px] w-[22px] items-center justify-center"
-            >
+        {/* Regen — owners / edit only. The AI pair (regen + comment
+            with gradient ring) is the editor's signature; viewers
+            never see it. */}
+        {canEdit ? (
+          <ToolButton
+            icon={commentsArmed ? "auto_awesome" : "autorenew"}
+            label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد التصميم"}
+            gradient
+            running={regen.status === "running"}
+            onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
+            disabled={applying || commentMode}
+            iconNode={
+              <motion.div
+                animate={{ rotate: commentsArmed ? 360 : 0 }}
+                transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
+                className="flex h-[22px] w-[22px] items-center justify-center"
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={commentsArmed ? "armed" : "idle"}
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ duration: 0.25 }}
+                    className="material-symbols-outlined text-[22px]"
+                  >
+                    {commentsArmed ? "auto_awesome" : "autorenew"}
+                  </motion.span>
+                </AnimatePresence>
+              </motion.div>
+            }
+          />
+        ) : null}
+        {/* Comment toggle. Two visual variants split by role:
+              • owner / edit → `assistant` (AI sparkles) glyph + the
+                animated `.btn-gradient-anim` ring. They have a
+                regen path; the AI pair (Regen + Comment) is the
+                editor's signature.
+              • comment-only → plain `chat_bubble_outline` glyph,
+                no gradient. They can't fire regen, so claiming the
+                AI affordance would be misleading. User direction
+                2026-05-23. */}
+        {canComment ? (
+          <ToolButton
+            icon={canEdit ? "assistant" : "chat_bubble_outline"}
+            label={commentMode ? "إنهاء وضع التعليقات" : "إضافة تعليق"}
+            gradient={canEdit}
+            iconFilled={commentMode}
+            onClick={onToggleCommentMode}
+            active={commentMode}
+            disabled={applying}
+            countBadge={draftCommentCount}
+          />
+        ) : null}
+
+        {/* First divider — only when the Persistence category below
+            (Save / Share) has content. canEdit covers owner + edit;
+            both render Save, and owner additionally renders Share. */}
+        {canEdit ? <ToolbarDivider /> : null}
+
+        {/* ── Category 2: Persistence ───────────────────────────── */}
+        {/* Save Project — owners / edit only. Comment + view roles
+            don't pin versions. */}
+        {canEdit ? (
+          <ToolButton
+            icon={isSaved ? "check" : "save"}
+            label={isSaved ? "محفوظ" : "حفظ المشروع"}
+            running={saveProject.status === "running"}
+            onClick={handleSaveProject}
+            active={isSaved}
+            disabled={applying || commentMode || !currentVersionId}
+            iconNode={
               <AnimatePresence mode="wait" initial={false}>
                 <motion.span
-                  key={commentsArmed ? "armed" : "idle"}
+                  key={isSaved ? "saved" : "unsaved"}
                   initial={{ opacity: 0, scale: 0.6 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.6 }}
                   transition={{ duration: 0.25 }}
                   className="material-symbols-outlined text-[22px]"
                 >
-                  {commentsArmed ? "auto_awesome" : "autorenew"}
+                  {isSaved ? "check" : "save"}
                 </motion.span>
               </AnimatePresence>
-            </motion.div>
-          }
-        />
-        {/* AI-pair styling — Regen above + Comment here both run the
-            `.btn-gradient-anim` ring so the user reads them as a
-            single AI family. The `assistant` icon (speech bubble +
-            sparkles) reinforces the system: assistant captures
-            intent → auto_awesome applies it.
-            Active state (commentMode on) is signalled by swapping
-            the icon to its FILLED Material Symbols variant
-            (outlined → solid bubble+sparkles). Under .btn-gradient-
-            anim the raised-bg active style is suppressed by the
-            gradient ring, so a SHAPE-level cue is the cleanest way
-            to show "I'm engaged" without competing with the animated
-            mesh-gradient. The font URL in layout.tsx loads
-            FILL@0..1 so the toggle is a no-extra-network swap. */}
-        <ToolButton
-          icon="assistant"
-          label={commentMode ? "إنهاء وضع التعليقات" : "إضافة تعليق"}
-          gradient
-          iconFilled={commentMode}
-          onClick={onToggleCommentMode}
-          active={commentMode}
-          disabled={applying}
-          countBadge={draftCommentCount}
-        />
+            }
+          />
+        ) : null}
+        {/* Share — owner only. The modal hosts invitee management
+            (POST /share is owner-only), so invitees / public-view
+            users wouldn't have anything to do in the Share tab.
+            Export remains accessible via the dedicated export
+            buttons below for every role. */}
+        {role === "owner" ? (
+          <ToolButton
+            icon="share"
+            label="مشاركة"
+            onClick={() => setShareOpen(true)}
+            disabled={applying}
+          />
+        ) : null}
 
-        <ToolbarDivider />
-
-        {/* ── Category 2: Persistence ───────────────────────────── */}
-        {/* Save Project — pins the canonical version. Icon morphs
-            save → check once the current version matches
-            savedVersionId. `active` brightens the glass when saved
-            so the state reads at a glance, without breaking the
-            toolbar's neutral-glass language. Re-clicking when
-            already saved still hits the API (idempotent) so the
-            button feels responsive on every click. */}
-        <ToolButton
-          icon={isSaved ? "check" : "save"}
-          label={isSaved ? "محفوظ" : "حفظ المشروع"}
-          running={saveProject.status === "running"}
-          onClick={handleSaveProject}
-          active={isSaved}
-          disabled={applying || commentMode || !currentVersionId}
-          iconNode={
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                key={isSaved ? "saved" : "unsaved"}
-                initial={{ opacity: 0, scale: 0.6 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.6 }}
-                transition={{ duration: 0.25 }}
-                className="material-symbols-outlined text-[22px]"
-              >
-                {isSaved ? "check" : "save"}
-              </motion.span>
-            </AnimatePresence>
-          }
-        />
-        <ToolButton
-          icon="bookmark_add"
-          label="حفظ كقالب"
-          running={saveTpl.status === "running"}
-          onClick={() => setShowSaveForm((v) => !v)}
-          disabled={applying}
-        />
-
-        <ToolbarDivider />
+        {/* Second divider — only when the section above (AI/Edit
+            and/or Persistence) has rendered something. View-only:
+            no divider; comment-only / edit / owner: separator
+            above exports. canComment covers comment+edit+owner. */}
+        {canComment ? <ToolbarDivider /> : null}
 
         {/* ── Category 3: Export ────────────────────────────────── */}
         {/* Tooltip wording unified — every export reads "تصدير X"
@@ -678,53 +556,35 @@ export function PreviewActionBar({
         />
       </div>
 
-      {/* Status toast below the toolbar */}
+      {/* Status toast below the toolbar — error (red) or info (muted).
+          The `success` variant was only set by the legacy save-template
+          flow that was removed 2026-05-22; dropped here too. */}
       {visibleMessage?.text ? (
         <div
           className={`rounded-lg px-3 py-1.5 text-xs ${
             visibleMessage.kind === "error"
               ? "bg-red-500/10 text-red-300"
-              : visibleMessage.kind === "success"
-                ? "bg-emerald-500/10 text-emerald-300"
-                : "bg-white/5 text-muted"
+              : "bg-white/5 text-muted"
           }`}
         >
           {visibleMessage.text}
         </div>
       ) : null}
 
-      {/* Save-as-template popover — floats to the right of the toolbar */}
-      {showSaveForm ? (
-        <div
-          dir="rtl"
-          className="glass-card absolute z-40 flex items-center gap-2 rounded-xl p-3"
-          style={{ left: "100%", top: 0, marginLeft: "12px", width: "320px" }}
-        >
-          <input
-            type="text"
-            value={templateTitle}
-            onChange={(event) => setTemplateTitle(event.target.value)}
-            placeholder="اسم القالب"
-            className="input-dark flex-1"
-          />
-          <button
-            type="button"
-            onClick={handleSaveAsTemplate}
-            disabled={saveTpl.status === "running"}
-            className="btn-gradient px-4 py-2 text-sm disabled:opacity-60"
-          >
-            {saveTpl.status === "running" ? "..." : "حفظ"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowSaveForm(false)}
-            aria-label="إلغاء"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-white/10 hover:text-white"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      ) : null}
+      {/* Legacy save-as-template inline popover removed 2026-05-22. */}
+
+      {/* Share + Export modal — mounted at the editor level so it
+          floats above the toolbar. Manifest + formatFallback are
+          handed in so the Export tab can run the same pipelines
+          this toolbar uses. */}
+      <ShareDialog
+        open={shareOpen}
+        projectId={projectId}
+        projectTitle={projectTitle}
+        manifest={manifest}
+        formatFallback={formatFallback}
+        onClose={() => setShareOpen(false)}
+      />
     </div>
   );
 }

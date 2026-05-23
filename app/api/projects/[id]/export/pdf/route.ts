@@ -21,7 +21,7 @@
 import { NextResponse } from "next/server";
 import puppeteer from "puppeteer";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 import {
   SlideManifestSchema,
   dimensionsForFormat,
@@ -69,21 +69,30 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id: projectId } = await params;
+  // Phase 15.A — view access required (exports allowed for every
+  // role that can see the deck per product direction). Trade-off
+  // CR flagged: this synchronous Puppeteer route holds a request
+  // open for up to 60s, so a malicious authenticated user with
+  // view-only access could spam exports. Mitigations are layered
+  // outside this route: (a) the `(app)` layout requires auth so
+  // truly public DoS isn't possible — only signed-in invitees can
+  // reach here; (b) the `useExportActions` hook has a per-projectId
+  // shared `busy` lock that prevents the same user from firing
+  // parallel exports from the UI; (c) Vercel's per-function timeout
+  // hard-caps cost per request. If abuse surfaces in practice we'll
+  // queue this behind Inngest + per-user rate limit; for now the
+  // simpler synchronous path stays.
+  const access = await resolveProjectAccess(projectId, "view");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
 
   // Resolve project + version. Same fallback logic as the PNG route:
   // prefer the user's pinned `savedVersionId`, fall back to
   // `currentVersionId` for an unsaved in-flight regen.
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, user: { supabaseUserId: user.id } },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     include: {
       presentation: {
         include: {

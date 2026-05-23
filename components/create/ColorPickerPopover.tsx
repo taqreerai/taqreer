@@ -133,7 +133,9 @@ export function ColorPickerPopover({
   // sessionStorage rehydration) and re-opens the picker.
   useEffect(() => {
     if (open) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "rehydrate internal state when external prop changes" shape for a popover that gets re-opened */
       setHsv(hexToHsv(value));
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
       setHexInput(value.toUpperCase());
     }
   }, [open, value]);

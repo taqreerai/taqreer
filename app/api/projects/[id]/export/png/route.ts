@@ -20,7 +20,7 @@ import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import puppeteer from "puppeteer";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 import {
   SlideManifestSchema,
   dimensionsForFormat,
@@ -67,23 +67,20 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id: projectId } = await params;
+  // Phase 15.A — view access required.
+  const access = await resolveProjectAccess(projectId, "view");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
 
   // Resolve project + the version we'll render. Prefer the pinned
   // savedVersionId if the user has saved (canonical snapshot); fall
   // back to currentVersionId so a user can export an unsaved
   // in-flight regen result if they want to. Both branches resolve to
   // a `PresentationVersion.slideJson` we can Zod-validate.
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, user: { supabaseUserId: user.id } },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     include: {
       presentation: {
         include: {

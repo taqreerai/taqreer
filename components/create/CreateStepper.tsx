@@ -147,7 +147,7 @@ function StepDot({ state }: { state: "current" | "done" | "pending" }) {
     return (
       <span
         className="relative z-10 flex h-5 w-5 flex-none items-center justify-center rounded-full text-white"
-        style={{ background: "var(--tq-violet)" }}
+        style={{ background: "var(--tq-blue)" }}
       >
         <span
           className="material-symbols-outlined leading-none"
@@ -162,7 +162,7 @@ function StepDot({ state }: { state: "current" | "done" | "pending" }) {
     return (
       <span
         className="relative z-10 flex h-5 w-5 flex-none items-center justify-center rounded-full"
-        style={{ background: "var(--tq-violet)" }}
+        style={{ background: "var(--tq-blue)" }}
       >
         <span className="h-2 w-2 rounded-full bg-white" />
       </span>

@@ -2,19 +2,19 @@
 
 Working doc for the dashboard "RecentProjects" rework, the /projects listing,
 the 3-dots menu actions, and the supporting thumbnail / metadata pipeline.
-Branch: `hotfix/thinking-config-adaptive` (the ONLY feature branch — see
-context.md "Branch + PR strategy"). Last sync: 2026-05-21.
+Branch: `dev` (the ONLY working branch — see context.md "Branch + PR
+strategy"). Last sync: 2026-05-23.
 
-## Current PR state (as of 2026-05-21)
+## Current PR state (as of 2026-05-23)
 
-- **PR #28** (`hotfix → dev`) — MERGED. After 51-commit / 82-commit divergence
-  with dev, we created safety backups (`stable-2026-05-21` tag,
-  `dev-backup-2026-05-21` + `main-backup-2026-05-21` branches) and force-pushed
-  `hotfix/...` over `dev`. PR auto-closed as merged.
-- **PR #29** (`dev → main`) — OPEN. CodeRabbit triggered. Waiting on review,
-  fix loop, then merge → `main = dev = hotfix`.
-- All work continues on `hotfix/thinking-config-adaptive`. Never create new
-  branches.
+- **PR #28**, **#29**, **#30**, **#31** — all MERGED to `main` via `dev`.
+- All recent work landed on `dev` directly (3-commit batch on 2026-05-23:
+  `feat(templates): Phase D`, `fix(ui): slide pill fade + SlideNavSidebar
+  geometry + 3-dots align`, plus the doc-comment cleanup before).
+  Next PR opens when the user calls it.
+- Templates feature complete end-to-end (save → list → use). The "Save copy
+  as template" + "Use this template" CTAs are wired (Phases A → D).
+- Never create new branches. `dev` is the working branch.
 
 ---
 
@@ -177,14 +177,33 @@ debugging never opens working-session code, and vice versa.
 | Lang A | Content language picker (`العربية` / `الإنجليزية`) on /create/content; threads through sessionStorage → POST → Project.language + Presentation.language/direction + brief.language. Replaces 3 hardcoded `"ar"`/`"rtl"` sites. | ✅ shipped |
 | Lang B | LANGUAGE directive injected at TOP of `buildUserMessage` based on `brief.language`. AR (default, reinforces RTL + Arabic font stack). EN (new — produce English-only deck text, dir=ltr, drop Arabic font fallbacks). System prompt unchanged (prompt-cache warm). | ✅ shipped |
 | Lang C | BiDi post-processor gating on `language === "en"` + rendered HTML `dir="ltr"` for EN decks. Wrap `lib/export/bidi-postprocess.ts` call in `if (manifest.language !== "en")`; update `html-document-server.ts` + `html-document.ts` to switch `dir` on language. | ⏳ deferred (needs Phase B in production first for detection-accuracy data) |
+| 11a | /projects page: grid using ProjectThumbnail (5/lg, 3/sm) | ✅ shipped |
+| 11b | Sort dropdown on /projects (and /templates) | ✅ shipped (built into ProjectsPageClient + TemplatesPageClient) |
+| 11c | Filters on /projects + /templates: language (ar/en/all), color (10 buckets with shade-range matching). **Slide-count filter dropped 2026-05-23 — it serves nothing.** | ✅ shipped (sans slide-count) |
+| 12a | /features → /favorites rename (route, sidebar link, page title) | ✅ shipped |
+| 12b | Wire isFavorite toggle from 3-dots menu | ✅ shipped |
+| 14 | Wire "Save copy as template" menu item | ✅ shipped (Phase A → D of templates flow, see §"Templates feature" below) |
 | 8b | Move `slideCount` + `dominantColor` capture from `/save` route → deck-generate completion | ⏳ next |
-| **11a** | **/projects page: 5-per-row grid using ProjectThumbnail** | ⏳ next |
-| **11b** | **Sort dropdown** | ⏳ next |
-| **11c** | **Filters: slide count, language (ar/en/all), color (10 buckets with shade-range matching)** | ⏳ next |
-| **12a** | **/features → /favorites rename (route, sidebar link, page title)** | ⏳ next |
-| **12b** | **Wire isFavorite toggle from 3-dots menu** | ⏳ next |
-| **13** | **`/create/from/[projectId]` content-only page** | ⏳ next |
-| **14** | **Wire "Save copy as template" menu item** (TBD — disabled until user says go) | 🚫 blocked |
+| 13 | `/create/from/[projectId]` content-only page (clone an existing project's content into a fresh create flow). **Dropped 2026-05-23** — the regen flow on an open project already covers the "I want a variation" use case (user opens deck, clicks regen, gets a new generation pass against the same content). Adding a separate "create from project" path would add menu clutter for a niche need. | 🚫 dropped |
+
+---
+
+## Templates feature — Phases A → D (2026-05-21 → 2026-05-23)
+
+Cross-cutting work, lives under §3 in context.md. Recap of what shipped:
+
+| Phase | What | State |
+|-------|------|-------|
+| A | Apply Template migration + `lib/template/derive-brand.ts` (BrandSnapshot schema) + `lib/template/build-showcase-html.ts` (3 showcase slides from a brand snapshot) | ✅ shipped |
+| B | `inngest/functions/template-showcase-render.ts` (Puppeteer → WebP → `slide-previews/${user}/templates/${tpl}/${slideId}.webp`) + `POST /api/projects/[id]/save-as-template` (3-step name-generate → DB write → render fire-and-forget) + `SaveAsTemplateDialog` (live brand preview + custom-name override) + "Save copy as template" menu item wire-up | ✅ shipped |
+| C | `/templates` page (own + community tabs, filter bar, color buckets), `TemplateLightbox` (modal-wrapped 450 px stage), `MyTemplates` dashboard widget, `PATCH /api/templates/[id]/visibility` + `DELETE /api/templates/[id]`, `TemplateActionsMenu` + `TemplateDeleteConfirmDialog`, sidebar "/templates" link, live updates on save | ✅ shipped |
+| D | **"Use this template" flow**: `POST /api/templates/[id]/use` (returns BrandSnapshot, bumps `Template.useCount`); `lib/create/seed-from-template.ts` (writes sessionStorage keys + `taqreer:create:templateSeed` marker); parallel route tree `/create-from-template/{content,summary}` (2-step flow — brand step skipped, logo card relocates to step 1); wired CTAs on `TemplateLightbox` footer + `TemplateActionsMenu` menu item + `TemplateTile` 3-dots. Normal `/create` flow stays byte-identical. | ✅ shipped 2026-05-23 |
+
+Notable carry-along fixes shipped 2026-05-23 alongside Phase D:
+- **Cookie-aware `SlideNavSidebar` position**: `/project/[id]` + `/preview/[id]` pages read `tq_sidebar_collapsed` SSR-side, pass `initialMainSidebarWidth` to DeckView. Eliminates the 260 → 80 slide-in flash on refresh.
+- **Latin font samples on `/create/brand`**: `GoogleFontSlot` picks Latin sample text when the family is flagged `arabic: false` (Inter / Poppins / etc.); Arabic-capable fonts keep their Arabic samples. `dir="auto"` + `text-start` so alignment auto-adjusts.
+- **Slide pill (`SlidePill`) blur fade**: opacity transition co-located with backdrop-filter so the blur fades smoothly on canvas-leave (was snapping to invisible at opacity:0). `--tq-magenta-hot` design token added for the active thumbnail ring.
+- **`SlideNavSidebar` thumbnail geometry**: rebuilt `thumbW` math against explicit `ASIDE_PADDING_PX` + `ASIDE_BORDER_PX` + `GRID_GAP_PX` + `GRID_MARGIN_PX` constants so the SlideRenderer width matches the button width exactly — fixes the asymmetric edge-stroke trim users were seeing.
 
 ---
 

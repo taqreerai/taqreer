@@ -73,10 +73,25 @@ export default async function DashboardPage() {
         presentation: { select: { savedVersionId: true } },
       },
     }),
+    // Explicit select — only the fields MyTemplates actually renders.
+    // `brand` is intentionally included (despite being a JSON blob)
+    // because the dashboard tile renders the template's identity
+    // INLINE from brand attributes (palette + heading font + chrome
+    // colours) rather than from a PNG screenshot — see MyTemplates.tsx
+    // for the rationale. The brand snapshot is small (~300 bytes per
+    // template) so the 6-row payload is well under a KB.
     prisma.template.findMany({
       where: { ownerId: dbUser.id },
       orderBy: { createdAt: "desc" },
       take: 6,
+      // `thumbnailUrls` is required because the dashboard tile click
+      // now opens TemplateLightbox IN PLACE (no navigation), and the
+      // lightbox needs the 4 showcase PNGs to render its stage.
+      // `isPublic` drives the 3-dots menu's visibility toggle label
+      // (`اجعله عاماً` vs `اجعله خاصاً`). All dashboard rows are the
+      // user's own (filtered by ownerId above), so `isMine` is always
+      // true at the call site — not selected from the DB.
+      select: { id: true, title: true, brand: true, thumbnailUrls: true, isPublic: true },
     }),
     prisma.subscription.findFirst({
       where: { userId: dbUser.id },
@@ -101,12 +116,61 @@ export default async function DashboardPage() {
     }),
   );
 
+  // Narrow Template.brand (Prisma's JsonValue) to the shape MyTemplates
+  // expects, with safe fallbacks per field. We deliberately do NOT
+  // re-validate against BrandSnapshotSchema here — the Inngest pipeline
+  // already validates on write, and the dashboard widget should keep
+  // rendering even if a single row's JSON is partially malformed
+  // (a broken tile is preferable to a broken dashboard).
+  const templateTiles = templates.map((t) => {
+    const brand = (t.brand ?? {}) as Record<string, unknown>;
+    const fontHeading =
+      (brand.fontHeading as { name?: unknown; url?: unknown } | undefined) ?? {};
+    return {
+      id: t.id,
+      title: t.title,
+      // Dashboard widget only shows the user's OWN templates (the
+      // query filters by ownerId), so isMine is always true. The
+      // 3-dots menu on each tile uses this to decide whether to
+      // render the actions trigger.
+      isMine: true,
+      isPublic: t.isPublic,
+      thumbnailUrls: t.thumbnailUrls,
+      // Drives the dashboard widget's auto-refresh hook so a saved
+      // template's PNGs appear without a manual reload once Inngest
+      // finishes rendering.
+      thumbnailsPending: t.thumbnailUrls.length === 0,
+      brand: {
+        background:
+          typeof brand.background === "string" ? brand.background : "#000000",
+        text: typeof brand.text === "string" ? brand.text : "#FFFFFF",
+        palette: Array.isArray(brand.palette)
+          ? brand.palette.filter((v): v is string => typeof v === "string")
+          : [],
+        fontHeading: {
+          name:
+            typeof fontHeading.name === "string" ? fontHeading.name : "Cairo",
+          url: typeof fontHeading.url === "string" ? fontHeading.url : undefined,
+        },
+        format: typeof brand.format === "string" ? brand.format : "16:9",
+      },
+    };
+  });
+
   return (
-    <div className="page-container space-y-8">
+    // Page-level vertical rhythm — `space-y-16` (64px) separates the
+    // dashboard's three major sections (QuickActions / widget pair /
+    // PlanUsage) at the spacing scale Linear / Vercel / Stripe
+    // dashboards converge on for "distinct content blocks". `pt-8`
+    // + `pb-12` keep content from kissing the header and viewport
+    // edge respectively. All values are Tailwind v4 utilities, so
+    // they compose from `--spacing` and scale automatically if the
+    // design token ever moves.
+    <div className="page-container space-y-16 pt-8 pb-12">
       <QuickActions />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
         <RecentProjects projects={projectsWithPending} />
-        <MyTemplates templates={templates} />
+        <MyTemplates templates={templateTiles} />
       </div>
       <PlanUsage
         plan={plan}

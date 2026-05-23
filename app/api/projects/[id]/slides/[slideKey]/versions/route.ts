@@ -14,24 +14,22 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string; slideKey: string }> },
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id: projectId, slideKey } = await params;
+  // Phase 15.A — edit access required (history popover only shown
+  // in edit UI).
+  const access = await resolveProjectAccess(projectId, "edit");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
-  const { id: projectId, slideKey } = await params;
-
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, user: { supabaseUserId: user.id } },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     include: { presentation: { select: { id: true } } },
   });
   if (!project || !project.presentation) {

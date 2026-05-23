@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProjectAccess } from "@/lib/api/project-access";
 
 type RetryPayload = {
   type?: string;
@@ -13,23 +13,14 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id } = await params;
-  const project = await prisma.project.findFirst({
-    where: {
-      id,
-      user: {
-        supabaseUserId: user.id,
-      },
-    },
+  // Phase 15.A — edit access required.
+  const access = await resolveProjectAccess(id, "edit");
+  if ("error" in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+  const project = await prisma.project.findUnique({
+    where: { id },
     include: {
       presentation: {
         include: {
@@ -83,11 +74,15 @@ export async function POST(
     await sendInngestEventWithRetry({
       name: "deck.generate.requested",
       data: {
+        // Spread original inputJson FIRST so the explicit IDs below
+        // win the merge. The old order let a stale / tampered
+        // `inputJson.projectId` (etc.) shadow the canonical project
+        // ID we just resolved, sending the regen to the wrong place.
+        ...inputJson,
         projectId: project.id,
         presentationId: project.presentation.id,
         versionId: latestVersion?.id,
         jobId: latestJob?.id,
-        ...inputJson,
       },
     });
   } catch (error) {

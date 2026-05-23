@@ -19,7 +19,7 @@
 // The header + footer are flex children; the middle grid scrolls
 // independently via `flex-1 overflow-y-auto`.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
@@ -94,9 +94,66 @@ export function SlideNavSidebar({
 }) {
   const { width: canvasW, height: canvasH } = dimensionsForFormat(format);
   const aspectRatio = `${canvasW} / ${canvasH}`;
-  // (260 outer − 24 horizontal padding − 12 col gap) / 2 cols ≈ 112 px
-  // per thumbnail. Scale = thumbW / canvasW so the SlideRenderer fits.
-  const thumbW = (SLIDE_NAV_WIDTH - 24 - 12) / 2;
+
+  // Guard against the on-refresh slide-in animation. The parent
+  // (DeckView) hydrates `mainSidebarWidth` from localStorage in an
+  // effect — the first paint uses the SSR default (260), the second
+  // paint may flip to 80 if the user has the main sidebar collapsed.
+  // With `transition-[right]` enabled on first paint, that 260 → 80
+  // flip animates ("the sidebar detaches and slides ltr on refresh").
+  // We delay enabling the transition by a couple of frames so the
+  // initial value settles BEFORE the transition is wired up — only
+  // subsequent (user-driven) toggles of the main sidebar animate.
+  const [enableRightTransition, setEnableRightTransition] = useState(false);
+  useEffect(() => {
+    // Two rAFs: first lets React flush the post-mount commit, second
+    // lets the browser paint with that committed `right` value. After
+    // both, flipping the transition on is safe because there's no
+    // pending value change to animate to.
+    let inner: number | null = null;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setEnableRightTransition(true);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      if (inner !== null) cancelAnimationFrame(inner);
+    };
+  }, []);
+  // Thumbnail geometry — every value here mirrors a class on the
+  // markup below so the math stays in lockstep with the rendered
+  // layout. If you change one of those classes (`p-3`, `gap-3`,
+  // `border-l`, `m-0.5` on the grid), update the matching constant.
+  //
+  //   ASIDE_PADDING_PX   = 12 (aside has `p-3`, applied both sides)
+  //   ASIDE_BORDER_PX    = 1  (aside has `border-l`, 1 px ring on the
+  //                            inline-start of the box)
+  //   GRID_GAP_PX        = 16 (grid has `gap-4`, single horizontal gap
+  //                            between the two columns)
+  //   GRID_MARGIN_PX     = 2  (grid has `m-0.5`, 2 px each side — see
+  //                            comment on the <div> below for why)
+  //
+  // Total horizontal chrome = 2*PAD + BORDER + GAP + 2*GRID_MARGIN
+  //                         = 24 + 1 + 16 + 4 = 45
+  // Per-cell width          = (260 − 45) / 2 = 107.5 px
+  //
+  // Earlier iterations missed the BORDER (`thumbW=112`) then missed the
+  // GRID_MARGIN (`thumbW=111.5`). Both left a sub-pixel overflow on
+  // the inline-end of each button that the button's `overflow-hidden`
+  // ate as edge-stroke trim — the visual symptom the user kept flagging.
+  const ASIDE_PADDING_PX = 12;
+  const ASIDE_BORDER_PX = 1;
+  const GRID_GAP_PX = 16;
+  const GRID_MARGIN_PX = 2;
+  const thumbW =
+    (SLIDE_NAV_WIDTH -
+      2 * ASIDE_PADDING_PX -
+      ASIDE_BORDER_PX -
+      GRID_GAP_PX -
+      2 * GRID_MARGIN_PX) /
+    2;
   const thumbScale = thumbW / canvasW;
 
   // Derive bulk-lock state from items so the pill's label flips
@@ -147,12 +204,14 @@ export function SlideNavSidebar({
     <aside
       dir={panelDir}
       aria-label="شريط الشرائح"
-      // Glass surface — built from primitives (no `.glass-card` because
-      // that class carries a hover transition we don't want on a sidebar
-      // panel). The `backdrop-blur-glass` utility is the preset-linked
-      // blur token; the inline bg / border-color use the same CSS
-      // variables `.glass-card` reads. Identical to CommentsPanel so
-      // the two read as a mirrored pair around the hero canvas.
+      // Glass surface — built from primitives (no `.glass-card`
+      // because that class carries a hover transition we don't want
+      // on a sidebar panel). Bg + border come from the canonical
+      // design tokens `--tq-bg-glass` + `--tq-border-glass`
+      // (globals.css) — same recipe `.glass-card` / `.qa-card` /
+      // `.glass-popover` consume. Position values stay inline
+      // because they're runtime-dynamic (`mainSidebarWidth` toggles
+      // with the user's sidebar-collapsed cookie).
       //
       // `border-l` (physical left) is correct for the RTL/LTR pair:
       // in RTL the panel is on the visual right with its left edge
@@ -160,47 +219,77 @@ export function SlideNavSidebar({
       // physical right (positioned via `right: mainSidebarWidth`)
       // and its left edge still faces the canvas. Logical
       // `border-inline-start` would flip.
-      className="backdrop-blur-glass fixed z-[30] flex flex-col overflow-hidden border-l p-3 transition-[right] duration-300 ease-in-out"
+      className={`backdrop-blur-glass fixed top-20 bottom-0 z-[30] flex flex-col overflow-hidden border-l p-3 ease-in-out ${
+        enableRightTransition ? "transition-[right] duration-300" : ""
+      }`}
       style={{
-        top: 80, // Header height (h-20)
-        bottom: 0,
         right: mainSidebarWidth,
         width: SLIDE_NAV_WIDTH,
-        background: "rgba(255, 255, 255, var(--glass-opacity))",
-        borderLeftColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+        background: "var(--tq-bg-glass)",
+        borderLeftColor: "var(--tq-border-glass)",
       }}
     >
-      {title ? (
-        <header className="border-b border-white/[0.08] pb-3 px-1 pt-1">
-          <p className="text-muted text-[10px] tracking-widest">
-            {items.length} SLIDES
-          </p>
-          <h1 className="mt-1 truncate text-sm font-semibold text-white">
-            {title}
-          </h1>
-        </header>
-      ) : (
-        <header className="flex items-center justify-between px-1 pt-1 pb-3 border-b border-white/[0.08]">
-          <span className="text-xs font-semibold text-white/50">
-            {items.length} {items.length === 1 ? "شريحة" : "شرائح"}
-          </span>
-        </header>
-      )}
+      {(() => {
+        // Localize the slide-count label by deck language. Both headers
+        // used to hardcode their own string — title-present said "SLIDES"
+        // in English regardless, no-title said "شرائح" in Arabic
+        // regardless. Now both follow the `language` prop so the chrome
+        // matches the deck's content language. `dir="auto"` lets the
+        // browser anchor the digit-vs-word order naturally.
+        const isSingle = items.length === 1;
+        const countLabel =
+          language === "en"
+            ? `${items.length} ${isSingle ? "slide" : "slides"}`
+            : `${items.length} ${isSingle ? "شريحة" : "شرائح"}`;
+        return title ? (
+          <header className="border-b border-white/[0.08] pb-3 px-1 pt-1">
+            <p
+              dir="auto"
+              className="text-muted text-[10px] tracking-widest uppercase"
+            >
+              {countLabel}
+            </p>
+            <h1 className="mt-1 truncate text-sm font-semibold text-white">
+              {title}
+            </h1>
+          </header>
+        ) : (
+          <header className="flex items-center justify-between px-1 pt-1 pb-3 border-b border-white/[0.08]">
+            <span
+              dir="auto"
+              className="text-xs font-semibold text-white/50"
+            >
+              {countLabel}
+            </span>
+          </header>
+        );
+      })()}
       {/* Scrollable middle — `flex-1` so it absorbs vertical slack
           between header and footer; `overflow-y-auto` so the slide
           grid scrolls independently of the chrome. */}
       <div className="flex-1 overflow-y-auto pt-3">
-        <div className="grid grid-cols-2 gap-3">
+        {/* `m-0.5` (= 2 px each side, via Tailwind's `--spacing`)
+            inset the grid 2 px inside the aside's content-box so the
+            buttons aren't flush against the aside's `overflow:hidden`
+            clip boundary. Without this inset, edge-stroke rendering
+            within each thumbnail's scaled SlideRenderer landed at
+            sub-pixel positions right against the clip, aliasing the
+            outermost strokes to invisibility. The matching
+            GRID_MARGIN_PX constant in the thumbW math above keeps
+            the SlideRenderer width == cell width (= 109.5 px) so the
+            inset doesn't reintroduce an overflow on the inline-end. */}
+        <div className="grid grid-cols-2 gap-4 m-0.5">
         {items.map((item) => {
           const isActive = currentIndex === item.index;
-          // Active ring: solid brand-blue inner + 25 % alpha halo.
-          // Both layers reference design tokens (no hardcoded hex);
-          // the alpha layer uses --tq-blue-rgb so the alpha factor
-          // can change without re-deriving the brand colour.
+          // Active ring: 2 px neon-magenta (`--tq-magenta-hot` =
+          // #F900FF), fully opaque. Brighter + thicker than the
+          // previous 1 px brand-purple — the violet was reading too
+          // quiet against the glass panel; the hot-magenta pops out
+          // at thumbnail scale and matches the user's preferred
+          // "this is selected" accent.
           const ringStyle = isActive
             ? {
-                boxShadow:
-                  "0 0 0 2px var(--tq-blue), 0 0 0 4px rgba(var(--tq-blue-rgb), 0.25)",
+                boxShadow: "0 0 0 2px var(--tq-magenta-hot)",
               }
             : undefined;
           const isLocked = item.kind === "slide" && item.locked === true;
@@ -213,9 +302,19 @@ export function SlideNavSidebar({
                 isActive ? " — مختارة" : ""
               }${isLocked ? " — مقفلة" : ""}`}
               aria-current={isActive ? "true" : undefined}
-              className={`relative w-full overflow-hidden rounded-md text-start outline-none transition-all hover:ring-2 hover:ring-white/40 focus-visible:ring-2 focus-visible:ring-white/80 ${
-                isActive ? "" : "ring-1 ring-white/10"
-              }`}
+              // Only the active thumbnail carries a visible stroke now
+              // (1 px white/60, via the inline `box-shadow` above).
+              // Hover stroke + the muted idle ring were both removed
+              // 2026-05-23 on user direction — the slide content does
+              // the heavy lifting visually; chrome strokes on every
+              // thumbnail read as a busy grid of frames against the
+              // glass panel.
+              //
+              // `focus-visible` is intentionally kept (and slightly
+              // brighter at `white/80`) so keyboard users still get a
+              // clear tab-focus indicator — that's an a11y requirement,
+              // not a hover decoration.
+              className="relative w-full overflow-hidden rounded-md text-start outline-none transition-all focus-visible:ring-1 focus-visible:ring-white/80"
               style={{ aspectRatio, ...ringStyle }}
             >
               {/* Thumbnail content — placeholder pulse + state icon, or

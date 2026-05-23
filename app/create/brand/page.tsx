@@ -214,6 +214,28 @@ function googleFontUrl(family: string): string {
   return `https://fonts.googleapis.com/css2?family=${encoded}:wght@400;700&display=swap`;
 }
 
+// Sample-text picker for the font preview slots (added 2026-05-22).
+//
+// Latin-only Google fonts (Inter / Poppins / etc., flagged
+// `arabic: false` above) can't render Arabic — so showing them next
+// to "أبجد هوز" / "النص الأساسي يُستخدم في فقرات المحتوى." just
+// produces tofu glyphs. Swap to Latin samples in that case so the
+// user actually sees what their picked font looks like.
+//
+// Upload-mode fonts default to the Arabic samples — we don't know
+// the uploaded font's glyph coverage, and the brand identity is
+// Arabic-first.
+const HEADING_SAMPLE_AR = "أبجد هوز";
+const HEADING_SAMPLE_LATIN = "Aa Bb Cc";
+const BODY_SAMPLE_AR = "النص الأساسي يُستخدم في فقرات المحتوى.";
+const BODY_SAMPLE_LATIN = "The quick brown fox jumps over the lazy dog.";
+
+function isLatinOnlyGoogleFont(family: string | null | undefined): boolean {
+  if (!family) return false;
+  const entry = GOOGLE_FONTS.find((f) => f.family === family);
+  return entry !== undefined && entry.arabic === false;
+}
+
 const DESIGN_STYLE_OPTIONS = ["إبداعي", "بسيط", "احترافي", "مرح", "صحفي", "جريء", "كلاسيكي"];
 
 type StoredContent = {
@@ -393,6 +415,28 @@ function CompactUploadZone({
   compact?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Native `<input accept>` filters the OS picker but drag-drop bypasses
+  // it — caller passes the same accept string here so we can validate
+  // a dropped file by extension before forwarding. Empty / wildcard
+  // accept = accept anything.
+  const acceptDropped = (dropped: File | undefined) => {
+    if (!dropped) return;
+    if (accept.trim() && accept !== "*") {
+      const exts = accept.split(",").map((s) => s.trim().toLowerCase());
+      const mime = dropped.type.toLowerCase();
+      const name = dropped.name.toLowerCase();
+      const matches = exts.some((ext) => {
+        if (ext.startsWith(".")) return name.endsWith(ext);
+        // MIME pattern (e.g. "image/*", "image/svg+xml")
+        if (ext.endsWith("/*")) return mime.startsWith(ext.slice(0, -1));
+        return mime === ext;
+      });
+      if (!matches) return;
+    }
+    onSelect(dropped);
+  };
 
   return (
     <div>
@@ -410,12 +454,25 @@ function CompactUploadZone({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        // Tall dropzone for logo + colour-from-screenshot uploads —
-        // these are user-attention features (one-tap of the brand
-        // identity), so they keep room to breathe. White/15 dashed
-        // border matches the step 1 + font upload vocabulary; glass-
-        // circle icon hierarchy mirrors رفع ملفات السياق.
-        className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 text-center transition-colors hover:border-white/30 ${compact ? "gap-1.5 p-2.5" : "p-4"}`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          acceptDropped(event.dataTransfer.files?.[0]);
+        }}
+        // 1 px dashed border (unified with every other upload zone
+        // in the app since 2026-05-22 — was `border-2`). Dragging
+        // brightens the border + adds a faint brand wash for clear
+        // drop-target affordance.
+        className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 text-center transition-colors ${
+          dragging
+            ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
+            : "border-white/15 hover:border-white/30"
+        } ${compact ? "gap-1.5 p-2.5" : "p-4"}`}
         style={{ minHeight: compact ? 72 : 100 }}
       >
         <span
@@ -440,6 +497,8 @@ function CompactUploadZone({
   );
 }
 
+const FONT_ACCEPT_EXTS = [".woff2", ".woff", ".ttf", ".otf"];
+
 function FontUploadSlot({
   label,
   file,
@@ -458,6 +517,17 @@ function FontUploadSlot({
   onRemove: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Drag-drop validator. Native `<input accept>` filters the OS
+  // picker but drag-drop bypasses it, so we check the extension here
+  // before forwarding the file.
+  const acceptDroppedFont = (dropped: File | undefined) => {
+    if (!dropped) return;
+    const name = dropped.name.toLowerCase();
+    if (!FONT_ACCEPT_EXTS.some((ext) => name.endsWith(ext))) return;
+    onSelect(dropped);
+  };
 
   return (
     <div className="space-y-3">
@@ -507,11 +577,25 @@ function FontUploadSlot({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            acceptDroppedFont(event.dataTransfer.files?.[0]);
+          }}
           // Compact dropzone — horizontal layout (icon + label inline)
           // so the slot stays the same height as the Google-fonts
-          // combobox input. Same dashed white/15 surface as step 1
-          // (just shorter), so the design vocabulary stays consistent.
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-black/20 px-3 py-2 text-center transition-colors hover:border-white/30"
+          // combobox input. 1 px dashed border (was 2 px, unified
+          // 2026-05-22 with every other upload area).
+          className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 py-2 text-center transition-colors ${
+            dragging
+              ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
+              : "border-white/15 hover:border-white/30"
+          }`}
           style={{ height: 44 }}
         >
           <span
@@ -524,7 +608,16 @@ function FontUploadSlot({
           <span className="text-[10px] text-white/40">— WOFF / TTF / OTF</span>
         </button>
       )}
-      <p className={`${sampleSizeClass} text-right text-white${family ? ` ${family}` : ""}`}>
+      <p
+        // `dir="auto"` + `text-start` so Latin sample text (when the
+        // picked font is Latin-only — added 2026-05-22) reads
+        // left-aligned + L→R, while Arabic samples keep their
+        // right-aligned RTL flow. Without this the paragraph
+        // hardcoded `text-right` inside a dir="rtl" parent, which
+        // looked wrong for Latin previews.
+        dir="auto"
+        className={`${sampleSizeClass} text-start text-white${family ? ` ${family}` : ""}`}
+      >
         {sampleText}
       </p>
     </div>
@@ -707,7 +800,12 @@ function GoogleFontSlot({
         </div>
       ) : null}
       <p
-        className={`${sampleSizeClass} text-right text-white`}
+        // `dir="auto"` + `text-start` so Latin samples (when the
+        // picked Google family is flagged `arabic: false` — added
+        // 2026-05-22) align left and read L→R; Arabic samples keep
+        // their right-aligned RTL flow.
+        dir="auto"
+        className={`${sampleSizeClass} text-start text-white`}
         style={selected ? { fontFamily: `"${selected}", system-ui, sans-serif` } : undefined}
       >
         {sampleText}
@@ -836,6 +934,28 @@ export default function CreateBrandPage() {
   // on the server; the `useLayoutEffect` below restores the user's
   // saved colours before paint (no flash).
   const [colors, setColors] = useState<string[]>(DEFAULT_COLORS);
+  // Fonts: each slot has a mode (upload | google) and corresponding
+  // state. The upload File object can't be serialised back from
+  // sessionStorage, so these always start blank; the user re-picks
+  // if they came back. Declared BEFORE the restore-from-storage
+  // useLayoutEffect so the effect's setter references aren't
+  // use-before-declare (ESLint pre-existing finding 2026-05-23).
+  const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>({
+    mode: "upload",
+    uploadFile: null,
+    uploadName: null,
+    uploadStorageUrl: null,
+    uploadFamily: "",
+    googleFamily: null,
+  });
+  const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>({
+    mode: "upload",
+    uploadFile: null,
+    uploadName: null,
+    uploadStorageUrl: null,
+    uploadFamily: "",
+    googleFamily: null,
+  });
   // Restore colours + font selections from sessionStorage post-hydration.
   // useLayoutEffect (not useEffect) so the swap happens BEFORE the browser
   // paints — user never sees the default-palette / empty-font-selectors
@@ -921,25 +1041,10 @@ export default function CreateBrandPage() {
     | { kind: "error"; message: string };
   const [extraction, setExtraction] = useState<ExtractionState>({ kind: "idle" });
 
-  // Fonts: each slot has a mode (upload | google) and corresponding state.
-  // The upload File object can't be serialised back from sessionStorage, so
-  // these always start blank; the user re-picks if they came back.
-  const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>({
-    mode: "upload",
-    uploadFile: null,
-    uploadName: null,
-    uploadStorageUrl: null,
-    uploadFamily: "",
-    googleFamily: null,
-  });
-  const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>({
-    mode: "upload",
-    uploadFile: null,
-    uploadName: null,
-    uploadStorageUrl: null,
-    uploadFamily: "",
-    googleFamily: null,
-  });
+  // `headingFontSlot` + `bodyFontSlot` moved above the restore
+  // useLayoutEffect (~line 944) so the effect's setter references
+  // aren't use-before-declare. Same hooks, same defaults — just the
+  // declaration order changed.
 
   const [logo, setLogo] = useState<File | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -1289,6 +1394,7 @@ export default function CreateBrandPage() {
       return;
     }
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "hydrate state from sessionStorage on mount" shape; useLayoutEffect is required to land BEFORE first paint to avoid a flash of default content
       setContent(JSON.parse(rawContent) as StoredContent);
     } catch {
       // Corrupt session payload — bounce to step 1 instead of crashing
@@ -1348,6 +1454,7 @@ export default function CreateBrandPage() {
   useEffect(() => {
     if (!logo) return;
     const url = URL.createObjectURL(logo);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- url is derived from the File object lifecycle (revoked in cleanup); useMemo can't manage the lifecycle here
     setLogoPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [logo]);
@@ -1974,7 +2081,10 @@ export default function CreateBrandPage() {
                   label="ارفع خط العناوين"
                   file={headingFontSlot.uploadFile}
                   family={headingFontSlot.uploadFamily}
-                  sampleText="أبجد هوز"
+                  // Upload mode — we don't know the uploaded font's
+                  // glyph coverage, so default to Arabic samples
+                  // (brand identity is Arabic-first).
+                  sampleText={HEADING_SAMPLE_AR}
                   sampleSizeClass="text-2xl"
                   onSelect={(file) => onUploadFont("heading", file)}
                   onRemove={() => onRemoveUploadFont("heading")}
@@ -1983,7 +2093,11 @@ export default function CreateBrandPage() {
                 <GoogleFontSlot
                   label="خط العناوين"
                   selected={headingFontSlot.googleFamily}
-                  sampleText="أبجد هوز"
+                  sampleText={
+                    isLatinOnlyGoogleFont(headingFontSlot.googleFamily)
+                      ? HEADING_SAMPLE_LATIN
+                      : HEADING_SAMPLE_AR
+                  }
                   sampleSizeClass="text-2xl"
                   onSelect={(family) => onSelectGoogleFont("heading", family)}
                 />
@@ -2012,7 +2126,7 @@ export default function CreateBrandPage() {
                   label="ارفع خط النص"
                   file={bodyFontSlot.uploadFile}
                   family={bodyFontSlot.uploadFamily}
-                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleText={BODY_SAMPLE_AR}
                   sampleSizeClass="text-base"
                   onSelect={(file) => onUploadFont("body", file)}
                   onRemove={() => onRemoveUploadFont("body")}
@@ -2021,7 +2135,11 @@ export default function CreateBrandPage() {
                 <GoogleFontSlot
                   label="خط النص"
                   selected={bodyFontSlot.googleFamily}
-                  sampleText="النص الأساسي يُستخدم في فقرات المحتوى."
+                  sampleText={
+                    isLatinOnlyGoogleFont(bodyFontSlot.googleFamily)
+                      ? BODY_SAMPLE_LATIN
+                      : BODY_SAMPLE_AR
+                  }
                   sampleSizeClass="text-base"
                   onSelect={(family) => onSelectGoogleFont("body", family)}
                 />

@@ -173,8 +173,11 @@ export default function CreateSummaryPage() {
       return;
     }
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- "hydrate state from sessionStorage on mount" shape; layout effect lands before paint to avoid flash
       setContent(JSON.parse(rawContent) as ContentState);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBrand(JSON.parse(rawBrand) as StoredBrand);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (rawOutput) setOutput(JSON.parse(rawOutput) as StoredOutput);
     } catch {
       // A corrupt session blob would blank the whole summary; bounce

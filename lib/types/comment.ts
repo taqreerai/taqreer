@@ -13,6 +13,16 @@ export type CommentBounds = {
   h: number;
 };
 
+export type CommentAuthor = {
+  id: string;
+  name: string | null;
+  // Email intentionally NOT in the wire shape — exposing it to
+  // every commenter on the deck would turn the panel into a PII
+  // directory. Name + image is all the UI renders; falls back to
+  // `?` initial when name is null.
+  image: string | null;
+};
+
 export type CommentRow = {
   id: string;
   presentationId: string;
@@ -25,4 +35,9 @@ export type CommentRow = {
   boundsJson: CommentBounds | null;
   status: string;
   createdAt: string;
+  // Phase 15.D — author surfaces the commenter's name + avatar in
+  // the CommentsPanel. Null for legacy rows authored before the
+  // migration; UI shows "غير معروف" in that case.
+  authorId: string | null;
+  author: CommentAuthor | null;
 };

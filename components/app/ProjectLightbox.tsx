@@ -13,9 +13,10 @@
 // non-portalled z-index):
 //
 //   Portal to <body>:
-//     1. Dim overlay  → solid `var(--tq-surface-modal)`, NO blur.
-//        Kills the dashboard's colors so the glass strips above
-//        have a quiet base to blur against. Click → close.
+//     1. Dim overlay → `.modal-dim` + `backdrop-brightness-75`
+//        (Tailwind utility) — darkens the page via backdrop-filter so
+//        the glass strips above can still blur the page through it.
+//        Click → close.
 //     2. Content layer (sibling of dim) — `pointer-events-none`
 //        wrapper with `pointer-events-auto` re-enabled on each
 //        interactive child. Lets the dim's onClick swallow any
@@ -113,9 +114,14 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
   // legitimate here — the index is internal to the lightbox and
   // needs to reset on the open transition; lifting it to the
   // parent would push lightbox-internal concerns into RecentProjects.
-  // Document + disable for this line specifically.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Reset to slide 0 every time the lightbox reopens — canonical
+  // "reset derived state on prop change" shape. The lint rule
+  // misfires because reading via render-time `useMemo` would also
+  // require the parent to mirror open state in a key, which is
+  // heavier than this single state nudge. Disable on the actual
+  // setState line.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setIndex(0);
   }, [open]);
 
@@ -164,9 +170,12 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
     <AnimatePresence>
       {open ? (
         <>
-          {/* Dim overlay — solid dark, no own backdrop-filter so
-              the glass strips on top can still see + blur the
-              dashboard underneath through it. */}
+          {/* Dim overlay — `.modal-dim` combines a light tint + a
+              backdrop-filter brightness so the glass strips ABOVE this
+              (toolbar, thumb strip) sample a darkened-page composite
+              and their own backdrop-blur has actual page content to
+              blur. The earlier "solid 0.88 dark" implementation made
+              those strips' blur effect invisible. See globals.css. */}
           <motion.div
             key="dim"
             onClick={onClose}
@@ -174,8 +183,7 @@ export function ProjectLightbox({ open, slides, format, title, onClose }: Props)
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            style={{ background: "var(--tq-surface-modal)" }}
-            className="fixed inset-0 z-[2000]"
+            className="modal-dim fixed inset-0 z-[2000]"
           />
 
           {/* Content layer — sibling of the dim, fills the viewport

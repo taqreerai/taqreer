@@ -91,7 +91,7 @@ export function Sidebar({
     router.refresh();
   };
 
-  // Action buttons — `إنشاء / تحسين / محاكاة / من قالب / من بيانات`.
+  // Action buttons — `إنشاء / تحسين / محاكاة / من بيانات`.
   // The per-flow brand colours (blue/magenta/lavender/violet/cyan)
   // that used to paint the active background block were dropped
   // 2026-05-21: solid coloured blocks competed with the glass system
@@ -99,6 +99,15 @@ export function Sidebar({
   // canonical raised-glass active state used elsewhere. Active state
   // now reuses `.nav-active` (same recipe as the lower nav links)
   // so all sidebar items share one active vocabulary.
+  //
+  // 2026-05-22: "من قالب" → /templates was moved out of this group
+  // and into the library group below as "القوالب", sitting next to
+  // "مشاريعي". Templates are a LIBRARY artefact (a saved-state you
+  // browse), not a generation flow — putting them next to projects
+  // matches the user's mental model of "my stuff vs. ways to start
+  // new stuff". The "create from a template" entry point will live
+  // inside the template's own preview (Phase D), not as a sidebar
+  // shortcut.
   const actionButtons: Array<{
     label: string;
     icon: string;
@@ -108,18 +117,18 @@ export function Sidebar({
     { label: 'إنشاء', icon: 'add_circle', path: '/create' },
     { label: 'تحسين', icon: 'auto_fix_high', path: '/enhance' },
     { label: 'محاكاة', icon: 'content_copy', path: '/mimic' },
-    { label: 'من قالب', icon: 'grid_view', path: '/templates' },
     { label: 'من بيانات', icon: 'dataset', path: '/datasheet', comingSoon: true },
   ];
 
   const navLinks = [
-    // `/templates` sits in the top "Create" group as "من قالب" (above) —
-    // the standalone "القوالب" entry here was a duplicate and got
-    // removed 2026-05-21 alongside the `/folders` retirement.
-    // `/projects` takes the `folder_copy` icon (formerly /folders')
-    // — projects ARE the folder metaphor at the user level; we don't
+    // `/projects` takes the `folder_copy` icon (formerly /folders') —
+    // projects ARE the folder metaphor at the user level; we don't
     // need a separate folders concept.
+    // `/templates` lives directly below /projects so the user's two
+    // library surfaces sit as a paired group. Moved here from the
+    // "Create" group on 2026-05-22 — see actionButtons docstring.
     { path: '/projects', icon: 'folder_copy', label: 'مشاريعي' },
+    { path: '/templates', icon: 'grid_view', label: 'القوالب' },
     { path: '/brand-kits', icon: 'id_card', label: 'هوية الشركة' },
     { path: '/favorites', icon: 'star', label: 'المفضلة' },
     { path: '/settings', icon: 'settings', label: 'الإعدادات' },
@@ -166,7 +175,10 @@ export function Sidebar({
           {/* Burger */}
           <button
             onClick={toggleSidebar}
-            className="nav-item flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] mb-1"
+            // `rounded-full` to match the other nav items now that
+            // `.nav-item` no longer carries `border-radius` in CSS
+            // (single-source-of-truth pattern: JSX className owns shape).
+            className="nav-item flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] mb-1 rounded-full"
             aria-label="Toggle sidebar"
           >
             <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
@@ -186,7 +198,7 @@ export function Sidebar({
           <div className="relative group w-full">
             <Link
               href="/dashboard"
-              className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl ${
+              className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full ${
                 pathname === '/dashboard' ? 'nav-active' : 'nav-item'
               }`}
             >
@@ -224,7 +236,7 @@ export function Sidebar({
                   // every sidebar item shares one active vocabulary.
                   // No per-flow background-color or boxShadow — see
                   // actionButtons docstring above for the rationale.
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl relative ${
+                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full relative ${
                     isActive ? 'nav-active' : 'nav-item'
                   }`}
                 >
@@ -264,7 +276,7 @@ export function Sidebar({
               <div key={item.path} className="relative group w-full">
                 <Link
                   href={item.path}
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-xl ${
+                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full ${
                     active ? 'nav-active' : 'nav-item'
                   }`}
                 >
@@ -356,7 +368,13 @@ export function Sidebar({
                   width: dropdownPos.width,
                   zIndex: 9999,
                 }}
-                className="glass-dropdown rounded-2xl shadow-2xl p-2"
+                // `.glass-dropdown` is background-free now (no own tint).
+                // Blur comes from the Tailwind utilities so it participates
+                // in v4's compositional `backdrop-filter` rule — without
+                // these utilities the dropdown is completely see-through
+                // (no blur), since the CSS class only sets border. See
+                // globals.css `.glass-dropdown` for full reasoning.
+                className="glass-dropdown backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl shadow-2xl p-2"
               >
                 <div className="px-3 py-2">
                   <p className="font-semibold text-white text-sm truncate">{name}</p>

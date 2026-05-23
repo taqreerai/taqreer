@@ -126,10 +126,13 @@ export function AllNotificationsModal({
     <AnimatePresence>
       {open ? (
         <>
-          {/* Dark overlay — sibling, animated. Dims the whole page like
-              the old `.glass-modal` did. NO backdrop-filter so the panel
-              (also a sibling, fixed-positioned) can see the page below
-              it via its own backdrop-filter. */}
+          {/* Dim overlay — sibling, animated. Uses `.modal-dim` which
+              combines a light tint + `backdrop-filter: brightness()`
+              so the panel's own backdrop-blur (a sibling above this)
+              correctly blurs a darkened-page composite. The original
+              implementation set a near-opaque solid background here
+              which cancelled the panel's blur — see globals.css for
+              the full reasoning. */}
           <motion.div
             key="dim"
             onClick={onClose}
@@ -137,21 +140,23 @@ export function AllNotificationsModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            // Same dim level as `.glass-modal` (`--tq-surface-modal`,
-            // 88 % dark) so the see-all modal feels consistent with the
-            // comment lightbox / slide lightbox.
-            style={{ background: "var(--tq-surface-modal)" }}
-            className="fixed inset-0 z-[1000]"
+            className="modal-dim fixed inset-0 z-[1000]"
           />
-          {/* Static glass panel — fixed-positioned, NOT inside any
-              animated ancestor with transform / opacity. That's the
-              only way backdrop-filter actually blurs the page through
-              the panel (any transform / opacity != 1 ancestor traps it
-              in a stacking context). Centering via a flex-centered
-              wrapper (pointer-events: none so clicks fall through to
-              the dim overlay); the panel itself has NO transform. */}
-          <div
+          {/* Panel wrapper — motion.div so AnimatePresence tracks
+              its enter/exit and the panel fades with the dim instead
+              of disappearing instantly. The panel itself stays a
+              plain div so its backdrop-filter samples the dim+page
+              correctly at steady state. See TemplateLightbox for
+              the full reasoning. */}
+          <motion.div
             key="panel-wrapper"
+            // Entry intentionally instant (initial=1) so the panel's
+            // backdrop-blur is present from the first frame. See
+            // TemplateLightbox for the stacking-context reasoning.
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
           <div
@@ -235,7 +240,7 @@ export function AllNotificationsModal({
               </footer>
             ) : null}
           </div>
-          </div>
+          </motion.div>
         </>
       ) : null}
     </AnimatePresence>,

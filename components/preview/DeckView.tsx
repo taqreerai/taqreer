@@ -37,8 +37,23 @@ import { createClient } from "@/lib/supabase/client";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { notificationStore } from "@/lib/notifications/store";
 
+import type { ProjectRole } from "@/lib/api/project-access";
+
 type Props = {
   projectId: string;
+  // Role of the current viewer (Phase 15.B). "owner" / "edit" = full
+  // editor UI. "comment" = view + comments + flat (non-AI) comment
+  // button, no regen / save / lock. "view" = pure read-only — no
+  // toolbar mutation buttons, no comments, no slide-pill mutations.
+  // Driven server-side in the page via resolveProjectAccess.
+  role: ProjectRole;
+  // Caller's prisma User row id — null for anonymous public-view
+  // (no login). Used for client-side authorship comparisons:
+  // currently the per-comment delete affordance hides for comment-
+  // only users when comment.authorId !== currentUserId. Server
+  // routes still enforce via their own auth checks (defense in
+  // depth); this prop is for UX, not security.
+  currentUserId: string | null;
   projectTitle: string;
   presentationId: string | null;
   initialProjectStatus: string;
@@ -70,6 +85,16 @@ type Props = {
   // as the fallback for placeholder cards during generation, when there's
   // no manifest yet to read `format` from.
   initialFormat?: SlideFormat;
+  // Width of the main app sidebar (80 collapsed, 260 expanded). Read
+  // SSR-side from the `tq_sidebar_collapsed` cookie by the page that
+  // mounts DeckView and passed in here so the SlideNavSidebar's
+  // `right:` value is correct on first paint — without this prop the
+  // sidebar defaulted to 260, then re-rendered to 80 once
+  // localStorage was read in an effect, producing a visible
+  // slide-in animation ("SlideNavSidebar slides ltr on refresh",
+  // user report 2026-05-23). Optional + defaults to 260 so callers
+  // that haven't wired the prop still work.
+  initialMainSidebarWidth?: number;
 };
 
 type DerivedStatus = "generating" | "completed" | "failed";
@@ -184,6 +209,8 @@ const TOOLBAR_POSITION_SPRING = { type: "spring" as const, stiffness: 180, dampi
 
 export function DeckView({
   projectId,
+  role,
+  currentUserId,
   projectTitle,
   presentationId,
   initialProjectStatus,
@@ -195,7 +222,16 @@ export function DeckView({
   initialSlideCount,
   initialSlideStates = [],
   initialFormat,
+  initialMainSidebarWidth = 260,
 }: Props) {
+  // Capability flags derived from role — passed/used wherever the
+  // UI gates a mutation affordance. View-only sees the deck and
+  // can export; comment can also create comments; edit/owner can
+  // do anything (regen, save, lock, restore, lock-all). Computing
+  // once here keeps the descendants from needing to know about the
+  // role taxonomy.
+  const canEdit = role === "owner" || role === "edit";
+  const canComment = canEdit || role === "comment";
   const router = useRouter();
   const pathname = usePathname();
   // Initial state seeds from server props. The parent (re)keys this component
@@ -416,10 +452,14 @@ export function DeckView({
   // Main app sidebar width — drives the slide-nav's `right` offset
   // so it docks against the main sidebar's inner edge. Mirrors the
   // source of truth in DashboardShell.tsx (localStorage +
-  // `taqreer_sidebar_collapsed_changed` custom event). Default to
-  // the expanded width (260) for SSR; the effect below replaces it
-  // with the stored value on mount.
-  const [mainSidebarWidth, setMainSidebarWidth] = useState<number>(260);
+  // `taqreer_sidebar_collapsed_changed` custom event). Initial value
+  // comes from the SSR-read cookie via `initialMainSidebarWidth` so
+  // first paint already has the correct width — no flash where the
+  // SlideNavSidebar starts at right:260 and snaps to right:80 (or
+  // vice-versa) after the localStorage read fires in the effect
+  // below. The localStorage sync is still kept so toggles from
+  // other tabs propagate.
+  const [mainSidebarWidth, setMainSidebarWidth] = useState<number>(initialMainSidebarWidth);
   useEffect(() => {
     const readWidth = (): number => {
       try {
@@ -848,8 +888,15 @@ export function DeckView({
   // presentation's currentVersionId, so refetching on manifest swap (after
   // a partial regen completes) brings up the new version's drafts (zero,
   // since drafts get applied during regen and the new version starts clean).
+  //
+  // Phase 15.A — gated on `canComment`. View-only viewers never see the
+  // comment UI; skipping the fetch saves a round-trip on every public-
+  // view load (also, the server now rejects view callers on the
+  // comments routes — without the gate the request would 403/404 and
+  // spam the console with errors).
   useEffect(() => {
     if (status !== "completed") return;
+    if (!canComment) return;
     let cancelled = false;
     (async () => {
       try {
@@ -868,7 +915,7 @@ export function DeckView({
     return () => {
       cancelled = true;
     };
-  }, [projectId, status, manifest?.presentationId]);
+  }, [projectId, status, manifest?.presentationId, canComment]);
 
   // While applying, poll project status. The user must hear about
   // ANY disconnect — Inngest cancellations don't flip the DB row to
@@ -1402,7 +1449,14 @@ export function DeckView({
     const genHeroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
     return (
       <section
-        dir="rtl"
+        // `dir={streamingDirection}` (was hardcoded "rtl") so an EN
+        // deck's generating layout flows LTR — the previous hardcoded
+        // RTL produced thumbnails that read right-aligned inside the
+        // hero canvas and got visually clipped against the LTR slide
+        // content. The completed-state branch below already uses
+        // `dir={manifest!.direction}`; this brings the generating
+        // branch into parity.
+        dir={streamingDirection}
         className="relative"
         style={{ marginRight: SLIDE_NAV_WIDTH }}
       >
@@ -1642,8 +1696,12 @@ export function DeckView({
               // EN decks flip to LTR so the visual #1 lands on the left
               // (user feedback 2026-05-20). Defaults to "ar" if missing.
               language={manifest!.language === "en" ? "en" : "ar"}
-              onLockAll={() => bulkSetLock(true)}
-              onUnlockAll={() => bulkSetLock(false)}
+              // Bulk lock pill is hidden for non-edit roles (SlideNavSidebar
+              // already auto-hides when both callbacks are omitted). Same
+              // gating logic as the per-slide lock toggle in NavItem,
+              // which checks canEdit before firing onToggleLock.
+              onLockAll={canEdit ? () => bulkSetLock(true) : undefined}
+              onUnlockAll={canEdit ? () => bulkSetLock(false) : undefined}
             />
           </motion.div>
         )}
@@ -1669,6 +1727,7 @@ export function DeckView({
               <div className="pointer-events-auto">
                 <PreviewActionBar
                   projectId={projectId}
+                  role={role}
                   projectTitle={projectTitle}
                   manifest={manifest!}
                   commentMode={commentMode}
@@ -1759,7 +1818,7 @@ export function DeckView({
               the user is in comment mode (the comment overlay
               owns the canvas; the pill would steal cursor focus
               from drag-to-draw). */}
-          {!isFocusedRegenerating && !commentMode ? (
+          {!isFocusedRegenerating && !commentMode && canEdit ? (
             <SlidePill
               currentVersionNumber={
                 slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
@@ -1950,6 +2009,11 @@ export function DeckView({
               onCreate={handleCreateComment}
               onUpdate={handleUpdateComment}
               onDelete={handleDeleteComment}
+              // For per-comment delete affordance gating: a viewer
+              // who's NOT canEdit can only delete their own comments.
+              // owner / edit see delete on everything (moderation).
+              canModerate={canEdit}
+              currentUserId={currentUserId}
             />
           ) : null}
         </motion.div>
