@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreateShell } from "@/components/create/CreateShell";
 import { PillButton } from "@/components/create/PillButton";
+import { useFlowPrefix } from "@/components/create/useFlowPrefix";
 import {
   DEFAULT_QUALITY,
   QUALITY_PRESETS,
@@ -27,6 +28,7 @@ import {
   isQuality,
   type Quality,
 } from "@/lib/types/quality";
+import { readSource, clearSource } from "@/lib/types/source";
 
 const QUALITY_KEY = "taqreer:create:quality";
 
@@ -109,6 +111,11 @@ const POSITION_LABELS: Record<string, string> = {
 
 export default function CreateSummaryPage() {
   const router = useRouter();
+  // Route prefix for parallel-flow nav (Phase 17.B). See
+  // components/create/useFlowPrefix for the rationale; same page
+  // serves both /create/summary and /enhance/summary via the
+  // re-export at app/enhance/summary/page.tsx.
+  const flowPrefix = useFlowPrefix();
   const [content, setContent] = useState<ContentState | null>(null);
   const [brand, setBrand] = useState<StoredBrand | null>(null);
   const [output, setOutput] = useState<StoredOutput | null>(null);
@@ -169,7 +176,7 @@ export default function CreateSummaryPage() {
     const rawBrand = sessionStorage.getItem("taqreer:create:brand");
     const rawOutput = sessionStorage.getItem("taqreer:create:output");
     if (!rawContent || !rawBrand) {
-      router.replace("/create/content");
+      router.replace(`${flowPrefix}/content`);
       return;
     }
     try {
@@ -182,7 +189,7 @@ export default function CreateSummaryPage() {
     } catch {
       // A corrupt session blob would blank the whole summary; bounce
       // to step 1 so the user re-enters from a clean state instead.
-      router.replace("/create/content");
+      router.replace(`${flowPrefix}/content`);
     }
   }, [router]);
 
@@ -269,6 +276,13 @@ export default function CreateSummaryPage() {
       const language: "ar" | "en" =
         output?.language === "en" ? "en" : "ar";
 
+      // Phase 17.B — forward the SourceMeta blob (if present) to
+      // /api/projects. Set by the Enhance / Mimic / Data flows via
+      // seedFromExtraction; absent for the regular create flow.
+      // /api/projects validates against SourceMetaSchema and
+      // downgrades to scratch if invalid — see route.ts.
+      const source = readSource();
+
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -280,6 +294,9 @@ export default function CreateSummaryPage() {
           saveBrandKit: false,
           slideCount: resolvedSlideCount,
           quality,
+          // Only include when present so create-flow POST shape stays
+          // unchanged (no undefined key in the JSON body).
+          ...(source ? { source } : {}),
         }),
       });
 
@@ -289,11 +306,16 @@ export default function CreateSummaryPage() {
       }
 
       const data = (await response.json()) as { projectId: string };
-      // Clear sessionStorage so the next "create new" starts fresh.
+      // Clear sessionStorage so the next visit starts fresh — for
+      // both /create and /enhance flows.
       sessionStorage.removeItem("taqreer:create:content");
       sessionStorage.removeItem("taqreer:create:brand");
       sessionStorage.removeItem("taqreer:create:brand:savedSnapshot");
       sessionStorage.removeItem("taqreer:create:output");
+      // Clear the SourceMeta marker too. No-op for create flow (it
+      // never wrote one); essential for /enhance so the next visit
+      // doesn't re-hydrate stale extraction state.
+      clearSource();
       router.push(`/preview/${data.projectId}`);
     } catch (caughtError) {
       setError(
@@ -325,7 +347,7 @@ export default function CreateSummaryPage() {
     <div className="flex items-center justify-between">
       <PillButton
         variant="secondary"
-        onClick={() => router.push("/create/brand")}
+        onClick={() => router.push(`${flowPrefix}/brand`)}
         icon="arrow_forward"
       >
         السابق
@@ -504,7 +526,7 @@ export default function CreateSummaryPage() {
           // text it toggles inline edit mode.
           onEdit={
             content?.type === "file"
-              ? () => router.push("/create/content")
+              ? () => router.push(`${flowPrefix}/content`)
               : () => setContentEditing((v) => !v)
           }
           editLabel={
@@ -559,7 +581,7 @@ export default function CreateSummaryPage() {
           <SummaryCard
             title="الهوية البصرية"
             icon="palette"
-            onEdit={() => router.push("/create/brand")}
+            onEdit={() => router.push(`${flowPrefix}/brand`)}
           >
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-1 flex-col gap-2 min-w-0">
@@ -610,7 +632,7 @@ export default function CreateSummaryPage() {
           <SummaryCard
             title="إعدادات الإخراج"
             icon="tune"
-            onEdit={() => router.push("/create/content")}
+            onEdit={() => router.push(`${flowPrefix}/content`)}
           >
             <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs">
               <SummaryStat label="حجم الشريحة" value={slideSizeLabel} />

@@ -16,6 +16,7 @@ import { PillButton } from "@/components/create/PillButton";
 import { CORNER_POSITIONS, Pill } from "@/components/create/controls";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { notifyCreateStateChange } from "@/components/create/CreateStepper";
+import { useFlowPrefix } from "@/components/create/useFlowPrefix";
 import type { CornerPosition } from "@/components/create/controls";
 import {
   LogoPositionFields,
@@ -921,6 +922,13 @@ function readStoredBrand(): StoredBrandShape | null {
 
 export default function CreateBrandPage() {
   const router = useRouter();
+  // Route prefix for parallel-flow nav (Phase 17.B). Returns
+  // "/create" when this component is mounted under /create/*,
+  // "/enhance" when mounted under /enhance/* (the re-export at
+  // app/enhance/brand/page.tsx). All forward / back nav within
+  // this page uses `${flowPrefix}/<step>` so the URL stays
+  // under the user's chosen flow.
+  const flowPrefix = useFlowPrefix();
   const [content, setContent] = useState<StoredContent | null>(null);
 
   // ─── Right column state ─────────────────────────────────────────────────
@@ -1580,7 +1588,7 @@ export default function CreateBrandPage() {
   useEffect(() => {
     const rawContent = sessionStorage.getItem("taqreer:create:content");
     if (!rawContent) {
-      router.replace("/create/content");
+      router.replace(`${flowPrefix}/content`);
       return;
     }
     try {
@@ -1589,7 +1597,7 @@ export default function CreateBrandPage() {
     } catch {
       // Corrupt session payload — bounce to step 1 instead of crashing
       // the whole page. Step 1 will hydrate fresh state.
-      router.replace("/create/content");
+      router.replace(`${flowPrefix}/content`);
       return;
     }
 
@@ -2119,7 +2127,7 @@ export default function CreateBrandPage() {
       );
       notifyCreateStateChange();
 
-      router.push("/create/summary");
+      router.push(`${flowPrefix}/summary`);
     } catch (caughtError) {
       console.error("Create brand upload error:", caughtError);
       setError(
@@ -2140,7 +2148,7 @@ export default function CreateBrandPage() {
           model. */}
       <PillButton
         variant="secondary"
-        onClick={() => router.push("/create/content")}
+        onClick={() => router.push(`${flowPrefix}/content`)}
         icon="arrow_forward"
       >
         السابق
