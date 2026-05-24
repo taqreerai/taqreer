@@ -150,26 +150,33 @@ export async function rasterizePdf(
   return out;
 }
 
-// ─── PPTX rasterization (stub for 17.A; full impl in 17.B) ─────────
-// Production path: LibreOffice CLI converts PPTX → PDF, then we
-// rasterize the PDF via the function above. LibreOffice is a host-
-// level binary (no npm equivalent that's both reliable and free at
-// scale), so it's a deployment dep — `brew install --cask
-// libreoffice` on Mac, `apt-get install libreoffice` on Linux.
+// ─── PPTX rasterization ───────────────────────────────────────────
+// PPTX is a vector format (DrawingML XML). To produce per-slide PNG
+// snapshots that Claude can read, we need a PowerPoint-compatible
+// renderer. The standard headless chain is:
 //
-// In 17.A we ship PDF-only; PPTX throws a clear error so the Enhance
-// /Mimic upload UI can surface "convert your PPT to PDF first" or
-// "this feature is coming in the next release." Concrete impl drops
-// in 17.B alongside the deployment Dockerfile update.
+//   PPTX → PDF (via LibreOffice CLI) → PNGs (via pdfjs-dist)
+//
+// pptx-to-pdf.ts owns the PPTX → PDF half; rasterizePdf (above)
+// owns PDF → PNGs. Chaining them keeps PNG output uniform across
+// PDF and PPTX inputs — same dimensions, same letterbox handling,
+// same background.
+//
+// Note: fonts + embedded images + theme colors are extracted from
+// the PPTX zip DIRECTLY (see lib/extract/assets-pptx.ts,
+// fonts-pptx.ts, colors-pptx.ts) — those don't go through this
+// rasterization path. Only the visual slide PNGs do.
 export async function rasterizePptx(
-  _pptxBuffer: Buffer,
-  _options: RasterizeOptions,
+  pptxBuffer: Buffer,
+  options: RasterizeOptions,
 ): Promise<RasterizedSlide[]> {
-  throw new Error(
-    "PPTX rasterization is not yet wired — install LibreOffice on the " +
-      "server and re-run. Tracked as Phase 17.B follow-up. For now, " +
-      "convert your deck to PDF before uploading.",
-  );
+  // Lazy import so this module's import-cost stays at zero when
+  // the caller only rasterizes PDFs. The dynamic import also makes
+  // it easier to mock pptx-to-pdf in tests without monkeypatching
+  // the static import graph.
+  const { pptxToPdf } = await import("./pptx-to-pdf");
+  const pdfBuffer = await pptxToPdf(pptxBuffer);
+  return rasterizePdf(pdfBuffer, options);
 }
 
 // ─── Dispatcher by MIME ────────────────────────────────────────────
