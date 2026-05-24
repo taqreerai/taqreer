@@ -942,16 +942,57 @@ slide-nav sidebar, BiDi patches, realtime broadcasts, presence, or bell
 notifications** — all of that is shared infrastructure that's already
 shipped (Phase 16 closed out 2026-05-24).
 
-### 21.1 Shared contracts
+### 21.1 PNG-first extraction strategy (the architectural pivot)
+
+We do NOT parse structured text out of PPT/PDF. Instead each slide is
+**rasterized to a high-fidelity PNG** that Claude reads with its native
+vision capability. This sidesteps the entire "parsed text loses layout
+context" problem (data tables, captions tied to images, infographics, mixed
+RTL/LTR runs, charts) and matches the way the Mimic flow was always going
+to work anyway. Decision locked 2026-05-24.
+
+What we DO extract programmatically alongside the PNGs:
+- **Embedded images** (team-member photos, separators, decorative SVGs,
+  logo marks) from the PPTX zip's `ppt/media/` or the PDF's embedded image
+  streams. These persist to Supabase under `project-assets/{projectId}/`
+  so Claude's generated HTML can reuse them via `<img src="…">`.
+- **Font family names** from the PPTX theme XML (`<a:majorFont>` /
+  `<a:minorFont>`) or PDF font dictionary. Listed in the brief; if a
+  recognised Google Font, Claude includes the `<link>` automatically.
+
+**Why no text extraction**: Claude sees the slide PNG and reads the text
+itself, in context — exactly as a human collaborator would. Hint
+engineering on extracted assets is also skipped: Claude correlates each
+asset URL to where it appeared on the rasterized slide visually.
+
+### 21.2 Shared contracts
 
 `lib/types/brief.ts`:
 
 ```ts
+export type ExtractedAsset = {
+  url: string;             // Supabase public URL — persists for project lifetime
+  originalSlide: number;   // 1-based slide index where it was used in the source
+  // No semantic hint — Claude sees the slide PNGs and figures out where
+  // each asset belongs from visual context.
+};
+
 export type SourceMeta =
   | { kind: "scratch" }
-  | { kind: "enhance"; originalContent: string }
-  | { kind: "mimic"; originalContent: string; referenceImages: string[] }    // base64 PNG data URLs
-  | { kind: "data"; dataFileId: string; userContext?: string };              // Anthropic Files API file_id
+  | {
+      kind: "enhance";
+      slideImages: string[];           // base64 data URLs, PNG, 1920×1080 (16:9) or 1080×1920 (9:16)
+      extractedAssets: ExtractedAsset[];
+      fonts: string[];                  // ["Cairo", "IBM Plex Sans Arabic", …]
+    }
+  | {
+      kind: "mimic";
+      uglySlideImages: string[];       // content-source rasterized
+      extractedAssets: ExtractedAsset[]; // FROM the ugly file (the good design file's assets aren't ours)
+      fonts: string[];
+      designReferenceImages: string[]; // good-file rasterized (Claude mimics this visual language)
+    }
+  | { kind: "data"; dataFileId: string; userContext?: string }; // Anthropic Files API file_id
 
 export type StandardBrief = {
   title: string;
@@ -973,47 +1014,70 @@ into sessionStorage by `lib/create/seed-from-extraction.ts`. The
 `/create/brand` and `/create/summary` pages already read from sessionStorage,
 so no changes there.
 
-`deck-generate.ts` reads `brief.source.kind` and routes to a different system
-prompt builder per flow:
-- `scratch` (default) — existing prompt
-- `enhance` — "Use the original content verbatim, redesign the visuals"
-- `mimic` — multipart user message with image blocks for `source.referenceImages`, prompt: "Match this design language"
-- `data` — message with `{type: "document", source: {type: "file", file_id: source.dataFileId}}`, prompt: "Build a narrative deck from this data"
+`deck-generate.ts` reads `brief.source.kind` and routes to a different
+multipart Claude user message per flow. The system prompt also branches:
+- `scratch` — existing prompt
+- `enhance` — "You are redesigning a presentation. Each slide is provided as an image. Use the content verbatim; redesign the layout. The embedded assets listed are available to reuse via `<img>`."
+- `mimic` — same as enhance + "These additional reference images show the design language to mimic. Match this aesthetic while using the content from the slides above."
+- `data` — references the Anthropic Files file_id via `{type: "document", source: {type: "file", file_id}}`, prompt: "Build a narrative deck from this dataset."
 
-### 21.2 Extraction modules (`lib/extract/`)
+### 21.3 Extraction modules (`lib/extract/`)
 
 | Module | Input | Output |
 |---|---|---|
-| `pptx.ts` | PPTX buffer | `{ slides: { text }[], theme: { colors[], fonts[] } }` via JSZip + `@xmldom/xmldom` (already patched for HTML pivot). Reads `ppt/theme/theme1.xml` for colors + fonts. |
-| `pdf.ts` | PDF buffer | `{ slides: { text }[], colors[] }`. Text via `pdfjs-dist`; colors via rasterize-first-page + `colorthief`. |
-| `xlsx.ts` | XLSX buffer | Skip parsing entirely — pass through to `data.ts` which uploads to Anthropic Files. Helper exists only as a thin pass-through + size validation. |
-| `rasterize.ts` | PPTX/PDF buffer | Array of PNG buffers (one per slide). Uses existing Puppeteer setup from PNG export pipeline. |
+| `rasterize.ts` | PPTX/PDF buffer | Array of PNG buffers (one per slide), 1920×1080 for 16:9 / 1080×1920 for 9:16. PPTX is converted to PDF via LibreOffice headless inside an Inngest extraction job (production needs LibreOffice on the host); then `pdfjs-dist` + `canvas` rasterizes each page. |
+| `assets-pptx.ts` | PPTX buffer | Enumerate `ppt/media/*` entries via JSZip. Parse each slide's XML to record which slide each image was used on. Upload each image to Supabase `project-assets/{projectId}/{assetId}.{ext}` and return URL + originalSlide. |
+| `assets-pdf.ts` | PDF buffer | Per-page image extraction via `pdfjs-dist` (`page.objs.get(...)` for image refs). Upload + return same shape as `assets-pptx`. |
+| `fonts-pptx.ts` | PPTX buffer | Read `ppt/theme/theme1.xml` `<a:majorFont>` + `<a:minorFont>` typeface names. |
+| `fonts-pdf.ts` | PDF buffer | Read PDF font dictionary via `pdfjs-dist` — typically returns PostScript font names that we normalise to family names. |
+| `index.ts` | File buffer + mime type | Dispatch by mime; returns the unified `{ slideImages, extractedAssets, fonts }` triple. |
 
-Extraction routes are streaming multipart endpoints — the uploaded file is
-consumed into a buffer, parsed, then garbage collected at end of request.
-**Zero file persistence on our side.**
+**Deployment dep**: LibreOffice headless on the server hosting the Inngest
+worker. Local dev: `brew install libreoffice` (Mac). Production: Docker
+image with LibreOffice or a separate conversion service. PPT → PDF
+conversion is the single non-trivial install; everything else is pure JS.
 
-### 21.3 Per-flow routes + pages
+### 21.4 Storage / retention
+
+| Asset | Retention |
+|---|---|
+| Uploaded raw file (PPT/PDF/XLSX) | In-memory only. Freed at end of extraction request. |
+| Slide PNGs | Base64-embedded in Claude's user message during generation. Not persisted — they're a snapshot of "what the original looked like," only useful during the generation pass. |
+| Extracted embedded images | Persisted to Supabase `project-assets/{projectId}/{assetId}.{ext}` for the project's lifetime. Claude's generated HTML references them by URL. Deleted by the existing project-delete storage cleanup pipeline. |
+| Data flow XLSX upload | Goes to Anthropic Files API only — never touches our storage. Deleted via Anthropic's API once `deck-generate` completes. |
+
+### 21.5 Per-flow routes + pages
 
 | Flow | UI page | API route | Prompt branch |
 |---|---|---|---|
-| Enhance | `/enhance` (drag-drop, file picker, progress) | `POST /api/enhance/extract` (multipart in → StandardBrief out) | `source.kind === "enhance"` |
-| Mimic | `/mimic` (two drop zones: design ref + content source) | `POST /api/mimic/extract` (multipart in → StandardBrief w/ referenceImages out) | `source.kind === "mimic"` |
-| Data | `/from-data` (drag-drop + optional context textarea) | `POST /api/data/extract` (multipart in → upload to Anthropic Files → StandardBrief w/ dataFileId out) | `source.kind === "data"` |
+| Enhance | `/enhance` (drag-drop, file picker, extraction progress) | `POST /api/enhance/extract` (multipart in → fires Inngest extraction job → returns jobId → client polls → StandardBrief out) | `source.kind === "enhance"` |
+| Mimic | `/mimic` (two drop zones: ugly content source + good design reference) | `POST /api/mimic/extract` (multipart in → Inngest extraction job → StandardBrief w/ uglySlideImages + extractedAssets + designReferenceImages out) | `source.kind === "mimic"` |
+| Data | `/from-data` (drag-drop + optional context textarea) | `POST /api/data/extract` (multipart in → upload to Anthropic Files → StandardBrief w/ dataFileId out — no Inngest, fast path) | `source.kind === "data"` |
 
-### 21.4 File-size caps + retention
+### 21.6 File-size caps
 
-| Flow | Cap | Retention |
-|---|---|---|
-| Enhance | 100 MB | In-memory only; freed at request end |
-| Mimic | 100 MB **per file** | In-memory only; freed at request end |
-| Data | 25 MB | Uploaded to Anthropic Files API only; deleted via their API once `deck-generate` completes (success or failure) |
+| Flow | Cap |
+|---|---|
+| Enhance | 100 MB |
+| Mimic | 100 MB **per file** |
+| Data | 25 MB |
 
-### 21.5 Implementation order
+### 21.7 Implementation order
 
 17.A first (the shared infra) so each subsequent sub-phase only adds a route
 + page + prompt branch. Each of 17.B / C / D is independent of the others
 once 17.A lands — they can ship sequentially or in parallel.
+
+**17.A sub-steps:**
+1. `lib/types/brief.ts` — StandardBrief + SourceMeta + ExtractedAsset types
+2. `lib/extract/rasterize.ts` — PDF → PNG via pdfjs-dist + canvas; PPT → PDF via LibreOffice headless wrapper
+3. `lib/extract/assets-{pptx,pdf}.ts` — embedded image extraction + Supabase upload
+4. `lib/extract/fonts-{pptx,pdf}.ts` — font family extraction
+5. `lib/extract/index.ts` — dispatcher + unified return shape
+6. `lib/storage/project-assets.ts` — wraps Supabase upload + signed URL signing for `project-assets/{projectId}/` bucket path
+7. `lib/create/seed-from-extraction.ts` — writes StandardBrief to sessionStorage
+8. `inngest/functions/extract-source.ts` — Inngest function that orchestrates rasterize + assets + fonts; returns the brief
+9. `inngest/functions/deck-generate.ts` — branch on `source.kind`; multipart Claude user message with image blocks for slideImages, asset URLs listed in prose, fonts listed in brief block.
 
 ---
 
