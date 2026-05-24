@@ -959,6 +959,22 @@ What we DO extract programmatically alongside the PNGs:
 - **Font family names** from the PPTX theme XML (`<a:majorFont>` /
   `<a:minorFont>`) or PDF font dictionary. Listed in the brief; if a
   recognised Google Font, Claude includes the `<link>` automatically.
+- **Brand palette** via a two-tier strategy:
+  - **Tier 1 (PPTX)**: parse `ppt/theme/theme1.xml` `<a:clrScheme>` →
+    `accent1` through `accent6`. The accent colors are almost always the
+    brand palette — the deck designer picked them deliberately. Skip
+    `bg1/bg2` (background defaults) and `tx1/tx2` (text defaults). Cost
+    ~10 ms, zero AI.
+  - **Tier 2 (PDF, or PPTX with a degenerate theme)**: run `colorthief`
+    over each rasterized slide PNG, aggregate frequencies across slides,
+    filter out neutrals (pure black/white, grays with HSL saturation
+    < 10%, near-blacks with L < 8%, near-whites with L > 92%), cluster
+    similar colors via HSL distance threshold, return top 5 by
+    frequency. `colorthief` is already in `package.json` (used by the
+    dashboard color filter). Cost ~50-100 ms per slide.
+  - **Dispatcher**: try Tier 1 first for PPTX; fall through to Tier 2
+    when Tier 1 returns fewer than 3 non-neutral accents (the "user used
+    a blank template" case). PDF always uses Tier 2.
 
 **Why no text extraction**: Claude sees the slide PNG and reads the text
 itself, in context — exactly as a human collaborator would. Hint
@@ -1014,6 +1030,13 @@ into sessionStorage by `lib/create/seed-from-extraction.ts`. The
 `/create/brand` and `/create/summary` pages already read from sessionStorage,
 so no changes there.
 
+**Color extraction populates `brand.colors[]` directly** (not `source.*`).
+The user lands on `/create/brand` with the palette already filled in, and
+can override before continuing. Fonts work the same way —
+`source.fonts` carries the extracted typeface names so `deck-generate`
+can render with the original fonts, but the user can still override on
+`/create/brand`.
+
 `deck-generate.ts` reads `brief.source.kind` and routes to a different
 multipart Claude user message per flow. The system prompt also branches:
 - `scratch` — existing prompt
@@ -1030,7 +1053,9 @@ multipart Claude user message per flow. The system prompt also branches:
 | `assets-pdf.ts` | PDF buffer | Per-page image extraction via `pdfjs-dist` (`page.objs.get(...)` for image refs). Upload + return same shape as `assets-pptx`. |
 | `fonts-pptx.ts` | PPTX buffer | Read `ppt/theme/theme1.xml` `<a:majorFont>` + `<a:minorFont>` typeface names. |
 | `fonts-pdf.ts` | PDF buffer | Read PDF font dictionary via `pdfjs-dist` — typically returns PostScript font names that we normalise to family names. |
-| `index.ts` | File buffer + mime type | Dispatch by mime; returns the unified `{ slideImages, extractedAssets, fonts }` triple. |
+| `colors-pptx.ts` | PPTX buffer | Parse `<a:clrScheme>` in `ppt/theme/theme1.xml` — return `accent1`–`accent6` hex array. Filter out the bg/tx slots. Returns `null` when the theme is degenerate (e.g. all black/white) so the caller can fall through to colorthief. |
+| `colors-rasterized.ts` | PNG buffer[] | Run `colorthief.getPalette(buffer, N=6)` per slide → aggregate into a frequency map → filter neutrals (`Math.abs(R-G)+Math.abs(G-B)<15` for grays; L<8 or >92 for near-blacks/whites) → cluster via HSL distance threshold (merge entries within ΔH<15° + ΔS<0.1 + ΔL<0.1) → return top 5 hex strings by aggregated frequency. |
+| `index.ts` | File buffer + mime type | Dispatch by mime; orchestrates rasterize → assets → fonts → colors (Tier 1 then Tier 2 fallback). Returns the unified `{ slideImages, extractedAssets, fonts, colors }` quad. |
 
 **Deployment dep**: LibreOffice headless on the server hosting the Inngest
 worker. Local dev: `brew install libreoffice` (Mac). Production: Docker
@@ -1073,11 +1098,13 @@ once 17.A lands — they can ship sequentially or in parallel.
 2. `lib/extract/rasterize.ts` — PDF → PNG via pdfjs-dist + canvas; PPT → PDF via LibreOffice headless wrapper
 3. `lib/extract/assets-{pptx,pdf}.ts` — embedded image extraction + Supabase upload
 4. `lib/extract/fonts-{pptx,pdf}.ts` — font family extraction
-5. `lib/extract/index.ts` — dispatcher + unified return shape
-6. `lib/storage/project-assets.ts` — wraps Supabase upload + signed URL signing for `project-assets/{projectId}/` bucket path
-7. `lib/create/seed-from-extraction.ts` — writes StandardBrief to sessionStorage
-8. `inngest/functions/extract-source.ts` — Inngest function that orchestrates rasterize + assets + fonts; returns the brief
-9. `inngest/functions/deck-generate.ts` — branch on `source.kind`; multipart Claude user message with image blocks for slideImages, asset URLs listed in prose, fonts listed in brief block.
+5. `lib/extract/colors-pptx.ts` — `<a:clrScheme>` parser (Tier 1)
+6. `lib/extract/colors-rasterized.ts` — colorthief aggregation + neutral filter + HSL clustering (Tier 2)
+7. `lib/extract/index.ts` — dispatcher (Tier 1 → Tier 2 fallback for colors; orchestrates rasterize + assets + fonts + colors). Returns the unified `{ slideImages, extractedAssets, fonts, colors }` shape.
+8. `lib/storage/project-assets.ts` — wraps Supabase upload + signed URL signing for `project-assets/{projectId}/` bucket path
+9. `lib/create/seed-from-extraction.ts` — writes StandardBrief (including `brand.colors[]` and `source.fonts`) to sessionStorage
+10. `inngest/functions/extract-source.ts` — Inngest function that calls the unified extractor and persists the StandardBrief for the client to poll
+11. `inngest/functions/deck-generate.ts` — branch on `source.kind`; multipart Claude user message with image blocks for slideImages, asset URLs listed in prose, fonts + colors listed in brief block.
 
 ---
 
