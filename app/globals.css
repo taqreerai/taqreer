@@ -1448,22 +1448,37 @@ body {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* Paler, broader blobs with multi-stop fade for smooth merge.
-     Each gradient is the same brand-adjacent hue at progressively
-     lower alpha (full-strength → mid → transparent) so the bleed
-     into the page base reads as continuous, not edged. */
+  /* Three-tone twin-glow composition:
+       • Top-left → center: desaturated Royal Blue → muted teal-
+         slate (#344F67) bridge → soft tail
+       • Bottom-right: desaturated Magenta Glow with extended
+         falloff reaching into the center
+     The top-left gradient pulls a teal-slate (#344F67) at its
+     mid-radius — gives the upper half a cool "ocean depth" cast
+     that bridges the pure brand blue into the middle, and softens
+     the meet with the magenta from the opposite corner.
+     2026-05-24 v14: lifted the dark dead-zone in the center.
+     v13's teal stops faded too fast (peak 0x30 → 0x20 → 0x0E →
+     transparent at 90 %), leaving a noticeable dark band on the
+     diagonal between the blue corner and the magenta corner.
+     v14 raises every teal stop ~25 % (0x38 → 0x28 → 0x16) and
+     adds a 0x0A tail at 85 % before transparent at 100 %, so the
+     teal lingers across the middle and the center reads ambient
+     rather than dim. */
   background-image:
-    radial-gradient(ellipse 100% 80% at 10% 90%,
-      rgba(110, 90, 200, 0.12) 0%,
-      rgba(110, 90, 200, 0.06) 35%,
-      transparent 85%),
-    radial-gradient(ellipse 90% 70% at 90% 5%,
-      rgba(180, 130, 175, 0.10) 0%,
-      rgba(180, 130, 175, 0.05) 35%,
-      transparent 85%),
-    radial-gradient(ellipse 85% 75% at 55% 50%,
-      rgba(140, 120, 200, 0.06) 0%,
-      transparent 80%);
+    radial-gradient(220% 200% at 10% 0,
+      #3f2ee32a 0%,
+      #3f2ee318 18%,
+      #344f6738 38%,
+      #344f6728 52%,
+      #344f6716 70%,
+      #344f670a 85%,
+      #0000 100%),
+    radial-gradient(45% 35% at 95% 100%,
+      #c84ca02e 0%,
+      #c84ca014 42%,
+      #c84ca006 88%,
+      #0000 175%);
 }
 
 .dashboard-bg::after {
@@ -1607,21 +1622,25 @@ body {
    modal panel (lightbox, save-as-template, share, notifications,
    project lightbox).
 
-   Single canonical tint (user-locked 2026-05-23):
-     color-mix(in oklab, var(--color-black) 70%, transparent)
-   = 70% opaque black mixed in oklab gamma space, alpha 0.7. oklab
-   gives a perceptually-uniform darken across any hue behind the
-   panel — neutral against the brand magenta + violet aurora that
-   the dashboard renders. Every modal in the app should consume this
-   class instead of inlining a black/30 / brightness-50 / etc.
-   variant — the dim contract is global, not per-modal.
+   Single canonical tint (user-locked 2026-05-24 v1 — iterating):
+     color-mix(in oklab, var(--color-black) 45%, transparent)
+   = 45% opaque black mixed in oklab gamma space, alpha 0.45. Pulled
+   back from the previous 70% (2026-05-23 lock) so the brand-color
+   light-leak gradients on the dashboard still read through the dim
+   layer, instead of getting completely washed to black behind the
+   modal. oklab gives a perceptually-uniform darken across any hue
+   behind the panel — neutral against the brand magenta + violet
+   aurora that the dashboard renders. Every modal in the app
+   consumes this class instead of inlining a black/30 /
+   brightness-50 / etc. variant — the dim contract is global, not
+   per-modal.
 
    No backdrop-filter is composed here. The dim is a flat tint, the
    panel above provides the glass blur on its own surface; layering
    filters here would compound darkening with the panel's blur and
    wash out the brand visuals it's supposed to sample. */
 .modal-dim {
-  background-color: color-mix(in oklab, var(--color-black) 70%, transparent);
+  background-color: color-mix(in oklab, var(--color-black) 45%, transparent);
 }
 
 /* ─── Card Danger Variant ─── */
