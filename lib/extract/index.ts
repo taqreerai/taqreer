@@ -23,6 +23,7 @@
 // the SourceMeta blob with anthropicFileId + extractedAssets +
 // fonts + colors.
 
+import { PDFDocument } from "pdf-lib";
 import { pptxToPdf } from "./pptx-to-pdf";
 import { extractAssetsFromPptx, type ExtractedPptxAsset } from "./assets-pptx";
 import { extractFontsFromPptx } from "./fonts-pptx";
@@ -39,6 +40,21 @@ export type ExtractionResult = {
   /** PDF bytes — feed to Anthropic Files API upload. */
   pdfBytes: Buffer;
   /**
+   * Page count derived from the PDF (post-LibreOffice for PPTX
+   * inputs; native for PDF inputs). Used as the canonical slide
+   * count for the generated deck — the /enhance flow no longer
+   * shows a manual slide-count picker (user feedback 2026-05-25).
+   */
+  pageCount: number;
+  /**
+   * Slide format derived from the FIRST page's aspect ratio:
+   *   w >= h  → "16:9"
+   *   else    → "9:16"
+   * Used as the canonical slide format — /enhance no longer shows
+   * a manual size picker.
+   */
+  format: "16:9" | "9:16";
+  /**
    * Embedded image assets pulled from the source (PPTX only).
    * Empty for PDFs in 17.B.A — PDF image extraction is harder and
    * deferred. Claude can still re-create visuals from the PDF
@@ -47,7 +63,9 @@ export type ExtractionResult = {
   embeddedAssets: ExtractedPptxAsset[];
   /**
    * Typeface family names from the PPTX theme XML. Empty for PDFs.
-   * Used as a "preferred fonts" hint to Claude.
+   * Used as a "preferred fonts" hint to Claude. Classification
+   * into system vs custom happens in deck-generate when building
+   * the directive.
    */
   fonts: string[];
   /**
@@ -107,8 +125,31 @@ export async function extract(
     if (colorsResult.status === "fulfilled") themeColors = colorsResult.value;
   }
 
+  // Step 3: read PDF metadata for slide count + format.
+  // pdf-lib is in package.json already (used elsewhere). Parsing
+  // is ~tens of ms for a typical deck — no measurable overhead.
+  let pageCount = 0;
+  let format: "16:9" | "9:16" = "16:9";
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    pageCount = pdfDoc.getPageCount();
+    if (pageCount > 0) {
+      const firstPage = pdfDoc.getPage(0);
+      const { width, height } = firstPage.getSize();
+      format = width >= height ? "16:9" : "9:16";
+    }
+  } catch {
+    // Malformed PDF here would be very unusual — LibreOffice
+    // converted a valid PPTX, or the user uploaded a real PDF.
+    // Fall back to safe defaults; downstream still works.
+    pageCount = 0;
+    format = "16:9";
+  }
+
   return {
     pdfBytes,
+    pageCount,
+    format,
     embeddedAssets,
     fonts,
     colors: themeColors ?? [],

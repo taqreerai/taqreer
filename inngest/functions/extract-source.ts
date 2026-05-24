@@ -62,6 +62,10 @@ type ExtractCompletedOutput = {
   embeddedAssets: UploadedAsset[];
   fonts: string[];
   colors: string[];
+  /** PDF page count → drives slide count in the generated deck. */
+  pageCount: number;
+  /** Slide format from the PDF's first-page aspect ratio. */
+  format: "16:9" | "9:16";
 };
 
 export const extractSource = inngest.createFunction(
@@ -168,6 +172,8 @@ export const extractSource = inngest.createFunction(
           embeddedAssets: uploadedAssets,
           fonts: ext.fonts,
           colors: ext.colors,
+          pageCount: ext.pageCount,
+          format: ext.format,
         } satisfies ExtractCompletedOutput;
       });
     } catch (err) {

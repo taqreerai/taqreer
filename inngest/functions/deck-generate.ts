@@ -16,6 +16,7 @@ import { deriveColorTags } from "@/lib/project/derive-color-tags";
 import { generateTemplateName } from "@/lib/template/generate-name";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
+import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -525,25 +526,39 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // right/left edges line up visually with the chrome below.
     `Content side+top inset: ${sideInsetPx}px (use EXACTLY this value for top / left / right on the content layer; bottom stays 140 px).`,
     ``,
-    // LANGUAGE directive — user-picked on /create/content. The
-    // system prompt is already bilingual-aware (LANGUAGE & DIRECTION
-    // section), so this block doesn't replace those mechanics; it
-    // STATES which mode this specific deck runs in so the model
-    // produces deck text in the chosen language even when the
-    // input content itself is ambiguous (e.g. all numbers, code
-    // samples, or stripped headlines). The OUTPUT JSON
-    // `language` + `direction` fields must mirror these values.
-    ...(briefLang === "en"
+    // LANGUAGE directive.
+    //
+    // For Enhance / Mimic flows: SKIP the picker-driven directive
+    // entirely. The PDF attached as a document block is the ground
+    // truth — Claude detects the original deck's language(s) from
+    // it and preserves them. Forcing AR/EN here would override the
+    // PDF and break the "match content word-for-word" guarantee.
+    // The system prompt's LANGUAGE & DIRECTION section still gives
+    // Claude the per-slide-root direction rules; we just don't
+    // tell him which one to pick.
+    //
+    // For create / scratch flows: keep the user-picked directive
+    // (content language is ambiguous from text alone — numbers,
+    // code samples, etc. need the picker as a signal).
+    ...(event.type === "enhance" ||
+    (event.brief as { source?: { kind?: string } } | null)?.source?.kind ===
+      "enhance" ||
+    (event.brief as { source?: { kind?: string } } | null)?.source?.kind ===
+      "mimic"
       ? [
-          `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
-          `Direction: \`dir="ltr"\` on every slide root. Skip Arabic font fallbacks (Cairo / Tajawal / etc.) — use the Latin font sourcing rules from the system prompt's TYPOGRAPHY section. Inline mixed-script handling (\`<span dir="rtl">\` around any incidental Arabic run) still applies the same way RTL mode handles incidental Latin.`,
-          `Manifest output: \`"language": "en"\`, \`"direction": "ltr"\`.`,
+          `LANGUAGE: Match the attached source PDF EXACTLY. Detect the language of each slide from the PDF (Arabic, English, mixed — whatever you see). Produce visible slide strings in that language, word-for-word. Do NOT translate, transliterate, paraphrase, or change script. The OUTPUT JSON \`language\` + \`direction\` fields must reflect what dominates the PDF.`,
         ]
-      : [
-          `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default. The brief's content may carry inline English runs (URLs, brand names, version numbers, code identifiers) — preserve those verbatim and wrap them in \`<span dir="ltr">\` per the system prompt's LANGUAGE & DIRECTION rules. Don't translate the inline English away.`,
-          `Direction: \`dir="rtl"\` on every slide root. Use the Arabic font stack from the system prompt's TYPOGRAPHY section.`,
-          `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
-        ]),
+      : briefLang === "en"
+        ? [
+            `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
+            `Direction: \`dir="ltr"\` on every slide root. Skip Arabic font fallbacks (Cairo / Tajawal / etc.) — use the Latin font sourcing rules from the system prompt's TYPOGRAPHY section. Inline mixed-script handling (\`<span dir="rtl">\` around any incidental Arabic run) still applies the same way RTL mode handles incidental Latin.`,
+            `Manifest output: \`"language": "en"\`, \`"direction": "ltr"\`.`,
+          ]
+        : [
+            `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default. The brief's content may carry inline English runs (URLs, brand names, version numbers, code identifiers) — preserve those verbatim and wrap them in \`<span dir="ltr">\` per the system prompt's LANGUAGE & DIRECTION rules. Don't translate the inline English away.`,
+            `Direction: \`dir="rtl"\` on every slide root. Use the Arabic font stack from the system prompt's TYPOGRAPHY section.`,
+            `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
+          ]),
     ``,
     `Brief:`,
     JSON.stringify(event.brief, null, 2),
@@ -788,7 +803,14 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
     lines.push(
       `SOURCE — Enhance flow`,
       `A PDF of the user's existing deck is attached BEFORE this text as a document block. Each page in that PDF is one slide of the original deck (1-indexed by page order).`,
-      `Your job: regenerate the SAME deck as a polished HTML version. Preserve the visual identity (palette, layout intent, content) while improving typography, hierarchy, whitespace, and execution to editorial quality. Do not introduce new content, fabricate sections, or drop pages — page count and ordering must match the attached PDF.`,
+      ``,
+      `STRICT VERBATIM CONTENT (non-negotiable):`,
+      `  • Every word of text on every slide must match the PDF EXACTLY, in the SAME language as it appears there. Do NOT translate, paraphrase, summarize, expand, abbreviate, transliterate, or "improve" the wording. Numbers, names, dates, quotes — verbatim.`,
+      `  • If the PDF is in English, the generated deck is in English. If Arabic, Arabic. If mixed, preserve the mix exactly as the original.`,
+      `  • Slide count and ordering must match the PDF page-for-page. Do not merge, split, drop, or add slides.`,
+      ``,
+      `ENHANCE THE DESIGN, NOT THE CONTENT:`,
+      `  Re-execute the deck's typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality. Preserve the brand identity (palette, fonts when provided, logo, key visual motifs). The content is locked; only the design changes.`,
     );
     if (assets.length > 0) {
       lines.push(
@@ -800,10 +822,24 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       );
     }
     if (fonts.length > 0) {
-      lines.push(
-        ``,
-        `Source font candidates (Claude may resolve these to Google Fonts where applicable): ${fonts.slice(0, 6).join(", ")}.`,
-      );
+      // Classify each name into "system" (OS-bundled — use verbatim
+      // in font-family stacks) vs "custom" (treat as a hint, try to
+      // resolve to a Google Font). Lets Claude give system fonts
+      // their canonical stack instead of forcing a Google lookup
+      // that'd never match.
+      const { systemFonts, customFonts } = classifyFontNames(fonts);
+      if (systemFonts.length > 0) {
+        lines.push(
+          ``,
+          `Source SYSTEM fonts (use VERBATIM in CSS \`font-family\` stacks — these are OS-bundled, do NOT try to load via Google Fonts <link>): ${systemFonts.slice(0, 6).join(", ")}.`,
+        );
+      }
+      if (customFonts.length > 0) {
+        lines.push(
+          ``,
+          `Source CUSTOM fonts (treat as hints — resolve to the matching Google Font where possible, e.g. "Cairo" → Cairo, "Tajawal" → Tajawal; fall back to the closest visual cousin if no Google match): ${customFonts.slice(0, 6).join(", ")}.`,
+        );
+      }
     }
   } else if (source.kind === "mimic") {
     const assets = source.extractedAssets ?? [];

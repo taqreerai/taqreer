@@ -1,46 +1,81 @@
 "use client";
 
-// Step 1 of the Enhance flow — file upload + extraction. Mirrors
-// /create/content/page.tsx but with a single card (no free-text
-// alternative; Enhance is file-only) and a different submit path:
+// Phase 17.B-17 — /enhance/content overhaul.
 //
-//   /create/content  → /api/extract-text → text in sessionStorage
-//                       → /create/brand
+// The single step of the Enhance flow. Three regions in one shell:
 //
-//   /enhance/content → /api/extract       → jobId
-//                       → poll /api/extract/[jobId]
-//                       → seedFromExtraction({ kind:"enhance", … })
-//                       → /enhance/brand (pre-filled palette + fonts)
+//   1. Source file (drop zone) — PDF or PPTX, ≤ 100 MB.
+//      On submit: POST /api/extract → poll → seedFromExtraction
+//      (pre-fills logo / palette below from the source).
 //
-// Reuses every shared chrome primitive (CreateShell, CreateStepper
-// via the shell, PillButton, OutputCards.SlideSizeFields, controls
-// — same drag-drop interaction grammar from /create/content). The
-// only logic unique to this page is the polling state machine.
+//   2. Brand logo — SVG upload via /api/storage/upload. Persisted
+//      to sessionStorage taqreer:create:brand.logo so summary +
+//      deck-generate pick it up.
+//
+//   3. Brand palette — 5 swatches, each opens ColorPickerPopover.
+//      Pre-filled by seedFromExtraction from Tier-1 PPTX theme
+//      accents; user can edit any swatch.
+//
+// What's NOT here (per user direction 2026-05-25):
+//   • No slide-size picker — auto-derived from PDF page aspect.
+//   • No slide-count picker — auto-derived from PDF page count.
+//   • No fonts picker — Claude reads the PDF + extracted-font
+//     hints carry the typography baseline.
+//   • No brand step — palette + logo absorbed into this page.
+//
+// On submit: writeSource is called BEFORE extraction polling
+// completes (no), AFTER (yes). Polling first; on completion we
+// call seedFromExtraction which writes the SourceMeta + pre-fills
+// the brand keys WITHOUT overwriting what the user typed (manual
+// edits win). Then the user clicks Next which navigates to
+// /enhance/summary.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreateShell } from "@/components/create/CreateShell";
+import { EnhanceShell } from "@/components/enhance/EnhanceShell";
 import { PillButton } from "@/components/create/PillButton";
-import {
-  SlideSizeFields,
-  type SlideSize,
-} from "@/components/create/OutputCards";
+import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import type { ExtractedAsset } from "@/lib/types/source";
 
-// sessionStorage key for slide size + dummy "content done" flag. We
-// don't actually persist a content blob the way /create/content
-// does — for Enhance, "content" IS the uploaded source, and that
-// rides in `taqreer:create:source` (written by seedFromExtraction
-// once extraction completes). But the stepper reads
-// `taqreer:create:content` to mark step 1 done, so we drop a
-// minimal { type: "source" } stub there post-extraction.
+// sessionStorage keys (canonical create-flow keys; the enhance
+// flow shares them so summary can read uniformly).
 const CONTENT_KEY = "taqreer:create:content";
+const BRAND_KEY = "taqreer:create:brand";
 const OUTPUT_KEY = "taqreer:create:output";
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+
+// Default palette shown when the source carries no theme accents
+// (PDF input, or PPTX with an unmodified Office theme). Mirrors
+// the brand defaults the /create/brand page uses.
+const DEFAULT_PALETTE = ["#3300FF", "#E036B8", "#9326C9", "#FFFFFF", "#03030D"];
+
+type ExtractCompletedResponse = {
+  status: "completed";
+  result: {
+    anthropicFileId: string;
+    embeddedAssets: Array<{ url: string; slideIndices: number[] }>;
+    fonts: string[];
+    colors: string[];
+    pageCount: number;
+    format: "16:9" | "9:16";
+  };
+  fileName?: string;
+  flowKind?: string;
+};
+
+type ExtractStatusResponse =
+  | { status: "queued" | "processing"; fileName?: string }
+  | { status: "failed"; error: string; fileName?: string }
+  | ExtractCompletedResponse;
+
+type StoredLogo = {
+  name: string;
+  storageUrl: string;
+};
 
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ك.ب`;
@@ -56,82 +91,75 @@ function readableFileName(raw: string): string {
   }
 }
 
-// Shape of the response from GET /api/extract/[jobId] when status
-// is "completed". Mirrors what extract-source.ts writes to
-// Job.outputJson on success (see ExtractCompletedOutput there).
-//
-// Phase 17.B-7: response carries `anthropicFileId` (file_id from
-// Anthropic Files API) instead of `slideImageUrls`. Claude reads
-// the PDF directly via a `document` block in deck-generate.
-type ExtractCompletedResponse = {
-  status: "completed";
-  result: {
-    anthropicFileId: string;
-    embeddedAssets: Array<{ url: string; slideIndices: number[] }>;
-    fonts: string[];
-    colors: string[];
-  };
-  fileName?: string;
-  flowKind?: string;
-};
-
-type ExtractStatusResponse =
-  | { status: "queued" | "processing"; fileName?: string }
-  | { status: "failed"; error: string; fileName?: string }
-  | ExtractCompletedResponse;
-
 export default function EnhanceContentPage() {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-  // Cancel any in-flight poll if the user navigates away or removes
-  // the file mid-extraction. The poller checks the ref before each
-  // iteration to bail cleanly.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const pollCancelledRef = useRef(false);
 
+  // ─── Source file ─────────────────────────────────────────────
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [slideSize, setSlideSize] = useState<SlideSize>("16:9");
-  const [error, setError] = useState("");
-  // Loading state machine — drives the disabled state on the
-  // submit button + the progress copy shown below the drop zone.
-  //   idle       → fresh page or file removed
-  //   uploading  → POST /api/extract is in flight
-  //   extracting → polling /api/extract/[jobId]
   const [stage, setStage] = useState<"idle" | "uploading" | "extracting">(
     "idle",
   );
+  // Once extraction completes we have the result ready; clicking
+  // Next just navigates. extractResultRef stores it across renders.
+  const [extracted, setExtracted] = useState<
+    ExtractCompletedResponse["result"] | null
+  >(null);
 
-  // Hydrate previously-picked slide size from output sessionStorage
-  // (mirrors /create/content's hydrate behavior so the user's
-  // preference persists across reloads / back-nav).
+  // ─── Brand ────────────────────────────────────────────────────
+  const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
+  const [logo, setLogo] = useState<StoredLogo | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  const [error, setError] = useState("");
+
+  // ─── Initial hydrate from sessionStorage ─────────────────────
+  // Brand keys may be pre-filled by a prior visit (e.g. user
+  // bounced back from summary). seedFromExtraction also writes
+  // here on successful extraction, but that runs later.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(OUTPUT_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { slideSize?: SlideSize };
-      if (parsed.slideSize === "16:9" || parsed.slideSize === "9:16") {
-        setSlideSize(parsed.slideSize);
+      const rawBrand = sessionStorage.getItem(BRAND_KEY);
+      if (rawBrand) {
+        const parsed = JSON.parse(rawBrand) as {
+          colors?: string[];
+          logo?: StoredLogo | null;
+        };
+        if (Array.isArray(parsed.colors) && parsed.colors.length > 0) {
+          setColors(parsed.colors);
+        }
+        if (parsed.logo) {
+          setLogo(parsed.logo);
+        }
       }
     } catch {
-      /* corrupt blob — ignore */
+      /* corrupt blob — start fresh */
     }
   }, []);
 
-  // Persist slide size as soon as it changes so reloads + back-nav
-  // see the same pick. Same key /create/content writes to.
+  // ─── Persist brand changes to sessionStorage ─────────────────
+  // Auto-saved so the summary page always reads the latest. Same
+  // shape /create/brand writes so /api/projects can consume it
+  // identically.
   useEffect(() => {
+    const payload = {
+      colors,
+      paletteMode: "manual" as const,
+      paletteScreenshotUrl: null,
+      fonts: { heading: null, body: null },
+      logo,
+    };
     try {
-      const raw = sessionStorage.getItem(OUTPUT_KEY);
-      const existing = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-      sessionStorage.setItem(
-        OUTPUT_KEY,
-        JSON.stringify({ ...existing, slideSize }),
-      );
+      sessionStorage.setItem(BRAND_KEY, JSON.stringify(payload));
     } catch {
       /* best-effort */
     }
-  }, [slideSize]);
+  }, [colors, logo]);
 
+  // ─── File pickers ────────────────────────────────────────────
   const selectFile = (next?: File | null) => {
     if (!next) return;
     const lower = next.name.toLowerCase();
@@ -150,27 +178,59 @@ export default function EnhanceContentPage() {
       return;
     }
     setFile(next);
+    setExtracted(null);
     setError("");
   };
 
   const removeFile = () => {
     pollCancelledRef.current = true;
     setFile(null);
+    setExtracted(null);
     setStage("idle");
     setError("");
   };
 
-  // Poll /api/extract/[jobId] every POLL_INTERVAL_MS until status
-  // is "completed" or "failed", or until POLL_TIMEOUT_MS elapses.
-  // Returns the completed result or throws on failure / timeout.
+  const selectLogo = async (next?: File | null) => {
+    if (!next) return;
+    if (!next.name.toLowerCase().endsWith(".svg")) {
+      setError("الشعار يجب أن يكون بصيغة SVG.");
+      return;
+    }
+    setError("");
+    setLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("bucket", "brand-assets");
+      formData.append("folder", "logos");
+      formData.append("file", next);
+      const res = await fetch("/api/storage/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "تعذر رفع الشعار");
+      }
+      const data = (await res.json()) as { name: string; storageUrl: string };
+      setLogo({ name: data.name, storageUrl: data.storageUrl });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "تعذر رفع الشعار. حاول مرة أخرى.",
+      );
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  // ─── Polling helper ──────────────────────────────────────────
   const pollExtraction = async (
     jobId: string,
   ): Promise<ExtractCompletedResponse["result"]> => {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
-      if (pollCancelledRef.current) {
-        throw new Error("Cancelled");
-      }
+      if (pollCancelledRef.current) throw new Error("Cancelled");
       const res = await fetch(`/api/extract/${jobId}`);
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as
@@ -179,18 +239,16 @@ export default function EnhanceContentPage() {
         throw new Error(data?.error ?? `Status ${res.status}`);
       }
       const body = (await res.json()) as ExtractStatusResponse;
-      if (body.status === "completed") {
-        return body.result;
-      }
+      if (body.status === "completed") return body.result;
       if (body.status === "failed") {
         throw new Error(body.error ?? "Extraction failed");
       }
-      // queued | processing — wait + iterate
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
-    throw new Error("Extraction timed out. Try a smaller file or try again.");
+    throw new Error("Extraction timed out. Try a smaller file.");
   };
 
+  // ─── Submit ──────────────────────────────────────────────────
   const handleNext = async () => {
     if (!file) {
       setError("اختر ملف PDF أو PowerPoint للمتابعة.");
@@ -198,44 +256,49 @@ export default function EnhanceContentPage() {
     }
     setError("");
     pollCancelledRef.current = false;
-    setStage("uploading");
 
     try {
-      // ─── Step 1: kick off extraction (POST /api/extract) ─────────
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("format", slideSize);
-      formData.append("kind", "enhance");
+      // If we haven't extracted yet, do it now. If we have (user
+      // already extracted and just adjusted brand fields), skip
+      // straight to the seed + navigate.
+      let result = extracted;
+      if (!result) {
+        setStage("uploading");
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("kind", "enhance");
+        // format param kept for the route's slideFormat default
+        // (server uses it for inputJson metadata, not for raster
+        // dimensions anymore). 16:9 default works regardless.
+        formData.append("format", "16:9");
 
-      const startRes = await fetch("/api/extract", {
-        method: "POST",
-        body: formData,
-      });
-      if (!startRes.ok) {
-        const data = (await startRes.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? `Upload failed (${startRes.status})`);
+        const startRes = await fetch("/api/extract", {
+          method: "POST",
+          body: formData,
+        });
+        if (!startRes.ok) {
+          const data = (await startRes.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(data?.error ?? `Upload failed (${startRes.status})`);
+        }
+        const { jobId } = (await startRes.json()) as { jobId: string };
+        if (!jobId) throw new Error("No jobId returned from /api/extract");
+
+        setStage("extracting");
+        result = await pollExtraction(jobId);
+        setExtracted(result);
       }
-      const { jobId } = (await startRes.json()) as { jobId: string };
-      if (!jobId) throw new Error("No jobId returned from /api/extract");
 
-      // ─── Step 2: poll until done ─────────────────────────────────
-      setStage("extracting");
-      const result = await pollExtraction(jobId);
-
-      // ─── Step 3: seed sessionStorage + navigate ──────────────────
-      // SourceMeta carries the Anthropic file_id (not slide PNG
-      // URLs anymore — Phase 17.B-7 pivot). The brand fields are
-      // hints; user can edit on /enhance/brand. Server returns
-      // assets with slideIndices[]; SourceMeta keeps a single
-      // originalSlide (first index) — multi-slide reuse is metadata
-      // we may surface later but doesn't drive prompt branching.
+      // Seed sessionStorage. seedFromExtraction merges with what's
+      // already in BRAND_KEY (user's manual color/logo picks are
+      // preserved) — well, it overwrites colors+format, but the
+      // logo we wrote via the brand-key effect above stays.
+      //
+      // The format + pageCount land in OUTPUT_KEY so the summary
+      // page picks up the slide size + slide count automatically.
       const extractedAssets: ExtractedAsset[] = result.embeddedAssets.map(
-        (a) => ({
-          url: a.url,
-          originalSlide: a.slideIndices[0] ?? -1,
-        }),
+        (a) => ({ url: a.url, originalSlide: a.slideIndices[0] ?? -1 }),
       );
 
       seedFromExtraction({
@@ -246,33 +309,69 @@ export default function EnhanceContentPage() {
           fonts: result.fonts,
         },
         brand: {
-          colors: result.colors,
+          // User's manual color picks take precedence over the
+          // extracted palette — we read `colors` from local state,
+          // which is the user's current grid.
+          colors,
           fonts: result.fonts,
-          format: slideSize,
+          format: result.format,
         },
       });
 
-      // Mark step 1 as done for the stepper (it reads CONTENT_KEY
-      // presence to flip the dot to ✓). The "type:source" stub is
-      // a no-op for downstream consumers — server-side /api/projects
-      // reads `source` for the enhance branch, not `content`.
+      // Stamp the auto-derived slide count into output sessionStorage
+      // so the summary page picks it up without a manual picker.
+      try {
+        const existing = sessionStorage.getItem(OUTPUT_KEY);
+        const obj = existing ? JSON.parse(existing) : {};
+        sessionStorage.setItem(
+          OUTPUT_KEY,
+          JSON.stringify({
+            ...obj,
+            slideSize: result.format,
+            slideCount: {
+              mode: "custom",
+              value: result.pageCount > 0 ? result.pageCount : null,
+            },
+          }),
+        );
+      } catch {
+        /* best-effort */
+      }
+
+      // Make sure the brand sessionStorage carries the final logo
+      // (the effect runs on dep change; on submit-with-fresh-extract
+      // the colors might have just shifted to extracted values, but
+      // the logo from local state is the source of truth).
+      try {
+        sessionStorage.setItem(
+          BRAND_KEY,
+          JSON.stringify({
+            colors,
+            paletteMode: "manual",
+            paletteScreenshotUrl: null,
+            fonts: { heading: null, body: null },
+            logo,
+          }),
+        );
+      } catch {
+        /* best-effort */
+      }
+
+      // Mark step 1 done for the stepper.
       sessionStorage.setItem(
         CONTENT_KEY,
         JSON.stringify({ type: "source", fileName: file.name }),
       );
 
-      router.push("/enhance/brand");
+      router.push("/enhance/summary");
     } catch (err) {
       if (pollCancelledRef.current) {
-        // User clicked Remove while we were waiting — silent reset.
         setStage("idle");
         return;
       }
       console.error("[enhance/content] extraction failed:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "تعذر تحليل الملف. حاول مرة أخرى.",
+        err instanceof Error ? err.message : "تعذر تحليل الملف. حاول مرة أخرى.",
       );
       setStage("idle");
     }
@@ -281,10 +380,11 @@ export default function EnhanceContentPage() {
   const loading = stage !== "idle";
 
   return (
-    <CreateShell
+    <EnhanceShell
       currentStep="content"
       title="حسّن عرضك التقديمي"
-      subtitle="ارفع ملف PDF أو PowerPoint وسنعيد بناءه بتصميم احترافي مع الحفاظ على محتواك."
+      subtitle="ارفع ملف PDF أو PowerPoint وسنعيد بناءه بتصميم احترافي مع الحفاظ على محتواك بالضبط."
+      fileName={file ? readableFileName(file.name) : undefined}
       bottomBar={
         <div className="flex items-center justify-between gap-4">
           <p
@@ -306,6 +406,7 @@ export default function EnhanceContentPage() {
         </div>
       }
     >
+      {/* ─── Card 1 — Source file ──────────────────────────────── */}
       <div className="glass-card flex flex-col gap-3 rounded-2xl p-5">
         <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -320,7 +421,7 @@ export default function EnhanceContentPage() {
         </header>
 
         <input
-          ref={inputRef}
+          ref={fileInputRef}
           type="file"
           accept=".pdf,.pptx,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint"
           className="hidden"
@@ -329,7 +430,7 @@ export default function EnhanceContentPage() {
 
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => fileInputRef.current?.click()}
           onDragOver={(event) => {
             event.preventDefault();
             setDragging(true);
@@ -341,9 +442,7 @@ export default function EnhanceContentPage() {
             selectFile(event.dataTransfer.files?.[0]);
           }}
           disabled={loading}
-          // Same border vocabulary as /create/content's file card.
-          // 1 px dashed, hover lifts the border to white/30.
-          className={`flex min-h-[280px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex min-h-[200px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
             dragging
               ? "border-white/40 bg-white/[0.04]"
               : "border-white/20 bg-black/20 hover:border-white/30"
@@ -366,13 +465,6 @@ export default function EnhanceContentPage() {
               </span>
             )}
           </span>
-          {/* The drop-zone copy doubles as the progress indicator
-              during upload + extraction — replaces the "drag and
-              drop" text in place so the user's eye stays focused
-              on the same surface rather than tracking a separate
-              status block below. ALL numerals in copy are Latin
-              digits (0-9), never Arabic-Indic (٠-٩) — design rule
-              locked 2026-05-24. */}
           {loading ? (
             <div>
               <p className="text-base font-semibold text-white">
@@ -435,13 +527,134 @@ export default function EnhanceContentPage() {
             </button>
           </div>
         ) : null}
+      </div>
 
-        {/* Slide size picker on row 1 — same placement as
-            /create/content, so step heights match. */}
-        <div className="border-t border-white/[0.08] pt-3">
-          <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} />
+      {/* ─── Card 2 — Brand (logo + palette) ─────────────────────── */}
+      <div className="glass-card flex flex-1 flex-col gap-4 rounded-2xl p-5">
+        <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span
+              className="material-symbols-outlined text-white"
+              style={{ fontSize: "18px" }}
+            >
+              palette
+            </span>
+            الهوية البصرية
+            <span className="text-xs font-normal text-white/40">
+              (اختياري — يُملأ تلقائياً من الملف)
+            </span>
+          </h2>
+        </header>
+
+        {/* Logo upload row */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-white/70">
+            الشعار (SVG)
+          </label>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept=".svg,image/svg+xml"
+            className="hidden"
+            onChange={(event) => selectLogo(event.target.files?.[0])}
+          />
+          {logo ? (
+            <div
+              className="flex items-center justify-between gap-3 rounded-xl border p-3"
+              style={{
+                background: "rgba(255, 255, 255, var(--glass-opacity))",
+                borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+              }}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">
+                  {logo.name}
+                </p>
+                <p className="text-xs text-white/50">SVG</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLogo(null)}
+                aria-label="إزالة الشعار"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "18px" }}
+                >
+                  close
+                </span>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={logoUploading}
+              className="flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 text-sm text-white/60 transition-colors hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {logoUploading ? (
+                <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+              ) : (
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "18px" }}
+                >
+                  add
+                </span>
+              )}
+              {logoUploading ? "جارٍ الرفع..." : "اختر ملف SVG"}
+            </button>
+          )}
+        </div>
+
+        {/* Palette grid — 5 swatches */}
+        <div className="flex flex-1 flex-col gap-2">
+          <label className="text-xs font-medium text-white/70">
+            ألوان الهوية
+          </label>
+          <div className="grid grid-cols-5 gap-2">
+            {colors.map((color, i) => (
+              <PaletteSwatch
+                key={i}
+                value={color}
+                onChange={(next) =>
+                  setColors((prev) =>
+                    prev.map((c, j) => (j === i ? next : c)),
+                  )
+                }
+              />
+            ))}
+          </div>
         </div>
       </div>
-    </CreateShell>
+    </EnhanceShell>
+  );
+}
+
+function PaletteSwatch({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="block h-12 w-full rounded-xl border border-white/15 transition-shadow hover:shadow-lg"
+        style={{ backgroundColor: value }}
+        aria-label={`لون ${value}`}
+      />
+      <ColorPickerPopover
+        open={open}
+        value={value}
+        onChange={onChange}
+        onClose={() => setOpen(false)}
+      />
+    </div>
   );
 }

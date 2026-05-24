@@ -19,6 +19,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreateShell } from "@/components/create/CreateShell";
+import { EnhanceShell } from "@/components/enhance/EnhanceShell";
 import { PillButton } from "@/components/create/PillButton";
 import { useFlowPrefix } from "@/components/create/useFlowPrefix";
 import {
@@ -498,11 +499,24 @@ export default function CreateSummaryPage() {
     </div>
   );
 
+  // Phase 17.B-17: when mounted under /enhance/* the brand step is
+  // gone (palette + logo absorbed into /enhance/content) and the
+  // output-settings card is hidden (slide size + count auto-
+  // derived from the source PDF). The shell also switches to the
+  // 2-step EnhanceShell so the stepper aside matches the flow.
+  const isEnhance = flowPrefix === "/enhance";
+  const Shell = isEnhance ? EnhanceShell : CreateShell;
+  // Source filename for the EnhanceShell pill — falls back to
+  // empty string for /create mode (CreateShell ignores fileName).
+  const enhanceFileName =
+    isEnhance && content?.type === "file" ? content.fileName ?? "" : "";
+
   return (
-    <CreateShell
+    <Shell
       currentStep="summary"
       title="كل شيء جاهز للإنشاء"
       subtitle="لقد قمنا بجمع البيانات المطلوبة. راجع الملخص أدناه قبل البدء."
+      fileName={enhanceFileName}
       bottomBar={bottomBar}
     >
       {/* No inner wrapper — children render directly into the
@@ -581,7 +595,13 @@ export default function CreateSummaryPage() {
           <SummaryCard
             title="الهوية البصرية"
             icon="palette"
-            onEdit={() => router.push(`${flowPrefix}/brand`)}
+            // /enhance has no brand step — palette + logo live on
+            // /enhance/content. Edit-button bounces there.
+            onEdit={() =>
+              router.push(
+                isEnhance ? `${flowPrefix}/content` : `${flowPrefix}/brand`,
+              )
+            }
           >
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-1 flex-col gap-2 min-w-0">
@@ -629,6 +649,10 @@ export default function CreateSummaryPage() {
             </div>
           </SummaryCard>
 
+          {/* Output settings card — hidden in /enhance mode where
+              slide size + count are auto-derived from the source
+              PDF (no edit possible, no value in showing). */}
+          {!isEnhance ? (
           <SummaryCard
             title="إعدادات الإخراج"
             icon="tune"
@@ -653,11 +677,12 @@ export default function CreateSummaryPage() {
               ) : null}
             </div>
           </SummaryCard>
+          ) : null}
         </div>
       </>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-    </CreateShell>
+    </Shell>
   );
 }
 
