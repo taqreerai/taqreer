@@ -1,46 +1,40 @@
 "use client";
 
-// Phase 17.B-17 — /enhance/content overhaul.
+// Phase 17.B — Single-shot Enhance flow.
 //
-// The single step of the Enhance flow. Three regions in one shell:
+// The whole /enhance experience lives on this one page:
 //
-//   1. Source file (drop zone) — PDF or PPTX, ≤ 100 MB.
-//      On submit: POST /api/extract → poll → seedFromExtraction
-//      (pre-fills logo / palette below from the source).
+//   1. Drop a PDF or PPTX
+//   2. Server extracts (LibreOffice → PDF → Anthropic Files API +
+//      PPTX zip walk for assets/fonts/colors)
+//   3. Generate button activates
+//   4. Click Generate → POST /api/projects → /preview/{id}
 //
-//   2. Brand logo — SVG upload via /api/storage/upload. Persisted
-//      to sessionStorage taqreer:create:brand.logo so summary +
-//      deck-generate pick it up.
+// No stepper, no summary, no brand step — the source PDF IS the
+// brand reference; Claude reads it via the document block. Matches
+// the typical AI-app single-card pattern (Claude.ai, ChatGPT,
+// v0.dev) — fewer steps, faster path to result.
 //
-//   3. Brand palette — 5 swatches, each opens ColorPickerPopover.
-//      Pre-filled by seedFromExtraction from Tier-1 PPTX theme
-//      accents; user can edit any swatch.
+// Layout: centered card max-w-2xl, vertically anchored toward
+// top-center of the available height (not dead-center — feels too
+// loose with that much vertical air). Dashboard chrome (sidebar +
+// header) stays via the /enhance/layout.tsx DashboardShell wrapper.
 //
-// What's NOT here (per user direction 2026-05-25):
-//   • No slide-size picker — auto-derived from PDF page aspect.
-//   • No slide-count picker — auto-derived from PDF page count.
-//   • No fonts picker — Claude reads the PDF + extracted-font
-//     hints carry the typography baseline.
-//   • No brand step — palette + logo absorbed into this page.
-//
-// On submit: writeSource is called BEFORE extraction polling
-// completes (no), AFTER (yes). Polling first; on completion we
-// call seedFromExtraction which writes the SourceMeta + pre-fills
-// the brand keys WITHOUT overwriting what the user typed (manual
-// edits win). Then the user clicks Next which navigates to
-// /enhance/summary.
+// The brief assembly + POST logic mirrors /create/summary's
+// handleGenerate so the server contract is identical for both flows
+// — /api/projects validates a SourceMeta blob on the brief and
+// branches deck-generate accordingly. Quality defaults to "medium"
+// (no quality picker in this flow; user can override later via
+// regen). Language is "ar" but deck-generate's source.kind="enhance"
+// branch ignores the directive and tells Claude to follow the PDF.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { EnhanceShell } from "@/components/enhance/EnhanceShell";
 import { PillButton } from "@/components/create/PillButton";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
+import { readSource, clearSource } from "@/lib/types/source";
+import { DEFAULT_QUALITY } from "@/lib/types/quality";
 import type { ExtractedAsset } from "@/lib/types/source";
-
-// sessionStorage keys (canonical create-flow keys; the enhance
-// flow shares them so summary can read uniformly).
-const CONTENT_KEY = "taqreer:create:content";
-const OUTPUT_KEY = "taqreer:create:output";
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
@@ -83,33 +77,33 @@ function readableFileName(raw: string): string {
   }
 }
 
+// State machine — drives the Generate button label + disabled state.
+//   idle        — no file selected
+//   extracting  — file uploaded, polling /api/extract/[jobId]
+//                 (also covers the brief upload-to-staging phase;
+//                 from user perspective they're indistinguishable)
+//   ready       — extraction complete, button enabled
+//   submitting  — Generate clicked, POSTing /api/projects
+type Stage = "idle" | "extracting" | "ready" | "submitting";
+
 export default function EnhanceContentPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollCancelledRef = useRef(false);
 
-  // ─── Source file ─────────────────────────────────────────────
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [stage, setStage] = useState<"idle" | "uploading" | "extracting">(
-    "idle",
-  );
-  // Once extraction completes we have the result ready; clicking
-  // Next just navigates. extractResultRef stores it across renders.
+  const [stage, setStage] = useState<Stage>("idle");
+  // Extraction result is cached so the Generate click can submit
+  // without re-extracting. Cleared when the user removes the file.
   const [extracted, setExtracted] = useState<
     ExtractCompletedResponse["result"] | null
   >(null);
-
   const [error, setError] = useState("");
 
-  // Brand UI dropped entirely per 2026-05-25 user direction —
-  // logo will be extracted from the PPT/PDF; Claude reads it
-  // from the document block. No user input needed on this step
-  // beyond the source file itself.
-
-  // ─── File pickers ────────────────────────────────────────────
-  const selectFile = (next?: File | null) => {
-    if (!next) return;
+  // ─── File selection ──────────────────────────────────────────
+  const validateAndSetFile = (next?: File | null): File | null => {
+    if (!next) return null;
     const lower = next.name.toLowerCase();
     const extOk =
       lower.endsWith(".pdf") ||
@@ -117,17 +111,18 @@ export default function EnhanceContentPage() {
       lower.endsWith(".ppt");
     if (!extOk) {
       setError("الرجاء رفع ملف PDF أو PowerPoint (.pptx, .ppt).");
-      return;
+      return null;
     }
     if (next.size > MAX_FILE_SIZE_BYTES) {
       setError(
         `الملف يتجاوز الحد الأقصى 100 ميجابايت (${(next.size / 1024 / 1024).toFixed(1)} م.ب).`,
       );
-      return;
+      return null;
     }
     setFile(next);
     setExtracted(null);
     setError("");
+    return next;
   };
 
   const removeFile = () => {
@@ -162,28 +157,22 @@ export default function EnhanceContentPage() {
     throw new Error("Extraction timed out. Try a smaller file.");
   };
 
-  // ─── Submit ──────────────────────────────────────────────────
-  const handleNext = async () => {
-    if (!file) {
-      setError("اختر ملف PDF أو PowerPoint للمتابعة.");
-      return;
-    }
-    setError("");
+  // ─── Auto-start extraction on file selection ─────────────────
+  // The moment the user picks a file we kick off extraction so the
+  // Generate button activates as soon as it's ready. No "start
+  // extraction" button.
+  useEffect(() => {
+    if (!file) return;
     pollCancelledRef.current = false;
+    setStage("extracting");
+    setError("");
 
-    try {
-      // If we haven't extracted yet, do it now. If we have (user
-      // already extracted and just adjusted brand fields), skip
-      // straight to the seed + navigate.
-      let result = extracted;
-      if (!result) {
-        setStage("uploading");
+    let isCurrent = true;
+    (async () => {
+      try {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("kind", "enhance");
-        // format param kept for the route's slideFormat default
-        // (server uses it for inputJson metadata, not for raster
-        // dimensions anymore). 16:9 default works regardless.
         formData.append("format", "16:9");
 
         const startRes = await fetch("/api/extract", {
@@ -199,94 +188,338 @@ export default function EnhanceContentPage() {
         const { jobId } = (await startRes.json()) as { jobId: string };
         if (!jobId) throw new Error("No jobId returned from /api/extract");
 
-        setStage("extracting");
-        result = await pollExtraction(jobId);
+        const result = await pollExtraction(jobId);
+        if (!isCurrent) return;
         setExtracted(result);
-      }
+        setStage("ready");
 
-      // Seed sessionStorage. seedFromExtraction merges with what's
-      // already in BRAND_KEY (user's manual color/logo picks are
-      // preserved) — well, it overwrites colors+format, but the
-      // logo we wrote via the brand-key effect above stays.
-      //
-      // The format + pageCount land in OUTPUT_KEY so the summary
-      // page picks up the slide size + slide count automatically.
-      const extractedAssets: ExtractedAsset[] = result.embeddedAssets.map(
-        (a) => ({
-          url: a.url,
-          originalSlide: a.slideIndices[0] ?? -1,
-          groupIds: a.groupIds ?? [],
-        }),
-      );
-
-      seedFromExtraction({
-        source: {
-          kind: "enhance",
-          anthropicFileId: result.anthropicFileId,
-          extractedAssets,
-          fonts: result.fonts,
-        },
-        brand: {
-          // No UI picker for colors anymore — pass through whatever
-          // the server extracted (theme accents for PPTX, empty for
-          // PDF). Claude treats them as a baseline brand hint and
-          // augments / replaces from what he sees in the PDF.
-          colors: result.colors,
-          fonts: result.fonts,
-          format: result.format,
-        },
-      });
-
-      // Stamp the auto-derived slide count into output sessionStorage
-      // so the summary page picks it up without a manual picker.
-      try {
-        const existing = sessionStorage.getItem(OUTPUT_KEY);
-        const obj = existing ? JSON.parse(existing) : {};
-        sessionStorage.setItem(
-          OUTPUT_KEY,
-          JSON.stringify({
-            ...obj,
-            slideSize: result.format,
-            slideCount: {
-              mode: "custom",
-              value: result.pageCount > 0 ? result.pageCount : null,
-            },
+        // Seed sessionStorage immediately so the data is ready
+        // when the user clicks Generate. Matches what /enhance/
+        // summary used to read.
+        const extractedAssets: ExtractedAsset[] = result.embeddedAssets.map(
+          (a) => ({
+            url: a.url,
+            originalSlide: a.slideIndices[0] ?? -1,
+            groupIds: a.groupIds ?? [],
           }),
         );
-      } catch {
-        /* best-effort */
-      }
 
-      // Mark step 1 done for the stepper.
-      sessionStorage.setItem(
-        CONTENT_KEY,
-        JSON.stringify({ type: "source", fileName: file.name }),
-      );
+        seedFromExtraction({
+          source: {
+            kind: "enhance",
+            anthropicFileId: result.anthropicFileId,
+            extractedAssets,
+            fonts: result.fonts,
+          },
+          brand: {
+            colors: result.colors,
+            fonts: result.fonts,
+            format: result.format,
+          },
+        });
 
-      router.push("/enhance/summary");
-    } catch (err) {
-      if (pollCancelledRef.current) {
+        // Stamp slide count + size into output sessionStorage —
+        // /api/projects reads these for the brief's slideCount /
+        // slideSize fields.
+        try {
+          const OUTPUT_KEY = "taqreer:create:output";
+          const existing = sessionStorage.getItem(OUTPUT_KEY);
+          const obj = existing ? JSON.parse(existing) : {};
+          sessionStorage.setItem(
+            OUTPUT_KEY,
+            JSON.stringify({
+              ...obj,
+              slideSize: result.format,
+              slideCount: {
+                mode: "custom",
+                value: result.pageCount > 0 ? result.pageCount : null,
+              },
+            }),
+          );
+        } catch {
+          /* best-effort */
+        }
+
+        // Stamp the content key as well so any downstream code
+        // that checks "step 1 done" sees it (defensive — nothing
+        // in this single-shot flow actually reads it, but other
+        // surfaces like the BellDropdown / RecentProjects may).
+        sessionStorage.setItem(
+          "taqreer:create:content",
+          JSON.stringify({ type: "source", fileName: file.name }),
+        );
+      } catch (err) {
+        if (!isCurrent || pollCancelledRef.current) {
+          setStage("idle");
+          return;
+        }
+        console.error("[enhance] extraction failed:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "تعذر تحليل الملف. حاول مرة أخرى.",
+        );
         setStage("idle");
-        return;
       }
-      console.error("[enhance/content] extraction failed:", err);
+    })();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [file]);
+
+  // ─── Submit ──────────────────────────────────────────────────
+  // Inlined from /create/summary's handleGenerate so /enhance can
+  // skip the summary step entirely. Mirrors the brief-assembly
+  // shape exactly so the server contract is identical.
+  const handleGenerate = async () => {
+    if (stage !== "ready" || !extracted || !file) return;
+    setError("");
+    setStage("submitting");
+    try {
+      const source = readSource();
+
+      // Pull brand + output from sessionStorage. seedFromExtraction
+      // (above, post-extraction) wrote the colors/fonts and the
+      // detected slideSize + slideCount. No logo for enhance —
+      // Claude finds it in the PDF.
+      const rawBrand = sessionStorage.getItem("taqreer:create:brand");
+      const rawOutput = sessionStorage.getItem("taqreer:create:output");
+      const brand = rawBrand
+        ? (JSON.parse(rawBrand) as {
+            colors?: string[];
+            paletteMode?: string;
+            paletteScreenshotUrl?: string | null;
+            fonts?: unknown;
+          })
+        : {};
+      const output = rawOutput
+        ? (JSON.parse(rawOutput) as {
+            slideSize?: "16:9" | "9:16";
+            slideCount?: { mode?: string; value?: number | null };
+          })
+        : {};
+
+      const resolvedSlideCount =
+        output?.slideCount?.mode === "custom" && output.slideCount.value
+          ? output.slideCount.value
+          : null;
+
+      const mergedBrand = {
+        colors: brand.colors ?? [],
+        paletteMode: brand.paletteMode ?? "manual",
+        paletteScreenshotUrl: brand.paletteScreenshotUrl ?? null,
+        fonts: brand.fonts ?? null,
+        logo: null,
+        slideSize: output.slideSize ?? extracted.format ?? "16:9",
+        slideCount: output.slideCount ?? { mode: "auto", value: null },
+      };
+
+      // Content stub — enhance flow has no text content; the source
+      // file IS the content. /api/projects sanitizes "type: source"
+      // as a no-op for the text path (Claude reads from the
+      // document block via source.kind="enhance").
+      const content = { type: "source" as const, fileName: file.name };
+
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          brand: mergedBrand,
+          rules: null,
+          // Default to Arabic for the brief field, but
+          // deck-generate's source.kind="enhance" branch tells
+          // Claude to follow the PDF's language anyway.
+          language: "ar",
+          saveBrandKit: false,
+          slideCount: resolvedSlideCount,
+          quality: DEFAULT_QUALITY,
+          ...(source ? { source } : {}),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "تعذر إنشاء المشروع");
+      }
+
+      const data = (await response.json()) as { projectId: string };
+
+      // Clean up sessionStorage — next /enhance visit starts fresh.
+      sessionStorage.removeItem("taqreer:create:content");
+      sessionStorage.removeItem("taqreer:create:brand");
+      sessionStorage.removeItem("taqreer:create:brand:savedSnapshot");
+      sessionStorage.removeItem("taqreer:create:output");
+      clearSource();
+
+      router.push(`/preview/${data.projectId}`);
+    } catch (err) {
+      console.error("[enhance] generate failed:", err);
       setError(
-        err instanceof Error ? err.message : "تعذر تحليل الملف. حاول مرة أخرى.",
+        err instanceof Error ? err.message : "تعذر إنشاء المشروع. حاول مرة أخرى.",
       );
-      setStage("idle");
+      setStage("ready");
     }
   };
 
-  const loading = stage !== "idle";
+  const generateLabel =
+    stage === "extracting"
+      ? "جارٍ التحليل..."
+      : stage === "submitting"
+        ? "جارٍ الإنشاء..."
+        : "إنشاء العرض";
+  const generateDisabled =
+    stage === "idle" || stage === "extracting" || stage === "submitting";
+  const generateLoading = stage === "extracting" || stage === "submitting";
 
   return (
-    <EnhanceShell
-      currentStep="content"
-      title="حسّن عرضك التقديمي"
-      subtitle="ارفع ملف PDF أو PowerPoint وسنعيد بناءه بتصميم احترافي مع الحفاظ على محتواك بالضبط."
-      fileName={file ? readableFileName(file.name) : undefined}
-      bottomBar={
-        <div className="flex items-center justify-between gap-4">
+    // Centered single-shot card. Anchored toward the top-third of
+    // the viewport via mt-[10vh] — dead-center feels too loose with
+    // the sidebar present, and pushes the action area below the
+    // fold on shorter screens. The card itself is max-w-2xl so it
+    // matches the visual weight of AI-app prompt areas without
+    // running edge-to-edge on wide monitors.
+    <div className="flex w-full justify-center" dir="rtl">
+      <div className="mt-[8vh] flex w-full max-w-2xl flex-col items-center gap-6">
+        <header className="text-center">
+          <h1 className="tq-h1">حسّن عرضك التقديمي</h1>
+          <p className="tq-subhead mt-2">
+            ارفع ملف PDF أو PowerPoint وسنعيد بناءه بتصميم احترافي مع الحفاظ
+            على محتواك بالضبط.
+          </p>
+        </header>
+
+        <div className="glass-card flex w-full flex-col gap-4 rounded-2xl p-5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.pptx,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint"
+            className="hidden"
+            onChange={(event) =>
+              validateAndSetFile(event.target.files?.[0])
+            }
+          />
+
+          {/* Drop zone — fixed min height ~200 px (was flex-1 inside
+              a stretched shell; now we're in a centered card, no
+              need to stretch). */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              validateAndSetFile(event.dataTransfer.files?.[0]);
+            }}
+            disabled={stage === "extracting" || stage === "submitting"}
+            className={`flex min-h-[220px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              dragging
+                ? "border-white/40 bg-white/[0.04]"
+                : "border-white/20 bg-black/20 hover:border-white/30"
+            }`}
+          >
+            <span
+              className="flex h-14 w-14 items-center justify-center rounded-full"
+              style={{
+                background: "rgba(255, 255, 255, var(--glass-opacity))",
+              }}
+            >
+              {stage === "extracting" ? (
+                <span className="spinner h-6 w-6 rounded-full border-2 border-white/20 border-t-white" />
+              ) : stage === "ready" ? (
+                <span
+                  className="material-symbols-outlined text-emerald-300"
+                  style={{ fontSize: "28px" }}
+                >
+                  check_circle
+                </span>
+              ) : (
+                <span
+                  className="material-symbols-outlined text-white/80"
+                  style={{ fontSize: "28px" }}
+                >
+                  cloud_upload
+                </span>
+              )}
+            </span>
+            {stage === "extracting" ? (
+              <div>
+                <p className="text-base font-semibold text-white">
+                  جارٍ تحليل المحتوى وإعداد الشرائح
+                </p>
+                <p className="mt-1 text-sm text-white/60">قد يستغرق 30-60 ثانية</p>
+              </div>
+            ) : stage === "ready" ? (
+              <div>
+                <p className="text-base font-semibold text-white">
+                  جاهز للإنشاء
+                </p>
+                <p className="mt-1 text-sm text-white/60">
+                  انقر "إنشاء العرض" للمتابعة
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-base font-semibold text-white">
+                    اسحب وأفلت الملف هنا
+                  </p>
+                  <p className="mt-1 text-sm text-white/60">
+                    أو انقر لاختيار ملف
+                  </p>
+                </div>
+                <p className="text-xs text-white/40">
+                  PDF أو PowerPoint (.pptx, .ppt) — حتى 100 ميجابايت
+                </p>
+              </>
+            )}
+          </button>
+
+          {/* File chip — visible whenever a file is selected.
+              Shows name + size; close button to remove. */}
+          {file ? (
+            <div
+              className="flex items-center justify-between gap-3 rounded-xl border p-3"
+              style={{
+                background: "rgba(255, 255, 255, var(--glass-opacity))",
+                borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+              }}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">
+                  {readableFileName(file.name)}
+                </p>
+                <p className="text-xs text-white/50">
+                  {formatFileSize(file.size)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={removeFile}
+                aria-label="إزالة الملف"
+                disabled={stage === "submitting"}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "18px" }}
+                >
+                  close
+                </span>
+              </button>
+            </div>
+          ) : null}
+
+          {/* Error message — reserved space so the layout doesn't
+              jump when an error appears. */}
           <p
             className="min-h-5 text-sm text-red-400"
             role={error ? "alert" : undefined}
@@ -294,150 +527,21 @@ export default function EnhanceContentPage() {
           >
             {error || " "}
           </p>
+
+          {/* Generate button — full-width primary CTA. Disabled
+              until extraction completes; loading state during the
+              extraction + the final POST. */}
           <PillButton
             variant="primary"
-            onClick={handleNext}
-            disabled={loading}
-            loading={loading}
-            icon="arrow_back"
+            onClick={handleGenerate}
+            disabled={generateDisabled}
+            loading={generateLoading}
+            icon="auto_awesome"
           >
-            الخطوة التالية
+            {generateLabel}
           </PillButton>
         </div>
-      }
-    >
-      {/* ─── Single card — Source file ─────────────────────────────
-          The only step in /enhance/content. `flex-1` makes the card
-          stretch to fill the EnhanceShell's min-h column so the file
-          drop zone matches the stepper aside's height. Logo +
-          palette UIs both dropped — extraction reads embedded logos
-          (incl. SVG preference) from the PPTX zip + Claude sees
-          them in the PDF document block; no user input needed. */}
-      <div className="glass-card flex flex-1 flex-col gap-3 rounded-2xl p-5">
-        <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <span
-              className="material-symbols-outlined text-white"
-              style={{ fontSize: "18px" }}
-            >
-              cloud_upload
-            </span>
-            رفع الملف المصدر
-          </h2>
-        </header>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.pptx,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint"
-          className="hidden"
-          onChange={(event) => selectFile(event.target.files?.[0])}
-        />
-
-        {/* Drop zone — `flex-1` stretches it inside the card so the
-            visual weight matches the stepper aside (no shrunken
-            zone hanging at the top with empty space below). */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            selectFile(event.dataTransfer.files?.[0]);
-          }}
-          disabled={loading}
-          className={`flex w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-            dragging
-              ? "border-white/40 bg-white/[0.04]"
-              : "border-white/20 bg-black/20 hover:border-white/30"
-          }`}
-        >
-          <span
-            className="flex h-14 w-14 items-center justify-center rounded-full"
-            style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-            }}
-          >
-            {stage === "extracting" ? (
-              <span className="spinner h-6 w-6 rounded-full border-2 border-white/20 border-t-white" />
-            ) : (
-              <span
-                className="material-symbols-outlined text-white/80"
-                style={{ fontSize: "28px" }}
-              >
-                cloud_upload
-              </span>
-            )}
-          </span>
-          {loading ? (
-            <div>
-              <p className="text-base font-semibold text-white">
-                {stage === "uploading"
-                  ? "جارٍ رفع الملف..."
-                  : "جارٍ تحليل المحتوى وإعداد الشرائح"}
-              </p>
-              {stage === "extracting" ? (
-                <p className="mt-1 text-sm text-white/60">
-                  قد يستغرق 30-60 ثانية
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <>
-              <div>
-                <p className="text-base font-semibold text-white">
-                  اسحب وأفلت الملف هنا
-                </p>
-                <p className="mt-1 text-sm text-white/60">
-                  أو انقر لاختيار ملف
-                </p>
-              </div>
-              <p className="text-xs text-white/40">
-                PDF أو PowerPoint (.pptx, .ppt) — حتى 100 ميجابايت
-              </p>
-            </>
-          )}
-        </button>
-
-        {file ? (
-          <div
-            className="flex items-center justify-between gap-3 rounded-xl border p-3"
-            style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-              borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-            }}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">
-                {readableFileName(file.name)}
-              </p>
-              <p className="text-xs text-white/50">
-                {formatFileSize(file.size)}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={removeFile}
-              aria-label="إزالة الملف"
-              disabled={loading && stage !== "extracting"}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "18px" }}
-              >
-                close
-              </span>
-            </button>
-          </div>
-        ) : null}
       </div>
-
-    </EnhanceShell>
+    </div>
   );
 }
