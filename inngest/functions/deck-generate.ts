@@ -670,6 +670,161 @@ function buildUserMessage(event: DeckGenerateEvent) {
   return lines.join("\n");
 }
 
+// ─── Source-aware content blocks (Phase 17.A) ─────────────────────
+// Branch the multipart Claude message on `brief.source.kind`. The
+// SourceMeta blob is shaped in lib/types/source.ts and attached by
+// /api/projects when the user came from an upload-driven flow:
+//
+//   "scratch" (default) → null   → pure text message (existing path)
+//   "enhance"           → image blocks for slide PNGs + extracted-asset reference
+//   "mimic"             → image blocks for UGLY file + DESIGN reference file
+//   "data"              → document block referencing the Anthropic file_id
+//
+// Returns the array of CONTENT BLOCKS to PREPEND to the user-text
+// block at the call site. Returns null for scratch / missing source
+// so the existing string-content path stays untouched.
+//
+// The accompanying text directives (telling Claude what these images
+// MEAN in the context of the flow) are appended via
+// `buildSourceTextDirective` below — keeps the long-form prose in
+// the user-text where it benefits from the same prompt-cache
+// treatment as the rest of the user message.
+type SourceBrief = {
+  kind?: "scratch" | "enhance" | "mimic" | "data";
+  slideImageUrls?: Array<{ url: string; index: number }>;
+  uglySlideImageUrls?: Array<{ url: string; index: number }>;
+  designReferenceImageUrls?: Array<{ url: string; index: number }>;
+  extractedAssets?: Array<{ url: string; originalSlide: number }>;
+  fonts?: string[];
+  dataFileId?: string;
+  userContext?: string;
+};
+
+function readSource(event: DeckGenerateEvent): SourceBrief | null {
+  const brief = event.brief as { source?: SourceBrief } | null;
+  const source = brief?.source ?? null;
+  if (!source || !source.kind || source.kind === "scratch") return null;
+  return source;
+}
+
+function buildSourceContentBlocks(
+  event: DeckGenerateEvent,
+): Anthropic.Messages.ImageBlockParam[] | null {
+  const source = readSource(event);
+  if (!source) return null;
+
+  // Helper — sort by slide index ascending so Claude sees pages in
+  // their original order. Extractors already sort but be defensive.
+  const toImageBlock = (
+    item: { url: string; index: number },
+  ): Anthropic.Messages.ImageBlockParam => ({
+    type: "image",
+    source: { type: "url", url: item.url },
+  });
+
+  if (source.kind === "enhance") {
+    const slides = (source.slideImageUrls ?? [])
+      .slice()
+      .sort((a, b) => a.index - b.index);
+    return slides.map(toImageBlock);
+  }
+
+  if (source.kind === "mimic") {
+    // Both groups go in. Claude differentiates them via the text
+    // directive appended in buildSourceTextDirective (UGLY = content,
+    // DESIGN reference = visual language). Order: UGLY first, then
+    // DESIGN reference — matches the directive's "files A and B"
+    // labeling.
+    const ugly = (source.uglySlideImageUrls ?? [])
+      .slice()
+      .sort((a, b) => a.index - b.index);
+    const ref = (source.designReferenceImageUrls ?? [])
+      .slice()
+      .sort((a, b) => a.index - b.index);
+    return [...ugly.map(toImageBlock), ...ref.map(toImageBlock)];
+  }
+
+  if (source.kind === "data") {
+    // Data flow doesn't use ImageBlockParam — it'll use a
+    // DocumentBlockParam with the Anthropic file_id once that path
+    // ships. For now, the text directive below tells Claude about
+    // the data, but no image/doc block is prepended.
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Source-aware text that PRECEDES the existing buildUserMessage
+ * output. Tells Claude what the prepended images mean and what to
+ * do with them.
+ *
+ * Returns "" (empty) when no source applies, so the caller can
+ * safely concat unconditionally.
+ */
+function buildSourceTextDirective(event: DeckGenerateEvent): string {
+  const source = readSource(event);
+  if (!source) return "";
+
+  const lines: string[] = [];
+
+  if (source.kind === "enhance") {
+    const slides = source.slideImageUrls ?? [];
+    const assets = source.extractedAssets ?? [];
+    const fonts = source.fonts ?? [];
+    lines.push(
+      `SOURCE — Enhance flow`,
+      `${slides.length} slide image(s) attached BEFORE this text. They are PNG snapshots of the user's existing deck (one per page, 1-indexed in attachment order).`,
+      `Your job: regenerate the SAME deck as a polished HTML version. Preserve the visual identity (palette, layout intent, content) while improving typography, hierarchy, whitespace, and execution to editorial quality. Do not introduce new content, fabricate sections, or drop pages — page count and ordering must match.`,
+    );
+    if (assets.length > 0) {
+      lines.push(
+        ``,
+        `Embedded assets available (${assets.length}) — URLs to reuse in your generated slides where they appeared in the originals. Reference them by URL in your <img src> attributes:`,
+        ...assets.map((a) => `  • ${a.url} (was on original slide ${a.originalSlide})`),
+      );
+    }
+    if (fonts.length > 0) {
+      lines.push(
+        ``,
+        `Source font candidates (Claude may resolve these to Google Fonts where applicable): ${fonts.slice(0, 6).join(", ")}.`,
+      );
+    }
+  } else if (source.kind === "mimic") {
+    const uglyCount = source.uglySlideImageUrls?.length ?? 0;
+    const refCount = source.designReferenceImageUrls?.length ?? 0;
+    const assets = source.extractedAssets ?? [];
+    lines.push(
+      `SOURCE — Mimic flow`,
+      `Two file groups attached BEFORE this text:`,
+      `  • UGLY (first ${uglyCount} images): content source. The user wants this content kept verbatim — text, structure, page count.`,
+      `  • DESIGN REFERENCE (next ${refCount} images): visual language source. Mimic this file's typography, palette, spacing, and layout strategy. Do not copy its content.`,
+      ``,
+      `Your job: take the UGLY content and re-execute it in the DESIGN REFERENCE's visual style. Match design language only; never invent content not in the UGLY file.`,
+    );
+    if (assets.length > 0) {
+      lines.push(
+        ``,
+        `Embedded assets from UGLY file (${assets.length}) — preserve them at the same positions in your output:`,
+        ...assets.map((a) => `  • ${a.url} (was on UGLY slide ${a.originalSlide})`),
+      );
+    }
+  } else if (source.kind === "data") {
+    lines.push(
+      `SOURCE — Data flow`,
+      `An uploaded data file (XLSX/CSV) lives in your tool context as file_id "${source.dataFileId ?? "(missing)"}". Read it via the document block to understand the rows / columns / sheets.`,
+      `Your job: turn the data into an editorial-grade insight deck. Identify the key narratives, surface the most meaningful numbers, design slides that explain them clearly.`,
+    );
+    if (source.userContext) {
+      lines.push(``, `User context: ${source.userContext}`);
+    }
+  }
+
+  lines.push(``); // trailing blank line separates from buildUserMessage output
+  return lines.join("\n");
+}
+
 export const deckGenerate = inngest.createFunction(
   {
     id: "deck-generate",
@@ -751,7 +906,18 @@ export const deckGenerate = inngest.createFunction(
 
     const validated = await step.run("call-claude-and-validate", async () => {
       const client = getClient();
-      const baseUserMessage = buildUserMessage(data);
+      // Build the user-text portion. When the brief carries a
+      // source.kind from an upload-driven flow (enhance / mimic /
+      // data), the directive describing what the prepended images
+      // mean lives at the TOP of the user text so it gets read
+      // before Claude reaches the long brief JSON dump below.
+      const sourceDirective = buildSourceTextDirective(data);
+      const baseUserMessage = sourceDirective
+        ? `${sourceDirective}\n${buildUserMessage(data)}`
+        : buildUserMessage(data);
+      // Prepended image blocks (Enhance + Mimic flows). Null for
+      // scratch / data — content stays a plain string in that case.
+      const sourceImageBlocks = buildSourceContentBlocks(data);
       let lastError = "";
 
       // Progress shown to the user must never go backward. The self-healing
@@ -877,6 +1043,19 @@ export const deckGenerate = inngest.createFunction(
             ? baseUserMessage
             : `${baseUserMessage}\n\nThe previous attempt was rejected:\n${lastError}\n\nReturn corrected JSON now. JSON only, no prose, no fences.`;
 
+        // Compose the message content. When source images are
+        // present (Enhance + Mimic flows), prepend them so Claude
+        // sees the visual context BEFORE the text directive that
+        // tells him what they mean. Otherwise stays a plain string
+        // — preserves the existing scratch / data path.
+        const messageContent: string | Anthropic.Messages.ContentBlockParam[] =
+          sourceImageBlocks && sourceImageBlocks.length > 0
+            ? [
+                ...sourceImageBlocks,
+                { type: "text" as const, text: userMessage },
+              ]
+            : userMessage;
+
         await writeProgress("thinking", maxSlideSeen, estimatedTotal, {
           thinkingTokens: 0,
           thinkingBudget,
@@ -902,7 +1081,7 @@ export const deckGenerate = inngest.createFunction(
           ...(callParams.outputConfig
             ? { output_config: callParams.outputConfig }
             : {}),
-          messages: [{ role: "user", content: userMessage }],
+          messages: [{ role: "user", content: messageContent }],
         });
 
         // Live thinking-phase telemetry. Before this listener existed, the

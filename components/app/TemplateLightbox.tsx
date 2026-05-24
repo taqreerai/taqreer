@@ -262,7 +262,7 @@ export function TemplateLightbox({
                         aria-current={active}
                         className={`h-10 w-16 overflow-hidden rounded-md transition-opacity ${
                           active
-                            ? "opacity-100 ring-2 ring-[var(--tq-blue)]"
+                            ? "opacity-100 ring-2 ring-white/60"
                             : "opacity-50 hover:opacity-80"
                         }`}
                       >

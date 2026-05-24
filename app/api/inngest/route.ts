@@ -6,6 +6,7 @@ import {
   brandAnalyze,
   templateShowcaseRender,
   thumbnailRender,
+  extractSource,
 } from "@/inngest/index";
 
 export const { GET, POST, PUT } = serve({
@@ -16,5 +17,6 @@ export const { GET, POST, PUT } = serve({
     brandAnalyze,
     templateShowcaseRender,
     thumbnailRender,
+    extractSource,
   ],
 });

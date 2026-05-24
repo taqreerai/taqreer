@@ -12,6 +12,7 @@ import {
   isQuality,
   type Quality,
 } from "@/lib/types/quality";
+import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 
 // Allowlist client-supplied font URLs against the schema's trusted-host
 // set (HTTPS + `fonts.googleapis.com` / `fonts.gstatic.com`). Without this,
@@ -163,6 +164,13 @@ type CreateProjectPayload = {
   // the guard below — same behavior the AR prompt has always
   // produced for mixed content.
   language?: "ar" | "en";
+  // Phase 17.A — SourceMeta blob from the upload-driven create flows
+  // (Enhance / Mimic / Data). Validated against SourceMetaSchema
+  // below; missing or invalid → treated as scratch flow (the
+  // default existing behavior). The brief carries this through to
+  // deck-generate, which branches the Claude message shape on
+  // source.kind (see buildSourceContentBlocks in deck-generate.ts).
+  source?: unknown;
 };
 
 // Whitelist-validated language → direction mapping. Centralised so
@@ -334,6 +342,22 @@ export async function POST(request: Request) {
       ? payload.language
       : "ar";
     const contentDirection = directionForLanguage(contentLanguage);
+
+    // Phase 17.A — validate the SourceMeta blob if present. Invalid
+    // or missing → null, in which case deck-generate sees no source
+    // and falls back to the scratch flow (existing default). Schema
+    // failure is silently downgraded rather than 400'd because the
+    // upload-driven flows can still produce a usable deck without
+    // the source URLs (Claude would just generate from scratch using
+    // the brand fields the user filled on /create/brand) — failing
+    // the whole POST would lose user-typed brand state. Tolerant by
+    // design; the seed-from-extraction helper validates upstream too.
+    let validatedSource: SourceMeta | null = null;
+    if (payload.source != null) {
+      const parsed = SourceMetaSchema.safeParse(payload.source);
+      validatedSource = parsed.success ? parsed.data : null;
+    }
+
     const brief = {
       title,
       language: contentLanguage,
@@ -342,6 +366,11 @@ export async function POST(request: Request) {
       brand: claudeBrand,
       rules: payload.rules ?? null,
       slideCount: resolvedSlideCount,
+      // Only include `source` when a valid SourceMeta was provided.
+      // deck-generate's readSource() also treats `kind: "scratch"`
+      // as null, so a future explicit-scratch payload remains a
+      // no-op on the multipart message shape.
+      ...(validatedSource ? { source: validatedSource } : {}),
     };
     // Quality preset — user-picked on /create/summary. Validated
     // here so a malformed value can't drive the Claude call params.
