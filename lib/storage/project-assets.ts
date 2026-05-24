@@ -1,14 +1,6 @@
-// Phase 17.A — Supabase storage helpers for upload-driven flows.
+// Phase 17.A — Supabase storage helpers for the upload-driven flows.
 //
-// Two buckets, two lifecycles:
-//
-//   extract-temp/{jobId}/slide-{N}.png
-//     Rasterized slide PNGs. Used by deck-generate to build the
-//     multipart Claude message. Deleted in a post-generation cleanup
-//     step — these are transient, the rendered HTML doesn't
-//     reference them.
-//
-//   project-assets/{jobId}/{assetId}.{ext}
+//   project-assets/{jobId}/{contentHash}.{ext}
 //     Embedded images extracted from the source (PPTX `ppt/media/*`).
 //     Persisted for the project's lifetime — the generated HTML
 //     references them by public URL, so deletion would break the
@@ -16,13 +8,19 @@
 //     yet) and remain under that path forever. Deleted only when
 //     the user deletes the project.
 //
+// ─── Phase 17.B-7 pivot ──────────────────────────────────────────
+// The `extract-temp` bucket + uploadSlideRasters helper are gone —
+// we no longer rasterize PDFs to PNGs locally. Claude reads the
+// source PDF directly via Anthropic Files API + `document` block.
+// The only persistent storage we need is `project-assets` for the
+// embedded images the generated HTML references.
+//
 // ─── Why jobId, not projectId ─────────────────────────────────────
 // Extraction runs BEFORE /api/projects POST — the project record
-// doesn't exist yet. We can't write to project-assets/{projectId}/
-// because we don't have a projectId yet. Using jobId as the
-// (permanent) namespace lets the upload happen during extraction;
-// the project record stores the jobId so cascade-delete can target
-// the right path when the user trashes a project.
+// doesn't exist yet. Using jobId as the (permanent) namespace lets
+// the upload happen during extraction; the project record stores
+// the jobId so cascade-delete can target the right path when the
+// user trashes a project.
 //
 // ─── Why a public bucket ──────────────────────────────────────────
 // Generated HTML embeds `<img src="...">` URLs. The deck preview
@@ -34,21 +32,9 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 
-// Bucket names. Both need to exist in Supabase before the upload
-// routes are called — operations cost: one-time bucket creation in
-// the Supabase dashboard. See deploy/SETUP.md (Phase 17.A) for the
-// exact steps.
-const EXTRACT_TEMP_BUCKET = "extract-temp";
 const PROJECT_ASSETS_BUCKET = "project-assets";
 
 // ─── Public API ────────────────────────────────────────────────────
-
-export type UploadedSlide = {
-  /** Public URL — fed to deck-generate's multipart Claude message. */
-  url: string;
-  /** 1-based slide index — matches the originating page number. */
-  index: number;
-};
 
 export type UploadedAsset = {
   /** Public URL — embedded into the generated HTML by Claude. */
@@ -56,42 +42,6 @@ export type UploadedAsset = {
   /** 1-based slide indices where this asset originally appeared. */
   slideIndices: number[];
 };
-
-/**
- * Upload rasterized slide PNGs to `extract-temp/{jobId}/`.
- * Returns the public URLs in the same order as the input.
- *
- * @throws if the storage env vars are missing or any upload fails.
- *   Failures are NOT individually retried — the caller (Inngest
- *   function) gets the retry semantics via Inngest's step.run
- *   wrapping.
- */
-export async function uploadSlideRasters(
-  jobId: string,
-  slides: Array<{ index: number; png: Buffer }>,
-): Promise<UploadedSlide[]> {
-  const admin = makeAdminClient();
-  const out: UploadedSlide[] = [];
-  for (const slide of slides) {
-    const path = `${jobId}/slide-${slide.index}.png`;
-    const { error } = await admin.storage
-      .from(EXTRACT_TEMP_BUCKET)
-      .upload(path, slide.png, {
-        contentType: "image/png",
-        upsert: true, // idempotent — re-extraction of same job overwrites
-      });
-    if (error) {
-      throw new Error(
-        `extract-temp upload failed for ${path}: ${error.message}`,
-      );
-    }
-    out.push({
-      url: publicUrl(EXTRACT_TEMP_BUCKET, path),
-      index: slide.index,
-    });
-  }
-  return out;
-}
 
 /**
  * Upload embedded assets to `project-assets/{jobId}/`. Returns the
@@ -176,36 +126,12 @@ export async function uploadProjectAssets(
 }
 
 /**
- * Delete an entire `extract-temp/{jobId}/` directory. Called after
- * deck-generate completes — slide PNGs aren't needed anymore.
- *
- * Best-effort: errors are swallowed because failing to clean up
- * temp files isn't worth failing a successful deck generation. A
- * periodic cleanup job (TODO Phase 17.B) sweeps any leftover jobIds
- * older than 24h.
- */
-export async function deleteExtractTemp(jobId: string): Promise<void> {
-  try {
-    const admin = makeAdminClient();
-    const { data: list, error: listError } = await admin.storage
-      .from(EXTRACT_TEMP_BUCKET)
-      .list(jobId);
-    if (listError || !list) return;
-    const paths = list.map((f) => `${jobId}/${f.name}`);
-    if (paths.length === 0) return;
-    await admin.storage.from(EXTRACT_TEMP_BUCKET).remove(paths);
-  } catch {
-    // Cleanup is best-effort — see periodic-cleanup TODO.
-  }
-}
-
-/**
  * Delete a project's persisted assets. Called from the project
  * cascade-delete path (DELETE /api/projects/[id]) when a user
  * trashes a project — its embedded images become orphans otherwise.
  *
- * Best-effort, same as deleteExtractTemp. Project deletion shouldn't
- * fail because we couldn't clean up storage.
+ * Best-effort: project deletion shouldn't fail because we couldn't
+ * clean up storage.
  */
 export async function deleteProjectAssets(jobId: string): Promise<void> {
   try {

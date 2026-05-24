@@ -26,10 +26,7 @@ import {
   type SlideSize,
 } from "@/components/create/OutputCards";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
-import type {
-  ExtractedSlideImage,
-  ExtractedAsset,
-} from "@/lib/types/source";
+import type { ExtractedAsset } from "@/lib/types/source";
 
 // sessionStorage key for slide size + dummy "content done" flag. We
 // don't actually persist a content blob the way /create/content
@@ -62,14 +59,17 @@ function readableFileName(raw: string): string {
 // Shape of the response from GET /api/extract/[jobId] when status
 // is "completed". Mirrors what extract-source.ts writes to
 // Job.outputJson on success (see ExtractCompletedOutput there).
+//
+// Phase 17.B-7: response carries `anthropicFileId` (file_id from
+// Anthropic Files API) instead of `slideImageUrls`. Claude reads
+// the PDF directly via a `document` block in deck-generate.
 type ExtractCompletedResponse = {
   status: "completed";
   result: {
-    slideImageUrls: Array<{ url: string; index: number }>;
+    anthropicFileId: string;
     embeddedAssets: Array<{ url: string; slideIndices: number[] }>;
     fonts: string[];
     colors: string[];
-    colorTier: "theme" | "histogram" | "none";
   };
   fileName?: string;
   flowKind?: string;
@@ -225,15 +225,11 @@ export default function EnhanceContentPage() {
       const result = await pollExtraction(jobId);
 
       // ─── Step 3: seed sessionStorage + navigate ──────────────────
-      // The slideImageUrls + extractedAssets shapes already match
-      // SourceMeta's ExtractedSlideImageSchema + ExtractedAssetSchema
-      // (writeSource validates against the schema at the seed call
-      // site, so a mismatch would throw here loudly).
-      const slideImageUrls: ExtractedSlideImage[] = result.slideImageUrls.map(
-        (s) => ({ url: s.url, index: s.index }),
-      );
-      // Server returns slideIndices[]; SourceMeta keeps a single
-      // originalSlide (first index). Multi-slide reuse is metadata
+      // SourceMeta carries the Anthropic file_id (not slide PNG
+      // URLs anymore — Phase 17.B-7 pivot). The brand fields are
+      // hints; user can edit on /enhance/brand. Server returns
+      // assets with slideIndices[]; SourceMeta keeps a single
+      // originalSlide (first index) — multi-slide reuse is metadata
       // we may surface later but doesn't drive prompt branching.
       const extractedAssets: ExtractedAsset[] = result.embeddedAssets.map(
         (a) => ({
@@ -245,7 +241,7 @@ export default function EnhanceContentPage() {
       seedFromExtraction({
         source: {
           kind: "enhance",
-          slideImageUrls,
+          anthropicFileId: result.anthropicFileId,
           extractedAssets,
           fonts: result.fonts,
         },
@@ -370,15 +366,41 @@ export default function EnhanceContentPage() {
               </span>
             )}
           </span>
-          <div>
-            <p className="text-base font-semibold text-white">
-              اسحب وأفلت الملف هنا
-            </p>
-            <p className="mt-1 text-sm text-white/60">أو انقر لاختيار ملف</p>
-          </div>
-          <p className="text-xs text-white/40">
-            PDF أو PowerPoint (.pptx, .ppt) — حتى 100 ميجابايت
-          </p>
+          {/* The drop-zone copy doubles as the progress indicator
+              during upload + extraction — replaces the "drag and
+              drop" text in place so the user's eye stays focused
+              on the same surface rather than tracking a separate
+              status block below. ALL numerals in copy are Latin
+              digits (0-9), never Arabic-Indic (٠-٩) — design rule
+              locked 2026-05-24. */}
+          {loading ? (
+            <div>
+              <p className="text-base font-semibold text-white">
+                {stage === "uploading"
+                  ? "جارٍ رفع الملف..."
+                  : "جارٍ تحليل المحتوى وإعداد الشرائح"}
+              </p>
+              {stage === "extracting" ? (
+                <p className="mt-1 text-sm text-white/60">
+                  قد يستغرق 30-60 ثانية
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div>
+                <p className="text-base font-semibold text-white">
+                  اسحب وأفلت الملف هنا
+                </p>
+                <p className="mt-1 text-sm text-white/60">
+                  أو انقر لاختيار ملف
+                </p>
+              </div>
+              <p className="text-xs text-white/40">
+                PDF أو PowerPoint (.pptx, .ppt) — حتى 100 ميجابايت
+              </p>
+            </>
+          )}
         </button>
 
         {file ? (
@@ -419,23 +441,6 @@ export default function EnhanceContentPage() {
         <div className="border-t border-white/[0.08] pt-3">
           <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} />
         </div>
-
-        {/* Progress copy — visible during upload + extraction. The
-            spinner already lives inside the drop-zone circle; this
-            is the text-only status indicator below the chrome. */}
-        {loading ? (
-          <div
-            className="mt-2 rounded-xl border p-3 text-sm text-white/80"
-            style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-              borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-            }}
-          >
-            {stage === "uploading"
-              ? "جارٍ رفع الملف..."
-              : "جارٍ تحليل المحتوى وإعداد الشرائح... (قد يستغرق ٣٠-٦٠ ثانية)"}
-          </div>
-        ) : null}
       </div>
     </CreateShell>
   );

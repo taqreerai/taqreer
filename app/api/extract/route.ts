@@ -30,7 +30,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { inngest } from "@/inngest/client";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
+import { type SlideFormat } from "@/lib/schema/slide";
 
 const SOURCE_FILES_BUCKET = "source-files";
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
@@ -113,10 +113,12 @@ export async function POST(request: Request) {
       }
     }
 
+    // Validate the requested slide format. Stored on the Job row
+    // so /enhance/brand can hydrate the slideSize picker, but no
+    // longer used for local rasterization (Phase 17.B-7 pivot —
+    // Claude renders the PDF natively at its own resolution).
     const format: SlideFormat =
       rawFormat === "9:16" ? "9:16" : "16:9";
-    const { width: targetWidth, height: targetHeight } =
-      dimensionsForFormat(format);
 
     // ─── Resolve the app User → supabaseUserId ─────────────────────
     // Supabase's user.id is the canonical id we store on every file
@@ -139,8 +141,7 @@ export async function POST(request: Request) {
           fileName: file.name,
           mime: resolvedMime,
           flowKind: rawKind, // "enhance" | "mimic" — for downstream consumer
-          targetWidth,
-          targetHeight,
+          format,
         },
       },
     });
@@ -196,8 +197,6 @@ export async function POST(request: Request) {
           fileBucketPath: bucketPath,
           fileName: file.name,
           mime: resolvedMime,
-          targetWidth,
-          targetHeight,
         },
       });
     } catch (err) {

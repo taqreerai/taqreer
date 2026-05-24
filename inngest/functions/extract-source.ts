@@ -1,13 +1,27 @@
-// Phase 17.A — Extract uploaded source files (PDF/PPTX) into the
+// Phase 17.A/B — Extract uploaded source files (PDF/PPTX) into the
 // structured payload the upload-driven create flows consume.
 //
 // Triggered by `inngest.send({ name: "source.extract.requested", … })`
 // from POST /api/extract once the file is uploaded to the staging
-// bucket. The function downloads the source file, runs the full
-// extraction pipeline (rasterize → embedded assets → fonts → colors),
-// uploads the slide PNGs to `extract-temp/{jobId}/` and embedded
-// assets to `project-assets/{jobId}/`, and writes the result onto
-// the Job row so /api/extract/[jobId] can poll completion.
+// bucket. The function:
+//   1. Downloads the source file from `source-files/`
+//   2. Normalizes to PDF (PPTX → LibreOffice; PDF passes through)
+//   3. Uploads the PDF to Anthropic Files API → file_id
+//   4. For PPTX only: extracts embedded assets / fonts / theme
+//      colors from the zip and uploads assets to project-assets/
+//   5. Writes the result to Job.outputJson so /api/extract/[jobId]
+//      can return it
+//
+// ─── Phase 17.B-7 architectural pivot ─────────────────────────────
+// We used to rasterize each slide to PNG via pdfjs-dist + @napi-rs/
+// canvas, upload PNGs to `extract-temp/`, and hand Claude N image
+// blocks. Now: Claude renders the PDF natively via Anthropic Files
+// API + a single `document` block. Reasons:
+//   • Skip Turbopack's pdfjs bundling hell entirely
+//   • Better visual fidelity (Claude's vision is purpose-built for
+//     PDF rendering)
+//   • ~500 lines of rasterize/canvas code deleted
+//   • No `extract-temp` Supabase bucket
 //
 // ─── Why a Job row, not a dedicated ExtractJob model ───────────────
 // The existing `Job` Prisma model is already a generic queue-state
@@ -16,101 +30,62 @@
 // (status polling, error storage, telemetry) without a migration.
 // projectId is nullable, which fits: extraction runs BEFORE the
 // project exists.
-//
-// ─── Step layout ──────────────────────────────────────────────────
-//   1. mark-processing     → Job.status flips "queued" → "processing"
-//   2. extract-and-upload  → fat step: download + extract + upload.
-//      Idempotent on retry because uploadSlideRasters uses upsert:true
-//      and uploadProjectAssets keys by content hash + upsert:true
-//      (see lib/storage/project-assets.ts CR-#4 fix). Returns only
-//      URLs + small metadata — never Buffers (Inngest step.run
-//      results are JSON-serialized).
-//   3. mark-completed      → Job.outputJson = result, status = "completed"
-// On terminal failure we catch outside the steps and write
-// status="failed" with the message in outputJson so the client can
-// surface a meaningful error.
 
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { extract } from "@/lib/extract";
 import {
-  uploadSlideRasters,
   uploadProjectAssets,
-  type UploadedSlide,
   type UploadedAsset,
 } from "@/lib/storage/project-assets";
+import { uploadFileToAnthropic } from "@/lib/anthropic/files";
 
 // Source files are staged in this bucket by POST /api/extract before
 // the event fires. Path shape: `${supabaseUserId}/extract/${jobId}/${fileName}`.
 const SOURCE_FILES_BUCKET = "source-files";
 
-// Payload the route emits. Keep in sync with the matching shape in
-// POST /api/extract.
+// Payload the route emits. Keep in sync with POST /api/extract.
 type ExtractRequestedEvent = {
   jobId: string;
   supabaseUserId: string;
   fileBucketPath: string; // path inside source-files bucket
   fileName: string;
   mime: string;
-  // Caller passes the desired raster output dimensions; we don't
-  // infer from the source because PDFs can be any size.
-  targetWidth: number;
-  targetHeight: number;
 };
 
 // What we persist to Job.outputJson on completion. Mirrors the
 // SourceMeta blob shape so /api/extract/[jobId] can return it
 // directly to the client without reshaping.
 type ExtractCompletedOutput = {
-  slideImageUrls: UploadedSlide[];
+  anthropicFileId: string;
   embeddedAssets: UploadedAsset[];
   fonts: string[];
   colors: string[];
-  colorTier: "theme" | "histogram" | "none";
 };
 
 export const extractSource = inngest.createFunction(
   {
     id: "extract-source",
-    name: "Extract uploaded PDF/PPTX into slide PNGs + assets",
-    // Two attempts max — extraction is deterministic (no API calls
-    // to flaky providers), so a retry only helps with transient
-    // storage hiccups. Beyond that, NonRetriableError + caller
-    // re-trigger is the right escape valve.
+    name: "Extract uploaded PDF/PPTX → Anthropic Files + brand metadata",
+    // Two attempts max — extraction is deterministic. A retry
+    // helps with transient storage / Anthropic upload hiccups.
+    // Beyond that, NonRetriableError + caller re-trigger is the
+    // escape valve.
     retries: 2,
-    // Cap concurrency: each job spawns pdfjs + sharp + Supabase
-    // I/O and can briefly use 200-400 MB resident. Two parallel
-    // jobs is a safe ceiling for the current Inngest worker.
+    // Cap concurrency. LibreOffice + Supabase + Anthropic file
+    // upload are all I/O-bound, but LibreOffice can be CPU-heavy
+    // briefly during PPTX→PDF rendering.
     concurrency: { limit: 2 },
     triggers: [{ event: "source.extract.requested" }],
   },
   async ({ event, step, logger }) => {
     const data = event.data as ExtractRequestedEvent;
     const { jobId, supabaseUserId, fileBucketPath, fileName, mime } = data;
-    const { targetWidth, targetHeight } = data;
 
     if (!jobId || !supabaseUserId || !fileBucketPath || !mime) {
       throw new NonRetriableError(
         `extract-source: malformed event payload (missing jobId / userId / path / mime)`,
-      );
-    }
-    // Target dimensions must be positive integers — `rasterize` uses
-    // them to construct the canvas, and a missing / zero / negative
-    // value would silently produce a degenerate output (or throw
-    // deeper in the stack with a less useful error). Validate at the
-    // event boundary so the failure surfaces as a clear NonRetriable
-    // here rather than mid-extraction.
-    if (
-      typeof targetWidth !== "number" ||
-      typeof targetHeight !== "number" ||
-      !Number.isFinite(targetWidth) ||
-      !Number.isFinite(targetHeight) ||
-      targetWidth <= 0 ||
-      targetHeight <= 0
-    ) {
-      throw new NonRetriableError(
-        `extract-source: invalid target dimensions (width=${targetWidth}, height=${targetHeight}) — expected positive numbers`,
       );
     }
 
@@ -123,14 +98,20 @@ export const extractSource = inngest.createFunction(
       });
     });
 
-    // ─── Step 2: download + extract + upload (fat idempotent step) ───
+    // ─── Step 2: download + normalize + upload (fat idempotent step) ─
+    // We bundle download → extract → Anthropic-upload → Supabase-
+    // asset-upload into a single step.run. The individual sub-
+    // steps are individually idempotent (uploadProjectAssets uses
+    // content-hash + upsert:true; Anthropic Files API doesn't
+    // dedupe but a retry's new file_id just costs us a free file
+    // we don't reuse). Bundling means a retry replays the whole
+    // pipeline cleanly without partial-state Job row updates.
     let result: ExtractCompletedOutput;
     try {
       result = await step.run("extract-and-upload", async () => {
-        // Download source bytes from the staging bucket. Service role
-        // because the event handler runs server-side without an
-        // authenticated user context (the original uploader's auth
-        // doesn't propagate through Inngest).
+        // Download source bytes from the staging bucket. Service
+        // role because Inngest doesn't carry the original
+        // uploader's auth context.
         const admin = createSupabaseAdminClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -140,34 +121,38 @@ export const extractSource = inngest.createFunction(
           .from(SOURCE_FILES_BUCKET)
           .download(fileBucketPath);
         if (dlError || !download) {
-          // Missing source file is non-retriable — either the route
-          // failed to upload, the user deleted it manually, or the
-          // path is wrong. None of these resolve on retry.
           throw new NonRetriableError(
             `Source file not found at ${fileBucketPath}: ${dlError?.message ?? "no data"}`,
           );
         }
         const sourceBuffer = Buffer.from(await download.arrayBuffer());
 
-        // Run the extraction pipeline. Throws if the file isn't
-        // a valid PDF/PPTX — let it propagate so Inngest marks the
-        // attempt failed and either retries (transient) or surfaces
-        // via the catch below (terminal).
-        const ext = await extract({
-          buffer: sourceBuffer,
-          mime,
-          width: targetWidth,
-          height: targetHeight,
+        // Run the extraction pipeline. Returns:
+        //   • pdfBytes      — PDF the user uploaded OR LibreOffice-
+        //                     converted from the PPTX
+        //   • embeddedAssets — PPTX only (PDF zip-walk path deferred)
+        //   • fonts          — PPTX theme XML
+        //   • colors         — PPTX theme accents (Tier-1 only;
+        //                     Tier-2 histogram deleted with the
+        //                     local rasterizer)
+        const ext = await extract({ buffer: sourceBuffer, mime });
+
+        // Upload the PDF to Anthropic Files API. Returns a
+        // file_id we reference in deck-generate's message via a
+        // `document` block. Filename keeps the original (minus
+        // any .pptx → .pdf swap so the dashboard label matches).
+        const pdfFileName = fileName.toLowerCase().endsWith(".pdf")
+          ? fileName
+          : fileName.replace(/\.[^.]+$/, ".pdf");
+        const anthropicFileId = await uploadFileToAnthropic({
+          bytes: ext.pdfBytes,
+          fileName: pdfFileName,
+          contentType: "application/pdf",
         });
 
-        // Upload slides + assets in series (small, low-concurrency).
-        // Both helpers are idempotent (upsert:true), so an Inngest
-        // retry of this same step replays the uploads against the
-        // same storage paths without creating duplicates.
-        const uploadedSlides = await uploadSlideRasters(
-          jobId,
-          ext.slides.map((s) => ({ index: s.index, png: s.png })),
-        );
+        // Upload embedded assets to project-assets/ for the
+        // generated HTML to reference by URL. Content-hash
+        // deduped + upsert:true → retry-safe.
         const uploadedAssets = await uploadProjectAssets(
           jobId,
           ext.embeddedAssets.map((a) => ({
@@ -179,11 +164,10 @@ export const extractSource = inngest.createFunction(
         );
 
         return {
-          slideImageUrls: uploadedSlides,
+          anthropicFileId,
           embeddedAssets: uploadedAssets,
           fonts: ext.fonts,
           colors: ext.colors,
-          colorTier: ext.colorTier,
         } satisfies ExtractCompletedOutput;
       });
     } catch (err) {
@@ -217,9 +201,6 @@ export const extractSource = inngest.createFunction(
         where: { id: jobId },
         data: {
           status: "completed",
-          // Cast through `unknown` — JSON columns accept any JSON-
-          // serializable structure but Prisma's input type doesn't
-          // express our nested record type narrowly.
           outputJson: result as unknown as object,
         },
       });

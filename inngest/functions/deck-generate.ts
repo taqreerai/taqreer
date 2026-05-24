@@ -691,9 +691,13 @@ function buildUserMessage(event: DeckGenerateEvent) {
 // treatment as the rest of the user message.
 type SourceBrief = {
   kind?: "scratch" | "enhance" | "mimic" | "data";
-  slideImageUrls?: Array<{ url: string; index: number }>;
-  uglySlideImageUrls?: Array<{ url: string; index: number }>;
-  designReferenceImageUrls?: Array<{ url: string; index: number }>;
+  // Phase 17.B-7: Anthropic Files API file_ids replace the old
+  // per-slide PNG URLs. Claude reads the PDF natively via a
+  // `document` block — better visual fidelity, no pdfjs/canvas
+  // local rasterization.
+  anthropicFileId?: string;
+  uglyAnthropicFileId?: string;
+  designAnthropicFileId?: string;
   extractedAssets?: Array<{ url: string; originalSlide: number }>;
   fonts?: string[];
   dataFileId?: string;
@@ -709,46 +713,55 @@ function readSource(event: DeckGenerateEvent): SourceBrief | null {
 
 function buildSourceContentBlocks(
   event: DeckGenerateEvent,
-): Anthropic.Messages.ImageBlockParam[] | null {
+): Anthropic.Messages.DocumentBlockParam[] | null {
   const source = readSource(event);
   if (!source) return null;
 
-  // Helper — sort by slide index ascending so Claude sees pages in
-  // their original order. Extractors already sort but be defensive.
-  const toImageBlock = (
-    item: { url: string; index: number },
-  ): Anthropic.Messages.ImageBlockParam => ({
-    type: "image",
-    source: { type: "url", url: item.url },
-  });
+  // Helper — wrap an Anthropic Files API file_id as a `document`
+  // block. Per the Files API docs:
+  //   { type: "document", source: { type: "file", file_id } }
+  //
+  // The `{ type: "file", file_id }` source shape is part of the
+  // beta Files API, exposed in the SDK only on
+  // `Anthropic.Beta.Messages.BetaFileDocumentSource`. The
+  // non-beta `DocumentBlockParam.source` union doesn't include
+  // it, but the REST endpoint accepts it when the
+  // `anthropic-beta: files-api-2025-04-14` header is set
+  // (which we do at the messages.stream call below). Cast through
+  // `unknown` to bypass the narrow non-beta type — runtime
+  // validation lives in the API response, not our SDK shims.
+  const toDocBlock = (
+    fileId: string,
+  ): Anthropic.Messages.DocumentBlockParam =>
+    ({
+      type: "document",
+      source: { type: "file", file_id: fileId },
+    }) as unknown as Anthropic.Messages.DocumentBlockParam;
 
   if (source.kind === "enhance") {
-    const slides = (source.slideImageUrls ?? [])
-      .slice()
-      .sort((a, b) => a.index - b.index);
-    return slides.map(toImageBlock);
+    if (!source.anthropicFileId) return null;
+    return [toDocBlock(source.anthropicFileId)];
   }
 
   if (source.kind === "mimic") {
-    // Both groups go in. Claude differentiates them via the text
-    // directive appended in buildSourceTextDirective (UGLY = content,
+    // Both files go in as separate document blocks. Claude
+    // differentiates them via the text directive (UGLY = content,
     // DESIGN reference = visual language). Order: UGLY first, then
-    // DESIGN reference — matches the directive's "files A and B"
-    // labeling.
-    const ugly = (source.uglySlideImageUrls ?? [])
-      .slice()
-      .sort((a, b) => a.index - b.index);
-    const ref = (source.designReferenceImageUrls ?? [])
-      .slice()
-      .sort((a, b) => a.index - b.index);
-    return [...ugly.map(toImageBlock), ...ref.map(toImageBlock)];
+    // DESIGN reference — matches the directive's labeling.
+    const blocks: Anthropic.Messages.DocumentBlockParam[] = [];
+    if (source.uglyAnthropicFileId) {
+      blocks.push(toDocBlock(source.uglyAnthropicFileId));
+    }
+    if (source.designAnthropicFileId) {
+      blocks.push(toDocBlock(source.designAnthropicFileId));
+    }
+    return blocks.length > 0 ? blocks : null;
   }
 
   if (source.kind === "data") {
-    // Data flow doesn't use ImageBlockParam — it'll use a
-    // DocumentBlockParam with the Anthropic file_id once that path
-    // ships. For now, the text directive below tells Claude about
-    // the data, but no image/doc block is prepended.
+    // Data flow uses its own dataFileId via a container_upload
+    // path when wired (Phase 17.D). For now nothing prepended;
+    // text directive below references it.
     return null;
   }
 
@@ -770,19 +783,20 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
   const lines: string[] = [];
 
   if (source.kind === "enhance") {
-    const slides = source.slideImageUrls ?? [];
     const assets = source.extractedAssets ?? [];
     const fonts = source.fonts ?? [];
     lines.push(
       `SOURCE — Enhance flow`,
-      `${slides.length} slide image(s) attached BEFORE this text. They are PNG snapshots of the user's existing deck (one per page, 1-indexed in attachment order).`,
-      `Your job: regenerate the SAME deck as a polished HTML version. Preserve the visual identity (palette, layout intent, content) while improving typography, hierarchy, whitespace, and execution to editorial quality. Do not introduce new content, fabricate sections, or drop pages — page count and ordering must match.`,
+      `A PDF of the user's existing deck is attached BEFORE this text as a document block. Each page in that PDF is one slide of the original deck (1-indexed by page order).`,
+      `Your job: regenerate the SAME deck as a polished HTML version. Preserve the visual identity (palette, layout intent, content) while improving typography, hierarchy, whitespace, and execution to editorial quality. Do not introduce new content, fabricate sections, or drop pages — page count and ordering must match the attached PDF.`,
     );
     if (assets.length > 0) {
       lines.push(
         ``,
         `Embedded assets available (${assets.length}) — URLs to reuse in your generated slides where they appeared in the originals. Reference them by URL in your <img src> attributes:`,
-        ...assets.map((a) => `  • ${a.url} (was on original slide ${a.originalSlide})`),
+        ...assets.map(
+          (a) => `  • ${a.url} (was on original slide ${a.originalSlide})`,
+        ),
       );
     }
     if (fonts.length > 0) {
@@ -792,14 +806,12 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       );
     }
   } else if (source.kind === "mimic") {
-    const uglyCount = source.uglySlideImageUrls?.length ?? 0;
-    const refCount = source.designReferenceImageUrls?.length ?? 0;
     const assets = source.extractedAssets ?? [];
     lines.push(
       `SOURCE — Mimic flow`,
-      `Two file groups attached BEFORE this text:`,
-      `  • UGLY (first ${uglyCount} images): content source. The user wants this content kept verbatim — text, structure, page count.`,
-      `  • DESIGN REFERENCE (next ${refCount} images): visual language source. Mimic this file's typography, palette, spacing, and layout strategy. Do not copy its content.`,
+      `Two PDF document blocks are attached BEFORE this text:`,
+      `  • UGLY (1st document): content source. The user wants this content kept verbatim — text, structure, page count.`,
+      `  • DESIGN REFERENCE (2nd document): visual language source. Mimic this file's typography, palette, spacing, and layout strategy. Do not copy its content.`,
       ``,
       `Your job: take the UGLY content and re-execute it in the DESIGN REFERENCE's visual style. Match design language only; never invent content not in the UGLY file.`,
     );
@@ -807,7 +819,9 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       lines.push(
         ``,
         `Embedded assets from UGLY file (${assets.length}) — preserve them at the same positions in your output:`,
-        ...assets.map((a) => `  • ${a.url} (was on UGLY slide ${a.originalSlide})`),
+        ...assets.map(
+          (a) => `  • ${a.url} (was on UGLY slide ${a.originalSlide})`,
+        ),
       );
     }
   } else if (source.kind === "data") {
@@ -915,9 +929,11 @@ export const deckGenerate = inngest.createFunction(
       const baseUserMessage = sourceDirective
         ? `${sourceDirective}\n${buildUserMessage(data)}`
         : buildUserMessage(data);
-      // Prepended image blocks (Enhance + Mimic flows). Null for
+      // Prepended document blocks (Enhance + Mimic flows). Null for
       // scratch / data — content stays a plain string in that case.
-      const sourceImageBlocks = buildSourceContentBlocks(data);
+      // Phase 17.B-7: these are PDF `document` blocks now, not
+      // image blocks — Claude renders the PDF internally.
+      const sourceDocumentBlocks = buildSourceContentBlocks(data);
       let lastError = "";
 
       // Progress shown to the user must never go backward. The self-healing
@@ -1049,9 +1065,9 @@ export const deckGenerate = inngest.createFunction(
         // tells him what they mean. Otherwise stays a plain string
         // — preserves the existing scratch / data path.
         const messageContent: string | Anthropic.Messages.ContentBlockParam[] =
-          sourceImageBlocks && sourceImageBlocks.length > 0
+          sourceDocumentBlocks && sourceDocumentBlocks.length > 0
             ? [
-                ...sourceImageBlocks,
+                ...sourceDocumentBlocks,
                 { type: "text" as const, text: userMessage },
               ]
             : userMessage;
@@ -1065,24 +1081,38 @@ export const deckGenerate = inngest.createFunction(
         // quality preset (paramsForQuality). The single stream call
         // shape stays the same regardless of tier — only the model /
         // thinking fields shift.
-        const stream = client.messages.stream({
-          model: callParams.model,
-          max_tokens: 48000,
-          thinking: callParams.thinking,
-          system: [
-            {
-              type: "text",
-              text: SYSTEM_PROMPT,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          // output_config.effort is the API-supported way to modulate
-          // adaptive thinking on the 4.x models — see paramsForQuality.
-          ...(callParams.outputConfig
-            ? { output_config: callParams.outputConfig }
-            : {}),
-          messages: [{ role: "user", content: messageContent }],
-        });
+        const stream = client.messages.stream(
+          {
+            model: callParams.model,
+            max_tokens: 48000,
+            thinking: callParams.thinking,
+            system: [
+              {
+                type: "text",
+                text: SYSTEM_PROMPT,
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+            // output_config.effort is the API-supported way to modulate
+            // adaptive thinking on the 4.x models — see paramsForQuality.
+            ...(callParams.outputConfig
+              ? { output_config: callParams.outputConfig }
+              : {}),
+            messages: [{ role: "user", content: messageContent }],
+          },
+          // Phase 17.B-7: pass the Files API beta header whenever
+          // we attach a `document` block referencing an Anthropic
+          // file_id. Harmless to pass on every call (the header is
+          // a no-op when no file_id is referenced), but we gate on
+          // sourceDocumentBlocks for documentation clarity.
+          sourceDocumentBlocks
+            ? {
+                headers: {
+                  "anthropic-beta": "files-api-2025-04-14",
+                },
+              }
+            : undefined,
+        );
 
         // Live thinking-phase telemetry. Before this listener existed, the
         // pipeline was silent during thinking — DeckView could only show
