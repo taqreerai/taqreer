@@ -40,7 +40,6 @@ import type { ExtractedAsset } from "@/lib/types/source";
 // sessionStorage keys (canonical create-flow keys; the enhance
 // flow shares them so summary can read uniformly).
 const CONTENT_KEY = "taqreer:create:content";
-const BRAND_KEY = "taqreer:create:brand";
 const OUTPUT_KEY = "taqreer:create:output";
 
 const POLL_INTERVAL_MS = 2_500;
@@ -70,11 +69,6 @@ type ExtractStatusResponse =
   | { status: "failed"; error: string; fileName?: string }
   | ExtractCompletedResponse;
 
-type StoredLogo = {
-  name: string;
-  storageUrl: string;
-};
-
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ك.ب`;
   return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
@@ -92,7 +86,6 @@ function readableFileName(raw: string): string {
 export default function EnhanceContentPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
   const pollCancelledRef = useRef(false);
 
   // ─── Source file ─────────────────────────────────────────────
@@ -107,49 +100,12 @@ export default function EnhanceContentPage() {
     ExtractCompletedResponse["result"] | null
   >(null);
 
-  // ─── Brand ────────────────────────────────────────────────────
-  // Palette UI dropped per 2026-05-25 user direction — Claude
-  // picks brand colors from the PDF visually + the extracted
-  // theme accents flow through sessionStorage as hints. Only the
-  // logo is user-editable on this page.
-  const [logo, setLogo] = useState<StoredLogo | null>(null);
-  const [logoUploading, setLogoUploading] = useState(false);
-
   const [error, setError] = useState("");
 
-  // ─── Initial hydrate from sessionStorage ─────────────────────
-  // The logo may be pre-filled by a prior visit (user bounced
-  // back from summary). seedFromExtraction also writes here on
-  // successful extraction.
-  useEffect(() => {
-    try {
-      const rawBrand = sessionStorage.getItem(BRAND_KEY);
-      if (rawBrand) {
-        const parsed = JSON.parse(rawBrand) as { logo?: StoredLogo | null };
-        if (parsed.logo) setLogo(parsed.logo);
-      }
-    } catch {
-      /* corrupt blob — start fresh */
-    }
-  }, []);
-
-  // ─── Persist logo changes to sessionStorage ───────────────────
-  // Read-modify-write so we don't clobber `colors` / `fonts` /
-  // `paletteMode` that seedFromExtraction wrote post-extraction.
-  useEffect(() => {
-    try {
-      const existingRaw = sessionStorage.getItem(BRAND_KEY);
-      const existing = existingRaw
-        ? (JSON.parse(existingRaw) as Record<string, unknown>)
-        : {};
-      sessionStorage.setItem(
-        BRAND_KEY,
-        JSON.stringify({ ...existing, logo }),
-      );
-    } catch {
-      /* best-effort */
-    }
-  }, [logo]);
+  // Brand UI dropped entirely per 2026-05-25 user direction —
+  // logo will be extracted from the PPT/PDF; Claude reads it
+  // from the document block. No user input needed on this step
+  // beyond the source file itself.
 
   // ─── File pickers ────────────────────────────────────────────
   const selectFile = (next?: File | null) => {
@@ -180,40 +136,6 @@ export default function EnhanceContentPage() {
     setExtracted(null);
     setStage("idle");
     setError("");
-  };
-
-  const selectLogo = async (next?: File | null) => {
-    if (!next) return;
-    if (!next.name.toLowerCase().endsWith(".svg")) {
-      setError("الشعار يجب أن يكون بصيغة SVG.");
-      return;
-    }
-    setError("");
-    setLogoUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("bucket", "brand-assets");
-      formData.append("folder", "logos");
-      formData.append("file", next);
-      const res = await fetch("/api/storage/upload", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? "تعذر رفع الشعار");
-      }
-      const data = (await res.json()) as { name: string; storageUrl: string };
-      setLogo({ name: data.name, storageUrl: data.storageUrl });
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "تعذر رفع الشعار. حاول مرة أخرى.",
-      );
-    } finally {
-      setLogoUploading(false);
-    }
   };
 
   // ─── Polling helper ──────────────────────────────────────────
@@ -335,22 +257,6 @@ export default function EnhanceContentPage() {
         /* best-effort */
       }
 
-      // Make sure the brand sessionStorage carries the final logo
-      // alongside whatever seedFromExtraction just wrote (colors +
-      // fonts hints). Read-modify-write to merge cleanly.
-      try {
-        const existingRaw = sessionStorage.getItem(BRAND_KEY);
-        const existing = existingRaw
-          ? (JSON.parse(existingRaw) as Record<string, unknown>)
-          : {};
-        sessionStorage.setItem(
-          BRAND_KEY,
-          JSON.stringify({ ...existing, logo }),
-        );
-      } catch {
-        /* best-effort */
-      }
-
       // Mark step 1 done for the stepper.
       sessionStorage.setItem(
         CONTENT_KEY,
@@ -400,8 +306,14 @@ export default function EnhanceContentPage() {
         </div>
       }
     >
-      {/* ─── Card 1 — Source file ──────────────────────────────── */}
-      <div className="glass-card flex flex-col gap-3 rounded-2xl p-5">
+      {/* ─── Single card — Source file ─────────────────────────────
+          The only step in /enhance/content. `flex-1` makes the card
+          stretch to fill the EnhanceShell's min-h column so the file
+          drop zone matches the stepper aside's height. Logo +
+          palette UIs both dropped — extraction reads embedded logos
+          (incl. SVG preference) from the PPTX zip + Claude sees
+          them in the PDF document block; no user input needed. */}
+      <div className="glass-card flex flex-1 flex-col gap-3 rounded-2xl p-5">
         <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             <span
@@ -422,6 +334,9 @@ export default function EnhanceContentPage() {
           onChange={(event) => selectFile(event.target.files?.[0])}
         />
 
+        {/* Drop zone — `flex-1` stretches it inside the card so the
+            visual weight matches the stepper aside (no shrunken
+            zone hanging at the top with empty space below). */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -436,7 +351,7 @@ export default function EnhanceContentPage() {
             selectFile(event.dataTransfer.files?.[0]);
           }}
           disabled={loading}
-          className={`flex min-h-[200px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
             dragging
               ? "border-white/40 bg-white/[0.04]"
               : "border-white/20 bg-black/20 hover:border-white/30"
@@ -523,85 +438,6 @@ export default function EnhanceContentPage() {
         ) : null}
       </div>
 
-      {/* ─── Card 2 — Brand logo (optional) ───────────────────────
-          Palette UI dropped per user direction 2026-05-25 — Claude
-          picks colors from the PDF directly. The extracted theme
-          accents still flow through sessionStorage as hints. */}
-      <div className="glass-card flex flex-1 flex-col gap-4 rounded-2xl p-5">
-        <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <span
-              className="material-symbols-outlined text-white"
-              style={{ fontSize: "18px" }}
-            >
-              image
-            </span>
-            الشعار (SVG)
-            <span className="text-xs font-normal text-white/40">
-              (اختياري)
-            </span>
-          </h2>
-        </header>
-
-        <div className="flex flex-col gap-2">
-          <input
-            ref={logoInputRef}
-            type="file"
-            accept=".svg,image/svg+xml"
-            className="hidden"
-            onChange={(event) => selectLogo(event.target.files?.[0])}
-          />
-          {logo ? (
-            <div
-              className="flex items-center justify-between gap-3 rounded-xl border p-3"
-              style={{
-                background: "rgba(255, 255, 255, var(--glass-opacity))",
-                borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-              }}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">
-                  {logo.name}
-                </p>
-                <p className="text-xs text-white/50">SVG</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLogo(null)}
-                aria-label="إزالة الشعار"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "18px" }}
-                >
-                  close
-                </span>
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => logoInputRef.current?.click()}
-              disabled={logoUploading}
-              className="flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 text-sm text-white/60 transition-colors hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {logoUploading ? (
-                <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-              ) : (
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "18px" }}
-                >
-                  add
-                </span>
-              )}
-              {logoUploading ? "جارٍ الرفع..." : "اختر ملف SVG"}
-            </button>
-          )}
-        </div>
-
-      </div>
     </EnhanceShell>
   );
 }

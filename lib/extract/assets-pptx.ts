@@ -264,11 +264,36 @@ function parseEmbeddedRefs(
   for (let i = 0; i < blips.length; i += 1) {
     const blip = blips.item(i);
     if (!blip) continue;
-    // xmldom doesn't have proper namespace lookup APIs for
-    // attributes, but getAttribute with the prefixed name works as
-    // long as the document uses the standard prefix (which OOXML
-    // mandates in practice — `r:` is canonical for relationships).
-    const embed = blip.getAttribute("r:embed");
+
+    // PREFER SVG OVER RASTER FALLBACK.
+    // PowerPoint stores embedded SVG with a PNG fallback nested
+    // inside the `<a:blip>`:
+    //   <a:blip r:embed="rId-PNG">
+    //     <a:extLst>
+    //       <a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}">
+    //         <asvg:svgBlip r:embed="rId-SVG"/>
+    //       </a:ext>
+    //     </a:extLst>
+    //   </a:blip>
+    // The raster is the rendering fallback for legacy viewers;
+    // the SVG is the canonical, high-resolution version. We
+    // extract ONLY the SVG when both are present — Claude gets
+    // the crisp vector, the deck doesn't carry a duplicate PNG.
+    // When no SVG is present (regular raster image), we fall
+    // back to the raster rId.
+    let embed: string | null = null;
+    const svgBlips = blip.getElementsByTagName("asvg:svgBlip");
+    if (svgBlips.length > 0) {
+      const svgBlip = svgBlips.item(0);
+      embed = svgBlip?.getAttribute("r:embed") ?? null;
+    }
+    if (!embed) {
+      // xmldom doesn't have proper namespace lookup APIs for
+      // attributes, but getAttribute with the prefixed name works
+      // as long as the document uses the standard prefix (which
+      // OOXML mandates in practice — `r:` is canonical).
+      embed = blip.getAttribute("r:embed");
+    }
     if (!embed) continue;
 
     // Walk up the parent chain. Track the OUTERMOST p:grpSp we see;
