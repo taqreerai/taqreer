@@ -209,7 +209,13 @@
      bg-rgb), 0.55)`) on purpose: avoids the Safari WebKit bug where
      a `var()` holding a comma-separated value fails to parse inside
      `rgba()`'s argument list. */
-  --tq-bg-dim:          rgba(14, 14, 24, 0.55);
+  /* Neutralized 2026-05-24: was rgba(14, 14, 24, 0.55) — the B=24
+     channel vs R=14/G=14 gave the dim layer a faint blue cast that
+     read against the v17 neutral gray-black dashboard gradient.
+     Equal channels (12, 12, 12) preserves the darkness value
+     without any hue. Propagates to .in-slide-dim + HeroComment-
+     Overlay + DeckView's slide dim layer. */
+  --tq-bg-dim:          rgba(12, 12, 12, 0.55);
 
   /* 3. Text */
   --tq-text-primary: #ffffff;
@@ -342,7 +348,9 @@ button, a, [role="button"] {
 }
 
 .settings-divider {
-  border-bottom: 1px solid rgba(42, 36, 59, 0.8);
+  /* Use the (now-neutralized) --tq-border token instead of the
+     literal rgba(42, 36, 59, 0.8) — same darkness, no plum hue. */
+  border-bottom: 1px solid var(--tq-border);
   margin-bottom: 16px;
 }
 
@@ -505,7 +513,13 @@ textarea.input-dark {
      consumers — also dropped. `--tq-border` + `--tq-muted` are still
      consumed (`--tq-border` reads as the legacy alias for input/card
      borders, `--tq-muted` is the source for `.text-muted`). */
-  --tq-border: rgba(42, 36, 59, 0.8);
+  /* Neutralized 2026-05-24: was rgba(42, 36, 59, 0.8) — the 23-unit
+     gap between G=36 and B=59 gave the border a dark plum cast that
+     read as blue-purple inside modals/menus once the v17 bg
+     switched to neutral gray-black. Perceptual luminance preserved
+     (Y' ~40), just hue stripped — propagates to .btn-outline-dark,
+     .input-search, and every other consumer. */
+  --tq-border: rgba(40, 40, 40, 0.8);
   --tq-muted: #b4b4b4;
 
   --font-headline-md: "Cairo", sans-serif;
@@ -1038,8 +1052,13 @@ body {
 }
 
 .btn-outline-dark:hover {
-  border-color: rgba(125, 45, 255, 0.4);
-  background: rgba(125, 45, 255, 0.08);
+  /* Neutralized 2026-05-24: was rgba(125, 45, 255, 0.4) /
+     rgba(125, 45, 255, 0.08) (brand Electric Violet) which read as
+     a violet wash inside modals after the v17 background switched
+     to a neutral gray-black gradient. White-at-low-alpha matches
+     the rest of the modal chrome's neutral palette. */
+  border-color: rgba(255, 255, 255, 0.30);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ─── Sidebar ─── */
@@ -1108,7 +1127,9 @@ body {
 
 /* ─── Progress Bar ─── */
 .progress-track {
-  background: rgba(42, 36, 59, 0.8);
+  /* Use --tq-border (neutralized 2026-05-24) so the track reads as
+     a dark gray under the brand-gradient fill, no plum cast. */
+  background: var(--tq-border);
   border-radius: 9999px;
   height: 6px;
 }
@@ -1341,7 +1362,12 @@ body {
 
 .btn-icon:hover {
   color: white;
-  background: rgba(55, 11, 244, 0.18);
+  /* Neutralized 2026-05-24: was rgba(55, 11, 244, 0.18) (brand
+     Royal Blue) which read as a blue wash inside modals after the
+     v17 background switched to a neutral gray-black gradient.
+     White-at-low-alpha matches the modal panel's pure-glass
+     aesthetic and keeps the hover signal subtle. */
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* ─── Search Input ─── */
@@ -1379,7 +1405,8 @@ body {
 
 /* ─── Sidebar Usage Bar ─── */
 .sidebar-usage {
-  border-bottom: 1px solid rgba(42, 36, 59, 0.6);
+  /* Neutralized 2026-05-24: 0.6-alpha companion to --tq-border. */
+  border-bottom: 1px solid rgba(40, 40, 40, 0.6);
 }
 
 /* ─── Hide Scrollbar ─── */
@@ -1448,37 +1475,19 @@ body {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* Three-tone twin-glow composition:
-       • Top-left → center: desaturated Royal Blue → muted teal-
-         slate (#344F67) bridge → soft tail
-       • Bottom-right: desaturated Magenta Glow with extended
-         falloff reaching into the center
-     The top-left gradient pulls a teal-slate (#344F67) at its
-     mid-radius — gives the upper half a cool "ocean depth" cast
-     that bridges the pure brand blue into the middle, and softens
-     the meet with the magenta from the opposite corner.
-     2026-05-24 v14: lifted the dark dead-zone in the center.
-     v13's teal stops faded too fast (peak 0x30 → 0x20 → 0x0E →
-     transparent at 90 %), leaving a noticeable dark band on the
-     diagonal between the blue corner and the magenta corner.
-     v14 raises every teal stop ~25 % (0x38 → 0x28 → 0x16) and
-     adds a 0x0A tail at 85 % before transparent at 100 %, so the
-     teal lingers across the middle and the center reads ambient
-     rather than dim. */
+  /* Single large radial — radial conversion of the user-supplied
+     reference linear gradient `to right, #434343 0%, black 100%`.
+     The anchor sits at the LEFT edge (15 % horizontal; vertical
+     defaults to 50 % when omitted from `at`) with a wide ellipse
+     (130 % × 110 %) so the gray "core" reads on the left side of
+     the viewport and fades smoothly to black across the rest.
+     2026-05-24 v18: darkened the gray core from #434343 → #3b3b3b
+     per design direction — slightly deeper baseline keeps the
+     dashboard chrome reading without competing for attention. */
   background-image:
-    radial-gradient(220% 200% at 10% 0,
-      #3f2ee32a 0%,
-      #3f2ee318 18%,
-      #344f6738 38%,
-      #344f6728 52%,
-      #344f6716 70%,
-      #344f670a 85%,
-      #0000 100%),
-    radial-gradient(45% 35% at 95% 100%,
-      #c84ca02e 0%,
-      #c84ca014 42%,
-      #c84ca006 88%,
-      #0000 175%);
+    radial-gradient(130% 110% at 15%,
+      #3b3b3b 0%,
+      #000 100%);
 }
 
 .dashboard-bg::after {
@@ -1613,7 +1622,13 @@ body {
    "never hardcode in TSX" rule is preserved by NOT inlining these
    in the popover's React style prop. */
 .in-slide-popover {
-  background-color: rgba(14, 14, 24, 0.45);
+  /* Neutralized 2026-05-24: was rgba(14, 14, 24, 0.45) — the B=24
+     vs R=14/G=14 channels gave the popover a faint blue cast that
+     read against the v17 neutral gray-black dashboard gradient.
+     Pure-gray equal-channels (12, 12, 12) keeps the same darkness
+     value but removes the hue, so the bell popup + slide popovers
+     read as neutral glass on the new background. */
+  background-color: rgba(12, 12, 12, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
