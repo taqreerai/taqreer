@@ -164,57 +164,187 @@ see. We use Supabase Realtime as a pure socket service.
       currentUserId` returns early) so the actor's tab doesn't
       re-trigger router.refresh on its own click — their apply-poller
       already picks up the new version smoothly.
-- [ ] Polling path stays as a 30-s fallback if the channel hasn't
-      connected yet. (Existing apply-poller covers the actor's
-      tab. For observers, the broadcast IS the only signal —
-      acceptable for MVP; if Realtime is down a manual refresh
-      recovers them.)
+- [x] Polling fallback decision — kept the existing apply-poller for
+      the actor's tab; for observers the broadcast IS the only signal.
+      The visibility-regain refetch in DeckView (added 2026-05-24)
+      covers the "tab was backgrounded, broadcast missed" Safari case.
+      No separate 30-s fallback poll needed.
 
-### Phase 16.E — Notification table + bell
+### Phase 16.D revisions (2026-05-24)
 
-- [ ] Prisma migration `20260524_add_notification`:
+Changes to the originally-shipped 16.D shape, not regressions:
+
+- **`.started` broadcasts REMOVED entirely** from both
+  `deck-generate.ts` and `deck-regenerate-partial.ts` — the live
+  dim+spinner overlay on observers' canvases competed with whatever
+  they were doing during the regen window. New shape: observers
+  stay silent on the previous version until `.finished` fires; the
+  `remoteRegenSlideIds` state in DeckView was removed alongside.
+- **`router.refresh()` in broadcast handlers REPLACED with
+  in-place state swap.** Per user direction "anything realtime
+  should not reload the page". `slide.regen.finished` +
+  `deck.regen.finished` handlers now fetch
+  `/status?includeManifest=true&includeSlideStates=true` (one
+  round-trip) and call `setManifest` + `setSlideStates` +
+  `setHistoryVersions`. No SSR refresh, no flicker.
+- **Broadcasts fire-and-forget** (`.catch(logger.warn)`) — earlier
+  shape used `step.run` which blocked the Inngest function when
+  `admin.removeChannel(channel)` deadlocked waiting for a graceful
+  close. `broadcastToProject` got a 3-s overall timeout wrapper to
+  bound the failure mode.
+- **`actorPrismaUserId` self-echo skip path** stays the same — the
+  actor's tab already has the new version via the apply-poller's
+  `setManifest` from `/status?versionId=...`.
+
+### Phase 16.D.5 — Lock/unlock as realtime broadcast (added 2026-05-24)
+
+Not in the original plan; emerged from the user-experience surface
+during 16.D work. Lock-pill state needed to flip in lockstep across
+collaborators (peer locks a slide → other tabs' pills grey out the
+Comment button live).
+
+- [x] `slide.lock.changed { slideKey, lockedAt, actorPrismaUserId }`
+      broadcast event added to `ProjectBroadcastEvent` union.
+      Single-slide lock route (`POST /api/projects/[id]/slides/[slideKey]/lock`)
+      emits after the upsert.
+- [x] `slides.locks.bulk-changed { allLocked, lockedAt, actorPrismaUserId }`
+      for the lock-all route. One event for the whole deck (vs. N
+      per-slide events) to avoid socket spam on a 20-slide deck.
+- [x] DeckView listeners update `slideStates[slideKey].lockedAt` from
+      the payload directly (no fetch — payload carries the canonical
+      ISO). Self-echo skip on both.
+- [x] **Bell notifications NOT wired** for lock events. User decision:
+      "no need for lock notifications, it happens in realtime". The
+      lock pill is the realtime signal; a bell entry would just be noise.
+
+### Phase 16.E — Notification table + bell (plumbing complete 2026-05-24, end-to-end UNTESTED — resume here)
+
+Built shape diverged from the original plan in a few places. Diffs
+called out inline below.
+
+- [x] Prisma migration `20260524003918_add_notifications`. Final
+      schema differs from the spec above in three places:
       ```prisma
       model Notification {
         id              String   @id @default(cuid())
-        projectId       String
-        project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-        recipientUserId String   // prisma User.id, not supabaseUserId
-        recipient       User     @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
-        actorUserId     String?  // null = system event
-        actor           User?    @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-        kind            String   // "comment_created" | "partial_regen_started" | "partial_regen_finished" | "full_regen_started" | "full_regen_finished"
-        payload         Json     // { commentId? slideIndex? jobId? snippet? }
-        readAt          DateTime?
+        recipientUserId String   // prisma User.id
+        type            String   // free-form string, not enum — see note
+        payload         Json
+        projectId       String?  // optional now (account-scoped events)
+        actorUserId     String?
         createdAt       DateTime @default(now())
+        readAt          DateTime?
+        recipient User    @relation("RecipientNotifications", fields: [recipientUserId], references: [id], onDelete: Cascade)
+        actor     User?   @relation("ActorNotifications", fields: [actorUserId], references: [id], onDelete: SetNull)
+        project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+        @@index([recipientUserId, createdAt(sort: Desc)])
         @@index([recipientUserId, readAt])
-        @@index([projectId, createdAt])
       }
       ```
-- [ ] Server-side fan-out helper `lib/notifications/fan-out.ts`:
-      enumerates project collaborators with role≥comment (owner +
-      accepted ProjectShare rows where accessLevel ≠ "view"), filters
-      out the actor, inserts one Notification per recipient in a single
-      `createMany`.
-- [ ] Call sites:
-      - `POST /api/projects/[id]/comments` after Comment INSERT
-      - `inngest/functions/regenerate-slide.ts` at `step.run("notify-start")`
-        + `step.run("notify-finish")`
-      - `inngest/functions/regenerate-presentation.ts` same shape
-- [ ] API:
-      - `GET /api/notifications` — paginated list for current user
-      - `PATCH /api/notifications/[id]/read`
-      - `PATCH /api/notifications/read-all`
-- [ ] `components/app/BellDropdown.tsx` — **reuse existing** dropdown.
-      Adapt to consume:
-      - Initial GET on open + a 1-min poll for cross-project events
-      - A **user-scoped Broadcast channel** `user:{prismaUserId}` —
-        opened once on app mount via `Header.tsx` — that the fan-out
-        helper broadcasts to alongside the project channel. Carries
-        only `notificationId` as the payload; bell GETs the full row.
-      - Click row → routes to `/project/{projectId}` (or to the comment
-        anchor if kind = `comment_created`).
-- [ ] Unread-count badge: GET `/api/notifications/unread-count` on
-      mount + increment locally on each incoming broadcast.
+      Three deviations: (a) `type` (not `kind`) is a **free-form
+      string** rather than an enum — new event kinds shouldn't force
+      a migration; unknown types fall back to a generic renderer.
+      (b) `projectId` is **nullable** so account-scoped events
+      (`share.invited` to a user pre-membership, etc.) can write a
+      row without a project context. (c) Primary index sorts
+      `createdAt` DESC explicitly so the bell's
+      newest-first query reads from the index without an extra sort.
+- [x] Server-side fan-out helper `lib/notifications/server.ts`
+      (NOT `lib/notifications/fan-out.ts` per the spec — file name
+      drift, function is `fanOutNotification`). Resolves project
+      members from `Project.userId` + accepted `ProjectShare` rows
+      (`acceptedAt != null AND userId != null`). **Role-≥-comment
+      filter dropped** — every project member regardless of role gets
+      bell entries (view-only viewers care about peer activity too;
+      the bell payload is pointer-only so no view-only PII leak).
+      Self-echo skip default-on with `allowSelfEcho: true` opt-out
+      for `deck.generate.finished` (actor IS the recipient there).
+      Plus a feature not in the spec: **10-minute grouping window**
+      on `(recipientUserId, type, projectId, actorUserId)`. Merges
+      slideKeys arrays, bumps `createdAt` + clears `readAt` so the
+      merged row floats up + re-unreads. Saves the bell from N rows
+      when a peer rapid-fires N comments on the same project. Per-
+      recipient `try/catch` so a single recipient's write blip doesn't
+      skip the rest.
+- [x] Call sites — final mapping:
+      - `POST /api/projects/[id]/comments` → `comment.created` (project
+        members minus actor)
+      - `inngest/functions/deck-regenerate-partial.ts` → `slide.regen.finished`
+        per slide (grouped by the merge window — "X redesigned 3 slides")
+      - `inngest/functions/deck-generate.ts` (finished) → both
+        `deck.regen.finished` (project members minus actor) AND
+        `deck.generate.finished` to **the actor only** with
+        `allowSelfEcho: true` (you kicked it off, you should be told
+        it finished even if you navigated away)
+      - `POST /api/projects/[id]/share` → `share.invited` to the
+        **invitee only** (recipientUserIds override). Guarded on
+        `prisma.user.findUnique({ where: { email } })` — first-touch
+        email-only invites SKIP the bell since there's no User row
+        yet to write to (the email IS the primary delivery channel
+        for those).
+      - `POST /api/invitations/[token]/accept` → `share.accepted`
+        to the project owner. Gated on `firstTimeAccept` so re-
+        clicking the same accept link doesn't re-notify.
+      - **Lock events are NOT wired** to the bell per user direction
+        — lock state is realtime via `slide.lock.changed` broadcast,
+        no bell entry needed.
+      - **`deck.generate.failed` NOT wired** — needs an Inngest
+        function watching `inngest/function.failed` events.
+        Deferred — `deck-generate.ts` doesn't currently surface a
+        failure callback point.
+- [x] API:
+      - `GET /api/notifications` — last 50 by `recipientUserId`,
+        server formats each row into the bell's existing
+        `{id, kind, title, desc, href, createdAt, read}` shape with
+        Arabic copy + per-type kind mapping (`comment.created`/
+        `slide.regen.finished`/`deck.regen.finished` → info,
+        `deck.generate.finished`/`share.accepted` → success,
+        `deck.generate.failed` → error, `share.invited` → info).
+        Supports `?ids=` for the realtime push refetch (same shape
+        as the comments route's `?ids=`).
+      - `POST /api/notifications/read-all` — bulk mark-read with
+        `updateMany({ readAt: null }, { readAt: new Date() })`.
+        Idempotent OK with count:0 on user-sync race.
+      - **`PATCH /api/notifications/[id]/read` NOT built** — per
+        product decision "mark all read on bell open" (NOT per-row),
+        the bell never needs single-row read state.
+      - `GET /api/me` — returns `{supabaseUserId, prismaUserId}` so
+        BellDropdown can topic the per-user channel. 204 for anon.
+- [x] `components/app/BellDropdown.tsx`:
+      - Initial GET on user set (NOT on bell open) — store hydrates
+        the moment we know the prisma id. Bell open just marks-all-read.
+      - **Per-user Supabase channel** `user:{prismaUserId}` opened by
+        the **notificationStore itself** (NOT Header.tsx per the spec)
+        on `setUser(supabaseId, prismaId)`. Cleaner ownership — the
+        channel lifecycle tracks the auth lifecycle in one place.
+      - Click row routes to row's `href` (server-formatted) — currently
+        all rows resolve to `/project/{projectId}` or
+        `/preview/{projectId}`. Slide-anchor (`?slide=...`) not yet
+        wired — would need server to resolve slideKey → slideIndex
+        at format time.
+      - **Mark-all-read on bell open** wired: `setOpen((v) => {
+        const next = !v; if (next) notificationStore.markAllRead(); }
+        )`. Store optimistically flips every local row's `read` to
+        true + fires the API call in the background.
+- [x] **Unread-count badge** uses local state (`items.filter(!read).length`)
+      — no separate `/unread-count` endpoint needed since the GET
+      already returns the read state per row. Increments live as
+      `pushFromServer` upserts new rows.
+
+### Phase 16.E open items (next session)
+
+1. End-to-end test: two browsers, different users, both on the same
+   project. Verify (a) comment in tab A → bell badge increments in
+   tab B + toast pops, (b) regen in tab A → bell row + canvas swap
+   in tab B, (c) bell open in tab B clears the badge + the next
+   `GET /api/notifications` returns rows with `readAt` set.
+2. Commit the Phase 16.E plumbing (currently uncommitted on dev) +
+   push to PR #33.
+3. Decide whether to wire `deck.generate.failed` (needs Inngest
+   `function.failed` listener — separate function, ~30 LoC).
+4. Optional polish: slide-anchor (`?slide=N`) on comment notifications
+   — requires server-side slideKey → slideIndex resolution at format
+   time; punt unless feedback says so.
 
 ## Reuse map (per `feedback_reuse_existing_components.md`)
 
@@ -253,25 +383,23 @@ this key is already in `.env.local` for storage signing (see
 The browser client uses `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
 both already wired through `lib/supabase/client.ts`.
 
-## Open questions to surface BEFORE 16.E start
+## Open questions — all resolved
 
-(16.B's open questions resolved during ship: invitee `User.image` is
-populated via Google OAuth — verified via `useUser()`. Email/password
-signups get a deterministic OKLCH gradient per `userId` via
-`lib/util/avatar-gradient.ts`.)
+(16.B) Avatar source — **resolved**: invitee `User.image` is populated
+via Google OAuth (verified via `useUser()`). Email/password signups
+get a deterministic OKLCH gradient per `userId` via
+`lib/util/avatar-gradient.ts`.
 
+(16.E) Bell payload snippet for `comment.created` — **dropped**.
+Server-formatted title is "X علّقت على شريحة في {project}" with no
+snippet body. Cleaner + privacy-safe (no PII over the user channel);
+the user clicks through to read the actual comment in context.
 
-- (16.B) Avatar source: do invitees have `image` set on the Prisma
-  `User` model today? Or is it Supabase auth metadata only? Phase 15
-  threaded `name` + `image` through `Comment.author` — same source
-  should work, but verify before coding.
-- (16.E) Bell payload "snippet" for `comment_created`: first 60 chars
-  of the comment body, or empty (force user to click through)? — UX
-  choice.
-- (16.E) Bell notifications for **share invites** (someone added me to
-  a project) — in scope or out? `plan-share.md` lists this as
-  out-of-scope for Phase 15; rolling into Phase 16.E adds another
-  `kind="share_invited"` event. Decide before migration.
+(16.E) Bell for share invites — **in scope, shipped 2026-05-24** as
+`share.invited` (invitee only, gated on existing User row) +
+`share.accepted` (project owner). First-touch email-only invites
+skip the bell since there's no User row yet; the email IS the
+delivery channel for those.
 
 ## Acceptance criteria
 
