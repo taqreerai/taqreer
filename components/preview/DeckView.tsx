@@ -497,15 +497,29 @@ export function DeckView({
     let cancelled = false;
     const tick = async () => {
       try {
+        // `&includeManifest=true` is the missing piece (CR PR #33):
+        // when Safari drops the `.finished` broadcast frame, the only
+        // place new slide CONTENT lands is in the broadcast handler's
+        // `fetchAndSwapState`. Without the manifest here, the catch-
+        // up poll would clear the spinner (via the version-bump
+        // useEffect below reacting to slideStates) but the peer would
+        // keep rendering the OLD manifest until the next visibility
+        // refresh or manual reload.
         const res = await fetch(
-          `/api/projects/${encodeURIComponent(projectId)}/status?includeSlideStates=true`,
+          `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
           { credentials: "same-origin" },
         );
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as {
+          manifest?: unknown;
           slideStates?: InitialSlideState[] | null;
         };
-        if (cancelled || !Array.isArray(data.slideStates)) return;
+        if (cancelled) return;
+        if (data.manifest) {
+          const parsed = SlideManifestSchema.safeParse(data.manifest);
+          if (parsed.success) setManifest(parsed.data);
+        }
+        if (!Array.isArray(data.slideStates)) return;
         const nextStates: Record<string, InitialSlideState> = {};
         const nextVersions: Record<string, HistoryRow[]> = {};
         for (const s of data.slideStates) {

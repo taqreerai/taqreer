@@ -79,6 +79,11 @@ export async function GET(
           id: true,
           name: true,
           email: true,
+          // `image` (Google OAuth photo URL) feeds the per-person
+          // Avatar in the share modal — the gradient + initial
+          // fallback still kicks in for email/password signups. Added
+          // 2026-05-24 alongside the avatar-on-the-right row layout.
+          image: true,
         },
       },
       shares: {
@@ -101,6 +106,7 @@ export async function GET(
               id: true,
               name: true,
               email: true,
+              image: true,
             },
           },
         },

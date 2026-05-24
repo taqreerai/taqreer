@@ -540,7 +540,12 @@ export function PreviewActionBar({
             buttons below for every role. */}
         {role === "owner" ? (
           <ToolButton
-            icon="share"
+            // `person_add` reflects the actual action — inviting
+            // collaborators — instead of the generic share glyph
+            // (which read as "system share sheet" / "copy link").
+            // Changed 2026-05-24 alongside the Export-tab removal
+            // from this toolbar's ShareDialog.
+            icon="person_add"
             label="مشاركة"
             onClick={() => setShareOpen(true)}
             disabled={applying}
@@ -617,6 +622,12 @@ export function PreviewActionBar({
         projectTitle={projectTitle}
         manifest={manifest}
         formatFallback={formatFallback}
+        // Editor toolbox already has dedicated PPTX/PDF/PNG/HTML
+        // export buttons in the same toolbar, so the in-modal Export
+        // tab is redundant here. Modal becomes share-only; tile-
+        // launched ShareDialog keeps the Export tab as the only
+        // export path from /projects.
+        showExportTab={false}
         onClose={() => setShareOpen(false)}
       />
     </div>

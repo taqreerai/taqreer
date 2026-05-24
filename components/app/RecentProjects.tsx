@@ -12,7 +12,7 @@
 // inside ProjectThumbnail; this widget just adds the widget-scoped
 // chrome (header + "see all" link + empty state) around the grid.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DashboardEmptyState,
@@ -52,6 +52,44 @@ export function RecentProjects({
   // schedule a router.refresh() at 3 s and 8 s. Caller-level so the
   // shared ProjectsGrid stays purely presentational.
   useRefreshWhileThumbnailsPending(visible);
+
+  // Dashboard-return refresh — fires once per mount. The dashboard
+  // page is `dynamic = "force-dynamic"` so the server always re-
+  // renders fresh, but Next.js's client-side Router Cache serves the
+  // previous RSC payload when the user navigates BACK via `<Link>`
+  // (e.g. /enhance → sidebar "الرئيسية" → /dashboard). The cached
+  // payload predates any project the user created on the in-between
+  // route, so the recent-projects grid looks stale until a hard
+  // reload. A 5s sessionStorage guard skips the refresh when the
+  // user JUST landed on the dashboard from a full page navigation
+  // (server already rendered fresh — no need to round-trip again).
+  // Reported 2026-05-24: "clicking on enhance and going back to
+  // dashboard home, the recent projects doesn't reload."
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const FRESH_KEY = "taqreer:dashboardFreshAt";
+    const FRESH_WINDOW_MS = 5_000;
+    let isFresh = false;
+    try {
+      const stamp = window.sessionStorage.getItem(FRESH_KEY);
+      if (stamp) {
+        const ms = Number(stamp);
+        if (Number.isFinite(ms) && Date.now() - ms < FRESH_WINDOW_MS) {
+          isFresh = true;
+        }
+      }
+    } catch {
+      /* sessionStorage unavailable — skip the guard, refresh anyway */
+    }
+    if (!isFresh) {
+      router.refresh();
+    }
+    try {
+      window.sessionStorage.setItem(FRESH_KEY, String(Date.now()));
+    } catch {
+      /* same as above */
+    }
+  }, [router]);
 
   return (
     <DashboardWidget>

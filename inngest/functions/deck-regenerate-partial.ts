@@ -56,7 +56,7 @@ function buildPartialSystemPrompt(
   const intentBlock =
     mode === "apply-comments"
       ? `USER COMMENTS — apply faithfully, minimally
-- Each comment carries a slide-space bounding box (x, y, w, h in 0..1920, 0..1080) pointing at the element the user wants changed. Use the box to disambiguate which element they meant.
+- Each comment carries a slide-space bounding box (x, y, w, h in 0..${width}, 0..${height}) pointing at the element the user wants changed. Use the box to disambiguate which element they meant.
 - Apply only what the comment asks. If the comment says "make this headline bigger", scale 1.2-1.5×, not 3×. If it says "change colour", change just the colour. Aim for minimal diff from the existing slide.
 - **PRESERVATION RULE — strict.** If the comment doesn't mention placement, the element's position and surrounding layout MUST stay identical. If it doesn't mention size, dimensions stay identical (except the specific text run referenced, if any). If it doesn't mention removal, nothing is removed. Every element the comment didn't reference is kept verbatim — same tag, same coordinates, same children. A colour-only comment changes ONLY the colour token.
 - If the comment is ambiguous, prefer the conservative interpretation.

@@ -228,12 +228,21 @@ export async function POST(
   });
 
   // Phase 16.E — fan-out a bell notification to every project member
-  // except the author. Fire-and-forget: never block the POST response
-  // on a notification fan-out. The helper handles per-recipient
-  // failure isolation + the 10-minute grouping window so a rapid
-  // burst of comments from the same author on the same project merges
-  // into one bell row instead of N.
-  fanOutNotification({
+  // except the author. AWAITED with a bounded timeout (not fire-and-
+  // forget): unlike the Inngest broadcast paths (function lifetime is
+  // 1-3 min — plenty of slack for unsettled promises to flush),
+  // Next.js API routes can have the runtime frozen the moment
+  // NextResponse is returned (Vercel + serverless). A detached
+  // .catch() promise here can be killed mid-Prisma-write, dropping
+  // the notification row entirely. CR PR #33 flagged 2026-05-24.
+  //
+  // The helper isolates per-recipient failures internally, so
+  // awaiting CAN'T fail the whole comment creation — fanOutNotification
+  // catches each recipient's error and logs without rethrowing. The
+  // 2 s Promise.race cap is a belt: a slow DB write shouldn't punish
+  // the POST response time, the fan-out continues in the background
+  // and (worst case) the next visibility-regain refetch backfills.
+  const fanOutPromise = fanOutNotification({
     type: "comment.created",
     projectId: id,
     actorPrismaUserId: ctx.authorPrismaUserId,
@@ -244,6 +253,10 @@ export async function POST(
       error: err instanceof Error ? err.message : String(err),
     });
   });
+  const fanOutTimeout = new Promise<void>((resolve) =>
+    setTimeout(resolve, 2_000),
+  );
+  await Promise.race([fanOutPromise, fanOutTimeout]);
 
   return NextResponse.json({ comment: created }, { status: 201 });
 }
