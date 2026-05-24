@@ -84,13 +84,25 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    // Resolve the canonical MIME. We trust `file.type` only when it's
+    // in our allowlist; otherwise fall back to the filename extension
+    // and OVERWRITE the working `mime` value with the canonical type.
+    // Without this, browsers that report empty / "application/octet-
+    // stream" for .pptx (Mac Safari, some drag-drop paths) would
+    // sneak that wrong type into the Job row, the upload's
+    // contentType, AND the Inngest event payload — which would then
+    // fail dispatcher MIME branching downstream.
+    let resolvedMime = file.type;
     if (!ALLOWED_MIME.has(file.type)) {
-      // Some browsers set the MIME wrong for .pptx (e.g. octet-stream
-      // when the file came off a Mac). Fall back to extension check.
       const lower = file.name.toLowerCase();
-      const extOk =
-        lower.endsWith(".pdf") || lower.endsWith(".pptx") || lower.endsWith(".ppt");
-      if (!extOk) {
+      if (lower.endsWith(".pdf")) {
+        resolvedMime = "application/pdf";
+      } else if (lower.endsWith(".pptx")) {
+        resolvedMime =
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+      } else if (lower.endsWith(".ppt")) {
+        resolvedMime = "application/vnd.ms-powerpoint";
+      } else {
         return NextResponse.json(
           {
             error:
@@ -125,7 +137,7 @@ export async function POST(request: Request) {
         inputJson: {
           supabaseUserId,
           fileName: file.name,
-          mime: file.type,
+          mime: resolvedMime,
           flowKind: rawKind, // "enhance" | "mimic" — for downstream consumer
           targetWidth,
           targetHeight,
@@ -145,7 +157,7 @@ export async function POST(request: Request) {
     const { error: uploadError } = await admin.storage
       .from(SOURCE_FILES_BUCKET)
       .upload(bucketPath, file, {
-        contentType: file.type || "application/octet-stream",
+        contentType: resolvedMime || "application/octet-stream",
         upsert: false,
       });
     if (uploadError) {
@@ -183,7 +195,7 @@ export async function POST(request: Request) {
           supabaseUserId,
           fileBucketPath: bucketPath,
           fileName: file.name,
-          mime: file.type,
+          mime: resolvedMime,
           targetWidth,
           targetHeight,
         },

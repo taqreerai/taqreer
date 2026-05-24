@@ -95,6 +95,24 @@ export const extractSource = inngest.createFunction(
         `extract-source: malformed event payload (missing jobId / userId / path / mime)`,
       );
     }
+    // Target dimensions must be positive integers — `rasterize` uses
+    // them to construct the canvas, and a missing / zero / negative
+    // value would silently produce a degenerate output (or throw
+    // deeper in the stack with a less useful error). Validate at the
+    // event boundary so the failure surfaces as a clear NonRetriable
+    // here rather than mid-extraction.
+    if (
+      typeof targetWidth !== "number" ||
+      typeof targetHeight !== "number" ||
+      !Number.isFinite(targetWidth) ||
+      !Number.isFinite(targetHeight) ||
+      targetWidth <= 0 ||
+      targetHeight <= 0
+    ) {
+      throw new NonRetriableError(
+        `extract-source: invalid target dimensions (width=${targetWidth}, height=${targetHeight}) — expected positive numbers`,
+      );
+    }
 
     // ─── Step 1: mark job processing ─────────────────────────────────
     await step.run("mark-processing", async () => {
