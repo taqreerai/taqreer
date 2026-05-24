@@ -164,6 +164,7 @@ export const extractSource = inngest.createFunction(
             contentType: a.contentType,
             bytes: a.bytes,
             slideIndices: a.slideIndices,
+            groupIds: a.groupIds,
           })),
         );
 

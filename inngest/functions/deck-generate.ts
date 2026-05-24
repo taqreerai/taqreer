@@ -713,7 +713,17 @@ type SourceBrief = {
   anthropicFileId?: string;
   uglyAnthropicFileId?: string;
   designAnthropicFileId?: string;
-  extractedAssets?: Array<{ url: string; originalSlide: number }>;
+  extractedAssets?: Array<{
+    url: string;
+    originalSlide: number;
+    /**
+     * PowerPoint shape-group IDs this asset belongs to. Multiple
+     * assets sharing the same groupId are a composite element
+     * (logo + wordmark, icon + label) and must be kept together
+     * in the generated slide. See lib/extract/assets-pptx.ts.
+     */
+    groupIds?: string[];
+  }>;
   fonts?: string[];
   dataFileId?: string;
   userContext?: string;
@@ -813,13 +823,55 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       `  Re-execute the deck's typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality. Preserve the brand identity (palette, fonts when provided, logo, key visual motifs). The content is locked; only the design changes.`,
     );
     if (assets.length > 0) {
+      // Bucket assets by groupId so we can describe each group as
+      // ONE composite element. Ungrouped assets get individual
+      // lines. Same logical asset can appear in multiple groups
+      // across slides — list each occurrence on its own line so
+      // Claude can spot the repetition pattern.
+      const ungrouped: typeof assets = [];
+      const grouped = new Map<string, typeof assets>();
+      for (const a of assets) {
+        if (a.groupIds && a.groupIds.length > 0) {
+          for (const gid of a.groupIds) {
+            const bucket = grouped.get(gid) ?? [];
+            bucket.push(a);
+            grouped.set(gid, bucket);
+          }
+        } else {
+          ungrouped.push(a);
+        }
+      }
       lines.push(
         ``,
-        `Embedded assets available (${assets.length}) — URLs to reuse in your generated slides where they appeared in the originals. Reference them by URL in your <img src> attributes:`,
-        ...assets.map(
-          (a) => `  • ${a.url} (was on original slide ${a.originalSlide})`,
-        ),
+        `Embedded assets available (${assets.length} unique URLs across ${grouped.size} composite groups + ${ungrouped.length} standalone). Reference by URL in your <img src> attributes.`,
       );
+      // Render each composite group as a labeled cluster so
+      // Claude treats grouped URLs as a single visual unit.
+      if (grouped.size > 0) {
+        lines.push(
+          ``,
+          `COMPOSITE GROUPS — multiple URLs that form ONE visual element. Keep them positioned + scaled together on the slide (same anchor, same z-stack, same transform): if you move one, move all.`,
+        );
+        for (const [gid, members] of grouped) {
+          lines.push(
+            `  Group ${gid} (${members.length} images):`,
+            ...members.map(
+              (a) =>
+                `    • ${a.url} (was on original slide ${a.originalSlide})`,
+            ),
+          );
+        }
+      }
+      if (ungrouped.length > 0) {
+        lines.push(
+          ``,
+          `STANDALONE — independent assets, position each individually:`,
+          ...ungrouped.map(
+            (a) =>
+              `  • ${a.url} (was on original slide ${a.originalSlide})`,
+          ),
+        );
+      }
     }
     if (fonts.length > 0) {
       // Classify each name into "system" (OS-bundled — use verbatim

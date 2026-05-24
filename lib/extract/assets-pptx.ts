@@ -47,6 +47,20 @@ export type ExtractedPptxAsset = {
    * ascending. Length >= 1 for every returned entry.
    */
   slideIndices: number[];
+  /**
+   * IDs of PowerPoint shape-groups (`<p:grpSp>`) the image is
+   * grouped inside. Each ID is shaped `"slide{N}-group{M}"` where N
+   * is the 1-based slide number and M is the 1-based group index
+   * within that slide (document order of the OUTERMOST grpSp
+   * containing the blip — handles nested groups by collapsing to
+   * the top-most).
+   *
+   * Multiple images sharing the same groupId form a composite
+   * element (e.g. a logo made of mark + wordmark). Claude's
+   * directive treats them as one unit — keep positioned + scaled
+   * together. Empty array when the image isn't inside any group.
+   */
+  groupIds: string[];
 };
 
 /**
@@ -77,10 +91,13 @@ export async function extractAssetsFromPptx(
     );
   }
 
-  // Step 2: build the assetMap: image-path-in-zip → set of slide
-  // indices that referenced it. Same image on slide 3 + slide 7
-  // merges into one entry with slideIndices=[3,7].
-  const assetMap = new Map<string, Set<number>>();
+  // Step 2: build the assetMap: image-path-in-zip → accumulated
+  // metadata (slide indices + group IDs that referenced it).
+  type AssetMeta = {
+    slideIndices: Set<number>;
+    groupIds: Set<string>;
+  };
+  const assetMap = new Map<string, AssetMeta>();
 
   for (const slidePath of slidePaths) {
     const slideIndex = slideIndexFromPath(slidePath);
@@ -97,28 +114,29 @@ export async function extractAssetsFromPptx(
     const slideFile = zip.file(slidePath);
     if (!slideFile) continue;
     const slideXml = await slideFile.async("string");
-    const rIds = parseEmbeddedRefs(slideXml);
+    const refs = parseEmbeddedRefs(slideXml, slideIndex);
 
-    for (const rId of rIds) {
+    for (const { rId, groupId } of refs) {
       const target = relsMap.get(rId);
       if (!target) continue;
       // Targets are typically "../media/imageN.ext" relative to the
       // slide file. Resolve to absolute zip path.
       const absolutePath = resolveZipPath(slidePath, target);
       if (!absolutePath.startsWith("ppt/media/")) continue; // safety
-      let indices = assetMap.get(absolutePath);
-      if (!indices) {
-        indices = new Set();
-        assetMap.set(absolutePath, indices);
+      let meta = assetMap.get(absolutePath);
+      if (!meta) {
+        meta = { slideIndices: new Set(), groupIds: new Set() };
+        assetMap.set(absolutePath, meta);
       }
-      indices.add(slideIndex);
+      meta.slideIndices.add(slideIndex);
+      if (groupId) meta.groupIds.add(groupId);
     }
   }
 
   // Step 3: read each image's bytes, drop unsupported formats,
   // build the return list.
   const out: ExtractedPptxAsset[] = [];
-  for (const [path, indices] of assetMap) {
+  for (const [path, meta] of assetMap) {
     const fileName = path.split("/").pop() ?? path;
     const contentType = mimeForFile(fileName);
     if (!contentType) continue; // unsupported (emf/wmf/unknown)
@@ -129,7 +147,8 @@ export async function extractAssetsFromPptx(
       fileName,
       contentType,
       bytes,
-      slideIndices: [...indices].sort((a, b) => a - b),
+      slideIndices: [...meta.slideIndices].sort((a, b) => a - b),
+      groupIds: [...meta.groupIds].sort(),
     });
   }
   return out;
@@ -192,8 +211,10 @@ function parseRelationships(relsXml: string): Map<string, string> {
 
 /**
  * Walk a slide's main XML, return all `r:embed` attribute values
- * on `<a:blip>` elements. Picture references in DrawingML always
- * use this exact shape:
+ * on `<a:blip>` elements PLUS the ID of the outermost `<p:grpSp>`
+ * (PowerPoint shape group) the blip lives inside, if any.
+ *
+ * Picture references in DrawingML always look like:
  *   <p:pic>
  *     <p:blipFill>
  *       <a:blip r:embed="rId1"/>
@@ -201,17 +222,45 @@ function parseRelationships(relsXml: string): Map<string, string> {
  *     </p:blipFill>
  *   </p:pic>
  *
+ * When the user groups items in PowerPoint (Ctrl+G), shapes get
+ * wrapped:
+ *   <p:grpSp>
+ *     <p:nvGrpSpPr>…</p:nvGrpSpPr>
+ *     <p:pic>...<a:blip r:embed="rIdA"/>...</p:pic>
+ *     <p:pic>...<a:blip r:embed="rIdB"/>...</p:pic>
+ *   </p:grpSp>
+ *
+ * Multiple blips inside the same grpSp share a groupId so the
+ * downstream consumer (deck-generate's directive) can tell Claude
+ * "these URLs are one composite element — keep them together."
+ *
+ * Nested groups collapse to the OUTERMOST: a grpSp inside a grpSp
+ * still resolves to its top-most ancestor's ID. The user's mental
+ * model is "I selected and grouped these things"; nested-group
+ * details aren't useful for re-composition.
+ *
  * We collect by walking all `a:blip` tags rather than `p:pic` →
  * `p:blipFill` → `a:blip`, because the same `a:blip` shape can
  * appear inside `a:bgPr` (background fills) or `a:tcPr` (table cell
- * fills) too, and we want to reuse those images if they exist.
+ * fills) too — those are valid images we want to reuse.
  */
-function parseEmbeddedRefs(slideXml: string): string[] {
+function parseEmbeddedRefs(
+  slideXml: string,
+  slideIndex: number,
+): Array<{ rId: string; groupId: string | null }> {
   const doc = new DOMParser().parseFromString(slideXml, "text/xml");
   // `a:blip` is the prefix-qualified tag name. xmldom matches by
   // raw tag name including the prefix.
   const blips = doc.getElementsByTagName("a:blip");
-  const out: string[] = [];
+  // Map of grpSp Element → assigned groupId. Filled lazily as we
+  // encounter blips; ensures every blip inside the same outermost
+  // grpSp gets the SAME ID even though we discover them via
+  // separate ancestor walks.
+  type Node = Element & { parentNode: Node | null; nodeName: string };
+  const groupIdMap = new Map<Node, string>();
+  let nextGroupNum = 0;
+
+  const out: Array<{ rId: string; groupId: string | null }> = [];
   for (let i = 0; i < blips.length; i += 1) {
     const blip = blips.item(i);
     if (!blip) continue;
@@ -220,7 +269,29 @@ function parseEmbeddedRefs(slideXml: string): string[] {
     // long as the document uses the standard prefix (which OOXML
     // mandates in practice — `r:` is canonical for relationships).
     const embed = blip.getAttribute("r:embed");
-    if (embed) out.push(embed);
+    if (!embed) continue;
+
+    // Walk up the parent chain. Track the OUTERMOST p:grpSp we see;
+    // that's the canonical group for this blip.
+    let outermostGrp: Node | null = null;
+    let ancestor = (blip.parentNode ?? null) as Node | null;
+    while (ancestor) {
+      if (ancestor.nodeName === "p:grpSp") outermostGrp = ancestor;
+      ancestor = ancestor.parentNode ?? null;
+    }
+
+    let groupId: string | null = null;
+    if (outermostGrp) {
+      let assigned = groupIdMap.get(outermostGrp);
+      if (!assigned) {
+        nextGroupNum += 1;
+        assigned = `slide${slideIndex}-group${nextGroupNum}`;
+        groupIdMap.set(outermostGrp, assigned);
+      }
+      groupId = assigned;
+    }
+
+    out.push({ rId: embed, groupId });
   }
   return out;
 }

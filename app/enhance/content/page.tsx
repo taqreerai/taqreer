@@ -34,7 +34,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EnhanceShell } from "@/components/enhance/EnhanceShell";
 import { PillButton } from "@/components/create/PillButton";
-import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import type { ExtractedAsset } from "@/lib/types/source";
 
@@ -48,16 +47,15 @@ const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
-// Default palette shown when the source carries no theme accents
-// (PDF input, or PPTX with an unmodified Office theme). Mirrors
-// the brand defaults the /create/brand page uses.
-const DEFAULT_PALETTE = ["#3300FF", "#E036B8", "#9326C9", "#FFFFFF", "#03030D"];
-
 type ExtractCompletedResponse = {
   status: "completed";
   result: {
     anthropicFileId: string;
-    embeddedAssets: Array<{ url: string; slideIndices: number[] }>;
+    embeddedAssets: Array<{
+      url: string;
+      slideIndices: number[];
+      groupIds: string[];
+    }>;
     fonts: string[];
     colors: string[];
     pageCount: number;
@@ -110,54 +108,48 @@ export default function EnhanceContentPage() {
   >(null);
 
   // ─── Brand ────────────────────────────────────────────────────
-  const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
+  // Palette UI dropped per 2026-05-25 user direction — Claude
+  // picks brand colors from the PDF visually + the extracted
+  // theme accents flow through sessionStorage as hints. Only the
+  // logo is user-editable on this page.
   const [logo, setLogo] = useState<StoredLogo | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
 
   const [error, setError] = useState("");
 
   // ─── Initial hydrate from sessionStorage ─────────────────────
-  // Brand keys may be pre-filled by a prior visit (e.g. user
-  // bounced back from summary). seedFromExtraction also writes
-  // here on successful extraction, but that runs later.
+  // The logo may be pre-filled by a prior visit (user bounced
+  // back from summary). seedFromExtraction also writes here on
+  // successful extraction.
   useEffect(() => {
     try {
       const rawBrand = sessionStorage.getItem(BRAND_KEY);
       if (rawBrand) {
-        const parsed = JSON.parse(rawBrand) as {
-          colors?: string[];
-          logo?: StoredLogo | null;
-        };
-        if (Array.isArray(parsed.colors) && parsed.colors.length > 0) {
-          setColors(parsed.colors);
-        }
-        if (parsed.logo) {
-          setLogo(parsed.logo);
-        }
+        const parsed = JSON.parse(rawBrand) as { logo?: StoredLogo | null };
+        if (parsed.logo) setLogo(parsed.logo);
       }
     } catch {
       /* corrupt blob — start fresh */
     }
   }, []);
 
-  // ─── Persist brand changes to sessionStorage ─────────────────
-  // Auto-saved so the summary page always reads the latest. Same
-  // shape /create/brand writes so /api/projects can consume it
-  // identically.
+  // ─── Persist logo changes to sessionStorage ───────────────────
+  // Read-modify-write so we don't clobber `colors` / `fonts` /
+  // `paletteMode` that seedFromExtraction wrote post-extraction.
   useEffect(() => {
-    const payload = {
-      colors,
-      paletteMode: "manual" as const,
-      paletteScreenshotUrl: null,
-      fonts: { heading: null, body: null },
-      logo,
-    };
     try {
-      sessionStorage.setItem(BRAND_KEY, JSON.stringify(payload));
+      const existingRaw = sessionStorage.getItem(BRAND_KEY);
+      const existing = existingRaw
+        ? (JSON.parse(existingRaw) as Record<string, unknown>)
+        : {};
+      sessionStorage.setItem(
+        BRAND_KEY,
+        JSON.stringify({ ...existing, logo }),
+      );
     } catch {
       /* best-effort */
     }
-  }, [colors, logo]);
+  }, [logo]);
 
   // ─── File pickers ────────────────────────────────────────────
   const selectFile = (next?: File | null) => {
@@ -298,7 +290,11 @@ export default function EnhanceContentPage() {
       // The format + pageCount land in OUTPUT_KEY so the summary
       // page picks up the slide size + slide count automatically.
       const extractedAssets: ExtractedAsset[] = result.embeddedAssets.map(
-        (a) => ({ url: a.url, originalSlide: a.slideIndices[0] ?? -1 }),
+        (a) => ({
+          url: a.url,
+          originalSlide: a.slideIndices[0] ?? -1,
+          groupIds: a.groupIds ?? [],
+        }),
       );
 
       seedFromExtraction({
@@ -309,10 +305,11 @@ export default function EnhanceContentPage() {
           fonts: result.fonts,
         },
         brand: {
-          // User's manual color picks take precedence over the
-          // extracted palette — we read `colors` from local state,
-          // which is the user's current grid.
-          colors,
+          // No UI picker for colors anymore — pass through whatever
+          // the server extracted (theme accents for PPTX, empty for
+          // PDF). Claude treats them as a baseline brand hint and
+          // augments / replaces from what he sees in the PDF.
+          colors: result.colors,
           fonts: result.fonts,
           format: result.format,
         },
@@ -339,19 +336,16 @@ export default function EnhanceContentPage() {
       }
 
       // Make sure the brand sessionStorage carries the final logo
-      // (the effect runs on dep change; on submit-with-fresh-extract
-      // the colors might have just shifted to extracted values, but
-      // the logo from local state is the source of truth).
+      // alongside whatever seedFromExtraction just wrote (colors +
+      // fonts hints). Read-modify-write to merge cleanly.
       try {
+        const existingRaw = sessionStorage.getItem(BRAND_KEY);
+        const existing = existingRaw
+          ? (JSON.parse(existingRaw) as Record<string, unknown>)
+          : {};
         sessionStorage.setItem(
           BRAND_KEY,
-          JSON.stringify({
-            colors,
-            paletteMode: "manual",
-            paletteScreenshotUrl: null,
-            fonts: { heading: null, body: null },
-            logo,
-          }),
+          JSON.stringify({ ...existing, logo }),
         );
       } catch {
         /* best-effort */
@@ -529,7 +523,10 @@ export default function EnhanceContentPage() {
         ) : null}
       </div>
 
-      {/* ─── Card 2 — Brand (logo + palette) ─────────────────────── */}
+      {/* ─── Card 2 — Brand logo (optional) ───────────────────────
+          Palette UI dropped per user direction 2026-05-25 — Claude
+          picks colors from the PDF directly. The extracted theme
+          accents still flow through sessionStorage as hints. */}
       <div className="glass-card flex flex-1 flex-col gap-4 rounded-2xl p-5">
         <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -537,20 +534,16 @@ export default function EnhanceContentPage() {
               className="material-symbols-outlined text-white"
               style={{ fontSize: "18px" }}
             >
-              palette
+              image
             </span>
-            الهوية البصرية
+            الشعار (SVG)
             <span className="text-xs font-normal text-white/40">
-              (اختياري — يُملأ تلقائياً من الملف)
+              (اختياري)
             </span>
           </h2>
         </header>
 
-        {/* Logo upload row */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-white/70">
-            الشعار (SVG)
-          </label>
           <input
             ref={logoInputRef}
             type="file"
@@ -608,53 +601,7 @@ export default function EnhanceContentPage() {
           )}
         </div>
 
-        {/* Palette grid — 5 swatches */}
-        <div className="flex flex-1 flex-col gap-2">
-          <label className="text-xs font-medium text-white/70">
-            ألوان الهوية
-          </label>
-          <div className="grid grid-cols-5 gap-2">
-            {colors.map((color, i) => (
-              <PaletteSwatch
-                key={i}
-                value={color}
-                onChange={(next) =>
-                  setColors((prev) =>
-                    prev.map((c, j) => (j === i ? next : c)),
-                  )
-                }
-              />
-            ))}
-          </div>
-        </div>
       </div>
     </EnhanceShell>
-  );
-}
-
-function PaletteSwatch({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="block h-12 w-full rounded-xl border border-white/15 transition-shadow hover:shadow-lg"
-        style={{ backgroundColor: value }}
-        aria-label={`لون ${value}`}
-      />
-      <ColorPickerPopover
-        open={open}
-        value={value}
-        onChange={onChange}
-        onClose={() => setOpen(false)}
-      />
-    </div>
   );
 }

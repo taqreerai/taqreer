@@ -37,6 +37,15 @@ export const ExtractedAssetSchema = z.object({
   // attribute to a specific slide (rare — PPTX slide layouts can
   // reference shared images that appear on every slide).
   originalSlide: z.number().int(),
+  /**
+   * IDs of PowerPoint shape-groups this asset is part of (e.g.
+   * "slide3-group1"). Multiple assets sharing the same groupId
+   * form a composite element (logo + wordmark, icon + label, etc).
+   * Empty array when the asset isn't grouped. Used by deck-generate
+   * to instruct Claude to keep grouped URLs positioned/scaled
+   * together.
+   */
+  groupIds: z.array(z.string()).default([]),
 });
 export type ExtractedAsset = z.infer<typeof ExtractedAssetSchema>;
 

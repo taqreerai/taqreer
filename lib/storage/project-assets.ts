@@ -41,6 +41,12 @@ export type UploadedAsset = {
   url: string;
   /** 1-based slide indices where this asset originally appeared. */
   slideIndices: number[];
+  /**
+   * IDs of PowerPoint shape-groups this image is part of. Threaded
+   * through from assets-pptx.ts. Empty array when ungrouped. See
+   * ExtractedPptxAsset.groupIds for full semantics.
+   */
+  groupIds: string[];
 };
 
 /**
@@ -65,20 +71,23 @@ export async function uploadProjectAssets(
     contentType: string;
     bytes: Buffer;
     slideIndices: number[];
+    groupIds: string[];
   }>,
 ): Promise<UploadedAsset[]> {
   const admin = makeAdminClient();
 
-  // ─── Step 1: dedupe by content hash, merge slideIndices ──────────
+  // ─── Step 1: dedupe by content hash, merge slideIndices + groupIds ─
   // The hash is the storage path's namespace inside this jobId. If
   // two ExtractedPptxAssets have the same bytes (rare but possible
   // — PowerPoint copy-paste, or images-of-images in slide layouts),
-  // they collapse into one upload with the union of their indices.
+  // they collapse into one upload with the union of their indices
+  // AND the union of their group IDs.
   type Pending = {
     contentType: string;
     bytes: Buffer;
     ext: string;
     slideIndices: Set<number>;
+    groupIds: Set<string>;
     hash: string;
   };
   const pendingByHash = new Map<string, Pending>();
@@ -91,12 +100,14 @@ export async function uploadProjectAssets(
     const existing = pendingByHash.get(hash);
     if (existing) {
       for (const idx of asset.slideIndices) existing.slideIndices.add(idx);
+      for (const gid of asset.groupIds) existing.groupIds.add(gid);
     } else {
       pendingByHash.set(hash, {
         contentType: asset.contentType,
         bytes: asset.bytes,
         ext,
         slideIndices: new Set(asset.slideIndices),
+        groupIds: new Set(asset.groupIds),
         hash,
       });
     }
@@ -120,6 +131,7 @@ export async function uploadProjectAssets(
     out.push({
       url: publicUrl(PROJECT_ASSETS_BUCKET, path),
       slideIndices: [...pending.slideIndices].sort((a, b) => a - b),
+      groupIds: [...pending.groupIds].sort(),
     });
   }
   return out;
