@@ -23,6 +23,10 @@ import type {
   ProjectBroadcastEvent,
   ProjectBroadcastPayloadMap,
 } from "./project-channel";
+import type {
+  UserBroadcastEvent,
+  UserBroadcastPayloadMap,
+} from "./user-channel";
 
 /**
  * Emit one broadcast message to the project channel.
@@ -156,5 +160,90 @@ export async function broadcastToProject<E extends ProjectBroadcastEvent>(
     })(),
     BROADCAST_OVERALL_TIMEOUT_MS,
     `broadcastToProject(${event})`,
+  );
+}
+
+/**
+ * Emit a broadcast on a user-scoped channel (topic `user:{prismaUserId}`).
+ *
+ * Same overall shape as `broadcastToProject` — transient admin client
+ * per call, race against the 3 s overall cap, never throw. Used by
+ * the notification fan-out helper to push pointer-only
+ * `notification.created` events to a single recipient's tab.
+ *
+ * Failure-mode mirror of broadcastToProject: a missed broadcast is
+ * a courtesy loss only. The Notification row is already persisted
+ * by the time we get here, so the recipient will see it on their
+ * next bell open / visibility-regain refetch / page reload regardless.
+ */
+export async function broadcastToUser<E extends UserBroadcastEvent>(
+  prismaUserId: string,
+  event: E,
+  payload: UserBroadcastPayloadMap[E],
+): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    console.warn("[realtime] broadcastToUser skipped — Supabase env missing");
+    return;
+  }
+  await withTimeout(
+    (async () => {
+      const admin = createSupabaseAdminClient(url, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        realtime: { params: { eventsPerSecond: 10 } },
+      });
+      const topic = `user:${prismaUserId}`;
+      const channel = admin.channel(topic, {
+        config: { broadcast: { self: false, ack: false } },
+      });
+      try {
+        await new Promise<void>((resolve) => {
+          let resolved = false;
+          const finish = () => {
+            if (resolved) return;
+            resolved = true;
+            resolve();
+          };
+          const timer = setTimeout(finish, 2000);
+          channel.subscribe((status) => {
+            if (
+              status === "SUBSCRIBED" ||
+              status === "CHANNEL_ERROR" ||
+              status === "TIMED_OUT"
+            ) {
+              clearTimeout(timer);
+              finish();
+            }
+          });
+        });
+        if (channel.state === "joined") {
+          await channel.send({ type: "broadcast", event, payload });
+        } else {
+          console.warn("[realtime] broadcastToUser skipped — channel not joined", {
+            topic,
+            state: channel.state,
+          });
+        }
+      } catch (err) {
+        console.warn("[realtime] broadcastToUser failed", {
+          prismaUserId,
+          event,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        try {
+          await admin.removeChannel(channel);
+        } catch (removeErr) {
+          console.warn("[realtime] removeChannel failed during user-broadcast cleanup", {
+            prismaUserId,
+            error:
+              removeErr instanceof Error ? removeErr.message : String(removeErr),
+          });
+        }
+      }
+    })(),
+    BROADCAST_OVERALL_TIMEOUT_MS,
+    `broadcastToUser(${event})`,
   );
 }

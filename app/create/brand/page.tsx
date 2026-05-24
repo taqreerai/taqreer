@@ -1038,15 +1038,49 @@ export default function CreateBrandPage() {
       }
       return null;
     };
+    // Reinject the Google Fonts <link> for a restored google-mode slot.
+    // The autosave persists `googleFamily` + the CSS URL so the slot's
+    // FontSlotState round-trips through sessionStorage, but the
+    // <link rel="stylesheet"> appended to <head> by `injectGoogleFont`
+    // (declared further down in this component) only lives in the DOM
+    // of the original mount — a back→forward navigation loses it. The
+    // preview <p> would then fall back to system fonts despite
+    // FontSlotState looking correct. We inline the same single-link
+    // append pattern `hydrateFromBrandKit` uses (the proper
+    // `injectGoogleFont` helper is defined later in the component and
+    // would TDZ-error at this point). `googleLinkRef.current[target]`
+    // is safe to dereference here even though the ref is declared
+    // later in the function body — useLayoutEffect bodies run AFTER
+    // every hook in the component has initialized. CR PR #33, 2026-05-24.
+    const restoreGoogleLink = (family: string, target: FontTarget) => {
+      // Drop any previous link for this target — defensive (the slot
+      // should be empty on a fresh mount but a Fast Refresh tick or
+      // re-mount could leave one stranded).
+      const prevLink = googleLinkRef.current[target];
+      if (prevLink && prevLink.parentNode) {
+        prevLink.parentNode.removeChild(prevLink);
+      }
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = googleFontUrl(family);
+      document.head.appendChild(link);
+      googleLinkRef.current[target] = link;
+    };
     const heading = restoreSlot(s.fonts?.heading);
     if (heading) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHeadingFontSlot(heading);
+      if (heading.mode === "google" && heading.googleFamily) {
+        restoreGoogleLink(heading.googleFamily, "heading");
+      }
     }
     const body = restoreSlot(s.fonts?.body);
     if (body) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setBodyFontSlot(body);
+      if (body.mode === "google" && body.googleFamily) {
+        restoreGoogleLink(body.googleFamily, "body");
+      }
     }
     // NOTE: do NOT flip `hasHydratedRef.current` here — even though
     // `s` exists, the autosave useEffect (declared further down)

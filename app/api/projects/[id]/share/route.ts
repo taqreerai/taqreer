@@ -23,6 +23,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectContext } from "@/lib/api/project-context";
 import { sendShareInvite } from "@/lib/email/send-share-invite";
+import { fanOutNotification } from "@/lib/notifications/server";
 
 // Single source of truth for the access-level enum on the wire.
 // Matches Prisma's `ProjectAccessLevel` enum exactly so the union
@@ -306,6 +307,35 @@ export async function POST(
         err instanceof Error ? err.message : "unknown error",
       );
     }
+  }
+
+  // Phase 16.E — fan-out a bell notification to the invitee IF they
+  // already have an account in our system. New-email invites (no
+  // matching User row yet) skip the bell — the email + the post-
+  // accept landing on /project/X are enough. Once they accept, the
+  // share.accepted route notifies the owner.
+  if (result.newShare?.email) {
+    (async () => {
+      try {
+        const invitee = await prisma.user.findUnique({
+          where: { email: result.newShare!.email },
+          select: { id: true },
+        });
+        if (!invitee) return; // first-touch email — no bell yet
+        await fanOutNotification({
+          type: "share.invited",
+          projectId,
+          actorPrismaUserId: ctx.project.user.id,
+          payload: { accessLevel: result.newShare!.accessLevel },
+          recipientUserIds: [invitee.id],
+        });
+      } catch (err) {
+        console.warn("[notifications] share.invited fanOut failed", {
+          projectId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
   }
 
   return NextResponse.json({ ok: true, share: result.newShare });

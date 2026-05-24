@@ -29,6 +29,12 @@ model User {
   usageEvents    UsageEvent[]
   projectShares  ProjectShare[]
   comments       Comment[]
+  // Notifications addressed TO this user (recipientUserId). The
+  // `notificationsActed` back-relation tracks rows where this user
+  // is the actor (someone else's bell entries). Kept separate so
+  // a single inverse query reads cleanly.
+  notifications      Notification[] @relation("RecipientNotifications")
+  notificationsActed Notification[] @relation("ActorNotifications")
 }
 
 model Account {
@@ -127,6 +133,7 @@ model Project {
   files         File[]
   jobs          Job[]
   shares        ProjectShare[]
+  notifications Notification[]
 
   @@index([userId, isFavorite])
 }
@@ -422,4 +429,80 @@ model UsageEvent {
   metadata  Json?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Phase 16.E — bell notifications.
+//
+// One row per "X happened that the recipient should know about." Server-
+// side fan-out (`lib/notifications/server.ts`) creates rows alongside
+// the realtime broadcasts that already drive live UI; the bell consumes
+// rows via REST + a per-user Supabase channel.
+//
+// `type` is a free-form string (not an enum) because new event kinds
+// will be added incrementally; an enum would force a migration each
+// time. The client maps `type` → renderer + icon via a small lookup
+// table in BellDropdown. Unknown types are tolerated (renderer falls
+// back to a generic info row using only `payload.title` if present).
+//
+// `payload` JSON shape is type-specific. Examples:
+//   comment.created  { slideKey, commentId, slideIds: ["s1", "s2"] }
+//     (slideIds populated when grouping merges multiple events from
+//      the same actor on the same project within the group window)
+//   slide.regen.finished { slideKey, slideIds: [...] }
+//   deck.regen.finished  {}  (no extra info — message uses projectId)
+//   deck.generate.finished { versionId }
+//   deck.generate.failed   { reason? }
+//   share.invited     { email, accessLevel }
+//   share.accepted    {}
+//
+// `projectId` is nullable so account-scoped events (an invite to a
+// project the recipient hasn't joined yet, etc.) can still write a
+// row when needed. When set, ON DELETE Cascade so wiping a project
+// also drops its notifications.
+//
+// `actorUserId` is nullable so system-generated events (a generation
+// completing isn't "caused by" a peer) can still attribute the source
+// in the JOIN even if no human actor exists. Drops to SET NULL on
+// user delete so the notification survives the actor's account removal
+// (the recipient may still want context like "the user who shared
+// this with you has left").
+//
+// `readAt` is set in bulk when the user opens the bell — "mark all
+// read on bell open" per product decision 2026-05-24. We do NOT do
+// per-row read state (a click on a row navigates, doesn't toggle
+// read).
+//
+// Indexes:
+//   • (recipientUserId, createdAt desc)  — the bell's primary list
+//     query, sorted newest-first.
+//   • (recipientUserId, readAt)          — unread count for the
+//     badge: `count where readAt IS NULL`.
+model Notification {
+  id              String   @id @default(cuid())
+  recipientUserId String
+  // Free-form discriminator. See top-of-model comment for the active
+  // type set. New types added here are reflected in the bell renderer
+  // lookup; unknown types render a generic row.
+  type            String
+  payload         Json
+  // Optional foreign key — see top-of-model comment for the nullable
+  // rationale. ON DELETE Cascade so deleting a project sweeps its
+  // notifications. SET NULL would orphan rows that still reference a
+  // dead projectId in the payload, which the renderer can't dereference.
+  projectId       String?
+  // Optional foreign key — see top-of-model comment for the nullable +
+  // SET NULL rationale. The actor's display name + avatar live on
+  // the User row that this points to (lazily joined by the bell's
+  // GET route), so deleted-actor rows render with a generic
+  // "someone" placeholder instead of a broken JOIN.
+  actorUserId     String?
+  createdAt       DateTime @default(now())
+  readAt          DateTime?
+
+  recipient User    @relation("RecipientNotifications", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  actor     User?   @relation("ActorNotifications", fields: [actorUserId], references: [id], onDelete: SetNull)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, createdAt(sort: Desc)])
+  @@index([recipientUserId, readAt])
 }

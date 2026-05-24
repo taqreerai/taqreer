@@ -513,9 +513,14 @@ export function HeroCommentOverlay({
                   try {
                     await onDelete(comment.id);
                     setPreviewState(null);
-                  } catch {
+                  } catch (err) {
                     // Keep the popup open on failure so the user can
                     // retry — same error UX the in-mode editor uses.
+                    // RE-THROW so MarkerPreviewPopup.handleDeleteClick's
+                    // catch fires and resets its `isDeleting` flag —
+                    // otherwise the delete button stays permanently
+                    // disabled (CR PR #33, 2026-05-24).
+                    throw err;
                   }
                 }}
               />

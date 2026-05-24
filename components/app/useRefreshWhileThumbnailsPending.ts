@@ -35,7 +35,7 @@
 // state is observed, so a later save can re-trigger a fresh cycle
 // without a remount.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 const RETRY_SCHEDULE_MS = [3_000, 8_000, 20_000, 45_000, 90_000, 150_000];
@@ -105,8 +105,16 @@ export function useRefreshWhileThumbnailsPending(
   // `projects` change (rebinding every render would churn through
   // event-listener registrations on a tab that's rendering once a
   // second under React's render-on-state-change rhythm).
+  //
+  // Ref sync runs in `useLayoutEffect` (not during render) so React
+  // can abandon a render without leaving a stale `projects` snapshot
+  // captured in the ref. `useLayoutEffect` fires synchronously before
+  // paint, so the visibility handler always sees the latest snapshot
+  // on its next firing (CR PR #33, 2026-05-24).
   const projectsRef = useRef(projects);
-  projectsRef.current = projects;
+  useLayoutEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
   useEffect(() => {
     if (typeof document === "undefined") return;
     const handler = () => {

@@ -252,6 +252,15 @@ export function DeckView({
   // Initial state seeds from server props. The parent (re)keys this component
   // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);
+  // Ref-mirror of manifest so realtime broadcast handlers can read the
+  // latest slide list without re-binding to the channel on every
+  // manifest change. Kept in sync via the useEffect right below the
+  // state — synchronous-after-render sync is fine here (the handler
+  // only fires async on socket events, never during render).
+  const manifestRef = useRef<SlideManifest | null>(initialManifest);
+  useEffect(() => {
+    manifestRef.current = manifest;
+  }, [manifest]);
   // Per-slide pill state, keyed by slideKey. Mutated by Lock /
   // Undo / Try-again actions; reseeds from props on parent remount.
   // Map<slideKey, state> for O(1) lookup; serialised to InitialSlideState
@@ -460,6 +469,95 @@ export function DeckView({
     versionId: string;
     targetSlideIds: string[];
   } | null>(null);
+  // Slides currently being regen'd by a PEER (not the local user). Set
+  // entries are slideIds. Added on `slide.regen.started` from the
+  // project channel (self-echo skipped — the actor's `applying` state
+  // already shows the spinner on the SAME slide for them), cleared on
+  // `slide.regen.finished`. Unioned with `applying.targetSlideIds`
+  // when computing the per-slide `regenerating` flag so observers see
+  // the same dim+spinner overlay the actor sees. Re-added 2026-05-24.
+  const [peerRegenInProgress, setPeerRegenInProgress] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
+  // throttles backgrounded / out-of-focus WebSockets and occasionally
+  // drops broadcast frames entirely — symptom: the spinner overlay
+  // stays past the actual regen completion until the next user-driven
+  // refetch (visibility-change, manual click somewhere, etc.) catches
+  // up. While peerRegenInProgress is non-empty, poll the status route
+  // every 8s with `&includeSlideStates=true` so `slideStates` mirrors
+  // the latest server state; the defensive useEffect below then notices
+  // `currentVersionNumber` bumps and clears the matching peer entries.
+  // 8 s balances "spinner clears within ~one regen-completion-window
+  // of the truth" against not hammering the route on a healthy
+  // websocket (in which case the broadcast clears the set first and
+  // the poll's slideStates write is a no-op).
+  useEffect(() => {
+    if (peerRegenInProgress.size === 0) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/status?includeSlideStates=true`,
+          { credentials: "same-origin" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          slideStates?: InitialSlideState[] | null;
+        };
+        if (cancelled || !Array.isArray(data.slideStates)) return;
+        const nextStates: Record<string, InitialSlideState> = {};
+        const nextVersions: Record<string, HistoryRow[]> = {};
+        for (const s of data.slideStates) {
+          nextStates[s.slideKey] = s;
+          nextVersions[s.slideKey] = s.versions ?? [];
+        }
+        setSlideStates(nextStates);
+        setHistoryVersions(nextVersions);
+      } catch {
+        /* network blip — next tick retries */
+      }
+    };
+    const interval = window.setInterval(tick, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [peerRegenInProgress, projectId]);
+  // Belt-and-braces clear for the peer-regen spinner: when a slide's
+  // `currentVersionNumber` ticks up (a new version landed via the
+  // fat-sync fetchAndSwapState in the slide.regen.finished handler),
+  // forcibly drop that slideId from peerRegenInProgress. The broadcast
+  // handler's set-remove already attempts this synchronously, but in
+  // practice (2026-05-24 testing) the spinner was observed to stay
+  // visible even after the new slide content landed — likely a stale-
+  // closure or batching race between the broadcast handler and the
+  // fetchAndSwapState rerender. Reacting to `currentVersionNumber`
+  // changes as a definitive "this slide just got a new version"
+  // signal closes the gap without depending on the listener's success.
+  const versionNumbersRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    const prevVersions = versionNumbersRef.current;
+    const nextVersions = new Map<string, number>();
+    const newlyBumped: string[] = [];
+    for (const [slideKey, state] of Object.entries(slideStates)) {
+      const n = state.currentVersionNumber;
+      nextVersions.set(slideKey, n);
+      const prevN = prevVersions.get(slideKey);
+      if (prevN !== undefined && n > prevN) newlyBumped.push(slideKey);
+    }
+    versionNumbersRef.current = nextVersions;
+    if (newlyBumped.length === 0) return;
+    setPeerRegenInProgress((prev) => {
+      if (prev.size === 0) return prev;
+      let dirty = false;
+      const next = new Set(prev);
+      for (const slideKey of newlyBumped) {
+        if (next.delete(slideKey)) dirty = true;
+      }
+      return dirty ? next : prev;
+    });
+  }, [slideStates]);
 
   // Measure the hero's rendered width so we can feed SlideRenderer
   // a `scale` of canvas-pixels-per-hero-pixel. The side panels are
@@ -698,8 +796,39 @@ export function DeckView({
           /* network blip — viewer keeps the previous state visible */
         }
       };
+      // Peer started a regen — mark the slide as in-flight so the
+      // dim+spinner overlay matches the visual the actor sees. Self
+      // echo is skipped: the actor's own `applying` state already
+      // drives the overlay for them; emitting the broadcast also for
+      // self would double-mark the slide (harmless but wasteful).
+      localHandle.on("slide.regen.started", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        setPeerRegenInProgress((prev) => {
+          if (prev.has(payload.slideId)) return prev;
+          const next = new Set(prev);
+          next.add(payload.slideId);
+          return next;
+        });
+      });
       localHandle.on("slide.regen.finished", (payload) => {
         if (cancelled) return;
+        // Always clear the in-flight marker BEFORE the self-echo
+        // skip — a "finished" event for a peer's slide should always
+        // remove the overlay, even if the actor happens to receive
+        // their own echo first. (The set entries are peer-only by
+        // construction, so a self-echoed remove is a cheap no-op.)
+        setPeerRegenInProgress((prev) => {
+          if (!prev.has(payload.slideId)) return prev;
+          const next = new Set(prev);
+          next.delete(payload.slideId);
+          return next;
+        });
         if (
           currentUserId &&
           payload.actorPrismaUserId === currentUserId
@@ -708,8 +837,49 @@ export function DeckView({
         }
         void fetchAndSwapState();
       });
+      // Peer started a FULL deck regen. Mark every slide in the current
+      // manifest as in-flight so the dim+spinner overlay covers the
+      // whole deck (parallel to the per-slide treatment for partial
+      // regens). Manifest IDs are read off the ref-mirrored state so
+      // the handler doesn't need to re-bind on every manifest update.
+      // Self-echo skipped: the actor's own deck regen is tracked by
+      // their `applying` state via the apply-poller.
+      // Peer started a FULL deck regen. Mark every slide in the current
+      // manifest as in-flight so the dim+spinner overlay covers the
+      // whole deck (parallel to the per-slide treatment for partial
+      // regens). Tried a progressive "generating" render path on the
+      // peer (would have matched the actor's done/current/pending view)
+      // but the streamingPreview slides came through inaccurate for
+      // the peer in testing 2026-05-24 — reverted to the simpler
+      // all-slides spinner overlay. Manifest IDs read off the
+      // ref-mirrored state so the handler doesn't need to re-bind on
+      // every manifest update. Self-echo skipped: the actor's own
+      // deck regen is driven by their `applying` state via the
+      // apply-poller.
+      localHandle.on("deck.regen.started", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        const currentManifest = manifestRef.current;
+        if (!currentManifest) return;
+        const allIds = currentManifest.slides.map((s) => s.slideId);
+        if (allIds.length === 0) return;
+        setPeerRegenInProgress((prev) => {
+          const next = new Set(prev);
+          for (const id of allIds) next.add(id);
+          return next;
+        });
+      });
       localHandle.on("deck.regen.finished", (payload) => {
         if (cancelled) return;
+        // Clear the full-deck overlay regardless of who finished —
+        // the cleanup is harmless for the actor (their set was never
+        // populated by the started self-echo skip).
+        setPeerRegenInProgress(() => new Set());
         if (
           currentUserId &&
           payload.actorPrismaUserId === currentUserId
@@ -1430,8 +1600,8 @@ export function DeckView({
         // apply (sentinel versionId), fall back to default (latest).
         const versionParam =
           applying.versionId && applying.versionId !== "__pending__"
-            ? `?versionId=${encodeURIComponent(applying.versionId)}`
-            : "";
+            ? `?versionId=${encodeURIComponent(applying.versionId)}&includeSlideStates=true`
+            : "?includeSlideStates=true";
         const res = await fetch(
           `/api/projects/${projectId}/status${versionParam}`,
         );
@@ -1460,6 +1630,15 @@ export function DeckView({
           // local docker Postgres doesn't broadcast) or `router.refresh()`
           // (RSC payload caching has been unreliable).
           manifest?: unknown;
+          // `slideStates` rides along when `includeSlideStates=true` is
+          // set. Carries per-slide `versions[]` lists so the History
+          // popover sees the new version row land WITHOUT requiring a
+          // page refresh — fix 2026-05-24: actor's own regen finished
+          // didn't update history because the broadcast handler self-
+          // echo-skips, leaving the apply-poller as the only completion
+          // signal. Apply-poller now mirrors what the peer-broadcast
+          // handler does: setManifest + setSlideStates + setHistoryVersions.
+          slideStates?: InitialSlideState[] | null;
         };
         // Optimistic mode: applying.versionId starts as "__pending__".
         // Until the apply POST returns and we replace it with the real
@@ -1487,6 +1666,22 @@ export function DeckView({
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) setManifest(parsed.data);
+          }
+          // Mirror the peer-broadcast handler: refresh slideStates +
+          // historyVersions from the same status payload so the
+          // History popover reflects the new version immediately. The
+          // actor used to have to refresh the page to see the regen's
+          // row land in History — the broadcast handler skips self,
+          // and this poller previously only updated the manifest.
+          if (Array.isArray(data.slideStates)) {
+            const nextStates: Record<string, InitialSlideState> = {};
+            const nextVersions: Record<string, HistoryRow[]> = {};
+            for (const s of data.slideStates) {
+              nextStates[s.slideKey] = s;
+              nextVersions[s.slideKey] = s.versions ?? [];
+            }
+            setSlideStates(nextStates);
+            setHistoryVersions(nextVersions);
           }
           setApplying(null);
           setComments([]);
@@ -2094,16 +2289,22 @@ export function DeckView({
     index: idx,
     slide,
     commentCount: commentsBySlideId.get(slide.slideId)?.length ?? 0,
-    regenerating: !!applying?.targetSlideIds.includes(slide.slideId),
+    regenerating:
+      !!applying?.targetSlideIds.includes(slide.slideId) ||
+      peerRegenInProgress.has(slide.slideId),
     locked: slideStates[slide.slideId]?.lockedAt != null,
   }));
-  // Phase 16.D revised — only the local actor sees the dim+spinner
-  // overlay. Observers stay on the previous version silently and
-  // refresh at the END of the regen via `slide.regen.finished`.
-  // Simpler state model, no UI churn for non-actor viewers.
-  const isFocusedRegenerating = !!applying?.targetSlideIds.includes(
-    focusedSlide.slideId,
-  );
+  // Phase 16.D revised (re-revised 2026-05-24) — observers now ALSO see
+  // the dim+spinner overlay for peer regens. Unioning `applying`
+  // (actor's own slides) with `peerRegenInProgress` (slides a peer
+  // started regenerating, set/cleared by the project channel started+
+  // finished broadcasts) keeps a single overlay path for both cases.
+  // User accepted the friction trade-off: the live spinner is the
+  // most legible "someone is changing this — don't start your own
+  // edit yet" cue, worth the visual cost for the regen window.
+  const isFocusedRegenerating =
+    !!applying?.targetSlideIds.includes(focusedSlide.slideId) ||
+    peerRegenInProgress.has(focusedSlide.slideId);
   // Hero width clamp — two candidates, smallest wins:
   //   • viewport-height-derived width (so hero never exceeds the
   //     remaining vertical space given its aspect ratio)

@@ -14,7 +14,7 @@
 // and feed it into the notification store so it knows where to load /
 // persist. Switching accounts in the same tab will swap the list.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -91,7 +91,14 @@ export function BellDropdown() {
   // Toast state hoisted above the measure effect so the effect can read
   // `toasts.length` without a TDZ violation.
   const [toasts, setToasts] = useState<Notification[]>([]);
-  const seenIdsRef = useRef<Set<string>>(new Set());
+  // Tracks `id → createdAt` (NOT `Set<id>`) so a re-broadcast of an
+  // EXISTING notification with a newer createdAt (server-side grouping
+  // window merges a second event into the same row) re-pops a toast.
+  // Without the createdAt key, the 2nd / 3rd grouped comment from the
+  // same actor within 10 min silently lands in the bell list without
+  // any visible cue. Bug surfaced 2026-05-24 during PR #33 testing —
+  // user added a 2nd comment from Safari and the toast didn't pop.
+  const seenIdsRef = useRef<Map<string, string>>(new Map());
   // Per-toast 15 s auto-dismiss timers, keyed by notification id. Tracked
   // here (not as a local array inside the queue-effect) so a follow-up
   // notification arriving while earlier toasts are still on screen does
@@ -114,6 +121,58 @@ export function BellDropdown() {
       timersRef.current.clear();
     };
   }, []);
+
+  // Per-toast measured heights. Populated as each BellToast mounts +
+  // observes itself with a ResizeObserver. Used to compute cumulative
+  // `y` positions so (a) expanding the top toast pushes the toasts
+  // beneath it DOWN by the height delta and (b) collapsed toasts
+  // never slightly overlap from a too-short TOAST_SLOT_HEIGHT. Map
+  // not object so set/delete order stays predictable. Empty entries
+  // fall back to TOAST_SLOT_HEIGHT on first paint before the
+  // ResizeObserver fires.
+  const [toastHeights, setToastHeights] = useState<Map<string, number>>(
+    () => new Map(),
+  );
+  const setToastHeight = useCallback((id: string, h: number) => {
+    setToastHeights((prev) => {
+      if (prev.get(id) === h) return prev;
+      const next = new Map(prev);
+      next.set(id, h);
+      return next;
+    });
+  }, []);
+
+  // Compute each toast's vertical offset based on the heights of the
+  // toasts above it (plus a fixed gap between them). Unmeasured toasts
+  // fall back to TOAST_SLOT_HEIGHT so the first paint before the
+  // ResizeObserver fires still positions sensibly.
+  const TOAST_GAP_PX = 8;
+  const toastPositions = useMemo(() => {
+    const out = new Map<string, number>();
+    let cur = 0;
+    for (const n of toasts) {
+      out.set(n.id, cur);
+      const h = toastHeights.get(n.id) ?? TOAST_SLOT_HEIGHT;
+      cur += h + TOAST_GAP_PX;
+    }
+    return out;
+  }, [toasts, toastHeights]);
+
+  // Prune heights for toasts that no longer exist (post-dismiss).
+  // Keeps the Map from growing forever across the session.
+  useEffect(() => {
+    setToastHeights((prev) => {
+      if (prev.size === 0) return prev;
+      const ids = new Set(toasts.map((t) => t.id));
+      let dirty = false;
+      const next = new Map<string, number>();
+      for (const [id, h] of prev) {
+        if (ids.has(id)) next.set(id, h);
+        else dirty = true;
+      }
+      return dirty ? next : prev;
+    });
+  }, [toasts]);
 
   // Re-measure the bell's screen position when the popover opens, when
   // toasts appear (so they can position correctly without requiring the
@@ -165,10 +224,21 @@ export function BellDropdown() {
     };
   }, []);
 
-  // Wire the store to the current Supabase user once on mount. Without
-  // this the store has no userId → push() drops silently and nothing
-  // appears in the dropdown. Note: we don't react to auth changes here
-  // because the dashboard layout already remounts on sign-in.
+  // Wire the store to the current user once on mount. Without this the
+  // store has no userId → push() drops silently and nothing appears
+  // in the dropdown.
+  //
+  // Two ids handed to the store:
+  //   • Supabase auth id — keys the localStorage cache (multi-account
+  //     on the same browser doesn't merge).
+  //   • Prisma user id — keys the user-scoped Supabase channel topic
+  //     (`user:{prismaUserId}`) AND the server's notification table FK.
+  //     Without it, live arrivals can't be subscribed to.
+  //
+  // We fetch the prisma id via /api/me in the same boot pass so the
+  // setUser call lands once with both ids and the store doesn't have
+  // to handle a mid-life upgrade. Anonymous / signed-out users skip
+  // both calls — the store stays in its empty state.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -176,7 +246,28 @@ export function BellDropdown() {
         const supabase = createClient();
         const { data } = await supabase.auth.getUser();
         if (cancelled) return;
-        notificationStore.setUser(data.user?.id ?? null);
+        const supabaseId = data.user?.id ?? null;
+        if (!supabaseId) {
+          notificationStore.setUser(null);
+          return;
+        }
+        // Fetch prisma id. /api/me returns 204 for anonymous + a
+        // shaped JSON body for authed; on a 204 the body is empty
+        // so the parsed result is null.
+        let prismaId: string | null = null;
+        try {
+          const meRes = await fetch("/api/me", { credentials: "same-origin" });
+          if (meRes.ok) {
+            const me = (await meRes.json()) as { prismaUserId?: string | null };
+            prismaId = me.prismaUserId ?? null;
+          }
+        } catch {
+          /* /api/me network blip — fall through with prismaId=null
+             so the localStorage cache still works; the user channel
+             just won't open until next mount. */
+        }
+        if (cancelled) return;
+        notificationStore.setUser(supabaseId, prismaId);
       } catch {
         /* anonymous / not signed in — store stays empty */
       }
@@ -201,8 +292,13 @@ export function BellDropdown() {
     const now = Date.now();
     const queued: Notification[] = [];
     for (const n of items) {
-      if (seenIdsRef.current.has(n.id)) continue;
-      seenIdsRef.current.add(n.id);
+      // Skip if we've already seen THIS exact (id, createdAt) tuple.
+      // A re-broadcast that updates the row (grouping window merge)
+      // bumps createdAt server-side, so the prior createdAt comparison
+      // fails and we proceed to toast — exactly what we want.
+      const prevCreatedAt = seenIdsRef.current.get(n.id);
+      if (prevCreatedAt === n.createdAt) continue;
+      seenIdsRef.current.set(n.id, n.createdAt);
       if (open) continue; // popover is showing them; no toast
       const age = now - new Date(n.createdAt).getTime();
       if (age > TOAST_FRESHNESS_MS) continue; // old persisted item — skip toast
@@ -215,7 +311,24 @@ export function BellDropdown() {
     // (during render), at which point our follow-up rAF check would
     // run with stale empty values — that was the root cause of the
     // "stacks forever" bug.
-    const combined = [...queued, ...toasts];
+    //
+    // Dedupe by id: when a grouping re-broadcast re-pops a notification
+    // whose toast is still on-screen, drop the stale toast (and its
+    // timer) from the carry-forward set so the fresh one replaces it.
+    // Without this, React would see two entries with the same `key`
+    // and warn — and the new + old toasts would stack on top of each
+    // other. The newer toast wins; the older's timer is cancelled.
+    const queuedIds = new Set(queued.map((q) => q.id));
+    const carriedToasts = toasts.filter((t) => {
+      if (!queuedIds.has(t.id)) return true;
+      const oldTimer = timersRef.current.get(t.id);
+      if (oldTimer !== undefined) {
+        window.clearTimeout(oldTimer);
+        timersRef.current.delete(t.id);
+      }
+      return false;
+    });
+    const combined = [...queued, ...carriedToasts];
     const toEvict = combined.length > 3 ? combined.slice(3) : [];
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setToasts(combined);
@@ -303,7 +416,28 @@ export function BellDropdown() {
       <button
         type="button"
         ref={bellRef}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          // Compute `next` from current state and call both setOpen
+          // and markAllRead at the top level — NOT inside the setOpen
+          // updater. React invokes updater functions during render
+          // (twice in StrictMode for idempotency checks), and the
+          // synchronous `emit()` inside `markAllRead` fans out to
+          // store listeners that call setState on subscribed
+          // components — triggering React's "Cannot update a
+          // component while rendering a different component" error.
+          // Bug surfaced 2026-05-24 during PR #33 testing.
+          //
+          // "All-read on bell open" — product decision 2026-05-24.
+          // Fires the moment the popover opens so the unread dot +
+          // badge clear instantly. The store optimistically flips
+          // every local row's `read` to true AND fires the
+          // /api/notifications/read-all call in the background.
+          // We don't gate on `items.length` — markAllRead no-ops
+          // when there's nothing unread to flip.
+          const next = !open;
+          setOpen(next);
+          if (next) notificationStore.markAllRead();
+        }}
         aria-label="الإشعارات"
         aria-expanded={open}
         // Glass icon button — NO background at any state. The hover
@@ -338,7 +472,18 @@ export function BellDropdown() {
             <div
               dir="rtl"
               data-bell-popover
-              className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] w-80 overflow-hidden rounded-2xl shadow-2xl"
+              // `.in-slide-popover` (dark navy 45% alpha) instead of
+            // `.glass-popover` (fully transparent + glass blur). The
+            // bell can float over the slide canvas on /project/[id]
+            // pages, and bright-theme slides (white backgrounds) were
+            // showing through the transparent popover, leaving the
+            // white notification text unreadable on both Safari and
+            // Chrome. The MarkerPreviewPopup over slides solves the
+            // same problem with `.in-slide-popover` — porting that
+            // recipe here so the bell behaves identically. The
+            // backdrop blur stays on; the dark tint just clamps the
+            // composite luminance into a band where white text reads.
+            className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] w-80 overflow-hidden rounded-2xl shadow-2xl"
               style={{
                 top: bellRect.top,
                 left: Math.max(
@@ -441,11 +586,12 @@ export function BellDropdown() {
               }}
             >
               <AnimatePresence initial={true}>
-                {toasts.map((n, i) => (
+                {toasts.map((n) => (
                   <BellToast
                     key={n.id}
                     n={n}
-                    index={i}
+                    y={toastPositions.get(n.id) ?? 0}
+                    onMeasureHeight={setToastHeight}
                     onClick={(notif) => {
                       handleItemClick(notif);
                       dismissToast(notif.id);
@@ -464,32 +610,73 @@ export function BellDropdown() {
 
 function BellToast({
   n,
-  index,
+  y,
+  onMeasureHeight,
   onClick,
   onDismiss,
 }: {
   n: Notification;
-  index: number;
+  // Cumulative `y` offset from the top of the toast container.
+  // Computed by the parent from the heights of every toast above
+  // this one — see `toastPositions` in BellDropdown. Drives both
+  // the slide-in animation (initial below) AND the slide-down
+  // shuffle when a new toast is prepended OR an upstream toast
+  // expands and grows taller.
+  y: number;
+  // Reports this toast's measured rendered height to the parent so
+  // the cumulative-y math accounts for expanded vs collapsed states.
+  // Receives our id + a fresh pixel height each time ResizeObserver
+  // fires (e.g. expand toggle, content reflow). Parent dedupes
+  // identical values so we don't loop.
+  onMeasureHeight: (id: string, h: number) => void;
   onClick: (n: Notification) => void;
   onDismiss: () => void;
 }) {
-  // Index-driven absolute positioning. Each slot is at `index *
-  // TOAST_SLOT_HEIGHT` from the top of the container. When a new toast
-  // is prepended, existing toasts re-render with index+1 → motion
-  // animates `y` from old value to new (smooth slide down). On exit,
-  // motion freezes the last `animate.y` value, so the evicted toast
-  // fades out at its final (post-shift) position — exactly the
-  // "slide down + fade out" the user described.
+  // ResizeObserver-driven height reporting. Falls back to a no-op on
+  // environments without RO (older Safari pre-13.1, jsdom in tests);
+  // the parent's TOAST_SLOT_HEIGHT default still positions toasts at
+  // the legacy slot offsets in that branch.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!rootRef.current || typeof ResizeObserver === "undefined") return;
+    const el = rootRef.current;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      // `borderBoxSize` is the cross-browser-correct measurement (
+      // matches the visible bounds including padding + border). Fall
+      // back to contentRect.height where borderBoxSize isn't reported
+      // (older Safari) — slight underestimate but tolerable.
+      const borderBox = entry.borderBoxSize?.[0];
+      const h = borderBox
+        ? borderBox.blockSize
+        : entry.contentRect.height;
+      if (h > 0) onMeasureHeight(n.id, h);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [n.id, onMeasureHeight]);
+
+  // Dynamic-y positioning. When a new toast is prepended OR an
+  // upstream toast's height changes (expand toggle), `y` changes →
+  // motion animates from old to new smoothly. On exit, motion
+  // freezes the last `animate.y` value, so the evicted toast fades
+  // out at its final post-shift position.
   return (
     <motion.div
-      initial={{ opacity: 0, y: index * TOAST_SLOT_HEIGHT - 16 }}
-      animate={{ opacity: 1, y: index * TOAST_SLOT_HEIGHT }}
+      ref={rootRef}
+      initial={{ opacity: 0, y: y - 16 }}
+      animate={{ opacity: 1, y }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       // Absolute positioning so each toast is anchored only by its
       // animated transform — no flex/layout interaction. Same glass
       // surface treatment as the bell popover.
-      className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl shadow-2xl"
+      // Toast surface mirrors the dropdown — `.in-slide-popover`
+      // (dark tint at 45% alpha) so a brightly themed slide showing
+      // through doesn't wash the white notification text out. Same
+      // recipe as the MarkerPreviewPopup on slides.
+      className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl shadow-2xl"
     >
       <NotificationRow n={n} onClick={onClick} compact={false} showTime={false} />
       <button
@@ -499,7 +686,16 @@ function BellToast({
           onDismiss();
         }}
         aria-label="إغلاق"
-        className="absolute end-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+        // `end-4` (16 px) + `h-6 w-6` (24 × 24) match the chevron in
+        // NotificationRow's end column exactly — same end offset (the
+        // row uses `px-4`, so its end column's right edge is also 16 px
+        // from the row edge) and same button size, so both glyphs share
+        // one vertical centerline. `end-3` + `h-7 w-7` made the close-X
+        // sit 4 px further toward the visual edge AND 4 px wider, so
+        // the chevron underneath looked offset toward the centre.
+        // `top-3` stays unchanged — the chevron is below the close-X
+        // via the spacer in NotificationRow, not a top-offset match.
+        className="absolute end-4 top-3 flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
       >
         <span className="material-symbols-outlined text-[16px]">close</span>
       </button>
@@ -534,6 +730,57 @@ export function NotificationRow({
   const visual = KIND_VISUAL[n.kind];
   const clickable = !!n.href || !!onClick;
   const [expanded, setExpanded] = useState(false);
+  // True between the toggle click and the `max-height` transition's
+  // `transitionend` event. Used to KEEP the wrap-mode at `break-words`
+  // during a collapse so the multi-line text stays multi-line while the
+  // box shrinks. Without this guard, `truncate` (`white-space: nowrap`)
+  // applies instantly the moment `expanded` flips to false — the text
+  // snaps to a single line in frame 1 and only the empty box height
+  // animates, so the collapse reads as "not animating" even though the
+  // CSS transition is correctly running on max-height. Pairs with the
+  // onTransitionEnd handler below.
+  const [transitioning, setTransitioning] = useState(false);
+
+  // Clip detection — hide the chevron entirely when collapsed content
+  // fits in the 2-line clamp. With `line-clamp-2` an unclipped <p>
+  // satisfies `scrollHeight === clientHeight`; a clipped one has
+  // scrollHeight > clientHeight by however many overflow pixels there
+  // are. A 1 px tolerance accounts for sub-pixel font-metric rounding
+  // that can give a 0.5 px false positive on some font / DPI combos.
+  // Measured per-element (title + desc) via ResizeObserver so the
+  // result reacts to font load, viewport resize, and content updates
+  // (e.g. grouping-merge bumps the title text on `notification.created`
+  // re-broadcast). Bug fix 2026-05-24.
+  const titleRef = useRef<HTMLParagraphElement | null>(null);
+  const descRef = useRef<HTMLParagraphElement | null>(null);
+  const [isClipped, setIsClipped] = useState(false);
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      // Measurement only meaningful in the COLLAPSED state — when
+      // expanded the box grows to fit and scrollHeight == clientHeight
+      // trivially. Skip during transitioning too: max-height is
+      // mid-animation and the comparison is noisy.
+      if (expanded || transitioning) return;
+      const title = titleRef.current;
+      const desc = descRef.current;
+      const titleClipped = !!title && title.scrollHeight > title.clientHeight + 1;
+      const descClipped = !!desc && desc.scrollHeight > desc.clientHeight + 1;
+      setIsClipped(titleClipped || descClipped);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (titleRef.current) ro.observe(titleRef.current);
+    if (descRef.current) ro.observe(descRef.current);
+    return () => ro.disconnect();
+  }, [n.title, n.desc, expanded, transitioning]);
+
+  // Show the chevron when EITHER content is clipped (so the user can
+  // expand to see the rest) OR the row is currently expanded (so the
+  // user can collapse back). Hide it when content fits unclipped in
+  // the 2-line clamp — there's nothing to expand and the spacer would
+  // otherwise leave a meaningless icon in the corner.
+  const showChevron = isClipped || expanded;
 
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
@@ -545,7 +792,17 @@ export function NotificationRow({
 
   const handleToggleExpand = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    setTransitioning(true);
     setExpanded((v) => !v);
+  }, []);
+
+  // Resets the wrap-mode guard once the max-height animation lands.
+  // Filter on propertyName so unrelated property transitions on the
+  // <p> (e.g. opacity from a parent fade) don't drop the guard early.
+  const handleMaxHeightEnd = useCallback((e: React.TransitionEvent) => {
+    if (e.propertyName === "max-height") {
+      setTransitioning(false);
+    }
   }, []);
 
   // Outer is a <div> (not <button>) so the inner delete <button> isn't
@@ -595,23 +852,37 @@ export function NotificationRow({
               aria-hidden
             />
           ) : null}
+          {/* Title is `line-clamp-2` collapsed — short titles render on
+              one line naturally, two-line titles render in full, only
+              3+ line titles get the chevron clipped at 2 lines with
+              ellipsis. Previously `truncate` (1 line + ellipsis) cut
+              perfectly normal notification titles like "Osama علّقت على
+              شريحة في <project>" mid-word, forcing the user to expand
+              just to read a 2-line message. Bumped 2026-05-24. */}
           <p
+            ref={titleRef}
             className={`overflow-hidden text-[13px] font-medium leading-snug text-white transition-[max-height] duration-300 ease-in-out ${
-              expanded ? "break-words" : "truncate"
+              expanded || transitioning ? "break-words" : "line-clamp-2"
             }`}
-            style={{ maxHeight: expanded ? 200 : 20 }}
+            style={{ maxHeight: expanded ? 200 : 40 }}
+            onTransitionEnd={handleMaxHeightEnd}
           >
             {n.title}
           </p>
         </div>
         {n.desc ? (
+          // Desc mirrors the title's 2-line collapsed clamp for the
+          // same reason — short descriptions read in full without
+          // needing the chevron, only long ones truncate.
           <p
+            ref={descRef}
             className={`mt-1 overflow-hidden text-[11px] leading-relaxed text-white/55 transition-[max-height] duration-300 ease-in-out ${
-              expanded
+              expanded || transitioning
                 ? "break-words"
-                : `truncate ${compact ? "max-w-[220px]" : ""}`
+                : `line-clamp-2 ${compact ? "max-w-[220px]" : ""}`
             }`}
-            style={{ maxHeight: expanded ? 200 : 18 }}
+            style={{ maxHeight: expanded ? 200 : 40 }}
+            onTransitionEnd={handleMaxHeightEnd}
           >
             {n.desc}
           </p>
@@ -619,29 +890,46 @@ export function NotificationRow({
       </div>
       {/* End column — time on top, chevron toggle below, delete (if
           enabled) below that. Flex-col so the chevron always sits
-          under the time when both are shown; for the toast (no time)
-          the chevron sits flush with the close × in the parent. */}
+          under the time when both are shown.
+          When `showTime=false` (toast mode), an INVISIBLE spacer
+          replaces the time slot so the chevron lands BELOW the
+          parent toast's absolute close-X (which sits at top-3 end-3,
+          h-7 = 28 px). Without the spacer the chevron stacks on top
+          of the close-X — both icons occupy the same ~24 × 24 corner
+          square. With the spacer, chevron starts at y = py-4 (16) +
+          spacer (28) = 44 px, well clear of the close-X's 12–40 px
+          vertical band. */}
       <div className="flex flex-shrink-0 flex-col items-end gap-1">
         {showTime ? (
           <span className="text-[10px] text-white/40" dir="ltr">
             {formatNotificationTime(n.createdAt)}
           </span>
-        ) : null}
-        <button
-          type="button"
-          onClick={handleToggleExpand}
-          aria-label={expanded ? "طي" : "عرض النص الكامل"}
-          aria-expanded={expanded}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <span
-            className={`material-symbols-outlined text-[16px] transition-transform ${
-              expanded ? "rotate-180" : ""
-            }`}
+        ) : (
+          // Toast mode spacer — reserves the top-right corner for the
+          // toast's absolute close-X (h-7 w-7 at top-3 end-4). KEEP this
+          // even when the chevron is hidden, otherwise the title text
+          // flows under the close-X and looks visually broken. Without
+          // a chevron beneath, the spacer is the only thing carving
+          // safe space around the X.
+          <span className="h-7 w-7" aria-hidden />
+        )}
+        {showChevron ? (
+          <button
+            type="button"
+            onClick={handleToggleExpand}
+            aria-label={expanded ? "طي" : "عرض النص الكامل"}
+            aria-expanded={expanded}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
           >
-            expand_more
-          </span>
-        </button>
+            <span
+              className={`material-symbols-outlined text-[16px] transition-transform ${
+                expanded ? "rotate-180" : ""
+              }`}
+            >
+              expand_more
+            </span>
+          </button>
+        ) : null}
         {showDelete ? (
           <button
             type="button"

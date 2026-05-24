@@ -26,15 +26,24 @@ export function formatRelativeArabic(iso: string): string {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return "";
   const now = Date.now();
-  const diffSec = Math.round((then - now) / 1000);
+  // `Math.trunc` (not `Math.round`) on every divide so the unit
+  // boundary thresholds in the if-chain below match the rounded
+  // value being formatted. With `Math.round`, a half-second value
+  // near a boundary (e.g. diff = 59.5s) could round to 60 and roll
+  // the unit one step early — and the rollover behavior is sign-
+  // dependent, so "in 59 seconds" and "59 seconds ago" produced
+  // different strings near the threshold. Truncating toward zero
+  // collapses both directions to a stable threshold (CR PR #33,
+  // 2026-05-24).
+  const diffSec = (then - now) / 1000;
   const absSec = Math.abs(diffSec);
 
   const rtf = new Intl.RelativeTimeFormat("ar", { numeric: "auto" });
-  if (absSec < 60) return rtf.format(diffSec, "second");
-  if (absSec < 3600) return rtf.format(Math.round(diffSec / 60), "minute");
-  if (absSec < 86_400) return rtf.format(Math.round(diffSec / 3600), "hour");
+  if (absSec < 60) return rtf.format(Math.trunc(diffSec), "second");
+  if (absSec < 3600) return rtf.format(Math.trunc(diffSec / 60), "minute");
+  if (absSec < 86_400) return rtf.format(Math.trunc(diffSec / 3600), "hour");
   if (absSec < 86_400 * 30) {
-    return rtf.format(Math.round(diffSec / 86_400), "day");
+    return rtf.format(Math.trunc(diffSec / 86_400), "day");
   }
   // Beyond a month: absolute date is clearer than "منذ X شهراً".
   return new Date(iso).toLocaleDateString("ar", {

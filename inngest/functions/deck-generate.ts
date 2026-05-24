@@ -15,6 +15,7 @@ import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
 import { generateTemplateName } from "@/lib/template/generate-name";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
+import { fanOutNotification } from "@/lib/notifications/server";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -681,11 +682,43 @@ export const deckGenerate = inngest.createFunction(
     const { projectId, versionId, jobId } = data;
     const actorPrismaUserId = data.actorPrismaUserId ?? null;
 
-    // Phase 16.D revised — NO `deck.regen.started` broadcast for
-    // the same reason as the partial regen: keeping observers
-    // productive on the previous version of the deck during the
-    // generate window. Only the finished broadcast (below) fires
-    // the router.refresh that swaps them onto the new version.
+    // Phase 16.D revised (re-revised 2026-05-24) — `deck.regen.started`
+    // IS now emitted, matching the partial-regen story. Peers see a
+    // notification + a banner-style "deck mid-regen" cue on every slide
+    // (DeckView marks all slide IDs in the current manifest as in-flight
+    // until the .finished signal lands).
+    //
+    // MUST be wrapped in `step.run` for the same reason as the partial-
+    // regen started (see deck-regenerate-partial.ts) — Inngest re-runs
+    // the function prelude on each step checkpoint, so an un-memoized
+    // emit fires once per round → multiple duplicate "is regenerating
+    // the whole deck" rows on the peer's bell. Fire-and-forget kept
+    // inside the step so we don't await the broadcast (admin.removeChannel
+    // deadlock avoidance).
+    //
+    // First-time generation also hits this path but naturally fans out
+    // to zero peers (project just created → only the actor is a member
+    // → self-echo skip empties the recipient set).
+    await step.run("broadcast-deck-regen-started", () => {
+      broadcastToProject(projectId, "deck.regen.started", {
+        actorPrismaUserId,
+      }).catch((err) => {
+        logger.warn("broadcast deck.regen.started failed", {
+          error: String(err),
+        });
+      });
+      fanOutNotification({
+        type: "deck.regen.started",
+        projectId,
+        actorPrismaUserId,
+        payload: {},
+      }).catch((err) => {
+        logger.warn("notification deck.regen.started fanOut failed", {
+          error: String(err),
+        });
+      });
+    });
+
 
     // Resolve quality preset → model + thinking + effort. Falls back
     // to "medium" via paramsForQuality's default branch when missing
@@ -1271,6 +1304,41 @@ export const deckGenerate = inngest.createFunction(
         error: String(err),
       });
     });
+
+    // Phase 16.E — bell notifications. Two flavors:
+    //   1. `deck.regen.finished` — fans out to OTHER project members
+    //      (self-echo default skip excludes the actor). Same shape as
+    //      partial regen, just at the deck level.
+    //   2. `deck.generate.finished` — ALWAYS notifies the actor
+    //      (`allowSelfEcho: true`) about their OWN run completing,
+    //      because they may have navigated away while it was running
+    //      and want a bell entry to tap back into. Self-echo opt-out
+    //      is the explicit purpose here.
+    // Both fire fire-and-forget per the broadcast convention above.
+    fanOutNotification({
+      type: "deck.regen.finished",
+      projectId,
+      actorPrismaUserId,
+      payload: {},
+    }).catch((err) => {
+      logger.warn("notification deck.regen.finished fanOut failed", {
+        error: String(err),
+      });
+    });
+    if (actorPrismaUserId) {
+      fanOutNotification({
+        type: "deck.generate.finished",
+        projectId,
+        actorPrismaUserId,
+        payload: { versionId },
+        recipientUserIds: [actorPrismaUserId],
+        allowSelfEcho: true,
+      }).catch((err) => {
+        logger.warn("notification deck.generate.finished fanOut failed", {
+          error: String(err),
+        });
+      });
+    }
 
     return { success: true, projectId };
   },

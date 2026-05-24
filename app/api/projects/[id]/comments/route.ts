@@ -7,6 +7,7 @@ import {
   type ProjectRole,
 } from "@/lib/api/project-access";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
+import { fanOutNotification } from "@/lib/notifications/server";
 
 // Drag-box coordinates are persisted in slide-space — slide width/height
 // depending on the deck's format. 16:9 → 1920×1080; 9:16 → 1080×1920.
@@ -224,6 +225,24 @@ export async function POST(
     commentId: created.id,
     slideId: created.slideId,
     actorPrismaUserId: ctx.authorPrismaUserId,
+  });
+
+  // Phase 16.E — fan-out a bell notification to every project member
+  // except the author. Fire-and-forget: never block the POST response
+  // on a notification fan-out. The helper handles per-recipient
+  // failure isolation + the 10-minute grouping window so a rapid
+  // burst of comments from the same author on the same project merges
+  // into one bell row instead of N.
+  fanOutNotification({
+    type: "comment.created",
+    projectId: id,
+    actorPrismaUserId: ctx.authorPrismaUserId,
+    payload: { commentId: created.id, slideKey: created.slideId },
+  }).catch((err) => {
+    console.warn("[notifications] comment.created fanOut failed", {
+      projectId: id,
+      error: err instanceof Error ? err.message : String(err),
+    });
   });
 
   return NextResponse.json({ comment: created }, { status: 201 });
