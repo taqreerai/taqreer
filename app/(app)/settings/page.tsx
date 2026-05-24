@@ -342,7 +342,7 @@ export default function SettingsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4"
+            className="modal-dim fixed inset-0 z-50 flex items-start justify-center p-4"
             onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteModal(false); }}
           >
             <motion.div
