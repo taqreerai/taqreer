@@ -702,8 +702,9 @@ permanently here as the audit trail.
 | **17.B** | **Enhance flow** — `/enhance` upload UI, `POST /api/enhance/extract` (in-memory PPTX/PDF parse, file deleted post-extract), Enhance prompt branch | ⏳ |
 | **17.C** | **Mimic flow** — `/mimic` two-drop UI, `POST /api/mimic/extract` (ugly extract + good rasterize → base64 PNGs in `source.referenceImages`), multipart Claude message w/ image blocks, Mimic prompt branch | ⏳ |
 | **17.D** | **Data flow** — `/from-data` upload UI, `POST /api/data/extract` (uploads to Anthropic Files API, returns `file_id` into `source.dataFileId`), Data prompt branch, post-generation Anthropic file cleanup | ⏳ |
-| 18 | **Billing + quota enforcement** — Stripe webhooks → quota checks at job creation → meter UI in dashboard | ⏳ later |
-| 19 | **Server-side HTML sanitization** — DOMPurify in `deck-generate.ts` before persisting manifest; pre-launch security ask (today: browser sanitises on render, JSDOM mirror used in thumbnail pipeline only) | ⏳ pre-launch blocker |
+| 18 | **Admin panel** — internal-only `/admin` route tree gated by `User.role = "admin"`. User list + filters (plan, country, regens, tokens). Aggregate stats (totals, active-online via Presence, decks/slides generated). Compose-bell-notification UI calling existing `fanOutNotification`. Email blast UI via Resend. Landing-page CMS (Page/Section/PricingPlan schema; landing reads from DB). UX bias: function-over-form, internal tool. **Same Next.js stack — no Laravel.** Reuses Prisma, Supabase auth, fanOutNotification, Resend. | ⏳ after Phase 17 |
+| 19 | **Billing + Stripe + discount codes** — Stripe SDK (already in `package.json`), subscription products + checkout + customer portal, webhook → quota enforcement at job creation, meter UI in dashboard. Discount-code schema + apply-at-checkout (admin-issued via Phase 18 UI). | ⏳ after Phase 18 |
+| 20 | **Server-side HTML sanitization** — DOMPurify in `deck-generate.ts` before persisting manifest; pre-launch security ask (today: browser sanitises on render, JSDOM mirror used in thumbnail pipeline only) | ⏳ pre-launch blocker |
 
 ---
 
