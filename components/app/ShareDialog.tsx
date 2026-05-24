@@ -214,7 +214,7 @@ export function ShareDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId, initialTab]);
+  }, [open, projectId, initialTab, showExportTab]);
 
   // Lazy-fetch the deck manifest when the modal opens without one
   // (i.e. opened from a project tile rather than the editor). The

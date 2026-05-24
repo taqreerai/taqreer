@@ -320,28 +320,40 @@ export async function POST(
   // matching User row yet) skip the bell — the email + the post-
   // accept landing on /project/X are enough. Once they accept, the
   // share.accepted route notifies the owner.
+  //
+  // AWAITED with a bounded 2 s timeout (mirrors the comments route
+  // pattern — CR PR #33). The previous detached async IIFE risked
+  // Vercel freezing the runtime the moment NextResponse returns,
+  // dropping the notification row before Prisma + broadcast finish.
+  // Awaiting + Promise.race caps the route's response time at 2 s
+  // worst case while still letting the fan-out complete in the
+  // background if the Prisma write resolves quickly.
   if (result.newShare?.email) {
-    (async () => {
-      try {
-        const invitee = await prisma.user.findUnique({
-          where: { email: result.newShare!.email },
-          select: { id: true },
-        });
-        if (!invitee) return; // first-touch email — no bell yet
-        await fanOutNotification({
-          type: "share.invited",
-          projectId,
-          actorPrismaUserId: ctx.project.user.id,
-          payload: { accessLevel: result.newShare!.accessLevel },
-          recipientUserIds: [invitee.id],
-        });
-      } catch (err) {
-        console.warn("[notifications] share.invited fanOut failed", {
-          projectId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    })();
+    const inviteeEmail = result.newShare.email;
+    const inviteeAccessLevel = result.newShare.accessLevel;
+    const fanOutPromise = (async () => {
+      const invitee = await prisma.user.findUnique({
+        where: { email: inviteeEmail },
+        select: { id: true },
+      });
+      if (!invitee) return; // first-touch email — no bell yet
+      await fanOutNotification({
+        type: "share.invited",
+        projectId,
+        actorPrismaUserId: ctx.project.user.id,
+        payload: { accessLevel: inviteeAccessLevel },
+        recipientUserIds: [invitee.id],
+      });
+    })().catch((err) => {
+      console.warn("[notifications] share.invited fanOut failed", {
+        projectId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    const fanOutTimeout = new Promise<void>((resolve) =>
+      setTimeout(resolve, 2_000),
+    );
+    await Promise.race([fanOutPromise, fanOutTimeout]);
   }
 
   return NextResponse.json({ ok: true, share: result.newShare });
