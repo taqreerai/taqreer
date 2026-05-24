@@ -27,6 +27,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { fanOutNotification } from "@/lib/notifications/server";
 
 export async function GET(
   request: Request,
@@ -83,8 +84,12 @@ export async function GET(
 
   // Link userId + stamp acceptedAt. If the same user re-clicks an
   // already-accepted invite, we keep the original acceptedAt
-  // (idempotent — only flip it the first time).
-  if (!share.acceptedAt || share.userId !== prismaUser.id) {
+  // (idempotent — only flip it the first time). The
+  // `firstTimeAccept` flag drives whether we fire the bell
+  // notification — re-clicking the same accept link shouldn't
+  // re-notify the owner.
+  const firstTimeAccept = !share.acceptedAt;
+  if (firstTimeAccept || share.userId !== prismaUser.id) {
     await prisma.projectShare.update({
       where: { id: share.id },
       data: {
@@ -92,6 +97,39 @@ export async function GET(
         acceptedAt: share.acceptedAt ?? new Date(),
       },
     });
+  }
+
+  // Phase 16.E — notify the project owner that the invitee accepted.
+  // Only fires on FIRST-time acceptance to avoid bell spam if the
+  // user revisits the accept link. We fetch the share's accessLevel
+  // separately because the initial findUnique above kept its select
+  // minimal; this second query is incurred only on the first-accept
+  // branch.
+  if (firstTimeAccept) {
+    (async () => {
+      try {
+        const meta = await prisma.projectShare.findUnique({
+          where: { id: share.id },
+          select: {
+            accessLevel: true,
+            project: { select: { userId: true } },
+          },
+        });
+        if (!meta || !meta.project) return;
+        await fanOutNotification({
+          type: "share.accepted",
+          projectId: share.projectId,
+          actorPrismaUserId: prismaUser.id,
+          payload: { accessLevel: meta.accessLevel },
+          recipientUserIds: [meta.project.userId],
+        });
+      } catch (err) {
+        console.warn("[notifications] share.accepted fanOut failed", {
+          projectId: share.projectId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
   }
 
   // Land them inside the deck.

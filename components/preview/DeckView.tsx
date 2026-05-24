@@ -252,6 +252,15 @@ export function DeckView({
   // Initial state seeds from server props. The parent (re)keys this component
   // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);
+  // Ref-mirror of manifest so realtime broadcast handlers can read the
+  // latest slide list without re-binding to the channel on every
+  // manifest change. Kept in sync via the useEffect right below the
+  // state — synchronous-after-render sync is fine here (the handler
+  // only fires async on socket events, never during render).
+  const manifestRef = useRef<SlideManifest | null>(initialManifest);
+  useEffect(() => {
+    manifestRef.current = manifest;
+  }, [manifest]);
   // Per-slide pill state, keyed by slideKey. Mutated by Lock /
   // Undo / Try-again actions; reseeds from props on parent remount.
   // Map<slideKey, state> for O(1) lookup; serialised to InitialSlideState
@@ -399,6 +408,14 @@ export function DeckView({
   const [retryError, setRetryError] = useState("");
   // Polling sets this when it sees a failed status arrive after mount.
   const [polledFailure, setPolledFailure] = useState(false);
+  // Polling sets this when the generation finishes on the server. Used
+  // to flip the derived status from "generating" to "completed" without
+  // a `router.refresh()` — the parent SSR still believes the project
+  // is queued/generating until the user navigates, but DeckView reads
+  // the manifest + this flag locally and renders the completed view
+  // immediately. Avoids the visible flash + transient-client-state
+  // loss that an SSR re-render cycle causes mid-generation completion.
+  const [polledCompleted, setPolledCompleted] = useState(false);
 
   // Generation-clock state. SLOW threshold (6 min) flips an in-page
   // caption ("الخادم تحت ضغط عالٍ حالياً") so the user sees the run
@@ -441,11 +458,120 @@ export function DeckView({
   //                Inngest completes). Targeted slides get a
   //                "regenerating" overlay; the Apply button locks.
   const [commentMode, setCommentMode] = useState(false);
+  // True while the read-only marker preview popup (HeroCommentOverlay
+  // sub-component) is open. Drives chrome that would otherwise compete
+  // with the popup — the per-slide pill (regen / history / lock) hides
+  // while a preview is showing so the popup reads as the primary
+  // focus.
+  const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [applying, setApplying] = useState<{
     versionId: string;
     targetSlideIds: string[];
   } | null>(null);
+  // Slides currently being regen'd by a PEER (not the local user). Set
+  // entries are slideIds. Added on `slide.regen.started` from the
+  // project channel (self-echo skipped — the actor's `applying` state
+  // already shows the spinner on the SAME slide for them), cleared on
+  // `slide.regen.finished`. Unioned with `applying.targetSlideIds`
+  // when computing the per-slide `regenerating` flag so observers see
+  // the same dim+spinner overlay the actor sees. Re-added 2026-05-24.
+  const [peerRegenInProgress, setPeerRegenInProgress] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
+  // throttles backgrounded / out-of-focus WebSockets and occasionally
+  // drops broadcast frames entirely — symptom: the spinner overlay
+  // stays past the actual regen completion until the next user-driven
+  // refetch (visibility-change, manual click somewhere, etc.) catches
+  // up. While peerRegenInProgress is non-empty, poll the status route
+  // every 8s with `&includeSlideStates=true` so `slideStates` mirrors
+  // the latest server state; the defensive useEffect below then notices
+  // `currentVersionNumber` bumps and clears the matching peer entries.
+  // 8 s balances "spinner clears within ~one regen-completion-window
+  // of the truth" against not hammering the route on a healthy
+  // websocket (in which case the broadcast clears the set first and
+  // the poll's slideStates write is a no-op).
+  useEffect(() => {
+    if (peerRegenInProgress.size === 0) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        // `&includeManifest=true` is the missing piece (CR PR #33):
+        // when Safari drops the `.finished` broadcast frame, the only
+        // place new slide CONTENT lands is in the broadcast handler's
+        // `fetchAndSwapState`. Without the manifest here, the catch-
+        // up poll would clear the spinner (via the version-bump
+        // useEffect below reacting to slideStates) but the peer would
+        // keep rendering the OLD manifest until the next visibility
+        // refresh or manual reload.
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+          { credentials: "same-origin" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          manifest?: unknown;
+          slideStates?: InitialSlideState[] | null;
+        };
+        if (cancelled) return;
+        if (data.manifest) {
+          const parsed = SlideManifestSchema.safeParse(data.manifest);
+          if (parsed.success) setManifest(parsed.data);
+        }
+        if (!Array.isArray(data.slideStates)) return;
+        const nextStates: Record<string, InitialSlideState> = {};
+        const nextVersions: Record<string, HistoryRow[]> = {};
+        for (const s of data.slideStates) {
+          nextStates[s.slideKey] = s;
+          nextVersions[s.slideKey] = s.versions ?? [];
+        }
+        setSlideStates(nextStates);
+        setHistoryVersions(nextVersions);
+      } catch {
+        /* network blip — next tick retries */
+      }
+    };
+    const interval = window.setInterval(tick, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [peerRegenInProgress, projectId]);
+  // Belt-and-braces clear for the peer-regen spinner: when a slide's
+  // `currentVersionNumber` ticks up (a new version landed via the
+  // fat-sync fetchAndSwapState in the slide.regen.finished handler),
+  // forcibly drop that slideId from peerRegenInProgress. The broadcast
+  // handler's set-remove already attempts this synchronously, but in
+  // practice (2026-05-24 testing) the spinner was observed to stay
+  // visible even after the new slide content landed — likely a stale-
+  // closure or batching race between the broadcast handler and the
+  // fetchAndSwapState rerender. Reacting to `currentVersionNumber`
+  // changes as a definitive "this slide just got a new version"
+  // signal closes the gap without depending on the listener's success.
+  const versionNumbersRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    const prevVersions = versionNumbersRef.current;
+    const nextVersions = new Map<string, number>();
+    const newlyBumped: string[] = [];
+    for (const [slideKey, state] of Object.entries(slideStates)) {
+      const n = state.currentVersionNumber;
+      nextVersions.set(slideKey, n);
+      const prevN = prevVersions.get(slideKey);
+      if (prevN !== undefined && n > prevN) newlyBumped.push(slideKey);
+    }
+    versionNumbersRef.current = nextVersions;
+    if (newlyBumped.length === 0) return;
+    setPeerRegenInProgress((prev) => {
+      if (prev.size === 0) return prev;
+      let dirty = false;
+      const next = new Set(prev);
+      for (const slideKey of newlyBumped) {
+        if (next.delete(slideKey)) dirty = true;
+      }
+      return dirty ? next : prev;
+    });
+  }, [slideStates]);
 
   // Measure the hero's rendered width so we can feed SlideRenderer
   // a `scale` of canvas-pixels-per-hero-pixel. The side panels are
@@ -574,6 +700,260 @@ export function DeckView({
           setPresence(state);
         }
       });
+
+      // Phase 16.C — live comment sync. On `comment.created` the
+      // payload is pointer-only (commentId + slideId + actorPrismaUserId),
+      // so dereference via `GET ?ids={id}` for the full row before
+      // merging. The original poster's tab already has the comment
+      // from its POST response — de-dup by id in the setter handles
+      // that. Best-effort: a failed dereference just leaves the
+      // comment out of view-only sessions until they refresh.
+      localHandle.on("comment.created", (payload) => {
+        if (cancelled || !canComment) return;
+        // Skip echo from our own write — the POST handler already
+        // optimistically set local state for us; the broadcast is
+        // just a redundancy net for OTHER viewers.
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        (async () => {
+          try {
+            const res = await fetch(
+              `/api/projects/${encodeURIComponent(projectId)}/comments?ids=${encodeURIComponent(payload.commentId)}`,
+              { credentials: "same-origin" },
+            );
+            if (!res.ok || cancelled) return;
+            const data = (await res.json()) as { comments?: CommentRow[] };
+            const incoming = data.comments?.[0];
+            if (!incoming || cancelled) return;
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape; the channel is the source of truth, this just mirrors fresh rows in
+            setComments((prev) =>
+              prev.some((c) => c.id === incoming.id)
+                ? prev
+                : [...prev, incoming],
+            );
+          } catch {
+            /* network blip — viewer will pick the row up on next refresh */
+          }
+        })();
+      });
+      localHandle.on("comment.deleted", (payload) => {
+        if (cancelled || !canComment) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape
+        setComments((prev) => prev.filter((c) => c.id !== payload.commentId));
+      });
+
+      // Phase 16.D revised — only `.finished` events fire here.
+      // The `.started` broadcasts were dropped from the Inngest
+      // functions: a 1-3 minute dim+spinner over an observer's
+      // canvas competed with whatever they were doing during the
+      // regen. Observers now stay silent on the previous version
+      // until the new one is ready, then a single router.refresh
+      // swaps the content. Self-echo skip — the actor's tab
+      // already has the new version locally via the apply-poller.
+      // Peer-regen broadcasts pull the canonical manifest + per-slide
+      // state in a single round-trip and apply both in-place. We don't
+      // router.refresh() because that re-runs the parent SSR and
+      // re-mounts DeckView, dropping transient client state (scroll
+      // position, focus, popovers, hover hints) every time another
+      // viewer regenerates a slide.
+      //
+      // What we sync from the response:
+      //   • setManifest         → canvas + nav thumbnails reflect the
+      //                            regen output immediately.
+      //   • setSlideStates      → lock pills + currentVersionNumber
+      //                            bumps land without staleness; a peer
+      //                            regen on a slide the local viewer is
+      //                            focused on now shows the right pill
+      //                            state on the toolbar.
+      //   • setHistoryVersions  → the History popover's row list stays
+      //                            current (newest-first per the server
+      //                            ordering), so opening it right after
+      //                            a peer regen shows the new entry on
+      //                            first render — no fetch glitch.
+      const fetchAndSwapState = async () => {
+        try {
+          const res = await fetch(
+            `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+            { credentials: "same-origin" },
+          );
+          if (!res.ok || cancelled) return;
+          const data = (await res.json()) as {
+            manifest?: unknown;
+            slideStates?: InitialSlideState[] | null;
+          };
+          if (cancelled) return;
+          if (data.manifest) {
+            const parsed = SlideManifestSchema.safeParse(data.manifest);
+            if (parsed.success) setManifest(parsed.data);
+          }
+          if (Array.isArray(data.slideStates)) {
+            const nextStates: Record<string, InitialSlideState> = {};
+            const nextVersions: Record<string, HistoryRow[]> = {};
+            for (const s of data.slideStates) {
+              nextStates[s.slideKey] = s;
+              nextVersions[s.slideKey] = s.versions ?? [];
+            }
+            setSlideStates(nextStates);
+            setHistoryVersions(nextVersions);
+          }
+        } catch {
+          /* network blip — viewer keeps the previous state visible */
+        }
+      };
+      // Peer started a regen — mark the slide as in-flight so the
+      // dim+spinner overlay matches the visual the actor sees. Self
+      // echo is skipped: the actor's own `applying` state already
+      // drives the overlay for them; emitting the broadcast also for
+      // self would double-mark the slide (harmless but wasteful).
+      localHandle.on("slide.regen.started", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        setPeerRegenInProgress((prev) => {
+          if (prev.has(payload.slideId)) return prev;
+          const next = new Set(prev);
+          next.add(payload.slideId);
+          return next;
+        });
+      });
+      localHandle.on("slide.regen.finished", (payload) => {
+        if (cancelled) return;
+        // Always clear the in-flight marker BEFORE the self-echo
+        // skip — a "finished" event for a peer's slide should always
+        // remove the overlay, even if the actor happens to receive
+        // their own echo first. (The set entries are peer-only by
+        // construction, so a self-echoed remove is a cheap no-op.)
+        setPeerRegenInProgress((prev) => {
+          if (!prev.has(payload.slideId)) return prev;
+          const next = new Set(prev);
+          next.delete(payload.slideId);
+          return next;
+        });
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        void fetchAndSwapState();
+      });
+      // Peer started a FULL deck regen. Mark every slide in the current
+      // manifest as in-flight so the dim+spinner overlay covers the
+      // whole deck (parallel to the per-slide treatment for partial
+      // regens). Manifest IDs are read off the ref-mirrored state so
+      // the handler doesn't need to re-bind on every manifest update.
+      // Self-echo skipped: the actor's own deck regen is tracked by
+      // their `applying` state via the apply-poller.
+      // Peer started a FULL deck regen. Mark every slide in the current
+      // manifest as in-flight so the dim+spinner overlay covers the
+      // whole deck (parallel to the per-slide treatment for partial
+      // regens). Tried a progressive "generating" render path on the
+      // peer (would have matched the actor's done/current/pending view)
+      // but the streamingPreview slides came through inaccurate for
+      // the peer in testing 2026-05-24 — reverted to the simpler
+      // all-slides spinner overlay. Manifest IDs read off the
+      // ref-mirrored state so the handler doesn't need to re-bind on
+      // every manifest update. Self-echo skipped: the actor's own
+      // deck regen is driven by their `applying` state via the
+      // apply-poller.
+      localHandle.on("deck.regen.started", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        const currentManifest = manifestRef.current;
+        if (!currentManifest) return;
+        const allIds = currentManifest.slides.map((s) => s.slideId);
+        if (allIds.length === 0) return;
+        setPeerRegenInProgress((prev) => {
+          const next = new Set(prev);
+          for (const id of allIds) next.add(id);
+          return next;
+        });
+      });
+      localHandle.on("deck.regen.finished", (payload) => {
+        if (cancelled) return;
+        // Clear the full-deck overlay regardless of who finished —
+        // the cleanup is harmless for the actor (their set was never
+        // populated by the started self-echo skip).
+        setPeerRegenInProgress(() => new Set());
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        void fetchAndSwapState();
+      });
+
+      // Lock pulses — flip slideStates[slideKey].lockedAt in-place
+      // when a peer (un)locks a slide. No fetch needed; the broadcast
+      // payload carries the canonical ISO timestamp the server
+      // persisted. Self-echo skip: the actor's own POST already
+      // applied the optimistic update.
+      localHandle.on("slide.lock.changed", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        setSlideStates((prev) => {
+          const current = prev[payload.slideKey];
+          // No row yet — synthesise a minimal one. currentVersionNumber
+          // defaults to 1 here; if a peer regen also lands the
+          // visibility-regain refetch or a later slide.regen.finished
+          // broadcast will reconcile the full row.
+          const next: InitialSlideState = current
+            ? { ...current, lockedAt: payload.lockedAt }
+            : {
+                slideKey: payload.slideKey,
+                currentVersionNumber: 1,
+                lockedAt: payload.lockedAt,
+                hasCachedComments: false,
+              };
+          return { ...prev, [payload.slideKey]: next };
+        });
+      });
+
+      // Bulk lock-all / unlock-all from a peer. Server sends ONE event
+      // for the whole deck (vs. N per-slide events) and we apply it
+      // uniformly across every slideStates row we currently know about.
+      localHandle.on("slides.locks.bulk-changed", (payload) => {
+        if (cancelled) return;
+        if (
+          currentUserId &&
+          payload.actorPrismaUserId === currentUserId
+        ) {
+          return;
+        }
+        setSlideStates((prev) => {
+          const next: Record<string, InitialSlideState> = {};
+          for (const [key, state] of Object.entries(prev)) {
+            next[key] = { ...state, lockedAt: payload.lockedAt };
+          }
+          return next;
+        });
+      });
+
       presenceHandleRef.current = localHandle;
       // Initial track with current slide / visibility — the re-track
       // effect below also fires on mount but races the async open;
@@ -603,7 +983,97 @@ export function DeckView({
       presenceHandleRef.current = null;
       localHandle?.close();
     };
-  }, [projectId, currentUserId, currentUserName, currentUserImage]);
+    // `canComment` is read inside the broadcast handlers; including it
+    // in deps reopens the channel when a role upgrade lands so the
+    // listener gate flips on without a refresh. In practice role
+    // changes mid-session are rare (Phase 15.E re-invite flow),
+    // but keeping the dep set honest avoids the stale-closure trap.
+  }, [
+    projectId,
+    currentUserId,
+    currentUserName,
+    currentUserImage,
+    canComment,
+  ]);
+
+  // Re-sync everything that's normally pushed via Supabase Realtime
+  // whenever the tab regains visibility. WebKit (Safari, iOS) and
+  // recent Chrome both throttle / pause WebSocket activity in
+  // backgrounded tabs aggressively — events that fired while the tab
+  // was hidden (a peer's `comment.created`, `slide.regen.finished`,
+  // etc.) are NOT replayed when the socket wakes up. Without this
+  // refresh, a viewer who alt-tabs out for a minute sees a stale
+  // canvas + missing comments + stale lock pills until they manually
+  // reload. Per user report 2026-05-24: added a comment in Chrome,
+  // switched to Safari → comment didn't appear until refresh.
+  //
+  // What we pull in one shot:
+  //   • /comments        → fresh draft comments (covers missed
+  //                         `comment.created` / `comment.deleted`)
+  //   • /status?...=true → fresh manifest + slideStates (covers missed
+  //                         `slide.regen.finished` / `deck.regen.finished`)
+  //
+  // Presence (avatars) auto-syncs when the Supabase channel reattaches
+  // — we don't need to do anything here for that bucket.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handler = () => {
+      if (document.visibilityState !== "visible") return;
+      // Comments — gated on canComment so we don't grant view-only
+      // viewers a side-channel into reading comments.
+      if (canComment) {
+        (async () => {
+          try {
+            const res = await fetch(
+              `/api/projects/${encodeURIComponent(projectId)}/comments`,
+              { credentials: "same-origin" },
+            );
+            if (!res.ok) return;
+            const data = (await res.json()) as { comments?: CommentRow[] };
+            if (Array.isArray(data.comments)) {
+              setComments(data.comments.filter((c) => c.status === "draft"));
+            }
+          } catch {
+            /* network blip — viewer keeps the previous comments */
+          }
+        })();
+      }
+      // Manifest + slideStates — fire regardless of canComment. Even
+      // view-only viewers need fresh slide content when a peer regens
+      // the deck while they're in another tab.
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+            { credentials: "same-origin" },
+          );
+          if (!res.ok) return;
+          const data = (await res.json()) as {
+            manifest?: unknown;
+            slideStates?: InitialSlideState[] | null;
+          };
+          if (data.manifest) {
+            const parsed = SlideManifestSchema.safeParse(data.manifest);
+            if (parsed.success) setManifest(parsed.data);
+          }
+          if (Array.isArray(data.slideStates)) {
+            const nextStates: Record<string, InitialSlideState> = {};
+            const nextVersions: Record<string, HistoryRow[]> = {};
+            for (const s of data.slideStates) {
+              nextStates[s.slideKey] = s;
+              nextVersions[s.slideKey] = s.versions ?? [];
+            }
+            setSlideStates(nextStates);
+            setHistoryVersions(nextVersions);
+          }
+        } catch {
+          /* network blip — viewer keeps the previous state */
+        }
+      })();
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [projectId, canComment]);
 
   // Re-track on slide change + tab-visibility flip. Reads through the
   // ref so a no-op when the channel hasn't finished opening yet —
@@ -648,7 +1118,7 @@ export function DeckView({
 
   const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
     ? "failed"
-    : manifest && isCompleted(projectStatus, versionStatus)
+    : manifest && (polledCompleted || isCompleted(projectStatus, versionStatus))
       ? "completed"
       : "generating";
 
@@ -913,7 +1383,15 @@ export function DeckView({
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}/status`);
+        // `includeManifest=true` so the completion branch below has
+        // the canonical manifest in-hand and can swap it via
+        // setManifest without a `router.refresh()` cycle. The
+        // server only attaches the manifest payload when the latest
+        // version is completed, so the polling path during
+        // "generating" pays no extra bandwidth.
+        const res = await fetch(
+          `/api/projects/${projectId}/status?includeManifest=true`,
+        );
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as {
           status: string;
@@ -923,6 +1401,7 @@ export function DeckView({
           streamingTheme?: unknown;
           streamingDirection?: "rtl" | "ltr" | null;
           streamingLanguage?: "ar" | "en" | null;
+          manifest?: unknown;
         };
         if (data.progress && isProgress(data.progress)) {
           setProgress(data.progress);
@@ -965,7 +1444,27 @@ export function DeckView({
           return;
         }
         if (data.status === "completed" || data.status === "complete") {
-          router.refresh();
+          // Swap manifest in-place if the server attached it (it
+          // does so when latestVersion?.status === "completed"),
+          // then flip the local `polledCompleted` flag so the
+          // derived status escapes "generating" without a
+          // router.refresh(). The parent SSR still believes the
+          // project is queued/generating until the next user-driven
+          // navigation, but DeckView renders the completed canvas
+          // immediately — no flash, no transient-client-state loss.
+          if (data.manifest) {
+            const parsed = SlideManifestSchema.safeParse(data.manifest);
+            if (parsed.success) setManifest(parsed.data);
+          }
+          setPolledCompleted(true);
+          // Stop polling — completion is terminal. The interval
+          // clearInterval lives in the cleanup function; setting
+          // cancelled aborts any in-flight tick, and the
+          // polledCompleted state flip will re-render → the effect
+          // re-evaluates `status !== "generating"` and returns
+          // early on the next render, leaving the cleanup to clear
+          // the interval.
+          cancelled = true;
         }
       } catch {
         /* network blip */
@@ -977,7 +1476,7 @@ export function DeckView({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [projectId, status, router]);
+  }, [projectId, status]);
 
   // Start the generation clock when we first enter `generating`. Prefer
   // the server-persisted `progress.genStartedAt` (ISO from the Inngest
@@ -1061,20 +1560,35 @@ export function DeckView({
   //   1. Pinned version status === "completed" → success.
   //   2. Pinned version status === "failed" / project "failed" →
   //      explicit backend failure.
-  //   3. No `progress` advancement for 60 s while pinned & queued →
+  //   3. No `progress` advancement for 240 s while pinned & queued →
   //      treat as stuck / cancelled (Inngest-cancelled case).
   //   4. ≥5 consecutive fetch failures → server / network disconnect.
-  //   5. Hard 5-min cap as a final fallback.
+  //   5. Hard 10-min cap as a final fallback.
+  //
+  // The 240 s stuck threshold (bumped from 60 s on 2026-05-24) reflects
+  // the all-Opus thinking tiers landed earlier today: Opus 4.7 on
+  // adaptive thinking can routinely spend 60-180 s in the thinking
+  // phase before the model emits its first JSON token, and during
+  // that window NEITHER `stage` nor `currentSlide` advances — so the
+  // old 60 s watchdog false-positived a perfectly healthy regen and
+  // tore down the poller mid-flight. Side effect of that tear-down
+  // (which the user reported the same day): when the regen actually
+  // finished, no poller was alive to see versionStatus flip to
+  // "completed", so the manifest never swapped in-place and the user
+  // had to refresh. Treating `thinkingTokens` advancement as a
+  // heartbeat below additionally covers the full-deck case where
+  // thinking is throttled-updated ~1×/sec.
   useEffect(() => {
     if (!applying) return;
     let cancelled = false;
     const applyStartedAt = Date.now();
-    const APPLY_TIMEOUT_MS = 5 * 60 * 1000;
-    const STUCK_NO_PROGRESS_MS = 60 * 1000;
+    const APPLY_TIMEOUT_MS = 10 * 60 * 1000;
+    const STUCK_NO_PROGRESS_MS = 240 * 1000;
     const MAX_CONSECUTIVE_ERRORS = 5;
     let lastProgressMs = Date.now();
     let lastProgressSlide = 0;
     let lastProgressStage: string | null = null;
+    let lastThinkingTokens = 0;
     let consecutiveErrors = 0;
     const failApply = (message: string) => {
       if (cancelled) return;
@@ -1100,8 +1614,8 @@ export function DeckView({
         // apply (sentinel versionId), fall back to default (latest).
         const versionParam =
           applying.versionId && applying.versionId !== "__pending__"
-            ? `?versionId=${encodeURIComponent(applying.versionId)}`
-            : "";
+            ? `?versionId=${encodeURIComponent(applying.versionId)}&includeSlideStates=true`
+            : "?includeSlideStates=true";
         const res = await fetch(
           `/api/projects/${projectId}/status${versionParam}`,
         );
@@ -1112,7 +1626,17 @@ export function DeckView({
           status: string;
           versionId: string | null;
           versionStatus: string | null;
-          progress: { stage: string; currentSlide: number } | null;
+          // `thinkingTokens` rides along in the same JSON column slot
+          // even though the status route's Progress type guard doesn't
+          // declare it — `deck-generate.ts` writes it via the `extra`
+          // spread on each thinking delta. We read it here as a
+          // heartbeat signal during the thinking phase, where neither
+          // `currentSlide` nor `stage` advances.
+          progress: {
+            stage: string;
+            currentSlide: number;
+            thinkingTokens?: number;
+          } | null;
           // Status route returns the full manifest alongside the version
           // status when (a) the caller pinned a versionId and (b) that
           // version is completed. Used here to swap in the spliced
@@ -1120,6 +1644,15 @@ export function DeckView({
           // local docker Postgres doesn't broadcast) or `router.refresh()`
           // (RSC payload caching has been unreliable).
           manifest?: unknown;
+          // `slideStates` rides along when `includeSlideStates=true` is
+          // set. Carries per-slide `versions[]` lists so the History
+          // popover sees the new version row land WITHOUT requiring a
+          // page refresh — fix 2026-05-24: actor's own regen finished
+          // didn't update history because the broadcast handler self-
+          // echo-skips, leaving the apply-poller as the only completion
+          // signal. Apply-poller now mirrors what the peer-broadcast
+          // handler does: setManifest + setSlideStates + setHistoryVersions.
+          slideStates?: InitialSlideState[] | null;
         };
         // Optimistic mode: applying.versionId starts as "__pending__".
         // Until the apply POST returns and we replace it with the real
@@ -1134,18 +1667,39 @@ export function DeckView({
         if (isPinned && data.versionStatus === "completed") {
           // Splice the new manifest in directly from the status
           // response. Local-dev parity: Supabase Realtime doesn't
-          // broadcast from the docker Postgres, and `router.refresh()`
-          // alone has been flaky for swapping the manifest in-place.
-          // Schema-validate before assigning so a malformed payload
-          // can't corrupt the visible deck.
+          // broadcast from the docker Postgres, so we couldn't lean
+          // on a `slide.regen.finished` broadcast to do the swap for
+          // the OWN-actor path. Schema-validate before assigning so
+          // a malformed payload can't corrupt the visible deck.
+          // We no longer call `router.refresh()` after — setManifest
+          // updates the canvas in-place, and the SSR re-render is
+          // unnecessary (per-slide pill state ride along on the
+          // applied-slide payload from `apply-comments`; the parent's
+          // initialSlideStates may stay slightly stale but it doesn't
+          // affect what the user sees).
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) setManifest(parsed.data);
           }
+          // Mirror the peer-broadcast handler: refresh slideStates +
+          // historyVersions from the same status payload so the
+          // History popover reflects the new version immediately. The
+          // actor used to have to refresh the page to see the regen's
+          // row land in History — the broadcast handler skips self,
+          // and this poller previously only updated the manifest.
+          if (Array.isArray(data.slideStates)) {
+            const nextStates: Record<string, InitialSlideState> = {};
+            const nextVersions: Record<string, HistoryRow[]> = {};
+            for (const s of data.slideStates) {
+              nextStates[s.slideKey] = s;
+              nextVersions[s.slideKey] = s.versions ?? [];
+            }
+            setSlideStates(nextStates);
+            setHistoryVersions(nextVersions);
+          }
           setApplying(null);
           setComments([]);
           setCommentMode(false);
-          router.refresh();
           return;
         }
         // 2. Explicit failure.
@@ -1157,15 +1711,30 @@ export function DeckView({
           return;
         }
 
-        // Update progress watermark if it advanced.
+        // Update progress watermark if it advanced. Three signals
+        // qualify as "the run is alive":
+        //   (a) `currentSlide` ticked up — a slide closed in the stream
+        //   (b) `stage` transitioned (thinking → designing → validating
+        //       → saving)
+        //   (c) `thinkingTokens` advanced — deck-generate writes this
+        //       on each thinking delta (~1×/sec). Critical for Opus
+        //       which can spend minutes in adaptive-thinking before
+        //       (a) or (b) ever change. Partial regen doesn't emit
+        //       thinkingTokens today; for that path the 240 s stuck
+        //       threshold above is the safety net.
         if (
           data.progress &&
           (data.progress.currentSlide !== lastProgressSlide ||
-            data.progress.stage !== lastProgressStage)
+            data.progress.stage !== lastProgressStage ||
+            (typeof data.progress.thinkingTokens === "number" &&
+              data.progress.thinkingTokens > lastThinkingTokens))
         ) {
           lastProgressMs = Date.now();
           lastProgressSlide = data.progress.currentSlide;
           lastProgressStage = data.progress.stage;
+          if (typeof data.progress.thinkingTokens === "number") {
+            lastThinkingTokens = data.progress.thinkingTokens;
+          }
         }
 
         // 3. Stuck — pinned + queued + no progress in 60 s. Covers
@@ -1216,6 +1785,13 @@ export function DeckView({
       message = "انتهت الجلسة، أعد تسجيل الدخول.";
     } else if (status === 404) {
       message = "التعليق غير موجود.";
+    } else if (status === 423) {
+      // Server-side lock guard from POST /comments. Fires when a peer
+      // locked the slide before the local optimistic create made it
+      // to the server — the client gate hides comment-mode on locked
+      // slides but a stale broadcast leaves a small window where the
+      // local view still thinks the slide is unlocked.
+      message = "هذه الشريحة مقفلة — قم بفك القفل قبل إضافة تعليقات.";
     } else {
       message = fallback;
     }
@@ -1727,12 +2303,22 @@ export function DeckView({
     index: idx,
     slide,
     commentCount: commentsBySlideId.get(slide.slideId)?.length ?? 0,
-    regenerating: !!applying?.targetSlideIds.includes(slide.slideId),
+    regenerating:
+      !!applying?.targetSlideIds.includes(slide.slideId) ||
+      peerRegenInProgress.has(slide.slideId),
     locked: slideStates[slide.slideId]?.lockedAt != null,
   }));
-  const isFocusedRegenerating = !!applying?.targetSlideIds.includes(
-    focusedSlide.slideId,
-  );
+  // Phase 16.D revised (re-revised 2026-05-24) — observers now ALSO see
+  // the dim+spinner overlay for peer regens. Unioning `applying`
+  // (actor's own slides) with `peerRegenInProgress` (slides a peer
+  // started regenerating, set/cleared by the project channel started+
+  // finished broadcasts) keeps a single overlay path for both cases.
+  // User accepted the friction trade-off: the live spinner is the
+  // most legible "someone is changing this — don't start your own
+  // edit yet" cue, worth the visual cost for the regen window.
+  const isFocusedRegenerating =
+    !!applying?.targetSlideIds.includes(focusedSlide.slideId) ||
+    peerRegenInProgress.has(focusedSlide.slideId);
   // Hero width clamp — two candidates, smallest wins:
   //   • viewport-height-derived width (so hero never exceeds the
   //     remaining vertical space given its aspect ratio)
@@ -1882,6 +2468,16 @@ export function DeckView({
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
                   draftCommentCount={comments.length}
+                  // Locked focused slide → PreviewActionBar disables
+                  // the Comment button (only the toggle-out path
+                  // stays live if commentMode is already on; see
+                  // its prop-doc). Mirrors the HeroCommentOverlay
+                  // gate further down — same source of truth, just
+                  // surfaced in the toolbar too so the user knows
+                  // why "+ comment" doesn't work before clicking.
+                  focusedSlideLocked={
+                    slideStates[focusedSlide.slideId]?.lockedAt != null
+                  }
                   // Armed = drafts exist, user has exited comment
                   // mode, and no apply is in flight → the regen
                   // button morphs to the AI icon and now triggers
@@ -1938,15 +2534,16 @@ export function DeckView({
           }`}
           data-active={commentMode ? "true" : "false"}
         >
-          {/* Slide content. Heavily blurred while THIS slide is being
-              regenerated; the regenerating overlay sits on top in sharp
-              focus. `overflow-hidden` lives here so the scaled
-              SlideRenderer can't bleed past the canvas while the
-              outer halo ring extends freely. */}
-          <div
-            className="h-full w-full overflow-hidden transition-[filter] duration-300"
-            style={isFocusedRegenerating ? { filter: "blur(20px)" } : undefined}
-          >
+          {/* Slide content. `overflow-hidden` clips the scaled
+              SlideRenderer so it can't bleed past the canvas while
+              the outer halo ring extends freely. The previous
+              `filter: blur(20px)` during regen was replaced with a
+              full-canvas dim overlay (sibling below) per direction
+              2026-05-23 — the blur left white slides bright and
+              required a separate dark chip behind the spinner; a
+              flat dim gives the spinner readable contrast against
+              any slide background without an extra chrome chip. */}
+          <div className="h-full w-full overflow-hidden">
             <SlideRenderer
               slide={focusedSlide}
               theme={manifest!.theme}
@@ -1967,7 +2564,7 @@ export function DeckView({
               the user is in comment mode (the comment overlay
               owns the canvas; the pill would steal cursor focus
               from drag-to-draw). */}
-          {!isFocusedRegenerating && !commentMode && canEdit ? (
+          {!isFocusedRegenerating && !commentMode && !markerPreviewOpen && canEdit ? (
             <SlidePill
               currentVersionNumber={
                 slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
@@ -2131,15 +2728,31 @@ export function DeckView({
             />
           ) : null}
 
-          {/* Regenerating overlay. */}
+          {/* Regenerating overlay — full-canvas dim + clean spinner.
+              The dim layer uses `var(--tq-bg-dim)` (the same 55 %
+              dark token the popovers use) so the white spinner reads
+              cleanly on any slide background, including bright /
+              white ones, without needing a separate chip chrome
+              behind it. Replaces the previous filter:blur(20px) on
+              the slide content + dim-chip combo (direction
+              2026-05-23). */}
           {isFocusedRegenerating ? (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
-              <div className="flex flex-col items-center gap-2 text-center">
-                <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
-                <span className="text-xs font-medium">
-                  جارٍ إعادة التصميم...
-                </span>
-              </div>
+            <div
+              // `dir="rtl"` so the trailing ASCII `...` lands on the
+              // visual LEFT (end of an RTL line) instead of the
+              // visual RIGHT. Without it the overlay inherits the
+              // canvas row's `dir="ltr"`, the Unicode BiDi algorithm
+              // treats `...` as a neutral run at line start, and the
+              // dots render at the visual LEFT BEFORE the Arabic
+              // ("... جارٍ إعادة التصميم") instead of after it.
+              dir="rtl"
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white"
+              style={{ backgroundColor: "var(--tq-bg-dim)" }}
+            >
+              <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
+              <span className="text-xs font-medium">
+                جارٍ إعادة التصميم...
+              </span>
             </div>
           ) : null}
 
@@ -2147,7 +2760,22 @@ export function DeckView({
               Only mounted while commentMode is on so its mouse
               capture doesn't intercept regular interactions outside
               the commenting flow. */}
-          {commentMode ? (
+          {/* Always mounted (Phase 16.C) so READ-ONLY pins render
+              for the slide regardless of whether THIS viewer is in
+              comment mode. Otherwise tab B (just observing) wouldn't
+              see markers when tab A creates a comment, defeating the
+              live-comment broadcast we wired up. Interactivity (drag
+              to create, click pin to edit) is still gated via the
+              `commentMode` prop — pins are visual-only when off.
+              Gated overall on `canComment` so pure view-only viewers
+              don't even see the markers. */}
+          {/* Hide the overlay entirely during a partial regen on
+              this slide — otherwise the orange pins sit on top of
+              the blur layer and read as decorative debris over the
+              regenerating slide. The blur + spinner own the visual
+              during that window; markers come back as soon as the
+              new version lands and `isFocusedRegenerating` clears. */}
+          {canComment && !isFocusedRegenerating ? (
             <HeroCommentOverlay
               slideId={focusedSlide.slideId}
               comments={comments}
@@ -2163,6 +2791,29 @@ export function DeckView({
               // owner / edit see delete on everything (moderation).
               canModerate={canEdit}
               currentUserId={currentUserId}
+              // Locked slides are "finalised" per the product
+              // contract — no new comment markers are allowed on
+              // them. We override `commentMode` to false on the
+              // focused slide when it's locked so the overlay stays
+              // in its read-only mode (existing markers still visible
+              // + clickable for the preview popup; click-to-create is
+              // suppressed). Switching to an unlocked slide restores
+              // interactivity without leaving / re-entering comment
+              // mode on the toolbar.
+              commentMode={
+                commentMode &&
+                slideStates[focusedSlide.slideId]?.lockedAt == null
+              }
+              // Fires when the user clicks "Edit" inside the read-
+              // only marker preview popup. HeroCommentOverlay has
+              // already opened its `editor` state on the chosen
+              // comment; we just flip commentMode so the editor
+              // popover actually renders (gated on `isInteractive`
+              // there).
+              onRequestCommentMode={
+                canComment ? () => setCommentMode(true) : undefined
+              }
+              onPreviewOpenChange={setMarkerPreviewOpen}
             />
           ) : null}
         </motion.div>

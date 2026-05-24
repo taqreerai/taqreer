@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
 // Same envelope as POST — 1920 on both axes covers 16:9 (1920×1080) and
 // 9:16 (1080×1920). Format-specific tightening is the lightbox's job.
@@ -64,7 +65,10 @@ async function authoriseProject(projectId: string, commentId: string) {
       id: commentId,
       presentation: { project: { id: projectId } },
     },
-    select: { id: true, authorId: true },
+    // `slideId` surfaces here so DELETE can include it in the
+    // `comment.deleted` broadcast payload AFTER the row is gone —
+    // we can't read it back from prisma post-delete.
+    select: { id: true, authorId: true, slideId: true },
   });
   if (!comment) {
     return { error: "Comment not found" as const, status: 404 as const };
@@ -77,7 +81,11 @@ async function authoriseProject(projectId: string, commentId: string) {
     return { error: "Forbidden" as const, status: 403 as const };
   }
 
-  return { commentId: comment.id };
+  return {
+    commentId: comment.id,
+    slideId: comment.slideId,
+    callerPrismaUserId,
+  };
 }
 
 export async function PATCH(
@@ -142,5 +150,17 @@ export async function DELETE(
       { status: 409 },
     );
   }
+
+  // Phase 16.C — emit a Realtime broadcast so concurrent viewers
+  // drop the marker / panel row without refreshing. Payload pointers
+  // were captured in `authoriseProject` BEFORE the delete (slideId
+  // would be unreadable from prisma post-delete). Best-effort —
+  // `broadcastToProject` swallows its own errors so a Supabase outage
+  // can't roll back a successful Prisma delete.
+  await broadcastToProject(id, "comment.deleted", {
+    commentId: authd.commentId,
+    slideId: authd.slideId,
+    actorPrismaUserId: authd.callerPrismaUserId,
+  });
   return NextResponse.json({ ok: true });
 }

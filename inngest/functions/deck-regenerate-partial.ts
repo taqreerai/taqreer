@@ -11,6 +11,8 @@ import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
+import { fanOutNotification } from "@/lib/notifications/server";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -20,16 +22,60 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
-// Focused system prompt for single-slide regen. We DON'T re-emit the full
-// design rule set from deck-generate.ts — Claude already knows them from
-// training and the active slide's existing HTML pins the local style. Instead
-// we drill in on the things that go wrong in partial mode: producing only
-// HTML (not JSON), matching the surrounding deck's chrome, and minimal-diff
-// behaviour (don't redesign the whole slide if the comment only asked to
-// change the headline colour). Canvas dims are format-aware so 9:16 decks
+// Focused system prompt for single-slide regen. Two modes, branched on
+// whether the user supplied comments:
+//
+//   • apply-comments — strict preservation. The user pinned specific
+//     elements with bounding-box comments; we change ONLY what they
+//     called out and keep everything else verbatim. Same vocab, same
+//     coordinates. Minimal-diff is the explicit goal.
+//
+//   • redesign — variation REQUIRED. The toolbar's "أعد تصميم الشريحة"
+//     pill posts an empty comments array and means "redesign this
+//     slide in a better way". Without the branch, the apply-comments
+//     preservation rules + "don't drift to a different vocabulary"
+//     line literally instruct Claude to keep everything the same — so
+//     it does. Bug 2026-05-24: actor reported "regenerated with exactly
+//     the same design". Redesign mode swaps those rules for an explicit
+//     "make it visually different" brief.
+//
+// We DON'T re-emit the full design rule set from deck-generate.ts —
+// Claude already knows them from training. Instead we drill in on the
+// things that go wrong in partial mode: producing only HTML (not JSON),
+// matching the surrounding deck's chrome, and (apply-comments mode)
+// minimal-diff behaviour. Canvas dims are format-aware so 9:16 decks
 // regen at 1080×1920 instead of being silently downgraded to 16:9.
-function buildPartialSystemPrompt(format: SlideFormat): string {
+type RegenMode = "apply-comments" | "redesign";
+
+function buildPartialSystemPrompt(
+  format: SlideFormat,
+  mode: RegenMode,
+): string {
   const { width, height } = SLIDE_DIMENSIONS[format];
+
+  const intentBlock =
+    mode === "apply-comments"
+      ? `USER COMMENTS — apply faithfully, minimally
+- Each comment carries a slide-space bounding box (x, y, w, h in 0..${width}, 0..${height}) pointing at the element the user wants changed. Use the box to disambiguate which element they meant.
+- Apply only what the comment asks. If the comment says "make this headline bigger", scale 1.2-1.5×, not 3×. If it says "change colour", change just the colour. Aim for minimal diff from the existing slide.
+- **PRESERVATION RULE — strict.** If the comment doesn't mention placement, the element's position and surrounding layout MUST stay identical. If it doesn't mention size, dimensions stay identical (except the specific text run referenced, if any). If it doesn't mention removal, nothing is removed. Every element the comment didn't reference is kept verbatim — same tag, same coordinates, same children. A colour-only comment changes ONLY the colour token.
+- If the comment is ambiguous, prefer the conservative interpretation.
+- If multiple comments conflict, the later one wins (comments are listed in submission order).`
+      : `REDESIGN BRIEF — variation REQUIRED
+- The user has NOT pinned specific changes; they hit "redesign this slide" wanting a fresh visual approach. Your task is to produce a slide that delivers the SAME information but in a visually DIFFERENT composition. Outputting the same HTML (or a cosmetic tweak of it) is a failure mode.
+- **Keep all CONTENT verbatim**: every headline, sub-headline, body paragraph, list item, label, statistic, caption, footer line. Same words, same meaning, same emphasis. Translation / paraphrasing is forbidden.
+- **Vary the FORM**: composition, layout, visual rhythm, hierarchy, alignment, negative-space distribution, decorative-graphic vocabulary, icon choices, accent shapes. Pick a noticeably different layout strategy than the current slide — if the current is a centred hero, try a split-axis composition; if it's a card grid, try a flowing column with a strong featured item; if it's text-heavy left + graphic right, try inverted or stacked.
+- **Theme stays locked** — same palette tokens, same font families, same brand mark, same chrome (pagination, footer). Variation is in composition, NOT in colour or type system.
+- Pick ONE strong design idea and commit to it. Don't hedge by producing a mild remix that reads the same at thumbnail scale — the user will see this side-by-side with the previous version in History and should immediately recognise that the layout changed.`;
+
+  const designAnchorBlock =
+    mode === "apply-comments"
+      ? `DESIGN RULES — keep what already works
+- The active slide's existing HTML is your strongest style anchor. Match its font sizing scale, line-heights, padding rhythm, decorative SVG style. Don't drift to a different design vocabulary just because you're regenerating.`
+      : `DESIGN RULES — anchor on the DECK, not the slide
+- Read the sibling slides for the deck's vocabulary (font scale, line-height rhythm, padding system, decorative-SVG idiom). Stay within that family.
+- The CURRENT slide's HTML is a CONTENT reference (read it to find the headline, body, lists). It is NOT a layout anchor — you are explicitly replacing its layout.`;
+
   return `You are regenerating ONE slide of an existing presentation. The rest of the deck is fixed — chrome (header row, footer row, brand mark, pagination), theme (palette, fonts, background), and slide-level margins stay locked.
 
 OUTPUT — STRICT
@@ -49,20 +95,14 @@ CHROME — match siblings exactly
 THEME — locked
 - Use the same theme tokens (\`var(--primary)\`, \`var(--accent)\`, \`var(--brand-bg)\`, etc.) as the rest of the deck. Do not introduce new fonts or hex colours not present in the theme.
 
-USER COMMENTS — apply faithfully, minimally
-- Each comment carries a slide-space bounding box (x, y, w, h in 0..1920, 0..1080) pointing at the element the user wants changed. Use the box to disambiguate which element they meant.
-- Apply only what the comment asks. If the comment says "make this headline bigger", scale 1.2-1.5×, not 3×. If it says "change colour", change just the colour. Aim for minimal diff from the existing slide.
-- **PRESERVATION RULE — strict.** If the comment doesn't mention placement, the element's position and surrounding layout MUST stay identical. If it doesn't mention size, dimensions stay identical (except the specific text run referenced, if any). If it doesn't mention removal, nothing is removed. Every element the comment didn't reference is kept verbatim — same tag, same coordinates, same children. A colour-only comment changes ONLY the colour token.
-- If the comment is ambiguous, prefer the conservative interpretation.
-- If multiple comments conflict, the later one wins (comments are listed in submission order).
+${intentBlock}
 
 STATIC DELIVERABLE
 - No animation, no transition, no \`:hover\`, no JavaScript. Same as the rest of the deck.
 
 ${COMPOSITION_RULES}
 
-DESIGN RULES — keep what already works
-- The active slide's existing HTML is your strongest style anchor. Match its font sizing scale, line-heights, padding rhythm, decorative SVG style. Don't drift to a different design vocabulary just because you're regenerating.
+${designAnchorBlock}
 - Decorative graphics stay inline <svg>. Icons stay inline <svg> (not icon fonts).
 - **Icons: use Lucide** (https://lucide.dev/icons) — inline \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\` with the path data from lucide.dev. Material icons (https://fonts.google.com/icons) are an acceptable fallback. NEVER icon fonts.
 - Webfont URLs must be on \`fonts.googleapis.com\` / \`fonts.gstatic.com\`.
@@ -114,16 +154,43 @@ function buildPartialUserMessage(
   const totalSlides = manifest.slides.length;
 
   const slideComments = comments.filter((c) => c.slideId === targetSlideId);
-  const commentLines = slideComments.length
-    ? slideComments
-        .map((c, idx) => {
-          const box = c.boundsJson
-            ? `Region (slide-space): x=${Math.round(c.boundsJson.x)} y=${Math.round(c.boundsJson.y)} w=${Math.round(c.boundsJson.w)} h=${Math.round(c.boundsJson.h)}`
-            : "Whole-slide comment";
-          return `  ${idx + 1}. ${box}\n     "${c.content.replace(/"/g, '\\"')}"`;
-        })
-        .join("\n")
-    : "  (none)";
+  // Mode is decided HERE (not at the call site) because the call site
+  // can't know whether a particular slide in the batch actually has
+  // comments — the function may be regenerating N slides where only
+  // some carry comments and the rest are pure redesigns. Per-slide
+  // branching reads more naturally from the message itself.
+  const mode: RegenMode = slideComments.length > 0 ? "apply-comments" : "redesign";
+
+  const intentSection =
+    mode === "apply-comments"
+      ? [
+          `USER COMMENTS ON THIS SLIDE:`,
+          slideComments
+            .map((c, idx) => {
+              const box = c.boundsJson
+                ? `Region (slide-space): x=${Math.round(c.boundsJson.x)} y=${Math.round(c.boundsJson.y)} w=${Math.round(c.boundsJson.w)} h=${Math.round(c.boundsJson.h)}`
+                : "Whole-slide comment";
+              return `  ${idx + 1}. ${box}\n     "${c.content.replace(/"/g, '\\"')}"`;
+            })
+            .join("\n"),
+        ].join("\n")
+      : [
+          `REDESIGN REQUEST — no specific comments`,
+          `The user wants a fresh visual approach. Keep every piece of content`,
+          `(headlines, body text, lists, labels, captions) verbatim — change the`,
+          `LAYOUT and composition. The current HTML below is your CONTENT source,`,
+          `NOT a layout anchor. Pick a distinctly different composition strategy`,
+          `than the current slide; a result that reads the same at thumbnail scale`,
+          `is a failure.`,
+        ].join("\n");
+
+  // Label for the current-HTML block shifts to match the mode — calling
+  // it the "regen target" in redesign mode would lure the model into
+  // anchoring on it. "Content reference" makes the role explicit.
+  const htmlLabel =
+    mode === "apply-comments"
+      ? `CURRENT ACTIVE SLIDE HTML (regenerate this one):`
+      : `CURRENT ACTIVE SLIDE HTML — content reference only (do NOT replicate its layout):`;
 
   return [
     `PARTIAL REGEN — ACTIVE SLIDE`,
@@ -134,13 +201,12 @@ function buildPartialUserMessage(
     `Deck direction: ${manifest.direction}`,
     `Deck language: ${manifest.language}`,
     ``,
-    `USER COMMENTS ON THIS SLIDE:`,
-    commentLines,
+    intentSection,
     ``,
     `THEME (locked, do not change):`,
     JSON.stringify(manifest.theme, null, 2),
     ``,
-    `CURRENT ACTIVE SLIDE HTML (regenerate this one):`,
+    htmlLabel,
     slide.html,
     ``,
     `SIBLING SLIDE EXCERPTS — read to match chrome / margins / pagination. DO NOT modify any sibling.`,
@@ -178,6 +244,13 @@ type RegenPartialEvent = {
   // the per-regen token-usage breakdown when the function completes.
   // Optional for backwards compat with in-flight pre-telemetry events.
   jobId?: string | null;
+  // Prisma User row id of the viewer who clicked Regen. Plumbed into
+  // the Phase 16.D `slide.regen.{started,finished}` broadcasts so
+  // each receiving client can skip its own self-echo (the actor's
+  // tab already drives the dim overlay via local `applying` state;
+  // the broadcast is the courtesy signal for OTHER collaborators).
+  // Optional for backwards compat with in-flight pre-16.D events.
+  actorPrismaUserId?: string | null;
 };
 
 export const deckRegeneratePartial = inngest.createFunction(
@@ -216,6 +289,60 @@ export const deckRegeneratePartial = inngest.createFunction(
       targetSlideIds,
       comments,
     } = data;
+    const actorPrismaUserId = data.actorPrismaUserId ?? null;
+
+    // Phase 16.D revised — `slide.regen.started` broadcast IS re-emitted
+    // for partial regens (per user request 2026-05-24). The earlier
+    // concern was that the started-overlay competed for peers' attention
+    // for the full 1-3 min regen window; the user accepts that trade-off
+    // because the live spinner is the most legible signal that "someone
+    // on the team is changing this slide right now — don't start your
+    // own edit yet".
+    //
+    // ⚠️ MUST be wrapped in `step.run` for memoization. Inngest's
+    // executor re-runs the function code from the top after every step
+    // checkpoint — anything sitting in the prelude fires once per
+    // round. With ~N step.runs after this point (per-slide Claude
+    // calls, heartbeat writes, version save), the started broadcast
+    // would emit N times → N duplicate "is redesigning" notifications
+    // and N duplicate spinner overlays. The user reported 2 dup'd
+    // started rows during PR #33 testing; step.run dedupes on the step
+    // name so the callback runs exactly once across the whole
+    // execution.
+    //
+    // Inside the step we keep the fire-and-forget pattern (don't
+    // await broadcastToProject / fanOutNotification): the step
+    // returns the moment the synchronous loop finishes, the unsettled
+    // promises continue running in the background, and we avoid the
+    // `admin.removeChannel` deadlock that previously hung functions
+    // for 5+ min when broadcasts WERE awaited inside step.run.
+    await step.run("broadcast-slide-regen-started", () => {
+      for (const slideId of targetSlideIds) {
+        broadcastToProject(projectId, "slide.regen.started", {
+          slideId,
+          actorPrismaUserId,
+        }).catch((err) => {
+          logger.warn("broadcast slide.regen.started failed", {
+            slideId,
+            error: String(err),
+          });
+        });
+      }
+      for (const slideId of targetSlideIds) {
+        fanOutNotification({
+          type: "slide.regen.started",
+          projectId,
+          actorPrismaUserId,
+          payload: { slideKey: slideId },
+        }).catch((err) => {
+          logger.warn("notification slide.regen.started fanOut failed", {
+            slideId,
+            error: String(err),
+          });
+        });
+      }
+    });
+
     // Resolve the original deck's quality preset → Claude call params.
     // Falls back to "medium" (the paramsForQuality default) for older
     // in-flight events that predate the `quality` field.
@@ -335,7 +462,20 @@ export const deckRegeneratePartial = inngest.createFunction(
     // the same dimensions — Claude needs the right canvas size in the
     // system prompt or vertical decks regen at 16:9.
     const sourceFormat: SlideFormat = source.format ?? "16:9";
-    const partialSystemPrompt = buildPartialSystemPrompt(sourceFormat);
+    // Pre-build BOTH system prompts once so per-slide steps just pick
+    // by mode. Two ephemeral caches max (one per mode) instead of a
+    // fresh compile per slide. The mode is decided per-slide inside
+    // the step (a slide with comments → apply-comments; a slide
+    // without → redesign), so a mixed batch transparently picks the
+    // right prompt per call.
+    const applyCommentsSystemPrompt = buildPartialSystemPrompt(
+      sourceFormat,
+      "apply-comments",
+    );
+    const redesignSystemPrompt = buildPartialSystemPrompt(
+      sourceFormat,
+      "redesign",
+    );
 
     // Fan out per-slide Claude calls. Each runs as its own Inngest step so
     // a single slide's failure produces a partial result we can surface to
@@ -356,6 +496,16 @@ export const deckRegeneratePartial = inngest.createFunction(
         step.run(`regen-slide-${slideId}`, async () => {
           const client = getClient();
           const userMessage = buildPartialUserMessage(source, slideId, comments);
+          // Mode mirrors what buildPartialUserMessage picks internally:
+          // a slide with comments → apply-comments (strict preservation);
+          // a slide without → redesign (variation required). Keeps the
+          // system prompt in sync with the user-message branch.
+          const hasCommentsForSlide = comments.some(
+            (c) => c.slideId === slideId,
+          );
+          const systemPromptText = hasCommentsForSlide
+            ? applyCommentsSystemPrompt
+            : redesignSystemPrompt;
           // Use the original deck's quality preset — paramsForQuality
           // gives us model + thinking + effort matching what generated
           // the deck originally (fast / medium / quality / extreme).
@@ -366,7 +516,7 @@ export const deckRegeneratePartial = inngest.createFunction(
             system: [
               {
                 type: "text",
-                text: partialSystemPrompt,
+                text: systemPromptText,
                 cache_control: { type: "ephemeral" },
               },
             ],
@@ -559,6 +709,46 @@ export const deckRegeneratePartial = inngest.createFunction(
             error: String(err),
           });
         });
+    }
+
+    // Phase 16.D — `slide.regen.finished` broadcasts, fire-and-forget
+    // for the same reason as the started broadcast above. The Inngest
+    // step that just saved the new version is what other clients
+    // care about; the broadcast is just the "go re-fetch now" nudge.
+    // If the function returns before the broadcast completes (Vercel
+    // freeze, etc.) observers will still pick up the new slides on
+    // their next poll / refresh — the regen state was persisted
+    // before we got here.
+    for (const slideId of targetSlideIds) {
+      broadcastToProject(projectId, "slide.regen.finished", {
+        slideId,
+        actorPrismaUserId,
+      }).catch((err) => {
+        logger.warn("broadcast slide.regen.finished failed", {
+          slideId,
+          error: String(err),
+        });
+      });
+    }
+
+    // Phase 16.E — bell notification per regen'd slide. The fan-out
+    // helper's 10-minute group window merges N sequential slide
+    // regens by the same actor into one bell row, so a partial regen
+    // that touched 4 slides produces ONE row ("X redesigned 4 slides")
+    // rather than spamming the bell. Fire-and-forget per the same
+    // rationale as the broadcasts above.
+    for (const slideId of targetSlideIds) {
+      fanOutNotification({
+        type: "slide.regen.finished",
+        projectId,
+        actorPrismaUserId,
+        payload: { slideKey: slideId },
+      }).catch((err) => {
+        logger.warn("notification slide.regen.finished fanOut failed", {
+          slideId,
+          error: String(err),
+        });
+      });
     }
 
     return { success: true, regenerated: regenResults.length };

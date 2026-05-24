@@ -69,8 +69,20 @@ export type SlidePillProps = SlidePillState & {
 // Base geometry only — fixed 36 × 36 square, padding zeroed so
 // `.btn-pill`'s default 6 × 12 padding doesn't crop the centred
 // icon. Per-variant classes paint colour + (for AI/CTA) surface.
+//
+// IMPORTANT — `transition-transform` only, NOT `transition-all`.
+// The Lock button swaps variant `glass → cta` on click (becomes
+// active), which means its class set flips from `.btn-pill` (border
+// 1 px rgba(255,255,255,0.15)) to `.btn-gradient` (no border) +
+// `text-white` (sets currentcolor = white). Under `transition-all`,
+// the browser interpolates `border-color` from the faint rgba →
+// currentcolor=white BEFORE `border-width` collapses 1 px → 0,
+// producing a bright white outline flash for ~150 ms on activation.
+// We don't need any cross-variant property animation — variant
+// swaps should land instantly. Hover-scale on the AI variant is the
+// only intentional animated transform on these buttons.
 const BUTTON_BASE =
-  "relative inline-flex h-9 w-9 items-center justify-center rounded-full p-0! transition-all disabled:cursor-not-allowed disabled:opacity-40";
+  "relative inline-flex h-9 w-9 items-center justify-center rounded-full p-0! transition-transform disabled:cursor-not-allowed disabled:opacity-40";
 
 // Glass-variant buttons consume the canonical `.btn-pill` class
 // (globals.css §"Normal-button surface"). It's transparent +

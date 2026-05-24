@@ -19,6 +19,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
 type LockPayload = {
   locked?: boolean;
@@ -105,8 +106,24 @@ export async function POST(
     select: { lockedAt: true },
   });
 
+  const lockedAtIso = state.lockedAt ? state.lockedAt.toISOString() : null;
+
+  // Realtime fan-out — peers viewing the project get the lock-pill
+  // flip without polling. Fire-and-forget: the broadcast helper has
+  // its own internal timeout + error swallow, and a missed realtime
+  // event is recoverable via the visibility-regain refetch in
+  // DeckView. We don't want a flaky socket to fail the lock write
+  // the user just successfully made.
+  broadcastToProject(projectId, "slide.lock.changed", {
+    slideKey,
+    lockedAt: lockedAtIso,
+    actorPrismaUserId: access.user.prismaId,
+  }).catch(() => {
+    /* socket blip — peers fall back to visibility-regain refetch */
+  });
+
   return NextResponse.json({
     ok: true,
-    lockedAt: state.lockedAt ? state.lockedAt.toISOString() : null,
+    lockedAt: lockedAtIso,
   });
 }

@@ -83,6 +83,9 @@ export async function POST(
         presentationId: project.presentation.id,
         versionId: latestVersion?.id,
         jobId: latestJob?.id,
+        // Phase 16.D — actor for `deck.regen.{started,finished}`
+        // self-echo skip in DeckView's broadcast handlers.
+        actorPrismaUserId: access.user.prismaId,
       },
     });
   } catch (error) {

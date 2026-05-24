@@ -200,6 +200,7 @@ export function PreviewActionBar({
   commentMode,
   onToggleCommentMode,
   draftCommentCount,
+  focusedSlideLocked,
   commentsArmed,
   onFirePartialRegen,
   applying,
@@ -223,6 +224,16 @@ export function PreviewActionBar({
   commentMode: boolean;
   onToggleCommentMode: () => void;
   draftCommentCount: number;
+  // True when the currently-focused slide is locked. Disables the
+  // Comment button entry-point — a locked slide refuses new comment
+  // markers (server enforces with 423, overlay suppresses click-to-
+  // create), so the affordance shouldn't read as available. Letting
+  // the user enter comment mode + see the "+" cursor only to have
+  // clicks no-op is worse UX than greying the button on the locked
+  // slide. Per-slide flag (not "every slide is locked") so navigating
+  // off the locked slide flips the button back without leaving /
+  // re-entering the deck.
+  focusedSlideLocked: boolean;
   // True when there are unsent drafts ready to be fired. Drives the
   // autorenew → auto_awesome icon morph + swaps the click handler
   // from full regen to partial regen.
@@ -467,12 +478,25 @@ export function PreviewActionBar({
         {canComment ? (
           <ToolButton
             icon={canEdit ? "assistant" : "chat_bubble_outline"}
-            label={commentMode ? "إنهاء وضع التعليقات" : "إضافة تعليق"}
+            label={
+              focusedSlideLocked && !commentMode
+                ? "الشريحة مقفلة — أعد فتح القفل لإضافة تعليق"
+                : commentMode
+                  ? "إنهاء وضع التعليقات"
+                  : "إضافة تعليق"
+            }
             gradient={canEdit}
             iconFilled={commentMode}
             onClick={onToggleCommentMode}
             active={commentMode}
-            disabled={applying}
+            // Locked focused slide → button is muted + click is a
+            // no-op. EXCEPTION: when commentMode is already ON (the
+            // user entered comment mode on an unlocked slide and
+            // then navigated TO a locked one), keep the button live
+            // so they can still click it to exit comment mode. The
+            // overlay's own create-gate (in DeckView) suppresses
+            // marker drawing on the locked slide regardless.
+            disabled={applying || (focusedSlideLocked && !commentMode)}
             countBadge={draftCommentCount}
           />
         ) : null}
@@ -516,7 +540,12 @@ export function PreviewActionBar({
             buttons below for every role. */}
         {role === "owner" ? (
           <ToolButton
-            icon="share"
+            // `person_add` reflects the actual action — inviting
+            // collaborators — instead of the generic share glyph
+            // (which read as "system share sheet" / "copy link").
+            // Changed 2026-05-24 alongside the Export-tab removal
+            // from this toolbar's ShareDialog.
+            icon="person_add"
             label="مشاركة"
             onClick={() => setShareOpen(true)}
             disabled={applying}
@@ -593,6 +622,12 @@ export function PreviewActionBar({
         projectTitle={projectTitle}
         manifest={manifest}
         formatFallback={formatFallback}
+        // Editor toolbox already has dedicated PPTX/PDF/PNG/HTML
+        // export buttons in the same toolbar, so the in-modal Export
+        // tab is redundant here. Modal becomes share-only; tile-
+        // launched ShareDialog keeps the Export tab as the only
+        // export path from /projects.
+        showExportTab={false}
         onClose={() => setShareOpen(false)}
       />
     </div>

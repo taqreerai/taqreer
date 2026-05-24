@@ -17,12 +17,24 @@
 // thinking on these models is:
 //   • `thinking.type.disabled` — no thinking (fast tier)
 //   • `thinking.type.adaptive` + `output_config.effort` — Claude picks the
-//     budget, modulated by effort tier (low / medium / high / xhigh / max)
+//     budget, modulated by effort tier (low / medium / high / xhigh / max).
+//     `xhigh` is Opus-4.7-exclusive; `max` is unconstrained.
 //
 // Wall-clock predictability isn't perfect — adaptive can choose long thinking
 // on complex prompts. Accepted trade-off, it's the only API-supported path on
 // the current models. If runs go long the next lever is dropping a tier or
 // trimming the prompt.
+//
+// Tier-to-model map (2026-05-24 — Sonnet was removed from the thinking
+// tiers because Sonnet-low adaptive was unpredictably slow on multi-slide
+// JSON tasks; Opus-low reaches the same wall-clock more decisively and the
+// quality gap was substantial enough to justify the cost premium on the
+// default tier. `fast` stays on Sonnet so short-content drafts and rapid
+// iteration cycles don't burn Opus tokens.):
+//   fast    → claude-sonnet-4-6 + thinking disabled
+//   medium  → claude-opus-4-7   + adaptive + effort:low      (default)
+//   quality → claude-opus-4-7   + adaptive + effort:medium
+//   extreme → claude-opus-4-7   + adaptive + effort:high
 
 import type { Quality } from "@/lib/types/quality";
 
@@ -36,6 +48,12 @@ export function paramsForQuality(
   quality: Quality | undefined | null,
 ): AnthropicCallParams {
   switch (quality) {
+    // `fast` is the only Sonnet preset — kept as the budget tier so
+    // short-content / iterative drafting runs don't pay the Opus
+    // premium. All three thinking tiers run on Opus 4.7 (the only
+    // way to get adaptive thinking on the 4.x stack; manual
+    // `{enabled, budget_tokens}` returns a 400 on Opus 4.7 — see
+    // top-of-file comment + docs cross-ref 2026-05-24).
     case "fast":
       return {
         model: "claude-sonnet-4-6",
@@ -43,7 +61,7 @@ export function paramsForQuality(
       };
     case "quality":
       return {
-        model: "claude-sonnet-4-6",
+        model: "claude-opus-4-7",
         thinking: { type: "adaptive" },
         outputConfig: { effort: "medium" },
       };
@@ -56,7 +74,7 @@ export function paramsForQuality(
     case "medium":
     default:
       return {
-        model: "claude-sonnet-4-6",
+        model: "claude-opus-4-7",
         thinking: { type: "adaptive" },
         outputConfig: { effort: "low" },
       };

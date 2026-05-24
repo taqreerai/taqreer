@@ -193,6 +193,23 @@
      the brand blobs at lower saturation; both layers dropped one
      stop together). */
   --tq-bg:              #0E0E18;
+  /* RGB triplet — kept for any future `rgba(var(--tq-bg-rgb), …)`
+     consumer in NON-Safari contexts. Direct use in `rgba()` (via the
+     `rgba(var(--rgb-triplet), <alpha>)` pattern) is BROKEN on Safari:
+     a CSS variable holding a comma-separated value fails to split
+     back into rgba's three numeric arguments, the whole declaration
+     is invalid, and the bg falls back to transparent. For dim
+     surfaces consume `--tq-bg-dim` below instead. */
+  --tq-bg-rgb:          14, 14, 24;
+  /* Pre-composed 55 %-alpha dim. Used by `.in-slide-dim` AND by
+     inline `style={{ backgroundColor: "var(--tq-bg-dim)" }}` on the
+     comment editor + marker preview popovers — both surfaces float
+     on top of the rendered slide and need a readable tint on
+     white-background slides. Composite value (not `rgba(var(--tq-
+     bg-rgb), 0.55)`) on purpose: avoids the Safari WebKit bug where
+     a `var()` holding a comma-separated value fails to parse inside
+     `rgba()`'s argument list. */
+  --tq-bg-dim:          rgba(14, 14, 24, 0.55);
 
   /* 3. Text */
   --tq-text-primary: #ffffff;
@@ -1554,7 +1571,35 @@ body {
    tint without the blur (e.g. for performance on a long list)
    doesn't pay for it. */
 .in-slide-dim {
-  background-color: color-mix(in srgb, var(--tq-bg) 55%, transparent);
+  /* Pre-composed token, not `rgba(var(--tq-bg-rgb), 0.55)` —
+     Safari WebKit fails to split a comma-separated `var()` value
+     back into rgba's argument list, the whole declaration becomes
+     invalid, and the bg falls through to transparent (white on
+     white slides). The composite `--tq-bg-dim` ships as a single
+     pre-parsed `rgba(...)` value so there's no nested function
+     to confuse the parser. */
+  background-color: var(--tq-bg-dim);
+}
+
+/* Surface class for in-slide popovers (comment editor + read-only
+   marker preview). Mid-alpha dim (0.65) — strong enough to read
+   white text on white slides, light enough that the
+   backdrop-filter blur underneath still shows the slide as a
+   frosted-glass blur (the popovers also carry `backdrop-blur-
+   glass`). Tried 0.55: blurred white slides still showed too
+   bright. Tried 0.85: lost the glass effect entirely. 0.65 is the
+   sweet spot.
+   Literal `rgba(...)` values not `var(--tq-bg-dim)` because
+   Safari's `backdrop-filter` compositor was leaving inline
+   `style={{ backgroundColor: "var(--tq-bg-dim)" }}` rendered as
+   transparent — keeping the literal here means the popover bg
+   doesn't depend on the var-resolution path Safari struggles with.
+   `globals.css` is the canonical place for raw colour values; the
+   "never hardcode in TSX" rule is preserved by NOT inlining these
+   in the popover's React style prop. */
+.in-slide-popover {
+  background-color: rgba(14, 14, 24, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* ─── Modal dim overlay ───────────────────────────────────────────

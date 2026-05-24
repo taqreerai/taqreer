@@ -33,6 +33,7 @@ import {
   type AccessRole,
 } from "@/components/app/AccessChipDropdown";
 import { useExportActions } from "@/lib/preview/use-export-actions";
+import { Avatar } from "@/components/common/Avatar";
 
 type ShareRow = {
   id: string;
@@ -43,11 +44,14 @@ type ShareRow = {
   userId: string | null;
   // Joined User row, present once the invitee has accepted. The
   // modal swaps the pending row's "invited email + بانتظار القبول"
-  // for the accepted user's real name + login email.
+  // for the accepted user's real name + login email. `image` is the
+  // Google OAuth photo URL (null for email/password signups — the
+  // Avatar atom falls back to a deterministic gradient + initial).
   user: {
     id: string;
     name: string | null;
     email: string;
+    image: string | null;
   } | null;
 };
 
@@ -55,6 +59,7 @@ type ShareOwner = {
   id: string;
   name: string | null;
   email: string;
+  image: string | null;
 };
 
 type ShareState = {
@@ -77,6 +82,13 @@ export function ShareDialog({
   // tab disables its buttons until manifest is available.
   manifest,
   formatFallback,
+  // When false, the Export tab + its TabPill are not rendered at all
+  // and the modal is share-only. Used by the editor toolbar where
+  // there's already a dedicated set of export buttons on the toolbox
+  // (the share+export combo there was redundant). Tile-launched
+  // invocations keep the default `true` because the modal is the
+  // only export path from /projects. Added 2026-05-24.
+  showExportTab = true,
   onClose,
 }: {
   open: boolean;
@@ -85,6 +97,7 @@ export function ShareDialog({
   initialTab?: ShareDialogTab;
   manifest?: SlideManifest;
   formatFallback?: SlideFormat;
+  showExportTab?: boolean;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<ShareDialogTab>(initialTab);
@@ -140,18 +153,38 @@ export function ShareDialog({
     };
   }, [open]);
 
-  // Reset internal state on every open for a new project so state
-  // from project A doesn't bleed into project B.
+  // Tracks the LAST projectId we hydrated state for. Used to decide
+  // whether the open-time reset below clears `state` to null. If the
+  // user re-opens the modal for the SAME project the previously
+  // fetched state is reusable; clearing it would force the modal to
+  // re-render at the "just invite form" height while the fetch flies,
+  // and the motion.div would animate from the previous settled height
+  // DOWN to the empty height and then BACK UP — user reads that as a
+  // collapse-then-expand glitch (measured h=275 → 192 → 275 with the
+  // identical payload). Reported 2026-05-24, observed via DOM
+  // sampling during open.
+  const lastHydratedProjectIdRef = useRef<string | null>(null);
+
+  // Reset internal state on every open for a NEW project so state
+  // from project A doesn't bleed into project B. Skips the reset
+  // when reopening the same project — the previous open's state
+  // (owner pill, invitees) stays mounted so the height transition
+  // is a no-op.
   useEffect(() => {
     if (!open || !projectId) return;
     /* eslint-disable react-hooks/set-state-in-effect */
-    setState(null);
+    const projectChanged = lastHydratedProjectIdRef.current !== projectId;
+    if (projectChanged) {
+      setState(null);
+    }
     setFetchError(null);
     setInviteEmail("");
     setInviteRole("view");
     setInviteError(null);
     setCopied(false);
-    setTab(initialTab);
+    // When export tab is hidden, force "share" — `initialTab="export"`
+    // would otherwise leave the modal on a tab that's not rendered.
+    setTab(showExportTab ? initialTab : "share");
     setFetchedManifest(null);
     setFetchedFormat(undefined);
     setManifestError(null);
@@ -173,6 +206,7 @@ export function ShareDialog({
         const data = (await res.json()) as ShareState;
         if (cancelled) return;
         setState(data);
+        lastHydratedProjectIdRef.current = projectId;
       } catch {
         if (!cancelled) setFetchError("تعذر تحميل إعدادات المشاركة");
       }
@@ -180,14 +214,16 @@ export function ShareDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId, initialTab]);
+  }, [open, projectId, initialTab, showExportTab]);
 
   // Lazy-fetch the deck manifest when the modal opens without one
   // (i.e. opened from a project tile rather than the editor). The
   // Export tab needs the manifest in the client for the PPTX +
-  // HTML pipelines. Skipped when the parent already provided it.
+  // HTML pipelines. Skipped when the parent already provided it,
+  // OR when the Export tab is hidden — no consumer downstream so
+  // the round-trip would be wasted bandwidth.
   useEffect(() => {
-    if (!open || !projectId || manifest) return;
+    if (!open || !projectId || manifest || !showExportTab) return;
     let cancelled = false;
     (async () => {
       try {
@@ -218,7 +254,7 @@ export function ShareDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId, manifest]);
+  }, [open, projectId, manifest, showExportTab]);
 
   // Measure each tab's border-box height (includes the tab's own
   // py-5 padding) with a ResizeObserver. Using contentRect.height
@@ -476,7 +512,7 @@ export function ShareDialog({
                   className="text-base font-semibold text-white truncate"
                   title={projectTitle}
                 >
-                  {tab === "share" ? "مشاركة" : "تصدير"} ·{" "}
+                  {tab === "share" || !showExportTab ? "مشاركة" : "تصدير"} ·{" "}
                   <span className="text-white/60 font-normal">
                     {projectTitle}
                   </span>
@@ -516,21 +552,25 @@ export function ShareDialog({
                 animate={{ height: activeHeight ?? "auto" }}
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
               >
-                {/* Tab strip — first child = RTL right. */}
-                <div className="flex shrink-0 flex-col gap-2 border-e border-white/[0.08] px-3 py-5">
-                  <TabPill
-                    label="مشاركة"
-                    icon="share"
-                    active={tab === "share"}
-                    onClick={() => setTab("share")}
-                  />
-                  <TabPill
-                    label="تصدير"
-                    icon="download"
-                    active={tab === "export"}
-                    onClick={() => setTab("export")}
-                  />
-                </div>
+                {/* Tab strip — first child = RTL right. Suppressed
+                    entirely when `showExportTab` is false (editor
+                    toolbox use case — share-only, no rail needed). */}
+                {showExportTab ? (
+                  <div className="flex shrink-0 flex-col gap-2 border-e border-white/[0.08] px-3 py-5">
+                    <TabPill
+                      label="مشاركة"
+                      icon="person_add"
+                      active={tab === "share"}
+                      onClick={() => setTab("share")}
+                    />
+                    <TabPill
+                      label="تصدير"
+                      icon="download"
+                      active={tab === "export"}
+                      onClick={() => setTab("export")}
+                    />
+                  </div>
+                ) : null}
                 {/* Content column — sized by flex stretch. Both tabs
                     are rendered (inactive absolute-positioned with
                     top-anchored coords so its natural height is
@@ -580,32 +620,34 @@ export function ShareDialog({
                         updatingRoleId={updatingRoleId}
                       />
                     </motion.div>
-                    <motion.div
-                      ref={exportRef}
-                      animate={{ opacity: tab === "export" ? 1 : 0 }}
-                      transition={{
-                        duration: 0.2,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
-                      style={{
-                        position: tab === "export" ? "relative" : "absolute",
-                        // Top-anchored only — see Share tab block above.
-                        top: tab === "export" ? "auto" : 0,
-                        left: tab === "export" ? "auto" : 0,
-                        right: tab === "export" ? "auto" : 0,
-                        pointerEvents: tab === "export" ? "auto" : "none",
-                      }}
-                      className="py-5"
-                      aria-hidden={tab !== "export"}
-                    >
-                      <ExportTabContent
-                        projectId={projectId}
-                        projectTitle={projectTitle}
-                        manifest={effectiveManifest}
-                        formatFallback={effectiveFormat}
-                        loadError={manifestError}
-                      />
-                    </motion.div>
+                    {showExportTab ? (
+                      <motion.div
+                        ref={exportRef}
+                        animate={{ opacity: tab === "export" ? 1 : 0 }}
+                        transition={{
+                          duration: 0.2,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
+                        style={{
+                          position: tab === "export" ? "relative" : "absolute",
+                          // Top-anchored only — see Share tab block above.
+                          top: tab === "export" ? "auto" : 0,
+                          left: tab === "export" ? "auto" : 0,
+                          right: tab === "export" ? "auto" : 0,
+                          pointerEvents: tab === "export" ? "auto" : "none",
+                        }}
+                        className="py-5"
+                        aria-hidden={tab !== "export"}
+                      >
+                        <ExportTabContent
+                          projectId={projectId}
+                          projectTitle={projectTitle}
+                          manifest={effectiveManifest}
+                          formatFallback={effectiveFormat}
+                          loadError={manifestError}
+                        />
+                      </motion.div>
+                    ) : null}
                   </div>
                 </div>
               </motion.div>
@@ -808,6 +850,9 @@ function ShareTabContent({
               role="owner"
               displayName={state.user.name ?? "أنت"}
               email={state.user.email}
+              avatarName={state.user.name ?? state.user.email}
+              avatarImage={state.user.image}
+              avatarSeedId={state.user.id}
             />
           ) : null}
 
@@ -830,6 +875,13 @@ function ShareTabContent({
                      swap IS the signal). */
                   displayName={row.user?.name ?? row.user?.email ?? row.email}
                   email={row.user ? row.user.email : "بانتظار القبول"}
+                  // Avatar seed prefers the joined user id (stable
+                  // across re-invites of the same person); falls back
+                  // to the share row id for pending invites so each
+                  // pending row gets its own consistent gradient.
+                  avatarName={row.user?.name ?? row.user?.email ?? row.email}
+                  avatarImage={row.user?.image ?? null}
+                  avatarSeedId={row.user?.id ?? row.id}
                   onRoleChange={(next) => updateRole(row, next)}
                   onRevoke={() => revoke(row.id)}
                   busy={
@@ -857,6 +909,9 @@ function PersonRow({
   role,
   displayName,
   email,
+  avatarName,
+  avatarImage,
+  avatarSeedId,
   onRoleChange,
   onRevoke,
   busy,
@@ -864,16 +919,24 @@ function PersonRow({
   role: AccessRole | "owner";
   displayName: string;
   email: string;
+  // Avatar uses Google OAuth photo when present; otherwise a stable
+  // gradient + initial derived from `avatarSeedId`. `avatarName`
+  // provides the initial; `avatarSeedId` keys the gradient bucket
+  // (user id for accepted invites, share row id for pending).
+  avatarName: string;
+  avatarImage: string | null;
+  avatarSeedId: string;
   onRoleChange?: (next: AccessRole) => void;
   onRevoke?: () => void;
   busy?: boolean;
 }) {
   // Under `dir="rtl"` the FIRST flex child lands on the visual RIGHT.
-  // Per sketch: name+email on the visual RIGHT, access chip on the
-  // visual LEFT, revoke X further LEFT. DOM order:
-  //   1. <text block>  → right
-  //   2. <chip>        → middle
-  //   3. <revoke X>    → left
+  // Per direction 2026-05-24 — avatar on the visual RIGHT (start),
+  // then name+email, access chip, revoke X going LEFT. DOM order:
+  //   1. <Avatar>      → right (start)
+  //   2. <text block>  → next to avatar
+  //   3. <chip>        → middle
+  //   4. <revoke X>    → left
   //
   // Row chrome is pill-shaped (rounded-full) per design rule —
   // matches the rest of the modal's pill family (invite bar, copy-
@@ -886,6 +949,12 @@ function PersonRow({
         border: "1px solid var(--tq-border-glass)",
       }}
     >
+      <Avatar
+        name={avatarName}
+        image={avatarImage}
+        seedId={avatarSeedId}
+        size={28}
+      />
       {/* Use PHYSICAL `text-right` (not logical `text-end`) so both
           lines always anchor to the visual right, regardless of the
           content's own directionality. Mixing logical `text-end`
