@@ -148,7 +148,7 @@ export function seedFromExtraction(input: SeedExtractionInput): void {
     }),
   );
 
-  // Custom event so any create-flow listener can react without
-  // re-importing this module. Same event seed-from-template fires.
-  window.dispatchEvent(new CustomEvent("taqreer:create:state-changed"));
+  // No manual state-changed dispatch here — writeSource() above
+  // already fires it. A second dispatch would cause double re-render
+  // in any listener that re-syncs on the event.
 }

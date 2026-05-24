@@ -66,9 +66,16 @@ export async function extractFontsFromPptx(
 
 function findFirstTheme(zip: JSZip): JSZip.JSZipObject | null {
   let found: JSZip.JSZipObject | null = null;
+  // Match any theme file under ppt/theme/. Catches the canonical
+  // theme{N}.xml as well as the variants tools emit:
+  //   • themeOverride{N}.xml (slide-master overrides; some Keynote
+  //     and Google Slides exports)
+  //   • theme{N}_override.xml (rare, OOXML 2007 quirks)
+  // Anchored to a flat single file under ppt/theme/ (no subdir
+  // traversal) so we don't accidentally pick up theme images.
   zip.forEach((relativePath, file) => {
     if (found) return;
-    if (/^ppt\/theme\/theme\d+\.xml$/.test(relativePath)) {
+    if (/^ppt\/theme\/theme[^/]*\.xml$/i.test(relativePath)) {
       found = file;
     }
   });

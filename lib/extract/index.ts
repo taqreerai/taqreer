@@ -39,6 +39,12 @@ import { extractFontsFromPptx } from "./fonts-pptx";
 import { extractColorsFromPptx } from "./colors-pptx";
 import { extractColorsFromSlides } from "./colors-rasterized";
 
+// Cap returned palette at 5 entries. Histogram tier (colors-
+// rasterized.ts) already caps at this via TARGET_COUNT; theme tier
+// (colors-pptx.ts) can return up to 6 accents — clamp here so the
+// API contract stays consistent regardless of which tier won.
+const MAX_PALETTE = 5;
+
 // ─── Public types ─────────────────────────────────────────────────
 
 export type ExtractionInput = {
@@ -150,7 +156,7 @@ export async function extract(
   let colorTier: ExtractionResult["colorTier"] = "none";
 
   if (themeColors && themeColors.length > 0) {
-    colors = themeColors;
+    colors = themeColors.slice(0, MAX_PALETTE);
     colorTier = "theme";
   } else {
     try {
@@ -158,7 +164,9 @@ export async function extract(
         slides.map((s) => s.png),
       );
       if (histogramColors.length > 0) {
-        colors = histogramColors;
+        // Histogram tier already caps internally, but slice
+        // defensively in case its TARGET_COUNT ever changes.
+        colors = histogramColors.slice(0, MAX_PALETTE);
         colorTier = "histogram";
       }
     } catch {

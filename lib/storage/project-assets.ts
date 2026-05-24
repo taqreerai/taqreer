@@ -32,7 +32,7 @@
 // (UUID v4) is the standard pattern.
 
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 
 // Bucket names. Both need to exist in Supabase before the upload
 // routes are called — operations cost: one-time bucket creation in
@@ -98,10 +98,15 @@ export async function uploadSlideRasters(
  * public URLs paired with the slide indices where each asset
  * originally appeared (passed through from the extractor).
  *
- * The filename is `{assetId}.{ext}` where assetId is a UUID — we
- * don't trust the source filename (could collide, could contain
- * unsafe chars), and the original name isn't surfaced anywhere in
- * UI so a UUID is fine.
+ * Idempotent on retries. assetId is derived from a SHA-256 of the
+ * bytes (first 32 hex chars — 128 bits of entropy, no realistic
+ * collision risk for the small number of images per deck), and the
+ * upload uses upsert:true. That means:
+ *   • Inngest retrying the upload step re-uploads to the same path,
+ *     so no orphaned blobs accumulate.
+ *   • Bytes-identical assets the extractor reported twice (e.g.
+ *     copy-paste duplicates in PowerPoint) collapse into a single
+ *     stored object, with their slideIndices merged in the return.
  */
 export async function uploadProjectAssets(
   jobId: string,
@@ -113,16 +118,49 @@ export async function uploadProjectAssets(
   }>,
 ): Promise<UploadedAsset[]> {
   const admin = makeAdminClient();
-  const out: UploadedAsset[] = [];
+
+  // ─── Step 1: dedupe by content hash, merge slideIndices ──────────
+  // The hash is the storage path's namespace inside this jobId. If
+  // two ExtractedPptxAssets have the same bytes (rare but possible
+  // — PowerPoint copy-paste, or images-of-images in slide layouts),
+  // they collapse into one upload with the union of their indices.
+  type Pending = {
+    contentType: string;
+    bytes: Buffer;
+    ext: string;
+    slideIndices: Set<number>;
+    hash: string;
+  };
+  const pendingByHash = new Map<string, Pending>();
   for (const asset of assets) {
     const ext = (asset.fileName.split(".").pop() ?? "bin").toLowerCase();
-    const assetId = randomUUID();
-    const path = `${jobId}/${assetId}.${ext}`;
+    const hash = createHash("sha256")
+      .update(asset.bytes)
+      .digest("hex")
+      .slice(0, 32);
+    const existing = pendingByHash.get(hash);
+    if (existing) {
+      for (const idx of asset.slideIndices) existing.slideIndices.add(idx);
+    } else {
+      pendingByHash.set(hash, {
+        contentType: asset.contentType,
+        bytes: asset.bytes,
+        ext,
+        slideIndices: new Set(asset.slideIndices),
+        hash,
+      });
+    }
+  }
+
+  // ─── Step 2: upload each unique hash with upsert:true ────────────
+  const out: UploadedAsset[] = [];
+  for (const pending of pendingByHash.values()) {
+    const path = `${jobId}/${pending.hash}.${pending.ext}`;
     const { error } = await admin.storage
       .from(PROJECT_ASSETS_BUCKET)
-      .upload(path, asset.bytes, {
-        contentType: asset.contentType,
-        upsert: false, // assetId is a fresh UUID, collisions impossible
+      .upload(path, pending.bytes, {
+        contentType: pending.contentType,
+        upsert: true, // idempotent — retry-safe, same bytes overwrite same path
       });
     if (error) {
       throw new Error(
@@ -131,7 +169,7 @@ export async function uploadProjectAssets(
     }
     out.push({
       url: publicUrl(PROJECT_ASSETS_BUCKET, path),
-      slideIndices: asset.slideIndices,
+      slideIndices: [...pending.slideIndices].sort((a, b) => a - b),
     });
   }
   return out;

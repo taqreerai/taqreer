@@ -93,9 +93,13 @@ export async function extractColorsFromPptx(
 
 function findFirstTheme(zip: JSZip): JSZip.JSZipObject | null {
   let found: JSZip.JSZipObject | null = null;
+  // Match any theme file under ppt/theme/ — see fonts-pptx.ts's
+  // findFirstTheme for the rationale. Keep these two implementations
+  // in sync; both fall through here when ppt/theme/theme1.xml is
+  // absent (themeOverride exports, exotic OOXML producers).
   zip.forEach((relativePath, file) => {
     if (found) return;
-    if (/^ppt\/theme\/theme\d+\.xml$/.test(relativePath)) {
+    if (/^ppt\/theme\/theme[^/]*\.xml$/i.test(relativePath)) {
       found = file;
     }
   });
