@@ -7,7 +7,7 @@ Arabic-first, RTL AI presentation platform. User provides content + brand, **Cla
 | **Stack** | Next.js 16 + Turbopack, React 19, TypeScript 5, Prisma 7 + Postgres, Inngest, Supabase (auth + storage), Anthropic SDK, Puppeteer |
 | **Output** | PPTX (shipped) · PNG/PDF (planned, step 15) · Templates (pending) |
 | **Differentiator** | HTML-first generation; preview = export; ~99 % Arabic PPT parity via custom BiDi post-processor |
-| **Active plan** | [`context/projects.md`](./projects.md) is the working backlog (steps 9f, 11, 12, 13, 15) |
+| **Active plan** | This file (§16 "Build Phases" + §21 "Phase 17") is the working backlog. [`context/log.md`](./log.md) is the dated changelog. |
 | **Branch strategy** | All work goes to `dev`. CodeRabbit reviews `dev → main` PRs. |
 
 For the dated log of every fix, see [`log.md`](./log.md). For the patch ledger, see §19.
@@ -51,7 +51,9 @@ User provides content + brand assets. Claude generates every slide as a string o
 
 ## 02. Active Flows
 
-Two flows shipped, one flow partial. **Mimic and Data flows are dropped from the active plan.**
+Four flows. Create is shipped; Enhance / Mimic / Data are Phase 17 (planned).
+Templates work as a **library**, not a separate flow — accessed via `/templates`
+and the "Use this template" CTA on tiles + lightbox.
 
 ### Flow 1 — Create (إنشاء) ✅
 
@@ -62,21 +64,55 @@ Dashboard → `/create/content`. Three-step wizard, brand decided fresh by Claud
 3. **Summary** (`/create/summary`) — Editable content + rules card. CTA: `إنشاء`. POST `/api/projects` → `/preview/[projectId]`.
 4. **Generate** (`/preview/[projectId]`) — Fires Inngest `deck.generate.requested`. Placeholders + per-card progress polled at 1.5 s. On complete, slides cascade in.
 
-### Flow 2 — Enhance (تحسين) 🟡
+### Flow 2 — Enhance (تحسين) ⏳ Phase 17.B
 
-Dashboard → `/enhance`.
+Dashboard → `/enhance`. User uploads an "ugly" PPTX / PDF. Server extracts text
+content + theme colors + font families in-memory (streamed multipart upload,
+file deleted post-extract — no persistence). User lands on `/create/brand`
+pre-filled with extracted brand (must still upload logo SVG manually), then
+`/create/summary` with extracted content pre-filled. Submit fires the same
+`deck.generate.requested` event with `source.kind === "enhance"` so `deck-
+generate.ts` branches its system prompt: "Use the original content but
+redesign the visual approach."
 
-1. **Upload** (`/enhance`) — PPTX-only. Advanced: keep colors, keep fonts, custom instructions. ✅ shipped
-2. **Review** (`/enhance/review`) — Claude vision extraction → palette/fonts/logo + redesign plan + per-asset overrides. 🟡 stub
-3. **Generate** — `deck.generate.requested` with `type: "enhance"`. ⏳ pending
+File cap: **100 MB**.
 
-### Flow 4 — From Template (إنشاء من قالب) ⏳
+### Flow 3 — Mimic (محاكاة) ⏳ Phase 17.C
 
-Dashboard → `/templates`. Shell only. See §13.
+Dashboard → `/mimic`. User uploads TWO files: a "design reference" (good PPT/
+PDF) + a "content source" (ugly). Server:
+- Extracts content from the ugly file (same path as Enhance).
+- Rasterizes the good file to PNG per slide (via Puppeteer, in-memory).
+- Embeds rasterized PNGs as base64 image blocks in the Claude user message
+  alongside the extracted content. No persistent storage of reference images.
 
-### Flow 5 — Use this as a template ⏳
+Both files deleted post-extract. Brand page shown (logo upload). Submit fires
+`deck.generate.requested` with `source.kind === "mimic"` and `source.referenceImages`
+attached to the multipart Claude message. Prompt branch: "Match the visual
+language of these reference images while presenting this content."
 
-NEW flow (in the projects.md plan as step 13). 3-dots menu on any project → `/create/from/[projectId]` content-only page that pre-fills brand from the source project (colors / fonts / logo / templateId / format). Skip brand AND summary steps; submit fires `deck.generate.requested` with the copied brand. See `context/projects.md` for the implementation outline.
+File cap: **100 MB per file**.
+
+### Flow 4 — Data (من بيانات) ⏳ Phase 17.D
+
+Dashboard → `/from-data`. User uploads an XLSX (or CSV). Server uploads the
+file directly to **Anthropic's Files API**, gets back a `file_id`, returns
+it to the client. Optional context textarea ("what's the story?").
+Brand page → summary. Submit fires `deck.generate.requested` with
+`source.kind === "data"` + `source.dataFileId` so `deck-generate.ts` references
+the file via `{type: "document", source: {type: "file", file_id}}`.
+Anthropic file deleted via their API once the deck completes.
+
+File cap: **25 MB** (XLSX rarely exceeds; Anthropic Files API enforces its own cap too).
+
+### Convergence
+
+All four flows funnel into the same downstream pipeline from `/create/summary`
+onward: POST `/api/projects` → Inngest `deck.generate.requested` →
+`deck-generate.ts` (prompt branches on `source.kind`) → preview page. The
+project page, toolbox, canvas, slide-nav sidebar, BiDi patches, realtime
+broadcasting, and presence avatars are all shared infrastructure — none of
+that work is duplicated per flow.
 
 ---
 
@@ -95,7 +131,7 @@ Actual installed dependencies. See `package.json` for exact versions.
 | AI | Anthropic SDK 0.95 (Claude Opus 4.7, streaming, adaptive thinking, prompt caching, self-healing Zod retry) |
 | Export | `dom-to-pptx` 1.1.8 (patched), PptxGenJS 4 (under the hood), JSZip, **Puppeteer 24** (thumbnails + planned PNG/PDF export), **sharp** (image resize), **jsdom** (server-side sanitiser) |
 | Validation + Sanitization | Zod 4, DOMPurify 3.4 (browser) + JSDOM-backed mirror (server) |
-| Email | Resend (planned for invite emails — step 15.4 in projects.md) |
+| Email | Resend — wired in `lib/email/send-share-invite.ts` for share invitation emails (Phase 15) |
 | Observability | Sentry (`@sentry/nextjs` 10.52) |
 | Billing (planned) | Stripe 22 SDK + Resend 6 |
 
@@ -248,13 +284,23 @@ app/api/
   content/extract/route.ts                           ✅  Extract text from uploads
   export/embed-fonts/route.ts                        ✅  Server-side font embed for PPTX
 
-  projects/[id]/favorite/route.ts                    ✅  PATCH isFavorite toggle (step 9f)
-  projects/[id]/route.ts                             ✅  PATCH (rename) + DELETE (hard delete + storage cleanup) (step 9f)
+  projects/[id]/favorite/route.ts                    ✅  PATCH isFavorite toggle
+  projects/[id]/route.ts                             ✅  PATCH (rename) + DELETE (hard delete + storage cleanup)
+  projects/[id]/share/route.ts                       ✅  Owner-only: manage publicAccessLevel + ProjectShare rows (Phase 15)
+  projects/[id]/export/png/route.ts                  ✅  Server-side PNG via Puppeteer
+  projects/[id]/export/pdf/route.ts                  ✅  Server-side PDF via Puppeteer (Range params honoured)
+  projects/[id]/manifest/route.ts                    ✅  Lazy manifest fetch for ShareDialog export tab
+  projects/[id]/realtime-token/route.ts              ✅  Project channel pre-flight gate (Phase 16.A)
+  invitations/[token]/accept/route.ts                ✅  Invite acceptance — auth bounce + share-row link + first-time-accept notification fan-out (Phase 15.E)
+  notifications/route.ts                             ✅  GET (last 50 bell rows, server-formatted)
+  notifications/read-all/route.ts                    ✅  POST mark-all-read on bell open (Phase 16.E)
+  me/route.ts                                        ✅  {supabaseUserId, prismaUserId} for user-channel topic
 
-  // Planned (per projects.md)
-  projects/[id]/share/route.ts                       ⏳  Owner-only: manage publicAccessLevel + ProjectShare rows (step 15)
-  projects/[id]/export/png/route.ts                  ⏳  Server-side PNG ZIP via Puppeteer (step 15.5)
-  invitations/[token]/accept/route.ts                ⏳  Invite acceptance + auto-clone on edit invites (step 15.4)
+  // Planned (Phase 17)
+  upload/route.ts                                    ⏳  Generic multipart upload (used by all extract routes)
+  enhance/extract/route.ts                           ⏳  In-memory PPTX/PDF parse → StandardBrief (Phase 17.B)
+  mimic/extract/route.ts                             ⏳  Ugly extract + good rasterize → StandardBrief + referenceImages (Phase 17.C)
+  data/extract/route.ts                              ⏳  Anthropic Files API upload → StandardBrief + dataFileId (Phase 17.D)
 ```
 
 ---
@@ -426,7 +472,7 @@ Three glass-popover buttons per slide:
 
 ## 10. Per-Slide Versioning + Comments
 
-Shipped end-to-end (steps 1–6 of the original `plan-comments.md` plus the pill + history additions).
+Shipped end-to-end — comment authoring, partial regen pipeline, per-slide pill (regen / history / lock), 5-version capped history, marker preview popup, live comments via realtime (Phase 16.C).
 
 ### Comment model
 
@@ -623,45 +669,58 @@ Schema is wired (`Subscription` + `UsageEvent`); enforcement is partial.
 
 ## 16. Build Phases
 
+Authoritative project board. `context/log.md` is the granular changelog; this
+table is the high-level "what's in / what's next." All shipped phases live
+permanently here as the audit trail.
+
 | # | Phase | Status |
 |---|---|---|
-| 1 | **Foundation** — Next 16 + Turbopack, Tailwind 4, Supabase, Postgres via Docker, Prisma 7.8, dashboard, project creation | ✅ |
-| 2 | **Slide Manifest Engine** — v2 schema, SlideRenderer at canvas dimensions, manifest persisted to PresentationVersion.slideJson | ✅ |
-| 3 | **AI Deck Generation** — Anthropic SDK, Opus 4.7, streaming + adaptive thinking + prompt caching + 1M context beta, self-healing Zod retry | ✅ |
-| 4 | **Preview Window** — SlideRenderer, vertical toolbar, generating placeholders + per-card progress, cascade-in, slide-nav sidebar, hero comment overlay | ✅ |
-| 5 | **PPTX Export** — patched dom-to-pptx + 4-pass post-processor; ~99 % Arabic parity | ✅ |
-| 6 | **Comments + Partial Regen** — comment authoring, draft → applied lifecycle, partial regen Inngest flow, per-slide pill (regen / history / lock), 5-version capped history | ✅ |
-| 7 | **Save Project + Thumbnails** — savedVersionId + per-slide snapshot + Puppeteer/sharp WebP pipeline + restore-aware indicator | ✅ |
-| 8 | **Dashboard Tile Rework** — full-bleed thumbnail + scrub + click-to-lightbox + lightbox slider + .tq-h1 / .tq-subhead unified typography | ✅ |
-| 9 | **3-dots Menu** — Favorites toggle + Copy link + Inline rename + Send to trash (wired); Share + Use as template (stubbed); Save copy as template (disabled) | ✅ (step 9f shipped 2026-05-20) |
-| 9.5 | **Content language picker + prompt directive** — user-explicit AR/EN pick on /create/content drives Project.language + Presentation.direction + buildUserMessage's LANGUAGE block (Phase A + B). BiDi gating + dir="ltr" on rendered HTML deferred (Phase C). | ✅ (Phases A+B shipped 2026-05-20; C deferred) |
-| 10 | **/favorites rename + isFavorite toggle** | ⏳ step 12 |
-| 11 | **/create/from/[projectId]** content-only "use as template" entry | ⏳ step 13 |
-| 12 | **/projects page** — 5-per-row grid + sort + filters (slide count / language / color) — language column is finally truthful, filter now works | ⏳ step 11 |
-| 13 | **Share modal** — schema, Resend invites, public access, auto-clone on edit invites, PNG export, LinkedIn button | ⏳ step 15.1 → 15.6 |
-| 14 | **PDF export** | ⏳ step 15.7 |
-| 15 | **Enhance Flow review page** — Claude vision extraction + per-asset overrides | 🟡 |
-| 16 | **Templates Flow 4** — `/templates` grid + filters, `/templates/[id]/content` apply | ⏳ |
-| 17 | **Billing + quota enforcement** — Stripe webhooks → quota checks at job creation → meter UI | ⏳ |
-
-> Mimic Flow (Flow 3) and Data deck Flow (Flow 5) are **dropped from the plan**.
+| 1 | **Foundation** — Next 16 Turbopack, Tailwind 4, Supabase, Postgres via Docker, Prisma 7.8, dashboard, project creation | ✅ |
+| 2 | **Slide Manifest Engine** — v2 schema, SlideRenderer at canvas dimensions, manifest persisted to `PresentationVersion.slideJson` | ✅ |
+| 3 | **AI Deck Generation** — Anthropic SDK, Opus 4.7 all-tiers, streaming + adaptive thinking + prompt caching + 1M context beta, self-healing Zod retry | ✅ |
+| 4 | **Preview Window** — SlideRenderer, toolbar, generating placeholders, cascade-in, slide-nav sidebar, hero comment overlay | ✅ |
+| 5 | **PPTX Export** — patched `dom-to-pptx` + 4-pass BiDi post-processor; ~99 % Arabic parity | ✅ |
+| 6 | **Comments + Partial Regen** — comment authoring, draft → applied lifecycle, partial regen Inngest flow, per-slide pill, 5-version capped history | ✅ |
+| 7 | **Save Project + Thumbnails** — `savedVersionId` + per-slide snapshot + Puppeteer/sharp WebP pipeline + restore-aware indicator | ✅ |
+| 8 | **Dashboard Tile Rework** — full-bleed thumbnail + scrub + click-to-lightbox + lightbox slider | ✅ |
+| 8b | **Filter-column freeze** — `slideCount` + `dominantColor` + `colorTags` frozen on FIRST `deck-generate` completion (race-safe `updateMany WHERE column = null`); `/save` no longer touches them | ✅ |
+| 9 | **3-dots Menu + Project Actions** — Favorites toggle, Copy link, Inline rename, Send to trash (hard delete + storage cleanup) | ✅ |
+| 9.5 | **Content language picker** — AR/EN pick on /create/content drives `Project.language` + `Presentation.direction` + `buildUserMessage` LANGUAGE block. Phase C (BiDi gating on `language === "en"`) deferred until production accuracy data | ✅ Phases A+B / ⏳ Phase C deferred |
+| 10 | **PNG + PDF Export** — Puppeteer-driven Range params + "Made with Taqreer" badge | ✅ |
+| 11 | **/projects page** — 5-per-row grid + sort + filters (language, color buckets via shade-range matching). Slide-count filter dropped (no real value) | ✅ |
+| 12 | **/favorites rename + isFavorite toggle wiring** | ✅ |
+| 13 | **`/create/from/[projectId]`** content-only "use as template" entry — **dropped**: regen on an open project covers the variation use case | 🚫 |
+| 14 | **Templates feature** — `/templates` page (own + community tabs), Save copy as template (Phase A–B), Use as template flow (Phase D, dedicated `/create-from-template` route tree) | ✅ |
+| 15 | **Sharing + Roles** — Owner/edit/comment/view ladder via `lib/api/project-access.ts`. `ProjectShare` schema, ShareDialog with Share+Export tabs, Resend invite emails, accept route, public-access toggle, LinkedIn share button | ✅ |
+| 16.A | **Realtime channel foundation** — `project-channel.ts` + `server-broadcast.ts` + `realtime-token` REST gate. Broadcast + Presence only (no Postgres Changes — DB lives in docker, not Supabase) | ✅ |
+| 16.B | **Presence avatars** — shared Avatar atom, deterministic OKLCH gradient for password signups, slide-thumbnail chips with tab-out dim | ✅ |
+| 16.C | **Live comments** — `comment.created` / `comment.deleted` broadcasts; DeckView merges into local state without router.refresh | ✅ |
+| 16.D | **Live regen status** — `slide.regen.started`/`.finished` + `deck.regen.started`/`.finished`; peer-side spinner overlays match the actor's; full-deck started broadcasts re-added 2026-05-24 after user accepted the friction trade-off | ✅ |
+| 16.D.5 | **Lock-state as realtime** — `slide.lock.changed` + `slides.locks.bulk-changed`; lock pills flip in lockstep | ✅ |
+| 16.E | **Bell notifications** — `Notification` table, `fanOutNotification` helper, per-user `user:{prismaUserId}` channel, formatted bell rows (slide numbers + gender-neutral verbs), mark-all-read on bell open, 8 emission sites (comment / slide.regen.started / slide.regen.finished / deck.regen.started / deck.regen.finished / deck.generate.finished / share.invited / share.accepted). Grouping disabled per direction "things need to be accurate." | ✅ |
+| **17.A** | **Shared upload + extraction infra (Phase 17 foundation)** — `lib/types/brief.ts` StandardBrief contract w/ optional `source` field; `lib/extract/{pptx,pdf,xlsx,rasterize}.ts` extraction modules; `lib/create/seed-from-extraction.ts` sessionStorage seeder; `deck-generate.ts` prompt branching on `source.kind` | ⏳ next |
+| **17.B** | **Enhance flow** — `/enhance` upload UI, `POST /api/enhance/extract` (in-memory PPTX/PDF parse, file deleted post-extract), Enhance prompt branch | ⏳ |
+| **17.C** | **Mimic flow** — `/mimic` two-drop UI, `POST /api/mimic/extract` (ugly extract + good rasterize → base64 PNGs in `source.referenceImages`), multipart Claude message w/ image blocks, Mimic prompt branch | ⏳ |
+| **17.D** | **Data flow** — `/from-data` upload UI, `POST /api/data/extract` (uploads to Anthropic Files API, returns `file_id` into `source.dataFileId`), Data prompt branch, post-generation Anthropic file cleanup | ⏳ |
+| 18 | **Billing + quota enforcement** — Stripe webhooks → quota checks at job creation → meter UI in dashboard | ⏳ later |
+| 19 | **Server-side HTML sanitization** — DOMPurify in `deck-generate.ts` before persisting manifest; pre-launch security ask (today: browser sanitises on render, JSDOM mirror used in thumbnail pipeline only) | ⏳ pre-launch blocker |
 
 ---
 
 ## 17. Implementation Status & Lessons
 
-### Working end-to-end today
+### Working end-to-end today (as of 2026-05-24)
 
-- **Auth + dashboard.** Supabase email + Google OAuth → real DB-backed dashboard (RecentProjects, MyTemplates, PlanUsage, QuickActions).
-- **Create wizard (Flow 1).** Content → brand → summary, with verbatim toggle, font picker, logo with position + exclusion pills.
-- **Claude pipeline.** Opus 4.7 + adaptive thinking + prompt caching + self-healing Zod retry. Streams text deltas; throttled progress writes.
-- **Preview window.** Cascade-in, slide-nav, comment authoring, per-slide pill (regen / history / lock), Save Project, thumbnail pipeline.
-- **Partial regen.** Comment-driven slide regen with parallel Claude calls; deck stays visible during regen; atomic version promotion.
-- **PPTX export.** ~99 % preview ↔ PPT parity for Arabic decks.
-- **Thumbnail pipeline.** Puppeteer-rendered WebPs per slide on every Save; URLs in `Project.thumbnailUrls`.
-- **Dashboard tile rework.** Full-bleed thumbnail + RTL scrub + click-to-lightbox; 3-col grid; canonical `.tq-h1` + `.tq-subhead`. 3-dots menu wired (favorites / copy link / inline rename / trash with confirmation + storage cleanup); share + use-as-template stubbed for steps 15 + 13.
-- **Content language pick.** Two-pill picker (`العربية` / `الإنجليزية`) on `/create/content` drives `Project.language` + `Presentation.direction` + a LANGUAGE directive at the top of `buildUserMessage`. AR (default) reinforces RTL + Arabic font stack. EN instructs English-only deck text, dir=ltr, Latin typography. Phase C (BiDi post-processor gating on `language === "en"`) still deferred.
-- **Notification system.** Bell dropdown + toast stack + per-user localStorage. Stuck-detection pushes warnings.
+- **Auth + dashboard.** Supabase email + Google OAuth → real DB-backed dashboard (RecentProjects, MyTemplates, PlanUsage, QuickActions); navigation-back refresh wired so `/enhance → /dashboard` shows fresh project list without manual reload.
+- **Create wizard (Flow 1).** Content → brand → summary, with verbatim toggle, font picker, logo with position + exclusion pills. sessionStorage hydration is fully restore-aware (auto-saves while user clicks Back/Next; doesn't trip on `useLayoutEffect` ordering anymore).
+- **Claude pipeline.** All-Opus tier (Opus 4.7 adaptive thinking on medium/quality/extreme presets, Sonnet 4.6 disabled-thinking on `fast` only) + prompt caching + self-healing Zod retry. Streams text deltas; throttled progress writes; partial-regen `redesign` mode prompt diversifies output when no comments are pinned.
+- **Preview window.** Cascade-in, slide-nav, comment authoring with marker preview popup, per-slide pill (regen / history / lock), Save Project, thumbnail pipeline. Hero comment overlay + CommentsPanel both consume live broadcasts.
+- **Partial regen + apply-comments.** Comment-driven slide regen with parallel Claude calls; deck stays visible during regen; atomic version promotion; apply-poller fetches manifest + slideStates + history in one round-trip so the History popover updates live.
+- **PPTX / PDF / PNG / HTML export.** ~99 % Arabic preview ↔ PPT parity. PNG/PDF go through Puppeteer with the same renderer; PDF Range params honoured. "Made with Taqreer" badge on PNG output for view-only sharers.
+- **Templates feature.** /templates page (own + community tabs), "Save copy as template" from a project tile, "Use this template" CTA on tile + lightbox → dedicated `/create-from-template` route tree that skips the brand step (template's brand wins) and the summary step (templated decks don't need user-pinned content).
+- **Sharing + roles.** Owner / edit / comment / view ladder. ShareDialog with Share + Export tabs (tile launcher); editor-toolbox launcher is share-only (Export tab hidden — toolbar has dedicated buttons). Avatar on the visual-right of each PersonRow under RTL. Resend invite emails, accept route, public-access toggle.
+- **Realtime collab (Phase 16).** Project channel (`project:{id}`) carries `comment.*`, `slide.regen.*`, `deck.regen.*`, `slide.lock.*` broadcasts. User channel (`user:{prismaUserId}`) delivers `notification.created` for bell rows. Presence avatars on slide thumbnails; peer-regen spinner overlay matches actor's view. Safari throttling backstop: 8 s catch-up poll while `peerRegenInProgress` is non-empty. Grouping disabled — every event gets its own accurate row.
+- **Bell notifications.** 8 emission sites (comment, slide regen started/finished, deck regen started/finished, deck generate finished, share invited, share accepted). Bell + toast use `.in-slide-popover` tint so they read on bright slide backgrounds. Slide numbers + gender-neutral verbs in titles ("علّق على الشريحة 4 في …"). Mark-all-read on bell open.
 
 ### Lessons learned — do not repeat
 
@@ -759,9 +818,8 @@ Total: 7 `Patched (taqreer)` markers.
 
 If you're a fresh agent picking this up, read in this order:
 
-1. **[`context/projects.md`](./projects.md)** — the active working plan. Current step + done/pending + open questions. **Source of truth for "what's next".**
-2. This file (`context.md`) — architecture + how the pieces fit.
-3. [`context/log.md`](./log.md) — dated changelog of every fix.
+1. **This file (`context.md`)** — architecture + how the pieces fit + active working plan. **Source of truth for "what's next"** (see §16 build phases + §21 Phase 17 detail).
+2. [`context/log.md`](./log.md) — dated changelog of every fix. Newest first.
 4. [`app/globals.css`](../app/globals.css) header — design system non-negotiables.
 5. [`inngest/functions/deck-generate.ts`](../inngest/functions/deck-generate.ts) — system prompt + Claude call.
 6. [`lib/schema/slide.ts`](../lib/schema/slide.ts) — v2 SlideManifest schema.
@@ -868,4 +926,94 @@ npx tsx scripts/setup-storage.ts         # one-time Supabase bucket setup (idemp
 
 ---
 
-*Living document — updated each shipping milestone. See [`log.md`](./log.md) for the dated changelog and [`projects.md`](./projects.md) for the current working plan.*
+## 21. Phase 17 — Upload-driven flows (planned)
+
+The next phase ships the remaining three flows (Enhance / Mimic / Data). They
+share an **upstream pattern** — file ingestion → server-side extraction →
+seed sessionStorage in the StandardBrief shape → user lands on `/create/brand`
+(pre-filled) → `/create/summary` → POST `/api/projects`. From that POST
+onward, all four flows funnel through the same Inngest `deck-generate.ts`
+function. The only per-flow divergence inside `deck-generate.ts` is a prompt
+branch keyed by `source.kind`.
+
+This means **nothing new is built for the project page, toolbox, canvas,
+slide-nav sidebar, BiDi patches, realtime broadcasts, presence, or bell
+notifications** — all of that is shared infrastructure that's already
+shipped (Phase 16 closed out 2026-05-24).
+
+### 21.1 Shared contracts
+
+`lib/types/brief.ts`:
+
+```ts
+export type SourceMeta =
+  | { kind: "scratch" }
+  | { kind: "enhance"; originalContent: string }
+  | { kind: "mimic"; originalContent: string; referenceImages: string[] }    // base64 PNG data URLs
+  | { kind: "data"; dataFileId: string; userContext?: string };              // Anthropic Files API file_id
+
+export type StandardBrief = {
+  title: string;
+  description: string;
+  language: "ar" | "en";
+  slideCount: number;
+  brand: {
+    format: "16:9" | "9:16";
+    colors: string[];
+    fonts: { heading: FontSlot; body: FontSlot };
+    logo: LogoInput | null;
+  };
+  source?: SourceMeta;  // omitted = scratch; deck-generate defaults to existing prompt
+};
+```
+
+All `/api/[flow]/extract` routes produce a `StandardBrief` that gets seeded
+into sessionStorage by `lib/create/seed-from-extraction.ts`. The
+`/create/brand` and `/create/summary` pages already read from sessionStorage,
+so no changes there.
+
+`deck-generate.ts` reads `brief.source.kind` and routes to a different system
+prompt builder per flow:
+- `scratch` (default) — existing prompt
+- `enhance` — "Use the original content verbatim, redesign the visuals"
+- `mimic` — multipart user message with image blocks for `source.referenceImages`, prompt: "Match this design language"
+- `data` — message with `{type: "document", source: {type: "file", file_id: source.dataFileId}}`, prompt: "Build a narrative deck from this data"
+
+### 21.2 Extraction modules (`lib/extract/`)
+
+| Module | Input | Output |
+|---|---|---|
+| `pptx.ts` | PPTX buffer | `{ slides: { text }[], theme: { colors[], fonts[] } }` via JSZip + `@xmldom/xmldom` (already patched for HTML pivot). Reads `ppt/theme/theme1.xml` for colors + fonts. |
+| `pdf.ts` | PDF buffer | `{ slides: { text }[], colors[] }`. Text via `pdfjs-dist`; colors via rasterize-first-page + `colorthief`. |
+| `xlsx.ts` | XLSX buffer | Skip parsing entirely — pass through to `data.ts` which uploads to Anthropic Files. Helper exists only as a thin pass-through + size validation. |
+| `rasterize.ts` | PPTX/PDF buffer | Array of PNG buffers (one per slide). Uses existing Puppeteer setup from PNG export pipeline. |
+
+Extraction routes are streaming multipart endpoints — the uploaded file is
+consumed into a buffer, parsed, then garbage collected at end of request.
+**Zero file persistence on our side.**
+
+### 21.3 Per-flow routes + pages
+
+| Flow | UI page | API route | Prompt branch |
+|---|---|---|---|
+| Enhance | `/enhance` (drag-drop, file picker, progress) | `POST /api/enhance/extract` (multipart in → StandardBrief out) | `source.kind === "enhance"` |
+| Mimic | `/mimic` (two drop zones: design ref + content source) | `POST /api/mimic/extract` (multipart in → StandardBrief w/ referenceImages out) | `source.kind === "mimic"` |
+| Data | `/from-data` (drag-drop + optional context textarea) | `POST /api/data/extract` (multipart in → upload to Anthropic Files → StandardBrief w/ dataFileId out) | `source.kind === "data"` |
+
+### 21.4 File-size caps + retention
+
+| Flow | Cap | Retention |
+|---|---|---|
+| Enhance | 100 MB | In-memory only; freed at request end |
+| Mimic | 100 MB **per file** | In-memory only; freed at request end |
+| Data | 25 MB | Uploaded to Anthropic Files API only; deleted via their API once `deck-generate` completes (success or failure) |
+
+### 21.5 Implementation order
+
+17.A first (the shared infra) so each subsequent sub-phase only adds a route
++ page + prompt branch. Each of 17.B / C / D is independent of the others
+once 17.A lands — they can ship sequentially or in parallel.
+
+---
+
+*Living document — updated each shipping milestone. See [`log.md`](./log.md) for the dated changelog.*
