@@ -30,10 +30,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PillButton } from "@/components/create/PillButton";
+import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import { readSource, clearSource } from "@/lib/types/source";
-import { DEFAULT_QUALITY } from "@/lib/types/quality";
+import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 import type { ExtractedAsset } from "@/lib/types/source";
 
 const POLL_INTERVAL_MS = 2_500;
@@ -100,6 +100,10 @@ export default function EnhanceContentPage() {
     ExtractCompletedResponse["result"] | null
   >(null);
   const [error, setError] = useState("");
+  // Quality preset — picked via the GenerateSplitButton's right
+  // half (chevron dropdown). Mirrors /create/summary's preset
+  // picker so the user can dial generation effort up/down.
+  const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
 
   // ─── File selection ──────────────────────────────────────────
   const validateAndSetFile = (next?: File | null): File | null => {
@@ -334,7 +338,10 @@ export default function EnhanceContentPage() {
           language: "ar",
           saveBrandKit: false,
           slideCount: resolvedSlideCount,
-          quality: DEFAULT_QUALITY,
+          // Quality is user-picked via the GenerateSplitButton's
+          // preset dropdown. Falls back to DEFAULT_QUALITY if the
+          // user never opened the menu.
+          quality,
           ...(source ? { source } : {}),
         }),
       });
@@ -365,15 +372,17 @@ export default function EnhanceContentPage() {
     }
   };
 
-  const generateLabel =
-    stage === "extracting"
-      ? "جارٍ التحليل..."
-      : stage === "submitting"
-        ? "جارٍ الإنشاء..."
-        : "إنشاء العرض";
-  const generateDisabled =
-    stage === "idle" || stage === "extracting" || stage === "submitting";
+  // GenerateSplitButton drives label/loading from its own `loading`
+  // prop (rendered as a spinner + label-swap). Submit + extraction
+  // both contribute to the loading state — both should disable +
+  // animate the button identically (user-perspective: "the model
+  // is working"). Idle = no file yet, disabled but not spinning.
+  const generateDisabled = stage === "idle";
   const generateLoading = stage === "extracting" || stage === "submitting";
+  const generateLabel =
+    stage === "extracting" ? "جارٍ التحليل..." : "إنشاء";
+  const generateLoadingLabel =
+    stage === "extracting" ? "جارٍ التحليل..." : "جارٍ الإنشاء...";
 
   return (
     // Centered single-shot card. Anchored toward the top-third of
@@ -518,29 +527,39 @@ export default function EnhanceContentPage() {
             </div>
           ) : null}
 
-          {/* Error message — reserved space so the layout doesn't
-              jump when an error appears. */}
-          <p
-            className="min-h-5 text-sm text-red-400"
-            role={error ? "alert" : undefined}
-            aria-live={error ? "polite" : undefined}
-          >
-            {error || " "}
-          </p>
+        </div>
 
-          {/* Generate button — full-width primary CTA. Disabled
-              until extraction completes; loading state during the
-              extraction + the final POST. */}
-          <PillButton
-            variant="primary"
-            onClick={handleGenerate}
+        {/* Generate split-button — sits OUTSIDE the upload card,
+            centered horizontally below it. Same chrome + size as
+            /create/summary's CTA (canonical animated mesh-stroke
+            pill, h-11). Disabled until extraction finishes; loading
+            state during extraction AND the final POST so the user
+            sees continuous progress through both phases. Preset
+            menu (right half of the split) lets the user pick a
+            generation quality. */}
+        <div className="flex justify-center">
+          <GenerateSplitButton
+            onGenerate={handleGenerate}
+            quality={quality}
+            onQualityChange={setQuality}
+            slideCount={extracted?.pageCount ?? undefined}
             disabled={generateDisabled}
             loading={generateLoading}
-            icon="auto_awesome"
-          >
-            {generateLabel}
-          </PillButton>
+            label={generateLabel}
+            loadingLabel={generateLoadingLabel}
+          />
         </div>
+
+        {/* Error message — reserved space so the layout doesn't
+            jump when an error appears. Rendered AFTER the button
+            since this is a single-shot page (no bottom bar). */}
+        <p
+          className="min-h-5 text-center text-sm text-red-400"
+          role={error ? "alert" : undefined}
+          aria-live={error ? "polite" : undefined}
+        >
+          {error || " "}
+        </p>
       </div>
     </div>
   );
