@@ -72,12 +72,12 @@ export function TemplatesPageClient({
     setUseBusy(true);
     try {
       await seedFromTemplate(preview.id);
-      // Hard navigation so the destination page's lazy initialisers +
-      // stepper mount-effect read the fresh templateSeed marker on
-      // first render. Target is the parallel /create-from-template
-      // tree (Phase D 2026-05-22) — keeps the normal /create flow
-      // untouched.
-      window.location.assign("/create-from-template/content");
+      // Hard navigation so /create's mount effect reads the fresh
+      // templateSeed marker on first render. Phase 17.D collapsed the
+      // separate /create-from-template tree into the unified single-
+      // page /create — the templateSeed marker is enough signal to
+      // pre-fill the branding card + render the "من قالب" pill.
+      window.location.assign("/create");
     } catch (err) {
       console.warn("[TemplatesPageClient] seedFromTemplate failed", err);
       setUseBusy(false);

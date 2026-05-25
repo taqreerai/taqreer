@@ -26,12 +26,41 @@ export function CompactUploadZone({
   file,
   onSelect,
   compact = false,
+  // When true, the picked filename is NOT rendered under the icon +
+  // label. Used by /mimic's content card where the dropzone shares
+  // space with other controls and any post-upload height growth
+  // would reflow the whole 3-card row. Defaults to false so /create
+  // + /enhance keep their existing "show the filename" behaviour.
+  hideFilename = false,
+  // When true, the dropzone button stretches vertically via h-full
+  // instead of sitting at its natural minHeight. Used by /mimic's
+  // content card where the logo upload sits beside a taller sibling
+  // (stacked ratio tiles); without h-full the logo button stays at
+  // ~86 px while the column is stretched to ~96 px by items-stretch,
+  // leaving an awkward gap below it. Default false so /create +
+  // /enhance keep their existing self-sized dropzone.
+  fillHeight = false,
+  // Horizontal layout: icon on the inline-start side (visual right
+  // in RTL), label + optional sub-text on the inline-end side, all
+  // in one row. Used by /create's branding-card logo upload where
+  // a tall stacked dropzone would unbalance the row against the
+  // single-line font slots. Default false keeps /enhance + /mimic
+  // stacked.
+  horizontal = false,
+  // Muted second line shown beneath the primary label (e.g. "SVG /
+  // PNG only", "Max 5 MB"). Renders in both stacked and horizontal
+  // modes when provided.
+  subText,
 }: {
   label: string;
   accept: string;
   file: File | null;
   onSelect: (file: File) => void;
   compact?: boolean;
+  hideFilename?: boolean;
+  fillHeight?: boolean;
+  horizontal?: boolean;
+  subText?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -58,7 +87,7 @@ export function CompactUploadZone({
   };
 
   return (
-    <div>
+    <div className={fillHeight ? "h-full" : undefined}>
       <input
         ref={inputRef}
         type="file"
@@ -87,29 +116,71 @@ export function CompactUploadZone({
         // in the app since 2026-05-22 — was `border-2`). Dragging
         // brightens the border + adds a faint brand wash for clear
         // drop-target affordance.
-        className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 text-center transition-colors ${
+        //
+        // Axis switches between flex-col (stacked, default) and
+        // flex-row (horizontal). In horizontal mode the start side
+        // (visual right in RTL) holds the icon, the end side holds
+        // the label + sub-text stacked vertically — same pattern
+        // /mimic's inline FileDropzone uses.
+        className={`flex w-full rounded-xl border border-dashed bg-black/20 transition-colors ${
+          horizontal
+            ? "flex-row items-center gap-3 p-2.5 text-start"
+            : "flex-col items-center justify-center gap-2 text-center"
+        } ${
           dragging
             ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
             : "border-white/15 hover:border-white/30"
-        } ${compact ? "gap-1.5 p-2.5" : "p-4"}`}
-        style={{ minHeight: compact ? 72 : 100 }}
+        } ${horizontal ? "" : compact ? "gap-1.5 p-2.5" : "p-4"} ${
+          fillHeight ? "h-full" : ""
+        }`}
+        style={{
+          minHeight: horizontal ? 48 : compact ? 72 : 100,
+        }}
       >
         <span
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]"
+          className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--tq-bg-glass)] ${
+            horizontal ? "h-8 w-8" : "h-10 w-10"
+          }`}
         >
           <span
             className="material-symbols-outlined text-white/80"
-            style={{ fontSize: 22 }}
+            style={{ fontSize: horizontal ? 18 : 22 }}
           >
             upload
           </span>
         </span>
-        <span className="text-sm font-semibold text-white">{label}</span>
-        {file ? (
-          <span className="max-w-full truncate text-xs text-white/60">
-            {file.name}
-          </span>
-        ) : null}
+        {horizontal ? (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{label}</p>
+            {/* Sub-text — show subText when provided, otherwise show
+                the picked filename (when not hidden). Falls back to
+                nothing so the row stays a single line in the empty
+                + no-subText case. */}
+            {subText ? (
+              <p className="mt-0.5 truncate text-[11px] text-white/40">
+                {subText}
+              </p>
+            ) : file && !hideFilename ? (
+              <p className="mt-0.5 truncate text-[11px] text-white/60">
+                {file.name}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <span className="text-sm font-semibold text-white">{label}</span>
+            {file && !hideFilename ? (
+              <span className="max-w-full truncate text-xs text-white/60">
+                {file.name}
+              </span>
+            ) : null}
+            {subText ? (
+              <span className="mt-0.5 truncate text-[10px] text-white/40">
+                {subText}
+              </span>
+            ) : null}
+          </>
+        )}
       </button>
     </div>
   );

@@ -283,8 +283,13 @@ export function ColorPickerPopover({
     <AnimatePresence>
       {open ? (
         <div
-          className="absolute bottom-full z-30 mb-2"
-          style={{ ...positionStyle, width: 240 }}
+          // Shrunk ~50 % from 240 → 140 px wide per user direction
+          // (2026-05-26). All inner dimensions scaled to match: SV
+          // plane 128 → 72 px tall, hue slider h-3 → h-2, swatch
+          // h-7 → h-5, preset tiles h-6 → h-4. Picker is still
+          // usable but a fraction of the footprint.
+          className="absolute top-full z-30 mt-2"
+          style={{ ...positionStyle, width: 140 }}
         >
         {/* Glass surface — `.glass-card` is the canonical white-tint
             recipe (background = rgba(255,255,255,var(--glass-opacity)),
@@ -302,22 +307,19 @@ export function ColorPickerPopover({
           exit={{ opacity: 0, scale: 0.9, y: 6 }}
           transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
-          className="glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl p-3 shadow-2xl"
+          className="glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-xl p-2 shadow-2xl"
         >
-          {/* SV plane — saturation on X, value on Y. The base layer
-              is a solid pure-hue colour; a left-to-right white
-              gradient gives the saturation axis, a top-to-bottom
-              black gradient gives the value axis. */}
+          {/* SV plane */}
           <div
             ref={svRef}
             onPointerDown={dragSv}
-            className="relative h-32 w-full cursor-crosshair touch-none overflow-hidden rounded-lg"
+            className="relative h-[72px] w-full cursor-crosshair touch-none overflow-hidden rounded-md"
             style={{
               background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${hsv.h}, 100%, 50%))`,
             }}
           >
             <div
-              className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-md"
+              className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white shadow-md"
               style={{
                 left: `${hsv.s * 100}%`,
                 top: `${(1 - hsv.v) * 100}%`,
@@ -326,18 +328,18 @@ export function ColorPickerPopover({
             />
           </div>
 
-          {/* Hue slider — rainbow gradient with a draggable thumb. */}
+          {/* Hue slider */}
           <div
             ref={hueRef}
             onPointerDown={dragHue}
-            className="relative mt-3 h-3 w-full cursor-pointer touch-none rounded-full"
+            className="relative mt-2 h-2 w-full cursor-pointer touch-none rounded-full"
             style={{
               background:
                 "linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)",
             }}
           >
             <div
-              className="pointer-events-none absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border-2 border-white shadow-md"
+              className="pointer-events-none absolute top-1/2 h-3 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-white shadow-md"
               style={{
                 left: `${(hsv.h / 360) * 100}%`,
                 background: `hsl(${hsv.h}, 100%, 50%)`,
@@ -346,9 +348,9 @@ export function ColorPickerPopover({
           </div>
 
           {/* Hex input + live swatch */}
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-1.5">
             <span
-              className="h-7 w-7 shrink-0 rounded-md border border-white/15"
+              className="h-5 w-5 shrink-0 rounded border border-white/15"
               style={{ background: hsvToHex(hsv.h, hsv.s, hsv.v) }}
             />
             <input
@@ -359,15 +361,13 @@ export function ColorPickerPopover({
               maxLength={7}
               aria-label="رمز اللون (HEX)"
               placeholder="#RRGGBB"
-              className="input-dark min-w-0 flex-1 font-mono text-xs"
-              style={{ padding: "6px 10px" }}
+              className="input-dark min-w-0 flex-1 font-mono text-[10px]"
+              style={{ padding: "3px 6px", height: 20 }}
             />
           </div>
 
-          {/* Curated presets — common brand-friendly tones. Clicking
-              a preset writes the value directly (no save button —
-              the picker is live, every interaction commits). */}
-          <div className="mt-3 grid grid-cols-6 gap-1.5">
+          {/* Presets */}
+          <div className="mt-2 grid grid-cols-6 gap-1">
             {PRESETS.map((preset) => (
               <button
                 key={preset}
@@ -375,7 +375,7 @@ export function ColorPickerPopover({
                 onClick={() => applyPreset(preset)}
                 aria-label={preset}
                 title={preset}
-                className="h-6 w-6 rounded-md border border-white/15 transition-transform hover:scale-110"
+                className="h-4 w-4 rounded border border-white/15 transition-transform hover:scale-110"
                 style={{ background: preset }}
               />
             ))}

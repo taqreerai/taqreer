@@ -24,6 +24,19 @@ export function GoogleFontSlot({
   sampleText,
   sampleSizeClass,
   onSelect,
+  // Mirrors FontUploadSlot's alignStart — when true the live sample
+  // preview is forced to `dir="rtl"` + text-right regardless of
+  // script. Used by /mimic where the brand-first product wants the
+  // preview pinned to the reading edge. /create + /enhance keep the
+  // BiDi-aware default (dir="auto" + text-start).
+  alignStart = false,
+  // Skip the sample-text paragraph below the combobox. Mirrors
+  // FontUploadSlot's `hideSample` — used by /create.
+  hideSample = false,
+  // Shrink the combobox input to match FontUploadSlot's compact
+  // mode (30 px tall, text-xs). Used by /create for consistent
+  // input sizing across the branding card.
+  compact = false,
 }: {
   // `label` was previously passed but never rendered — combobox doesn't
   // own its own heading. Card-level <h3> sits above the slot in the
@@ -32,6 +45,9 @@ export function GoogleFontSlot({
   sampleText: string;
   sampleSizeClass: string;
   onSelect: (family: string | null) => void;
+  alignStart?: boolean;
+  hideSample?: boolean;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -83,8 +99,11 @@ export function GoogleFontSlot({
           // "رفع ملف" and "Google Fonts" produces zero card height
           // change. Padding override also makes room for the chevron
           // on the start edge (RTL → left).
-          className="input-dark text-right text-sm"
-          style={{ height: 44, padding: "0 16px 0 40px" }}
+          className={`input-dark text-right ${compact ? "text-xs" : "text-sm"}`}
+          style={{
+            height: compact ? 30 : 44,
+            padding: compact ? "0 12px 0 30px" : "0 16px 0 40px",
+          }}
         />
         <button
           type="button"
@@ -179,21 +198,19 @@ export function GoogleFontSlot({
           )}
         </div>
       ) : null}
-      <p
-        // `dir="auto"` + `text-start` so Latin samples (when the
-        // picked Google family is flagged `arabic: false` — added
-        // 2026-05-22) align left and read L→R; Arabic samples keep
-        // their right-aligned RTL flow.
-        dir="auto"
-        className={`${sampleSizeClass} text-start text-white`}
-        style={
-          selected
-            ? { fontFamily: `"${selected}", system-ui, sans-serif` }
-            : undefined
-        }
-      >
-        {sampleText}
-      </p>
+      {hideSample ? null : (
+        <p
+          dir={alignStart ? "rtl" : "auto"}
+          className={`${sampleSizeClass} ${alignStart ? "text-right" : "text-start"} text-white`}
+          style={
+            selected
+              ? { fontFamily: `"${selected}", system-ui, sans-serif` }
+              : undefined
+          }
+        >
+          {sampleText}
+        </p>
+      )}
     </div>
   );
 }

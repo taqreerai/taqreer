@@ -58,12 +58,10 @@ export function MyTemplates({
     setUseBusy(true);
     try {
       await seedFromTemplate(preview.id);
-      // Full navigation (not router.push) so the destination page's
-      // lazy initialisers + stepper mount-effect see the fresh
-      // sessionStorage on their first render. Target is the parallel
-      // /create-from-template route tree — keeps the normal /create
-      // flow untouched.
-      window.location.assign("/create-from-template/content");
+      // Full navigation (not router.push) so /create's mount effect
+      // sees the fresh sessionStorage on first render. Phase 17.D
+      // unified the template-seeded flow into the regular /create.
+      window.location.assign("/create");
     } catch (err) {
       console.warn("[MyTemplates] seedFromTemplate failed", err);
       setUseBusy(false);

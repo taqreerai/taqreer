@@ -59,14 +59,39 @@ export const SourceEnhanceSchema = z.object({
   fonts: z.array(z.string()),
 });
 
-export const SourceMimicSchema = z.object({
-  kind: z.literal("mimic"),
-  // Content source — the "ugly" file the user wants to repurpose.
-  uglyAnthropicFileId: z.string().min(1),
-  fonts: z.array(z.string()),
-  // Design reference — the "good" file Claude mimics visually.
-  designAnthropicFileId: z.string().min(1),
-});
+// Mimic content can come from EITHER an uploaded file ("ugly" file
+// path — same shape as enhance) OR free-text the user types into the
+// content card on /mimic. The two are mutually-exclusive in practice
+// but we accept both fields as optional + enforce "at least one" via
+// a Zod refinement, so the deck-generate branch can branch on which
+// field is populated and the wire shape can evolve later (e.g. if we
+// ever let the user provide a content brief alongside an uploaded
+// file as supplementary notes) without a schema break.
+//
+// The design reference file is always required — without it there's
+// nothing to mimic, and the flow becomes a glorified /create.
+export const SourceMimicSchema = z
+  .object({
+    kind: z.literal("mimic"),
+    // Content source — the "ugly" file the user wants to repurpose.
+    // Optional now: if absent, `userContent` must be set instead.
+    uglyAnthropicFileId: z.string().min(1).optional(),
+    // Content as plain text — typed into the content card on /mimic.
+    // Trimmed + length-floored upstream of writeSource so a blank
+    // textarea doesn't slip past the refinement.
+    userContent: z.string().min(1).optional(),
+    fonts: z.array(z.string()),
+    // Design reference — the "good" file Claude mimics visually.
+    designAnthropicFileId: z.string().min(1),
+  })
+  .refine(
+    (v) => Boolean(v.uglyAnthropicFileId) || Boolean(v.userContent),
+    {
+      message:
+        "Mimic source requires either a content file (uglyAnthropicFileId) or typed content (userContent).",
+      path: ["userContent"],
+    },
+  );
 
 export const SourceDataSchema = z.object({
   kind: z.literal("data"),
