@@ -196,13 +196,25 @@ export default function EnhanceContentPage() {
   };
 
   // ─── Polling helper ──────────────────────────────────────────
+  // Takes an AbortSignal so an in-flight `fetch` actually aborts on
+  // unmount / file-swap. Pre-fix (CR #36, 2026-05-25) we only set a
+  // `pollCancelledRef` flag — the flag was checked at the top of each
+  // loop iteration, but the fetch ITSELF kept running its full
+  // round-trip even after the component unmounted, holding a request
+  // slot open and arriving with `setExtracted` calls into a torn-down
+  // tree (the `isCurrent` guard at the call site dropped the result,
+  // but the network work was wasted). With AbortController + signal,
+  // a pending fetch is cancelled the moment the effect cleanup fires.
   const pollExtraction = async (
     jobId: string,
+    signal: AbortSignal,
   ): Promise<ExtractCompletedResponse["result"]> => {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
-      if (pollCancelledRef.current) throw new Error("Cancelled");
-      const res = await fetch(`/api/extract/${jobId}`);
+      if (signal.aborted || pollCancelledRef.current) {
+        throw new Error("Cancelled");
+      }
+      const res = await fetch(`/api/extract/${jobId}`, { signal });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as
           | { error?: string }
@@ -226,6 +238,12 @@ export default function EnhanceContentPage() {
     setStage("extracting");
     setError("");
 
+    // One controller per file selection — aborts the in-flight POST
+    // /api/extract AND the polling fetch when the effect cleans up
+    // (file swap, unmount, navigation away). Pre-fix the network
+    // work continued past unmount; now it terminates cleanly.
+    const controller = new AbortController();
+
     let isCurrent = true;
     (async () => {
       try {
@@ -237,6 +255,7 @@ export default function EnhanceContentPage() {
         const startRes = await fetch("/api/extract", {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         });
         if (!startRes.ok) {
           const data = (await startRes.json().catch(() => null)) as
@@ -247,7 +266,7 @@ export default function EnhanceContentPage() {
         const { jobId } = (await startRes.json()) as { jobId: string };
         if (!jobId) throw new Error("No jobId returned from /api/extract");
 
-        const result = await pollExtraction(jobId);
+        const result = await pollExtraction(jobId, controller.signal);
         if (!isCurrent) return;
         setExtracted(result);
         setStage("ready");
@@ -296,7 +315,13 @@ export default function EnhanceContentPage() {
           JSON.stringify({ type: "source", fileName: file.name }),
         );
       } catch (err) {
-        if (!isCurrent || pollCancelledRef.current) {
+        // AbortError is the expected outcome when the effect cleanup
+        // aborts the controller (file swap / unmount / navigation).
+        // Treat it the same as the explicit pollCancelledRef path —
+        // silently reset to idle, no error toast.
+        const isAbort =
+          err instanceof DOMException && err.name === "AbortError";
+        if (!isCurrent || pollCancelledRef.current || isAbort) {
           setStage("idle");
           return;
         }
@@ -312,6 +337,8 @@ export default function EnhanceContentPage() {
 
     return () => {
       isCurrent = false;
+      pollCancelledRef.current = true;
+      controller.abort();
     };
   }, [file]);
 
@@ -530,10 +557,7 @@ export default function EnhanceContentPage() {
                   }`}
                 >
                   <span
-                    className="flex h-10 w-10 items-center justify-center rounded-full"
-                    style={{
-                      background: "rgba(255, 255, 255, var(--glass-opacity))",
-                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]"
                   >
                     {stage === "extracting" ? (
                       <span className="spinner h-5 w-5 rounded-full border-2 border-white/20 border-t-white" />
@@ -614,10 +638,7 @@ export default function EnhanceContentPage() {
                       removeFile();
                     }}
                     aria-label="إزالة الملف"
-                    className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-                    style={{
-                      background: "rgba(0, 0, 0, 0.35)",
-                    }}
+                    className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
                   >
                     <span
                       className="material-symbols-outlined"
@@ -638,10 +659,7 @@ export default function EnhanceContentPage() {
                 (vs 100 px) so the card doesn't grow much under the
                 logo section. */}
             <div
-              className="flex flex-col gap-2 border-t pt-3"
-              style={{
-                borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-              }}
+              className="flex flex-col gap-2 border-t pt-3 border-[var(--tq-border-glass)]"
             >
               <div>
                 <h3 className="text-sm font-semibold text-white">الشعار</h3>
@@ -825,10 +843,7 @@ function ModeToggle({
 }) {
   return (
     <div
-      className="flex items-center gap-0.5 rounded-full p-0.5"
-      style={{
-        background: "rgba(255, 255, 255, var(--glass-opacity))",
-      }}
+      className="flex items-center gap-0.5 rounded-full p-0.5 bg-[var(--tq-bg-glass)]"
     >
       <button
         type="button"

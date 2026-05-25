@@ -114,13 +114,10 @@ export function GenerateSplitButton({
           <span>{loading ? loadingLabel : label}</span>
         </button>
         {/* 1 px divider between the two clickable areas. Muted via
-            the glass-border opacity token. */}
+            the glass-border opacity token (--tq-border-glass). */}
         <span
           aria-hidden
-          className="my-2 w-px"
-          style={{
-            background: "rgba(255, 255, 255, var(--glass-border-opacity))",
-          }}
+          className="my-2 w-px bg-[var(--tq-border-glass)]"
         />
         <button
           type="button"
@@ -152,11 +149,7 @@ export function GenerateSplitButton({
             exit={{ opacity: 0, scale: 0.95, y: 4 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.25 }}
             dir="rtl"
-            className="backdrop-blur-glass absolute right-0 bottom-full z-30 mb-2 w-56 overflow-hidden rounded-2xl border shadow-2xl"
-            style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-              borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-            }}
+            className="backdrop-blur-glass absolute right-0 bottom-full z-30 mb-2 w-56 overflow-hidden rounded-2xl border shadow-2xl bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
           >
             <div className="px-3 py-2 text-[11px] text-white/40">
               جودة التوليد

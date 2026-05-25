@@ -125,8 +125,16 @@ export async function extract(
   // Step 3: read PDF metadata for slide count + format.
   // pdf-lib is in package.json already (used elsewhere). Parsing
   // is ~tens of ms for a typical deck — no measurable overhead.
-  let pageCount = 0;
-  let format: "16:9" | "9:16" = "16:9";
+  //
+  // Fail-fast on parse error (CR #36, 2026-05-25). Pre-fix we
+  // swallowed the catch + defaulted to pageCount=0 + format="16:9",
+  // which let the extraction job "succeed" with unusable metadata —
+  // the generated deck would commit to the wrong slide count + size
+  // silently. A LibreOffice-converted PDF that pdf-lib can't read is
+  // a real failure; surface it so the job marks as failed and the
+  // /enhance page shows a clear error instead of a misshapen deck.
+  let pageCount: number;
+  let format: "16:9" | "9:16";
   try {
     const pdfDoc = await PDFDocument.load(pdfBytes);
     pageCount = pdfDoc.getPageCount();
@@ -134,13 +142,13 @@ export async function extract(
       const firstPage = pdfDoc.getPage(0);
       const { width, height } = firstPage.getSize();
       format = width >= height ? "16:9" : "9:16";
+    } else {
+      // 0-page PDF — also unusable. Treat as a parse failure.
+      throw new Error("PDF reports zero pages");
     }
-  } catch {
-    // Malformed PDF here would be very unusual — LibreOffice
-    // converted a valid PPTX, or the user uploaded a real PDF.
-    // Fall back to safe defaults; downstream still works.
-    pageCount = 0;
-    format = "16:9";
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to parse normalized PDF metadata: ${message}`);
   }
 
   return {

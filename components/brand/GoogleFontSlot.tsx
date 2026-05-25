@@ -110,7 +110,7 @@ export function GoogleFontSlot({
       </div>
       {open ? (
         <div
-          className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 shadow-2xl backdrop-blur-glass"
+          className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
           // `top: 100%` would stack on the sample line; using `top: 44`
           // (input height) anchors the popup directly under the field.
           // 240 px max-h fits ~6 rows; the rest scrolls.
@@ -118,12 +118,11 @@ export function GoogleFontSlot({
           // Surface recipe matches the quality-preset dropdown on
           // /create/summary: translucent-white fill at glass-opacity
           // over the dark backdrop, glass-border-opacity hairline,
-          // backdrop-blur-glass blur token.
+          // backdrop-blur-glass blur token — all via the
+          // --tq-bg-glass / --tq-border-glass tokens.
           style={{
             top: 44,
             maxHeight: 240,
-            background: "rgba(255, 255, 255, var(--glass-opacity))",
-            borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
           }}
         >
           {filtered.length === 0 ? (
@@ -152,9 +151,8 @@ export function GoogleFontSlot({
                   style={
                     isActive
                       ? {
-                          borderColor: "rgba(255, 255, 255, 1)",
-                          background:
-                            "rgba(255, 255, 255, var(--glass-opacity))",
+                          borderColor: "rgb(255, 255, 255)",
+                          background: "var(--tq-bg-glass)",
                         }
                       : undefined
                   }

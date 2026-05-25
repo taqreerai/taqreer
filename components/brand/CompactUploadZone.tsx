@@ -95,8 +95,7 @@ export function CompactUploadZone({
         style={{ minHeight: compact ? 72 : 100 }}
       >
         <span
-          className="flex h-10 w-10 items-center justify-center rounded-full"
-          style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]"
         >
           <span
             className="material-symbols-outlined text-white/80"
