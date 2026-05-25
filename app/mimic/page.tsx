@@ -47,7 +47,11 @@ import {
   type SlideSize,
   type SlideCountMode,
 } from "@/components/create/OutputCards";
-import { SegmentedToggle, Toggle } from "@/components/create/controls";
+import {
+  CardHeader,
+  SegmentedToggle,
+  Toggle,
+} from "@/components/create/controls";
 import {
   emptyFontSlot,
   googleFontUrl,
@@ -203,6 +207,14 @@ export default function MimicContentPage() {
 
   // ─── Brand pickers (only consulted when toggle is OFF) ─────────
   const [brandingMimicked, setBrandingMimicked] = useState(true);
+  // The branding-card wrapper needs `overflow: hidden` ONLY during
+  // its enter/exit width animation (so the card content gets clipped
+  // as the wrapper grows from 0 to W_CARD_PX). After the animation
+  // settles we must switch to `overflow: visible` or popovers
+  // anchored inside the card (ColorPickerPopover, GoogleFontSlot's
+  // dropdown) would be cropped at the card edge. Flipped by the
+  // motion.div's onAnimationStart / onAnimationComplete callbacks.
+  const [brandingOverflowVisible, setBrandingOverflowVisible] = useState(false);
   const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
   const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
     emptyFontSlot(),
@@ -596,7 +608,7 @@ export default function MimicContentPage() {
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`glass-card flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-2.5 rounded-2xl p-3`}
+            className={`glass-card flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <input
               ref={contentInputRef}
@@ -606,7 +618,7 @@ export default function MimicContentPage() {
               onChange={(event) => setContentFromInput(event.target.files?.[0])}
             />
 
-            <h3 className="text-sm font-semibold text-white">المحتوى</h3>
+            <CardHeader icon="subject" title="المحتوى" />
 
             {/* Textarea — primary content input. Disabled while a
                 file is picked; the two are mutually exclusive.
@@ -675,28 +687,29 @@ export default function MimicContentPage() {
               />
             </div>
 
-            <div className="border-t border-[var(--tq-border-glass)]" />
-
             {/* Bottom row: logo (visual right = DOM 1st) + ratios
-                (visual left = DOM 2nd, stacked). Section labels
-                live INSIDE each side so the row stays a single
-                horizontal band of equal height — no extra label
-                row above. Logo uses hideFilename to keep its tile
-                height stable when a file lands; an absolute × in
-                the corner replaces the "إزالة" text row that used
-                to sit underneath and grow the card. */}
-            <div className="flex gap-3">
+                (visual left = DOM 2nd, stacked). Border-t + pt-3
+                matches /create's section-separator pattern (no
+                stand-alone hairline div). Section labels live
+                INSIDE each side so the row stays a single
+                horizontal band of equal height. Logo uses
+                hideFilename to keep its tile height stable when a
+                file lands; an absolute × in the corner replaces
+                the "إزالة" text row that used to sit underneath
+                and grow the card. */}
+            <div className="flex gap-3 border-t border-[var(--tq-border-glass)] pt-3">
               {/* Logo — half-width. Wrapped in `relative` so the
                   remove × can overlay the tile's start corner. */}
               <div className="relative flex-1">
                 <CompactUploadZone
-                  label={logoFile ? "تم رفع الشعار" : "ارفع الشعار"}
-                  accept=".svg,.png,image/svg+xml,image/png"
+                  label={logoFile ? "تم رفع الشعار" : "شعار SVG فقط"}
+                  accept=".svg,image/svg+xml"
                   file={logoFile}
                   onSelect={setLogoFile}
                   compact
                   hideFilename
                   fillHeight
+                  muted={!logoFile}
                 />
                 {logoFile ? (
                   <button
@@ -748,27 +761,26 @@ export default function MimicContentPage() {
                 animate={{ width: W_CARD_PX, opacity: 1, marginInlineStart: 0 }}
                 exit={{ width: 0, opacity: 0, marginInlineStart: -16 }}
                 transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-                style={{ overflow: "hidden" }}
+                // Clip during transitions, unclip when settled so
+                // popovers (ColorPickerPopover, GoogleFontSlot
+                // dropdown) can escape the card's edge.
+                onAnimationStart={() => setBrandingOverflowVisible(false)}
+                onAnimationComplete={() => setBrandingOverflowVisible(true)}
+                style={{
+                  overflow: brandingOverflowVisible ? "visible" : "hidden",
+                }}
               >
-                <div className={`glass-card flex h-full ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-2.5 rounded-2xl p-3`}>
-                  <h3 className="text-sm font-semibold text-white">
-                    الهوية البصرية
-                  </h3>
+                <div className={`glass-card flex h-full ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}>
+                  <CardHeader icon="palette" title="الهوية البصرية" />
 
-                  <div>
+                  {/* Palette row — label on the visual right,
+                      swatches + add tile on the visual left as a
+                      single horizontal cluster (matches /create). */}
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-white/70">
                       الألوان
                     </span>
-                    {/* Single-row grid: MAX_PALETTE (6) swatches +
-                        optional "add" tile must fit in one line so
-                        adding a 4th/5th/6th colour never wraps and
-                        grows the card beyond CARD_MIN_H. Card usable
-                        width is 360 − p-3 (24) = 336 px; with
-                        gap-1.5 (6 px × 5 gaps = 30) → ~51 px per
-                        cell. Smaller swatch (h-8) since the column
-                        is now narrow. When colours.length === MAX,
-                        the add tile drops, swatches expand to fill. */}
-                    <div className="mt-2 grid grid-cols-6 gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       {colors.map((color, index) => (
                         <PaletteSwatch
                           key={index}
@@ -784,7 +796,7 @@ export default function MimicContentPage() {
                           type="button"
                           onClick={addColor}
                           aria-label="إضافة لون"
-                          className="flex h-8 w-full items-center justify-center rounded-lg border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                         >
                           <span
                             className="material-symbols-outlined"
@@ -797,9 +809,11 @@ export default function MimicContentPage() {
                     </div>
                   </div>
 
-                  <div className="border-t border-[var(--tq-border-glass)]" />
-
-                  <div className="space-y-2">
+                  {/* Heading font — separator + label/toggle row +
+                      compact slot (hideSample to drop the "أبجد هوز"
+                      preview line + alignStart for RTL-anchored
+                      content; matches /create's branding card). */}
+                  <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-white/70">
                         خط العناوين
@@ -819,6 +833,8 @@ export default function MimicContentPage() {
                         sampleText={HEADING_SAMPLE_AR}
                         sampleSizeClass="text-base"
                         alignStart
+                        compact
+                        hideSample
                         onSelect={(f) =>
                           setHeadingFontSlot((s) => ({
                             ...s,
@@ -844,6 +860,8 @@ export default function MimicContentPage() {
                         }
                         sampleSizeClass="text-base"
                         alignStart
+                        compact
+                        hideSample
                         onSelect={(family) =>
                           setHeadingFontSlot((s) => ({
                             ...s,
@@ -854,7 +872,10 @@ export default function MimicContentPage() {
                     )}
                   </div>
 
-                  <div className="space-y-2">
+                  {/* Body font — same recipe (no separator since the
+                      heading section above already establishes the
+                      visual rhythm; the row's space-y carries to here). */}
+                  <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-white/70">
                         خط النص
@@ -874,6 +895,8 @@ export default function MimicContentPage() {
                         sampleText={BODY_SAMPLE_AR}
                         sampleSizeClass="text-sm"
                         alignStart
+                        compact
+                        hideSample
                         onSelect={(f) =>
                           setBodyFontSlot((s) => ({
                             ...s,
@@ -899,6 +922,8 @@ export default function MimicContentPage() {
                         }
                         sampleSizeClass="text-sm"
                         alignStart
+                        compact
+                        hideSample
                         onSelect={(family) =>
                           setBodyFontSlot((s) => ({
                             ...s,
@@ -923,7 +948,7 @@ export default function MimicContentPage() {
             className={`${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
           >
             <div
-              className="canvas-gradient-border glass-card flex h-full w-full flex-col gap-2.5 rounded-2xl p-3"
+              className="canvas-gradient-border glass-card flex h-full w-full flex-col gap-4 rounded-2xl p-4"
               data-active="true"
             >
               <input
@@ -936,20 +961,22 @@ export default function MimicContentPage() {
                 }
               />
 
-              <h3 className="text-sm font-semibold text-white">
-                ما الذي نُحاكيه
-              </h3>
+              <CardHeader icon="auto_awesome" title="ما الذي نُحاكيه" />
 
-              {/* Shared Toggle from /create/controls — RTL-aware
-                  thumb travel (right-0.5 off → right-[22px] on),
-                  uses --tq-blue for the active fill. Same look + a11y
-                  semantics as every other toggle in the app
-                  (SaveAsTemplateDialog, rule toggles on /create). */}
-              <Toggle
-                label="مُحاكاة الهوية البصرية"
-                value={brandingMimicked}
-                onChange={setBrandingMimicked}
-              />
+              {/* Branding-mimic toggle — same Toggle primitive every
+                  other card uses (RTL-aware spring knob via
+                  /create/controls). Sits as the first labelled
+                  section under the header. */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-white/70">
+                  مُحاكاة الهوية البصرية
+                </span>
+                <Toggle
+                  ariaLabel="مُحاكاة الهوية البصرية"
+                  value={brandingMimicked}
+                  onChange={setBrandingMimicked}
+                />
+              </div>
 
               {/* Slide count — unified with /create's animated layout
                   (2026-05-26, user direction "use the one at create
@@ -966,7 +993,7 @@ export default function MimicContentPage() {
                       marginInlineStart with a spring (stiffness 500,
                       damping 35) matching the SegmentedToggle's
                       indicator spring. */}
-              <div className="flex min-h-[24px] items-center justify-between gap-2">
+              <div className="flex min-h-[24px] items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-3">
                 <span className="text-xs font-semibold text-white/70">
                   عدد الشرائح
                 </span>
@@ -1014,23 +1041,25 @@ export default function MimicContentPage() {
                 </motion.div>
               </div>
 
-              {/* Design-ref dropzone — shrunk via `compact` so the
-                  card stays at CARD_MIN_H while the new SlideCount
-                  row claims its share. The h-full + flex-1 wrapper
-                  lets the (shorter) dropzone still fill whatever
-                  vertical space is left after the toggle + slide
-                  count claim theirs. */}
-              <FileDropzone
-                file={designFile}
-                stage={designStage}
-                submitting={submitting}
-                dragging={designDragging}
-                setDragging={setDesignDragging}
-                onOpen={() => designInputRef.current?.click()}
-                onDrop={(f) => setDesignFromInput(f)}
-                onRemove={removeDesignFile}
-                compact
-              />
+              {/* Design-ref dropzone — wrapped in a flex-1 div with
+                  border-t separator so the dropzone reads as its own
+                  section (matches /create's section-separator
+                  rhythm). The dropzone itself is `compact` + h-full
+                  so it claims whatever vertical space is left after
+                  the header + toggle + slide-count rows. */}
+              <div className="flex flex-1 flex-col border-t border-[var(--tq-border-glass)] pt-3">
+                <FileDropzone
+                  file={designFile}
+                  stage={designStage}
+                  submitting={submitting}
+                  dragging={designDragging}
+                  setDragging={setDesignDragging}
+                  onOpen={() => designInputRef.current?.click()}
+                  onDrop={(f) => setDesignFromInput(f)}
+                  onRemove={removeDesignFile}
+                  compact
+                />
+              </div>
             </div>
           </motion.div>
         </div>
@@ -1061,8 +1090,10 @@ export default function MimicContentPage() {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// PaletteSwatch — compact version of /create's BrandColorRow. Same
-// ColorPickerPopover, smaller swatch (h-10) to fit the branding card.
+// PaletteSwatch — h-7 w-7 fixed-square swatch matching /create's
+// InlinePaletteSwatch byte-for-byte. The palette row uses inline-flex
+// (not grid) so the swatches sit beside the "الألوان" label as one
+// horizontal cluster — same vocabulary across /create + /mimic.
 // ───────────────────────────────────────────────────────────────────
 function PaletteSwatch({
   value,
@@ -1083,7 +1114,7 @@ function PaletteSwatch({
       <button
         type="button"
         onClick={() => setPickerOpen((v) => !v)}
-        className="block h-8 w-full rounded-lg border border-white/15 transition-shadow hover:shadow-md"
+        className="block h-7 w-7 shrink-0 rounded-md border border-white/15 transition-shadow hover:shadow-md"
         style={{ backgroundColor: value }}
         aria-label={`اللون ${index + 1}`}
       />
@@ -1092,7 +1123,7 @@ function PaletteSwatch({
         onClick={onRemove}
         disabled={!removable}
         aria-label="إزالة اللون"
-        className="absolute top-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white transition-opacity hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-0"
+        className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
           close

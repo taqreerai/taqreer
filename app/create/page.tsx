@@ -50,6 +50,7 @@ import {
   type SlideCountMode,
 } from "@/components/create/OutputCards";
 import {
+  CardHeader,
   PositionDropdown,
   SegmentedToggle,
   Toggle,
@@ -712,12 +713,12 @@ export default function CreatePage() {
 
             <div className="relative">
               <CompactUploadZone
-                label={logoFile ? readableFileName(logoFile.name) : "ارفع الشعار"}
-                accept=".svg,.png,image/svg+xml,image/png"
+                label={logoFile ? readableFileName(logoFile.name) : "شعار SVG فقط"}
+                accept=".svg,image/svg+xml"
                 file={logoFile}
                 onSelect={setLogoFile}
                 hideFilename
-                subText="SVG / PNG — يفضّل SVG لإعادة التلوين"
+                muted={!logoFile}
               />
               {logoFile ? (
                 <button
@@ -921,26 +922,6 @@ export default function CreatePage() {
         </p>
       </div>
     </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────
-// CardHeader — h3 title with material icon + bottom hairline. Same
-// pattern the legacy CardShell used (icon + title + border-b below).
-// Keeps the three /create cards visually consistent with each other
-// and with the rest of the dashboard's labelled clusters.
-// ───────────────────────────────────────────────────────────────────
-function CardHeader({ icon, title }: { icon: string; title: string }) {
-  return (
-    <header className="flex items-center gap-2 border-b border-white/[0.08] pb-2">
-      <span
-        className="material-symbols-outlined text-white"
-        style={{ fontSize: 18 }}
-      >
-        {icon}
-      </span>
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-    </header>
   );
 }
 

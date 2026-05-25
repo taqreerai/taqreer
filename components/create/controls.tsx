@@ -37,6 +37,24 @@ export const CORNER_POSITIONS: ReadonlyArray<CornerPosition> = CORNER_OPTIONS.ma
   (c) => c.value,
 );
 
+// CardHeader — title row used at the top of every card across the
+// create/enhance/mimic flows. Icon + h3 title + bottom hairline.
+// Promoted from /create's local definition 2026-05-26 so /enhance
+// and /mimic carry the same chrome — no fork, byte-identical rendering.
+export function CardHeader({ icon, title }: { icon: string; title: string }) {
+  return (
+    <header className="flex items-center gap-2 border-b border-white/[0.08] pb-2">
+      <span
+        className="material-symbols-outlined text-white"
+        style={{ fontSize: 18 }}
+      >
+        {icon}
+      </span>
+      <h3 className="text-sm font-semibold text-white">{title}</h3>
+    </header>
+  );
+}
+
 // SegmentedToggle — two-option pill switch in a single rounded
 // container (active = white bg + black text, idle = white/60 text
 // on glass background). Replaces the "two separate Pill buttons"

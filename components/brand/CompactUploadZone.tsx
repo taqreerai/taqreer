@@ -51,6 +51,13 @@ export function CompactUploadZone({
   // PNG only", "Max 5 MB"). Renders in both stacked and horizontal
   // modes when provided.
   subText,
+  // Renders the primary `label` in muted color (text-white/40)
+  // instead of the default `text-white`. Used by the logo upload
+  // slots on /create + /enhance + /mimic where the empty-state
+  // label doubles as a format hint ("SVG فقط") and should read as
+  // a sub-message, not a CTA. Callers flip this OFF as soon as a
+  // file lands so the filename pops at full contrast.
+  muted = false,
 }: {
   label: string;
   accept: string;
@@ -61,6 +68,7 @@ export function CompactUploadZone({
   fillHeight?: boolean;
   horizontal?: boolean;
   subText?: string;
+  muted?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -151,7 +159,13 @@ export function CompactUploadZone({
         </span>
         {horizontal ? (
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{label}</p>
+            <p
+              className={`truncate font-semibold ${
+                muted ? "text-[11px] text-white/40" : "text-sm text-white"
+              }`}
+            >
+              {label}
+            </p>
             {/* Sub-text — show subText when provided, otherwise show
                 the picked filename (when not hidden). Falls back to
                 nothing so the row stays a single line in the empty
@@ -168,7 +182,13 @@ export function CompactUploadZone({
           </div>
         ) : (
           <>
-            <span className="text-sm font-semibold text-white">{label}</span>
+            <span
+              className={`font-semibold ${
+                muted ? "text-[11px] text-white/40" : "text-sm text-white"
+              }`}
+            >
+              {label}
+            </span>
             {file && !hideFilename ? (
               <span className="max-w-full truncate text-xs text-white/60">
                 {file.name}

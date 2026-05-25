@@ -39,6 +39,10 @@ import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
 import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
 import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import {
+  CardHeader,
+  SegmentedToggle,
+} from "@/components/create/controls";
+import {
   emptyFontSlot,
   googleFontUrl,
   isLatinOnlyGoogleFont,
@@ -56,6 +60,13 @@ import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+
+// Segmented-toggle option list — declared once so the SegmentedToggle
+// stays stable across re-renders (matches /create + /mimic pattern).
+const FONT_MODE_OPTIONS = [
+  { value: "upload" as const, label: "ملف" },
+  { value: "google" as const, label: "Google" },
+];
 
 type ExtractCompletedResponse = {
   status: "completed";
@@ -531,7 +542,7 @@ export default function EnhanceContentPage() {
               the file area needs much more vertical real estate.
               p-4 + gap-4 deliberately tighter than the create-flow
               cards so the row reads compact, not airy. */}
-          <div className="glass-card flex min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+          <div className="glass-card flex min-h-[387px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -542,6 +553,8 @@ export default function EnhanceContentPage() {
               }
             />
 
+            <CardHeader icon="subject" title="الملف الأصلي" />
+
             {/* File dropzone — primary action of the page.
                 When a file IS selected, the dropzone CONTENT swaps to
                 show the file's name + size + a stage caption (instead
@@ -550,10 +563,13 @@ export default function EnhanceContentPage() {
                 button absolutely positions at the visual start corner
                 so the user can clear the pick without re-triggering
                 the file picker — `stopPropagation` keeps the button's
-                click from bubbling up to the dropzone parent. */}
-            <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-white">الملف الأصلي</h3>
-              <div className="relative">
+                click from bubbling up to the dropzone parent.
+                flex-1 on the inner wrapper + h-full on the relative
+                container makes the dropzone consume all remaining
+                vertical space inside the card (CARD_MIN_H = 387 px
+                pins the card at /create + /mimic's baseline). */}
+            <div className="flex flex-1 flex-col gap-2">
+              <div className="relative h-full">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -568,7 +584,7 @@ export default function EnhanceContentPage() {
                     validateAndSetFile(event.dataTransfer.files?.[0]);
                   }}
                   disabled={stage === "extracting" || stage === "submitting"}
-                  className={`flex min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`flex h-full min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     dragging
                       ? "border-white/40 bg-white/[0.04]"
                       : "border-white/20 bg-black/20 hover:border-white/30"
@@ -669,39 +685,6 @@ export default function EnhanceContentPage() {
               </div>
             </div>
 
-            {/* Logo dropzone — secondary, sits in the same card so
-                "what we're working with" reads as one cluster. Hairline
-                divider on top sets it apart from the file area without
-                introducing a second card surface. `compact` prop on
-                CompactUploadZone shrinks its min-height to 72 px
-                (vs 100 px) so the card doesn't grow much under the
-                logo section. */}
-            <div
-              className="flex flex-col gap-2 border-t pt-3 border-[var(--tq-border-glass)]"
-            >
-              <div>
-                <h3 className="text-sm font-semibold text-white">الشعار</h3>
-                <p className="mt-0.5 text-xs text-white/50">
-                  اختياري — سيُستخدم في كل شريحة
-                </p>
-              </div>
-              <CompactUploadZone
-                label={logoFile ? "تغيير الشعار" : "ارفع الشعار"}
-                accept=".svg,.png,image/svg+xml,image/png"
-                file={logoFile}
-                onSelect={setLogoFile}
-                compact
-              />
-              {logoFile ? (
-                <button
-                  type="button"
-                  onClick={() => setLogoFile(null)}
-                  className="self-start text-xs text-white/50 transition-colors hover:text-white"
-                >
-                  إزالة
-                </button>
-              ) : null}
-            </div>
           </div>
 
           {/* ─── Fonts card (optional) ────────────────────────
@@ -710,23 +693,24 @@ export default function EnhanceContentPage() {
               already equalizes heights, but matching internal rhythm
               prevents the inner content from feeling differently
               spaced). */}
-          <div className="glass-card flex min-w-[320px] flex-1 flex-col gap-3 rounded-2xl p-4">
-            <div>
-              <h3 className="text-sm font-semibold text-white">الخطوط</h3>
-              <p className="mt-1 text-xs text-white/50">
-                اختياري — رفع ملف أو اختيار خط Google
-              </p>
-            </div>
+          <div className="glass-card flex min-h-[387px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+            <CardHeader icon="palette" title="الهوية البصرية" />
 
-            {/* Heading slot */}
-            <div className="space-y-2">
+            {/* Heading font — same recipe as /create + /mimic:
+                inline label-row with SegmentedToggle on the visual
+                left, compact font slot below with sample text hidden
+                (alignStart pins remaining preview to the RTL edge
+                when the slot opts back in). */}
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-white/70">
                   خط العناوين
                 </span>
-                <ModeToggle
-                  mode={headingFontSlot.mode}
+                <SegmentedToggle
+                  options={FONT_MODE_OPTIONS}
+                  value={headingFontSlot.mode}
                   onChange={setHeadingMode}
+                  ariaLabel="مصدر خط العناوين"
                 />
               </div>
               {headingFontSlot.mode === "upload" ? (
@@ -736,6 +720,9 @@ export default function EnhanceContentPage() {
                   family=""
                   sampleText={HEADING_SAMPLE_AR}
                   sampleSizeClass="text-base"
+                  alignStart
+                  compact
+                  hideSample
                   onSelect={(f) =>
                     setHeadingFontSlot((s) => ({
                       ...s,
@@ -760,6 +747,9 @@ export default function EnhanceContentPage() {
                       : HEADING_SAMPLE_AR
                   }
                   sampleSizeClass="text-base"
+                  alignStart
+                  compact
+                  hideSample
                   onSelect={(family) =>
                     setHeadingFontSlot((s) => ({ ...s, googleFamily: family }))
                   }
@@ -767,13 +757,19 @@ export default function EnhanceContentPage() {
               )}
             </div>
 
-            {/* Body slot */}
-            <div className="space-y-2">
+            {/* Body font — separator (border-t pt-3) sets it apart
+                from the heading section above; matches /create. */}
+            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-white/70">
                   خط النص
                 </span>
-                <ModeToggle mode={bodyFontSlot.mode} onChange={setBodyMode} />
+                <SegmentedToggle
+                  options={FONT_MODE_OPTIONS}
+                  value={bodyFontSlot.mode}
+                  onChange={setBodyMode}
+                  ariaLabel="مصدر خط النص"
+                />
               </div>
               {bodyFontSlot.mode === "upload" ? (
                 <FontUploadSlot
@@ -782,6 +778,9 @@ export default function EnhanceContentPage() {
                   family=""
                   sampleText={BODY_SAMPLE_AR}
                   sampleSizeClass="text-sm"
+                  alignStart
+                  compact
+                  hideSample
                   onSelect={(f) =>
                     setBodyFontSlot((s) => ({
                       ...s,
@@ -806,11 +805,53 @@ export default function EnhanceContentPage() {
                       : BODY_SAMPLE_AR
                   }
                   sampleSizeClass="text-sm"
+                  alignStart
+                  compact
+                  hideSample
                   onSelect={(family) =>
                     setBodyFontSlot((s) => ({ ...s, googleFamily: family }))
                   }
                 />
               )}
+            </div>
+
+            {/* Logo sub-section — same compact CompactUploadZone +
+                hideFilename + absolute × overlay pattern /create's
+                logo card uses. Sits under the fonts inside the
+                "الهوية البصرية" card so all brand picks (fonts +
+                logo) live together. */}
+            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
+              <span className="block text-xs font-semibold text-white/70">
+                الشعار
+              </span>
+              <div className="relative">
+                <CompactUploadZone
+                  label={
+                    logoFile ? readableFileName(logoFile.name) : "شعار SVG فقط"
+                  }
+                  accept=".svg,image/svg+xml"
+                  file={logoFile}
+                  onSelect={setLogoFile}
+                  compact
+                  hideFilename
+                  muted={!logoFile}
+                />
+                {logoFile ? (
+                  <button
+                    type="button"
+                    onClick={() => setLogoFile(null)}
+                    aria-label="إزالة الشعار"
+                    className="absolute top-1.5 start-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 14 }}
+                    >
+                      close
+                    </span>
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -847,44 +888,3 @@ export default function EnhanceContentPage() {
   );
 }
 
-// Tiny pill-style mode toggle used inside each font slot card. Two
-// segments: "ملف" (upload) | "Google". Active segment gets the white
-// outline + glass fill from --glass-opacity; inactive stays muted.
-// Kept inline (not extracted) because it's purely a layout-level
-// affordance, not a primitive worth promoting to components/brand/.
-function ModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: "upload" | "google";
-  onChange: (next: "upload" | "google") => void;
-}) {
-  return (
-    <div
-      className="flex items-center gap-0.5 rounded-full p-0.5 bg-[var(--tq-bg-glass)]"
-    >
-      <button
-        type="button"
-        onClick={() => onChange("upload")}
-        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-          mode === "upload"
-            ? "bg-white text-black"
-            : "text-white/60 hover:text-white"
-        }`}
-      >
-        ملف
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("google")}
-        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-          mode === "google"
-            ? "bg-white text-black"
-            : "text-white/60 hover:text-white"
-        }`}
-      >
-        Google
-      </button>
-    </div>
-  );
-}
