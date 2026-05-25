@@ -23,7 +23,7 @@ import {
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlidePill } from "@/components/preview/SlidePill";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
-import type { InitialSlideState } from "@/app/(app)/preview/[projectId]/page";
+import type { InitialSlideState } from "@/lib/project/load-project";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import {
   SlideNavSidebar,
