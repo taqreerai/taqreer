@@ -387,6 +387,22 @@ export function DeckView({
   const [streamingPreviewDraft, setStreamingPreviewDraft] = useState<boolean[]>(
     [],
   );
+  // Stale-poll guards for the streaming preview. The pre-fix monotonic
+  // guard was length-only (`validated.length >= prev.length`), which
+  // worked for retry-induced shrinkage but couldn't reject the case
+  // where two polls overlap: poll A starts, takes longer; poll B fires
+  // and returns first with newer state; poll A returns last with stale
+  // state of the same length, overwriting B's freshness with stale
+  // slides. `lastManifestVersionRef` tracks the highest server-emitted
+  // `streamingManifestVersion` we've accepted; incoming snapshots with
+  // a lower version are rejected outright. `highWatermarkRef` retains
+  // the length of the highest version accepted so far, so when a NEW
+  // version arrives (parser reset → second manifest pass) we keep
+  // showing the previous full-length list until the new version
+  // catches up to that watermark — preserves the deliberate UX where
+  // draft slides stay visible until the polished pass replaces them.
+  const lastManifestVersionRef = useRef(0);
+  const highWatermarkRef = useRef(0);
   // Theme captured from the same stream once Claude closes the
   // `theme` object (always streams before slides). Drives the CSS-var
   // wiring for streamingPreview slides — without it palette / fonts /
@@ -1404,6 +1420,11 @@ export function DeckView({
           // field. Null/missing for /create runs; present and zip-aligned
           // with streamingPreview on /enhance|mimic|data.
           streamingPreviewDraft?: unknown[] | null;
+          // Monotonic manifest-version token. See refs above for how
+          // this drives the version-aware stale-poll guard. Null
+          // /missing on older in-flight runs (treated as version 0
+          // → equal to our initial ref, falls through to length-only).
+          streamingManifestVersion?: number | null;
           streamingTheme?: unknown;
           streamingDirection?: "rtl" | "ltr" | null;
           streamingLanguage?: "ar" | "en" | null;
@@ -1439,15 +1460,59 @@ export function DeckView({
           for (let i = 0; i < validated.length; i += 1) {
             draftFlags.push(rawDraft[i] === true);
           }
-          // Monotonic guard — never shrink the preview during a single
-          // generation. If a retry restarts Claude from slide 1, the
-          // server's `streamingPreview` resets to [], but DeckView keeps
-          // the high-watermark list visible until the canonical
-          // `manifest` arrives on completion. The draft array is gated on
-          // the same accept/preserve decision so the two stay in lockstep.
+          // ─── Stale-poll guard (2026-05-25, version-aware) ──────────
+          // Three layered conditions decide whether to accept this
+          // snapshot:
+          //   (a) `incomingVersion < lastAccepted` → reject. The poll
+          //       carries server state older than what we already
+          //       displayed (two-polls-in-flight, older one returns
+          //       last). Pre-fix length-only guard couldn't catch
+          //       this when both polls happened to carry the same
+          //       `streamingPreview.length`.
+          //   (b) `incomingVersion > lastAccepted` → only accept once
+          //       the new version's length catches up to the
+          //       high-watermark of the previous version. Preserves
+          //       the deliberate UX where draft slides stay visible
+          //       until the polished pass replaces them (server
+          //       clears its array on `didReset` + bumps version;
+          //       the brief empty window shouldn't blank the screen).
+          //   (c) Same version → fall back to length-only monotonic
+          //       (catches retry-induced shrinkage within a manifest
+          //       attempt). Always update the high-watermark when
+          //       we grow.
+          // Missing `streamingManifestVersion` (older in-flight runs
+          // pre-deploy) is coerced to 0, which equals the initial
+          // ref value, so the guard falls through to length-only —
+          // identical behavior to the pre-fix code path.
+          const incomingVersion =
+            typeof data.streamingManifestVersion === "number" &&
+            Number.isFinite(data.streamingManifestVersion)
+              ? data.streamingManifestVersion
+              : 0;
           setStreamingPreview((prev) => {
-            const accept = validated.length >= prev.length;
-            if (accept) {
+            const lastVersion = lastManifestVersionRef.current;
+            // (a) Stale — older server version than what we last accepted.
+            if (incomingVersion < lastVersion) {
+              return prev;
+            }
+            // (b) Newer version — gate on catching up to the prior
+            // version's high-watermark to avoid blanking the preview
+            // during the draft→polished transition.
+            if (incomingVersion > lastVersion) {
+              if (validated.length >= highWatermarkRef.current) {
+                lastManifestVersionRef.current = incomingVersion;
+                highWatermarkRef.current = validated.length;
+                setStreamingPreviewDraft(draftFlags);
+                return validated;
+              }
+              // Polished pass still ramping up — hold the prior view.
+              return prev;
+            }
+            // (c) Same version — legacy length-only monotonic guard.
+            if (validated.length >= prev.length) {
+              if (validated.length > highWatermarkRef.current) {
+                highWatermarkRef.current = validated.length;
+              }
               setStreamingPreviewDraft(draftFlags);
               return validated;
             }

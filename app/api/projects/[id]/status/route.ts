@@ -34,6 +34,13 @@ type SlideJson = {
   // Only emitted by enhance/mimic/data flows (deck-generate gates the
   // write); /create runs single-pass so the field stays absent.
   streamingPreviewDraft?: unknown;
+  // Monotonic manifest-version token written by deck-generate. Strictly
+  // non-decreasing across the lifetime of a versionId; bumped on parser
+  // `didReset()` AND on every retry-attempt restart. DeckView uses it
+  // to reject stale snapshots from out-of-order polls — closes the
+  // race where an older poll arrives last and overwrites newer state
+  // when both happen to carry the same `streamingPreview.length`.
+  streamingManifestVersion?: unknown;
 };
 
 function getSlideJson(value: unknown): SlideJson | null {
@@ -167,6 +174,15 @@ export async function GET(
   const streamingPreviewDraft = Array.isArray(slideJson?.streamingPreviewDraft)
     ? slideJson.streamingPreviewDraft.slice(0, 60).map((v) => v === true)
     : null;
+  // Coerce the monotonic version token. Default 0 keeps older in-flight
+  // runs / non-enhance flows safe — clients should treat "missing" as
+  // "no version info, fall back to legacy length-only guard" rather
+  // than "version 0, reject everything".
+  const streamingManifestVersion =
+    typeof slideJson?.streamingManifestVersion === "number" &&
+    Number.isFinite(slideJson.streamingManifestVersion)
+      ? slideJson.streamingManifestVersion
+      : null;
 
   // Include the FULL slide manifest on the response in either of two cases:
   //
@@ -245,6 +261,7 @@ export async function GET(
     progress,
     streamingPreview,
     streamingPreviewDraft,
+    streamingManifestVersion,
     streamingTheme,
     streamingDirection,
     streamingLanguage,

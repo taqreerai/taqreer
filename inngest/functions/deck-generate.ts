@@ -1273,6 +1273,17 @@ export const deckGenerate = inngest.createFunction(
                 ...(enableDraftBadges
                   ? { streamingPreviewDraft: streamingPreviewDraft.slice() }
                   : {}),
+                // Monotonic manifest-version token. Always emitted (even
+                // when draft badges are off — non-enhance flows still
+                // benefit from the client-side stale-poll guard built on
+                // it). Strictly non-decreasing across the lifetime of
+                // this `versionId`: bumped on parser `didReset()` AND on
+                // every retry-attempt restart in the loop above. Clients
+                // reject incoming snapshots whose version is lower than
+                // the last accepted one — closes the "two polls in
+                // flight, older one returns last, overwrites" race that
+                // length-only monotonicity couldn't catch.
+                streamingManifestVersion: manifestVersion,
                 // Theme captured mid-stream (always streams before slides
                 // in the manifest order). Null until the theme `}` closes.
                 streamingTheme,
@@ -1328,7 +1339,14 @@ export const deckGenerate = inngest.createFunction(
         // include slides that never made it into the canonical manifest.
         streamingPreview.length = 0;
         streamingPreviewDraft.length = 0;
-        manifestVersion = 1;
+        // INCREMENT (not reset to 1) so `manifestVersion` is strictly
+        // monotonic across the lifetime of this `versionId`. Pre-fix
+        // we reset to 1 on each retry attempt, which let an old poll
+        // arrive AFTER the retry started — same version number on
+        // both, same length potentially, no signal to reject the
+        // stale state. With monotonic increments, the client's
+        // version-aware guard can always tell stale from fresh.
+        manifestVersion += 1;
         streamingTheme = null;
 
         const userMessage =
