@@ -283,13 +283,6 @@ export function ProjectThumbnail({
     }
   };
 
-  const handleUseAsTemplate = () => {
-    // Route lands in step 13. For 9f we just navigate — the page
-    // will 404 today; that's the documented contract for the
-    // intermediate state.
-    window.location.href = `/create/from/${projectId}`;
-  };
-
   const handleShare = () => {
     setShareOpen(true);
   };
@@ -575,7 +568,6 @@ export function ProjectThumbnail({
         onRename={enterRenameMode}
         onToggleFavorite={handleToggleFavorite}
         onCopyLink={handleCopyLink}
-        onUseAsTemplate={handleUseAsTemplate}
         onSaveAsTemplate={() => setSaveTemplateOpen(true)}
         onSendToTrash={() => setTrashOpen(true)}
       />
