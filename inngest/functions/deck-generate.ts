@@ -17,6 +17,7 @@ import { generateTemplateName } from "@/lib/template/generate-name";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
+import { repairJson } from "@/lib/extract/json-repair";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -150,8 +151,13 @@ type DeckGenerateEvent = {
   enhance?: EnhanceData;
   brief: unknown;
   // User-picked generation quality preset. Maps to model + thinking +
-  // effort below. Optional / unknown values fall back to "medium".
-  quality?: "fast" | "medium" | "quality" | "extreme";
+  // effort below via `paramsForQuality()`. Typed as `string` (not the
+  // strict `Quality` union) so legacy quality values from pre-2026-05-25
+  // queued jobs ("fast", "medium", "quality", "extreme") still flow
+  // through cleanly — paramsForQuality's default branch maps any
+  // unrecognised key to `opus-low` (identical to the old `medium`
+  // default). The expanded matrix lives in `lib/types/quality.ts`.
+  quality?: string;
   // Prisma User row id of the viewer who triggered the run. Plumbed
   // into Phase 16.D `deck.regen.{started,finished}` broadcasts so
   // each receiving client can skip its own self-echo. Optional for
@@ -860,12 +866,14 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       `ENHANCE THE DESIGN, NOT THE CONTENT:`,
       `  Re-execute the deck's typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality. Preserve the brand identity (palette, fonts when provided, logo, key visual motifs). The content is locked; only the design changes.`,
       ``,
-      `VISUAL REUSE — recreate, don't reference:`,
-      `  • There are NO pre-extracted asset URLs in this run. Read every visual (logo, photo, icon, illustration, diagram, decorative shape) directly from the PDF document block.`,
-      `  • For logos and brand marks: redraw as inline <svg> matching the original silhouette, colors, and proportions as closely as you can read from the page.`,
-      `  • For icons / illustrations / decorative shapes: redraw in your usual clean inline-SVG style (Lucide stroke icons for utility, brand-token fills for atmosphere). Do not try to pixel-replicate the original — re-execute in the design system.`,
-      `  • For photographic content: describe the subject in a placeholder block (e.g. a styled <div> with the original caption / role) rather than fabricating an image. If a photo is decorative only, drop it.`,
-      `  • Skip purely-decorative shapes from the original that don't serve the new composition. The redesign is the priority, not faithful reconstruction.`,
+      `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
+      `  • LOGOS:`,
+      `    - If the logo is a WORDMARK (readable text like "Coca-Cola", "IBM", "NIKE"), render it as styled text in the deck. Match the font weight, letter-spacing, and color you can read from the page. No SVG needed.`,
+      `    - If the logo is ICONOGRAPHIC (a mark that's not just letters), emit a placeholder block: a styled <div> with the brand name as a label. The user will swap it in after generation. Do NOT attempt to redraw iconographic logos in SVG — Claude approximations look off.`,
+      `  • PHOTOS / photographic content: emit a styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor", "Photo: product hero shot"). Use the deck's palette for the placeholder background; the user replaces it post-generation. If a photo is purely decorative filler, drop it.`,
+      `  • COMPLEX CHARTS or DIAGRAMS (multi-bar charts, complex flowcharts, org charts, custom illustrations): emit a styled placeholder block with the chart's title and any axis labels you can read. The user replaces it with the actual chart after generation. Do not attempt to reconstruct the data graphically.`,
+      `  • SIMPLE ICONS (utility glyphs — arrows, checkmarks, stars, basic shapes, Lucide-style strokes): inline <svg> in your usual clean style. Fast to draw, looks better than a placeholder.`,
+      `  • DECORATIVE shapes from the original that don't carry meaning: skip them. The redesign is the priority.`,
     );
     if (fonts.length > 0) {
       // Classify each name into "system" (OS-bundled — use verbatim
@@ -896,7 +904,13 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       ``,
       `Your job: take the UGLY content and re-execute it in the DESIGN REFERENCE's visual style. Match design language only; never invent content not in the UGLY file.`,
       ``,
-      `VISUAL REUSE: no pre-extracted asset URLs. Read the UGLY file's logos / icons / visuals directly from the document block and redraw them as inline <svg> in the DESIGN REFERENCE's style. Photos → styled placeholder blocks.`,
+      `VISUAL HANDLING — placeholders over redraws:`,
+      `  • Wordmark logos → styled text in the DESIGN REFERENCE's typography.`,
+      `  • Iconographic logos → styled placeholder block with the brand name label (user swaps post-gen).`,
+      `  • Photos → styled placeholder block describing the subject (user swaps post-gen).`,
+      `  • Complex charts / diagrams → styled placeholder block with the chart title + axis labels.`,
+      `  • Simple icons (arrows, checks, Lucide-style strokes) → inline <svg> in the DESIGN REFERENCE's style.`,
+      `  • Decorative shapes that don't carry meaning → skip.`,
     );
   } else if (source.kind === "data") {
     lines.push(
@@ -964,11 +978,49 @@ export const deckGenerate = inngest.createFunction(
 
 
     // Resolve quality preset → model + thinking + effort. Falls back
-    // to "medium" via paramsForQuality's default branch when missing
-    // (older queued jobs predating this field).
-    const callParams = paramsForQuality(data.quality);
+    // to `opus-low` via paramsForQuality's default branch when missing
+    // (older queued jobs predating this field, or any unrecognised
+    // legacy key).
+    //
+    // ─── Auto-upgrade sonnet-fast on source-document flows ─────────
+    // Sonnet 4.6 with thinking disabled (the `sonnet-fast` preset)
+    // can't reliably emit the 30+ KB structured output that PDF
+    // document-block flows require — observed on 2026-05-25, a
+    // 9-slide enhance run failed `JSON.parse` 3 times at position
+    // ~31417 and burned ~30k output tokens per attempt with no
+    // recoverable result. Without thinking the model loses
+    // JSON-structure discipline deep into long dense output.
+    //
+    // Force a quiet upgrade to `sonnet-low` (adds minimal adaptive
+    // thinking) for enhance + mimic + data flows. Same Sonnet pricing
+    // tier (~$0.05 extra per run), dramatically more reliable on
+    // long verbatim outputs. The user's preset choice is preserved
+    // on Job.quality for analytics; only the actual API call is
+    // upgraded.
+    const sourceForUpgradeCheck = readSource(data);
+    const sourceKind = sourceForUpgradeCheck?.kind ?? "scratch";
+    const isLongOutputFlow =
+      sourceKind === "enhance" ||
+      sourceKind === "mimic" ||
+      sourceKind === "data";
+    const effectiveQuality =
+      data.quality === "sonnet-fast" && isLongOutputFlow
+        ? "sonnet-low"
+        : data.quality;
+    if (effectiveQuality !== data.quality) {
+      logger.info("claude_quality_auto_upgrade", {
+        from: data.quality,
+        to: effectiveQuality,
+        sourceKind,
+        reason:
+          "sonnet-no-thinking unreliable on long source-document output",
+      });
+    }
+
+    const callParams = paramsForQuality(effectiveQuality);
     logger.info("claude_quality_preset", {
-      quality: data.quality ?? "medium (default)",
+      quality: effectiveQuality ?? "opus-low (default)",
+      requestedQuality: data.quality ?? null,
       model: callParams.model,
       thinking: callParams.thinking.type,
       effort: callParams.outputConfig?.effort ?? "n/a",
@@ -1312,9 +1364,48 @@ export const deckGenerate = inngest.createFunction(
         let parsed: unknown;
         try {
           parsed = JSON.parse(jsonStr);
-        } catch (error) {
-          lastError = `JSON.parse failed: ${error instanceof Error ? error.message : String(error)}`;
-          continue;
+        } catch (firstError) {
+          // First attempt with raw output failed. Try the repair pass
+          // before bouncing the attempt — Claude (especially Sonnet
+          // with thinking disabled) occasionally drops a comma or
+          // appends a trailing one in dense 30+ KB outputs. The
+          // repair is string-aware so it won't damage HTML payloads.
+          // See lib/extract/json-repair.ts for what's covered.
+          const repaired = repairJson(jsonStr);
+          try {
+            parsed = JSON.parse(repaired);
+            logger.info("json_parse_recovered_via_repair", {
+              attempt,
+              originalErr:
+                firstError instanceof Error
+                  ? firstError.message
+                  : String(firstError),
+              size: jsonStr.length,
+              repairedDeltaChars: repaired.length - jsonStr.length,
+            });
+          } catch (secondError) {
+            // Both raw + repaired failed. Log diagnostic info so the
+            // next time this fails on a similar input we can pattern-
+            // match — without storing the full 30 KB blob.
+            lastError = `JSON.parse failed: ${secondError instanceof Error ? secondError.message : String(secondError)}`;
+            logger.warn("json_parse_failed_both_raw_and_repair", {
+              attempt,
+              rawErr:
+                firstError instanceof Error
+                  ? firstError.message
+                  : String(firstError),
+              repairErr:
+                secondError instanceof Error
+                  ? secondError.message
+                  : String(secondError),
+              size: jsonStr.length,
+              // Head + tail of the JSON to spot the failure region
+              // without persisting the whole payload.
+              jsonHead: jsonStr.slice(0, 300),
+              jsonTail: jsonStr.slice(-300),
+            });
+            continue;
+          }
         }
 
         const result = SlideManifestSchema.safeParse(parsed);
