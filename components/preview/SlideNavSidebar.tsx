@@ -344,7 +344,22 @@ export function SlideNavSidebar({
                     }`}
                   >
                     {item.state === "done" ? (
-                      <span className="material-symbols-outlined text-emerald-400" style={{ fontSize: "32px" }}>
+                      // White + smaller checkmark (was emerald-400 @ 32 px).
+                      // Rationale 2026-05-25: the "done" state on a
+                      // PLACEHOLDER card means "Claude advanced past this
+                      // slide in his buffer" — NOT "this slide is designed
+                      // and ready" (if it were, the slot would render a
+                      // real slide thumbnail via the `kind:"slide"` branch
+                      // above, not a placeholder). The green check was a
+                      // misleading celebration; white at reduced opacity
+                      // communicates "we processed this slot, no visual
+                      // yet" — which is what's actually true. /create
+                      // never sees this state because its slides stream
+                      // fast enough to swap placeholders to real thumbnails
+                      // before the user notices; /enhance is the visible
+                      // case (PDF reading + thinking-phase iteration push
+                      // text streaming to a tight burst at the end).
+                      <span className="material-symbols-outlined text-white/60" style={{ fontSize: "18px" }}>
                         check_circle
                       </span>
                     ) : item.state === "current" ? (
