@@ -1,37 +1,87 @@
 // Generation quality presets. User-picked on /create/summary; flows
 // through POST /api/projects → the Inngest event → deck-generate's
-// Claude call params (model + thinking + effort). Default is
-// "medium" when missing/invalid so any pre-deploy queued job still
-// behaves like the current baseline.
+// Claude call params (model + thinking + effort).
+//
+// ─── Expanded preset matrix (2026-05-25) ─────────────────────────
+// Each preset is named by its EXACT Anthropic API config — `model`
+// (sonnet | opus) + thinking budget tier — so the picker reads as
+// "exactly what this run will do" instead of opaque labels like
+// "Medium" / "Extreme". 11 configs total:
+//   • Sonnet 4.6: fast (no thinking) + adaptive low/medium/high/max
+//   • Opus 4.7:   fast (no thinking) + adaptive low/medium/high/xhigh/max
+// `xhigh` is Opus-4.7-exclusive — Sonnet returns 400 on that effort tier.
+// `max` is unconstrained on both.
+//
+// Legacy quality values from before this expansion (`"fast"`,
+// `"medium"`, `"quality"`, `"extreme"`) are still accepted by
+// `paramsForQuality()` via its default branch so old queued jobs +
+// stored Job.quality strings still resolve to a valid Claude call.
+// The UI and new writes use the expanded keys below.
+//
+// Default = `opus-low` — matches the behavior of the previous
+// `medium` default (Opus 4.7 + adaptive thinking, effort:low).
 
-export type Quality = "fast" | "medium" | "quality" | "extreme";
+export type Quality =
+  | "sonnet-fast"
+  | "sonnet-low"
+  | "sonnet-medium"
+  | "sonnet-high"
+  | "sonnet-max"
+  | "opus-fast"
+  | "opus-low"
+  | "opus-medium"
+  | "opus-high"
+  | "opus-xhigh"
+  | "opus-max";
 
 export const QUALITY_PRESETS: ReadonlyArray<{
   key: Quality;
-  // Arabic label shown on the pill.
+  // Display label shown in the GenerateSplitButton dropdown. Format:
+  // `<Model display> · <effort>` so the user sees the exact API config
+  // and can map preset → measured cost in context/pricing.md.
   label: string;
-  // Rough constants used to estimate ETA to the user. Empirical from
-  // observed runs — fast 3 min / 5 slides, medium 4 min, quality 6
-  // min, extreme 9 min. These don't drive anything except the muted
-  // "~N د" tag on the pill; the actual model params live in
-  // QUALITY_TO_API below.
+  // Rough constants used to estimate ETA to the user. Sonnet (no
+  // thinking) is fastest; Opus with high thinking budgets is slowest.
+  // These drive the muted "~N د" tag on the pill — actual model params
+  // live in `lib/anthropic/quality-params.ts`. Numbers are educated
+  // extrapolations from the small sample we have today; refine as
+  // more data lands per `context/pricing.md`.
   secsPerSlide: number;
   baseOverheadSecs: number;
 }> = [
-  { key: "fast",    label: "سريع",  secsPerSlide: 30, baseOverheadSecs: 30 },
-  { key: "medium",  label: "متوسط", secsPerSlide: 40, baseOverheadSecs: 60 },
-  { key: "quality", label: "عالي",  secsPerSlide: 60, baseOverheadSecs: 120 },
-  { key: "extreme", label: "أقصى",  secsPerSlide: 70, baseOverheadSecs: 180 },
+  // ─── Sonnet 4.6 (5 configs) ─────────────────────────────────────
+  { key: "sonnet-fast",   label: "Sonnet 4.6 · fast",   secsPerSlide: 25, baseOverheadSecs: 20 },
+  { key: "sonnet-low",    label: "Sonnet 4.6 · low",    secsPerSlide: 30, baseOverheadSecs: 35 },
+  { key: "sonnet-medium", label: "Sonnet 4.6 · medium", secsPerSlide: 35, baseOverheadSecs: 50 },
+  { key: "sonnet-high",   label: "Sonnet 4.6 · high",   secsPerSlide: 40, baseOverheadSecs: 70 },
+  { key: "sonnet-max",    label: "Sonnet 4.6 · max",    secsPerSlide: 50, baseOverheadSecs: 100 },
+  // ─── Opus 4.7 (6 configs) ───────────────────────────────────────
+  { key: "opus-fast",     label: "Opus 4.7 · fast",     secsPerSlide: 35, baseOverheadSecs: 40 },
+  { key: "opus-low",      label: "Opus 4.7 · low",      secsPerSlide: 40, baseOverheadSecs: 60 },
+  { key: "opus-medium",   label: "Opus 4.7 · medium",   secsPerSlide: 50, baseOverheadSecs: 90 },
+  { key: "opus-high",     label: "Opus 4.7 · high",     secsPerSlide: 60, baseOverheadSecs: 120 },
+  { key: "opus-xhigh",    label: "Opus 4.7 · xhigh",    secsPerSlide: 75, baseOverheadSecs: 160 },
+  { key: "opus-max",      label: "Opus 4.7 · max",      secsPerSlide: 95, baseOverheadSecs: 220 },
 ];
 
-export const DEFAULT_QUALITY: Quality = "medium";
+// Default — Opus 4.7 + adaptive low. Matches the behavior of the
+// previous `medium` preset (which itself defaulted to Opus low after
+// the 2026-05-24 reshuffle that moved Sonnet out of the thinking tiers).
+export const DEFAULT_QUALITY: Quality = "opus-low";
 
 export function isQuality(value: unknown): value is Quality {
   return (
-    value === "fast" ||
-    value === "medium" ||
-    value === "quality" ||
-    value === "extreme"
+    value === "sonnet-fast" ||
+    value === "sonnet-low" ||
+    value === "sonnet-medium" ||
+    value === "sonnet-high" ||
+    value === "sonnet-max" ||
+    value === "opus-fast" ||
+    value === "opus-low" ||
+    value === "opus-medium" ||
+    value === "opus-high" ||
+    value === "opus-xhigh" ||
+    value === "opus-max"
   );
 }
 

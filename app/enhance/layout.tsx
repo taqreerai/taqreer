@@ -1,55 +1,29 @@
-"use client";
-
-import { usePathname } from "next/navigation";
+import { cookies } from "next/headers";
 import { DashboardShell } from "@/components/app/DashboardShell";
 
-const steps = [
-  { step: 1, label: "رفع الملف", path: "/enhance" },
-  { step: 2, label: "مراجعة وإنشاء", path: "/enhance/review" },
-];
+// Mirrors app/create/layout.tsx exactly. The Enhance flow is a
+// PARALLEL route tree (Phase 17.B) — same chrome (dashboard
+// sidebar + header + RTL page container), same shell pattern, just
+// a different URL namespace (/enhance/* instead of /create/*) so
+// the user's address bar reads "تحسين" the entire way through.
+//
+// Each /enhance/* page renders <CreateShell currentStep="...">
+// inside this layout, exactly like /create/* pages do. Stepper +
+// progress strip are owned by CreateShell, not this layout.
+const SIDEBAR_COOKIE = "tq_sidebar_collapsed";
 
-function getCurrentStep(pathname: string) {
-  if (pathname.startsWith("/enhance/review")) return 2;
-  return 1;
-}
-
-export default function EnhanceLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const currentStep = getCurrentStep(pathname);
+export default async function EnhanceLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const cookieStore = await cookies();
+  const initialIsCollapsed =
+    cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
 
   return (
-    <DashboardShell initialIsCollapsed={false}>
-      <div className="page-container space-y-8" dir="rtl">
-        <div className="glass-card rounded-xl px-4 py-3">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            {steps.map((item, index) => {
-              const isActive = item.step === currentStep;
-              const isComplete = item.step < currentStep;
-
-              return (
-                <div key={item.path} className="flex flex-1 items-center gap-3">
-                  <div
-                    className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition-colors ${
-                      isActive
-                        ? "border-[var(--tq-blue)] bg-[var(--tq-blue)] text-white"
-                        : "border-white/[var(--glass-border-opacity)] text-muted"
-                    }`}
-                  >
-                    {isComplete ? (
-                      <span className="material-symbols-outlined text-[18px]">check</span>
-                    ) : (
-                      <span>{item.step}</span>
-                    )}
-                    <span>{item.label}</span>
-                  </div>
-                  {index < steps.length - 1 ? (
-                    <span className="hidden h-px w-8 bg-white/[var(--glass-border-opacity)] md:block" />
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+    <DashboardShell initialIsCollapsed={initialIsCollapsed}>
+      <div className="page-container" dir="rtl">
         {children}
       </div>
     </DashboardShell>

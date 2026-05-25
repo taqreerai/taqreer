@@ -33,6 +33,110 @@
 import JSZip from "jszip";
 import { DOMParser } from "@xmldom/xmldom";
 
+// ─── System font classification ───────────────────────────────────
+//
+// Some PPTX themes reference system / OS-bundled fonts (Arial,
+// Helvetica, Calibri, Times New Roman, Tahoma, …) rather than a
+// custom typeface. These need different handling downstream:
+//
+//   • SYSTEM fonts → Claude uses them verbatim in CSS font-family
+//     stacks. No Google Font lookup, no fallback substitution.
+//   • CUSTOM fonts → Claude treats the name as a hint, tries to
+//     resolve to a matching Google Font (Cairo, Tajawal, Playfair
+//     Display, etc.) or falls back to the closest visual cousin.
+//
+// The list below is lowercase normalized; we compare against the
+// extracted typeface in lowercase to avoid "Arial" vs "arial"
+// mismatches. Curated for the typefaces PowerPoint / Keynote /
+// Google Slides actually emit by default on macOS, Windows, and
+// Linux. Not exhaustive — when in doubt, we treat as custom and
+// let Claude figure it out.
+const SYSTEM_FONT_LOWERCASE = new Set([
+  // macOS / iOS
+  "helvetica",
+  "helvetica neue",
+  "san francisco",
+  "lucida grande",
+  "monaco",
+  "menlo",
+  "geneva",
+  "courier",
+  "courier new",
+  // Windows / Office
+  "arial",
+  "arial black",
+  "arial narrow",
+  "calibri",
+  "calibri light",
+  "cambria",
+  "candara",
+  "consolas",
+  "constantia",
+  "corbel",
+  "ebrima",
+  "franklin gothic",
+  "franklin gothic medium",
+  "gabriola",
+  "gadugi",
+  "georgia",
+  "impact",
+  "lucida console",
+  "lucida sans unicode",
+  "ms sans serif",
+  "ms serif",
+  "palatino linotype",
+  "segoe ui",
+  "segoe ui historic",
+  "sitka small",
+  "sitka text",
+  "sylfaen",
+  "symbol",
+  "tahoma",
+  "times",
+  "times new roman",
+  "trebuchet ms",
+  "verdana",
+  "wingdings",
+  // Cross-platform / generic CSS
+  "sans-serif",
+  "serif",
+  "monospace",
+  "system-ui",
+  "cursive",
+  "fantasy",
+]);
+
+export type ClassifiedFonts = {
+  /** Family names that are OS-bundled (Arial, Helvetica, Calibri, …). */
+  systemFonts: string[];
+  /** Family names not in the system list — treated as custom hints. */
+  customFonts: string[];
+  /**
+   * Original combined list in insertion order. Kept for
+   * back-compat with callers that don't need the classification.
+   */
+  allFonts: string[];
+};
+
+/**
+ * Classify an already-extracted typeface name list into system vs
+ * custom. Exported so the dispatcher / deck-generate can both apply
+ * the same rule when given a name from any source.
+ */
+export function classifyFontNames(names: string[]): ClassifiedFonts {
+  const systemFonts: string[] = [];
+  const customFonts: string[] = [];
+  for (const name of names) {
+    const key = name.trim().toLowerCase();
+    if (SYSTEM_FONT_LOWERCASE.has(key)) {
+      systemFonts.push(name);
+    } else {
+      customFonts.push(name);
+    }
+  }
+  return { systemFonts, customFonts, allFonts: names };
+}
+
 // ─── Public API ────────────────────────────────────────────────────
 
 /**

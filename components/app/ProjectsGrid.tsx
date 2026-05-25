@@ -32,13 +32,20 @@ import { motion } from "framer-motion";
 import { ProjectThumbnail } from "@/components/app/ProjectThumbnail";
 import type { SlideFormat } from "@/lib/schema/slide";
 
-// Domino fade-in tuning. Total cascade duration ≈ 800 ms with the
-// default 15-tile page size:
-//   14 gaps × 0.04 s + 0.24 s per tile = 0.80 s at the last tile.
-// Constants here (not magic numbers in JSX) so the rhythm is one
-// edit if we ever want to slow it down / speed it up.
-const STAGGER_BETWEEN_TILES_S = 0.04;
-const TILE_FADE_S = 0.24;
+// Fade-in cascade REMOVED 2026-05-25. The per-tile `motion.div` used
+// to mount with `initial: { opacity: 0 } → animate: { opacity: 1 }`
+// plus a per-tile delay for a domino effect. Got dropped because
+// framer-motion's `initial → animate` doesn't reliably re-fire when
+// the React tree is restored from bfcache (Safari, sometimes Chrome)
+// or Next.js's router cache (any browser) on browser-back navigation.
+// Tiles ended up in the DOM but stuck at `opacity: 0` — a blank grid
+// with no tiles and no empty state. User-reported on /dashboard AND
+// /projects 2026-05-25. /templates was unaffected because it never
+// had the animation in the first place.
+//
+// `layout` (Framer's position animation for delete-backfill / filter
+// reflow) stays — it only fires on position changes, never on initial
+// mount or restore, so it's bfcache-safe.
 
 export type ProjectsGridProject = {
   id: string;
@@ -129,31 +136,17 @@ export function ProjectsGrid({
       key={staggerKey ?? "default"}
       className={`grid ${gridClassName}`}
     >
-      {projects.map((project, index) => (
+      {projects.map((project) => (
         // `layout` animates position changes (delete backfill,
-        // filter narrow). `initial`/`animate`/`transition` drive the
-        // domino fade-in when this tile mounts. The delay scales
-        // linearly with `index` so tile 1 starts at 0, tile N at
-        // (N-1) * STAGGER. Total cascade ≈ 14 * 0.04 + 0.24 = 0.80 s
-        // for a 15-tile page.
+        // filter narrow). Fires only on position deltas — never on
+        // mount or bfcache restore — so it's safe to keep when the
+        // fade-in cascade isn't. The cascade itself (initial:opacity:0
+        // → animate:opacity:1, per-tile delay) was REMOVED 2026-05-25;
+        // see the module header for why. Tiles now render at default
+        // opacity (1) immediately, the same way /templates' tiles do.
         <motion.div
           key={project.id}
-          // `layout` animates position changes when the rendered
-          // set is mutated in place (delete backfill, filter narrow,
-          // search refine). Without it, surviving tiles snap to
-          // their new grid positions instantly while filtered-out
-          // tiles disappear — jarring. WITH it, Framer measures
-          // each tile's before/after position and tweens transform
-          // smoothly (~300 ms spring). Composes with the per-tile
-          // initial/animate cascade above: fresh mounts fade in
-          // with stagger, surviving tiles reflow with layout.
           layout
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{
-            delay: index * STAGGER_BETWEEN_TILES_S,
-            duration: TILE_FADE_S,
-          }}
         >
           <ProjectThumbnail
             projectId={project.id}

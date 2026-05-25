@@ -16,6 +16,8 @@ import { deriveColorTags } from "@/lib/project/derive-color-tags";
 import { generateTemplateName } from "@/lib/template/generate-name";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
+import { classifyFontNames } from "@/lib/extract/fonts-pptx";
+import { repairJson } from "@/lib/extract/json-repair";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -105,7 +107,11 @@ For each text / icon / shape, name the surface it sits on, pick a contrasting co
 - Gradient stops, muted text, pill text within ~10 lightness pts of the background.
 Fallback: white on dark, near-black on light.
 
-OUTPUT — JSON only, no prose, no markdown fences
+OUTPUT — JSON only in the text channel
+- The FIRST character of your text response must be \`{\`. No analysis prose, no acknowledgement, no markdown fences, no "Here's the deck:" preamble.
+- Use your THINKING budget to draft, critique, and refine — iterate freely in thinking. Then commit ONE polished manifest to the text response. The text is your final answer, not a work-in-progress.
+- The live-preview UI reads each slide \`{ ... }\` as it closes. Drafting in text confuses the preview and wastes output tokens; thinking is the right channel for iteration.
+
 {
   "version": "2.0",
   "presentationId": "<echo from brief>",
@@ -145,8 +151,13 @@ type DeckGenerateEvent = {
   enhance?: EnhanceData;
   brief: unknown;
   // User-picked generation quality preset. Maps to model + thinking +
-  // effort below. Optional / unknown values fall back to "medium".
-  quality?: "fast" | "medium" | "quality" | "extreme";
+  // effort below via `paramsForQuality()`. Typed as `string` (not the
+  // strict `Quality` union) so legacy quality values from pre-2026-05-25
+  // queued jobs ("fast", "medium", "quality", "extreme") still flow
+  // through cleanly — paramsForQuality's default branch maps any
+  // unrecognised key to `opus-low` (identical to the old `medium`
+  // default). The expanded matrix lives in `lib/types/quality.ts`.
+  quality?: string;
   // Prisma User row id of the viewer who triggered the run. Plumbed
   // into Phase 16.D `deck.regen.{started,finished}` broadcasts so
   // each receiving client can skip its own self-echo. Optional for
@@ -201,6 +212,19 @@ class StreamingSlideParser {
   private themeStart: number | null = null;
   private themeDepth = 0;
   private themeJson: string | null = null;
+  // Manifest-reset signal. Flips to true when a top-level `}` closes
+  // after the parser had locked onto a `slides` array — i.e., a complete
+  // manifest just finished and any subsequent slides belong to a DIFFERENT
+  // manifest. Observed in the wild on /enhance (PDF document block) where
+  // Claude occasionally drafts a manifest, then re-emits a polished version
+  // in the same response. The caller drains this flag via `didReset()` and
+  // clears its own slide accumulator so the next live-preview snapshot
+  // shows ONLY slides from the latest manifest, not draft + final mixed.
+  // Without this reset the parser would lock onto the draft's slides array
+  // forever (the original `=== null` guard set it once and never cleared),
+  // and the final manifest's slides would stream past unparsed — exactly
+  // the empty-preview / green-checkmarks-only symptom users reported.
+  private resetSignaled = false;
 
   // Walk back over whitespace + `:` + whitespace + `"<key>"` and return
   // true if the quoted key matches `expected`. Used to anchor structural
@@ -280,6 +304,22 @@ class StreamingSlideParser {
             this.themeStart = null;
           }
           this.totalDepth--;
+          // Top-level close: the manifest object just finished. If we had
+          // locked onto its slides array, signal a reset so the caller
+          // discards everything we emitted from it — a new manifest may
+          // be streaming next (draft → polished pattern on /enhance), and
+          // we want the live-preview to reflect ONLY the latest manifest.
+          // Clear our own internal locks too so the next `"slides":` /
+          // `"theme":` re-anchors fresh. completedCount stays as a
+          // monotonic lifetime counter; it's only read by `getCompletedCount()`
+          // which no caller currently uses for live-preview logic.
+          if (this.totalDepth === 0 && this.slidesArrayDepth !== null) {
+            this.slidesArrayDepth = null;
+            this.currentSlideStart = null;
+            this.themeStart = null;
+            this.themeJson = null;
+            this.resetSignaled = true;
+          }
           break;
         case "[":
           this.totalDepth++;
@@ -310,6 +350,16 @@ class StreamingSlideParser {
 
   getThemeJson(): string | null {
     return this.themeJson;
+  }
+
+  // Drains the manifest-reset flag. Returns true if the most recent
+  // advance() observed a top-level `}` that closed a tracked manifest;
+  // the caller should drop any slides it accumulated from that manifest
+  // before processing the next batch. Always resets the flag to false.
+  didReset(): boolean {
+    const r = this.resetSignaled;
+    this.resetSignaled = false;
+    return r;
   }
 }
 
@@ -525,25 +575,39 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // right/left edges line up visually with the chrome below.
     `Content side+top inset: ${sideInsetPx}px (use EXACTLY this value for top / left / right on the content layer; bottom stays 140 px).`,
     ``,
-    // LANGUAGE directive — user-picked on /create/content. The
-    // system prompt is already bilingual-aware (LANGUAGE & DIRECTION
-    // section), so this block doesn't replace those mechanics; it
-    // STATES which mode this specific deck runs in so the model
-    // produces deck text in the chosen language even when the
-    // input content itself is ambiguous (e.g. all numbers, code
-    // samples, or stripped headlines). The OUTPUT JSON
-    // `language` + `direction` fields must mirror these values.
-    ...(briefLang === "en"
+    // LANGUAGE directive.
+    //
+    // For Enhance / Mimic flows: SKIP the picker-driven directive
+    // entirely. The PDF attached as a document block is the ground
+    // truth — Claude detects the original deck's language(s) from
+    // it and preserves them. Forcing AR/EN here would override the
+    // PDF and break the "match content word-for-word" guarantee.
+    // The system prompt's LANGUAGE & DIRECTION section still gives
+    // Claude the per-slide-root direction rules; we just don't
+    // tell him which one to pick.
+    //
+    // For create / scratch flows: keep the user-picked directive
+    // (content language is ambiguous from text alone — numbers,
+    // code samples, etc. need the picker as a signal).
+    ...(event.type === "enhance" ||
+    (event.brief as { source?: { kind?: string } } | null)?.source?.kind ===
+      "enhance" ||
+    (event.brief as { source?: { kind?: string } } | null)?.source?.kind ===
+      "mimic"
       ? [
-          `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
-          `Direction: \`dir="ltr"\` on every slide root. Skip Arabic font fallbacks (Cairo / Tajawal / etc.) — use the Latin font sourcing rules from the system prompt's TYPOGRAPHY section. Inline mixed-script handling (\`<span dir="rtl">\` around any incidental Arabic run) still applies the same way RTL mode handles incidental Latin.`,
-          `Manifest output: \`"language": "en"\`, \`"direction": "ltr"\`.`,
+          `LANGUAGE: Match the attached source PDF EXACTLY. Detect the language of each slide from the PDF (Arabic, English, mixed — whatever you see). Produce visible slide strings in that language, word-for-word. Do NOT translate, transliterate, paraphrase, or change script. The OUTPUT JSON \`language\` + \`direction\` fields must reflect what dominates the PDF.`,
         ]
-      : [
-          `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default. The brief's content may carry inline English runs (URLs, brand names, version numbers, code identifiers) — preserve those verbatim and wrap them in \`<span dir="ltr">\` per the system prompt's LANGUAGE & DIRECTION rules. Don't translate the inline English away.`,
-          `Direction: \`dir="rtl"\` on every slide root. Use the Arabic font stack from the system prompt's TYPOGRAPHY section.`,
-          `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
-        ]),
+      : briefLang === "en"
+        ? [
+            `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
+            `Direction: \`dir="ltr"\` on every slide root. Skip Arabic font fallbacks (Cairo / Tajawal / etc.) — use the Latin font sourcing rules from the system prompt's TYPOGRAPHY section. Inline mixed-script handling (\`<span dir="rtl">\` around any incidental Arabic run) still applies the same way RTL mode handles incidental Latin.`,
+            `Manifest output: \`"language": "en"\`, \`"direction": "ltr"\`.`,
+          ]
+        : [
+            `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default. The brief's content may carry inline English runs (URLs, brand names, version numbers, code identifiers) — preserve those verbatim and wrap them in \`<span dir="ltr">\` per the system prompt's LANGUAGE & DIRECTION rules. Don't translate the inline English away.`,
+            `Direction: \`dir="rtl"\` on every slide root. Use the Arabic font stack from the system prompt's TYPOGRAPHY section.`,
+            `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
+          ]),
     ``,
     `Brief:`,
     JSON.stringify(event.brief, null, 2),
@@ -691,10 +755,20 @@ function buildUserMessage(event: DeckGenerateEvent) {
 // treatment as the rest of the user message.
 type SourceBrief = {
   kind?: "scratch" | "enhance" | "mimic" | "data";
-  slideImageUrls?: Array<{ url: string; index: number }>;
-  uglySlideImageUrls?: Array<{ url: string; index: number }>;
-  designReferenceImageUrls?: Array<{ url: string; index: number }>;
-  extractedAssets?: Array<{ url: string; originalSlide: number }>;
+  // Phase 17.B-7: Anthropic Files API file_ids replace the old
+  // per-slide PNG URLs. Claude reads the PDF natively via a
+  // `document` block — better visual fidelity, no pdfjs/canvas
+  // local rasterization.
+  //
+  // Asset-extraction removed (2026-05-25). Embedded images from
+  // the PPTX zip used to land here as a URL list (with group IDs);
+  // Claude would reference them via `<img src>` in his HTML. We
+  // dropped that path — the extracted assets clashed visually
+  // with Claude's clean inline-SVG output. He now redraws what he
+  // needs from the PDF visual context.
+  anthropicFileId?: string;
+  uglyAnthropicFileId?: string;
+  designAnthropicFileId?: string;
   fonts?: string[];
   dataFileId?: string;
   userContext?: string;
@@ -709,46 +783,55 @@ function readSource(event: DeckGenerateEvent): SourceBrief | null {
 
 function buildSourceContentBlocks(
   event: DeckGenerateEvent,
-): Anthropic.Messages.ImageBlockParam[] | null {
+): Anthropic.Messages.DocumentBlockParam[] | null {
   const source = readSource(event);
   if (!source) return null;
 
-  // Helper — sort by slide index ascending so Claude sees pages in
-  // their original order. Extractors already sort but be defensive.
-  const toImageBlock = (
-    item: { url: string; index: number },
-  ): Anthropic.Messages.ImageBlockParam => ({
-    type: "image",
-    source: { type: "url", url: item.url },
-  });
+  // Helper — wrap an Anthropic Files API file_id as a `document`
+  // block. Per the Files API docs:
+  //   { type: "document", source: { type: "file", file_id } }
+  //
+  // The `{ type: "file", file_id }` source shape is part of the
+  // beta Files API, exposed in the SDK only on
+  // `Anthropic.Beta.Messages.BetaFileDocumentSource`. The
+  // non-beta `DocumentBlockParam.source` union doesn't include
+  // it, but the REST endpoint accepts it when the
+  // `anthropic-beta: files-api-2025-04-14` header is set
+  // (which we do at the messages.stream call below). Cast through
+  // `unknown` to bypass the narrow non-beta type — runtime
+  // validation lives in the API response, not our SDK shims.
+  const toDocBlock = (
+    fileId: string,
+  ): Anthropic.Messages.DocumentBlockParam =>
+    ({
+      type: "document",
+      source: { type: "file", file_id: fileId },
+    }) as unknown as Anthropic.Messages.DocumentBlockParam;
 
   if (source.kind === "enhance") {
-    const slides = (source.slideImageUrls ?? [])
-      .slice()
-      .sort((a, b) => a.index - b.index);
-    return slides.map(toImageBlock);
+    if (!source.anthropicFileId) return null;
+    return [toDocBlock(source.anthropicFileId)];
   }
 
   if (source.kind === "mimic") {
-    // Both groups go in. Claude differentiates them via the text
-    // directive appended in buildSourceTextDirective (UGLY = content,
+    // Both files go in as separate document blocks. Claude
+    // differentiates them via the text directive (UGLY = content,
     // DESIGN reference = visual language). Order: UGLY first, then
-    // DESIGN reference — matches the directive's "files A and B"
-    // labeling.
-    const ugly = (source.uglySlideImageUrls ?? [])
-      .slice()
-      .sort((a, b) => a.index - b.index);
-    const ref = (source.designReferenceImageUrls ?? [])
-      .slice()
-      .sort((a, b) => a.index - b.index);
-    return [...ugly.map(toImageBlock), ...ref.map(toImageBlock)];
+    // DESIGN reference — matches the directive's labeling.
+    const blocks: Anthropic.Messages.DocumentBlockParam[] = [];
+    if (source.uglyAnthropicFileId) {
+      blocks.push(toDocBlock(source.uglyAnthropicFileId));
+    }
+    if (source.designAnthropicFileId) {
+      blocks.push(toDocBlock(source.designAnthropicFileId));
+    }
+    return blocks.length > 0 ? blocks : null;
   }
 
   if (source.kind === "data") {
-    // Data flow doesn't use ImageBlockParam — it'll use a
-    // DocumentBlockParam with the Anthropic file_id once that path
-    // ships. For now, the text directive below tells Claude about
-    // the data, but no image/doc block is prepended.
+    // Data flow uses its own dataFileId via a container_upload
+    // path when wired (Phase 17.D). For now nothing prepended;
+    // text directive below references it.
     return null;
   }
 
@@ -770,46 +853,65 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
   const lines: string[] = [];
 
   if (source.kind === "enhance") {
-    const slides = source.slideImageUrls ?? [];
-    const assets = source.extractedAssets ?? [];
     const fonts = source.fonts ?? [];
     lines.push(
       `SOURCE — Enhance flow`,
-      `${slides.length} slide image(s) attached BEFORE this text. They are PNG snapshots of the user's existing deck (one per page, 1-indexed in attachment order).`,
-      `Your job: regenerate the SAME deck as a polished HTML version. Preserve the visual identity (palette, layout intent, content) while improving typography, hierarchy, whitespace, and execution to editorial quality. Do not introduce new content, fabricate sections, or drop pages — page count and ordering must match.`,
+      `A PDF of the user's existing deck is attached BEFORE this text as a document block. Each page in that PDF is one slide of the original deck (1-indexed by page order).`,
+      ``,
+      `STRICT VERBATIM CONTENT (non-negotiable):`,
+      `  • Every word of text on every slide must match the PDF EXACTLY, in the SAME language as it appears there. Do NOT translate, paraphrase, summarize, expand, abbreviate, transliterate, or "improve" the wording. Numbers, names, dates, quotes — verbatim.`,
+      `  • If the PDF is in English, the generated deck is in English. If Arabic, Arabic. If mixed, preserve the mix exactly as the original.`,
+      `  • Slide count and ordering must match the PDF page-for-page. Do not merge, split, drop, or add slides.`,
+      ``,
+      `ENHANCE THE DESIGN, NOT THE CONTENT:`,
+      `  Re-execute the deck's typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality. Preserve the brand identity (palette, fonts when provided, logo, key visual motifs). The content is locked; only the design changes.`,
+      ``,
+      `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
+      `  • LOGOS:`,
+      `    - If the logo is a WORDMARK (readable text like "Coca-Cola", "IBM", "NIKE"), render it as styled text in the deck. Match the font weight, letter-spacing, and color you can read from the page. No SVG needed.`,
+      `    - If the logo is ICONOGRAPHIC (a mark that's not just letters), emit a placeholder block: a styled <div> with the brand name as a label. The user will swap it in after generation. Do NOT attempt to redraw iconographic logos in SVG — Claude approximations look off.`,
+      `  • PHOTOS / photographic content: emit a styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor", "Photo: product hero shot"). Use the deck's palette for the placeholder background; the user replaces it post-generation. If a photo is purely decorative filler, drop it.`,
+      `  • COMPLEX CHARTS or DIAGRAMS (multi-bar charts, complex flowcharts, org charts, custom illustrations): emit a styled placeholder block with the chart's title and any axis labels you can read. The user replaces it with the actual chart after generation. Do not attempt to reconstruct the data graphically.`,
+      `  • SIMPLE ICONS (utility glyphs — arrows, checkmarks, stars, basic shapes, Lucide-style strokes): inline <svg> in your usual clean style. Fast to draw, looks better than a placeholder.`,
+      `  • DECORATIVE shapes from the original that don't carry meaning: skip them. The redesign is the priority.`,
     );
-    if (assets.length > 0) {
-      lines.push(
-        ``,
-        `Embedded assets available (${assets.length}) — URLs to reuse in your generated slides where they appeared in the originals. Reference them by URL in your <img src> attributes:`,
-        ...assets.map((a) => `  • ${a.url} (was on original slide ${a.originalSlide})`),
-      );
-    }
     if (fonts.length > 0) {
-      lines.push(
-        ``,
-        `Source font candidates (Claude may resolve these to Google Fonts where applicable): ${fonts.slice(0, 6).join(", ")}.`,
-      );
+      // Classify each name into "system" (OS-bundled — use verbatim
+      // in font-family stacks) vs "custom" (treat as a hint, try to
+      // resolve to a Google Font). Lets Claude give system fonts
+      // their canonical stack instead of forcing a Google lookup
+      // that'd never match.
+      const { systemFonts, customFonts } = classifyFontNames(fonts);
+      if (systemFonts.length > 0) {
+        lines.push(
+          ``,
+          `Source SYSTEM fonts (use VERBATIM in CSS \`font-family\` stacks — these are OS-bundled, do NOT try to load via Google Fonts <link>): ${systemFonts.slice(0, 6).join(", ")}.`,
+        );
+      }
+      if (customFonts.length > 0) {
+        lines.push(
+          ``,
+          `Source CUSTOM fonts (treat as hints — resolve to the matching Google Font where possible, e.g. "Cairo" → Cairo, "Tajawal" → Tajawal; fall back to the closest visual cousin if no Google match): ${customFonts.slice(0, 6).join(", ")}.`,
+        );
+      }
     }
   } else if (source.kind === "mimic") {
-    const uglyCount = source.uglySlideImageUrls?.length ?? 0;
-    const refCount = source.designReferenceImageUrls?.length ?? 0;
-    const assets = source.extractedAssets ?? [];
     lines.push(
       `SOURCE — Mimic flow`,
-      `Two file groups attached BEFORE this text:`,
-      `  • UGLY (first ${uglyCount} images): content source. The user wants this content kept verbatim — text, structure, page count.`,
-      `  • DESIGN REFERENCE (next ${refCount} images): visual language source. Mimic this file's typography, palette, spacing, and layout strategy. Do not copy its content.`,
+      `Two PDF document blocks are attached BEFORE this text:`,
+      `  • UGLY (1st document): content source. The user wants this content kept verbatim — text, structure, page count.`,
+      `  • DESIGN REFERENCE (2nd document): visual language source. Mimic this file's typography, palette, spacing, and layout strategy. Do not copy its content.`,
       ``,
       `Your job: take the UGLY content and re-execute it in the DESIGN REFERENCE's visual style. Match design language only; never invent content not in the UGLY file.`,
+      ``,
+      `VISUAL HANDLING — placeholders over redraws:`,
+      `  • Wordmark logos → styled text in the DESIGN REFERENCE's typography.`,
+      `  • Iconographic logos → styled placeholder block with the brand name label (user swaps post-gen).`,
+      `  • Photos → styled placeholder block describing the subject (user swaps post-gen).`,
+      `  • Complex charts / diagrams → styled placeholder block with the chart title + axis labels.`,
+      `  • Simple icons (arrows, checks, Lucide-style strokes) → inline <svg> in the DESIGN REFERENCE's style.`,
+      `  • Decorative shapes that don't carry meaning → skip.`,
     );
-    if (assets.length > 0) {
-      lines.push(
-        ``,
-        `Embedded assets from UGLY file (${assets.length}) — preserve them at the same positions in your output:`,
-        ...assets.map((a) => `  • ${a.url} (was on UGLY slide ${a.originalSlide})`),
-      );
-    }
   } else if (source.kind === "data") {
     lines.push(
       `SOURCE — Data flow`,
@@ -876,11 +978,49 @@ export const deckGenerate = inngest.createFunction(
 
 
     // Resolve quality preset → model + thinking + effort. Falls back
-    // to "medium" via paramsForQuality's default branch when missing
-    // (older queued jobs predating this field).
-    const callParams = paramsForQuality(data.quality);
+    // to `opus-low` via paramsForQuality's default branch when missing
+    // (older queued jobs predating this field, or any unrecognised
+    // legacy key).
+    //
+    // ─── Auto-upgrade sonnet-fast on source-document flows ─────────
+    // Sonnet 4.6 with thinking disabled (the `sonnet-fast` preset)
+    // can't reliably emit the 30+ KB structured output that PDF
+    // document-block flows require — observed on 2026-05-25, a
+    // 9-slide enhance run failed `JSON.parse` 3 times at position
+    // ~31417 and burned ~30k output tokens per attempt with no
+    // recoverable result. Without thinking the model loses
+    // JSON-structure discipline deep into long dense output.
+    //
+    // Force a quiet upgrade to `sonnet-low` (adds minimal adaptive
+    // thinking) for enhance + mimic + data flows. Same Sonnet pricing
+    // tier (~$0.05 extra per run), dramatically more reliable on
+    // long verbatim outputs. The user's preset choice is preserved
+    // on Job.quality for analytics; only the actual API call is
+    // upgraded.
+    const sourceForUpgradeCheck = readSource(data);
+    const sourceKind = sourceForUpgradeCheck?.kind ?? "scratch";
+    const isLongOutputFlow =
+      sourceKind === "enhance" ||
+      sourceKind === "mimic" ||
+      sourceKind === "data";
+    const effectiveQuality =
+      data.quality === "sonnet-fast" && isLongOutputFlow
+        ? "sonnet-low"
+        : data.quality;
+    if (effectiveQuality !== data.quality) {
+      logger.info("claude_quality_auto_upgrade", {
+        from: data.quality,
+        to: effectiveQuality,
+        sourceKind,
+        reason:
+          "sonnet-no-thinking unreliable on long source-document output",
+      });
+    }
+
+    const callParams = paramsForQuality(effectiveQuality);
     logger.info("claude_quality_preset", {
-      quality: data.quality ?? "medium (default)",
+      quality: effectiveQuality ?? "opus-low (default)",
+      requestedQuality: data.quality ?? null,
       model: callParams.model,
       thinking: callParams.thinking.type,
       effort: callParams.outputConfig?.effort ?? "n/a",
@@ -915,9 +1055,11 @@ export const deckGenerate = inngest.createFunction(
       const baseUserMessage = sourceDirective
         ? `${sourceDirective}\n${buildUserMessage(data)}`
         : buildUserMessage(data);
-      // Prepended image blocks (Enhance + Mimic flows). Null for
+      // Prepended document blocks (Enhance + Mimic flows). Null for
       // scratch / data — content stays a plain string in that case.
-      const sourceImageBlocks = buildSourceContentBlocks(data);
+      // Phase 17.B-7: these are PDF `document` blocks now, not
+      // image blocks — Claude renders the PDF internally.
+      const sourceDocumentBlocks = buildSourceContentBlocks(data);
       let lastError = "";
 
       // Progress shown to the user must never go backward. The self-healing
@@ -1049,9 +1191,9 @@ export const deckGenerate = inngest.createFunction(
         // tells him what they mean. Otherwise stays a plain string
         // — preserves the existing scratch / data path.
         const messageContent: string | Anthropic.Messages.ContentBlockParam[] =
-          sourceImageBlocks && sourceImageBlocks.length > 0
+          sourceDocumentBlocks && sourceDocumentBlocks.length > 0
             ? [
-                ...sourceImageBlocks,
+                ...sourceDocumentBlocks,
                 { type: "text" as const, text: userMessage },
               ]
             : userMessage;
@@ -1065,24 +1207,38 @@ export const deckGenerate = inngest.createFunction(
         // quality preset (paramsForQuality). The single stream call
         // shape stays the same regardless of tier — only the model /
         // thinking fields shift.
-        const stream = client.messages.stream({
-          model: callParams.model,
-          max_tokens: 48000,
-          thinking: callParams.thinking,
-          system: [
-            {
-              type: "text",
-              text: SYSTEM_PROMPT,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          // output_config.effort is the API-supported way to modulate
-          // adaptive thinking on the 4.x models — see paramsForQuality.
-          ...(callParams.outputConfig
-            ? { output_config: callParams.outputConfig }
-            : {}),
-          messages: [{ role: "user", content: messageContent }],
-        });
+        const stream = client.messages.stream(
+          {
+            model: callParams.model,
+            max_tokens: 48000,
+            thinking: callParams.thinking,
+            system: [
+              {
+                type: "text",
+                text: SYSTEM_PROMPT,
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+            // output_config.effort is the API-supported way to modulate
+            // adaptive thinking on the 4.x models — see paramsForQuality.
+            ...(callParams.outputConfig
+              ? { output_config: callParams.outputConfig }
+              : {}),
+            messages: [{ role: "user", content: messageContent }],
+          },
+          // Phase 17.B-7: pass the Files API beta header whenever
+          // we attach a `document` block referencing an Anthropic
+          // file_id. Harmless to pass on every call (the header is
+          // a no-op when no file_id is referenced), but we gate on
+          // sourceDocumentBlocks for documentation clarity.
+          sourceDocumentBlocks
+            ? {
+                headers: {
+                  "anthropic-beta": "files-api-2025-04-14",
+                },
+              }
+            : undefined,
+        );
 
         // Live thinking-phase telemetry. Before this listener existed, the
         // pipeline was silent during thinking — DeckView could only show
@@ -1142,6 +1298,19 @@ export const deckGenerate = inngest.createFunction(
               // the existing self-healing retry if needed.
             }
           }
+          // Draft-then-final detection (/enhance flow observation 2026-05-25).
+          // If the parser saw a top-level `}` close a tracked manifest, Claude
+          // is about to stream a SECOND manifest. Drop the just-emitted draft
+          // slides + theme so the next live-preview snapshot reflects ONLY
+          // slides from the polished manifest, not the half-baked draft. The
+          // monotonic guard in DeckView keeps the high-watermark visible
+          // during the brief empty window — no UI tear. extractJson() at the
+          // end of stream uses lastIndexOf("}") so the saved canonical
+          // manifest is the polished one regardless.
+          if (sliceParser.didReset()) {
+            streamingPreview.length = 0;
+            streamingTheme = null;
+          }
 
           // Capture the theme once it appears. Theme is parser-cached
           // so the JSON.parse here only runs while we're between "theme
@@ -1195,9 +1364,48 @@ export const deckGenerate = inngest.createFunction(
         let parsed: unknown;
         try {
           parsed = JSON.parse(jsonStr);
-        } catch (error) {
-          lastError = `JSON.parse failed: ${error instanceof Error ? error.message : String(error)}`;
-          continue;
+        } catch (firstError) {
+          // First attempt with raw output failed. Try the repair pass
+          // before bouncing the attempt — Claude (especially Sonnet
+          // with thinking disabled) occasionally drops a comma or
+          // appends a trailing one in dense 30+ KB outputs. The
+          // repair is string-aware so it won't damage HTML payloads.
+          // See lib/extract/json-repair.ts for what's covered.
+          const repaired = repairJson(jsonStr);
+          try {
+            parsed = JSON.parse(repaired);
+            logger.info("json_parse_recovered_via_repair", {
+              attempt,
+              originalErr:
+                firstError instanceof Error
+                  ? firstError.message
+                  : String(firstError),
+              size: jsonStr.length,
+              repairedDeltaChars: repaired.length - jsonStr.length,
+            });
+          } catch (secondError) {
+            // Both raw + repaired failed. Log diagnostic info so the
+            // next time this fails on a similar input we can pattern-
+            // match — without storing the full 30 KB blob.
+            lastError = `JSON.parse failed: ${secondError instanceof Error ? secondError.message : String(secondError)}`;
+            logger.warn("json_parse_failed_both_raw_and_repair", {
+              attempt,
+              rawErr:
+                firstError instanceof Error
+                  ? firstError.message
+                  : String(firstError),
+              repairErr:
+                secondError instanceof Error
+                  ? secondError.message
+                  : String(secondError),
+              size: jsonStr.length,
+              // Head + tail of the JSON to spot the failure region
+              // without persisting the whole payload.
+              jsonHead: jsonStr.slice(0, 300),
+              jsonTail: jsonStr.slice(-300),
+            });
+            continue;
+          }
         }
 
         const result = SlideManifestSchema.safeParse(parsed);

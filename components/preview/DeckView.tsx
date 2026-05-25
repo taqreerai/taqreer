@@ -2244,8 +2244,15 @@ export function DeckView({
                   جارٍ تصميم عرضك...
                 </h1>
                 {/* Live progress caption — thinking-token counter
-                    during silent thinking, slide-being-designed during
-                    streaming, validating / saving on the tail. */}
+                    during silent thinking, "extracting" during the
+                    designing stage (this caption is only visible when
+                    NO real slide has rendered in the hero, so "designing
+                    slide X of Y" was misleading — the design hasn't
+                    landed yet; we're still preparing), validating /
+                    saving on the tail. /create's fast slide streaming
+                    swaps in a real hero slide before this branch is
+                    ever shown, so this copy is in practice an /enhance
+                    (long-thinking-then-burst) message. */}
                 <div className="text-muted flex items-center justify-center gap-3 text-sm">
                   <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
                   <span>
@@ -2258,7 +2265,7 @@ export function DeckView({
                           : progress?.stage === "saving"
                             ? "حفظ العرض..."
                             : progress?.currentSlide
-                              ? `جارٍ تصميم الشريحة ${progress.currentSlide} من ${total}`
+                              ? "جارٍ استخراج النص والهوية البصرية..."
                               : "بدء التصميم..."}
                   </span>
                 </div>

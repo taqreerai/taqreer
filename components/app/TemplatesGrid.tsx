@@ -1,8 +1,7 @@
 "use client";
 
-// Templates grid — sibling of ProjectsGrid, mirrors its animation
-// rhythm (per-tile staggered fade-in + Framer's `layout` for in-place
-// reflow) so the two libraries feel like the same family at different
+// Templates grid — sibling of ProjectsGrid. Same shape, same set of
+// props, so the two libraries feel like one family at different
 // surfaces. Differences:
 //
 //   • Tiles render via `TemplateTile`, not ProjectThumbnail.
@@ -12,13 +11,23 @@
 //
 // Purely presentational. Pagination, filtering, deletion all owned by
 // the caller — same contract as ProjectsGrid.
+//
+// Fade-in cascade REMOVED 2026-05-25 (same fix applied to ProjectsGrid
+// the same day). The per-tile `motion.div` used to mount with
+// `initial: { opacity: 0 } → animate: { opacity: 1 }` plus a per-tile
+// delay. Dropped because framer-motion's `initial → animate` doesn't
+// reliably re-fire when the React tree is restored from bfcache
+// (Safari, sometimes Chrome) or Next.js's router cache (any browser)
+// on browser-back navigation. Tiles ended up in the DOM but stuck at
+// `opacity: 0` — a blank grid with no tiles and no empty state.
+// User reproduced this on /templates with the same flow as
+// /dashboard + /projects. `layout` (Framer's position animation for
+// delete-backfill / filter reflow) stays — it only fires on position
+// changes, never on initial mount or restore, so it's bfcache-safe.
 
 import { motion } from "framer-motion";
 import { TemplateTile } from "@/components/app/TemplateTile";
 import type { TemplateForBrowse } from "@/app/(app)/templates/types";
-
-const STAGGER_BETWEEN_TILES_S = 0.04;
-const TILE_FADE_S = 0.24;
 
 type Props = {
   templates: TemplateForBrowse[];
@@ -48,16 +57,13 @@ export function TemplatesGrid({
 
   return (
     <div key={staggerKey ?? "default"} className={`grid ${gridClassName}`}>
-      {templates.map((tpl, index) => (
+      {templates.map((tpl) => (
+        // `layout` only — fade-in cascade removed for the same
+        // bfcache/router-cache reason documented in the module
+        // header. Tiles render at default opacity (1) immediately.
         <motion.div
           key={tpl.id}
           layout
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{
-            delay: index * STAGGER_BETWEEN_TILES_S,
-            duration: TILE_FADE_S,
-          }}
         >
           <TemplateTile
             template={tpl}

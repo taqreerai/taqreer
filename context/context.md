@@ -64,18 +64,64 @@ Dashboard → `/create/content`. Three-step wizard, brand decided fresh by Claud
 3. **Summary** (`/create/summary`) — Editable content + rules card. CTA: `إنشاء`. POST `/api/projects` → `/preview/[projectId]`.
 4. **Generate** (`/preview/[projectId]`) — Fires Inngest `deck.generate.requested`. Placeholders + per-card progress polled at 1.5 s. On complete, slides cascade in.
 
-### Flow 2 — Enhance (تحسين) ⏳ Phase 17.B
+### Flow 2 — Enhance (تحسين) ✅ Phase 17.B shipped
 
-Dashboard → `/enhance`. User uploads an "ugly" PPTX / PDF. Server extracts text
-content + theme colors + font families in-memory (streamed multipart upload,
-file deleted post-extract — no persistence). User lands on `/create/brand`
-pre-filled with extracted brand (must still upload logo SVG manually), then
-`/create/summary` with extracted content pre-filled. Submit fires the same
-`deck.generate.requested` event with `source.kind === "enhance"` so `deck-
-generate.ts` branches its system prompt: "Use the original content but
-redesign the visual approach."
+Dashboard → `/enhance`. **Single-shot page** (no stepper, no summary route) —
+2 equal-width glass cards under a brief header + a Generate split-button below.
 
-File cap: **100 MB**.
+**Card 1 — source + logo** (combined): PDF/PPTX dropzone on top (`min-h-160`,
+swaps its content to `filename + size + stage caption` when a file is picked,
+small remove-X overlays in the corner). Hairline divider, then a compact logo
+dropzone underneath (SVG / PNG, optional).
+
+**Card 2 — fonts** (optional): heading + body slots, each with an inline ملف /
+Google pill toggle. Upload mode → `FontUploadSlot` (woff2 / woff / ttf / otf).
+Google mode → `GoogleFontSlot` (searchable combobox over a 16-family catalog,
+8 Arabic + 8 Latin). All three brand picks (logo, heading, body) are optional —
+empty = Claude reads brand identity from the PDF document block, filled = user's
+pick wins on the brief.
+
+**Server pipeline**:
+1. `POST /api/extract` — uploads the source file to `source-files/` bucket,
+   fires `source.extract.requested` Inngest event.
+2. `extract-source.ts` — downloads source, runs `lib/extract/` dispatcher:
+   PPTX → LibreOffice → PDF (or passthrough for PDF), pulls fonts +
+   colors from PPTX theme XML (best-effort, swallowed on error), reads
+   pageCount + first-page aspect ratio via pdf-lib.
+3. PDF bytes uploaded to **Anthropic Files API** (beta `files-api-2025-04-14`)
+   → `file_id`. The job's `outputJson` is the `SourceMeta` blob:
+   `{ anthropicFileId, fonts, colors, pageCount, format }`.
+4. `/enhance/content` polls `GET /api/extract/[jobId]` every 2.5 s. On
+   `completed`, the Generate button activates.
+5. User click → upload logo + font files to `brand-assets/` (parallel) →
+   resolve font slots → `POST /api/projects` with brief carrying
+   `source.kind === "enhance"` + `source.anthropicFileId`.
+6. `deck-generate.ts` branches on `source.kind`: builds a `document` block
+   from the file_id, sets `anthropic-beta: files-api-2025-04-14` header on
+   the Claude call, runs the enhance directive (STRICT VERBATIM CONTENT +
+   ENHANCE THE DESIGN + VISUAL REUSE: redraw logos / icons / illustrations
+   from the PDF as inline SVG, placeholder blocks for photos).
+
+**Deliberate non-features (dropped per user testing 2026-05-25)**:
+- No PPTX zip asset extraction (logos, photos, separators). Extracted raster
+  / SVG assets clashed visually with Claude's clean inline-SVG output style;
+  Claude now reads visuals directly from the PDF and re-draws.
+- No per-slide PNG rasterization. Claude reads the PDF natively (Anthropic
+  Files API document block) — fewer moving parts, better fidelity.
+- No multi-step wizard. The single-shot page hits the typical AI-app pattern
+  (Claude.ai, ChatGPT, v0.dev) — fewer steps, faster path to result.
+
+**SYSTEM_PROMPT discipline for this flow** (covers both /enhance + /mimic):
+draft / critique / refine happens in Claude's THINKING channel (where the
+adaptive thinking budget from `output_config.effort` lives). Text channel
+emits ONE polished manifest, no preamble, no markdown fences, no draft.
+Defensive parser hardening in `StreamingSlideParser.didReset()` handles
+the rare case Claude still emits draft + final in text (top-level `}` close
+on a tracked manifest → resets locks + signals caller to clear preview).
+
+File cap: **100 MB**. State machine: `idle → extracting → ready → submitting`.
+Quality preset picked via the Generate split-button's chevron dropdown
+(`fast | medium | quality | extreme`), defaults to `medium`.
 
 ### Flow 3 — Mimic (محاكاة) ⏳ Phase 17.C
 
@@ -298,7 +344,7 @@ app/api/
 
   // Planned (Phase 17)
   upload/route.ts                                    ⏳  Generic multipart upload (used by all extract routes)
-  enhance/extract/route.ts                           ⏳  In-memory PPTX/PDF parse → StandardBrief (Phase 17.B)
+  extract/route.ts                                   ✅  POST: stages source upload → Inngest source.extract.requested. GET /[jobId]: poll. Phase 17.B shipped (single canonical route for Enhance + future Mimic/Data).
   mimic/extract/route.ts                             ⏳  Ugly extract + good rasterize → StandardBrief + referenceImages (Phase 17.C)
   data/extract/route.ts                              ⏳  Anthropic Files API upload → StandardBrief + dataFileId (Phase 17.D)
 ```
@@ -699,7 +745,7 @@ permanently here as the audit trail.
 | 16.D.5 | **Lock-state as realtime** — `slide.lock.changed` + `slides.locks.bulk-changed`; lock pills flip in lockstep | ✅ |
 | 16.E | **Bell notifications** — `Notification` table, `fanOutNotification` helper, per-user `user:{prismaUserId}` channel, formatted bell rows (slide numbers + gender-neutral verbs), mark-all-read on bell open, 8 emission sites (comment / slide.regen.started / slide.regen.finished / deck.regen.started / deck.regen.finished / deck.generate.finished / share.invited / share.accepted). Grouping disabled per direction "things need to be accurate." | ✅ |
 | **17.A** | **Shared upload + extraction infra (Phase 17 foundation)** — `lib/types/brief.ts` StandardBrief contract w/ optional `source` field; `lib/extract/{pptx,pdf,xlsx,rasterize}.ts` extraction modules; `lib/create/seed-from-extraction.ts` sessionStorage seeder; `deck-generate.ts` prompt branching on `source.kind` | ⏳ next |
-| **17.B** | **Enhance flow** — `/enhance` upload UI, `POST /api/enhance/extract` (in-memory PPTX/PDF parse, file deleted post-extract), Enhance prompt branch | ⏳ |
+| **17.B** | **Enhance flow** — single-shot `/enhance` (2 cards: source+logo + fonts), `POST /api/extract` (Supabase staging + Inngest extract-source: LibreOffice PPTX→PDF, Anthropic Files API upload, PPTX theme fonts/colors), `deck-generate.ts` branches on `source.kind === "enhance"` with VISUAL REUSE directive (Claude reads PDF document block, redraws assets as inline SVG). Asset extraction tried + reverted (clashed visually with Claude's SVG style). Streaming preview hardened: `StreamingSlideParser.didReset()` handles draft→polished pattern; SYSTEM_PROMPT routes iteration to thinking channel. | ✅ shipped 2026-05-25 |
 | **17.C** | **Mimic flow** — `/mimic` two-drop UI, `POST /api/mimic/extract` (ugly extract + good rasterize → base64 PNGs in `source.referenceImages`), multipart Claude message w/ image blocks, Mimic prompt branch | ⏳ |
 | **17.D** | **Data flow** — `/from-data` upload UI, `POST /api/data/extract` (uploads to Anthropic Files API, returns `file_id` into `source.dataFileId`), Data prompt branch, post-generation Anthropic file cleanup | ⏳ |
 | 18 | **Admin panel** — internal-only `/admin` route tree gated by `User.role = "admin"`. User list + filters (plan, country, regens, tokens). Aggregate stats (totals, active-online via Presence, decks/slides generated). Compose-bell-notification UI calling existing `fanOutNotification`. Email blast UI via Resend. Landing-page CMS (Page/Section/PricingPlan schema; landing reads from DB). UX bias: function-over-form, internal tool. **Same Next.js stack — no Laravel.** Reuses Prisma, Supabase auth, fanOutNotification, Resend. | ⏳ after Phase 17 |
