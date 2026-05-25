@@ -28,6 +28,12 @@ type SlideJson = {
   // SlideRenderer doesn't assume RTL/Arabic.
   streamingDirection?: unknown;
   streamingLanguage?: unknown;
+  // Parallel boolean array (indexed same as streamingPreview) marking
+  // which slides came from Claude's FIRST manifest pass. DeckView reads
+  // this to render a "مسودة" chip on draft tiles during /enhance gen.
+  // Only emitted by enhance/mimic/data flows (deck-generate gates the
+  // write); /create runs single-pass so the field stays absent.
+  streamingPreviewDraft?: unknown;
 };
 
 function getSlideJson(value: unknown): SlideJson | null {
@@ -153,6 +159,14 @@ export async function GET(
     slideJson?.streamingLanguage === "ar" || slideJson?.streamingLanguage === "en"
       ? slideJson.streamingLanguage
       : null;
+  // Coerce the parallel draft-flag array to a clean boolean[]. Null when
+  // the field is absent (i.e. /create flow — deck-generate skips writing
+  // it). Capped to the same 60-entry defensive limit as streamingPreview
+  // so the two arrays stay zip-aligned on the client even under runaway
+  // parsers.
+  const streamingPreviewDraft = Array.isArray(slideJson?.streamingPreviewDraft)
+    ? slideJson.streamingPreviewDraft.slice(0, 60).map((v) => v === true)
+    : null;
 
   // Include the FULL slide manifest on the response in either of two cases:
   //
@@ -230,6 +244,7 @@ export async function GET(
     slideCount,
     progress,
     streamingPreview,
+    streamingPreviewDraft,
     streamingTheme,
     streamingDirection,
     streamingLanguage,

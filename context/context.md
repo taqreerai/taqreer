@@ -120,8 +120,22 @@ the rare case Claude still emits draft + final in text (top-level `}` close
 on a tracked manifest → resets locks + signals caller to clear preview).
 
 File cap: **100 MB**. State machine: `idle → extracting → ready → submitting`.
-Quality preset picked via the Generate split-button's chevron dropdown
-(`fast | medium | quality | extreme`), defaults to `medium`.
+
+**Quality preset menu — 4 configs** (final 2026-05-25 — locked):
+- **Sonnet 4.6 · fast** (`sonnet-fast`) — Sonnet 4.6, thinking disabled. Auto-upgrades to `opus-fast` on this flow (source-document JSON saturates Sonnet without thinking).
+- **Opus 4.7 · fast** (`opus-fast`) — Opus 4.7, thinking disabled.
+- **Opus 4.7 · medium** (`opus-balanced`, **default**) — Opus 4.7, adaptive + `effort:medium`. Measured ~$2.58 per 9-slide deck.
+- **Opus 4.7 · high** (`opus-max`) — Opus 4.7, adaptive + `effort:high`. The "deep" tier; produces the draft → polish two-pass behavior that the draft chip surfaces. Measured ~$3.03 per 9-slide deck.
+
+Labels mirror Anthropic's documented effort-tier names so the menu reads as a direct knob over the API config. `effort:max` and `effort:xhigh` were tested and dropped (max stalls on Files API enhance flows; xhigh shows marginal benefit at 1.17× cost). See `context/pricing.md` for the matrix + measured data, `lib/anthropic/quality-params.ts` for the case statements.
+
+**Streaming-side features (enhance/mimic/data flows)**:
+- **Draft chip** — slides emitted during Claude's first manifest pass (the "draft") show a glass-pill `مسودة` chip in the thumbnail corner. Server tracks `manifestVersion` + parallel `streamingPreviewDraft: boolean[]`; on `didReset()` the parser increments version + clears both arrays in lockstep. Client renders the chip via `NavItem.draft` in `SlideNavSidebar`. Gated to `effectiveQuality === "opus-max"` AND `source.kind ∈ {enhance, mimic, data}` (medium/disabled runs are single-pass; the chip would never clear otherwise).
+- **Language detection** — `lib/extract/language-pptx.ts` samples first 3 slides' `<a:t>` text-run XML, counts Arabic vs Latin chars, returns `"ar" | "en" | null`. Threaded into the brief so the preview SlideNavSidebar opens in the source language from the first paint instead of defaulting to Arabic.
+- **`max_tokens: 64000`** — per Anthropic's published guidance for Opus 4.7 max/xhigh effort ("set a large max output token budget ... starting at 64k tokens"). Cross-refs the docs URL in code comment.
+- **`onFailure` hook on deck-generate** — fires once after Inngest exhausts retries; marks Project/Version/Job rows as `failed` so the existing "حاول مرة أخرى" retry button in DeckView surfaces. Pre-fix, failed enhance runs left rows stuck in `queued`/`generating` indefinitely.
+
+**Visual handling rule (logos)** — single non-negotiable: "anything that LOOKS like a logo, brand mark, monogram, or stylized identifier — do NOT attempt to draw it in SVG" (regardless of whether Claude "recognizes" it). Two fallbacks: brand name readable → styled text, otherwise → placeholder div with short label. The previous wordmark/iconographic classification step is gone (it let Claude mis-categorize and proceed to redraw).
 
 ### Flow 3 — Mimic (محاكاة) ⏳ Phase 17.C
 
@@ -756,11 +770,12 @@ permanently here as the audit trail.
 
 ## 17. Implementation Status & Lessons
 
-### Working end-to-end today (as of 2026-05-24)
+### Working end-to-end today (as of 2026-05-25 — Phase 17.B closed)
 
 - **Auth + dashboard.** Supabase email + Google OAuth → real DB-backed dashboard (RecentProjects, MyTemplates, PlanUsage, QuickActions); navigation-back refresh wired so `/enhance → /dashboard` shows fresh project list without manual reload.
-- **Create wizard (Flow 1).** Content → brand → summary, with verbatim toggle, font picker, logo with position + exclusion pills. sessionStorage hydration is fully restore-aware (auto-saves while user clicks Back/Next; doesn't trip on `useLayoutEffect` ordering anymore).
-- **Claude pipeline.** All-Opus tier (Opus 4.7 adaptive thinking on medium/quality/extreme presets, Sonnet 4.6 disabled-thinking on `fast` only) + prompt caching + self-healing Zod retry. Streams text deltas; throttled progress writes; partial-regen `redesign` mode prompt diversifies output when no comments are pinned.
+- **Create wizard (Flow 1) — LOCKED.** Content → brand → summary, with verbatim toggle, font picker, logo with position + exclusion pills. sessionStorage hydration is fully restore-aware. **Phase shipped + locked 2026-05-25**: `app/create/**`, `app/create-from-template/**`, `components/create/**` are immutable for visual/UX/behavior changes (see `memory/feedback_never_touch_create_flow.md`).
+- **Enhance flow (Flow 2) — LOCKED.** Single-shot page (`/enhance`), Anthropic Files API document-block pipeline, language detection from PPTX, 4-preset menu (sonnet-fast / opus-fast / opus-balanced default / opus-max), draft chip on opus-max two-pass runs, `onFailure` hook surfaces retry button, `max_tokens: 64000`. **Phase 17.B closed + locked 2026-05-25** (see `memory/feedback_never_touch_enhance_flow.md`). ~$18.60 of Opus testing went into landing the final shape.
+- **Claude pipeline.** All-Opus tier (Opus 4.7 adaptive thinking on opus-balanced/opus-max presets — `effort: medium`/`high`; Opus 4.7 disabled-thinking on `opus-fast`; Sonnet 4.6 disabled-thinking on `sonnet-fast` only, with auto-upgrade to opus-fast on source-document flows) + prompt caching + self-healing Zod retry. Streams text deltas; throttled progress writes; partial-regen `redesign` mode prompt diversifies output when no comments are pinned. **Dropped from menu after measured testing**: `effort:max` (stalls on Files API enhance), `effort:xhigh` (marginal benefit at 1.17× cost).
 - **Preview window.** Cascade-in, slide-nav, comment authoring with marker preview popup, per-slide pill (regen / history / lock), Save Project, thumbnail pipeline. Hero comment overlay + CommentsPanel both consume live broadcasts.
 - **Partial regen + apply-comments.** Comment-driven slide regen with parallel Claude calls; deck stays visible during regen; atomic version promotion; apply-poller fetches manifest + slideStates + history in one round-trip so the History popover updates live.
 - **PPTX / PDF / PNG / HTML export.** ~99 % Arabic preview ↔ PPT parity. PNG/PDF go through Puppeteer with the same renderer; PDF Range params honoured. "Made with Taqreer" badge on PNG output for view-only sharers.

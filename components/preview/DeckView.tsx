@@ -122,13 +122,15 @@ type Progress = {
   // client falls back to mount-time `Date.now()` as before.
   genStartedAt?: string;
   // Live thinking-phase telemetry — populated by deck-generate's
-  // `stream.on("thinking", …)` handler. Both optional because older
+  // `stream.on("thinking", …)` handler. Optional because older
   // in-flight runs / the fast tier (thinking disabled) won't carry
-  // them. We surface "thinkingTokens / thinkingBudget" in the
-  // caption so the user sees forward motion during the silent
-  // pre-output thinking phase.
+  // it. We no longer surface the count in the caption (dropped
+  // 2026-05-25 — the bare "Thinking..." copy reads cleaner and the
+  // numerator/denominator was noisy noise on max-effort runs where
+  // server-side subagent thinking didn't stream incrementally), but
+  // the field is still read by the "is the run actually advancing"
+  // stuck-detection heuristic in the polling effect below.
   thinkingTokens?: number;
-  thinkingBudget?: number;
 };
 
 function isProgress(value: unknown): value is Progress {
@@ -139,17 +141,6 @@ function isProgress(value: unknown): value is Progress {
     typeof v.currentSlide === "number" &&
     typeof v.estimatedTotal === "number"
   );
-}
-
-// Compact human-readable token count. Sub-thousand: bare integer.
-// Mid-range (1k–10k): one decimal place (e.g. 3.2k). 10k+: rounded
-// integer (e.g. 12k). Keeps the caption short and readable while the
-// budget grows during the thinking phase.
-function formatTokens(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "0";
-  if (n < 1000) return `${Math.round(n)}`;
-  if (n >= 10000) return `${Math.round(n / 1000)}k`;
-  return `${(n / 1000).toFixed(1)}k`;
 }
 
 // Map the streaming progress to a 0..100 % bar. Thinking gets a small head
@@ -385,6 +376,17 @@ export function DeckView({
   // first slide closes in the stream — typically 30–60 s into a
   // generation. Reset to [] when status leaves "generating".
   const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
+  // Parallel boolean array (indexed identical to streamingPreview) flagging
+  // tiles whose slide is still showing Claude's FIRST-pass DRAFT (vs the
+  // polished re-emit). Server only emits this field on enhance/mimic/data
+  // flows; for /create it stays empty and no draft chips render. Kept in
+  // strict zip-alignment with streamingPreview via the same monotonic
+  // guard below — when we accept a new streamingPreview snapshot we also
+  // accept the matching draft array; when we preserve the prior snapshot
+  // we preserve the prior draft array too.
+  const [streamingPreviewDraft, setStreamingPreviewDraft] = useState<boolean[]>(
+    [],
+  );
   // Theme captured from the same stream once Claude closes the
   // `theme` object (always streams before slides). Drives the CSS-var
   // wiring for streamingPreview slides — without it palette / fonts /
@@ -1398,6 +1400,10 @@ export function DeckView({
           slideCount: number;
           progress: Progress | null;
           streamingPreview?: unknown[] | null;
+          // Parallel boolean array — see comment on the matching server
+          // field. Null/missing for /create runs; present and zip-aligned
+          // with streamingPreview on /enhance|mimic|data.
+          streamingPreviewDraft?: unknown[] | null;
           streamingTheme?: unknown;
           streamingDirection?: "rtl" | "ltr" | null;
           streamingLanguage?: "ar" | "en" | null;
@@ -1420,14 +1426,33 @@ export function DeckView({
             const parsed = SlideSchema.safeParse(candidate);
             if (parsed.success) validated.push(parsed.data);
           }
+          // Coerce the parallel draft array to clean booleans (defensive
+          // even though the server already validated). Pad to the validated
+          // length with `false` so the two arrays stay strictly zip-aligned
+          // even if the server briefly emitted one before the other (race
+          // window during writeProgress snapshot — `.slice()` is per-array
+          // and a poll in between could see mismatched lengths).
+          const draftFlags: boolean[] = [];
+          const rawDraft = Array.isArray(data.streamingPreviewDraft)
+            ? data.streamingPreviewDraft
+            : [];
+          for (let i = 0; i < validated.length; i += 1) {
+            draftFlags.push(rawDraft[i] === true);
+          }
           // Monotonic guard — never shrink the preview during a single
           // generation. If a retry restarts Claude from slide 1, the
           // server's `streamingPreview` resets to [], but DeckView keeps
           // the high-watermark list visible until the canonical
-          // `manifest` arrives on completion.
-          setStreamingPreview((prev) =>
-            validated.length >= prev.length ? validated : prev,
-          );
+          // `manifest` arrives on completion. The draft array is gated on
+          // the same accept/preserve decision so the two stay in lockstep.
+          setStreamingPreview((prev) => {
+            const accept = validated.length >= prev.length;
+            if (accept) {
+              setStreamingPreviewDraft(draftFlags);
+              return validated;
+            }
+            return prev;
+          });
         }
         if (data.streamingTheme) {
           const parsed = ThemeSchema.safeParse(data.streamingTheme);
@@ -2112,6 +2137,11 @@ export function DeckView({
           index: idx,
           slide: previewSlide,
           commentCount: 0,
+          // Flag drives the small "مسودة" chip in SlideNavSidebar. True
+          // only when the server tagged this slide as belonging to
+          // Claude's first manifest pass (drafting). Undefined / false
+          // → no chip. Field is absent on /create runs by design.
+          draft: streamingPreviewDraft[idx] === true,
         };
       }
       return {
@@ -2256,17 +2286,15 @@ export function DeckView({
                 <div className="text-muted flex items-center justify-center gap-3 text-sm">
                   <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
                   <span>
-                    {progress?.stage === "thinking" && progress.thinkingBudget
-                      ? `التفكير: ${formatTokens(progress.thinkingTokens ?? 0)} / ${formatTokens(progress.thinkingBudget)} رمز`
-                      : progress?.stage === "thinking"
-                        ? "بدء التفكير..."
-                        : progress?.stage === "validating"
-                          ? "التحقق من المخرجات..."
-                          : progress?.stage === "saving"
-                            ? "حفظ العرض..."
-                            : progress?.currentSlide
-                              ? "جارٍ استخراج النص والهوية البصرية..."
-                              : "بدء التصميم..."}
+                    {progress?.stage === "thinking"
+                      ? "التفكير..."
+                      : progress?.stage === "validating"
+                        ? "التحقق من المخرجات..."
+                        : progress?.stage === "saving"
+                          ? "حفظ العرض..."
+                          : progress?.currentSlide
+                            ? "جارٍ استخراج النص والهوية البصرية..."
+                            : "بدء التصميم..."}
                   </span>
                 </div>
                 <div className="w-full max-w-md">

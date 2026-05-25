@@ -35,6 +35,7 @@ import { PDFDocument } from "pdf-lib";
 import { pptxToPdf } from "./pptx-to-pdf";
 import { extractFontsFromPptx } from "./fonts-pptx";
 import { extractColorsFromPptx } from "./colors-pptx";
+import { detectPptxLanguage } from "./language-pptx";
 
 // ─── Public types ─────────────────────────────────────────────────
 
@@ -76,6 +77,16 @@ export type ExtractionResult = {
    * colors from the PDF visually.
    */
   colors: string[];
+  /**
+   * Detected dominant language of the source file. PPTX inputs go
+   * through `detectPptxLanguage()` (zip text sampling). PDF inputs
+   * return null — no zip to walk, and PDF text extraction would
+   * need a separate dep. Threaded into the brief so the generating-
+   * phase preview UI (SlideNavSidebar direction + lang) matches the
+   * source from the first paint instead of defaulting to Arabic
+   * and switching mid-stream when Claude emits the manifest.
+   */
+  language: "ar" | "en" | null;
 };
 
 // ─── Public API ────────────────────────────────────────────────────
@@ -113,13 +124,16 @@ export async function extract(
   // extraction for a missing theme accent.
   let fonts: string[] = [];
   let themeColors: string[] | null = null;
+  let language: "ar" | "en" | null = null;
   if (isPptx) {
-    const [fontsResult, colorsResult] = await Promise.allSettled([
+    const [fontsResult, colorsResult, langResult] = await Promise.allSettled([
       extractFontsFromPptx(buffer),
       extractColorsFromPptx(buffer),
+      detectPptxLanguage(buffer),
     ]);
     if (fontsResult.status === "fulfilled") fonts = fontsResult.value;
     if (colorsResult.status === "fulfilled") themeColors = colorsResult.value;
+    if (langResult.status === "fulfilled") language = langResult.value;
   }
 
   // Step 3: read PDF metadata for slide count + format.
@@ -157,5 +171,6 @@ export async function extract(
     format,
     fonts,
     colors: themeColors ?? [],
+    language,
   };
 }

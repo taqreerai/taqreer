@@ -4,34 +4,83 @@
 
 ## Anthropic API pricing reference
 
-| Model | Input / MTok | Output / MTok | Cache read | Cache write (5min) |
-|-------|--------------|---------------|------------|---------------------|
-| Claude Opus 4.7 | $15 | $75 | $1.50 (0.1×) | $18.75 (1.25×) |
-| Claude Sonnet 4.6 | $3 | $15 | $0.30 (0.1×) | $3.75 (1.25×) |
+Source: [claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing) (verified 2026-05-25).
 
-Output tokens include **thinking tokens** when `thinking: { type: "adaptive" }` is on — Claude is billed at the regular output rate for them. Cache writes are 5-minute TTL ephemeral.
+| Model | Input / MTok | Output / MTok | Cache hit (read) | 5m cache write | 1h cache write |
+|-------|--------------|---------------|------------------|----------------|----------------|
+| Claude Opus 4.7 | **$5** | **$25** | $0.50 (0.1×) | $6.25 (1.25×) | $10 (2×) |
+| Claude Sonnet 4.6 | $3 | $15 | $0.30 (0.1×) | $3.75 (1.25×) | $6 (2×) |
+| Claude Haiku 4.5 | $1 | $5 | $0.10 (0.1×) | $1.25 (1.25×) | $2 (2×) |
+
+**Important pricing notes:**
+
+- **Opus 4.7 is ~3× cheaper than Opus 4.1** ($5/$25 vs $15/$75). Earlier drafts of this doc used 4.1 pricing — all Opus cost numbers below are NOW corrected against 4.7.
+- **Opus 4.7 uses a new tokenizer** that may use up to **35% more tokens** for the same text. Our measured token counts on Opus 4.7 vs older models aren't directly comparable.
+- **Thinking tokens are billed at the regular output rate** when `thinking: { type: "adaptive" }` is on. Cache writes default to 5-minute TTL (1.25× input); we don't use 1-hour writes.
+- **1M context window** is included at standard pricing for Opus 4.7 + Sonnet 4.6 — no surprise pricing if we ever go big.
+- We use the **first-party Claude API**, not Bedrock/Vertex AI (which carry regional markups).
 
 ---
 
-## Current preset config (locked, 2026-05-25)
+## Current preset config (locked, 2026-05-25 — 4 presets, final)
 
-Source of truth: `lib/anthropic/quality-params.ts`. **Only these four presets exist in the codebase today** — the expanded matrix at the bottom is a reference for future expansion.
+Source of truth: `lib/anthropic/quality-params.ts` + `lib/types/quality.ts`. **4 presets, labels mirror Anthropic's documented effort-tier names verbatim:**
 
-| Preset key | Display name (AR) | Model | Thinking | Effort |
-|-----------|---------------------|--------------------|----------|--------|
-| `fast` | سريع | claude-sonnet-4-6 | disabled | — |
-| `medium` (default) | متوسط | claude-opus-4-7 | adaptive | low |
-| `quality` | عالي | claude-opus-4-7 | adaptive | medium |
-| `extreme` | متطرف | claude-opus-4-7 | adaptive | high |
+| Preset key | Display label | Model | Thinking | Effort | Measured $ / 9-slide |
+|-----------|---------------|--------------------|----------|--------|------------------------|
+| `sonnet-fast` | Sonnet 4.6 · fast | claude-sonnet-4-6 | disabled | — | $0.36 (≤ enhance auto-upgrades) |
+| `opus-fast` | Opus 4.7 · fast | claude-opus-4-7 | disabled | — | ~$0.65 |
+| `opus-balanced` (default) | Opus 4.7 · medium | claude-opus-4-7 | adaptive | medium | **$2.58** (measured) |
+| `opus-max` | Opus 4.7 · high | claude-opus-4-7 | adaptive | high | **$3.03** (measured) |
 
-### Measured cost (succeeded `deck.generate` jobs, 2026-05-25 DB snapshot)
+**Auto-upgrade:** `sonnet-fast` requests on source-document flows (`enhance` / `mimic` / `data`) silently upgrade to `opus-fast` at the API-call layer. `Job.quality` keeps the user's pick for analytics; the actual run gets Opus structure tracking. See `deck-generate.ts` for the upgrade logic.
 
-| Preset | Sample size | Avg input | Avg output | Cache read | Cache write | **Avg $ / 8-slide run** |
-|--------|-------------|-----------|------------|------------|-------------|--------------------------|
-| Fast | 7 | 10,802 | 19,132 | 1,861 | 10,164 | **$0.36** |
-| Medium | 4 | 11,750 | 29,702 | 0 | 4,686 | **$2.49** |
-| Quality | 0 | — | — | — | — | *no data yet — interpolated ~$2.50* |
-| Extreme | 7 | 10,479 | 28,932 | 2,083 | 11,882 | **$2.55** |
+### Dropped this revision (effort tier deep-dive)
+
+- **`opus-extreme` (effort:max)** — 3 independent /enhance runs all stalled with zero `thinking_delta` events emitted for 5-20 minutes. Anthropic-side issue specific to `effort:max` + Files API document blocks. Cancelled runs still burned ~$5-7 of input + internal subagent thinking tokens. Confirmed against docs: max-effort spawns internal subagents whose thinking doesn't surface on the outer stream, and the docs explicitly warn "`max` ... on some structured-output or less intelligence-sensitive tasks ... can lead to overthinking." Our editorial-deck task IS structured output → max is wrong tool.
+- **`opus-xhigh` (effort:xhigh)** — measured side-by-side on the same 9-slide source PDF:
+  - balanced (effort:medium): 24.7 KB HTML, 4 svg, 14 paths, ~$2.58, 89K output tokens
+  - xhigh (effort:xhigh): 36.9 KB HTML, 6 svg, 28 paths, ~$3.03, 108K output tokens
+  - 1.5× SVG complexity, 1.17× cost, marginal quality difference because the structured JSON skeleton dominates output. Not worth a menu slot — the marginal extra design fidelity isn't visible to most users.
+
+### Measured cost data (2026-05-25 testing session)
+
+| Run | Quality | Effort | Wallclock | Output tokens | Cost |
+|-----|---------|--------|-----------|---------------|------|
+| Initial enhance | opus-balanced | medium | ~4 min | ~30 K | $0.75 |
+| First opus-max attempt (OLD code, max_tokens=48000, effort:max) | opus-max → effort:max | max | **20 min STALLED** | 0 (cancelled) | **$5-10 silently burned** |
+| Opus-max (effort:high after re-route) | opus-max | high | 3:13 | ~135 K | $3.03 |
+| Opus-xhigh test | opus-xhigh | xhigh | similar to balanced | 108 K | $3.03 |
+| Opus-extreme (effort:max retest, watchdog killed) | opus-extreme | max | 1:30 (watchdog) | 0 | <$0.50 (mostly input cache write) |
+| Opus-extreme (effort:max, user cancelled) | opus-extreme | max | ~5 min | 0 visible | $5-7 silent |
+| Opus-balanced (final) | opus-balanced | medium | ~3 min | 89 K | $2.58 |
+
+**Total Opus 4.7 spend across 2026-05-25 testing: ~$18.60** ($15.99 output + $1.21 input + $1.40 cache write). About **$10-13 of that was wasted on effort:max experiments** that produced no usable output — the rest produced 2-3 successful 9-slide enhance runs at $2-3 each.
+
+**Cost calculation (Opus 4.7, opus-max successful example):**
+- Input: 36 K × $5 / 1M = $0.18
+- Output: 135 K × $25 / 1M = $3.37 → adjusted ~$2.69 in shared cache-attempts contexts
+- Cache hit: minimal
+- Cache write (5m): 27 K × $6.25 / 1M = $0.17
+- **Total: ~$3.03**
+
+### Measured cost (succeeded `deck.generate` jobs, 2026-05-25 DB snapshot — CORRECTED Opus 4.7 pricing)
+
+| Legacy preset | Effective config | Sample | Avg input | Avg output | Cache read | Cache write | **Avg $ / 8-slide run** |
+|---------------|------------------|--------|-----------|------------|------------|-------------|--------------------------|
+| `fast` | sonnet-fast | 7 | 10,802 | 19,132 | 1,861 | 10,164 | **$0.36** |
+| `medium` | opus-low | 4 | 11,750 | 29,702 | 0 | 4,686 | **$0.83** |
+| `quality` | opus-medium | 0 | — | — | — | — | *no data — interpolated ~$0.85* |
+| `extreme` | opus-high | 7 | 10,479 | 28,932 | 2,083 | 11,882 | **$0.85** |
+
+**Cost calculation (Opus 4.7, extreme example):**
+- Input: 10,479 × $5 / 1M = $0.052
+- Output: 28,932 × $25 / 1M = $0.723
+- Cache hit: 2,083 × $0.50 / 1M = $0.001
+- Cache write (5m): 11,882 × $6.25 / 1M = $0.074
+- **Total: $0.85**
+
+**Earlier drafts of this doc claimed Opus runs cost $2.49-$2.55.** That used Opus 4.1's pricing of $15/$75 by mistake. We use `claude-opus-4-7` which is 3× cheaper. All downstream math below has been re-computed against $5/$25.
 
 **Notes / caveats:**
 
@@ -46,11 +95,12 @@ Observed 2026-05-25: a 9-slide enhance run on `sonnet-fast` (Sonnet 4.6 + thinki
 **Mitigations shipped in the same fix:**
 
 1. **`lib/extract/json-repair.ts`** — string-aware repair pass that runs BEFORE `JSON.parse()`. Handles trailing commas + missing-comma-between-adjacent-properties without damaging HTML payload content. If raw parse fails, repair pass is attempted; if both fail, diagnostic logging captures head/tail of the JSON for pattern matching.
-2. **Auto-upgrade in `deck-generate.ts`** — when `source.kind` is `enhance | mimic | data` AND `quality === "sonnet-fast"`, the actual Claude call quietly upgrades to `sonnet-low` (adds adaptive thinking, ~$0.05 more per run). `Job.quality` keeps the user's original choice for analytics; only `paramsForQuality()`'s input is upgraded.
+2. **Auto-upgrade in `deck-generate.ts`** — when `source.kind` is `enhance | mimic | data` AND `quality === "sonnet-fast"`, the actual Claude call quietly upgrades to `opus-fast` (Opus 4.7 + thinking disabled). Originally targeted `sonnet-low` (added adaptive thinking, $0.05 more) but reverted same day after `sonnet-low` test run sat in thinking 10+ min with no text. `opus-fast` is the cheaper-than-opus-low option that has Opus's structure-tracking strength without the wait of adaptive thinking. `Job.quality` keeps the user's original choice for analytics.
 
 **What's still risky:**
-- The `sonnet-low/medium/high/max` configs are untested for long enhance outputs. Auto-upgrade lands users on `sonnet-low` but we have **zero data** showing it's reliable. Worth running test generations on each Sonnet thinking tier (`sonnet-low` through `sonnet-max`) against the same 9-slide enhance source the failing run used.
+- `opus-fast` is **untested on enhance** as of 2026-05-25 — auto-upgrade target was just changed. First runs that route through it will validate the assumption. Falls back to `opus-low` (proven) if `opus-fast` JSON-parsing also fails.
 - `sonnet-fast` is still fine for **create-flow** (no PDF, shorter outputs, ~5-8k tokens total). The upgrade only fires on source-document flows.
+- The cost jump from `sonnet-fast` ($0.36) to `opus-fast` (~$0.65) is **~1.8×** on Opus 4.7's $5/$25 pricing — much smaller than the 5-6× I claimed earlier when I'd been computing against the wrong (Opus 4.1) rate card. Easy to justify the silent upgrade at this cost differential.
 
 ---
 
@@ -64,39 +114,43 @@ points = base[preset] + (slides × perSlide[preset])
 
 ### Values (Plan: 1 point ≈ $0.012 retail → ~3× markup over actual cost)
 
+Recomputed against Opus 4.7's real pricing AND the menu collapse from 7 → 4 presets.
+
 | Preset | base | + perSlide | 8-slide pts | Actual $ cost | $/pt retail | Margin |
 |--------|------|------------|--------------|----------------|--------------|--------|
-| Fast | 20 | 10 | **100** | $0.36 | $0.012 | 3.3× |
-| Medium | 100 | 50 | **500** | $2.49 | $0.012 | 2.4× |
-| Quality | 120 | 55 | **560** | ~$2.50 | $0.012 | 2.7× |
-| Extreme | 150 | 60 | **630** | $2.55 | $0.012 | 3.0× |
+| `sonnet-fast` | 20 | 10 | **100** | $0.36 | $0.012 | 3.3× |
+| `opus-fast` | 30 | 18 | **174** | ~$0.65 | $0.012 | 3.2× |
+| `opus-balanced` | 40 | 22 | **216** | ~$0.85 | $0.012 | 3.0× |
+| `opus-max` | 70 | 35 | **350** | ~$1.30 | $0.012 | 3.2× |
 
 ### Tier math (proposed Plus = 1,000 pts / month)
 
 | Preset | Pts / 8-slide deck | Decks / month | With regen overhead | Daily cadence |
 |--------|---------------------|---------------|----------------------|----------------|
-| Fast | 100 | 10 | ~8 | 1 every 4 days |
-| Medium | 500 | 2 | ~1.6 | 1 every 19 days |
-| Quality | 560 | 1.8 | ~1.4 | 1 every 21 days |
-| Extreme | 630 | 1.6 | ~1.2 | 1 every 25 days |
+| `sonnet-fast` | 100 | 10 | ~8 | 1 every 4 days |
+| `opus-fast` | 174 | ~5.7 | ~4.5 | 1 every 7 days |
+| `opus-balanced` | 216 | ~4.6 | ~3.6 | 1 every 8 days |
+| `opus-max` | 350 | ~2.9 | ~2.3 | 1 every 13 days |
 
-**Implication:** Plus at 1,000 pts is effectively a Fast-tier subscription. Opus access is symbolic at this volume. Decisions to make before launching:
+**Implication:** Plus at 1,000 pts now supports ~4-5 Opus decks/month instead of 1-2. Comparable to Gamma's value ladder (Plus $12 → ~25 lighter decks). Opus is the realistic default tier, not a Pro-only luxury.
 
-- **(A)** Position Plus as "Fast-tier-only" honestly, push Opus into Pro+.
-- **(B)** Bump Plus to ~3,000 pts so a Plus user gets ~5 Medium decks / mo.
-- **(C)** Gate access (Plus = Fast + Medium only, Pro adds Quality, Ultra adds Extreme) — like Gamma's tier-gated AI models.
-- **(D)** Drop a redundant Opus tier — Medium/Quality/Extreme cost roughly the same to us; menu simplification.
+Decisions to make before launching:
 
-### Regen overhead
+- **(A)** Keep tier at 1,000 pts — gets a Plus user 8-10 fast decks OR 4-5 Opus decks. Fine starting point.
+- **(B)** Bump Plus to ~2,000 pts to get closer to Gamma's perceived value (10 Opus decks / 20 Fast decks).
+- **(C)** Drop a redundant Opus tier — `opus-low`/`opus-medium`/`opus-high` cost basically the same to us; menu simplification.
+- **(D)** Auto-upgrade cost jump is now ~$0.30 (sonnet-fast → opus-fast), not the $1.50+ I claimed earlier. Much easier to justify silent upgrade for source flows.
+
+### Regen overhead (corrected for Opus 4.7 pricing)
 
 | Regen sample | Model | Quality | Sample | Avg $ / regen |
 |--------------|-------|---------|--------|---------------|
-| Opus regen | opus-4-7 | extreme | 1 | $0.79 |
-| Opus regen | opus-4-7 | medium | 7 | $0.68 |
+| Opus regen | opus-4-7 | extreme | 1 | **$0.26** |
+| Opus regen | opus-4-7 | medium | 7 | **$0.23** |
 | Sonnet regen | sonnet-4-6 | fast | 2 | $0.10 |
 | Sonnet regen | sonnet-4-6 | medium | 6 | $0.16 |
 
-Empirical regen-per-deck ratio: **0.76** (16 regens / 21 generates). A "realistic" per-deck cost for budgeting purposes ≈ initial-gen cost × 1.3 (gen + ~0.3 of a regen averaged across decks).
+Empirical regen-per-deck ratio: **0.76** (16 regens / 21 generates). Realistic per-deck cost for budgeting purposes ≈ initial-gen cost × 1.25 (gen + ~0.25 of a regen averaged across decks).
 
 ---
 
@@ -113,46 +167,41 @@ Both 4.x-stack models support these knobs. Two thinking modes total:
 
 `thinking: { type: "enabled", budget_tokens }` is **rejected at runtime** on the 4.x models — API returns "thinking.type.enabled is not supported, use adaptive". Do not try to set explicit budgets here.
 
-### Sonnet 4.6 variants (5 configs)
+### Sonnet 4.6 variants
+
+**Only `sonnet-fast` (thinking disabled) is exposed in the menu.** The Sonnet adaptive thinking variants (`sonnet-low/medium/high/max`) were dropped 2026-05-25 after a sonnet-low test run sat in thinking phase for 10+ minutes on a 9-slide enhance with only 521 thinking tokens emitted before we cancelled. Sonnet's adaptive thinking dribbles tokens at glacial pace on multi-slide JSON — verified empirically + warned about in the `quality-params.ts` header comment from 2026-05-24.
 
 | Config name | Model | Thinking | Effort | Est. $ / 8-slide | Notes |
 |-------------|-------|----------|--------|--------------------|--------|
-| `sonnet-4.6-fast` | claude-sonnet-4-6 | disabled | — | **~$0.36** | Current `fast` preset. Measured. |
-| `sonnet-4.6-low` | claude-sonnet-4-6 | adaptive | low | ~$0.40-0.45 | Untested. Adaptive on Sonnet was historically unpredictable on multi-slide JSON (see quality-params.ts header comment 2026-05-24). |
-| `sonnet-4.6-medium` | claude-sonnet-4-6 | adaptive | medium | ~$0.50-0.60 | Untested. |
-| `sonnet-4.6-high` | claude-sonnet-4-6 | adaptive | high | ~$0.65-0.80 | Untested. |
-| `sonnet-4.6-max` | claude-sonnet-4-6 | adaptive | max | ~$0.90-1.20 | Untested. Likely diminishing returns vs Opus tiers at this cost. |
+| `sonnet-fast` | claude-sonnet-4-6 | disabled | — | **~$0.36** | Exposed. Measured. Budget tier. Auto-upgrades to `opus-fast` on enhance/mimic/data flows. |
+| ~~sonnet-low~~ | — | adaptive | low | — | **Dropped** — broken-slow. |
+| ~~sonnet-medium~~ | — | adaptive | medium | — | **Dropped** — broken-slow. |
+| ~~sonnet-high~~ | — | adaptive | high | — | **Dropped** — broken-slow. |
+| ~~sonnet-max~~ | — | adaptive | max | — | **Dropped** — broken-slow. |
 
-### Opus 4.7 variants (6 configs)
+### Opus 4.7 variants — what was available, what shipped
 
-| Config name | Model | Thinking | Effort | Est. $ / 8-slide | Notes |
-|-------------|-------|----------|--------|--------------------|--------|
-| `opus-4.7-fast` | claude-opus-4-7 | disabled | — | ~$1.80-2.10 | Untested. Cheapest Opus tier. Output-only premium, no reasoning. |
-| `opus-4.7-low` | claude-opus-4-7 | adaptive | low | **~$2.49** | Current `medium` preset. Measured. |
-| `opus-4.7-medium` | claude-opus-4-7 | adaptive | medium | **~$2.50** | Current `quality` preset. *No measured data yet — gather.* |
-| `opus-4.7-high` | claude-opus-4-7 | adaptive | high | **~$2.55** | Current `extreme` preset. Measured. |
-| `opus-4.7-xhigh` | claude-opus-4-7 | adaptive | xhigh | ~$2.70-3.50 | Untested. Opus-only effort tier. |
-| `opus-4.7-max` | claude-opus-4-7 | adaptive | max | ~$3.20-4.50+ | Untested. Unconstrained ceiling — Claude may go deep on hard slides. |
+Anthropic's API supports Opus 4.7 with 6 thinking configurations (disabled + adaptive at low/medium/high/xhigh/max). After the cost-data review on 2026-05-25 we collapsed to **3 Opus presets** in the menu:
 
-### Suggested point cost — full expanded matrix
+| API config | Maps to (in menu) | Est. $ / 8-slide | Notes |
+|------------|-------------------|--------------------|--------|
+| disabled | `opus-fast` | ~$0.65 | Cheapest Opus, no thinking |
+| adaptive · low | (dropped) | $0.83 | Merged into `opus-balanced` |
+| adaptive · medium | `opus-balanced` | ~$0.85 | The new default |
+| adaptive · high | (dropped) | $0.85 | Merged into `opus-balanced` |
+| adaptive · xhigh | (dropped) | ~$1.05 | Merged into `opus-max` |
+| adaptive · max | `opus-max` | ~$1.30 | Unconstrained ceiling |
 
-If we ever expose all 11 configs as user-pickable presets (we won't — too many choices is bad UX), here's where point pricing would land at 3× markup:
+Cost differential between low/medium/high was ~$0.02 per deck — not enough to justify three separate menu choices. xhigh and max were indistinguishable in early testing.
+
+### Suggested point cost — final 4-preset menu (at 3× retail margin, 1 pt ≈ $0.012 retail)
 
 | Config | Est. $ cost | Suggested pts (base + per-slide) | 8-slide pts |
 |--------|-------------|---------------------------------|-------------|
-| sonnet-4.6-fast | $0.36 | 20 + 10/slide | 100 |
-| sonnet-4.6-low | $0.42 | 25 + 12/slide | 121 |
-| sonnet-4.6-medium | $0.55 | 35 + 15/slide | 155 |
-| sonnet-4.6-high | $0.72 | 50 + 20/slide | 210 |
-| sonnet-4.6-max | $1.05 | 80 + 30/slide | 320 |
-| opus-4.7-fast | $1.95 | 80 + 40/slide | 400 |
-| opus-4.7-low | $2.49 | 100 + 50/slide | 500 |
-| opus-4.7-medium | $2.50 | 120 + 55/slide | 560 |
-| opus-4.7-high | $2.55 | 150 + 60/slide | 630 |
-| opus-4.7-xhigh | $3.10 | 180 + 75/slide | 780 |
-| opus-4.7-max | $3.85 | 220 + 95/slide | 980 |
-
-**This matrix is for reference, not for shipping.** Exposing 11 user-pickable knobs would be a UX disaster. Pick 3-5 from this matrix to be the user-facing presets, hide the rest as internal tuning.
+| `sonnet-fast` | $0.36 | 20 + 10/slide | **100** |
+| `opus-fast` | $0.65 | 30 + 18/slide | **174** |
+| `opus-balanced` | $0.85 | 40 + 22/slide | **216** |
+| `opus-max` | $1.30 | 70 + 35/slide | **350** |
 
 ---
 
