@@ -49,7 +49,15 @@ export type ProjectActionsMenuActions = {
   onRename?: () => void;
   onToggleFavorite?: () => void;
   onCopyLink?: () => void;
-  onUseAsTemplate?: () => void;
+  // `onUseAsTemplate` removed 2026-05-25 — the project-tile "use
+  // as template" entry pointed to a Phase 9f stub route
+  // (`/create/from/[projectId]`) that was never built, AND it
+  // conflicted with /enhance and /mimic flows where "use the
+  // project's brand to seed a new deck" doesn't have a clear
+  // shape. Templates from the /templates page still work via
+  // TemplateTile.handleUseAsTemplate → seedFromTemplate() →
+  // /create-from-template/content. Surface the working path
+  // through Save copy as template → /templates → Use this template.
   onSaveAsTemplate?: () => void;
   onSendToTrash?: () => void;
 };
@@ -64,7 +72,6 @@ export function ProjectActionsMenu({
   onRename,
   onToggleFavorite,
   onCopyLink,
-  onUseAsTemplate,
   onSaveAsTemplate,
   onSendToTrash,
   onExitComplete,
@@ -219,13 +226,6 @@ export function ProjectActionsMenu({
               icon="link"
               label="نسخ الرابط"
               onClick={onCopyLink}
-              closeAfter
-              onClose={onClose}
-            />
-            <MenuItem
-              icon="dashboard_customize"
-              label="استخدامه كقالب"
-              onClick={onUseAsTemplate}
               closeAfter
               onClose={onClose}
             />

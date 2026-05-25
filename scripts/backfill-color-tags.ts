@@ -63,7 +63,11 @@ async function main() {
     let written = 0;
     for (const project of projects) {
       const brief = parseBrief(project.aiPrompt);
-      const briefColors = extractStringArray(brief?.brand?.colors);
+      // Pass `brief.brand` straight in — `extractStringArray` has a
+      // built-in branch that pulls `.colors` off a plain object when no
+      // explicit `key` is given. Keeps the call type-safe without
+      // adding a cast for an unknown-typed nested property.
+      const briefColors = extractStringArray(brief?.brand);
       const manifestColors = extractStringArray(
         project.presentation?.versions[0]?.slideJson &&
           typeof project.presentation.versions[0].slideJson === "object"

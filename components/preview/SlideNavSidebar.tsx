@@ -46,6 +46,14 @@ export type NavItem =
       // (user feedback 2026-05-20: a small corner icon was too easy
       // to miss when scanning a 15-slide deck for locked rows).
       locked?: boolean;
+      // True while the server flagged this slide as belonging to
+      // Claude's FIRST manifest pass (draft pass). Renders a small
+      // "مسودة" chip in the thumbnail corner so the user knows the
+      // visual will be replaced by the polished re-emit. /enhance|
+      // mimic|data only — /create runs single-pass and never sets
+      // this. Drops away in the same frame the polished pass lands
+      // (server clears its parallel flag array on the second pass).
+      draft?: boolean;
     };
 
 export function SlideNavSidebar({
@@ -388,6 +396,35 @@ export function SlideNavSidebar({
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55">
                   <span className="spinner h-5 w-5 rounded-full border-2 border-white/30 border-t-white" />
                 </div>
+              ) : null}
+
+              {/* Draft badge — pinned to the physical TOP-START corner
+                  of the thumbnail, used on /enhance|mimic|data when
+                  this slide is Claude's first pass. Clears in the same
+                  frame the polished pass lands (server resets the
+                  parallel draft array on `didReset`, the monotonic
+                  guard in DeckView accepts the new full list, and
+                  `item.draft` becomes false across the deck in one
+                  snap — reads to the user as "drafts are now finals").
+                  Style matches the in-slide control pill recipe
+                  (`SlidePill.tsx` + `.slides_pill` in globals.css):
+                  `--tq-bg` (#0E0E18) at 0.55 alpha + `backdrop-blur-
+                  glass` + `backdrop-saturate(--glass-saturation)`.
+                  Previous iterations were too transparent (amber 30 %
+                  blended into cream slides) or too solid (bg-black
+                  felt heavy); matching the slide-pill recipe keeps
+                  the chip readable on any palette while feeling like
+                  in-slide chrome rather than a foreign label.
+                  `start-0` resolves to the logical inline-start (right
+                  in RTL, left in LTR) so it never collides with the
+                  comment-count badge in the opposite corner. */}
+              {item.kind === "slide" && item.draft ? (
+                <span
+                  aria-hidden
+                  className="pointer-events-none backdrop-blur-glass backdrop-saturate-(--glass-saturation) absolute top-1 start-1 rounded-full bg-[color-mix(in_oklab,var(--tq-bg)_55%,transparent)] px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white"
+                >
+                  مسودة
+                </span>
               ) : null}
 
               {/* Locked overlay — centred padlock icon on a faintly

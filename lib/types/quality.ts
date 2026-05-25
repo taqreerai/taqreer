@@ -2,36 +2,62 @@
 // through POST /api/projects → the Inngest event → deck-generate's
 // Claude call params (model + thinking + effort).
 //
-// ─── Expanded preset matrix (2026-05-25) ─────────────────────────
-// Each preset is named by its EXACT Anthropic API config — `model`
-// (sonnet | opus) + thinking budget tier — so the picker reads as
-// "exactly what this run will do" instead of opaque labels like
-// "Medium" / "Extreme". 11 configs total:
-//   • Sonnet 4.6: fast (no thinking) + adaptive low/medium/high/max
-//   • Opus 4.7:   fast (no thinking) + adaptive low/medium/high/xhigh/max
-// `xhigh` is Opus-4.7-exclusive — Sonnet returns 400 on that effort tier.
-// `max` is unconstrained on both.
+// ─── Collapsed preset matrix (2026-05-25, fifth revision) ─────────
+// 4 configs. opus-xhigh (effort:xhigh) dropped this revision after
+// docs + data both pointed against it for our task:
 //
-// Legacy quality values from before this expansion (`"fast"`,
-// `"medium"`, `"quality"`, `"extreme"`) are still accepted by
-// `paramsForQuality()` via its default branch so old queued jobs +
-// stored Job.quality strings still resolve to a valid Claude call.
-// The UI and new writes use the expanded keys below.
+//   • Anthropic docs explicitly flag effort:max as overthink-prone on
+//     "structured-output or less intelligence-sensitive tasks" — and
+//     our deck generation is structured output (Zod-validated JSON
+//     manifest). xhigh inherits the same overthink risk one tier
+//     down.
+//   • Measured side-by-side runs on the same source PDF:
+//     opus-balanced (medium) — 24.7 KB HTML, 4 svg, 14 paths, ~$2.58
+//     opus-xhigh   (xhigh)  — 36.9 KB HTML, 6 svg, 28 paths, ~$3.03
+//     1.5× SVG complexity, 1.17× cost, marginal quality difference
+//     because the structured JSON skeleton dominates output. Not
+//     worth a menu slot.
 //
-// Default = `opus-low` — matches the behavior of the previous
-// `medium` default (Opus 4.7 + adaptive thinking, effort:low).
+// Menu (key → API config → label shown to user):
+//   sonnet-fast    → claude-sonnet-4-6 + thinking disabled              "Sonnet 4.6 · fast"
+//   opus-fast      → claude-opus-4-7   + thinking disabled              "Opus 4.7 · fast"
+//   opus-balanced  → claude-opus-4-7   + adaptive + effort:medium       "Opus 4.7 · medium"     (DEFAULT)
+//   opus-max       → claude-opus-4-7   + adaptive + effort:high         "Opus 4.7 · high"
+//
+// Labels mirror Anthropic's documented effort-tier names verbatim
+// (medium / high) so the menu surfaces the actual knob rather
+// than product-side aliases. Keys stay stable for already-shipped
+// tiers (opus-balanced / opus-max) so legacy Job rows still
+// resolve to the same API config via paramsForQuality().
+//
+// ─── What got dropped (2026-05-25) ────────────────────────────────
+// • Sonnet adaptive variants (sonnet-low/medium/high/max) — verified
+//   broken-slow on multi-slide JSON (sonnet-low test sat in thinking
+//   10+ min on a 9-slide enhance with no text emitted).
+// • Opus effort tiers low / high / xhigh — collapsed into `balanced`
+//   (effort:medium). Cost data showed no meaningful differentiation
+//   between low/medium/high on our task. xhigh and max were
+//   indistinguishable in early tests; kept `max` as the headline
+//   "go deep" option.
+//
+// ─── Legacy compatibility ─────────────────────────────────────────
+// All previous Quality keys are accepted at the runtime layer and
+// fall through to `opus-balanced`-equivalent params via the default
+// branch in `paramsForQuality()`. No DB migration needed. Affected
+// legacy keys:
+//   • Original 4 ("fast" / "medium" / "quality" / "extreme")
+//   • Phase 17.B-expansion 11 (sonnet-low/medium/high/max,
+//     opus-low/medium/high/xhigh)
+// All resolve to opus + adaptive + effort:low at runtime (which is
+// what they did before the collapse — identical behavior, just no
+// longer exposed as picker options).
+//
+// Default = `opus-balanced` — the new mid-tier sweet spot.
 
 export type Quality =
   | "sonnet-fast"
-  | "sonnet-low"
-  | "sonnet-medium"
-  | "sonnet-high"
-  | "sonnet-max"
   | "opus-fast"
-  | "opus-low"
-  | "opus-medium"
-  | "opus-high"
-  | "opus-xhigh"
+  | "opus-balanced"
   | "opus-max";
 
 export const QUALITY_PRESETS: ReadonlyArray<{
@@ -40,47 +66,48 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // `<Model display> · <effort>` so the user sees the exact API config
   // and can map preset → measured cost in context/pricing.md.
   label: string;
+  // Whether the preset uses adaptive extended thinking. Drives the
+  // little "thinking" / "no thinking" chip rendered next to the label
+  // in the dropdown, so the user can spot at a glance which presets
+  // pay the thinking-budget surcharge AND wait-time. Matches the
+  // `thinking.type` in `paramsForQuality()` for each preset.
+  thinking: boolean;
   // Rough constants used to estimate ETA to the user. Sonnet (no
   // thinking) is fastest; Opus with high thinking budgets is slowest.
   // These drive the muted "~N د" tag on the pill — actual model params
-  // live in `lib/anthropic/quality-params.ts`. Numbers are educated
-  // extrapolations from the small sample we have today; refine as
-  // more data lands per `context/pricing.md`.
+  // live in `lib/anthropic/quality-params.ts`. Numbers are tuned against
+  // measured runs on the /enhance flow (2026-05-25 calibration pass):
+  // opus-max on a 9-slide deck ran ~5–9 min wallclock; previous numbers
+  // (95/220 → 18 min estimate) were ~2× too high. New constants land
+  // closer to measured wallclock while keeping a small safety margin so
+  // we don't under-promise.
   secsPerSlide: number;
   baseOverheadSecs: number;
 }> = [
-  // ─── Sonnet 4.6 (5 configs) ─────────────────────────────────────
-  { key: "sonnet-fast",   label: "Sonnet 4.6 · fast",   secsPerSlide: 25, baseOverheadSecs: 20 },
-  { key: "sonnet-low",    label: "Sonnet 4.6 · low",    secsPerSlide: 30, baseOverheadSecs: 35 },
-  { key: "sonnet-medium", label: "Sonnet 4.6 · medium", secsPerSlide: 35, baseOverheadSecs: 50 },
-  { key: "sonnet-high",   label: "Sonnet 4.6 · high",   secsPerSlide: 40, baseOverheadSecs: 70 },
-  { key: "sonnet-max",    label: "Sonnet 4.6 · max",    secsPerSlide: 50, baseOverheadSecs: 100 },
-  // ─── Opus 4.7 (6 configs) ───────────────────────────────────────
-  { key: "opus-fast",     label: "Opus 4.7 · fast",     secsPerSlide: 35, baseOverheadSecs: 40 },
-  { key: "opus-low",      label: "Opus 4.7 · low",      secsPerSlide: 40, baseOverheadSecs: 60 },
-  { key: "opus-medium",   label: "Opus 4.7 · medium",   secsPerSlide: 50, baseOverheadSecs: 90 },
-  { key: "opus-high",     label: "Opus 4.7 · high",     secsPerSlide: 60, baseOverheadSecs: 120 },
-  { key: "opus-xhigh",    label: "Opus 4.7 · xhigh",    secsPerSlide: 75, baseOverheadSecs: 160 },
-  { key: "opus-max",      label: "Opus 4.7 · max",      secsPerSlide: 95, baseOverheadSecs: 220 },
+  // Labels mirror Anthropic's effort-tier names verbatim
+  // (medium / high / max — see /docs/en/build-with-claude/effort)
+  // so the menu reads as a direct knob over the API config rather
+  // than inventing product-side aliases ("balanced", "extreme", etc.)
+  // that obscured what was actually being requested. Keys stay
+  // stable so existing Job rows storing legacy `quality` strings
+  // still resolve to the same API config via paramsForQuality().
+  { key: "sonnet-fast",    label: "Sonnet 4.6 · fast",     thinking: false, secsPerSlide: 15, baseOverheadSecs: 15 },
+  { key: "opus-fast",      label: "Opus 4.7 · fast",       thinking: false, secsPerSlide: 20, baseOverheadSecs: 30 },
+  { key: "opus-balanced",  label: "Opus 4.7 · medium",     thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
+  { key: "opus-max",       label: "Opus 4.7 · high",       thinking: true,  secsPerSlide: 40, baseOverheadSecs: 90 },
 ];
 
-// Default — Opus 4.7 + adaptive low. Matches the behavior of the
-// previous `medium` preset (which itself defaulted to Opus low after
-// the 2026-05-24 reshuffle that moved Sonnet out of the thinking tiers).
-export const DEFAULT_QUALITY: Quality = "opus-low";
+// Default — Opus 4.7 + adaptive medium thinking. The "balanced"
+// tier: enough thinking for the editorial-deck task without the
+// runtime tail of `max`. New default after the 2026-05-25 collapse
+// from 7 → 4 presets.
+export const DEFAULT_QUALITY: Quality = "opus-balanced";
 
 export function isQuality(value: unknown): value is Quality {
   return (
     value === "sonnet-fast" ||
-    value === "sonnet-low" ||
-    value === "sonnet-medium" ||
-    value === "sonnet-high" ||
-    value === "sonnet-max" ||
     value === "opus-fast" ||
-    value === "opus-low" ||
-    value === "opus-medium" ||
-    value === "opus-high" ||
-    value === "opus-xhigh" ||
+    value === "opus-balanced" ||
     value === "opus-max"
   );
 }

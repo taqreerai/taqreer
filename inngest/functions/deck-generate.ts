@@ -867,9 +867,11 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       `  Re-execute the deck's typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality. Preserve the brand identity (palette, fonts when provided, logo, key visual motifs). The content is locked; only the design changes.`,
       ``,
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
-      `  • LOGOS:`,
-      `    - If the logo is a WORDMARK (readable text like "Coca-Cola", "IBM", "NIKE"), render it as styled text in the deck. Match the font weight, letter-spacing, and color you can read from the page. No SVG needed.`,
-      `    - If the logo is ICONOGRAPHIC (a mark that's not just letters), emit a placeholder block: a styled <div> with the brand name as a label. The user will swap it in after generation. Do NOT attempt to redraw iconographic logos in SVG — Claude approximations look off.`,
+      `  • LOGOS / BRAND MARKS — never recreate (non-negotiable):`,
+      `    - If anything in the source LOOKS like a logo, brand mark, monogram, or stylized identifier — do NOT attempt to draw it in SVG. Claude approximations of brand marks always look off AND bloat the output with paths that produce mediocre results. This rule applies regardless of whether you "recognize" the logo or not.`,
+      `    - Two options for what to put in its place:`,
+      `       (a) If the brand name is READABLE as text (any letters / wordmark / company name spelled out) → render as styled text in the deck, matching the font weight and color you can read from the page.`,
+      `       (b) Otherwise → emit a styled placeholder <div> with a short text label (use the brand name if you can read it from elsewhere on the page, otherwise just "Logo"). The user will swap it in after generation.`,
       `  • PHOTOS / photographic content: emit a styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor", "Photo: product hero shot"). Use the deck's palette for the placeholder background; the user replaces it post-generation. If a photo is purely decorative filler, drop it.`,
       `  • COMPLEX CHARTS or DIAGRAMS (multi-bar charts, complex flowcharts, org charts, custom illustrations): emit a styled placeholder block with the chart's title and any axis labels you can read. The user replaces it with the actual chart after generation. Do not attempt to reconstruct the data graphically.`,
       `  • SIMPLE ICONS (utility glyphs — arrows, checkmarks, stars, basic shapes, Lucide-style strokes): inline <svg> in your usual clean style. Fast to draw, looks better than a placeholder.`,
@@ -905,8 +907,9 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       `Your job: take the UGLY content and re-execute it in the DESIGN REFERENCE's visual style. Match design language only; never invent content not in the UGLY file.`,
       ``,
       `VISUAL HANDLING — placeholders over redraws:`,
-      `  • Wordmark logos → styled text in the DESIGN REFERENCE's typography.`,
-      `  • Iconographic logos → styled placeholder block with the brand name label (user swaps post-gen).`,
+      `  • LOGOS / BRAND MARKS — never recreate. If anything looks like a logo, brand mark, monogram, or stylized identifier (in EITHER document), do NOT draw it in SVG. Two options:`,
+      `    (a) Brand name is readable text → styled text in the DESIGN REFERENCE's typography.`,
+      `    (b) Otherwise → styled placeholder <div> with a short label (brand name if readable, else "Logo"). User swaps post-gen.`,
       `  • Photos → styled placeholder block describing the subject (user swaps post-gen).`,
       `  • Complex charts / diagrams → styled placeholder block with the chart title + axis labels.`,
       `  • Simple icons (arrows, checks, Lucide-style strokes) → inline <svg> in the DESIGN REFERENCE's style.`,
@@ -933,6 +936,85 @@ export const deckGenerate = inngest.createFunction(
     name: "Generate Presentation Deck",
     retries: 3,
     triggers: [{ event: "deck.generate.requested" }],
+    // Terminal failure hook — fires once after Inngest exhausts all
+    // function-level retries on a thrown error. Pre-fix, deck-generate
+    // had no onFailure handler, so a failed run left Project /
+    // Version / Job rows stuck in `queued` / `generating` indefinitely
+    // — the UI poller never saw `status === "failed"` and the existing
+    // "حاول مرة أخرى" button in DeckView never surfaced. Mirrors the
+    // pattern already used by deck-regenerate-partial.ts.
+    //
+    // Token cost on failure: `usage` accumulator only runs after
+    // `await stream.finalMessage()` resolves cleanly. If the stream
+    // throws (network blip, Anthropic 5xx, abort), the usage block is
+    // skipped — so a dead run charges 0 tokens to the user.
+    //
+    // Best-effort writes — each update is wrapped so a deleted row
+    // (race with project-delete) doesn't poison the others. Caught
+    // separately and logged via console.error since `logger` from
+    // the function-arg scope isn't in scope here.
+    onFailure: async ({ event, error }) => {
+      const original = (event.data.event?.data ?? {}) as {
+        projectId?: string;
+        versionId?: string;
+        jobId?: string;
+      };
+      const { prisma } = await import("@/lib/prisma");
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const updates: Promise<unknown>[] = [];
+      if (original.projectId) {
+        updates.push(
+          prisma.project
+            .update({
+              where: { id: original.projectId },
+              data: { status: "failed" },
+            })
+            .catch((e) => {
+              console.error(
+                "deck-generate onFailure: project status write failed",
+                e,
+                error,
+              );
+            }),
+        );
+      }
+      if (original.versionId) {
+        updates.push(
+          prisma.presentationVersion
+            .update({
+              where: { id: original.versionId },
+              data: { status: "failed" },
+            })
+            .catch((e) => {
+              console.error(
+                "deck-generate onFailure: version status write failed",
+                e,
+                error,
+              );
+            }),
+        );
+      }
+      if (original.jobId) {
+        updates.push(
+          prisma.job
+            .update({
+              where: { id: original.jobId },
+              data: {
+                status: "failed",
+                outputJson: { error: errorMsg } as never,
+              },
+            })
+            .catch((e) => {
+              console.error(
+                "deck-generate onFailure: job status write failed",
+                e,
+                error,
+              );
+            }),
+        );
+      }
+      await Promise.all(updates);
+    },
   },
   async ({ event, step, logger }) => {
     const data = event.data as DeckGenerateEvent;
@@ -988,15 +1070,27 @@ export const deckGenerate = inngest.createFunction(
     // document-block flows require — observed on 2026-05-25, a
     // 9-slide enhance run failed `JSON.parse` 3 times at position
     // ~31417 and burned ~30k output tokens per attempt with no
-    // recoverable result. Without thinking the model loses
-    // JSON-structure discipline deep into long dense output.
+    // recoverable result.
     //
-    // Force a quiet upgrade to `sonnet-low` (adds minimal adaptive
-    // thinking) for enhance + mimic + data flows. Same Sonnet pricing
-    // tier (~$0.05 extra per run), dramatically more reliable on
-    // long verbatim outputs. The user's preset choice is preserved
-    // on Job.quality for analytics; only the actual API call is
-    // upgraded.
+    // Original mitigation targeted `sonnet-low` (Sonnet + adaptive
+    // thinking low). Reversed same day after the test run sat in
+    // thinking phase for 10+ min with only 521 thinking tokens
+    // emitted — Sonnet adaptive on multi-slide JSON dribbles tokens
+    // at glacial pace. The Sonnet thinking variants were dropped
+    // from the menu entirely (see `lib/types/quality.ts`).
+    //
+    // New target: `opus-fast` (Opus 4.7 + thinking disabled).
+    // Trade-off: ~1.8× cost jump from sonnet-fast ($0.36 → ~$0.65 on
+    // Opus 4.7's $5/$25 pricing — verified against Anthropic's
+    // published rates 2026-05-25), no thinking phase (= fast wall-
+    // clock), and Opus's stronger base structure tracking handles
+    // long structured output where Sonnet-no-thinking fails.
+    // Untested on enhance as of 2026-05-25 but theoretically the
+    // best balance of speed + reliability; first runs will validate.
+    //
+    // The user's preset choice is preserved on Job.quality for
+    // analytics; only the actual API call is upgraded. Log line
+    // `claude_quality_auto_upgrade` traces the swap.
     const sourceForUpgradeCheck = readSource(data);
     const sourceKind = sourceForUpgradeCheck?.kind ?? "scratch";
     const isLongOutputFlow =
@@ -1005,7 +1099,7 @@ export const deckGenerate = inngest.createFunction(
       sourceKind === "data";
     const effectiveQuality =
       data.quality === "sonnet-fast" && isLongOutputFlow
-        ? "sonnet-low"
+        ? "opus-fast"
         : data.quality;
     if (effectiveQuality !== data.quality) {
       logger.info("claude_quality_auto_upgrade", {
@@ -1084,6 +1178,46 @@ export const deckGenerate = inngest.createFunction(
       // DOMPurify pass at end-of-stream, so this preview path can never
       // become the authoritative manifest.
       const streamingPreview: SlideType[] = [];
+      // Parallel boolean array marking which streamingPreview slides came
+      // from the FIRST manifest pass (Claude's draft) vs a subsequent pass
+      // (his polished re-emit). DeckView surfaces a small "مسودة" chip on
+      // tiles where this is true so the user knows the visual will be
+      // replaced. Indexed identically to streamingPreview so the client
+      // can zip them by position without an extra slideId lookup.
+      //
+      // Lifecycle:
+      //   • `manifestVersion === 1` → every push is `true` (draft)
+      //   • On `didReset()` → cleared in lockstep with streamingPreview
+      //     (existing behavior), `manifestVersion++`
+      //   • `manifestVersion > 1` → every push is `false` (final). When
+      //     these arrive, DeckView's monotonic guard swaps the previous
+      //     full draft list out for the polished list and the chips
+      //     vanish in one snap.
+      //
+      // Gating: BOTH conditions must hold.
+      //  1. Upload-driven source (enhance / mimic / data) — these are
+      //     the flows where Claude's two-pass draft→polish pattern
+      //     was ever observed. /create runs single-pass.
+      //  2. effectiveQuality === "opus-max" (label "Opus 4.7 · high"
+      //     in the UI) — the two-pass behavior is specific to
+      //     adaptive thinking at higher effort tiers. Sonnet (no
+      //     thinking), opus-fast (no thinking), and opus-balanced
+      //     (effort:medium) all produce single-pass output, so a
+      //     draft chip there would stay on through the entire run
+      //     without ever clearing — misleading. Restricting to the
+      //     "high" preset matches where the chip actually has a
+      //     real signal to surface.
+      const streamingPreviewDraft: boolean[] = [];
+      let manifestVersion = 1;
+      const briefSourceKind =
+        (data.brief as { source?: { kind?: string } } | null)?.source?.kind ??
+        null;
+      const isUploadSourceFlow =
+        briefSourceKind === "enhance" ||
+        briefSourceKind === "mimic" ||
+        briefSourceKind === "data";
+      const enableDraftBadges =
+        isUploadSourceFlow && effectiveQuality === "opus-max";
       // Latest theme JSON pulled out of the stream — captured once by
       // the parser as Claude closes the `theme` object. DeckView needs
       // it to wire palette / font CSS vars on the live preview slides;
@@ -1130,6 +1264,26 @@ export const deckGenerate = inngest.createFunction(
                 // Snapshot of the live-preview slides so far. Replaced
                 // by the canonical `slides` array on the final save.
                 streamingPreview: streamingPreview.slice(),
+                // Parallel draft markers — only emitted on enhance/mimic/data
+                // (the flows where Claude's two-pass behavior shows up). For
+                // /create we skip the field entirely so the slideJson payload
+                // is byte-identical to the pre-change shape. Snapshot via
+                // .slice() for the same defensive-copy reason as
+                // streamingPreview above.
+                ...(enableDraftBadges
+                  ? { streamingPreviewDraft: streamingPreviewDraft.slice() }
+                  : {}),
+                // Monotonic manifest-version token. Always emitted (even
+                // when draft badges are off — non-enhance flows still
+                // benefit from the client-side stale-poll guard built on
+                // it). Strictly non-decreasing across the lifetime of
+                // this `versionId`: bumped on parser `didReset()` AND on
+                // every retry-attempt restart in the loop above. Clients
+                // reject incoming snapshots whose version is lower than
+                // the last accepted one — closes the "two polls in
+                // flight, older one returns last, overwrites" race that
+                // length-only monotonicity couldn't catch.
+                streamingManifestVersion: manifestVersion,
                 // Theme captured mid-stream (always streams before slides
                 // in the manifest order). Null until the theme `}` closes.
                 streamingTheme,
@@ -1142,20 +1296,26 @@ export const deckGenerate = inngest.createFunction(
           })
           .catch(() => undefined);
 
-      // Effort tier (low / medium / high) doubles as an approximate budget
-      // ceiling for the UI counter. The API doesn't accept an explicit
-      // budget_tokens on adaptive mode, so we pick a rough cap per effort
-      // tier that matches what we observe at runtime — Claude's adaptive
-      // thinking on Sonnet ~tops out around these levels for editorial-
-      // grade decks. The counter is a UX signal, not a hard contract.
+      // Effort tier doubles as an approximate budget ceiling for the
+      // UI counter ("التفكير: X / Yk رمز"). The API doesn't accept an
+      // explicit `budget_tokens` on adaptive mode, so we pick a rough
+      // cap per effort tier that matches what we observe at runtime.
+      // The counter is a UX signal, not a hard contract — Claude can
+      // exceed these on truly hard problems.
+      //
+      // Recalibrated 2026-05-25 alongside the max_tokens bump (48k →
+      // 64k). The previous numbers were Sonnet-era heuristics from
+      // before we had Opus 4.7 on the menu; max-tier in particular
+      // (effort:max) now shows 64k to match the real total-output
+      // headroom we hand to the API.
       const thinkingBudget = (() => {
         if (callParams.thinking.type !== "adaptive") return 0;
         const effort = callParams.outputConfig?.effort;
-        if (effort === "low") return 4000;
-        if (effort === "medium") return 12000;
-        if (effort === "high") return 24000;
-        if (effort === "xhigh") return 40000;
-        if (effort === "max") return 48000;
+        if (effort === "low") return 6000;
+        if (effort === "medium") return 16000;
+        if (effort === "high") return 32000;
+        if (effort === "xhigh") return 48000;
+        if (effort === "max") return 64000;
         return 0;
       })();
 
@@ -1178,6 +1338,15 @@ export const deckGenerate = inngest.createFunction(
         // / stale frames and the post-success snapshot to slideJson can
         // include slides that never made it into the canonical manifest.
         streamingPreview.length = 0;
+        streamingPreviewDraft.length = 0;
+        // INCREMENT (not reset to 1) so `manifestVersion` is strictly
+        // monotonic across the lifetime of this `versionId`. Pre-fix
+        // we reset to 1 on each retry attempt, which let an old poll
+        // arrive AFTER the retry started — same version number on
+        // both, same length potentially, no signal to reject the
+        // stale state. With monotonic increments, the client's
+        // version-aware guard can always tell stale from fresh.
+        manifestVersion += 1;
         streamingTheme = null;
 
         const userMessage =
@@ -1210,7 +1379,17 @@ export const deckGenerate = inngest.createFunction(
         const stream = client.messages.stream(
           {
             model: callParams.model,
-            max_tokens: 48000,
+            // Anthropic's published guidance for Opus 4.7 max / xhigh
+            // effort: "set a large max output token budget so the model
+            // has room to think and act across its subagents and tool
+            // calls. We recommend starting at 64k tokens" (see
+            // /docs/en/build-with-claude/prompt-engineering/
+            // claude-prompting-best-practices). The recommendation
+            // applies cleanly to the lower tiers too — we never come
+            // close to hitting 64k on real runs, so the bump just
+            // gives the model headroom on the high-effort tiers
+            // without changing behavior anywhere else.
+            max_tokens: 64000,
             thinking: callParams.thinking,
             system: [
               {
@@ -1290,6 +1469,11 @@ export const deckGenerate = inngest.createFunction(
               const parsed = SlideSchema.safeParse(candidate);
               if (parsed.success) {
                 streamingPreview.push(parsed.data);
+                // Tag each slide with whether it belongs to the FIRST
+                // manifest pass (Claude's draft) or a subsequent polished
+                // pass. The flag rides in a parallel array so the SlideType
+                // schema stays untouched. v1 = draft, v2+ = final.
+                streamingPreviewDraft.push(manifestVersion === 1);
               }
             } catch {
               // Malformed mid-stream JSON (rare — Claude usually closes
@@ -1307,9 +1491,17 @@ export const deckGenerate = inngest.createFunction(
           // during the brief empty window — no UI tear. extractJson() at the
           // end of stream uses lastIndexOf("}") so the saved canonical
           // manifest is the polished one regardless.
+          //
+          // We also bump `manifestVersion` so the NEXT batch of pushes lands
+          // with `draft=false` — when DeckView's monotonic guard finally
+          // swaps the old drafts out for the new full-length polished list,
+          // every chip clears in one frame (the user reads it as "ah, those
+          // are the final versions now").
           if (sliceParser.didReset()) {
             streamingPreview.length = 0;
+            streamingPreviewDraft.length = 0;
             streamingTheme = null;
+            manifestVersion += 1;
           }
 
           // Capture the theme once it appears. Theme is parser-cached

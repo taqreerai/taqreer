@@ -35,8 +35,10 @@
 // Default for `seed == null` (anonymous public-view, legacy rows
 // without an author id, etc.). Canonical brand blue → magenta so
 // unknown-user rows stay on-brand instead of getting a random hue.
-const DEFAULT_GRADIENT =
-  "linear-gradient(135deg, #370BF4 0%, #E036B8 100%)";
+// References the design-system token `--tq-gradient-avatar` (defined
+// in globals.css) which is the same blue→magenta recipe — keeps the
+// brand gradient as a single source of truth.
+const DEFAULT_GRADIENT = "var(--tq-gradient-avatar)";
 
 /**
  * Hash a string to a uniform unsigned 32-bit integer. Deterministic

@@ -76,9 +76,9 @@ export type TemplateSeed = {
   brand: BrandSnapshot;
 };
 
-// Inferred from the schema so the type stays in lockstep with the
-// runtime validator (single source of truth).
-export type UseTemplateResponse = z.infer<typeof UseTemplateResponseSchema>;
+// `UseTemplateResponse` type was removed 2026-05-25 — no importer.
+// If a caller ever needs the response shape, re-derive via
+// `z.infer<typeof UseTemplateResponseSchema>` at the use site.
 
 /**
  * Fire the POST /api/templates/[id]/use endpoint, get the snapshot,
@@ -207,18 +207,11 @@ export function readTemplateSeed(): TemplateSeed | null {
   }
 }
 
-/**
- * Clear the templateSeed marker. Called by /create/summary after a
- * successful POST /api/projects so the next /create visit starts in
- * normal 3-step mode. Not called on cancel — we keep the seed alive
- * across navigation so the user can poke around the create flow and
- * come back without re-fetching.
- */
-export function clearTemplateSeed(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.removeItem(TEMPLATE_SEED_KEY);
-  } catch {
-    /* best-effort */
-  }
-}
+// `clearTemplateSeed` was removed 2026-05-25 — no importer. The
+// original design called it from /create/summary post-submit, but
+// the actual seed-write happens on /create-from-template/* (Phase D
+// route fork) and that flow's submit handler doesn't bother clearing
+// the marker — a stale seed in sessionStorage is harmless because
+// the parallel route only reads it on entry. If a callsite ever
+// needs to clear, restore as `window.sessionStorage.removeItem(
+// TEMPLATE_SEED_KEY)`.

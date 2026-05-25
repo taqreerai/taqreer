@@ -53,10 +53,17 @@ export const BrandSnapshotSchema = z.object({
   language: z.enum(["ar", "en"]),
   direction: z.enum(["rtl", "ltr"]),
   format: z.enum(SLIDE_FORMATS),
-  // Min 3 / max 8 mirrors ThemeSchema.palette — keeps Template.brand
-  // a valid input to the renderer if we ever round-trip it back into
-  // a manifest seed (Phase D "use this template" flow).
-  palette: z.array(HexColor).min(3).max(8),
+  // Min 2 / max 8 — relaxed from 3 (2026-05-25) after observing
+  // /enhance-generated decks where Claude declared 6 colors in
+  // `theme.palette` but only used 2-3 in the actual slide HTML.
+  // Source: enhance reads from PDF/PPTX theme XML which carries
+  // Office 2007's full 6-accent palette even when the visual deck
+  // only uses 1-2 accents. The palette-intersect logic below
+  // (`deriveUsedColors`) strips the ghost entries, sometimes
+  // landing on 2 colors. ThemeSchema.palette.min(3) stays at 3
+  // for Claude-output validation — this asymmetric relaxation only
+  // applies to template storage.
+  palette: z.array(HexColor).min(2).max(8),
   background: HexColor,
   text: HexColor,
   fontHeading: BrandFont,
@@ -113,12 +120,29 @@ export function deriveBrandSnapshot(input: DeriveInput): BrandSnapshot | null {
       ? manifest.format
       : "16:9";
 
+  // ─── Palette intersect (2026-05-25) ────────────────────────────
+  // Pre-fix we copied `manifest.theme.palette` verbatim, which on
+  // /enhance flows leaked Office 2007's default 6-accent palette
+  // (green / mid-blue / red) into templates whose actual slides only
+  // used 2-3 brand colors. Now we intersect the declared palette
+  // with colors that ACTUALLY appear in slide HTML — keeps Claude's
+  // ordering intent, drops ghost entries. Falls back to the declared
+  // palette only when the intersect strips below the schema min(2)
+  // (defensive — shouldn't happen for a normal deck since the
+  // background + at least one accent are always referenced).
+  const usedColors = collectColorsFromSlides(manifest);
+  const filteredPalette = manifest.theme.palette.filter((hex) =>
+    usedColors.has(normalizeHex(hex)),
+  );
+  const palette =
+    filteredPalette.length >= 2 ? filteredPalette : [...manifest.theme.palette];
+
   const snapshot: BrandSnapshot = {
     schemaVersion: BRAND_SNAPSHOT_VERSION,
     language,
     direction,
     format,
-    palette: [...manifest.theme.palette],
+    palette,
     background: manifest.theme.background,
     text: manifest.theme.text,
     fontHeading: {
@@ -136,8 +160,8 @@ export function deriveBrandSnapshot(input: DeriveInput): BrandSnapshot | null {
   };
 
   // Final self-check — if our own construction violated the schema
-  // (e.g. palette had 2 items because the manifest somehow slipped past
-  // its own min(3)), surface as null rather than persisting bad data.
+  // (e.g. palette ended up empty after a broken filter), surface as
+  // null rather than persisting bad data.
   const verify = BrandSnapshotSchema.safeParse(snapshot);
   return verify.success ? verify.data : null;
 }
@@ -147,4 +171,40 @@ function isSlideFormat(value: unknown): value is SlideFormat {
     typeof value === "string" &&
     (SLIDE_FORMATS as readonly string[]).includes(value)
   );
+}
+
+// Normalize a hex color literal to a canonical lowercase 6-digit form
+// so `#FFF`, `#fff`, and `#FFFFFF` all compare equal.
+function normalizeHex(hex: string): string {
+  const lower = hex.toLowerCase();
+  if (lower.length === 4) {
+    // #abc → #aabbcc
+    return `#${lower[1]}${lower[1]}${lower[2]}${lower[2]}${lower[3]}${lower[3]}`;
+  }
+  return lower;
+}
+
+// Walk every slide's HTML and collect every hex color literal it
+// mentions. Returns a Set of normalized lowercase 6-digit hex strings.
+// Includes `background` + `text` in the set defensively — slides may
+// reference those via CSS vars (which we can't see in the HTML), so
+// treating them as "always used" prevents the background or text
+// color from being stripped if they happen to appear in `palette`.
+function collectColorsFromSlides(manifest: SlideManifest): Set<string> {
+  const used = new Set<string>();
+  used.add(normalizeHex(manifest.theme.background));
+  used.add(normalizeHex(manifest.theme.text));
+  // `#abc` (3-digit shorthand) or `#aabbcc` (6-digit full). Skip
+  // 4/8-digit alpha hex — vanishingly rare in Claude output and not
+  // part of `HexColor`'s validation anyway.
+  const hexPattern = /#(?:[0-9a-fA-F]{3}\b|[0-9a-fA-F]{6}\b)/g;
+  for (const slide of manifest.slides) {
+    if (typeof slide.html !== "string") continue;
+    const matches = slide.html.match(hexPattern);
+    if (!matches) continue;
+    for (const m of matches) {
+      used.add(normalizeHex(m));
+    }
+  }
+  return used;
 }

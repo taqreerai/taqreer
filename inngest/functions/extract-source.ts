@@ -68,6 +68,14 @@ type ExtractCompletedOutput = {
   pageCount: number;
   /** Slide format from the PDF's first-page aspect ratio. */
   format: "16:9" | "9:16";
+  /**
+   * Detected source language ("ar" | "en" | null). PPTX inputs run
+   * a quick text-sample detection; PDF inputs return null and the
+   * /enhance client falls through to a default. Used to seed the
+   * brief's `language` so the preview SlideNavSidebar renders the
+   * right direction from the first paint.
+   */
+  language: "ar" | "en" | null;
 };
 
 export const extractSource = inngest.createFunction(
@@ -161,6 +169,7 @@ export const extractSource = inngest.createFunction(
           colors: ext.colors,
           pageCount: ext.pageCount,
           format: ext.format,
+          language: ext.language,
         } satisfies ExtractCompletedOutput;
       });
     } catch (err) {

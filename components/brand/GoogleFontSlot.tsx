@@ -151,7 +151,7 @@ export function GoogleFontSlot({
                   style={
                     isActive
                       ? {
-                          borderColor: "rgb(255, 255, 255)",
+                          borderColor: "var(--tq-text-primary)",
                           background: "var(--tq-bg-glass)",
                         }
                       : undefined

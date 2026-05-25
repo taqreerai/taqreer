@@ -1,23 +1,16 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+// Generic utility helpers.
+//
+// `cn`, `formatDate`, and `truncate` were removed 2026-05-25 in the
+// dead-code audit pass — zero importers across the app. The
+// associated `clsx` + `tailwind-merge` deps were also dropped. If a
+// future surface needs the canonical Tailwind-class merge helper,
+// reintroduce them then; for now we'd rather not carry unused
+// exports + their npm dependencies.
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-export function formatDate(date: Date | string): string {
-  // `ar-SA-u-nu-latn` keeps Arabic month names + word order but
-  // forces Latin digits (0-9). The whole dashboard standardises on
-  // Latin numerals for readability across mixed Arabic / English UI.
-  return new Intl.DateTimeFormat("ar-SA-u-nu-latn", {
-    dateStyle: "long",
-  }).format(new Date(date));
-}
-
-export function truncate(str: string, length: number) {
-  return str.length > length ? `${str.substring(0, length)}...` : str;
-}
-
+/**
+ * UTC start of the current calendar month. Used by usage / quota
+ * routes to bound "this month's runs so far" queries.
+ */
 export function getStartOfMonthUTC(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));

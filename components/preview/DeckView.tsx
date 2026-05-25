@@ -23,7 +23,7 @@ import {
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlidePill } from "@/components/preview/SlidePill";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
-import type { InitialSlideState } from "@/app/(app)/preview/[projectId]/page";
+import type { InitialSlideState } from "@/lib/project/load-project";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import {
   SlideNavSidebar,
@@ -122,13 +122,15 @@ type Progress = {
   // client falls back to mount-time `Date.now()` as before.
   genStartedAt?: string;
   // Live thinking-phase telemetry — populated by deck-generate's
-  // `stream.on("thinking", …)` handler. Both optional because older
+  // `stream.on("thinking", …)` handler. Optional because older
   // in-flight runs / the fast tier (thinking disabled) won't carry
-  // them. We surface "thinkingTokens / thinkingBudget" in the
-  // caption so the user sees forward motion during the silent
-  // pre-output thinking phase.
+  // it. We no longer surface the count in the caption (dropped
+  // 2026-05-25 — the bare "Thinking..." copy reads cleaner and the
+  // numerator/denominator was noisy noise on max-effort runs where
+  // server-side subagent thinking didn't stream incrementally), but
+  // the field is still read by the "is the run actually advancing"
+  // stuck-detection heuristic in the polling effect below.
   thinkingTokens?: number;
-  thinkingBudget?: number;
 };
 
 function isProgress(value: unknown): value is Progress {
@@ -139,17 +141,6 @@ function isProgress(value: unknown): value is Progress {
     typeof v.currentSlide === "number" &&
     typeof v.estimatedTotal === "number"
   );
-}
-
-// Compact human-readable token count. Sub-thousand: bare integer.
-// Mid-range (1k–10k): one decimal place (e.g. 3.2k). 10k+: rounded
-// integer (e.g. 12k). Keeps the caption short and readable while the
-// budget grows during the thinking phase.
-function formatTokens(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "0";
-  if (n < 1000) return `${Math.round(n)}`;
-  if (n >= 10000) return `${Math.round(n / 1000)}k`;
-  return `${(n / 1000).toFixed(1)}k`;
 }
 
 // Map the streaming progress to a 0..100 % bar. Thinking gets a small head
@@ -385,6 +376,33 @@ export function DeckView({
   // first slide closes in the stream — typically 30–60 s into a
   // generation. Reset to [] when status leaves "generating".
   const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
+  // Parallel boolean array (indexed identical to streamingPreview) flagging
+  // tiles whose slide is still showing Claude's FIRST-pass DRAFT (vs the
+  // polished re-emit). Server only emits this field on enhance/mimic/data
+  // flows; for /create it stays empty and no draft chips render. Kept in
+  // strict zip-alignment with streamingPreview via the same monotonic
+  // guard below — when we accept a new streamingPreview snapshot we also
+  // accept the matching draft array; when we preserve the prior snapshot
+  // we preserve the prior draft array too.
+  const [streamingPreviewDraft, setStreamingPreviewDraft] = useState<boolean[]>(
+    [],
+  );
+  // Stale-poll guards for the streaming preview. The pre-fix monotonic
+  // guard was length-only (`validated.length >= prev.length`), which
+  // worked for retry-induced shrinkage but couldn't reject the case
+  // where two polls overlap: poll A starts, takes longer; poll B fires
+  // and returns first with newer state; poll A returns last with stale
+  // state of the same length, overwriting B's freshness with stale
+  // slides. `lastManifestVersionRef` tracks the highest server-emitted
+  // `streamingManifestVersion` we've accepted; incoming snapshots with
+  // a lower version are rejected outright. `highWatermarkRef` retains
+  // the length of the highest version accepted so far, so when a NEW
+  // version arrives (parser reset → second manifest pass) we keep
+  // showing the previous full-length list until the new version
+  // catches up to that watermark — preserves the deliberate UX where
+  // draft slides stay visible until the polished pass replaces them.
+  const lastManifestVersionRef = useRef(0);
+  const highWatermarkRef = useRef(0);
   // Theme captured from the same stream once Claude closes the
   // `theme` object (always streams before slides). Drives the CSS-var
   // wiring for streamingPreview slides — without it palette / fonts /
@@ -1398,6 +1416,15 @@ export function DeckView({
           slideCount: number;
           progress: Progress | null;
           streamingPreview?: unknown[] | null;
+          // Parallel boolean array — see comment on the matching server
+          // field. Null/missing for /create runs; present and zip-aligned
+          // with streamingPreview on /enhance|mimic|data.
+          streamingPreviewDraft?: unknown[] | null;
+          // Monotonic manifest-version token. See refs above for how
+          // this drives the version-aware stale-poll guard. Null
+          // /missing on older in-flight runs (treated as version 0
+          // → equal to our initial ref, falls through to length-only).
+          streamingManifestVersion?: number | null;
           streamingTheme?: unknown;
           streamingDirection?: "rtl" | "ltr" | null;
           streamingLanguage?: "ar" | "en" | null;
@@ -1420,14 +1447,77 @@ export function DeckView({
             const parsed = SlideSchema.safeParse(candidate);
             if (parsed.success) validated.push(parsed.data);
           }
-          // Monotonic guard — never shrink the preview during a single
-          // generation. If a retry restarts Claude from slide 1, the
-          // server's `streamingPreview` resets to [], but DeckView keeps
-          // the high-watermark list visible until the canonical
-          // `manifest` arrives on completion.
-          setStreamingPreview((prev) =>
-            validated.length >= prev.length ? validated : prev,
-          );
+          // Coerce the parallel draft array to clean booleans (defensive
+          // even though the server already validated). Pad to the validated
+          // length with `false` so the two arrays stay strictly zip-aligned
+          // even if the server briefly emitted one before the other (race
+          // window during writeProgress snapshot — `.slice()` is per-array
+          // and a poll in between could see mismatched lengths).
+          const draftFlags: boolean[] = [];
+          const rawDraft = Array.isArray(data.streamingPreviewDraft)
+            ? data.streamingPreviewDraft
+            : [];
+          for (let i = 0; i < validated.length; i += 1) {
+            draftFlags.push(rawDraft[i] === true);
+          }
+          // ─── Stale-poll guard (2026-05-25, version-aware) ──────────
+          // Three layered conditions decide whether to accept this
+          // snapshot:
+          //   (a) `incomingVersion < lastAccepted` → reject. The poll
+          //       carries server state older than what we already
+          //       displayed (two-polls-in-flight, older one returns
+          //       last). Pre-fix length-only guard couldn't catch
+          //       this when both polls happened to carry the same
+          //       `streamingPreview.length`.
+          //   (b) `incomingVersion > lastAccepted` → only accept once
+          //       the new version's length catches up to the
+          //       high-watermark of the previous version. Preserves
+          //       the deliberate UX where draft slides stay visible
+          //       until the polished pass replaces them (server
+          //       clears its array on `didReset` + bumps version;
+          //       the brief empty window shouldn't blank the screen).
+          //   (c) Same version → fall back to length-only monotonic
+          //       (catches retry-induced shrinkage within a manifest
+          //       attempt). Always update the high-watermark when
+          //       we grow.
+          // Missing `streamingManifestVersion` (older in-flight runs
+          // pre-deploy) is coerced to 0, which equals the initial
+          // ref value, so the guard falls through to length-only —
+          // identical behavior to the pre-fix code path.
+          const incomingVersion =
+            typeof data.streamingManifestVersion === "number" &&
+            Number.isFinite(data.streamingManifestVersion)
+              ? data.streamingManifestVersion
+              : 0;
+          setStreamingPreview((prev) => {
+            const lastVersion = lastManifestVersionRef.current;
+            // (a) Stale — older server version than what we last accepted.
+            if (incomingVersion < lastVersion) {
+              return prev;
+            }
+            // (b) Newer version — gate on catching up to the prior
+            // version's high-watermark to avoid blanking the preview
+            // during the draft→polished transition.
+            if (incomingVersion > lastVersion) {
+              if (validated.length >= highWatermarkRef.current) {
+                lastManifestVersionRef.current = incomingVersion;
+                highWatermarkRef.current = validated.length;
+                setStreamingPreviewDraft(draftFlags);
+                return validated;
+              }
+              // Polished pass still ramping up — hold the prior view.
+              return prev;
+            }
+            // (c) Same version — legacy length-only monotonic guard.
+            if (validated.length >= prev.length) {
+              if (validated.length > highWatermarkRef.current) {
+                highWatermarkRef.current = validated.length;
+              }
+              setStreamingPreviewDraft(draftFlags);
+              return validated;
+            }
+            return prev;
+          });
         }
         if (data.streamingTheme) {
           const parsed = ThemeSchema.safeParse(data.streamingTheme);
@@ -2112,6 +2202,11 @@ export function DeckView({
           index: idx,
           slide: previewSlide,
           commentCount: 0,
+          // Flag drives the small "مسودة" chip in SlideNavSidebar. True
+          // only when the server tagged this slide as belonging to
+          // Claude's first manifest pass (drafting). Undefined / false
+          // → no chip. Field is absent on /create runs by design.
+          draft: streamingPreviewDraft[idx] === true,
         };
       }
       return {
@@ -2256,17 +2351,15 @@ export function DeckView({
                 <div className="text-muted flex items-center justify-center gap-3 text-sm">
                   <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
                   <span>
-                    {progress?.stage === "thinking" && progress.thinkingBudget
-                      ? `التفكير: ${formatTokens(progress.thinkingTokens ?? 0)} / ${formatTokens(progress.thinkingBudget)} رمز`
-                      : progress?.stage === "thinking"
-                        ? "بدء التفكير..."
-                        : progress?.stage === "validating"
-                          ? "التحقق من المخرجات..."
-                          : progress?.stage === "saving"
-                            ? "حفظ العرض..."
-                            : progress?.currentSlide
-                              ? "جارٍ استخراج النص والهوية البصرية..."
-                              : "بدء التصميم..."}
+                    {progress?.stage === "thinking"
+                      ? "التفكير..."
+                      : progress?.stage === "validating"
+                        ? "التحقق من المخرجات..."
+                        : progress?.stage === "saving"
+                          ? "حفظ العرض..."
+                          : progress?.currentSlide
+                            ? "جارٍ استخراج النص والهوية البصرية..."
+                            : "بدء التصميم..."}
                   </span>
                 </div>
                 <div className="w-full max-w-md">

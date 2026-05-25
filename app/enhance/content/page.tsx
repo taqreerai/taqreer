@@ -65,6 +65,11 @@ type ExtractCompletedResponse = {
     colors: string[];
     pageCount: number;
     format: "16:9" | "9:16";
+    // PPTX-detected dominant language ("ar" | "en"); null for PDF
+    // inputs OR PPTX with too little text to decide. Threaded into
+    // the brief so the preview SlideNavSidebar opens in the right
+    // direction from the first paint instead of flipping mid-stream.
+    language: "ar" | "en" | null;
   };
   fileName?: string;
   flowKind?: string;
@@ -438,7 +443,15 @@ export default function EnhanceContentPage() {
           content,
           brand: mergedBrand,
           rules: null,
-          language: "ar",
+          // Use the language detected from the source PPTX/PDF
+          // during extraction. Falls back to "ar" when detection
+          // returned null (PDF inputs, empty PPTX text, or genuine
+          // ambiguity) — same default we had before detection.
+          // The detected value flows into deck-generate's brief →
+          // streaming preview's `streamingLanguage`, so the
+          // SlideNavSidebar renders in the right direction from
+          // first paint instead of flipping mid-stream.
+          language: extracted.language ?? "ar",
           saveBrandKit: false,
           slideCount: resolvedSlideCount,
           quality,
