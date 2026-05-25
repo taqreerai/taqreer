@@ -189,8 +189,9 @@ Anthropic's API supports Opus 4.7 with 6 thinking configurations (disabled + ada
 | adaptive · low | (dropped) | $0.83 | Merged into `opus-balanced` |
 | adaptive · medium | `opus-balanced` | ~$0.85 | The new default |
 | adaptive · high | (dropped) | $0.85 | Merged into `opus-balanced` |
-| adaptive · xhigh | (dropped) | ~$1.05 | Merged into `opus-max` |
-| adaptive · max | `opus-max` | ~$1.30 | Unconstrained ceiling |
+| adaptive · high | `opus-max` | ~$0.95 | The "deep" tier (final shipped config) |
+| adaptive · xhigh | (dropped 2026-05-25) | ~$1.05 | 1.17× cost vs medium, marginal benefit on structured-output tasks |
+| adaptive · max | (dropped 2026-05-25) | unbounded | Stalled 3+ runs with zero thinking-deltas on Files API enhance flows |
 
 Cost differential between low/medium/high was ~$0.02 per deck — not enough to justify three separate menu choices. xhigh and max were indistinguishable in early testing.
 

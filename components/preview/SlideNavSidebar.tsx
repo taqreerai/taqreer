@@ -421,8 +421,7 @@ export function SlideNavSidebar({
               {item.kind === "slide" && item.draft ? (
                 <span
                   aria-hidden
-                  className="pointer-events-none backdrop-blur-glass backdrop-saturate-(--glass-saturation) absolute top-1 start-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white"
-                  style={{ backgroundColor: "rgba(14, 14, 24, 0.55)" }}
+                  className="pointer-events-none backdrop-blur-glass backdrop-saturate-(--glass-saturation) absolute top-1 start-1 rounded-full bg-[color-mix(in_oklab,var(--tq-bg)_55%,transparent)] px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white"
                 >
                   مسودة
                 </span>
