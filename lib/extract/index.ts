@@ -6,26 +6,33 @@
 //
 //   1. Normalize the input file to PDF (PDFs pass through; PPTXs
 //      go through LibreOffice via lib/extract/pptx-to-pdf.ts)
-//   2. For PPTX inputs ONLY: extract structural data from the zip
-//      that Claude can't easily recover from the PDF alone:
-//        • Embedded images (logos, photos, separators) → uploaded
-//          to project-assets/ so generated HTML can reference them
-//          by URL
-//        • Typeface family names → Claude uses them as the brand
-//          font baseline; resolves to Google Fonts where possible
-//        • Theme palette (Tier-1 accents from <a:clrScheme>) →
-//          baseline brand colors shown on the /enhance/brand page
-//      For PDFs these stay empty; Claude picks up structure from
-//      the PDF itself + user fills in brand fields on /enhance/brand.
+//   2. For PPTX inputs ONLY: extract STRUCTURAL data the PDF
+//      doesn't preserve clearly:
+//        • Typeface family names from theme XML — used as the
+//          brand font baseline; system-vs-custom classification +
+//          Google-font resolution happens in deck-generate
+//        • Theme palette (Tier-1 accents from <a:clrScheme>) —
+//          baseline brand colors shown on the brand step
+//      For PDFs these stay empty; Claude reads palette/typefaces
+//      visually from the PDF document block.
+//
+// ─── Asset-extraction removed (2026-05-25) ─────────────────────────
+// We used to also pull embedded images (logos, photos) from the
+// PPTX zip and upload them to a `project-assets/{jobId}/` Supabase
+// bucket, then expose URLs to Claude via `<img src>` references.
+// Removed entirely — extracted raster/SVG assets clashed visually
+// with Claude's clean inline-SVG output style and made redesigned
+// decks look uneven. Claude SEES every asset rendered as pixels
+// via the PDF document block; he can recreate what matters and
+// skip what doesn't. Brand identity now flows through palette +
+// fonts + the PDF itself.
 //
 // Caller (inngest/functions/extract-source.ts) takes our output,
 // uploads the PDF to Anthropic Files API → gets file_id → writes
-// the SourceMeta blob with anthropicFileId + extractedAssets +
-// fonts + colors.
+// the SourceMeta blob with anthropicFileId + fonts + colors.
 
 import { PDFDocument } from "pdf-lib";
 import { pptxToPdf } from "./pptx-to-pdf";
-import { extractAssetsFromPptx, type ExtractedPptxAsset } from "./assets-pptx";
 import { extractFontsFromPptx } from "./fonts-pptx";
 import { extractColorsFromPptx } from "./colors-pptx";
 
@@ -54,13 +61,6 @@ export type ExtractionResult = {
    * a manual size picker.
    */
   format: "16:9" | "9:16";
-  /**
-   * Embedded image assets pulled from the source (PPTX only).
-   * Empty for PDFs in 17.B.A — PDF image extraction is harder and
-   * deferred. Claude can still re-create visuals from the PDF
-   * document block alone.
-   */
-  embeddedAssets: ExtractedPptxAsset[];
   /**
    * Typeface family names from the PPTX theme XML. Empty for PDFs.
    * Used as a "preferred fonts" hint to Claude. Classification
@@ -111,16 +111,13 @@ export async function extract(
   // no state. Failures are swallowed (best-effort): we'd rather
   // ship a deck with weaker brand pre-fill than fail the whole
   // extraction for a missing theme accent.
-  let embeddedAssets: ExtractedPptxAsset[] = [];
   let fonts: string[] = [];
   let themeColors: string[] | null = null;
   if (isPptx) {
-    const [assetsResult, fontsResult, colorsResult] = await Promise.allSettled([
-      extractAssetsFromPptx(buffer),
+    const [fontsResult, colorsResult] = await Promise.allSettled([
       extractFontsFromPptx(buffer),
       extractColorsFromPptx(buffer),
     ]);
-    if (assetsResult.status === "fulfilled") embeddedAssets = assetsResult.value;
     if (fontsResult.status === "fulfilled") fonts = fontsResult.value;
     if (colorsResult.status === "fulfilled") themeColors = colorsResult.value;
   }
@@ -150,11 +147,7 @@ export async function extract(
     pdfBytes,
     pageCount,
     format,
-    embeddedAssets,
     fonts,
     colors: themeColors ?? [],
   };
 }
-
-// ─── Re-exports for callers ───────────────────────────────────────
-export type { ExtractedPptxAsset } from "./assets-pptx";

@@ -8,46 +8,20 @@
 // absence means `kind: "scratch"` (the existing default prompt path).
 // Each upload-driven flow writes its own `kind` variant.
 //
-// ─── Why URLs, not base64 ─────────────────────────────────────────
-// Slide PNGs at 1920×1080 are ~400-800 KB each. A 12-slide deck
-// base64-encoded is ~10 MB, which is at or above browser
-// sessionStorage quota on most browsers (5-10 MB total). The
-// extraction route uploads slide PNGs to a TEMP Supabase bucket
-// (`extract-temp/{jobId}/slide-{N}.png`) instead, and this metadata
-// blob only carries the URLs. deck-generate.ts fetches the bytes
-// server-side when building the Claude message, then a post-
-// generation cleanup deletes the temp directory. Extracted embedded
-// assets (team photos, separators) are different — they're persisted
-// to `project-assets/{projectId}/` for the project's lifetime, since
-// the generated HTML references them by URL.
+// ─── Phase 17.B asset-extraction removal (2026-05-25) ─────────────
+// We used to pull embedded images out of the PPTX zip (logos,
+// photos, separators) and upload them to a `project-assets/{jobId}/`
+// Supabase bucket, then hand Claude a URL list to reference via
+// `<img src>`. Removed entirely on user feedback: the extracted
+// raster/SVG assets clashed visually with Claude's own clean
+// inline-SVG output (Lucide stroke icons, brand-token fills) and
+// made the redesigned deck look uneven. Claude already SEES every
+// asset rendered as pixels via the PDF document block — he can
+// re-create what matters and skip what doesn't. Brand identity now
+// flows through palette + fonts + the PDF itself; logos are
+// approximate (Claude redraws from the visual reference).
 
 import { z } from "zod";
-
-// ─── ExtractedAsset ──────────────────────────────────────────────
-// An embedded image pulled from the source file (PPTX `ppt/media/*`
-// or a PDF page's image stream) and persisted to Supabase under
-// `project-assets/{projectId}/{assetId}.{ext}`. Claude correlates
-// these to where they appeared in the rasterized slide PNGs
-// visually — no semantic hint string is attached, the `originalSlide`
-// index is purely a debug aid / for downstream UI that might want
-// to show "this was on slide 3."
-export const ExtractedAssetSchema = z.object({
-  url: z.string().url(),
-  // 1-based slide index. May be -1 for assets we couldn't
-  // attribute to a specific slide (rare — PPTX slide layouts can
-  // reference shared images that appear on every slide).
-  originalSlide: z.number().int(),
-  /**
-   * IDs of PowerPoint shape-groups this asset is part of (e.g.
-   * "slide3-group1"). Multiple assets sharing the same groupId
-   * form a composite element (logo + wordmark, icon + label, etc).
-   * Empty array when the asset isn't grouped. Used by deck-generate
-   * to instruct Claude to keep grouped URLs positioned/scaled
-   * together.
-   */
-  groupIds: z.array(z.string()).default([]),
-});
-export type ExtractedAsset = z.infer<typeof ExtractedAssetSchema>;
 
 // ─── SourceMeta — the discriminated union ────────────────────────
 // Three upload-driven kinds + scratch (implicit, the default when
@@ -77,11 +51,11 @@ export const SourceEnhanceSchema = z.object({
   // `document` block in the Claude message. PPTX inputs have
   // already been LibreOffice-converted to PDF before upload.
   anthropicFileId: z.string().min(1),
-  // Embedded images extracted from the source (PPTX zip walk).
-  // Empty for PDF inputs (PDF embedded-image extraction deferred).
-  extractedAssets: z.array(ExtractedAssetSchema),
   // Typeface family names from the source's theme XML (PPTX only;
-  // empty for PDF). Claude uses them as the brand font baseline.
+  // empty for PDF). Classified into system-vs-custom in
+  // deck-generate's enhance directive — system fonts pass through
+  // as font-family stacks verbatim, custom fonts get resolved to
+  // their closest Google Font match.
   fonts: z.array(z.string()),
 });
 
@@ -89,10 +63,6 @@ export const SourceMimicSchema = z.object({
   kind: z.literal("mimic"),
   // Content source — the "ugly" file the user wants to repurpose.
   uglyAnthropicFileId: z.string().min(1),
-  // Embedded images extracted from the UGLY file (PPTX zip walk).
-  // The "good" design file's assets aren't ours — Claude looks at
-  // the good file visually for design language only.
-  extractedAssets: z.array(ExtractedAssetSchema),
   fonts: z.array(z.string()),
   // Design reference — the "good" file Claude mimics visually.
   designAnthropicFileId: z.string().min(1),

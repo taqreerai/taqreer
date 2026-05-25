@@ -106,7 +106,11 @@ For each text / icon / shape, name the surface it sits on, pick a contrasting co
 - Gradient stops, muted text, pill text within ~10 lightness pts of the background.
 Fallback: white on dark, near-black on light.
 
-OUTPUT — JSON only, no prose, no markdown fences
+OUTPUT — JSON only in the text channel
+- The FIRST character of your text response must be \`{\`. No analysis prose, no acknowledgement, no markdown fences, no "Here's the deck:" preamble.
+- Use your THINKING budget to draft, critique, and refine — iterate freely in thinking. Then commit ONE polished manifest to the text response. The text is your final answer, not a work-in-progress.
+- The live-preview UI reads each slide \`{ ... }\` as it closes. Drafting in text confuses the preview and wastes output tokens; thinking is the right channel for iteration.
+
 {
   "version": "2.0",
   "presentationId": "<echo from brief>",
@@ -202,6 +206,19 @@ class StreamingSlideParser {
   private themeStart: number | null = null;
   private themeDepth = 0;
   private themeJson: string | null = null;
+  // Manifest-reset signal. Flips to true when a top-level `}` closes
+  // after the parser had locked onto a `slides` array — i.e., a complete
+  // manifest just finished and any subsequent slides belong to a DIFFERENT
+  // manifest. Observed in the wild on /enhance (PDF document block) where
+  // Claude occasionally drafts a manifest, then re-emits a polished version
+  // in the same response. The caller drains this flag via `didReset()` and
+  // clears its own slide accumulator so the next live-preview snapshot
+  // shows ONLY slides from the latest manifest, not draft + final mixed.
+  // Without this reset the parser would lock onto the draft's slides array
+  // forever (the original `=== null` guard set it once and never cleared),
+  // and the final manifest's slides would stream past unparsed — exactly
+  // the empty-preview / green-checkmarks-only symptom users reported.
+  private resetSignaled = false;
 
   // Walk back over whitespace + `:` + whitespace + `"<key>"` and return
   // true if the quoted key matches `expected`. Used to anchor structural
@@ -281,6 +298,22 @@ class StreamingSlideParser {
             this.themeStart = null;
           }
           this.totalDepth--;
+          // Top-level close: the manifest object just finished. If we had
+          // locked onto its slides array, signal a reset so the caller
+          // discards everything we emitted from it — a new manifest may
+          // be streaming next (draft → polished pattern on /enhance), and
+          // we want the live-preview to reflect ONLY the latest manifest.
+          // Clear our own internal locks too so the next `"slides":` /
+          // `"theme":` re-anchors fresh. completedCount stays as a
+          // monotonic lifetime counter; it's only read by `getCompletedCount()`
+          // which no caller currently uses for live-preview logic.
+          if (this.totalDepth === 0 && this.slidesArrayDepth !== null) {
+            this.slidesArrayDepth = null;
+            this.currentSlideStart = null;
+            this.themeStart = null;
+            this.themeJson = null;
+            this.resetSignaled = true;
+          }
           break;
         case "[":
           this.totalDepth++;
@@ -311,6 +344,16 @@ class StreamingSlideParser {
 
   getThemeJson(): string | null {
     return this.themeJson;
+  }
+
+  // Drains the manifest-reset flag. Returns true if the most recent
+  // advance() observed a top-level `}` that closed a tracked manifest;
+  // the caller should drop any slides it accumulated from that manifest
+  // before processing the next batch. Always resets the flag to false.
+  didReset(): boolean {
+    const r = this.resetSignaled;
+    this.resetSignaled = false;
+    return r;
   }
 }
 
@@ -710,20 +753,16 @@ type SourceBrief = {
   // per-slide PNG URLs. Claude reads the PDF natively via a
   // `document` block — better visual fidelity, no pdfjs/canvas
   // local rasterization.
+  //
+  // Asset-extraction removed (2026-05-25). Embedded images from
+  // the PPTX zip used to land here as a URL list (with group IDs);
+  // Claude would reference them via `<img src>` in his HTML. We
+  // dropped that path — the extracted assets clashed visually
+  // with Claude's clean inline-SVG output. He now redraws what he
+  // needs from the PDF visual context.
   anthropicFileId?: string;
   uglyAnthropicFileId?: string;
   designAnthropicFileId?: string;
-  extractedAssets?: Array<{
-    url: string;
-    originalSlide: number;
-    /**
-     * PowerPoint shape-group IDs this asset belongs to. Multiple
-     * assets sharing the same groupId are a composite element
-     * (logo + wordmark, icon + label) and must be kept together
-     * in the generated slide. See lib/extract/assets-pptx.ts.
-     */
-    groupIds?: string[];
-  }>;
   fonts?: string[];
   dataFileId?: string;
   userContext?: string;
@@ -808,7 +847,6 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
   const lines: string[] = [];
 
   if (source.kind === "enhance") {
-    const assets = source.extractedAssets ?? [];
     const fonts = source.fonts ?? [];
     lines.push(
       `SOURCE — Enhance flow`,
@@ -821,58 +859,14 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       ``,
       `ENHANCE THE DESIGN, NOT THE CONTENT:`,
       `  Re-execute the deck's typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality. Preserve the brand identity (palette, fonts when provided, logo, key visual motifs). The content is locked; only the design changes.`,
+      ``,
+      `VISUAL REUSE — recreate, don't reference:`,
+      `  • There are NO pre-extracted asset URLs in this run. Read every visual (logo, photo, icon, illustration, diagram, decorative shape) directly from the PDF document block.`,
+      `  • For logos and brand marks: redraw as inline <svg> matching the original silhouette, colors, and proportions as closely as you can read from the page.`,
+      `  • For icons / illustrations / decorative shapes: redraw in your usual clean inline-SVG style (Lucide stroke icons for utility, brand-token fills for atmosphere). Do not try to pixel-replicate the original — re-execute in the design system.`,
+      `  • For photographic content: describe the subject in a placeholder block (e.g. a styled <div> with the original caption / role) rather than fabricating an image. If a photo is decorative only, drop it.`,
+      `  • Skip purely-decorative shapes from the original that don't serve the new composition. The redesign is the priority, not faithful reconstruction.`,
     );
-    if (assets.length > 0) {
-      // Bucket assets by groupId so we can describe each group as
-      // ONE composite element. Ungrouped assets get individual
-      // lines. Same logical asset can appear in multiple groups
-      // across slides — list each occurrence on its own line so
-      // Claude can spot the repetition pattern.
-      const ungrouped: typeof assets = [];
-      const grouped = new Map<string, typeof assets>();
-      for (const a of assets) {
-        if (a.groupIds && a.groupIds.length > 0) {
-          for (const gid of a.groupIds) {
-            const bucket = grouped.get(gid) ?? [];
-            bucket.push(a);
-            grouped.set(gid, bucket);
-          }
-        } else {
-          ungrouped.push(a);
-        }
-      }
-      lines.push(
-        ``,
-        `Embedded assets available (${assets.length} unique URLs across ${grouped.size} composite groups + ${ungrouped.length} standalone). Reference by URL in your <img src> attributes.`,
-      );
-      // Render each composite group as a labeled cluster so
-      // Claude treats grouped URLs as a single visual unit.
-      if (grouped.size > 0) {
-        lines.push(
-          ``,
-          `COMPOSITE GROUPS — multiple URLs that form ONE visual element. Keep them positioned + scaled together on the slide (same anchor, same z-stack, same transform): if you move one, move all.`,
-        );
-        for (const [gid, members] of grouped) {
-          lines.push(
-            `  Group ${gid} (${members.length} images):`,
-            ...members.map(
-              (a) =>
-                `    • ${a.url} (was on original slide ${a.originalSlide})`,
-            ),
-          );
-        }
-      }
-      if (ungrouped.length > 0) {
-        lines.push(
-          ``,
-          `STANDALONE — independent assets, position each individually:`,
-          ...ungrouped.map(
-            (a) =>
-              `  • ${a.url} (was on original slide ${a.originalSlide})`,
-          ),
-        );
-      }
-    }
     if (fonts.length > 0) {
       // Classify each name into "system" (OS-bundled — use verbatim
       // in font-family stacks) vs "custom" (treat as a hint, try to
@@ -894,7 +888,6 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       }
     }
   } else if (source.kind === "mimic") {
-    const assets = source.extractedAssets ?? [];
     lines.push(
       `SOURCE — Mimic flow`,
       `Two PDF document blocks are attached BEFORE this text:`,
@@ -902,16 +895,9 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
       `  • DESIGN REFERENCE (2nd document): visual language source. Mimic this file's typography, palette, spacing, and layout strategy. Do not copy its content.`,
       ``,
       `Your job: take the UGLY content and re-execute it in the DESIGN REFERENCE's visual style. Match design language only; never invent content not in the UGLY file.`,
+      ``,
+      `VISUAL REUSE: no pre-extracted asset URLs. Read the UGLY file's logos / icons / visuals directly from the document block and redraw them as inline <svg> in the DESIGN REFERENCE's style. Photos → styled placeholder blocks.`,
     );
-    if (assets.length > 0) {
-      lines.push(
-        ``,
-        `Embedded assets from UGLY file (${assets.length}) — preserve them at the same positions in your output:`,
-        ...assets.map(
-          (a) => `  • ${a.url} (was on UGLY slide ${a.originalSlide})`,
-        ),
-      );
-    }
   } else if (source.kind === "data") {
     lines.push(
       `SOURCE — Data flow`,
@@ -1259,6 +1245,19 @@ export const deckGenerate = inngest.createFunction(
               // end-of-stream re-validates the whole thing and triggers
               // the existing self-healing retry if needed.
             }
+          }
+          // Draft-then-final detection (/enhance flow observation 2026-05-25).
+          // If the parser saw a top-level `}` close a tracked manifest, Claude
+          // is about to stream a SECOND manifest. Drop the just-emitted draft
+          // slides + theme so the next live-preview snapshot reflects ONLY
+          // slides from the polished manifest, not the half-baked draft. The
+          // monotonic guard in DeckView keeps the high-watermark visible
+          // during the brief empty window — no UI tear. extractJson() at the
+          // end of stream uses lastIndexOf("}") so the saved canonical
+          // manifest is the polished one regardless.
+          if (sliceParser.didReset()) {
+            streamingPreview.length = 0;
+            streamingTheme = null;
           }
 
           // Capture the theme once it appears. Theme is parser-cached

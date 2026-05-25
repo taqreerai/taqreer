@@ -7,8 +7,7 @@
 //   1. Downloads the source file from `source-files/`
 //   2. Normalizes to PDF (PPTX → LibreOffice; PDF passes through)
 //   3. Uploads the PDF to Anthropic Files API → file_id
-//   4. For PPTX only: extracts embedded assets / fonts / theme
-//      colors from the zip and uploads assets to project-assets/
+//   4. For PPTX only: pulls font names + theme colors from the zip
 //   5. Writes the result to Job.outputJson so /api/extract/[jobId]
 //      can return it
 //
@@ -23,6 +22,14 @@
 //   • ~500 lines of rasterize/canvas code deleted
 //   • No `extract-temp` Supabase bucket
 //
+// ─── Asset extraction removed (2026-05-25) ────────────────────────
+// We also used to extract embedded images from the PPTX zip and
+// upload them to `project-assets/{jobId}/` so the generated HTML
+// could reference them by URL. Removed entirely — extracted assets
+// clashed visually with Claude's clean inline-SVG output and made
+// redesigned decks look uneven. Claude reads visuals directly from
+// the PDF document block and recreates them in his own style.
+//
 // ─── Why a Job row, not a dedicated ExtractJob model ───────────────
 // The existing `Job` Prisma model is already a generic queue-state
 // tracker (status / inputJson / outputJson) used by deck-generate and
@@ -35,10 +42,6 @@ import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { extract } from "@/lib/extract";
-import {
-  uploadProjectAssets,
-  type UploadedAsset,
-} from "@/lib/storage/project-assets";
 import { uploadFileToAnthropic } from "@/lib/anthropic/files";
 
 // Source files are staged in this bucket by POST /api/extract before
@@ -59,7 +62,6 @@ type ExtractRequestedEvent = {
 // directly to the client without reshaping.
 type ExtractCompletedOutput = {
   anthropicFileId: string;
-  embeddedAssets: UploadedAsset[];
   fonts: string[];
   colors: string[];
   /** PDF page count → drives slide count in the generated deck. */
@@ -103,13 +105,11 @@ export const extractSource = inngest.createFunction(
     });
 
     // ─── Step 2: download + normalize + upload (fat idempotent step) ─
-    // We bundle download → extract → Anthropic-upload → Supabase-
-    // asset-upload into a single step.run. The individual sub-
-    // steps are individually idempotent (uploadProjectAssets uses
-    // content-hash + upsert:true; Anthropic Files API doesn't
-    // dedupe but a retry's new file_id just costs us a free file
-    // we don't reuse). Bundling means a retry replays the whole
-    // pipeline cleanly without partial-state Job row updates.
+    // We bundle download → extract → Anthropic-upload into a single
+    // step.run. The Anthropic Files API doesn't dedupe on its end,
+    // but a retry's new file_id just costs us a free file we don't
+    // reuse — cheap insurance. Bundling means a retry replays the
+    // whole pipeline cleanly without partial-state Job row updates.
     let result: ExtractCompletedOutput;
     try {
       result = await step.run("extract-and-upload", async () => {
@@ -132,13 +132,14 @@ export const extractSource = inngest.createFunction(
         const sourceBuffer = Buffer.from(await download.arrayBuffer());
 
         // Run the extraction pipeline. Returns:
-        //   • pdfBytes      — PDF the user uploaded OR LibreOffice-
-        //                     converted from the PPTX
-        //   • embeddedAssets — PPTX only (PDF zip-walk path deferred)
-        //   • fonts          — PPTX theme XML
-        //   • colors         — PPTX theme accents (Tier-1 only;
-        //                     Tier-2 histogram deleted with the
-        //                     local rasterizer)
+        //   • pdfBytes  — PDF the user uploaded OR LibreOffice-
+        //                 converted from the PPTX
+        //   • fonts     — PPTX theme XML typefaces
+        //   • colors    — PPTX theme accents (Tier-1 only)
+        //   • pageCount — from the PDF
+        //   • format    — from the PDF's first-page aspect ratio
+        // Embedded image extraction was removed (2026-05-25);
+        // Claude reads visuals from the PDF document block directly.
         const ext = await extract({ buffer: sourceBuffer, mime });
 
         // Upload the PDF to Anthropic Files API. Returns a
@@ -154,23 +155,8 @@ export const extractSource = inngest.createFunction(
           contentType: "application/pdf",
         });
 
-        // Upload embedded assets to project-assets/ for the
-        // generated HTML to reference by URL. Content-hash
-        // deduped + upsert:true → retry-safe.
-        const uploadedAssets = await uploadProjectAssets(
-          jobId,
-          ext.embeddedAssets.map((a) => ({
-            fileName: a.fileName,
-            contentType: a.contentType,
-            bytes: a.bytes,
-            slideIndices: a.slideIndices,
-            groupIds: a.groupIds,
-          })),
-        );
-
         return {
           anthropicFileId,
-          embeddedAssets: uploadedAssets,
           fonts: ext.fonts,
           colors: ext.colors,
           pageCount: ext.pageCount,
