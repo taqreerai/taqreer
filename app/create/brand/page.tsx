@@ -255,7 +255,7 @@ type UploadedAsset = {
 
 function selectedClass(isSelected: boolean) {
   return isSelected
-    ? "border-2 border-[#370BF4] bg-[var(--tq-blue)]/10"
+    ? "border-2 border-[var(--tq-blue)] bg-[var(--tq-blue)]/10"
     : "border border-white/[var(--glass-border-opacity)]";
 }
 

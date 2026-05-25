@@ -319,7 +319,7 @@ export default function SettingsPage() {
                 onClick={() => applyGlassPreset(key)}
                 className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer ${
                   glassPreset === key
-                    ? 'border-[rgba(55,11,244,0.7)] bg-[rgba(55,11,244,0.15)] text-white'
+                    ? 'border-[rgba(var(--tq-blue-rgb),0.7)] bg-[rgba(var(--tq-blue-rgb),0.15)] text-white'
                     : 'border-white/[0.08] bg-white/[0.03] text-muted hover:border-white/20 hover:text-white'
                 }`}
               >
