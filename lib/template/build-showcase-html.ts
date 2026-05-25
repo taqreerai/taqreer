@@ -49,7 +49,9 @@ export const SHOWCASE_SLIDE_IDS = [
   "showcase-02-typography",
   "showcase-03-palette",
 ] as const;
-export type ShowcaseSlideId = (typeof SHOWCASE_SLIDE_IDS)[number];
+// `ShowcaseSlideId` (derived type) removed 2026-05-25 — no importer.
+// If a caller needs the union, re-derive as
+// `(typeof SHOWCASE_SLIDE_IDS)[number]` at the use site.
 
 export function buildShowcaseHtml(
   brand: BrandSnapshot,

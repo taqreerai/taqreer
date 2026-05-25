@@ -1,12 +1,16 @@
-// Phase 17.B-7 — Anthropic Files API client helpers.
+// Phase 17.B-7 — Anthropic Files API client helper.
 //
-// Centralized so every flow that uploads/deletes files goes through
-// the same beta-header + SDK-shape contract. Used by:
+// Centralized so every flow that uploads files goes through the same
+// beta-header + SDK-shape contract. Used by:
 //
 //   • Inngest extract-source.ts — uploads source PDF for /enhance
-//   • Inngest deck-generate.ts  — could delete files post-run if
-//                                  we wanted (not currently doing
-//                                  it; files are free to keep)
+//
+// `deleteFileFromAnthropic` + `ANTHROPIC_FILES_API_BETA` were removed
+// 2026-05-25 in the dead-code audit pass — neither had any importer.
+// Anthropic doesn't charge for file storage and we never set up a
+// cleanup pass, so delete-on-completion stayed theoretical. The beta
+// header is referenced internally via the local `FILES_API_BETA`
+// constant.
 //
 // ─── Why a beta header ───────────────────────────────────────────
 // Per the official docs (verified 2026-05-25), the Files API is
@@ -66,25 +70,3 @@ export async function uploadFileToAnthropic({
   return file.id;
 }
 
-/**
- * Delete an uploaded file. Called post-generation cleanup to avoid
- * indefinite retention; safe to call multiple times (the SDK will
- * 404 on the second call, which we swallow).
- *
- * Best-effort — a failed delete doesn't undo a successful
- * generation, so we don't throw on errors.
- */
-export async function deleteFileFromAnthropic(fileId: string): Promise<void> {
-  try {
-    const client = getClient();
-    await client.beta.files.delete(fileId, { betas: [FILES_API_BETA] });
-  } catch {
-    // best-effort
-  }
-}
-
-// Re-export the beta constant for callers that need to pass it
-// through to messages.stream / messages.create alongside other
-// beta headers (the deck-generate function combines this with the
-// existing prompt-caching beta when invoking Claude).
-export const ANTHROPIC_FILES_API_BETA = FILES_API_BETA;
