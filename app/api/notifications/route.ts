@@ -193,7 +193,13 @@ function formatNotificationRow(row: {
       const level = typeof payload.accessLevel === "string" ? payload.accessLevel : null;
       const roleAr =
         level === "edit" ? "للتعديل" : level === "comment" ? "للتعليق" : "للعرض";
-      title = `${actor} دعتك للانضمام إلى ${project} ${roleAr}`;
+      // Updated wording 2026-05-26 per user direction: lead with
+      // "تمت دعوتك من طرف" + actor + project + role, so the
+      // recipient reads the action before the inviter's name.
+      // Phrasing is gender-neutral (تمت + من طرف) so it works
+      // regardless of the actor's gender, consistent with the
+      // rest of the notification copy.
+      title = `تمت دعوتك من طرف ${actor} للانضمام إلى ${project} ${roleAr}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
