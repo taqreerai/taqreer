@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/app/Sidebar";
 import { Header } from "@/components/app/Header";
 
@@ -109,12 +109,40 @@ export function DashboardShell({
   //   • pr-[40px]  = 40 px gap to the slide-nav's left edge
   // Must match DeckView's HERO_VERTICAL_PADDING_PX (160 total).
   const pathname = usePathname() ?? "";
+  const router = useRouter();
   // Post route-split: both /preview (generation) and /project
   // (working session) use the same full-width chrome — the
   // generating placeholder grid and the live DeckView need the
   // same horizontal real estate.
   const isFullWidthRoute =
     pathname.startsWith("/preview/") || pathname.startsWith("/project/");
+
+  // Share-revoked listener — `notificationStore` dispatches
+  // `taqreer:share-revoked` on its window when the user channel
+  // delivers the broadcast. If we're currently looking at the
+  // revoked project (either `/project/{id}` or `/preview/{id}`),
+  // hard-redirect to /dashboard so the user isn't left staring at
+  // a page they no longer have access to. Mounted in the shell so
+  // it covers BOTH route shapes without duplicating handlers per
+  // page.
+  useEffect(() => {
+    const onRevoked = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
+      const revokedId = detail?.projectId;
+      if (!revokedId) return;
+      const onProject = pathname.startsWith(`/project/${revokedId}`);
+      const onPreview = pathname.startsWith(`/preview/${revokedId}`);
+      if (onProject || onPreview) {
+        // `replace` (not `push`) so the back button doesn't return
+        // them to the now-forbidden URL.
+        router.replace("/dashboard");
+      }
+    };
+    window.addEventListener("taqreer:share-revoked", onRevoked);
+    return () =>
+      window.removeEventListener("taqreer:share-revoked", onRevoked);
+  }, [pathname, router]);
+
   const contentClasses = isFullWidthRoute
     ? "pt-[120px] pb-[40px] pl-[120px] pr-[40px]"
     : "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16";

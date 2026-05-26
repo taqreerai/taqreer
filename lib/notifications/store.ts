@@ -179,6 +179,22 @@ class NotificationStore {
           }
         })();
       });
+      // Access-revoked handler — when the owner removes this user
+      // from the project's share list, the server broadcasts
+      // `share.revoked` on this channel. We dispatch a DOM event
+      // so any page-level listener can react (the preview/project
+      // pages redirect to /dashboard when the revoked projectId
+      // matches the URL). Decoupled via CustomEvent rather than a
+      // direct router import so this lib stays page-agnostic.
+      handle.on("share.revoked", (payload) => {
+        if (!payload?.projectId) return;
+        if (typeof window === "undefined") return;
+        window.dispatchEvent(
+          new CustomEvent("taqreer:share-revoked", {
+            detail: { projectId: payload.projectId },
+          }),
+        );
+      });
       this.channel = handle;
     } catch (err) {
       console.warn("[notifications] openUserChannel failed", err);

@@ -29,10 +29,11 @@ import { getRealtimeBrowserClient } from "./supabase-browser";
 // on the wire format. Add new entries here BEFORE emitting them; the
 // pre-registered Supabase listener for each entry needs to exist
 // before the channel subscribes (the on/subscribe ordering rule).
-export type UserBroadcastEvent = "notification.created";
+export type UserBroadcastEvent = "notification.created" | "share.revoked";
 
 const USER_BROADCAST_EVENTS: readonly UserBroadcastEvent[] = [
   "notification.created",
+  "share.revoked",
 ];
 
 // Wire payload shapes per event. `server-broadcast.ts` enforces the
@@ -45,6 +46,15 @@ export type UserBroadcastPayloadMap = {
   // channel's comment.created.
   "notification.created": {
     notificationId: string;
+  };
+  // Fired when the owner revokes an accepted share. Tells the
+  // recipient's open browser to drop access — clients listening on
+  // this event hard-redirect to `/dashboard` if they're currently
+  // viewing the revoked `projectId`. Includes `projectTitle` only
+  // for a toast (UI nicety; not required for the redirect).
+  "share.revoked": {
+    projectId: string;
+    projectTitle?: string;
   };
 };
 
@@ -86,6 +96,7 @@ export function openUserChannel(prismaUserId: string): UserChannelHandle {
   };
   const subscribers: BroadcastSubscribers = {
     "notification.created": [],
+    "share.revoked": [],
   };
 
   // Pre-register one Supabase listener per event name. See project-
