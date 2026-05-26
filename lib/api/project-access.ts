@@ -68,6 +68,13 @@ export async function resolveProjectAccess(
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Resolve the caller's app-level email up-front (used both for
+  // the share-row email fallback and for the bare-email denial
+  // sweep below). Falls back to null for anonymous callers and for
+  // signed-in users whose Supabase email isn't propagated to our
+  // User row yet.
+  const callerEmail = user?.email?.toLowerCase() ?? null;
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -75,21 +82,38 @@ export async function resolveProjectAccess(
       publicAccessLevel: true,
       user: { select: { id: true, supabaseUserId: true } },
       // Pull the caller's share row in the same query when signed in.
-      // Include BOTH accepted-active rows AND revoked rows — the
-      // revoked path needs to DENY the caller (overrides the
-      // public-link fallback) per user direction 2026-05-26
-      // "revoked user still can access through the link." Pending
-      // (not-yet-accepted, not-revoked) rows are excluded — they
-      // grant no access until the invitee opens the invite URL.
+      // Match by EITHER the joined User's supabaseUserId OR the bare
+      // `email` column — covers two real-world cases:
+      //   • Accepted share: row has `userId` populated, the user
+      //     join hits, match wins on the relation.
+      //   • Pending or revoked-without-userId share: row has email
+      //     but no userId (or the User row was deleted post-revoke).
+      //     The email-match branch catches it so a previously-
+      //     revoked email can't sneak past via account creation.
+      // Include BOTH active rows AND revoked rows — the revoked
+      // path needs to DENY the caller (overrides the public-link
+      // fallback) per user direction 2026-05-26 "revoked user
+      // still can access through the link."
       shares: user
         ? {
             where: {
-              user: { supabaseUserId: user.id },
               OR: [
-                { acceptedAt: { not: null }, revokedAt: null },
-                { revokedAt: { not: null } },
+                { user: { supabaseUserId: user.id } },
+                ...(callerEmail ? [{ email: callerEmail }] : []),
+              ],
+              AND: [
+                {
+                  OR: [
+                    { acceptedAt: { not: null }, revokedAt: null },
+                    { revokedAt: { not: null } },
+                  ],
+                },
               ],
             },
+            // Pull revoked rows FIRST so a revoke takes precedence
+            // over any legacy accepted row that might still exist
+            // for the same email/user combo.
+            orderBy: { revokedAt: { sort: "desc", nulls: "last" } },
             select: { accessLevel: true, userId: true, revokedAt: true },
             take: 1,
           }
