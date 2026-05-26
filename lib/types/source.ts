@@ -43,6 +43,15 @@ import { z } from "zod";
 
 export const SourceScratchSchema = z.object({
   kind: z.literal("scratch"),
+  // Optional Anthropic Files API id when /create's content card has
+  // a user-uploaded source file (PDF/PPTX/DOCX) instead of typed
+  // text. The extraction pipeline (/api/extract → polling) is the
+  // same one /enhance + /mimic use; the only difference is that the
+  // scratch branch in deck-generate.ts treats the document as "raw
+  // material to interpret into a new deck" rather than "redesign
+  // verbatim" or "mimic visually". Absent for pure-text submits +
+  // for legacy briefs that predate this field.
+  anthropicFileId: z.string().min(1).optional(),
 });
 
 export const SourceEnhanceSchema = z.object({
@@ -77,15 +86,25 @@ export const SourceMimicSchema = z
     // Optional now: if absent, `userContent` must be set instead.
     uglyAnthropicFileId: z.string().min(1).optional(),
     // Content as plain text — typed into the content card on /mimic.
-    // Trimmed + length-floored upstream of writeSource so a blank
-    // textarea doesn't slip past the refinement.
-    userContent: z.string().min(1).optional(),
+    // Schema-level trim check: a string of pure whitespace ("   "
+    // or "\n\n\n") would pass `min(1)` but is semantically empty.
+    // The refine below also gates this so a blank textarea can't
+    // satisfy the "at least one content source" requirement.
+    userContent: z
+      .string()
+      .min(1)
+      .refine((v) => v.trim().length > 0, {
+        message: "userContent must contain non-whitespace text.",
+      })
+      .optional(),
     fonts: z.array(z.string()),
     // Design reference — the "good" file Claude mimics visually.
     designAnthropicFileId: z.string().min(1),
   })
   .refine(
-    (v) => Boolean(v.uglyAnthropicFileId) || Boolean(v.userContent),
+    (v) =>
+      Boolean(v.uglyAnthropicFileId) ||
+      (typeof v.userContent === "string" && v.userContent.trim().length > 0),
     {
       message:
         "Mimic source requires either a content file (uglyAnthropicFileId) or typed content (userContent).",

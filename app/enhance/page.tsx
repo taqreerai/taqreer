@@ -180,6 +180,13 @@ export default function EnhanceContentPage() {
   );
 
   // ─── File selection (source PDF/PPTX) ────────────────────────
+  // setStage("extracting") + setError("") moved here from the
+  // useEffect body (2026-05-26, CR finding) — calling setState
+  // synchronously inside an effect tripped the
+  // react-hooks/set-state-in-effect lint rule and could cause
+  // a cascading-render warning. Setting them at the file-pick
+  // call site instead is the canonical pattern: the effect
+  // then only owns the external work (upload + poll).
   const validateAndSetFile = (next?: File | null): File | null => {
     if (!next) return null;
     const lower = next.name.toLowerCase();
@@ -197,8 +204,10 @@ export default function EnhanceContentPage() {
       );
       return null;
     }
+    pollCancelledRef.current = false;
     setFile(next);
     setExtracted(null);
+    setStage("extracting");
     setError("");
     return next;
   };
@@ -248,11 +257,11 @@ export default function EnhanceContentPage() {
   };
 
   // ─── Auto-start extraction on file selection ─────────────────
+  // Stage/error/cancel-flag setters live in `validateAndSetFile` so
+  // this effect body only owns external work (POST + poll) — keeps
+  // the react-hooks/set-state-in-effect lint clean.
   useEffect(() => {
     if (!file) return;
-    pollCancelledRef.current = false;
-    setStage("extracting");
-    setError("");
 
     // One controller per file selection — aborts the in-flight POST
     // /api/extract AND the polling fetch when the effect cleans up
@@ -514,7 +523,7 @@ export default function EnhanceContentPage() {
     // Outer wrapper centered horizontally. Anchored toward top-third
     // so the 3-card row sits in the visual sweet-spot instead of
     // dead-center where it'd float low on tall screens.
-    <div className="flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full max-w-3xl flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">حسّن عرضك التقديمي</h1>

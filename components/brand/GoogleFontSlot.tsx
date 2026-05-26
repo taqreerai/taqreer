@@ -130,8 +130,11 @@ export function GoogleFontSlot({
       {open ? (
         <div
           className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
-          // `top: 100%` would stack on the sample line; using `top: 44`
-          // (input height) anchors the popup directly under the field.
+          // `top: 100%` would stack on the sample line; anchor at the
+          // input's actual height — 44 px regular, 30 px compact — so
+          // the menu sits directly under the field in both modes.
+          // Pre-fix this was hardcoded 44 and the menu floated 14 px
+          // below the bottom edge of the compact input on /create.
           // 240 px max-h fits ~6 rows; the rest scrolls.
           //
           // Surface recipe matches the quality-preset dropdown on
@@ -140,7 +143,7 @@ export function GoogleFontSlot({
           // backdrop-blur-glass blur token — all via the
           // --tq-bg-glass / --tq-border-glass tokens.
           style={{
-            top: 44,
+            top: compact ? 30 : 44,
             maxHeight: 240,
           }}
         >

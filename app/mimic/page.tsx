@@ -253,11 +253,17 @@ export default function MimicContentPage() {
     return next;
   };
 
+  // Stage setters live at the call site (not inside the extraction
+  // useEffects) so react-hooks/set-state-in-effect stays clean —
+  // setState inside an effect body triggers cascading-render
+  // warnings. The effects below now only own the network work.
   const setDesignFromInput = (next?: File | null) => {
     const valid = validateFile(next);
     if (!valid) return;
     setDesignFile(valid);
     setDesignExtracted(null);
+    setDesignStage("extracting");
+    setError("");
   };
   const setContentFromInput = (next?: File | null) => {
     const valid = validateFile(next);
@@ -265,6 +271,8 @@ export default function MimicContentPage() {
     setContentFile(valid);
     setContentExtracted(null);
     setContentText("");
+    setContentStage("extracting");
+    setError("");
   };
 
   const removeDesignFile = () => {
@@ -306,10 +314,11 @@ export default function MimicContentPage() {
   };
 
   // ─── Auto-extract: design reference ────────────────────────────
+  // Stage("extracting") + error reset moved to setDesignFromInput
+  // (lint: react-hooks/set-state-in-effect). The effect body now
+  // only owns the POST + poll cycle and the abort-handler branch.
   useEffect(() => {
     if (!designFile) return;
-    setDesignStage("extracting");
-    setError("");
     const controller = new AbortController();
     let isCurrent = true;
     (async () => {
@@ -338,7 +347,14 @@ export default function MimicContentPage() {
       } catch (err) {
         const isAbort =
           err instanceof DOMException && err.name === "AbortError";
-        if (!isCurrent || isAbort) {
+        // Stale-effect guard (CR finding 2026-05-26): when `isCurrent`
+        // is false, a NEWER effect is already in flight with its own
+        // setDesignStage("extracting") call queued from
+        // setDesignFromInput. Resetting to "idle" here would clobber
+        // that newer state and desync the Generate button. Only
+        // reset to idle for the OWN-effect error path.
+        if (!isCurrent) return;
+        if (isAbort) {
           setDesignStage("idle");
           return;
         }
@@ -358,10 +374,10 @@ export default function MimicContentPage() {
   }, [designFile]);
 
   // ─── Auto-extract: content file (only when a file is picked) ───
+  // Stage("extracting") + error reset moved to setContentFromInput
+  // (lint + stale-stage parity with the design effect above).
   useEffect(() => {
     if (!contentFile) return;
-    setContentStage("extracting");
-    setError("");
     const controller = new AbortController();
     let isCurrent = true;
     (async () => {
@@ -390,7 +406,11 @@ export default function MimicContentPage() {
       } catch (err) {
         const isAbort =
           err instanceof DOMException && err.name === "AbortError";
-        if (!isCurrent || isAbort) {
+        // Stale-effect guard — see the matching comment on the
+        // design effect above. Newer effect's setContentStage(
+        // "extracting") would otherwise be clobbered to "idle".
+        if (!isCurrent) return;
+        if (isAbort) {
           setContentStage("idle");
           return;
         }
@@ -581,7 +601,7 @@ export default function MimicContentPage() {
     setBodyFontSlot((s) => ({ ...s, mode }));
 
   return (
-    <div className="flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">حاكِ تصميم عرض آخر</h1>

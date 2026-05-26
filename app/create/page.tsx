@@ -73,6 +73,15 @@ import { readTemplateSeed } from "@/lib/create/seed-from-template";
 
 // ─── Constants ────────────────────────────────────────────────────
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+// Extraction polling — file uploads on /create route through the
+// shared /api/extract pipeline (Anthropic Files API upload), just
+// like /enhance + /mimic. Pre-fix the file was selected but never
+// posted to extract: the Generate call sent { type: "source",
+// fileName, fileSize } with no actual document bytes, so the
+// upload path was a no-op (CR critical 2026-05-26). Polling shape
+// + intervals mirror /enhance for consistency.
+const POLL_INTERVAL_MS = 2_500;
+const POLL_TIMEOUT_MS = 5 * 60 * 1_000;
 const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
 const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
@@ -153,6 +162,15 @@ export default function CreatePage() {
   const [contentText, setContentText] = useState<string>("");
   const [contentFile, setContentFile] = useState<File | null>(null);
   const [contentDragging, setContentDragging] = useState(false);
+  // File-upload extraction state. When the user picks a content
+  // file we POST to /api/extract → poll until "completed" → save
+  // the anthropicFileId for the brief. Mirrors /enhance + /mimic.
+  type ContentFileStage = "idle" | "extracting" | "ready";
+  const [contentFileStage, setContentFileStage] =
+    useState<ContentFileStage>("idle");
+  const [contentAnthropicFileId, setContentAnthropicFileId] = useState<
+    string | null
+  >(null);
   // Slide size now lives in the OUTPUT card (alongside slide count
   // + pagination + persistent overlay). Language stays close to the
   // textarea since it modulates the typed content directly.
@@ -241,9 +259,16 @@ export default function CreatePage() {
   // ─── Derived flags ─────────────────────────────────────────────
   const hasText = contentText.trim().length > 0;
   const hasFile = contentFile !== null;
-  const contentReady = hasText || hasFile;
-  const generateDisabled = !contentReady || submitting;
-  const generateLoading = submitting;
+  // File path is "ready" only AFTER extraction completes. Text path
+  // is always ready when non-empty. Gating Generate on the file
+  // being fully extracted prevents POSTing /api/projects with a
+  // dangling fileName before the document is available to Claude.
+  const fileReady = hasFile && contentFileStage === "ready" && !!contentAnthropicFileId;
+  const fileExtracting = hasFile && contentFileStage === "extracting";
+  const contentReady = hasText || fileReady;
+  const generateDisabled =
+    !contentReady || submitting || fileExtracting;
+  const generateLoading = submitting || fileExtracting;
 
   // ─── File validation ───────────────────────────────────────────
   const validateFile = (next?: File | null): File | null => {
@@ -273,11 +298,109 @@ export default function CreatePage() {
     if (!valid) return;
     setContentFile(valid);
     setContentText("");
+    // Reset extraction state on every new pick so the polling
+    // effect below restarts cleanly. setStage("extracting") at the
+    // call site (not inside the useEffect) keeps the lint rule
+    // react-hooks/set-state-in-effect quiet — same pattern as
+    // /enhance + /mimic.
+    setContentAnthropicFileId(null);
+    setContentFileStage("extracting");
+    setError("");
   };
   const removeContentFile = () => {
     setContentFile(null);
+    setContentAnthropicFileId(null);
+    setContentFileStage("idle");
     setError("");
   };
+
+  // ─── Auto-extract: content file ────────────────────────────────
+  // Mirrors /enhance + /mimic's polling effect. The result's
+  // anthropicFileId is what we send as `source.anthropicFileId` on
+  // submit — the actual document the LLM reads via the document
+  // block in deck-generate.ts. Without this effect the file picker
+  // was decorative (CR critical 2026-05-26).
+  useEffect(() => {
+    if (!contentFile) return;
+    const controller = new AbortController();
+    let isCurrent = true;
+    (async () => {
+      try {
+        const formData = new FormData();
+        formData.append("file", contentFile);
+        formData.append("kind", "create");
+        formData.append("format", "16:9");
+        const startRes = await fetch("/api/extract", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+        if (!startRes.ok) {
+          const data = (await startRes.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(
+            data?.error ?? `Upload failed (${startRes.status})`,
+          );
+        }
+        const { jobId } = (await startRes.json()) as { jobId: string };
+        if (!jobId) throw new Error("No jobId returned from /api/extract");
+
+        // Poll until the extract job lands at "completed" / "failed"
+        // or the abort signal fires. Same interval + timeout as the
+        // other flows (2.5 s / 5 min).
+        const deadline = Date.now() + POLL_TIMEOUT_MS;
+        while (Date.now() < deadline) {
+          if (controller.signal.aborted) throw new Error("Cancelled");
+          const res = await fetch(`/api/extract/${jobId}`, {
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            const data = (await res.json().catch(() => null)) as
+              | { error?: string }
+              | null;
+            throw new Error(data?.error ?? `Status ${res.status}`);
+          }
+          const body = (await res.json()) as
+            | { status: "queued" | "processing" }
+            | { status: "failed"; error: string }
+            | { status: "completed"; result: { anthropicFileId: string } };
+          if (body.status === "completed") {
+            if (!isCurrent) return;
+            setContentAnthropicFileId(body.result.anthropicFileId);
+            setContentFileStage("ready");
+            return;
+          }
+          if (body.status === "failed") {
+            throw new Error(body.error ?? "Extraction failed");
+          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, POLL_INTERVAL_MS),
+          );
+        }
+        throw new Error("Extraction timed out. Try a smaller file.");
+      } catch (err) {
+        const isAbort =
+          err instanceof DOMException && err.name === "AbortError";
+        if (!isCurrent) return;
+        if (isAbort) {
+          setContentFileStage("idle");
+          return;
+        }
+        console.error("[create] content extraction failed:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "تعذر تحليل ملف المحتوى. حاول مرة أخرى.",
+        );
+        setContentFileStage("idle");
+      }
+    })();
+    return () => {
+      isCurrent = false;
+      controller.abort();
+    };
+  }, [contentFile]);
 
   // ─── Palette handlers ──────────────────────────────────────────
   const updateColor = (index: number, next: string) =>
@@ -371,6 +494,16 @@ export default function CreatePage() {
           : null,
       };
 
+      // When the user picked a content file, attach the extracted
+      // anthropicFileId as a scratch-with-source. Empty / text-only
+      // submits omit `source` entirely so the server reverts to the
+      // legacy scratch path. Pre-fix the file selection was thrown
+      // away on submit (CR critical 2026-05-26).
+      const source =
+        hasFile && contentAnthropicFileId
+          ? { kind: "scratch" as const, anthropicFileId: contentAnthropicFileId }
+          : null;
+
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -383,6 +516,7 @@ export default function CreatePage() {
           slideCount:
             slideCountMode === "custom" ? slideCountValue : null,
           quality,
+          ...(source ? { source } : {}),
           ...(templateSeedId ? { templateId: templateSeedId } : {}),
         }),
       });
@@ -418,7 +552,7 @@ export default function CreatePage() {
     setBodyFontSlot((s) => ({ ...s, mode }));
 
   return (
-    <div className="flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">أنشئ عرضاً جديداً</h1>
