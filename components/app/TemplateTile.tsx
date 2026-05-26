@@ -89,12 +89,12 @@ export function TemplateTile({
     setUseBusy(true);
     try {
       await seedFromTemplate(id);
-      // Hard navigation rather than router.push so the destination
-      // page's lazy initialisers + stepper mount-effect read the
-      // fresh sessionStorage on first render. Target is the parallel
-      // /create-from-template route tree (Phase D 2026-05-22) so the
-      // normal /create flow stays untouched by template-mode logic.
-      window.location.assign("/create-from-template/content");
+      // Hard navigation rather than router.push so /create's mount
+      // effect reads the fresh templateSeed sessionStorage on first
+      // render. Phase 17.D collapsed /create-from-template into the
+      // unified single-page /create — the seed marker is enough to
+      // pre-fill the branding card + surface the "من قالب" pill.
+      window.location.assign("/create");
     } catch (err) {
       // No toast infra yet — surface to console + release the gate so
       // the user can retry. Matches the rest of TemplateTile's error UX.

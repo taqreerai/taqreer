@@ -179,6 +179,22 @@ class NotificationStore {
           }
         })();
       });
+      // Access-revoked handler — when the owner removes this user
+      // from the project's share list, the server broadcasts
+      // `share.revoked` on this channel. We dispatch a DOM event
+      // so any page-level listener can react (the preview/project
+      // pages redirect to /dashboard when the revoked projectId
+      // matches the URL). Decoupled via CustomEvent rather than a
+      // direct router import so this lib stays page-agnostic.
+      handle.on("share.revoked", (payload) => {
+        if (!payload?.projectId) return;
+        if (typeof window === "undefined") return;
+        window.dispatchEvent(
+          new CustomEvent("taqreer:share-revoked", {
+            detail: { projectId: payload.projectId },
+          }),
+        );
+      });
       this.channel = handle;
     } catch (err) {
       console.warn("[notifications] openUserChannel failed", err);
@@ -205,9 +221,28 @@ class NotificationStore {
       const server = Array.isArray(data.notifications) ? data.notifications : [];
       // Upsert by id: server rows replace any local row with the same
       // id, additions get added, client-only items stay.
+      //
+      // The `read` flag is treated as STICKY ONCE TRUE — if the local
+      // row was already marked read, that local truth wins over the
+      // server's current state. This guards the race where the user
+      // marks-all-read optimistically (`markAllRead` flips local
+      // `read: true` immediately) but the page reloads / re-hydrates
+      // BEFORE the fire-and-forget `/api/notifications/read-all` POST
+      // lands. Without this guard, the next hydrate would re-fetch
+      // the server's stale `readAt: null` rows and clobber the
+      // optimistic local true → user sees "old notifications as
+      // unread again." The app has no "mark unread" action, so
+      // sticky-true is safe (server can only confirm read, never
+      // un-set it).
       const byId = new Map<string, Notification>();
       for (const item of this.items) byId.set(item.id, item);
-      for (const row of server) byId.set(row.id, row);
+      for (const row of server) {
+        const local = byId.get(row.id);
+        byId.set(
+          row.id,
+          local ? { ...row, read: row.read || local.read } : row,
+        );
+      }
       const merged = [...byId.values()]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, MAX_NOTIFICATIONS);
@@ -283,8 +318,12 @@ class NotificationStore {
     if (idx === -1) {
       this.items = [row, ...this.items].slice(0, MAX_NOTIFICATIONS);
     } else {
+      // Same sticky-once-true rule as hydrateFromServer — a re-pushed
+      // row (e.g. broadcast re-fire after a merge) must not flip a
+      // locally-read row back to unread.
+      const existing = this.items[idx];
       const next = [...this.items];
-      next[idx] = row;
+      next[idx] = { ...row, read: row.read || existing.read };
       // Re-sort if the server bumped createdAt (merge path).
       next.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       this.items = next.slice(0, MAX_NOTIFICATIONS);

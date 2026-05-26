@@ -43,6 +43,15 @@ import { z } from "zod";
 
 export const SourceScratchSchema = z.object({
   kind: z.literal("scratch"),
+  // Optional Anthropic Files API id when /create's content card has
+  // a user-uploaded source file (PDF/PPTX/DOCX) instead of typed
+  // text. The extraction pipeline (/api/extract → polling) is the
+  // same one /enhance + /mimic use; the only difference is that the
+  // scratch branch in deck-generate.ts treats the document as "raw
+  // material to interpret into a new deck" rather than "redesign
+  // verbatim" or "mimic visually". Absent for pure-text submits +
+  // for legacy briefs that predate this field.
+  anthropicFileId: z.string().min(1).optional(),
 });
 
 export const SourceEnhanceSchema = z.object({
@@ -59,14 +68,49 @@ export const SourceEnhanceSchema = z.object({
   fonts: z.array(z.string()),
 });
 
-export const SourceMimicSchema = z.object({
-  kind: z.literal("mimic"),
-  // Content source — the "ugly" file the user wants to repurpose.
-  uglyAnthropicFileId: z.string().min(1),
-  fonts: z.array(z.string()),
-  // Design reference — the "good" file Claude mimics visually.
-  designAnthropicFileId: z.string().min(1),
-});
+// Mimic content can come from EITHER an uploaded file ("ugly" file
+// path — same shape as enhance) OR free-text the user types into the
+// content card on /mimic. The two are mutually-exclusive in practice
+// but we accept both fields as optional + enforce "at least one" via
+// a Zod refinement, so the deck-generate branch can branch on which
+// field is populated and the wire shape can evolve later (e.g. if we
+// ever let the user provide a content brief alongside an uploaded
+// file as supplementary notes) without a schema break.
+//
+// The design reference file is always required — without it there's
+// nothing to mimic, and the flow becomes a glorified /create.
+export const SourceMimicSchema = z
+  .object({
+    kind: z.literal("mimic"),
+    // Content source — the "ugly" file the user wants to repurpose.
+    // Optional now: if absent, `userContent` must be set instead.
+    uglyAnthropicFileId: z.string().min(1).optional(),
+    // Content as plain text — typed into the content card on /mimic.
+    // Schema-level trim check: a string of pure whitespace ("   "
+    // or "\n\n\n") would pass `min(1)` but is semantically empty.
+    // The refine below also gates this so a blank textarea can't
+    // satisfy the "at least one content source" requirement.
+    userContent: z
+      .string()
+      .min(1)
+      .refine((v) => v.trim().length > 0, {
+        message: "userContent must contain non-whitespace text.",
+      })
+      .optional(),
+    fonts: z.array(z.string()),
+    // Design reference — the "good" file Claude mimics visually.
+    designAnthropicFileId: z.string().min(1),
+  })
+  .refine(
+    (v) =>
+      Boolean(v.uglyAnthropicFileId) ||
+      (typeof v.userContent === "string" && v.userContent.trim().length > 0),
+    {
+      message:
+        "Mimic source requires either a content file (uglyAnthropicFileId) or typed content (userContent).",
+      path: ["userContent"],
+    },
+  );
 
 export const SourceDataSchema = z.object({
   kind: z.literal("data"),

@@ -34,6 +34,24 @@ export function FontUploadSlot({
   sampleSizeClass,
   onSelect,
   onRemove,
+  // When true, the dropzone-button content (icon + label + format
+  // hint) anchors to the inline-start edge (visual right in RTL)
+  // instead of centering, AND the sample paragraph below is forced
+  // to RTL + right-aligned regardless of script. Used by /mimic
+  // where the brand-first product wants both the CTA and the live
+  // preview pinned to the page's reading edge. /create + /enhance
+  // keep their centered button + dir="auto" sample (the default).
+  alignStart = false,
+  // Skip the sample-text paragraph below the dropzone entirely.
+  // Used by /create where space is at a premium and the live
+  // preview wasn't earning its vertical band — the user uploads
+  // a font, that's signal enough; rendering the sample again
+  // pushed the branding card past /enhance's 387-px envelope.
+  hideSample = false,
+  // Shrink the dropzone button to match the height/text-size of
+  // the persistent-text input on /create (30 px tall, text-xs).
+  // Default false keeps the legacy 44-px height for /enhance + /mimic.
+  compact = false,
 }: {
   label: string;
   file: File | null;
@@ -42,6 +60,9 @@ export function FontUploadSlot({
   sampleSizeClass: string;
   onSelect: (file: File) => void;
   onRemove: () => void;
+  alignStart?: boolean;
+  hideSample?: boolean;
+  compact?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -113,36 +134,46 @@ export function FontUploadSlot({
           // Compact dropzone — horizontal layout (icon + label inline)
           // so the slot stays the same height as the Google-fonts
           // combobox input. 1 px dashed border (was 2 px, unified
-          // 2026-05-22 with every other upload area).
-          className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 py-2 text-center transition-colors ${
+          // 2026-05-22 with every other upload area). When `compact`,
+          // the row shrinks to 30 px (matching the persistent-text
+          // input on /create) and the label switches to text-xs +
+          // smaller icon.
+          className={`flex w-full items-center gap-2 rounded-xl border border-dashed bg-black/20 transition-colors ${
+            compact ? "px-2.5 py-1" : "px-3 py-2"
+          } ${
+            alignStart ? "justify-start text-start" : "justify-center text-center"
+          } ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
               : "border-white/15 hover:border-white/30"
           }`}
-          style={{ height: 44 }}
+          style={{ height: compact ? 30 : 44 }}
         >
           <span
             className="material-symbols-outlined text-white/70"
-            style={{ fontSize: 18 }}
+            style={{ fontSize: compact ? 14 : 18 }}
           >
             font_download
           </span>
-          <span className="text-xs font-semibold text-white">{label}</span>
-          <span className="text-[10px] text-white/40">— WOFF / TTF / OTF</span>
+          <span className={`${compact ? "text-[11px]" : "text-xs"} font-semibold text-white`}>{label}</span>
+          {compact ? null : <span className="text-[10px] text-white/40">— WOFF / TTF / OTF</span>}
         </button>
       )}
-      <p
-        // `dir="auto"` + `text-start` so Latin sample text (when the
-        // picked font is Latin-only — added 2026-05-22) reads
-        // left-aligned + L→R, while Arabic samples keep their
-        // right-aligned RTL flow. Without this the paragraph
-        // hardcoded `text-right` inside a dir="rtl" parent, which
-        // looked wrong for Latin previews.
-        dir="auto"
-        className={`${sampleSizeClass} text-start text-white${family ? ` ${family}` : ""}`}
-      >
-        {sampleText}
-      </p>
+      {hideSample ? null : (
+        <p
+          // `dir="auto"` + `text-start` so Latin sample text (when the
+          // picked font is Latin-only — added 2026-05-22) reads
+          // left-aligned + L→R, while Arabic samples keep their
+          // right-aligned RTL flow.
+          //
+          // alignStart=true forces RTL + text-right regardless of script.
+          // hideSample=true skips this paragraph entirely (see prop doc).
+          dir={alignStart ? "rtl" : "auto"}
+          className={`${sampleSizeClass} ${alignStart ? "text-right" : "text-start"} text-white${family ? ` ${family}` : ""}`}
+        >
+          {sampleText}
+        </p>
+      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@ const cards: Array<{
     icon: 'add_circle',
     title: 'إنشاء عرض جديد',
     desc: 'ابدأ من الصفر بمحتواك',
-    path: '/create/content',
+    path: '/create',
   },
   {
     icon: 'auto_fix_high',

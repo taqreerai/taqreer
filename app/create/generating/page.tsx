@@ -12,7 +12,7 @@ function GeneratingRedirect() {
     if (projectId) {
       router.replace(`/preview/${projectId}`);
     } else {
-      router.replace("/create/content");
+      router.replace("/create");
     }
   }, [projectId, router]);
 

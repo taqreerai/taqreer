@@ -127,39 +127,35 @@ function formatNotificationRow(row: {
   let desc: string | undefined;
   let href: string | undefined;
 
+  // 2026-05-26 — all notification copy unified to PASSIVE / verbal-noun
+  // forms so the phrasing works for both male AND female actors. The
+  // previous mix (masculine علّق/أعاد + feminine قبلت) read wrong for
+  // half the userbase. New shape: "تم {verb} ... من طرف {actor} ...".
   switch (row.type) {
     case "comment.created":
       // Title carries the actual slide NUMBER(s) — e.g.
-      // "{actor} علّق على الشريحة 4 في {project}" — instead of the
-      // count-only phrasing ("علّق على شريحة"). Per user request
-      // 2026-05-24 during PR #33 testing: the bell row should make
-      // it obvious WHICH slide the actor touched, so the recipient
-      // can decide whether to click through.
-      title = `${actor} علّق على ${slideTarget} في ${project}`;
+      // "تم التعليق على الشريحة 4 من طرف X في {project}" — so the
+      // recipient sees WHICH slide the actor touched.
+      title = `تم التعليق على ${slideTarget} من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "slide.regen.started":
       // Mid-flight signal — peer sees "X is redesigning slide N" the
       // moment the regen kicks off, paired with a live spinner overlay
-      // on the affected slide. The `.finished` row lands separately
-      // when the regen completes (different type, so they don't merge).
-      // Re-added 2026-05-24 after user requested the live spinner
-      // back for partial regens (was scrapped earlier as too noisy).
-      title = `${actor} يعيد تصميم ${slideTarget} في ${project}`;
+      // on the affected slide. `جارٍ` (active participle, gender-
+      // neutral) for in-flight events; `تمت` (passive perfect) for
+      // finished events.
+      title = `جارٍ إعادة تصميم ${slideTarget} من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "slide.regen.finished":
-      // Same shape as comment.created — include the slide number(s)
-      // so the recipient sees which slide was redesigned.
-      title = `${actor} أعاد تصميم ${slideTarget} في ${project}`;
+      title = `تمت إعادة تصميم ${slideTarget} من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "deck.regen.started":
       // Mid-flight signal for full deck regen. Peer sees this notification
-      // and a global "deck mid-regen" banner over the slides (DeckView
-      // marks every slide in the manifest as in-flight). The `.finished`
-      // row arrives separately when the regen completes.
-      title = `${actor} يعيد تصميم العرض كاملاً في ${project}`;
+      // + a global "deck mid-regen" banner over the slides.
+      title = `جارٍ إعادة تصميم العرض كاملاً من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "deck.regen.finished": {
@@ -169,8 +165,8 @@ function formatNotificationRow(row: {
           : 1;
       title =
         count > 1
-          ? `${actor} أعاد تصميم العرض ${count} مرات في ${project}`
-          : `${actor} أعاد تصميم العرض كاملاً في ${project}`;
+          ? `تمت إعادة تصميم العرض ${count} مرات من طرف ${actor} في ${project}`
+          : `تمت إعادة تصميم العرض كاملاً من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
@@ -193,13 +189,22 @@ function formatNotificationRow(row: {
       const level = typeof payload.accessLevel === "string" ? payload.accessLevel : null;
       const roleAr =
         level === "edit" ? "للتعديل" : level === "comment" ? "للتعليق" : "للعرض";
-      title = `${actor} دعتك للانضمام إلى ${project} ${roleAr}`;
+      // Updated wording 2026-05-26 per user direction: lead with
+      // "تمت دعوتك من طرف" + actor + project + role, so the
+      // recipient reads the action before the inviter's name.
+      // Phrasing is gender-neutral (تمت + من طرف) so it works
+      // regardless of the actor's gender, consistent with the
+      // rest of the notification copy.
+      title = `تمت دعوتك من طرف ${actor} للانضمام إلى ${project} ${roleAr}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
     case "share.accepted":
       kind = "success";
-      title = `${actor} قبلت دعوتك للانضمام إلى ${project}`;
+      // Mirror the share.invited shape — passive lead-in + actor +
+      // project, gender-neutral. Was: "{actor} قبلت دعوتك للانضمام
+      // إلى {project}" (feminine "قبلت", read wrong for male actors).
+      title = `تم قبول دعوتك من طرف ${actor} للانضمام إلى ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     default:

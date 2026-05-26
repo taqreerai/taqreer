@@ -68,6 +68,13 @@ export async function resolveProjectAccess(
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Resolve the caller's app-level email up-front (used both for
+  // the share-row email fallback and for the bare-email denial
+  // sweep below). Falls back to null for anonymous callers and for
+  // signed-in users whose Supabase email isn't propagated to our
+  // User row yet.
+  const callerEmail = user?.email?.toLowerCase() ?? null;
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -75,13 +82,39 @@ export async function resolveProjectAccess(
       publicAccessLevel: true,
       user: { select: { id: true, supabaseUserId: true } },
       // Pull the caller's share row in the same query when signed in.
+      // Match by EITHER the joined User's supabaseUserId OR the bare
+      // `email` column — covers two real-world cases:
+      //   • Accepted share: row has `userId` populated, the user
+      //     join hits, match wins on the relation.
+      //   • Pending or revoked-without-userId share: row has email
+      //     but no userId (or the User row was deleted post-revoke).
+      //     The email-match branch catches it so a previously-
+      //     revoked email can't sneak past via account creation.
+      // Include BOTH active rows AND revoked rows — the revoked
+      // path needs to DENY the caller (overrides the public-link
+      // fallback) per user direction 2026-05-26 "revoked user
+      // still can access through the link."
       shares: user
         ? {
             where: {
-              user: { supabaseUserId: user.id },
-              acceptedAt: { not: null },
+              OR: [
+                { user: { supabaseUserId: user.id } },
+                ...(callerEmail ? [{ email: callerEmail }] : []),
+              ],
+              AND: [
+                {
+                  OR: [
+                    { acceptedAt: { not: null }, revokedAt: null },
+                    { revokedAt: { not: null } },
+                  ],
+                },
+              ],
             },
-            select: { accessLevel: true, userId: true },
+            // Pull revoked rows FIRST so a revoke takes precedence
+            // over any legacy accepted row that might still exist
+            // for the same email/user combo.
+            orderBy: { revokedAt: { sort: "desc", nulls: "last" } },
+            select: { accessLevel: true, userId: true, revokedAt: true },
             take: 1,
           }
         : false,
@@ -95,6 +128,10 @@ export async function resolveProjectAccess(
   let role: ProjectRole | null = null;
   let userIdForCtx: string | null = null;
   let prismaUserIdForCtx: string | null = null;
+  // True when this signed-in user was explicitly revoked from this
+  // project. Blocks the public-link fallback below — the explicit
+  // revoke must outrank "anyone with the link can view."
+  let explicitlyRevoked = false;
 
   if (user) {
     userIdForCtx = user.id;
@@ -105,17 +142,29 @@ export async function resolveProjectAccess(
     } else {
       const share = project.shares?.[0];
       if (share) {
-        role = share.accessLevel as ProjectRole;
-        // Share carries the invitee's prisma userId directly —
-        // available because accept set it on the row.
-        prismaUserIdForCtx = share.userId ?? null;
+        if (share.revokedAt) {
+          // Soft-deleted share: the owner kicked this user out.
+          // Mark as explicitly revoked so the public-link fallback
+          // below doesn't grant them view-access via the URL.
+          explicitlyRevoked = true;
+          prismaUserIdForCtx = share.userId ?? null;
+        } else {
+          role = share.accessLevel as ProjectRole;
+          // Share carries the invitee's prisma userId directly —
+          // available because accept set it on the row.
+          prismaUserIdForCtx = share.userId ?? null;
+        }
       }
     }
   }
 
   // Public-view fallback — only when the caller hasn't already
-  // matched a stronger role and the project's link is on.
-  if (!role && project.publicAccessLevel === "view") {
+  // matched a stronger role, the project's link is on, AND the
+  // caller wasn't explicitly revoked. The revoke check is what
+  // gives "remove from sharing" its teeth on public-link projects:
+  // without it, the kicked user could still re-open the project via
+  // the public URL.
+  if (!role && !explicitlyRevoked && project.publicAccessLevel === "view") {
     role = "view";
   }
 

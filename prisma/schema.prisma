@@ -172,6 +172,16 @@ model ProjectShare {
   invitedBy    String
   invitedAt    DateTime            @default(now())
   acceptedAt   DateTime?
+  // Owner-revoked timestamp. Soft-delete: the row stays after
+  // a revoke so the access resolver can DENY the recipient on
+  // subsequent requests (otherwise a project with
+  // `publicAccessLevel = "view"` would let the kicked user fall
+  // through to the public-link view — user direction 2026-05-26
+  // "revoked user still can access through the link"). Re-inviting
+  // the same email resets `revokedAt` to null in the share-POST
+  // upsert path. List queries (share modal, GET /api/projects/[id]/
+  // share) filter `revokedAt: null` so revoked rows don't surface.
+  revokedAt    DateTime?
   // One-time URL token. Set on creation, nulled on revoke so a
   // stale email link can't grant access after the owner kicks
   // someone out. `@unique` enforces collision-free generation.

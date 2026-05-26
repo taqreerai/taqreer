@@ -144,26 +144,38 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // Number stepper for the custom slide-count input. All three controls
 // are h-8 so the stepper drops cleanly into the pill row.
-function SlideCountStepper({
+export function SlideCountStepper({
   value,
   onChange,
   min,
   max,
+  // Visual size variant. Default keeps /create's existing
+  // h-8 / w-52 dimensions (byte-identical). "compact" shrinks
+  // everything ~25% for /mimic where the stepper sits beside
+  // text-xs labels and inline pills.
+  size = "default",
 }: {
   value: number;
   onChange: (next: number) => void;
   min: number;
   max: number;
+  size?: "default" | "compact";
 }) {
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
-  const stepBtnClasses =
-    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40";
+  const compact = size === "compact";
+  const stepBtnClasses = `flex ${
+    compact ? "h-6 w-6" : "h-8 w-8"
+  } shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40`;
   const stepBtnStyle = {
     background: "rgba(255, 255, 255, var(--glass-opacity))",
     borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
   } as const;
+  const iconSize = compact ? 14 : 16;
+  const inputDims = compact
+    ? { width: 40, height: 24, padding: "0 6px" }
+    : { width: 52, height: 32, padding: "0 8px" };
   return (
-    <div className="flex items-center gap-1.5">
+    <div className={`flex items-center ${compact ? "gap-1" : "gap-1.5"}`}>
       <button
         type="button"
         onClick={() => onChange(clamp(value - 1))}
@@ -172,7 +184,7 @@ function SlideCountStepper({
         className={stepBtnClasses}
         style={stepBtnStyle}
       >
-        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: iconSize }}>
           remove
         </span>
       </button>
@@ -190,8 +202,10 @@ function SlideCountStepper({
         // sits between − / + buttons with no visible <label>, so the
         // programmatic name comes from aria-label.
         aria-label="عدد الشرائح"
-        className="input-dark no-spinner text-center text-sm"
-        style={{ width: 52, height: 32, padding: "0 8px" }}
+        className={`input-dark no-spinner text-center ${
+          compact ? "text-xs" : "text-sm"
+        }`}
+        style={inputDims}
       />
       <button
         type="button"
@@ -201,10 +215,144 @@ function SlideCountStepper({
         className={stepBtnClasses}
         style={stepBtnStyle}
       >
-        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: iconSize }}>
           add
         </span>
       </button>
+    </div>
+  );
+}
+
+// ─── InlineStepper — single-pill compact stepper ──────────────────
+// Originally lived inline in app/create/page.tsx; promoted here
+// 2026-05-26 so /mimic can use the SAME stepper + animation as
+// /create (user direction: "unify عدد الشرائح, use the one at
+// create on mimic, same animation and layout").
+//
+// Difference vs. SlideCountStepper: this is a single rounded-full
+// pill containing − / number / + as flat siblings (no individual
+// button borders). Total natural width ≈ 66 px (h-5 buttons + w-6
+// number input + 2-px border). The compact footprint lets it sit
+// next to a SegmentedToggle inside a single-row slide-count cluster
+// without ever wrapping or pushing the label.
+//
+// Used together with framer-motion AnimatePresence + parent
+// motion.div(layout) at the call site for a smooth enter/exit
+// width animation. See app/create/page.tsx and app/mimic/page.tsx
+// for the canonical wrapper pattern.
+export function InlineStepper({
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  min: number;
+  max: number;
+}) {
+  const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  return (
+    <div
+      // h-22 / w~66 (button h-5 w-5, input w-6). The 1-px
+      // border-glass token + glass-bg match the rest of the input
+      // chrome on /create + /mimic.
+      className="flex items-center rounded-full border backdrop-blur-glass"
+      style={{
+        height: 22,
+        background: "rgba(255, 255, 255, var(--glass-opacity))",
+        borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onChange(clamp(value - 1))}
+        disabled={value <= min}
+        aria-label="إنقاص"
+        className="flex h-5 w-5 items-center justify-center rounded-full text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
+          remove
+        </span>
+      </button>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => {
+          const n = Number(event.target.value);
+          onChange(Number.isFinite(n) ? clamp(n) : min);
+        }}
+        aria-label="عدد الشرائح"
+        className="no-spinner w-6 bg-transparent text-center text-[11px] text-white outline-none"
+      />
+      <button
+        type="button"
+        onClick={() => onChange(clamp(value + 1))}
+        disabled={value >= max}
+        aria-label="زيادة"
+        className="flex h-5 w-5 items-center justify-center rounded-full text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
+          add
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// ─── SlideCountFields — auto/custom + stepper, exported for reuse ──
+// /create's OutputContentCard ALREADY renders this exact cluster
+// (SectionLabel + Pill row + conditional SlideCountStepper). The
+// promotion to a standalone export keeps /mimic's "what to mimic"
+// card visually byte-identical to /create's slide-count UI while
+// leaving the original call site (OutputContentCard) untouched.
+//
+// Default copy/range matches /create: "عدد الشرائح" label, 1..20.
+// `hideLabel` mirrors SlideSizeFields' option for tighter card
+// layouts where the surrounding context already implies the field's
+// purpose (e.g. /mimic where space is at a premium under the
+// branding toggle).
+export function SlideCountFields({
+  mode,
+  value,
+  onMode,
+  onValue,
+  label,
+  hideLabel = false,
+  min = 1,
+  max = 20,
+}: {
+  mode: SlideCountMode;
+  value: number;
+  onMode: (m: SlideCountMode) => void;
+  onValue: (n: number) => void;
+  label?: string;
+  hideLabel?: boolean;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <div className="space-y-2">
+      {hideLabel ? null : <SectionLabel>{label ?? "عدد الشرائح"}</SectionLabel>}
+      <div className="flex items-center gap-1.5">
+        <Pill active={mode === "auto"} onClick={() => onMode("auto")}>
+          تلقائي
+        </Pill>
+        <Pill active={mode === "custom"} onClick={() => onMode("custom")}>
+          مخصص
+        </Pill>
+        {mode === "custom" ? (
+          <SlideCountStepper
+            value={value}
+            onChange={onValue}
+            min={min}
+            max={max}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -264,14 +412,35 @@ function SizeChoice({
 export function SlideSizeFields({
   slideSize,
   onSlideSize,
+  // Direction of the two SizeChoice tiles:
+  //   • horizontal (default) — grid-cols-2 side-by-side. Matches the
+  //     /create + /create-from-template call sites unchanged.
+  //   • vertical (`stacked`) — single column, tiles stacked. Used by
+  //     /mimic's compact content card where the slide-size picker
+  //     shares a row with the logo slot and needs to claim less
+  //     horizontal real estate.
+  stacked = false,
+  // Optional section label override. /create keeps the default
+  // "حجم الشريحة" (slide size) when omitted, so existing call
+  // sites are byte-identical.
+  label,
+  // Skip the SectionLabel row entirely. /mimic uses this in its
+  // compact content card where the SizeChoice tiles read clearly
+  // enough on their own (16:9 / 9:16) — the header word adds a
+  // vertical band the card can't afford. /create keeps its label
+  // since the field shares space with other section headers.
+  hideLabel = false,
 }: {
   slideSize: SlideSize;
   onSlideSize: (v: SlideSize) => void;
+  stacked?: boolean;
+  label?: string;
+  hideLabel?: boolean;
 }) {
   return (
     <div className="space-y-2">
-      <SectionLabel>حجم الشريحة</SectionLabel>
-      <div className="grid grid-cols-2 gap-2">
+      {hideLabel ? null : <SectionLabel>{label ?? "حجم الشريحة"}</SectionLabel>}
+      <div className={stacked ? "grid grid-cols-1 gap-2" : "grid grid-cols-2 gap-2"}>
         <SizeChoice
           active={slideSize === "16:9"}
           onClick={() => onSlideSize("16:9")}

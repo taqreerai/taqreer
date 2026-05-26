@@ -34,6 +34,7 @@ import {
 } from "@/components/app/AccessChipDropdown";
 import { useExportActions } from "@/lib/preview/use-export-actions";
 import { Avatar } from "@/components/common/Avatar";
+import { Toggle } from "@/components/create/controls";
 
 type ShareRow = {
   id: string;
@@ -414,6 +415,53 @@ export function ShareDialog({
     [projectId, state],
   );
 
+  // ─── Public link on/off toggle ──────────────────────────────────
+  //
+  // Posts `publicAccessLevel: "view" | null` to flip the project's
+  // public-link state. Optimistic local update so the footer's
+  // disabled/enabled UI flips instantly; on server error we revert.
+  // The Toggle in the footer is the user-facing entry point — pre-
+  // fix there was no way to TURN OFF the link once it was enabled
+  // (it auto-activated on the first copy and stayed view-only
+  // forever after, even after every share was revoked).
+  const setPublicLinkEnabled = useCallback(
+    async (enabled: boolean) => {
+      if (!projectId) return;
+      const next: AccessRole | null = enabled ? "view" : null;
+      // Optimistic flip
+      const prev = state?.publicAccessLevel ?? null;
+      setState((s) => (s ? { ...s, publicAccessLevel: next } : s));
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/share`,
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ publicAccessLevel: next }),
+          },
+        );
+        if (!res.ok) {
+          // Revert on failure
+          setState((s) => (s ? { ...s, publicAccessLevel: prev } : s));
+          setFetchError(
+            enabled
+              ? "تعذر تفعيل الرابط العام"
+              : "تعذر إيقاف الرابط العام",
+          );
+        }
+      } catch {
+        setState((s) => (s ? { ...s, publicAccessLevel: prev } : s));
+        setFetchError(
+          enabled
+            ? "تعذر تفعيل الرابط العام"
+            : "تعذر إيقاف الرابط العام",
+        );
+      }
+    },
+    [projectId, state],
+  );
+
   // ─── Copy link ───────────────────────────────────────────────────
   //
   // Side-effect on the server: if the project's `publicAccessLevel`
@@ -652,20 +700,24 @@ export function ShareDialog({
                 </div>
               </motion.div>
 
-              {/* Footer — constant Copy-Link CTA across both tabs.
-                  Always view-only (the link route is gated server-side
-                  by publicAccessLevel='view' once a link is shared).
+              {/* Footer — Toggle on the right (RTL visual) controls
+                  the public-link state; Copy-Link CTA on the left.
+                  When the toggle is OFF, the link is fully disabled
+                  on the server (`publicAccessLevel = null`) and the
+                  copy button is disabled so the owner doesn't put a
+                  non-functional URL on someone's clipboard. Pre-fix
+                  there was no UI to disable the link; it auto-
+                  activated on the first copy and stayed view-only
+                  forever — see prior commit 43260e1 + user direction
+                  2026-05-26 "there is no option to do this".
                   Uses `.btn-gradient` (PATTERN 2 — primary CTA) to
                   match the template-modal "استخدامه كقالب" button so
                   the modals read as one family. */}
               <footer className="flex items-center justify-between gap-2 border-t border-white/[0.08] px-4 py-3">
-                <span className="text-xs text-white/40">
-                  الرابط يفتح للمشاهدة فقط
-                </span>
                 <button
                   type="button"
                   onClick={copyLink}
-                  disabled={!projectId}
+                  disabled={!projectId || state?.publicAccessLevel !== "view"}
                   className="btn-gradient inline-flex items-center gap-2 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <AnimatePresence mode="wait" initial={false}>
@@ -684,6 +736,19 @@ export function ShareDialog({
                   </AnimatePresence>
                   {copied ? "تم النسخ" : "نسخ رابط المشاركة"}
                 </button>
+                <div className="inline-flex items-center gap-2">
+                  <span className="text-xs text-white/60">
+                    {state?.publicAccessLevel === "view"
+                      ? "الرابط العام مفعّل — للمشاهدة فقط"
+                      : "الرابط العام غير مفعّل"}
+                  </span>
+                  <Toggle
+                    ariaLabel="الرابط العام"
+                    value={state?.publicAccessLevel === "view"}
+                    onChange={(next) => void setPublicLinkEnabled(next)}
+                    disabled={!projectId || !state}
+                  />
+                </div>
               </footer>
             </div>
           </motion.div>
