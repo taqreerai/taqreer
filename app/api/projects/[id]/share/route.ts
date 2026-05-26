@@ -87,6 +87,12 @@ export async function GET(
         },
       },
       shares: {
+        // Hide soft-deleted (revoked) rows from the share modal —
+        // the row stays in the DB so the access resolver can deny
+        // the kicked user, but the owner's UI should only show
+        // ACTIVE collaborators. Re-inviting the same email
+        // resurrects the row via the POST upsert (revokedAt: null).
+        where: { revokedAt: null },
         // Stable order so the modal's invitee list doesn't reshuffle
         // on every fetch. Newest first — matches the "just added"
         // mental model better than insertion order from the user's PoV.
@@ -225,13 +231,18 @@ export async function POST(
       // and re-invites to an existing-but-not-yet-accepted email
       // still rotate the token + clear acceptedAt — that's the
       // owner's "kick + re-invite" workflow.
+      //
+      // Re-invite of a REVOKED row (revokedAt != null) takes the
+      // "kick + re-invite" path: resets revokedAt to null, rotates
+      // the token, clears acceptedAt+userId so the user re-accepts
+      // through a fresh URL. This is the unrevoke path.
       const existing = await tx.projectShare.findUnique({
         where: { projectId_email: { projectId, email: inviteEmail } },
-        select: { id: true, accessLevel: true, acceptedAt: true },
+        select: { id: true, accessLevel: true, acceptedAt: true, revokedAt: true },
       });
 
-      if (existing && existing.acceptedAt) {
-        // Role change on an accepted user — non-destructive.
+      if (existing && existing.acceptedAt && !existing.revokedAt) {
+        // Role change on an accepted, active user — non-destructive.
         const updated = await tx.projectShare.update({
           where: { id: existing.id },
           data: { accessLevel: body.accessLevel },
@@ -244,9 +255,10 @@ export async function POST(
         });
         newShare = updated;
       } else {
-        // New invite OR re-invite of a pending row — rotate token,
-        // reset acceptedAt + userId (the new link supersedes any
-        // forwarded copy of the old one).
+        // New invite OR re-invite of a pending / revoked row —
+        // rotate token, reset acceptedAt + userId (the new link
+        // supersedes any forwarded copy of the old one), AND clear
+        // revokedAt so the access resolver stops denying the user.
         const upserted = await tx.projectShare.upsert({
           where: { projectId_email: { projectId, email: inviteEmail } },
           create: {
@@ -261,6 +273,7 @@ export async function POST(
             inviteToken: generateInviteToken(),
             acceptedAt: null,
             userId: null,
+            revokedAt: null,
           },
           select: {
             id: true,
