@@ -55,14 +55,49 @@ Four flows. Create is shipped; Enhance / Mimic / Data are Phase 17 (planned).
 Templates work as a **library**, not a separate flow — accessed via `/templates`
 and the "Use this template" CTA on tiles + lightbox.
 
-### Flow 1 — Create (إنشاء) ✅
+### Flow 1 — Create (إنشاء) ✅ Phase 17.D shipped (single-page rebuild)
 
-Dashboard → `/create/content`. Three-step wizard, brand decided fresh by Claude.
+Dashboard → `/create`. **Single-shot page** with 4 cards in a responsive grid
+(4 → 2 → 1 cols at viewport breakpoints 1280 / 760 / below), Generate split-button
+below. Replaces the previous `/create/{content,brand,summary}` 3-step wizard and
+the entire `/create-from-template` route tree (template seeding now hydrates the
+single page via `lib/create/seed-from-template.ts`).
 
-1. **Content** (`/create/content`) — Upload PPTX/PDF/DOCX/TXT/images or paste text. Verbatim toggle.
-2. **Brand** (`/create/brand`) — Palette + fonts + logo + position + slide size + count.
-3. **Summary** (`/create/summary`) — Editable content + rules card. CTA: `إنشاء`. POST `/api/projects` → `/preview/[projectId]`.
-4. **Generate** (`/preview/[projectId]`) — Fires Inngest `deck.generate.requested`. Placeholders + per-card progress polled at 1.5 s. On complete, slides cascade in.
+**Card 1 — Content** (icon `subject`): textarea for typed content + horizontal
+dropzone for PDF/PPTX/DOCX/TXT. Language SegmentedToggle (ar / en) inline with
+the textarea header so direction flips RTL ↔ LTR on the input. The two are
+mutually exclusive (textarea dims when a file is picked).
+
+**Card 2 — Fonts + Colors** (icon `palette`): inline palette (h-7 swatches +
+add tile, gap-1.5) on row 1, heading-font + body-font slots below each separated
+by `border-t pt-3`, "Save as default brand" Toggle pinned to the card bottom.
+Each font slot pairs a label-row (text-xs + SegmentedToggle ملف / Google) with
+the slot below, `compact + alignStart + hideSample` — sample preview text
+("أبجد هوز" / "النص الأساسي يُستخدم...") removed for vertical density.
+
+**Card 3 — Logo** (icon `image`): `CompactUploadZone` accepting **SVG only**
+(label "شعار SVG فقط" at `text-[11px]` in `text-white/40` when empty, swaps to
+filename at full contrast when picked). Below: `border-t pt-3` then "موضع الشعار"
+label + an `ExclusionDropdown` (استثناء الغلاف / الشكر in one pill) + a
+`PositionDropdown` (6-corner picker collapsed into a glass popover). Same
+"Save as default brand" Toggle as Card 2 (shared state).
+
+**Card 4 — Output Settings** (icon `settings`): `SlideSizeFields` (16:9 / 9:16
+side-by-side), then `border-t pt-3` separators between each section: slide-count
+(SegmentedToggle تلقائي / مخصص with framer-motion `layout` + AnimatePresence
+spring 500/35 wrapping the `InlineStepper` so the stepper grows/shrinks the
+toggle's anchor smoothly), pagination Toggle, persistent overlay (text input +
+ExclusionDropdown + PositionDropdown).
+
+**Content extraction** (file path) — when the user picks a content file, the page
+POSTs `/api/extract` (kind=`create`), polls `/api/extract/[jobId]` every 2.5 s
+until completed (5 min cap), and stores the resulting `anthropicFileId`. On
+Generate the brief carries `source: { kind: "scratch", anthropicFileId }` —
+`deck-generate.ts`'s scratch branch attaches the PDF as a `document` block with
+a "raw material for a fresh deck" directive (read content not design, edit
+aggressively, structure for clarity). Text-only submits omit `source`
+entirely and follow the legacy scratch path. Generate is gated on extraction
+being `ready` so the file's bytes are always uploaded before the POST lands.
 
 ### Flow 2 — Enhance (تحسين) ✅ Phase 17.B shipped
 
@@ -137,21 +172,51 @@ Labels mirror Anthropic's documented effort-tier names so the menu reads as a di
 
 **Visual handling rule (logos)** — single non-negotiable: "anything that LOOKS like a logo, brand mark, monogram, or stylized identifier — do NOT attempt to draw it in SVG" (regardless of whether Claude "recognizes" it). Two fallbacks: brand name readable → styled text, otherwise → placeholder div with short label. The previous wordmark/iconographic classification step is gone (it let Claude mis-categorize and proceed to redraw).
 
-### Flow 3 — Mimic (محاكاة) ⏳ Phase 17.C
+### Flow 3 — Mimic (محاكاة) ✅ Phase 17.C shipped (new flow this session)
 
-Dashboard → `/mimic`. User uploads TWO files: a "design reference" (good PPT/
-PDF) + a "content source" (ugly). Server:
-- Extracts content from the ugly file (same path as Enhance).
-- Rasterizes the good file to PNG per slide (via Puppeteer, in-memory).
-- Embeds rasterized PNGs as base64 image blocks in the Claude user message
-  alongside the extracted content. No persistent storage of reference images.
+Dashboard → `/mimic`. **Single-shot page** with a 3-card row (RTL flow: content
+right, branding middle conditional, what-to-mimic left), Generate split-button
+below. Each card pins at `min-h-[387px]` matching /create + /enhance.
 
-Both files deleted post-extract. Brand page shown (logo upload). Submit fires
-`deck.generate.requested` with `source.kind === "mimic"` and `source.referenceImages`
-attached to the multipart Claude message. Prompt branch: "Match the visual
-language of these reference images while presenting this content."
+**Card 1 — Content** (icon `subject`): textarea OR file dropzone (mutually
+exclusive). Direction follows live `detectStringLanguage(text)` heuristic so
+typing English flips LTR mid-stream, Arabic stays RTL. Bottom row (under
+`border-t pt-3`) splits the card in half: logo on the visual right
+(`CompactUploadZone` SVG-only, same "شعار SVG فقط" empty label + filename swap
+on pick), `SlideSizeFields stacked` on the left.
 
-File cap: **100 MB per file**.
+**Card 2 — Branding** (icon `palette`, CONDITIONAL): only rendered when the
+"مُحاكاة الهوية البصرية" Toggle in card 3 is OFF. Mounts/unmounts via
+AnimatePresence with width: 0 ↔ 360 spring (350ms cubic easing). Inline palette
+(h-7 swatches like /create) + heading font + body font slots, each with the same
+SegmentedToggle ملف/Google + compact + alignStart + hideSample shape /create
+uses. Overflow toggling: `overflow: hidden` during the AnimatePresence
+transition, `overflow: visible` after `onAnimationComplete` so the
+ColorPickerPopover and GoogleFontSlot dropdowns can escape the card edge.
+
+**Card 3 — What to mimic** (icon `auto_awesome`): wrapped in
+`.canvas-gradient-border data-active="true"` for the animated mesh halo (visual
+cue: "this is the file whose design we're copying"). Toggle "مُحاكاة الهوية
+البصرية" at top (ON by default = use design's brand identity; OFF reveals
+card 2). `border-t pt-3` → slide-count row (SegmentedToggle + InlineStepper +
+identical spring 500/35 to /create's). `border-t pt-3` → design-reference
+dropzone (`compact + h-full` to fill the remaining card height).
+
+**Server pipeline** (mirrors /enhance for both content + design):
+1. On file pick, POST `/api/extract` (kind=`mimic`) + poll until completed.
+2. Both files get an `anthropicFileId` from the Anthropic Files API.
+3. On Generate the brief carries `source.kind === "mimic"` with
+   `designAnthropicFileId` (always) + EITHER `uglyAnthropicFileId` (file path)
+   OR `userContent` (text path — sentinel-safe escaped before injection).
+4. `deck-generate.ts`'s mimic branch attaches both files as `document` blocks
+   with the directive: "DESIGN REFERENCE = visual language source, mimic its
+   typography/palette/spacing/layout, do not copy its content. UGLY/CONTENT
+   = render verbatim in the reference's style."
+
+File cap: **100 MB per file**. State machine: `idle → extracting → ready →
+submitting`. Stale-extraction guard on both effects: the abort handler only
+resets stage to `idle` for own-effect aborts, never clobbers a newer
+extraction's `extracting` state.
 
 ### Flow 4 — Data (من بيانات) ⏳ Phase 17.D
 
@@ -167,12 +232,67 @@ File cap: **25 MB** (XLSX rarely exceeds; Anthropic Files API enforces its own c
 
 ### Convergence
 
-All four flows funnel into the same downstream pipeline from `/create/summary`
-onward: POST `/api/projects` → Inngest `deck.generate.requested` →
-`deck-generate.ts` (prompt branches on `source.kind`) → preview page. The
-project page, toolbox, canvas, slide-nav sidebar, BiDi patches, realtime
-broadcasting, and presence avatars are all shared infrastructure — none of
-that work is duplicated per flow.
+All four flows funnel into the same downstream pipeline from POST `/api/projects`
+onward → Inngest `deck.generate.requested` → `deck-generate.ts` (prompt branches
+on `source.kind`) → `/preview/[projectId]`. The project page, toolbox, canvas,
+slide-nav sidebar, BiDi patches, realtime broadcasting, and presence avatars
+are all shared infrastructure — none of that work is duplicated per flow.
+
+### Shared design system (2026-05-26 unification) ✅
+
+The three landing flows (`/create`, `/enhance`, `/mimic`) now read as one
+labelled-cluster family — every card carries the same chrome contract, the same
+input primitives, the same animation springs. Per user direction "everything
+should be unified as create, everything, even the font text area alignment."
+
+**Card chrome** — every card wraps a `CardHeader` (icon + h3 title + bottom
+hairline `border-b border-white/[0.08] pb-2`) followed by sections separated by
+`border-t border-[var(--tq-border-glass)] pt-3`. Each card sits in a
+`glass-card` with `gap-4 + p-4 + rounded-2xl` and pins at `min-h-[387px]` so
+every flow's hero row reads as the same vertical band (measured live from
+/enhance's first empty-state card, then locked).
+
+**Shared primitives** (all in `components/create/controls.tsx` unless noted):
+
+| Primitive | Used by | Visual contract |
+|---|---|---|
+| `CardHeader` | every card on /create + /enhance + /mimic | icon + title, border-b separator below |
+| `SegmentedToggle` | font mode (ملف / Google), slide count (تلقائي / مخصص), language (ar / en) | sliding indicator via framer-motion `layoutId`, spring 500/35 |
+| `Toggle` | "Save as default brand", pagination, "مُحاكاة الهوية البصرية" | violet active track + white knob, knob spring 500/35 |
+| `PositionDropdown` | logo position, persistent overlay position | h-8 glass pill → glass popover with 6-corner grid |
+| `Pill` | residual chooser sites (legacy) | glass surface, white-on-active stroke |
+| `InlineStepper` (in `OutputCards.tsx`) | slide-count "مخصص" mode on /create + /mimic | single rounded pill, h-22, − / number / +, w-66 |
+| `CompactUploadZone` (in `components/brand/`) | logo upload (all flows) + screenshot extractor | `compact + hideFilename`, **SVG-only** logo accept, `muted` prop swaps label to text-[11px] white/40 |
+| `FontUploadSlot` / `GoogleFontSlot` (in `components/brand/`) | every font picker | `compact + alignStart + hideSample` for the in-card variant |
+| `ColorPickerPopover` (in `components/create/`) | palette swatches (all flows) | 140 × ~180 px, opens below swatch (`top-full mt-2`) |
+
+**Animation language** — every motion uses the same spring everywhere:
+`{ type: "spring", stiffness: 500, damping: 35 }`. SegmentedToggle's active
+indicator, Toggle's knob travel, slide-count `motion.div(layout)` parent +
+`AnimatePresence`-wrapped stepper (width 0 ↔ 66 + opacity + marginInlineStart
+to absorb the gap). Mimic's branding card uses a longer 350 ms cubic easing
+for the larger card-width grow.
+
+**Responsive layout** — /create uses an explicit-breakpoint grid (1 → 2 → 4
+cols at `min-[760px]` / `min-[1280px]`) to skip the awkward 3-col intermediate;
+/enhance + /mimic use `flex-wrap items-stretch` so cards wrap to a new row when
+the container can't fit them side-by-side, with `min-w-[320px]` (enhance) or
+`w-[360px]` (mimic) preventing infinite shrink.
+
+**Card-level micro-rules** (consistent across all 3 flows):
+- All Arabic copy uses **Latin numerals only** (0-9, never ٠-٩) — BiDi handles
+  embedding correctly in RTL contexts.
+- Section labels are `text-xs font-semibold text-white/70` (never an h3 inside
+  a card — h3 is reserved for the CardHeader at the top).
+- Inline pill toggles + inputs share the same 30-px compact height with
+  `padding: "0 12px"` so toggling between dropzone / combobox / input never
+  reflows the card.
+- `page-container` class on the outermost `<div>` wrapper of every app page
+  for the shared app-page chrome contract.
+
+**Locked**: with the design system in place, /create + /enhance + /mimic are
+considered done. Future visual changes go through the shared primitives so
+all three flows update together; no flow-specific forks.
 
 ---
 
@@ -758,10 +878,11 @@ permanently here as the audit trail.
 | 16.D | **Live regen status** — `slide.regen.started`/`.finished` + `deck.regen.started`/`.finished`; peer-side spinner overlays match the actor's; full-deck started broadcasts re-added 2026-05-24 after user accepted the friction trade-off | ✅ |
 | 16.D.5 | **Lock-state as realtime** — `slide.lock.changed` + `slides.locks.bulk-changed`; lock pills flip in lockstep | ✅ |
 | 16.E | **Bell notifications** — `Notification` table, `fanOutNotification` helper, per-user `user:{prismaUserId}` channel, formatted bell rows (slide numbers + gender-neutral verbs), mark-all-read on bell open, 8 emission sites (comment / slide.regen.started / slide.regen.finished / deck.regen.started / deck.regen.finished / deck.generate.finished / share.invited / share.accepted). Grouping disabled per direction "things need to be accurate." | ✅ |
-| **17.A** | **Shared upload + extraction infra (Phase 17 foundation)** — `lib/types/brief.ts` StandardBrief contract w/ optional `source` field; `lib/extract/{pptx,pdf,xlsx,rasterize}.ts` extraction modules; `lib/create/seed-from-extraction.ts` sessionStorage seeder; `deck-generate.ts` prompt branching on `source.kind` | ⏳ next |
-| **17.B** | **Enhance flow** — single-shot `/enhance` (2 cards: source+logo + fonts), `POST /api/extract` (Supabase staging + Inngest extract-source: LibreOffice PPTX→PDF, Anthropic Files API upload, PPTX theme fonts/colors), `deck-generate.ts` branches on `source.kind === "enhance"` with VISUAL REUSE directive (Claude reads PDF document block, redraws assets as inline SVG). Asset extraction tried + reverted (clashed visually with Claude's SVG style). Streaming preview hardened: `StreamingSlideParser.didReset()` handles draft→polished pattern; SYSTEM_PROMPT routes iteration to thinking channel. | ✅ shipped 2026-05-25 |
-| **17.C** | **Mimic flow** — `/mimic` two-drop UI, `POST /api/mimic/extract` (ugly extract + good rasterize → base64 PNGs in `source.referenceImages`), multipart Claude message w/ image blocks, Mimic prompt branch | ⏳ |
-| **17.D** | **Data flow** — `/from-data` upload UI, `POST /api/data/extract` (uploads to Anthropic Files API, returns `file_id` into `source.dataFileId`), Data prompt branch, post-generation Anthropic file cleanup | ⏳ |
+| **17.A** | **Shared upload + extraction infra (Phase 17 foundation)** — `lib/types/source.ts` discriminated-union schema w/ scratch / enhance / mimic / data variants; `lib/extract/{pptx,pdf}.ts` extraction modules; `lib/create/seed-from-extraction.ts` sessionStorage seeder; `deck-generate.ts` prompt branching on `source.kind` | ✅ shipped 2026-05-25 |
+| **17.B** | **Enhance flow** — single-shot `/enhance` (2 cards: source-only + الهوية البصرية with logo under fonts), `POST /api/extract` (Supabase staging + Inngest extract-source: LibreOffice PPTX→PDF, Anthropic Files API upload, PPTX theme fonts/colors), `deck-generate.ts` branches on `source.kind === "enhance"` with VISUAL REUSE directive (Claude reads PDF document block, redraws assets as inline SVG). Asset extraction tried + reverted (clashed visually with Claude's SVG style). Streaming preview hardened: `StreamingSlideParser.didReset()` handles draft→polished pattern; SYSTEM_PROMPT routes iteration to thinking channel. | ✅ shipped 2026-05-25 |
+| **17.C** | **Mimic flow (NEW this session)** — `/mimic` single-shot 3-card layout (content + branding-conditional + what-to-mimic), shared `/api/extract` pipeline (kind=`mimic`) for both files, `source.kind === "mimic"` with `designAnthropicFileId` + (`uglyAnthropicFileId` OR `userContent`), `deck-generate.ts` mimic branch with sentinel-escaped user content + "match design language only, render content verbatim" directive | ✅ shipped 2026-05-26 |
+| **17.D** | **/create single-page rebuild + design-system unification** — collapsed `/create/{content,brand,summary}` 3-step wizard + `/create-from-template` route tree into single 4-card page (content / fonts+colors / logo / output settings). Wired `/api/extract` (kind=`create`) for file content path; extended `SourceScratchSchema` with optional `anthropicFileId` + scratch-with-file branch in `deck-generate.ts`. Promoted CardHeader / SegmentedToggle / InlineStepper / ColorPickerPopover / muted-CompactUploadZone to shared primitives; rolled out to /enhance + /mimic so all three flows share one design system. Logo upload restricted to SVG. | ✅ shipped 2026-05-26 |
+| **17.E** | **Data flow** — `/from-data` upload UI, `POST /api/extract` (uploads XLSX to Anthropic Files API, returns `file_id` into `source.dataFileId`), Data prompt branch, post-generation Anthropic file cleanup | ⏳ |
 | 18 | **Admin panel** — internal-only `/admin` route tree gated by `User.role = "admin"`. User list + filters (plan, country, regens, tokens). Aggregate stats (totals, active-online via Presence, decks/slides generated). Compose-bell-notification UI calling existing `fanOutNotification`. Email blast UI via Resend. Landing-page CMS (Page/Section/PricingPlan schema; landing reads from DB). UX bias: function-over-form, internal tool. **Same Next.js stack — no Laravel.** Reuses Prisma, Supabase auth, fanOutNotification, Resend. | ⏳ after Phase 17 |
 | 19 | **Billing + Stripe + discount codes** — Stripe SDK (already in `package.json`), subscription products + checkout + customer portal, webhook → quota enforcement at job creation, meter UI in dashboard. Discount-code schema + apply-at-checkout (admin-issued via Phase 18 UI). | ⏳ after Phase 18 |
 | 20 | **Server-side HTML sanitization** — DOMPurify in `deck-generate.ts` before persisting manifest; pre-launch security ask (today: browser sanitises on render, JSDOM mirror used in thumbnail pipeline only) | ⏳ pre-launch blocker |
@@ -770,11 +891,13 @@ permanently here as the audit trail.
 
 ## 17. Implementation Status & Lessons
 
-### Working end-to-end today (as of 2026-05-25 — Phase 17.B closed)
+### Working end-to-end today (as of 2026-05-26 — Phase 17.C + 17.D closed)
 
 - **Auth + dashboard.** Supabase email + Google OAuth → real DB-backed dashboard (RecentProjects, MyTemplates, PlanUsage, QuickActions); navigation-back refresh wired so `/enhance → /dashboard` shows fresh project list without manual reload.
-- **Create wizard (Flow 1) — LOCKED.** Content → brand → summary, with verbatim toggle, font picker, logo with position + exclusion pills. sessionStorage hydration is fully restore-aware. **Phase shipped + locked 2026-05-25**: `app/create/**`, `app/create-from-template/**`, `components/create/**` are immutable for visual/UX/behavior changes (see `memory/feedback_never_touch_create_flow.md`).
-- **Enhance flow (Flow 2) — LOCKED.** Single-shot page (`/enhance`), Anthropic Files API document-block pipeline, language detection from PPTX, 4-preset menu (sonnet-fast / opus-fast / opus-balanced default / opus-max), draft chip on opus-max two-pass runs, `onFailure` hook surfaces retry button, `max_tokens: 64000`. **Phase 17.B closed + locked 2026-05-25** (see `memory/feedback_never_touch_enhance_flow.md`). ~$18.60 of Opus testing went into landing the final shape.
+- **Three landing flows — UNIFIED (`/create`, `/enhance`, `/mimic`).** Phase 17.D shipped the /create single-page rebuild + design-system unification 2026-05-26. All three flows now share one CardHeader pattern, one SegmentedToggle, one InlineStepper, one SVG-only logo upload, one set of font-slot props (compact + alignStart + hideSample), one `min-h-[387px]` card baseline, and one animation spring (stiffness 500, damping 35). See §02 "Shared design system" for the full primitive ledger. **Files**: `app/{create,enhance,mimic}/page.tsx`, `components/create/controls.tsx`, `components/create/OutputCards.tsx`, `components/brand/{CompactUploadZone,FontUploadSlot,GoogleFontSlot}.tsx`.
+- **Create flow (Flow 1) — Phase 17.D shipped 2026-05-26.** Single-page 4-card layout replacing the previous 3-step wizard + entire `/create-from-template` route tree. Template seeds hydrate the single page via `lib/create/seed-from-template.ts`. File-upload content path wired through `/api/extract` → polling → `source.kind === "scratch"` with `anthropicFileId` (extends `SourceScratchSchema` with optional file_id; scratch branch in `deck-generate.ts` attaches the document block + "raw material for a fresh deck" directive). Generate gated on extraction completing.
+- **Enhance flow (Flow 2) — Phase 17.B shipped 2026-05-25.** Single-shot page (`/enhance`) with 2 cards (source-only + الهوية البصرية with logo under fonts), Anthropic Files API document-block pipeline, language detection from PPTX, 4-preset menu (sonnet-fast / opus-fast / opus-balanced default / opus-max), draft chip on opus-max two-pass runs, `onFailure` hook surfaces retry button, `max_tokens: 64000`. ~$18.60 of Opus testing went into landing the final shape. Card chrome unified to /create pattern in Phase 17.D.
+- **Mimic flow (Flow 3) — Phase 17.C shipped 2026-05-26 (new flow).** Single-shot 3-card page (content + branding-conditional + what-to-mimic with animated mesh halo) with shared `/api/extract` pipeline for BOTH design reference + content file. Content card accepts text OR file. Branding card mounts only when "مُحاكاة الهوية البصرية" toggle is OFF (AnimatePresence width spring with overflow-toggle so popovers escape the card edge after settling). Sentinel-safe user-content escape in `deck-generate.ts` mimic branch.
 - **Claude pipeline.** All-Opus tier (Opus 4.7 adaptive thinking on opus-balanced/opus-max presets — `effort: medium`/`high`; Opus 4.7 disabled-thinking on `opus-fast`; Sonnet 4.6 disabled-thinking on `sonnet-fast` only, with auto-upgrade to opus-fast on source-document flows) + prompt caching + self-healing Zod retry. Streams text deltas; throttled progress writes; partial-regen `redesign` mode prompt diversifies output when no comments are pinned. **Dropped from menu after measured testing**: `effort:max` (stalls on Files API enhance), `effort:xhigh` (marginal benefit at 1.17× cost).
 - **Preview window.** Cascade-in, slide-nav, comment authoring with marker preview popup, per-slide pill (regen / history / lock), Save Project, thumbnail pipeline. Hero comment overlay + CommentsPanel both consume live broadcasts.
 - **Partial regen + apply-comments.** Comment-driven slide regen with parallel Claude calls; deck stays visible during regen; atomic version promotion; apply-poller fetches manifest + slideStates + history in one round-trip so the History popover updates live.
