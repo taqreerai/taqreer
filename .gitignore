@@ -21,3 +21,4 @@ comments.txt
 # committed, and they'd ship to clients if served.
 public/_test/
 public/raw-deck-*.html
+scratch/

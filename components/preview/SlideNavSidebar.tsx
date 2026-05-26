@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlidePresenceStack } from "@/components/preview/SlidePresenceStack";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import type { PresenceViewer } from "@/lib/realtime/project-channel";
@@ -371,7 +372,16 @@ export function SlideNavSidebar({
                         check_circle
                       </span>
                     ) : item.state === "current" ? (
-                      <span className="spinner h-5 w-5 rounded-full border-2 border-white/20 border-t-white" />
+                      // Paragraph-write icon — three lines that write
+                      // themselves LTR (or RTL when the deck language
+                      // is Arabic). Replaces the older spinner so the
+                      // loading affordance reads as "Claude is writing
+                      // this slide" instead of a generic wait.
+                      <ParagraphWriteIcon
+                        rtl={language === "ar"}
+                        size={22}
+                        className="text-white/70"
+                      />
                     ) : null}
                   </div>
                 ) : manifest ? (

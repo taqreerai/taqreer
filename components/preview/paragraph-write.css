@@ -1,0 +1,146 @@
+/* Animation tokens for the paragraph-write loading icon.
+ * Lives next to the React component so Turbopack picks it up on
+ * the component's import graph — bypasses an issue we hit where
+ * keyframes appended to globals.css weren't making it into the
+ * compiled bundle on the dev server (hash stayed identical after
+ * restart, rules silently dropped). Importing a sibling CSS file
+ * from the component ensures Turbopack ties it to that module's
+ * module-id and forces a fresh CSS compile.
+ *
+ * See `ParagraphWriteIcon.tsx` for the visual spec + commentary
+ * on the timing math (write 0–25%, hold, cascading fade-out via
+ * staggered keyframes 1/2/3, and the data-rtl mirror).
+ */
+
+@keyframes paragraph-write-1 {
+  0%   { transform: scaleX(0); opacity: 0;
+         animation-timing-function: cubic-bezier(0, 0.9, 0.15, 1); }
+  25%  { transform: scaleX(1); opacity: 1;
+         animation-timing-function: linear; }
+  85%  { transform: scaleX(1); opacity: 1;
+         animation-timing-function: cubic-bezier(0.4, 0, 1, 1); }
+  92%  { transform: scaleX(1); opacity: 0;
+         animation-timing-function: linear; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+@keyframes paragraph-write-2 {
+  0%   { transform: scaleX(0); opacity: 0;
+         animation-timing-function: cubic-bezier(0, 0.9, 0.15, 1); }
+  25%  { transform: scaleX(1); opacity: 1;
+         animation-timing-function: linear; }
+  86%  { transform: scaleX(1); opacity: 1;
+         animation-timing-function: cubic-bezier(0.4, 0, 1, 1); }
+  93%  { transform: scaleX(1); opacity: 0;
+         animation-timing-function: linear; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+@keyframes paragraph-write-3 {
+  0%   { transform: scaleX(0); opacity: 0;
+         animation-timing-function: cubic-bezier(0, 0.9, 0.15, 1); }
+  25%  { transform: scaleX(1); opacity: 1;
+         animation-timing-function: linear; }
+  87%  { transform: scaleX(1); opacity: 1;
+         animation-timing-function: cubic-bezier(0.4, 0, 1, 1); }
+  94%  { transform: scaleX(1); opacity: 0;
+         animation-timing-function: linear; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+
+.paragraph-write-icon {
+  direction: ltr;
+  /* `overflow: visible` so the break-mode fall can carry the rect
+     lines outside the SVG viewBox. Browsers apply `overflow: hidden`
+     by default to <svg> elements, which clipped the falling lines at
+     the icon's edge — they vanished the moment they crossed y=200
+     in viewBox units. With overflow visible the lines escape the
+     viewBox and travel the full 100vh fall to the bottom of the
+     page. Safe for the loop variant too — the scaleX(0→1) animation
+     stays inside the viewBox at all times. */
+  overflow: visible;
+}
+.paragraph-write-icon[data-rtl="true"] {
+  transform: scaleX(-1);
+}
+.paragraph-write-icon .pw-line {
+  transform-box: fill-box;
+  transform-origin: left center;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.paragraph-write-icon .pw-line-1 {
+  animation: paragraph-write-1 4s 0s linear infinite;
+}
+.paragraph-write-icon .pw-line-2 {
+  animation: paragraph-write-2 4s 0.1s linear infinite;
+}
+.paragraph-write-icon .pw-line-3 {
+  animation: paragraph-write-3 4s 0.2s linear infinite;
+}
+
+/* ─── Break mode ───────────────────────────────────────────────
+   One-shot variant used by the 404 page. Each line writes in
+   normally, holds briefly, then tilts + falls off-screen with a
+   slight per-line rotation so the three lines tumble rather
+   than slide. `forwards` fill mode pins the final invisible
+   state so the icon stays gone after the fall.
+
+   transform-origin stays `left center` (inherited from the loop
+   variant) — that means rotation pivots from each line's left
+   edge, so the RIGHT end of every line dips down first. Reads
+   like sticky notes peeling off their left-hand anchor.
+
+   Per-line rotation angles + stagger picked so the three lines
+   don't all tilt the same way (would look mechanical):
+     line 1 →  18deg  (clockwise, slightly delayed fall)
+     line 2 → -22deg  (counter-clockwise, larger angle)
+     line 3 →  12deg  (gentler, slowest to start falling)
+*/
+/* Fall distance uses `100vh` so each line travels a full viewport
+   height regardless of where the icon is positioned — the icon
+   sits roughly in the middle of the page, so 100vh always pushes
+   every line past the bottom edge no matter the device size.
+   Using vh here is safe even though the lines are inside an SVG;
+   CSS transform lengths resolve against the viewport, not the
+   SVG's coordinate space. */
+@keyframes paragraph-break-1 {
+  0%  { transform: scaleX(0); opacity: 0;
+        animation-timing-function: cubic-bezier(0, 0.9, 0.15, 1); }
+  20% { transform: scaleX(1); opacity: 1;
+        animation-timing-function: linear; }
+  40% { transform: scaleX(1) translateY(0) rotate(0deg); opacity: 1;
+        animation-timing-function: cubic-bezier(0.55, 0, 0.95, 0.3); }
+  100% { transform: scaleX(1) translateY(100vh) rotate(18deg); opacity: 0; }
+}
+@keyframes paragraph-break-2 {
+  0%  { transform: scaleX(0); opacity: 0;
+        animation-timing-function: cubic-bezier(0, 0.9, 0.15, 1); }
+  20% { transform: scaleX(1); opacity: 1;
+        animation-timing-function: linear; }
+  45% { transform: scaleX(1) translateY(0) rotate(0deg); opacity: 1;
+        animation-timing-function: cubic-bezier(0.55, 0, 0.95, 0.3); }
+  100% { transform: scaleX(1) translateY(100vh) rotate(-22deg); opacity: 0; }
+}
+@keyframes paragraph-break-3 {
+  0%  { transform: scaleX(0); opacity: 0;
+        animation-timing-function: cubic-bezier(0, 0.9, 0.15, 1); }
+  20% { transform: scaleX(1); opacity: 1;
+        animation-timing-function: linear; }
+  50% { transform: scaleX(1) translateY(0) rotate(0deg); opacity: 1;
+        animation-timing-function: cubic-bezier(0.55, 0, 0.95, 0.3); }
+  100% { transform: scaleX(1) translateY(100vh) rotate(12deg); opacity: 0; }
+}
+
+/* Mode override — the `data-mode="break"` attribute the React
+   component sets when the caller wants the one-shot 404 variant.
+   These rules need higher specificity than the default loop
+   animations above; `[data-mode="break"]` accomplishes that
+   without `!important`. */
+.paragraph-write-icon[data-mode="break"] .pw-line-1 {
+  animation: paragraph-break-1 3s 0s linear forwards;
+}
+.paragraph-write-icon[data-mode="break"] .pw-line-2 {
+  animation: paragraph-break-2 3s 0.15s linear forwards;
+}
+.paragraph-write-icon[data-mode="break"] .pw-line-3 {
+  animation: paragraph-break-3 3s 0.3s linear forwards;
+}
