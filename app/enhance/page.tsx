@@ -35,7 +35,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
+import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
 import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
 import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import {
@@ -833,34 +833,12 @@ export default function EnhanceContentPage() {
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>
-              <div className="relative">
-                <CompactUploadZone
-                  label={
-                    logoFile ? readableFileName(logoFile.name) : "شعار SVG فقط"
-                  }
-                  accept=".svg,image/svg+xml"
-                  file={logoFile}
-                  onSelect={setLogoFile}
-                  compact
-                  hideFilename
-                  muted={!logoFile}
-                />
-                {logoFile ? (
-                  <button
-                    type="button"
-                    onClick={() => setLogoFile(null)}
-                    aria-label="إزالة الشعار"
-                    className="absolute top-1.5 start-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                    >
-                      close
-                    </span>
-                  </button>
-                ) : null}
-              </div>
+              <LogoUploadSlot
+                file={logoFile}
+                onSelect={setLogoFile}
+                onRemove={() => setLogoFile(null)}
+                compact
+              />
             </div>
           </div>
         </div>

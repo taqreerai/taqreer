@@ -351,6 +351,15 @@ model Job {
   outputTokens        Int      @default(0)
   cacheReadTokens     Int      @default(0)
   cacheCreationTokens Int      @default(0)
+  // Mid-stream cancellation signal. Set to NOW() by
+  // POST /api/projects/[id]/cancel when the user clicks the
+  // cancel pill in the slide-nav. The deck-generate worker polls
+  // this column after every closed slide in the streaming parser —
+  // if non-null, it aborts the Anthropic stream + marks the
+  // version/project cancelled. Inngest's `cancelOn` event handles
+  // the BETWEEN-steps cancellation; this column handles the
+  // INSIDE-step (mid-stream) abort.
+  cancelRequestedAt   DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   project             Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)

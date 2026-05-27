@@ -515,7 +515,7 @@ export function CanvasCard({
             onChange={onPersistentPosition}
             disabled={!persistentText.trim()}
           />
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col items-start gap-1.5">
             <Pill
               active={persistentExcludeCover}
               onClick={() => onPersistentExcludeCover(!persistentExcludeCover)}
@@ -530,7 +530,7 @@ export function CanvasCard({
               }
               disabled={!persistentText.trim()}
             >
-              استثناء الشكر
+              استثناء الشريحة الأخيرة
             </Pill>
           </div>
         </div>
@@ -658,7 +658,7 @@ export function LogoPositionFields({
           disabledValues={reservedPositions}
           disabledTooltip="محجوز للنص الثابت"
         />
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col items-start gap-1.5">
           <Pill
             active={excludeCover}
             onClick={() => onExcludeCover(!excludeCover)}
@@ -671,7 +671,7 @@ export function LogoPositionFields({
             onClick={() => onExcludeClosing(!excludeClosing)}
             disabled={disabled}
           >
-            استثناء الشكر
+            استثناء الشريحة الأخيرة
           </Pill>
         </div>
       </div>

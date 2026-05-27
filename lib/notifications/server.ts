@@ -38,11 +38,15 @@ import { broadcastToUser } from "@/lib/realtime/server-broadcast";
 // that needs to know the type's existence (unknown types fall back to
 // a generic info row, so deploys can ship server-side ahead of
 // client-side without surfacing errors).
+// `*.started` events (slide.regen.started, deck.regen.started) used to
+// be persisted here too, but were dropped 2026-05-27 — they're transient
+// live-UI signals (spinners, banners), and by the time the recipient
+// opens the bell the regen has already finished. Persisting them only
+// doubled the badge count for a single logical regen. The terminal
+// `*.finished` row carries enough information on its own.
 export type NotificationType =
   | "comment.created"
-  | "slide.regen.started"
   | "slide.regen.finished"
-  | "deck.regen.started"
   | "deck.regen.finished"
   | "deck.generate.finished"
   | "deck.generate.failed"
@@ -62,19 +66,9 @@ export type NotificationPayloadMap = {
     // `slideKeys.length` to decide the count form.
     slideKeys?: string[];
   };
-  "slide.regen.started": {
-    slideKey: string;
-    slideKeys?: string[];
-  };
   "slide.regen.finished": {
     slideKey: string;
     slideKeys?: string[];
-  };
-  "deck.regen.started": {
-    // No extra fields — project context is enough. No grouping field
-    // since the bell formatter only renders a single in-flight row
-    // (multi-trigger merging just bumps createdAt + re-unread).
-    count?: number;
   };
   "deck.regen.finished": {
     // No extra fields — the project context is enough. Reader uses
@@ -190,7 +184,6 @@ function mergePayload<T extends NotificationType>(
       : {};
   switch (type) {
     case "comment.created":
-    case "slide.regen.started":
     case "slide.regen.finished": {
       const slideKey = (incoming as { slideKey?: string }).slideKey;
       const existingKeys = Array.isArray(base.slideKeys)
@@ -214,7 +207,6 @@ function mergePayload<T extends NotificationType>(
         slideKeys,
       };
     }
-    case "deck.regen.started":
     case "deck.regen.finished": {
       const prevCount = typeof base.count === "number" ? base.count : 1;
       return { ...base, ...(incoming as Record<string, unknown>), count: prevCount + 1 };

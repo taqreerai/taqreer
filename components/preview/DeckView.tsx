@@ -21,6 +21,7 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { SlidePill } from "@/components/preview/SlidePill";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
 import type { InitialSlideState } from "@/lib/project/load-project";
@@ -30,6 +31,7 @@ import {
   SLIDE_NAV_WIDTH,
   type NavItem,
 } from "@/components/preview/SlideNavSidebar";
+import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDialog";
 import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
@@ -89,6 +91,23 @@ type Props = {
   initialSavedSlideVersions?: Record<string, number> | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
+  /**
+   * True when the user picked "auto" slide-count (let Claude decide);
+   * false when they pinned an explicit number. Drives the generating-
+   * state slide-nav strategy: auto mode shows an empty sidebar that
+   * grows tile-by-tile with a trailing "still working" placeholder,
+   * custom mode shows the user-picked N up-front and fills as Claude
+   * finishes each. Defaults to true on legacy briefs.
+   */
+  initialSlideCountAuto: boolean;
+  /**
+   * Which create flow produced this brief — drives the generating-
+   * state status copy. "data" gets "analyzing data..." instead of
+   * "extracting text and brand identity..." (which is misleading
+   * for /datasheet, where the data is already parsed). Null for
+   * legacy briefs that pre-date the source field.
+   */
+  initialSourceKind?: "scratch" | "enhance" | "mimic" | "data" | null;
   // Per-slide state for the pill (lock / version count / cached
   // comments). Empty array for projects without a presentation row.
   // The shape stays serialisable so it crosses the server→client
@@ -108,9 +127,23 @@ type Props = {
   // user report 2026-05-23). Optional + defaults to 260 so callers
   // that haven't wired the prop still work.
   initialMainSidebarWidth?: number;
+  /**
+   * Reload-defense for partial slide regen (2026-05-27). When a
+   * `deck.regenerate.partial` Job row is still in flight, this
+   * carries the target slide IDs + the new version's id so DeckView
+   * pre-seeds `applying` on mount and the regenerating-slide overlay
+   * survives a browser reload. The apply-poller below resumes
+   * automatically and clears `applying` when the regen lands. Null
+   * when no partial regen is active (the common case). Sourced from
+   * `lib/project/load-project.ts:initialActiveRegen`.
+   */
+  initialActiveRegen?: {
+    versionId: string;
+    targetSlideIds: string[];
+  } | null;
 };
 
-type DerivedStatus = "generating" | "completed" | "failed";
+type DerivedStatus = "generating" | "completed" | "failed" | "cancelled";
 
 type ProgressStage = "thinking" | "designing" | "validating" | "saving";
 type Progress = {
@@ -198,6 +231,20 @@ function isFailed(projectStatus: string, versionStatus: string | null): boolean 
   return projectStatus === "failed" || versionStatus === "failed";
 }
 
+// User-initiated mid-generation cancel. Distinct from `failed` so the
+// recovery UI can use neutral chrome (not danger red) and copy that
+// reflects intent — "you stopped this" reads differently from
+// "Claude crashed". POST /api/projects/[id]/cancel flips both
+// Project.status and PresentationVersion.status to "cancelled" in
+// one transaction; we OR them here so the derived status surfaces
+// the moment either side flips.
+function isCancelled(
+  projectStatus: string,
+  versionStatus: string | null,
+): boolean {
+  return projectStatus === "cancelled" || versionStatus === "cancelled";
+}
+
 // Hero card opacity-only reveal on mount.
 const slideCardVariants: Variants = {
   hidden: { opacity: 0 },
@@ -226,9 +273,12 @@ export function DeckView({
   initialSavedSlideVersions,
   initialManifest,
   initialSlideCount,
+  initialSlideCountAuto,
+  initialSourceKind = null,
   initialSlideStates = [],
   initialFormat,
   initialMainSidebarWidth = 260,
+  initialActiveRegen = null,
 }: Props) {
   // Capability flags derived from role — passed/used wherever the
   // UI gates a mutation affordance. View-only sees the deck and
@@ -424,6 +474,12 @@ export function DeckView({
   const previewManualClickRef = useRef(false);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
+  // Cancel-generation state. `cancelOpen` controls the confirmation
+  // modal's visibility; `cancelBusy` is the in-flight POST window
+  // between click + server ack. Local-only — the server-side
+  // cancellation status lives on Project / Version / Job rows.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
   // Polling sets this when it sees a failed status arrive after mount.
   const [polledFailure, setPolledFailure] = useState(false);
   // Polling sets this when the generation finishes on the server. Used
@@ -483,10 +539,25 @@ export function DeckView({
   // focus.
   const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
+  // Seed `applying` from `initialActiveRegen` so a browser reload
+  // during a partial regen restores the per-slide overlay instead of
+  // dropping it (2026-05-27 — user report: partial-regen overlay
+  // disappeared from thumbnail + canvas after reload while the Inngest
+  // run was still alive). The apply-poller below picks up the seed
+  // and clears `applying` once the regen lands. Lazy initializer to
+  // avoid a needless re-render when initialActiveRegen is null (the
+  // common case).
   const [applying, setApplying] = useState<{
     versionId: string;
     targetSlideIds: string[];
-  } | null>(null);
+  } | null>(() =>
+    initialActiveRegen
+      ? {
+          versionId: initialActiveRegen.versionId,
+          targetSlideIds: initialActiveRegen.targetSlideIds,
+        }
+      : null,
+  );
   // Slides currently being regen'd by a PEER (not the local user). Set
   // entries are slideIds. Added on `slide.regen.started` from the
   // project channel (self-echo skipped — the actor's `applying` state
@@ -1134,11 +1205,15 @@ export function DeckView({
     return out;
   }, [presence, currentUserId]);
 
-  const status: DerivedStatus = polledFailure || isFailed(projectStatus, versionStatus)
-    ? "failed"
-    : manifest && (polledCompleted || isCompleted(projectStatus, versionStatus))
-      ? "completed"
-      : "generating";
+  // Cancelled takes precedence over failed/generating — once the user
+  // explicitly stopped the run, no other state should mask it.
+  const status: DerivedStatus = isCancelled(projectStatus, versionStatus)
+    ? "cancelled"
+    : polledFailure || isFailed(projectStatus, versionStatus)
+      ? "failed"
+      : manifest && (polledCompleted || isCompleted(projectStatus, versionStatus))
+        ? "completed"
+        : "generating";
 
   // Auto-advance the hero focus to the latest streamed slide while the
   // user is still riding the live stream (no manual click yet). Once the
@@ -2064,6 +2139,47 @@ export function DeckView({
     }
   }, [projectId, router]);
 
+  // Cancel mid-generation. POSTs to /api/projects/[id]/cancel — the
+  // route flips Job.cancelRequestedAt + Project.status + Version.status
+  // in one transaction AND fires the Inngest cancel event. The
+  // deck-generate worker polls the DB flag inside its streaming step
+  // and aborts the Anthropic stream when it observes the flip; Inngest
+  // tears the function envelope down at the next step boundary. After
+  // a successful POST we router.refresh() so the parent re-runs
+  // loadProject + sees the new "cancelled" status, swapping DeckView
+  // into the cancelled-recovery state below.
+  const handleCancel = useCallback(async () => {
+    setCancelBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/cancel`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        // Surface the server's actual error message (route puts a
+        // human-readable Arabic string in `error`) so we don't mask
+        // a 404 / 403 / 500 as a generic failure. Inline the status
+        // + body into the message string itself — Next.js's dev
+        // overlay only renders the first console.error arg, so
+        // passing the object as a second arg shows up as `{}`.
+        const body = await res.text().catch(() => "<unreadable>");
+        console.error(
+          `[deck-view] cancel failed — HTTP ${res.status} — body: ${body}`,
+        );
+        throw new Error(`تعذر إلغاء العملية (HTTP ${res.status})`);
+      }
+      // Close the modal optimistically; the page-level re-render
+      // (router.refresh) will swap DeckView into the cancelled-recovery
+      // shell using the same path the failed-state branch uses.
+      setCancelOpen(false);
+      router.refresh();
+    } catch (err) {
+      // Stay on the modal so the user sees the failure + can retry the
+      // cancel. The original generation keeps running in the meantime.
+      console.error("[deck-view] cancel failed", err);
+      setCancelBusy(false);
+    }
+  }, [projectId, router]);
+
   // Bulk lock / unlock — driven by the SlideNavSidebar footer pill.
   // Walks the current manifest's slide list, builds an optimistic
   // snapshot with every slide's lockedAt flipped, then POSTs the
@@ -2120,6 +2236,17 @@ export function DeckView({
     [manifest, projectId],
   );
 
+  // Placeholder strategy switches on `initialSlideCountAuto`:
+  //   • custom  → fixed-N tiles (the user picked N, show N up-front)
+  //   • auto    → empty-then-grow — render only as many tiles as
+  //                streamingPreview has delivered, PLUS one trailing
+  //                "still working" placeholder while generation is
+  //                live. Avoids the legacy 6/8-tile guess that read
+  //                as a hard count to the user even though the auto
+  //                mode means Claude picks.
+  // Computed inside the `status === "generating"` branch (below); this
+  // memo only handles the static-N case so the completed-branch math
+  // (which uses manifest.slides.length) stays untouched.
   const placeholders = useMemo(
     () => Array.from({ length: Math.max(slideCount, 1) }),
     [slideCount],
@@ -2170,6 +2297,82 @@ export function DeckView({
     );
   }
 
+  // ─── Cancelled ─────────────────────────────────────────────────────────────
+  // User clicked the cancel pill mid-generation. Same recovery shell
+  // as "failed" but with neutral (not danger) chrome — the deck isn't
+  // broken, the user just stopped it intentionally. "Try again"
+  // re-fires the original brief via /api/projects/[id]/retry; partial
+  // slides were discarded server-side so we start from a clean state.
+  //
+  // Centered both axes — the recovery card is the only thing on the
+  // page in this state, so it sits in the optical middle of the
+  // viewport (minus the dashboard header). `min-h-[calc(100vh-120px)]`
+  // = viewport minus the DashboardShell header padding so the card
+  // floats inside the visible area rather than docking against the
+  // top of the content well. `.glass-card` is the canonical neutral
+  // surface (token-driven background + backdrop-blur, see globals.css
+  // — no inline `style` overrides). Buttons use `.btn-gradient` +
+  // `.btn-outline-dark` to match the failed-state recovery card.
+  if (status === "cancelled") {
+    return (
+      <section
+        dir="rtl"
+        className="page-container flex min-h-[calc(100vh-120px)] items-center justify-center"
+      >
+        <div className="glass-card mx-auto w-full max-w-xl rounded-2xl p-8 text-center">
+          <span className="material-symbols-outlined mb-4 block text-[42px] text-white/70">
+            stop_circle
+          </span>
+          <h1 className="mb-2 text-[26px] font-bold text-white">
+            تم إلغاء الإنشاء
+          </h1>
+          <p className="text-muted mb-6">
+            تم إيقاف العملية بناءً على طلبك وحذف الشرائح المُنشأة.
+          </p>
+          <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
+            {/* "إعادة الإنشاء" — sends the user BACK to the create
+                flow they originally came from (NOT a silent re-run of
+                the same brief, which is what /api/projects/[id]/retry
+                does). The point of cancelling is usually to ADJUST
+                something — different language, slide count, file,
+                etc. — so a fresh trip through the create form lets
+                them revise. The flow URL is derived from
+                `initialSourceKind` (see lib/project/load-project.ts
+                → readSourceKind). null falls back to /create since
+                that's the legacy default when the field is missing. */}
+            <Link
+              href={
+                initialSourceKind === "enhance"
+                  ? "/enhance"
+                  : initialSourceKind === "mimic"
+                    ? "/mimic"
+                    : initialSourceKind === "data"
+                      ? "/datasheet"
+                      : "/create"
+              }
+              className="btn-gradient inline-flex items-center justify-center gap-2 px-5 py-2 text-sm no-underline"
+            >
+              إعادة الإنشاء
+            </Link>
+            <Link
+              href="/dashboard"
+              // `.btn-pill` lives unlayered in globals.css (see comment
+              // at globals.css:1096 — "unlayered specificity beating
+              // @layer utilities") so its own padding + font-size win
+              // against plain `px-5 py-2 text-sm` utilities. The `!`
+              // prefix lifts the utilities to !important so the link
+              // renders at the same dimensions as the gradient button
+              // beside it.
+              className="btn-pill no-underline !px-5 !py-2 !text-sm"
+            >
+              العودة للرئيسية
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   // ─── Generating ────────────────────────────────────────────────────────────
   if (status === "generating") {
     // Card state machine — drives the per-slot UI in the cascade:
@@ -2187,34 +2390,59 @@ export function DeckView({
     };
 
     const percent = progressPercent(progress);
-    const total = placeholders.length;
+    // Slot count switches on the user's slide-count mode:
+    //   • custom (user picked N) → fixed-N tiles. Today's behavior.
+    //   • auto                   → exactly `streamingPreview.length + 1`
+    //                              tiles: one per slide Claude has
+    //                              closed, plus one trailing "still
+    //                              working" placeholder that uses the
+    //                              paragraph-write icon (same as a
+    //                              state:"current" placeholder). The
+    //                              tail disappears when status flips
+    //                              to "completed" and the manifest
+    //                              branch below takes over.
+    // The `Math.max(..., 1)` guarantees at least one tile so an empty
+    // sidebar doesn't flash on initial paint before Claude's first
+    // slide closes — the user sees the writing icon immediately.
+    const slotCount = initialSlideCountAuto
+      ? Math.max(streamingPreview.length + 1, 1)
+      : placeholders.length;
+    const total = slotCount;
     // Mix real streamed slides (kind:"slide") into the head of the
     // nav row, padded with placeholders for slots Claude hasn't
     // closed yet. Once `streamingTheme` is null we can't render a
     // thumbnail (SlideRenderer needs theme CSS vars), so fall back
     // to placeholder pulse with the right state. Comment count is
     // hard-coded to 0 during streaming — comments don't exist yet.
-    const navItems: NavItem[] = placeholders.map((_, idx) => {
-      const previewSlide = streamingPreview[idx];
-      if (previewSlide && streamingTheme) {
+    //
+    // Auto-mode tail: the LAST slot (index === streamingPreview.length)
+    // is forced to state:"current" so the paragraph-write icon shows
+    // even before progress.currentSlide ticks past it.
+    const navItems: NavItem[] = Array.from({ length: slotCount }).map(
+      (_, idx) => {
+        const previewSlide = streamingPreview[idx];
+        if (previewSlide && streamingTheme) {
+          return {
+            kind: "slide",
+            index: idx,
+            slide: previewSlide,
+            commentCount: 0,
+            // Flag drives the small "مسودة" chip in SlideNavSidebar. True
+            // only when the server tagged this slide as belonging to
+            // Claude's first manifest pass (drafting). Undefined / false
+            // → no chip. Field is absent on /create runs by design.
+            draft: streamingPreviewDraft[idx] === true,
+          };
+        }
+        const isAutoTail =
+          initialSlideCountAuto && idx === streamingPreview.length;
         return {
-          kind: "slide",
+          kind: "placeholder",
           index: idx,
-          slide: previewSlide,
-          commentCount: 0,
-          // Flag drives the small "مسودة" chip in SlideNavSidebar. True
-          // only when the server tagged this slide as belonging to
-          // Claude's first manifest pass (drafting). Undefined / false
-          // → no chip. Field is absent on /create runs by design.
-          draft: streamingPreviewDraft[idx] === true,
+          state: isAutoTail ? "current" : cardStatus(idx),
         };
-      }
-      return {
-        kind: "placeholder",
-        index: idx,
-        state: cardStatus(idx),
-      };
-    });
+      },
+    );
     // Synthetic manifest shell so SlideNavSidebar's `manifest.theme`
     // / `manifest.direction` / `manifest.language` reads work without
     // the canonical manifest existing yet. Only the fields the nav +
@@ -2286,6 +2514,16 @@ export function DeckView({
           // sidebar reads LTR even before the first slide closes.
           language={streamingLanguage}
           viewersBySlide={viewersBySlide}
+          // Cancel pill — only wired in the generating branch.
+          // Confirmation modal handled below by CancelGenerationDialog;
+          // we just open it here. Role gate: only owner / editor see
+          // the pill — view / comment / public-view roles get nothing.
+          // The API route enforces the gate again, but hiding it from
+          // non-editors keeps the UI honest.
+          onCancelGeneration={
+            canEdit ? () => setCancelOpen(true) : undefined
+          }
+          cancelDisabled={cancelBusy}
         />
         {/* Canvas row — hero centered in the remaining width. Same
             shape as the completed branch so the shell doesn't reflow
@@ -2358,7 +2596,18 @@ export function DeckView({
                         : progress?.stage === "saving"
                           ? "حفظ العرض..."
                           : progress?.currentSlide
-                            ? "جارٍ استخراج النص والهوية البصرية..."
+                            ? // Stage copy switches on the source kind so the
+                              // message reflects what Claude is actually doing.
+                              // /enhance reads the PDF (extracts text + brand),
+                              // /datasheet reads parsed markdown (analyzes data
+                              // — no PDF extraction), /mimic reads both source
+                              // + design ref, /create scratch starts from text
+                              // or an uploaded reference doc.
+                              initialSourceKind === "data"
+                              ? "جارٍ تحليل البيانات..."
+                              : initialSourceKind === "mimic"
+                                ? "جارٍ قراءة المصدر وأسلوب التصميم..."
+                                : "جارٍ استخراج النص والهوية البصرية..."
                             : "بدء التصميم..."}
                   </span>
                 </div>
@@ -2373,7 +2622,13 @@ export function DeckView({
                     <div className="progress-bar" style={{ width: `${percent}%` }} />
                   </div>
                   <p className="text-muted mt-2 text-xs">
-                    {percent}% · {progress?.currentSlide ?? 0} / {total}
+                    {/* Denominator switch: in custom mode the user
+                        picked a count, so X/N is meaningful. In auto
+                        mode the total is unknown until Claude finishes
+                        — show X/? instead of a growing fake N derived
+                        from the placeholder tail. */}
+                    {percent}% · {progress?.currentSlide ?? 0} /{" "}
+                    {initialSlideCountAuto ? "?" : total}
                   </p>
                 </div>
                 {isSlow && (
@@ -2385,6 +2640,19 @@ export function DeckView({
             ) : null}
           </div>
         </div>
+        {/* Cancel-confirmation modal — portal'd to body so the
+            backdrop-blur escapes the section's positioning context.
+            Only mounts when the user clicks the cancel pill; the
+            in-flight `cancelBusy` flag locks the modal during the
+            POST to prevent double-fire. */}
+        <CancelGenerationDialog
+          open={cancelOpen}
+          onClose={() => {
+            if (!cancelBusy) setCancelOpen(false);
+          }}
+          onConfirm={handleCancel}
+          busy={cancelBusy}
+        />
       </section>
     );
   }
@@ -2849,7 +3117,15 @@ export function DeckView({
               className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white"
               style={{ backgroundColor: "var(--tq-bg-dim)" }}
             >
-              <span className="spinner h-7 w-7 rounded-full border-2 border-white/30 border-t-white" />
+              {/* Branded paragraph-write animation. Replaces the legacy
+                  `.spinner` ring (2026-05-27) so canvas + sidebar
+                  thumbnails share one loading vocabulary with the
+                  initial-generation streaming cells. */}
+              <ParagraphWriteIcon
+                rtl={(manifest?.language ?? "ar") !== "en"}
+                size={32}
+                className="text-white/70"
+              />
               <span className="text-xs font-medium">
                 جارٍ إعادة التصميم...
               </span>

@@ -57,6 +57,12 @@ function safeFontUrl(raw: string | null | undefined): string | null {
 //
 // Returns null on any failure (file missing, fetch failure, non-SVG content,
 // parse error). The caller falls back to the URL-only logo block in that case.
+//
+// Earlier revisions returned a `{ markup, isPolychrome, aspectRatio }` blob.
+// Both extra signals were dropped (2026-05-27, user direction): every
+// supported logo is treated as "flatten to a single contrast color per
+// slide" + a single fixed wrapper size. Less metadata to plumb, less
+// prompt prose to render, faster Claude turnaround.
 async function readLogoSvgMarkup(path: string): Promise<string | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -71,31 +77,31 @@ async function readLogoSvgMarkup(path: string): Promise<string | null> {
     if (error || !data) return null;
     const text = await data.text();
     if (!text.includes("<svg")) return null;
-    return (
-      text
-        // Execution vectors
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
-        .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
-        .replace(/javascript:/gi, "")
-        // Prompt-injection vectors — strip elements that carry arbitrary
-        // free-text Claude would otherwise read as instructions.
-        .replace(/<title[\s\S]*?<\/title>/gi, "")
-        .replace(/<desc[\s\S]*?<\/desc>/gi, "")
-        .replace(/<metadata[\s\S]*?<\/metadata>/gi, "")
-        .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
-        // HTML / XML comments (can hide injected directives in plain text)
-        .replace(/<!--[\s\S]*?-->/g, "")
-        // XML processing instructions (e.g. `<?xml-stylesheet ...?>`) and
-        // DOCTYPE declarations — both carry free-text payloads and the
-        // export pipeline doesn't need them once the SVG is inlined.
-        .replace(/<\?[\s\S]*?\?>/g, "")
-        .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
-        // CDATA sections wrap arbitrary text including unescaped HTML —
-        // a clean removal target since nothing legitimate in our logo
-        // pipeline relies on CDATA-wrapped content.
-        .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "")
-    );
+    const sanitized = text
+      // Execution vectors
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+      .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+      .replace(/javascript:/gi, "")
+      // Prompt-injection vectors — strip elements that carry arbitrary
+      // free-text Claude would otherwise read as instructions.
+      .replace(/<title[\s\S]*?<\/title>/gi, "")
+      .replace(/<desc[\s\S]*?<\/desc>/gi, "")
+      .replace(/<metadata[\s\S]*?<\/metadata>/gi, "")
+      .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
+      // HTML / XML comments (can hide injected directives in plain text)
+      .replace(/<!--[\s\S]*?-->/g, "")
+      // XML processing instructions (e.g. `<?xml-stylesheet ...?>`) and
+      // DOCTYPE declarations — both carry free-text payloads and the
+      // export pipeline doesn't need them once the SVG is inlined.
+      .replace(/<\?[\s\S]*?\?>/g, "")
+      .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
+      // CDATA sections wrap arbitrary text including unescaped HTML —
+      // a clean removal target since nothing legitimate in our logo
+      // pipeline relies on CDATA-wrapped content.
+      .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "");
+
+    return sanitized;
   } catch {
     return null;
   }
@@ -467,6 +473,19 @@ export async function POST(request: Request) {
             enhance: payload.enhance,
             rules: payload.rules,
             slideCount: resolvedSlideCount,
+            // Persist only the SOURCE KIND — `loadProject`'s
+            // `readSourceKind` keys off `source.kind` to pick the
+            // generating-state status copy in DeckView ("جارٍ تحليل
+            // البيانات..." for datasheet, etc.). Storing the full
+            // SourceMeta here would bloat aiPrompt with the entire
+            // parsed-markdown / file_id payload — that data already
+            // lives in PresentationVersion.slideJson.brief.source,
+            // which is the canonical place deck-generate reads it
+            // from on retry. aiPrompt is the lightweight client-side
+            // hint surface, not the source of truth for the brief.
+            ...(validatedSource
+              ? { source: { kind: validatedSource.kind } }
+              : {}),
           }),
         },
       });

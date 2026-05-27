@@ -71,11 +71,46 @@ export type InitialState = {
   initialSavedSlideVersions: Record<string, number> | null;
   initialManifest: SlideManifest | null;
   initialSlideCount: number;
+  /**
+   * True when the user picked "auto" slide-count (let Claude decide);
+   * false when they pinned an explicit number. Drives the generating-
+   * state slide-nav strategy in DeckView — auto mode shows an empty
+   * sidebar that grows tile-by-tile with a trailing "still working"
+   * placeholder, custom mode shows the user-picked N up-front.
+   *
+   * Defaults to true for legacy briefs that predate the `mode` field
+   * — see `readSlideCountAuto` for the fallback logic.
+   */
+  initialSlideCountAuto: boolean;
+  /**
+   * Which create flow produced this brief ("scratch" / "enhance" /
+   * "mimic" / "data"), or null for legacy briefs without a `source`
+   * field. Drives the generating-state status copy so the message
+   * reflects what's actually happening — /enhance reads "extracting
+   * text + brand" honestly, but /datasheet has no PDF and shouldn't
+   * lie about extraction.
+   */
+  initialSourceKind: FlowSourceKind | null;
   initialSlideStates: InitialSlideState[];
   // Slide aspect ratio chosen on /create/brand. Used as the fallback for
   // the generating-state placeholder grid (when the manifest isn't ready
   // yet) so the cards have the correct orientation from the first paint.
   initialFormat: SlideFormat;
+  /**
+   * Reload-defense for partial-slide regen (2026-05-27). When a Job
+   * row of type `deck.regenerate.partial` is still in flight (status:
+   * queued / processing / running), this carries the target slide
+   * IDs + the new version's id so DeckView can pre-seed `applying`
+   * on mount and the regenerating-slide overlay survives the
+   * browser reload. The apply-poller already handles cleanup once
+   * the regen lands; this just restores the in-flight state.
+   *
+   * Null when no partial regen is active (the common case).
+   */
+  initialActiveRegen: {
+    versionId: string;
+    targetSlideIds: string[];
+  } | null;
 };
 
 // Normalises Presentation.savedSlideVersions JSON into a
@@ -121,6 +156,114 @@ function readSlideCountHint(aiPrompt: string | null): number | null {
     /* aiPrompt is best-effort */
   }
   return null;
+}
+
+// Which create flow produced this brief — drives the generating-
+// state copy in DeckView (e.g. "extracting text + brand" reads
+// honestly for /enhance but is misleading for /datasheet, where
+// there's no PDF and the data was already parsed before submit).
+// Returns null for legacy briefs without a `source.kind` field or
+// for plain /create scratch text (no source means the default
+// "starting design" copy applies).
+export type FlowSourceKind = "scratch" | "enhance" | "mimic" | "data";
+
+function readSourceKind(aiPrompt: string | null): FlowSourceKind | null {
+  if (!aiPrompt) return null;
+  try {
+    const parsed = JSON.parse(aiPrompt) as {
+      source?: { kind?: string };
+    };
+    const kind = parsed?.source?.kind;
+    if (
+      kind === "scratch" ||
+      kind === "enhance" ||
+      kind === "mimic" ||
+      kind === "data"
+    ) {
+      return kind;
+    }
+  } catch {
+    /* aiPrompt is best-effort */
+  }
+  return null;
+}
+
+// Did the user opt into "auto" slide-count (let Claude pick) or pick
+// an explicit number? Read from the same aiPrompt JSON shape the
+// create flows write. Defaults to `true` (auto) — legacy briefs
+// without the `brand.slideCount.mode` field land here as auto, which
+// matches their original UI semantics (no count chip on the brief).
+//
+// Used by DeckView's generating branch: in auto mode the sidebar
+// starts empty and grows tile-by-tile with a trailing "still working"
+// placeholder; in custom mode it shows the user-picked N placeholders
+// up-front and fills them as Claude finishes each slide.
+function readSlideCountAuto(aiPrompt: string | null): boolean {
+  if (!aiPrompt) return true;
+  try {
+    const parsed = JSON.parse(aiPrompt) as {
+      slideCount?: number | null;
+      brand?: { slideCount?: { mode?: string; value?: number | null } };
+    };
+    // Explicit mode signal wins — that's what /create + /enhance +
+    // /mimic + /datasheet write.
+    const mode = parsed?.brand?.slideCount?.mode;
+    if (mode === "custom") return false;
+    if (mode === "auto") return true;
+    // Legacy briefs without `mode` — fall back to "is the count
+    // pinned anywhere?". If yes, treat as custom; otherwise auto.
+    if (typeof parsed?.slideCount === "number" && parsed.slideCount > 0) {
+      return false;
+    }
+    if (
+      typeof parsed?.brand?.slideCount?.value === "number" &&
+      parsed.brand.slideCount.value > 0
+    ) {
+      return false;
+    }
+  } catch {
+    /* aiPrompt is best-effort */
+  }
+  return true;
+}
+
+// Reload-defense lookup for partial-slide regen. Returns the target
+// slide IDs + target version id when a `deck.regenerate.partial`
+// Job is still in flight (status ∈ active set), or null when no
+// regen is active. The active-status set mirrors the cancel
+// route's `ACTIVE_JOB_STATUSES` — kept in sync because both
+// callers use it to decide "is this run still alive".
+//
+// `inputJson` is a Prisma `Json` column (unschemata'd at the DB
+// layer), so every field gets defensively narrowed. A malformed
+// historical row collapses to null — the overlay just won't
+// restore rather than crashing the project load.
+async function readActiveRegen(
+  projectId: string,
+): Promise<InitialState["initialActiveRegen"]> {
+  const activeJob = await prisma.job.findFirst({
+    where: {
+      projectId,
+      type: "deck.regenerate.partial",
+      status: { in: ["queued", "processing", "running"] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { inputJson: true },
+  });
+  if (!activeJob?.inputJson || typeof activeJob.inputJson !== "object") {
+    return null;
+  }
+  const input = activeJob.inputJson as {
+    versionId?: unknown;
+    targetSlideIds?: unknown;
+  };
+  const versionId =
+    typeof input.versionId === "string" ? input.versionId : null;
+  const targetSlideIds = Array.isArray(input.targetSlideIds)
+    ? input.targetSlideIds.filter((v): v is string => typeof v === "string")
+    : [];
+  if (!versionId || targetSlideIds.length === 0) return null;
+  return { versionId, targetSlideIds };
 }
 
 export async function loadProject(
@@ -188,8 +331,16 @@ export async function loadProject(
     const slides = (version.slideJson as { slides?: unknown[] }).slides;
     if (Array.isArray(slides) && slides.length > 0) initialSlideCount = slides.length;
   }
+  const initialSlideCountAuto = readSlideCountAuto(project.aiPrompt);
+  const initialSourceKind = readSourceKind(project.aiPrompt);
 
   const initialFormat: SlideFormat = project.format === "9:16" ? "9:16" : "16:9";
+
+  // Partial-regen reload defense — look up the newest non-terminal
+  // Job for this project of type `deck.regenerate.partial` and
+  // rehydrate its target slide IDs + target version id. See
+  // `readActiveRegen` for the defensive narrowing rationale.
+  const initialActiveRegen = await readActiveRegen(projectId);
 
   // Per-slide state for the pill (lock + version count + cached
   // comments). Only fetched when we have a presentation row;
@@ -246,8 +397,11 @@ export async function loadProject(
     ),
     initialManifest: manifest,
     initialSlideCount,
+    initialSlideCountAuto,
+    initialSourceKind,
     initialSlideStates,
     initialFormat,
+    initialActiveRegen,
   };
 }
 

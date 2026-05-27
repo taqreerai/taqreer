@@ -37,7 +37,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
+import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
 import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
 import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
@@ -718,34 +718,18 @@ export default function MimicContentPage() {
                 the "إزالة" text row that used to sit underneath
                 and grow the card. */}
             <div className="flex gap-3 border-t border-[var(--tq-border-glass)] pt-3">
-              {/* Logo — half-width. Wrapped in `relative` so the
-                  remove × can overlay the tile's start corner. */}
-              <div className="relative flex-1">
-                <CompactUploadZone
-                  label={logoFile ? "تم رفع الشعار" : "شعار SVG فقط"}
-                  accept=".svg,image/svg+xml"
+              {/* Logo — half-width. LogoUploadSlot's `fillHeight`
+                  mode stretches it to match the stacked ratio
+                  picker beside it; otherwise we'd leave an
+                  awkward gap below the slot at its natural 72 px. */}
+              <div className="flex-1">
+                <LogoUploadSlot
                   file={logoFile}
                   onSelect={setLogoFile}
+                  onRemove={() => setLogoFile(null)}
                   compact
-                  hideFilename
                   fillHeight
-                  muted={!logoFile}
                 />
-                {logoFile ? (
-                  <button
-                    type="button"
-                    onClick={() => setLogoFile(null)}
-                    aria-label="إزالة الشعار"
-                    className="absolute top-1.5 start-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                    >
-                      close
-                    </span>
-                  </button>
-                ) : null}
               </div>
 
               {/* Ratios — half-width, stacked vertically. Reuses the
