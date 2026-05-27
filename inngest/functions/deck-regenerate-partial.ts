@@ -304,18 +304,26 @@ export const deckRegeneratePartial = inngest.createFunction(
     // checkpoint — anything sitting in the prelude fires once per
     // round. With ~N step.runs after this point (per-slide Claude
     // calls, heartbeat writes, version save), the started broadcast
-    // would emit N times → N duplicate "is redesigning" notifications
-    // and N duplicate spinner overlays. The user reported 2 dup'd
-    // started rows during PR #33 testing; step.run dedupes on the step
-    // name so the callback runs exactly once across the whole
-    // execution.
+    // would emit N times → N duplicate spinner overlays. The user
+    // reported 2 dup'd started rows during PR #33 testing; step.run
+    // dedupes on the step name so the callback runs exactly once
+    // across the whole execution.
     //
     // Inside the step we keep the fire-and-forget pattern (don't
-    // await broadcastToProject / fanOutNotification): the step
-    // returns the moment the synchronous loop finishes, the unsettled
-    // promises continue running in the background, and we avoid the
+    // await broadcastToProject): the step returns the moment the
+    // synchronous loop finishes, the unsettled promises continue
+    // running in the background, and we avoid the
     // `admin.removeChannel` deadlock that previously hung functions
     // for 5+ min when broadcasts WERE awaited inside step.run.
+    //
+    // NOTE: bell notifications are NOT fanned out for the started
+    // event (dropped 2026-05-27). `*.started` is a transient live-UI
+    // signal — by the time the recipient opens the bell, the regen
+    // has already finished and the started row is just noise that
+    // doubles the badge count. The terminal `slide.regen.finished`
+    // notification (fired further down on completion) tells the full
+    // story on its own. Project-channel broadcasts above stay so
+    // spinner overlays + collaborator banners still fire live.
     await step.run("broadcast-slide-regen-started", () => {
       for (const slideId of targetSlideIds) {
         broadcastToProject(projectId, "slide.regen.started", {
@@ -323,19 +331,6 @@ export const deckRegeneratePartial = inngest.createFunction(
           actorPrismaUserId,
         }).catch((err) => {
           logger.warn("broadcast slide.regen.started failed", {
-            slideId,
-            error: String(err),
-          });
-        });
-      }
-      for (const slideId of targetSlideIds) {
-        fanOutNotification({
-          type: "slide.regen.started",
-          projectId,
-          actorPrismaUserId,
-          payload: { slideKey: slideId },
-        }).catch((err) => {
-          logger.warn("notification slide.regen.started fanOut failed", {
             slideId,
             error: String(err),
           });

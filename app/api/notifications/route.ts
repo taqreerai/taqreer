@@ -139,23 +139,13 @@ function formatNotificationRow(row: {
       title = `تم التعليق على ${slideTarget} من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
-    case "slide.regen.started":
-      // Mid-flight signal — peer sees "X is redesigning slide N" the
-      // moment the regen kicks off, paired with a live spinner overlay
-      // on the affected slide. `جارٍ` (active participle, gender-
-      // neutral) for in-flight events; `تمت` (passive perfect) for
-      // finished events.
-      title = `جارٍ إعادة تصميم ${slideTarget} من طرف ${actor} في ${project}`;
-      href = isProject ? `/project/${row.projectId}` : undefined;
-      break;
+    // `*.started` cases dropped 2026-05-27 — those notifications are
+    // no longer persisted server-side (see lib/notifications/server.ts
+    // for the rationale). The default branch will safely format any
+    // stale `*.started` rows still living in the DB until the cleanup
+    // migration drops them.
     case "slide.regen.finished":
       title = `تمت إعادة تصميم ${slideTarget} من طرف ${actor} في ${project}`;
-      href = isProject ? `/project/${row.projectId}` : undefined;
-      break;
-    case "deck.regen.started":
-      // Mid-flight signal for full deck regen. Peer sees this notification
-      // + a global "deck mid-regen" banner over the slides.
-      title = `جارٍ إعادة تصميم العرض كاملاً من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "deck.regen.finished": {
