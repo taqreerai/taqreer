@@ -39,7 +39,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
+import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
 import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
 import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
@@ -845,31 +845,11 @@ export default function CreatePage() {
           >
             <CardHeader icon="image" title="الشعار" />
 
-            <div className="relative">
-              <CompactUploadZone
-                label={logoFile ? readableFileName(logoFile.name) : "شعار SVG فقط"}
-                accept=".svg,image/svg+xml"
-                file={logoFile}
-                onSelect={setLogoFile}
-                hideFilename
-                muted={!logoFile}
-              />
-              {logoFile ? (
-                <button
-                  type="button"
-                  onClick={() => setLogoFile(null)}
-                  aria-label="إزالة الشعار"
-                  className="absolute top-1.5 start-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 14 }}
-                  >
-                    close
-                  </span>
-                </button>
-              ) : null}
-            </div>
+            <LogoUploadSlot
+              file={logoFile}
+              onSelect={setLogoFile}
+              onRemove={() => setLogoFile(null)}
+            />
 
             <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
@@ -1064,7 +1044,7 @@ export default function CreatePage() {
 // checkbox-style toggles (exclude cover, exclude closing). Same
 // chrome as PositionDropdown so the two read as a pair: identical
 // h-8 trigger, identical glass popover. Single-pill replacement for
-// the legacy two-pill "استثناء الغلاف / استثناء الشكر" layout.
+// the legacy two-pill "استثناء الغلاف / استثناء الشريحة الأخيرة" layout.
 // ───────────────────────────────────────────────────────────────────
 function ExclusionDropdown({
   excludeCover,
@@ -1123,7 +1103,7 @@ function ExclusionDropdown({
         >
           expand_more
         </span>
-        <span>{label}</span>
+        <span className="whitespace-nowrap">{label}</span>
       </button>
       {open ? (
         <div
@@ -1131,7 +1111,7 @@ function ExclusionDropdown({
           // GoogleFontSlot — backdrop-blur-glass + bg-glass + glass
           // border + shadow-2xl. Keeps the dropdown family visually
           // consistent across /create.
-          className="absolute top-full z-30 mt-1 min-w-[160px] overflow-hidden rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+          className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
           role="listbox"
           aria-label="استثناء"
         >
@@ -1141,7 +1121,7 @@ function ExclusionDropdown({
             onChange={onCoverChange}
           />
           <ExclusionItem
-            label="استثناء الشكر"
+            label="استثناء الشريحة الأخيرة"
             checked={excludeClosing}
             onChange={onClosingChange}
           />
@@ -1168,7 +1148,7 @@ function ExclusionItem({
       onClick={() => onChange(!checked)}
       className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-white/5"
     >
-      <span>{label}</span>
+      <span className="whitespace-nowrap">{label}</span>
       <span
         className={`material-symbols-outlined transition-opacity ${
           checked ? "opacity-100 text-white" : "opacity-0"
