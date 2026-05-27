@@ -38,6 +38,7 @@
 // projectId is nullable, which fits: extraction runs BEFORE the
 // project exists.
 
+import type { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
@@ -78,6 +79,111 @@ type ExtractCompletedOutput = {
   language: "ar" | "en" | null;
 };
 
+// Narrow `event.data` to `ExtractRequestedEvent`. Throws
+// `NonRetriableError` on malformed input so Inngest stops retrying.
+function parseExtractRequestedEvent(data: unknown): ExtractRequestedEvent {
+  const ev = data as Partial<ExtractRequestedEvent> | null;
+  if (
+    !ev ||
+    !ev.jobId ||
+    !ev.supabaseUserId ||
+    !ev.fileBucketPath ||
+    !ev.mime
+  ) {
+    throw new NonRetriableError(
+      "extract-source: malformed event payload (missing jobId / userId / path / mime)",
+    );
+  }
+  return ev as ExtractRequestedEvent;
+}
+
+// Build a Supabase admin client with the service-role key — used
+// because Inngest doesn't carry the original uploader's auth
+// context. Reused across functions; hoisting it here gives one call
+// site that's grep-able when env names change.
+function getSupabaseAdmin() {
+  return createSupabaseAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
+// Rename a non-PDF source file to its `.pdf` form for the upload to
+// Anthropic Files (Files API enforces content-type ↔ extension
+// agreement). Passes `.pdf` through unchanged; otherwise swaps the
+// final extension.
+function toPdfFileName(fileName: string): string {
+  return fileName.toLowerCase().endsWith(".pdf")
+    ? fileName
+    : fileName.replace(/\.[^.]+$/, ".pdf");
+}
+
+// Tiny wrapper around `prisma.job.update` for the three call sites
+// (mark-processing, mark-failed via onFailure, mark-completed). The
+// dynamic `import("@/lib/prisma")` is kept here to preserve the
+// Inngest cold-start optimisation — pulling Prisma in only when a
+// step actually runs.
+async function updateJobStatus(
+  jobId: string,
+  data: Prisma.JobUpdateInput,
+): Promise<void> {
+  const { prisma } = await import("@/lib/prisma");
+  await prisma.job.update({ where: { id: jobId }, data });
+}
+
+// Download the source bytes, run the PPTX/PDF extraction pipeline,
+// upload the PDF to Anthropic Files. Returns the `ExtractCompletedOutput`
+// blob persisted to `Job.outputJson`. Lifted out of the `step.run`
+// closure so the orchestration body stays scannable.
+async function runExtractionPipeline(args: {
+  fileBucketPath: string;
+  fileName: string;
+  mime: string;
+}): Promise<ExtractCompletedOutput> {
+  const { fileBucketPath, fileName, mime } = args;
+  const admin = getSupabaseAdmin();
+  const { data: download, error: dlError } = await admin.storage
+    .from(SOURCE_FILES_BUCKET)
+    .download(fileBucketPath);
+  if (dlError || !download) {
+    throw new NonRetriableError(
+      `Source file not found at ${fileBucketPath}: ${dlError?.message ?? "no data"}`,
+    );
+  }
+  const sourceBuffer = Buffer.from(await download.arrayBuffer());
+
+  // Run the extraction pipeline. Returns:
+  //   • pdfBytes  — PDF the user uploaded OR LibreOffice-converted
+  //                 from the PPTX
+  //   • fonts     — PPTX theme XML typefaces
+  //   • colors    — PPTX theme accents (Tier-1 only)
+  //   • pageCount — from the PDF
+  //   • format    — from the PDF's first-page aspect ratio
+  // Embedded image extraction was removed (2026-05-25); Claude
+  // reads visuals from the PDF document block directly.
+  const ext = await extract({ buffer: sourceBuffer, mime });
+
+  // Upload the PDF to Anthropic Files. Returns a file_id we
+  // reference in deck-generate's message via a `document` block.
+  // Filename keeps the original (minus any .pptx → .pdf swap so the
+  // dashboard label matches).
+  const anthropicFileId = await uploadFileToAnthropic({
+    bytes: ext.pdfBytes,
+    fileName: toPdfFileName(fileName),
+    contentType: "application/pdf",
+  });
+
+  return {
+    anthropicFileId,
+    fonts: ext.fonts,
+    colors: ext.colors,
+    pageCount: ext.pageCount,
+    format: ext.format,
+    language: ext.language,
+  };
+}
+
 export const extractSource = inngest.createFunction(
   {
     id: "extract-source",
@@ -92,25 +198,40 @@ export const extractSource = inngest.createFunction(
     // briefly during PPTX→PDF rendering.
     concurrency: { limit: 2 },
     triggers: [{ event: "source.extract.requested" }],
+    // Terminal-failure handler — fires once after every retry is
+    // exhausted. Writes the error onto Job.outputJson so
+    // /api/extract/[jobId] can surface a meaningful message.
+    // Previously inline `try/catch` in the orchestration body did
+    // this on every attempt; using onFailure means the bookkeeping
+    // runs exactly once at the END (no race with Inngest's retry
+    // semantics) and the happy path stops being indented inside a
+    // try block.
+    onFailure: async ({ event, error }) => {
+      const original = (event.data.event?.data ?? {}) as Partial<
+        ExtractRequestedEvent
+      >;
+      if (!original.jobId) return;
+      const message =
+        error instanceof Error ? error.message : "Unknown extraction error";
+      await updateJobStatus(original.jobId, {
+        status: "failed",
+        outputJson: { error: message, fileName: original.fileName ?? null },
+      }).catch((e) => {
+        console.error("extract-source onFailure: status write failed", e, error);
+      });
+    },
   },
   async ({ event, step, logger }) => {
-    const data = event.data as ExtractRequestedEvent;
-    const { jobId, supabaseUserId, fileBucketPath, fileName, mime } = data;
-
-    if (!jobId || !supabaseUserId || !fileBucketPath || !mime) {
-      throw new NonRetriableError(
-        `extract-source: malformed event payload (missing jobId / userId / path / mime)`,
-      );
-    }
+    const data = parseExtractRequestedEvent(event.data);
+    const { jobId, fileBucketPath, fileName, mime } = data;
 
     // ─── Step 1: mark job processing ─────────────────────────────────
-    await step.run("mark-processing", async () => {
-      const { prisma } = await import("@/lib/prisma");
-      await prisma.job.update({
-        where: { id: jobId },
-        data: { status: "processing", attempts: { increment: 1 } },
-      });
-    });
+    await step.run("mark-processing", () =>
+      updateJobStatus(jobId, {
+        status: "processing",
+        attempts: { increment: 1 },
+      }),
+    );
 
     // ─── Step 2: download + normalize + upload (fat idempotent step) ─
     // We bundle download → extract → Anthropic-upload into a single
@@ -118,95 +239,24 @@ export const extractSource = inngest.createFunction(
     // but a retry's new file_id just costs us a free file we don't
     // reuse — cheap insurance. Bundling means a retry replays the
     // whole pipeline cleanly without partial-state Job row updates.
-    let result: ExtractCompletedOutput;
-    try {
-      result = await step.run("extract-and-upload", async () => {
-        // Download source bytes from the staging bucket. Service
-        // role because Inngest doesn't carry the original
-        // uploader's auth context.
-        const admin = createSupabaseAdminClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!,
-          { auth: { autoRefreshToken: false, persistSession: false } },
-        );
-        const { data: download, error: dlError } = await admin.storage
-          .from(SOURCE_FILES_BUCKET)
-          .download(fileBucketPath);
-        if (dlError || !download) {
-          throw new NonRetriableError(
-            `Source file not found at ${fileBucketPath}: ${dlError?.message ?? "no data"}`,
-          );
-        }
-        const sourceBuffer = Buffer.from(await download.arrayBuffer());
-
-        // Run the extraction pipeline. Returns:
-        //   • pdfBytes  — PDF the user uploaded OR LibreOffice-
-        //                 converted from the PPTX
-        //   • fonts     — PPTX theme XML typefaces
-        //   • colors    — PPTX theme accents (Tier-1 only)
-        //   • pageCount — from the PDF
-        //   • format    — from the PDF's first-page aspect ratio
-        // Embedded image extraction was removed (2026-05-25);
-        // Claude reads visuals from the PDF document block directly.
-        const ext = await extract({ buffer: sourceBuffer, mime });
-
-        // Upload the PDF to Anthropic Files API. Returns a
-        // file_id we reference in deck-generate's message via a
-        // `document` block. Filename keeps the original (minus
-        // any .pptx → .pdf swap so the dashboard label matches).
-        const pdfFileName = fileName.toLowerCase().endsWith(".pdf")
-          ? fileName
-          : fileName.replace(/\.[^.]+$/, ".pdf");
-        const anthropicFileId = await uploadFileToAnthropic({
-          bytes: ext.pdfBytes,
-          fileName: pdfFileName,
-          contentType: "application/pdf",
-        });
-
-        return {
-          anthropicFileId,
-          fonts: ext.fonts,
-          colors: ext.colors,
-          pageCount: ext.pageCount,
-          format: ext.format,
-          language: ext.language,
-        } satisfies ExtractCompletedOutput;
-      });
-    } catch (err) {
-      // Terminal failure path. Write the error onto the Job row so
-      // /api/extract/[jobId] can surface a meaningful message and
-      // re-throw so Inngest registers the function as failed.
-      const message =
-        err instanceof Error ? err.message : "Unknown extraction error";
-      logger.error("extract-source failed", {
-        jobId,
-        fileName,
-        error: message,
-      });
-      await step.run("mark-failed", async () => {
-        const { prisma } = await import("@/lib/prisma");
-        await prisma.job.update({
-          where: { id: jobId },
-          data: {
-            status: "failed",
-            outputJson: { error: message, fileName },
-          },
-        });
-      });
-      throw err;
-    }
+    // Errors bubble up to the `onFailure` hook above for the
+    // mark-failed bookkeeping.
+    const result = await step.run("extract-and-upload", () =>
+      runExtractionPipeline({ fileBucketPath, fileName, mime }),
+    );
+    logger.info("extract-source pipeline complete", {
+      jobId,
+      pageCount: result.pageCount,
+      format: result.format,
+    });
 
     // ─── Step 3: mark job completed + persist result ─────────────────
-    await step.run("mark-completed", async () => {
-      const { prisma } = await import("@/lib/prisma");
-      await prisma.job.update({
-        where: { id: jobId },
-        data: {
-          status: "completed",
-          outputJson: result as unknown as object,
-        },
-      });
-    });
+    await step.run("mark-completed", () =>
+      updateJobStatus(jobId, {
+        status: "completed",
+        outputJson: result as Prisma.InputJsonValue,
+      }),
+    );
 
     return { jobId, status: "completed" };
   },
