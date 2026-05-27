@@ -77,12 +77,23 @@ export async function POST(request: Request) {
   }
 
   // ─── Resolve canonical MIME ──────────────────────────────────────
-  // Same allowlist-with-extension-fallback pattern /api/extract uses
-  // — see comments there for the rationale (Safari + drag/drop often
-  // ship empty `file.type`).
+  // Allowlist-with-extension-fallback pattern (same as /api/extract).
+  // The allowlist contains `text/plain` because many browsers report
+  // .csv files as text/plain — but that's only valid IF the filename
+  // actually ends in .csv. Without that guard a client could POST any
+  // arbitrary text file (`notes.txt`, source code, leaked secrets,
+  // anything) and have SheetJS try to parse it as a spreadsheet. So
+  // every code path that accepts the request must verify the
+  // extension lines up with the claimed type. CR #1 (PR #39).
+  const lower = file.name.toLowerCase();
   let resolvedMime = file.type;
+  if (file.type === "text/plain" && !lower.endsWith(".csv")) {
+    return NextResponse.json(
+      { error: "صيغة غير مدعومة. ارفع ملف .xlsx أو .xls أو .csv." },
+      { status: 400 },
+    );
+  }
   if (!ALLOWED_MIME.has(file.type)) {
-    const lower = file.name.toLowerCase();
     if (lower.endsWith(".xlsx")) {
       resolvedMime =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

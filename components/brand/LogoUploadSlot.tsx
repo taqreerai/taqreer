@@ -88,6 +88,15 @@ export function LogoUploadSlot({
   // canonical React shape for this pattern.
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const lastFileRef = useRef<File | null>(null);
+  // Mirror of the currently-live blob URL, written from inside the
+  // sync effect via a functional setter. Used by the unmount cleanup
+  // below — the previous version captured `objectUrl` from the
+  // initial render via empty-deps closure, which meant the LAST
+  // created URL could survive unmount (the closure still pointed at
+  // the URL from render-0 even though the current state had moved
+  // on). The ref always carries the latest value because it's
+  // mutated synchronously inside the sync effect. CR #3 (PR #39).
+  const liveObjectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Skip the setState dance when the file ref is unchanged — React
@@ -105,6 +114,7 @@ export function LogoUploadSlot({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setObjectUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
+        liveObjectUrlRef.current = null;
         return null;
       });
       return;
@@ -116,21 +126,23 @@ export function LogoUploadSlot({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setObjectUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
+      liveObjectUrlRef.current = url;
       return url;
     });
   }, [file]);
 
   useEffect(() => {
     // Final cleanup on unmount — revoke whatever URL is still live.
+    // Reads from `liveObjectUrlRef` (mutated synchronously inside the
+    // sync effect) instead of the closed-over `objectUrl` so the
+    // cleanup always sees the latest URL, not the value from initial
+    // render. CR #3 (PR #39).
     return () => {
-      if (lastFileRef.current && objectUrl) {
-        URL.revokeObjectURL(objectUrl);
+      if (liveObjectUrlRef.current) {
+        URL.revokeObjectURL(liveObjectUrlRef.current);
+        liveObjectUrlRef.current = null;
       }
     };
-    // objectUrl intentionally NOT in deps — we only want this to
-    // fire on unmount, not on every URL swap (which the effect above
-    // handles).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Empty state → exactly the dropzone every flow used before this

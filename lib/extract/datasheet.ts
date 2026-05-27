@@ -102,6 +102,17 @@ export function parseDatasheet(
   let charsRemaining = MAX_MARKDOWN_CHARS;
   const sections: string[] = [];
 
+  // Flips to true the first time we overflow the markdown budget.
+  // From that point onward we keep iterating worksheets ONLY to
+  // accumulate row counts into `totalRows` — the per-sheet markdown
+  // is no longer pushed into `sections`, so charsRemaining doesn't
+  // need to be touched either. Without this guard, an early-overflow
+  // case would `break` and the documented "pre-truncation count
+  // across the whole workbook" contract on `DatasheetParseResult.
+  // totalRows` would silently lie to the UI + the prompt. CR #4
+  // (PR #39).
+  let budgetOverflowed = false;
+
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
@@ -122,6 +133,12 @@ export function parseDatasheet(
     const rawHeaderRow = grid[0] ?? [];
     const dataRows = grid.slice(1);
     totalRows += dataRows.length;
+
+    // Once the global budget has overflowed, keep counting rows for
+    // accurate `totalRows` reporting but skip the expensive sampling
+    // + column-stats + render work — that markdown wouldn't land in
+    // the output anyway.
+    if (budgetOverflowed) continue;
 
     // Truncate rows if this sheet alone exceeds the per-sheet cap.
     // We keep the head (first PRESERVED_HEAD_ROWS) so even after a
@@ -150,7 +167,11 @@ export function parseDatasheet(
     });
 
     // Global char cap — if appending this sheet would blow the budget,
-    // append what fits + a "[truncated]" stub and stop iterating.
+    // append what fits + a "[truncated]" stub, flip the overflow
+    // flag, and let the loop continue (so subsequent sheets still
+    // contribute to `totalRows`). The renderer + sections list no
+    // longer grow after this point because `budgetOverflowed` short-
+    // circuits the next iteration.
     if (sheetMarkdown.length > charsRemaining) {
       const fitted = sheetMarkdown.slice(0, Math.max(0, charsRemaining - 200));
       sections.push(
@@ -159,7 +180,8 @@ export function parseDatasheet(
         } more sheet(s) omitted.]_`,
       );
       truncated = true;
-      break;
+      budgetOverflowed = true;
+      continue;
     }
     sections.push(sheetMarkdown);
     charsRemaining -= sheetMarkdown.length;

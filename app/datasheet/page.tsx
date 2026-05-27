@@ -258,6 +258,12 @@ export default function DatasheetPage() {
     setDataParsed(null);
     setDataFileStage("idle");
     setError("");
+    // Reset the hidden <input type="file"> so the user can re-pick
+    // the same path. Without this the browser caches the prior value
+    // and `onChange` doesn't fire for an identical filename, leaving
+    // the user stuck after a parse failure or manual remove.
+    // CR #2 (PR #39).
+    if (dataInputRef.current) dataInputRef.current.value = "";
   };
 
   // ─── Auto-parse: data file ─────────────────────────────────────
@@ -302,6 +308,11 @@ export default function DatasheetPage() {
             : "تعذر تحليل الملف. حاول مرة أخرى.",
         );
         setDataFileStage("idle");
+        // Also reset the hidden file input on parse-failure so the
+        // user can immediately retry with the same file (e.g. after
+        // a network blip). See removeDataFile for the rationale.
+        // CR #2 (PR #39).
+        if (dataInputRef.current) dataInputRef.current.value = "";
       }
     })();
     return () => {

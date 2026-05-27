@@ -22,6 +22,7 @@
 // approximate (Claude redraws from the visual reference).
 
 import { z } from "zod";
+import { MAX_MARKDOWN_CHARS } from "@/lib/extract/datasheet";
 
 // ─── SourceMeta — the discriminated union ────────────────────────
 // Three upload-driven kinds + scratch (implicit, the default when
@@ -132,7 +133,15 @@ export const SourceMimicSchema = z
 // specific angle without forcing them to.
 export const SourceDataSchema = z.object({
   kind: z.literal("data"),
-  markdown: z.string().min(1),
+  // The parser caps markdown output at `MAX_MARKDOWN_CHARS` (~200k)
+  // when truncation kicks in. Reapply the cap here as a hard schema
+  // boundary — without this, a direct `/api/projects` caller (anyone
+  // hitting the route without first going through the parser) could
+  // smuggle an arbitrarily large payload that blows the Claude
+  // prompt size + the Inngest event-payload limit. The cap is
+  // imported from the parser module so the two stay locked together.
+  // CR #5 (PR #39).
+  markdown: z.string().min(1).max(MAX_MARKDOWN_CHARS),
   sheetCount: z.number().int().min(1),
   totalRows: z.number().int().min(0),
   truncated: z.boolean(),
