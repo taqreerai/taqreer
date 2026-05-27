@@ -22,6 +22,166 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
+// Heartbeat stage taxonomy. Phase ordering decides which heartbeat
+// wins when two race through the read-modify-write window on
+// `slideJson.progress` — later phases beat earlier ones even when
+// `currentSlide` hasn't advanced. Module-scope (not handler-scope)
+// so `readProgress` + `writeHeartbeat` can share one source of truth.
+type HeartbeatStage = "designing" | "validating" | "saving";
+const PHASE_ORDER: Record<HeartbeatStage, number> = {
+  designing: 0,
+  validating: 1,
+  saving: 2,
+};
+
+// Defensive narrowing for the `slideJson.progress` block read by the
+// heartbeat's monotonic guard. The column is Prisma `Json`, so the
+// shape we expect (`{ stage, currentSlide, ... }`) is only a
+// convention. Returns undefined when nothing matches — the caller
+// treats that as "no prior progress recorded yet".
+type ProgressBlock = {
+  stage?: HeartbeatStage;
+  currentSlide?: number;
+  estimatedTotal?: number;
+};
+function readProgressBlock(slideJson: unknown): ProgressBlock | undefined {
+  if (!slideJson || typeof slideJson !== "object") return undefined;
+  const progress = (slideJson as { progress?: unknown }).progress;
+  if (!progress || typeof progress !== "object") return undefined;
+  const p = progress as Record<string, unknown>;
+  return {
+    stage:
+      p.stage === "designing" || p.stage === "validating" || p.stage === "saving"
+        ? p.stage
+        : undefined,
+    currentSlide: typeof p.currentSlide === "number" ? p.currentSlide : undefined,
+    estimatedTotal:
+      typeof p.estimatedTotal === "number" ? p.estimatedTotal : undefined,
+  };
+}
+
+// Mid-stream progress heartbeat. Reads the current `slideJson.progress`,
+// drops the write if it would regress (out-of-order race-loss), else
+// writes the new stage/currentSlide. Per project convention there's
+// no try/catch here — the call sites use `Promise.allSettled` (for
+// parallel batches) or `.catch(noop)` (for the two await points) so
+// a heartbeat blip can't fail the regen.
+async function writeHeartbeat(
+  versionId: string,
+  totalTargets: number,
+  currentSlide: number,
+  stage: HeartbeatStage,
+): Promise<void> {
+  const current = await prisma.presentationVersion.findUnique({
+    where: { id: versionId },
+    select: { slideJson: true },
+  });
+  const existing =
+    (current?.slideJson as Record<string, unknown> | null) ?? {};
+  const existingProgress = readProgressBlock(existing);
+  const existingPhaseOrder =
+    PHASE_ORDER[existingProgress?.stage ?? "designing"];
+  const newPhaseOrder = PHASE_ORDER[stage];
+  const sameOrLaterPhase = newPhaseOrder >= existingPhaseOrder;
+  const advancesSlide =
+    currentSlide >= (existingProgress?.currentSlide ?? 0);
+  if (!sameOrLaterPhase || (!advancesSlide && newPhaseOrder === existingPhaseOrder)) {
+    // Out-of-order or backwards regression — drop silently. The next
+    // in-order heartbeat will catch the poller up.
+    return;
+  }
+  await prisma.presentationVersion.update({
+    where: { id: versionId },
+    data: {
+      slideJson: {
+        ...existing,
+        status: "regenerating",
+        progress: {
+          stage,
+          currentSlide,
+          estimatedTotal: totalTargets,
+        },
+      } as never,
+    },
+  });
+}
+
+// Per-step token usage shape. Stays as a discrete type instead of
+// inline object literals so the reducer + the EMPTY constant share
+// one source of truth.
+type RegenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+};
+const EMPTY_USAGE: RegenUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheCreationTokens: 0,
+};
+function sumUsage(a: RegenUsage, b: RegenUsage): RegenUsage {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
+    cacheCreationTokens: a.cacheCreationTokens + b.cacheCreationTokens,
+  };
+}
+
+// Pick the regen mode for a single slide. A slide carrying user
+// comments lands in `apply-comments` (strict preservation); a
+// commentless slide in a batch lands in `redesign` (variation
+// required). The user-message builder + the system-prompt picker
+// in the handler must agree on this — this helper is the single
+// source of truth they both call.
+function pickRegenMode(
+  comments: ReadonlyArray<{ slideId: string }>,
+  slideId: string,
+): RegenMode {
+  return comments.some((c) => c.slideId === slideId)
+    ? "apply-comments"
+    : "redesign";
+}
+
+// Logger shape we accept. Matches Inngest's `logger.warn` surface
+// without coupling to the full LoggerInstance type — keeps the
+// helpers callable from tests that don't have Inngest in scope.
+type WarnLogger = { warn: (msg: string, meta?: Record<string, unknown>) => void };
+
+// Run a fire-and-forget broadcast / notification across a slide
+// batch. The promise is intentionally NOT awaited at the call site;
+// failures get logged but never reach the surrounding step. Replaces
+// three near-identical inline loops (started broadcast, finished
+// broadcast, notification fan-out) plus the onFailure swallow shape.
+function fireAndForgetForSlides(
+  slideIds: ReadonlyArray<string>,
+  label: string,
+  logger: WarnLogger,
+  fn: (slideId: string) => Promise<unknown>,
+): void {
+  for (const slideId of slideIds) {
+    fn(slideId).catch((err) => {
+      logger.warn(`${label} failed`, {
+        slideId,
+        error: String(err),
+      });
+    });
+  }
+}
+
+// Narrow the onFailure event's nested original-event payload to the
+// fields we read. Keeps the orchestration block in the failure
+// handler readable; mirrors the discriminated-union cleanup landed
+// in `deck-generate.ts` (commit c9042ec).
+function readOriginalEvent(eventData: unknown): Partial<RegenPartialEvent> {
+  if (!eventData || typeof eventData !== "object") return {};
+  const inner = (eventData as { event?: { data?: unknown } }).event?.data;
+  if (!inner || typeof inner !== "object") return {};
+  return inner as Partial<RegenPartialEvent>;
+}
+
 // Focused system prompt for single-slide regen. Two modes, branched on
 // whether the user supplied comments:
 //
@@ -158,8 +318,10 @@ function buildPartialUserMessage(
   // can't know whether a particular slide in the batch actually has
   // comments — the function may be regenerating N slides where only
   // some carry comments and the rest are pure redesigns. Per-slide
-  // branching reads more naturally from the message itself.
-  const mode: RegenMode = slideComments.length > 0 ? "apply-comments" : "redesign";
+  // branching reads more naturally from the message itself. `pickRegenMode`
+  // is the shared helper the orchestrator uses to pick its matching
+  // system prompt — keeps the two branches locked in step.
+  const mode = pickRegenMode(comments, targetSlideId);
 
   const intentSection =
     mode === "apply-comments"
@@ -264,7 +426,7 @@ export const deckRegeneratePartial = inngest.createFunction(
     // stops spinning and the user can surface the error. Project status
     // is left alone (the previous version is still visible).
     onFailure: async ({ event, error }) => {
-      const original = (event.data.event?.data ?? {}) as Partial<RegenPartialEvent>;
+      const original = readOriginalEvent(event.data);
       if (!original.versionId) return;
       const { prisma } = await import("@/lib/prisma");
       await prisma.presentationVersion
@@ -325,17 +487,16 @@ export const deckRegeneratePartial = inngest.createFunction(
     // story on its own. Project-channel broadcasts above stay so
     // spinner overlays + collaborator banners still fire live.
     await step.run("broadcast-slide-regen-started", () => {
-      for (const slideId of targetSlideIds) {
-        broadcastToProject(projectId, "slide.regen.started", {
-          slideId,
-          actorPrismaUserId,
-        }).catch((err) => {
-          logger.warn("broadcast slide.regen.started failed", {
+      fireAndForgetForSlides(
+        targetSlideIds,
+        "broadcast slide.regen.started",
+        logger,
+        (slideId) =>
+          broadcastToProject(projectId, "slide.regen.started", {
             slideId,
-            error: String(err),
-          });
-        });
-      }
+            actorPrismaUserId,
+          }),
+      );
     });
 
     // Resolve the original deck's quality preset → Claude call params.
@@ -368,72 +529,26 @@ export const deckRegeneratePartial = inngest.createFunction(
     // worst case the later write wins with consistent content.
     // Best-effort; failures don't block the regen.
     const totalTargets = targetSlideIds.length;
-    // Phase ordering for the monotonic guard below — later phases
-    // win over earlier ones even if they fire while currentSlide
-    // hasn't advanced past the prior heartbeat's value.
-    const PHASE_ORDER: Record<string, number> = {
-      designing: 0,
-      validating: 1,
-      saving: 2,
-    };
-    const heartbeat = async (
-      currentSlide: number,
-      stage: "designing" | "validating" | "saving",
-    ) => {
-      try {
-        const current = await prisma.presentationVersion.findUnique({
-          where: { id: versionId },
-          select: { slideJson: true },
-        });
-        const existing =
-          (current?.slideJson as Record<string, unknown> | null) ?? {};
-        // MONOTONIC PROGRESS GUARD (CR-flagged 2026-05-21):
-        // The per-slide heartbeats fire concurrently from the
-        // Promise.all below. Each does its own read-then-write on
-        // `slideJson.progress` — without this guard, two heartbeats
-        // racing through the read/write window can land out of
-        // order and the user sees progress flicker backwards (e.g.
-        // 1 → 3 → 2 → 4). Drop any heartbeat that would REGRESS the
-        // currently-stored progress, EXCEPT when the new heartbeat
-        // is advancing to a later phase (validating / saving over
-        // designing) — those phases naturally cross a phase
-        // boundary and bypass the slide-number comparison.
-        const existingProgress = existing.progress as
-          | { stage?: string; currentSlide?: number }
-          | undefined;
-        const existingPhaseOrder =
-          PHASE_ORDER[existingProgress?.stage ?? "designing"] ?? 0;
-        const newPhaseOrder = PHASE_ORDER[stage] ?? 0;
-        const sameOrLaterPhase = newPhaseOrder >= existingPhaseOrder;
-        const advancesSlide =
-          currentSlide >= (existingProgress?.currentSlide ?? 0);
-        if (sameOrLaterPhase && (advancesSlide || newPhaseOrder > existingPhaseOrder)) {
-          await prisma.presentationVersion.update({
-            where: { id: versionId },
-            data: {
-              slideJson: {
-                ...existing,
-                status: "regenerating",
-                progress: {
-                  stage,
-                  currentSlide,
-                  estimatedTotal: totalTargets,
-                },
-              } as never,
-            },
-          });
-        }
-        // Else: out-of-order heartbeat or backwards regression;
-        // drop it silently. The next in-order heartbeat will
-        // catch up the poller.
-      } catch {
-        /* heartbeat failure doesn't fail the regen */
-      }
-    };
+    // Bound the module-scope `writeHeartbeat` to this run's versionId
+    // + target count so the call sites stay short. MONOTONIC PROGRESS
+    // GUARD (CR-flagged 2026-05-21) lives inside writeHeartbeat — the
+    // per-slide heartbeats below fire concurrently from `Promise.all`
+    // and each does its own read-then-write on `slideJson.progress`;
+    // the guard drops any write that would regress the stored
+    // progress, except when crossing into a later phase (designing →
+    // validating → saving).
+    const heartbeat = (currentSlide: number, stage: HeartbeatStage) =>
+      writeHeartbeat(versionId, totalTargets, currentSlide, stage);
 
-    // Initial pulse — even before any slide closes, tell the poller the
-    // run is alive and what shape it'll have.
-    await heartbeat(0, "designing");
+    // Initial pulse — even before any slide closes, tell the poller
+    // the run is alive and what shape it'll have. `.catch(noop)` so
+    // a heartbeat blip can't fail the regen (the empty try/catch
+    // around the body was dropped in the 2026-05-27 simplifier pass;
+    // `Promise.allSettled` drains the parallel batch below, and the
+    // two direct awaits swallow rejections at the call site).
+    await heartbeat(0, "designing").catch(() => {
+      /* heartbeat blip — next pulse catches up */
+    });
 
     // Load the source manifest in a step so a retry doesn't re-read the DB
     // unnecessarily. Source = the previous version's manifest; new version
@@ -495,12 +610,11 @@ export const deckRegeneratePartial = inngest.createFunction(
           // a slide with comments → apply-comments (strict preservation);
           // a slide without → redesign (variation required). Keeps the
           // system prompt in sync with the user-message branch.
-          const hasCommentsForSlide = comments.some(
-            (c) => c.slideId === slideId,
-          );
-          const systemPromptText = hasCommentsForSlide
-            ? applyCommentsSystemPrompt
-            : redesignSystemPrompt;
+          // Single source of truth shared with `buildPartialUserMessage`.
+          const systemPromptText =
+            pickRegenMode(comments, slideId) === "apply-comments"
+              ? applyCommentsSystemPrompt
+              : redesignSystemPrompt;
           // Use the original deck's quality preset — paramsForQuality
           // gives us model + thinking + effort matching what generated
           // the deck originally (fast / medium / quality / extreme).
@@ -562,7 +676,9 @@ export const deckRegeneratePartial = inngest.createFunction(
     // Drain in-flight heartbeat writes so the next heartbeat lands on
     // top of the latest state, not racing with one still in flight.
     await Promise.allSettled(heartbeatWrites);
-    await heartbeat(totalTargets, "validating");
+    await heartbeat(totalTargets, "validating").catch(() => {
+      /* heartbeat blip — non-fatal */
+    });
 
     // Splice the regenerated slides into a fresh copy of the source manifest
     // and persist. We rebuild the manifest object from scratch (vs. mutating
@@ -642,18 +758,15 @@ export const deckRegeneratePartial = inngest.createFunction(
       // clean regen (this whole array is empty) leaves the map
       // empty for every targeted slide — recordSlidePartialRegen
       // then clears each SlideState.cachedComments to SQL NULL.
-      const commentsBySlide = new Map<
-        string,
-        { slideId: string; content: string; boundsJson: unknown }[]
-      >();
+      // Group dispatched comments by target slideId so each slide's
+      // SlideState caches ONLY its own. A clean regen (empty input)
+      // leaves the map empty for every targeted slide; the recorder
+      // then clears `SlideState.cachedComments` to SQL NULL.
+      const commentsBySlide = new Map<string, CommentInput[]>();
       for (const c of comments) {
-        const arr = commentsBySlide.get(c.slideId) ?? [];
-        arr.push({
-          slideId: c.slideId,
-          content: c.content,
-          boundsJson: c.boundsJson,
-        });
-        commentsBySlide.set(c.slideId, arr);
+        const arr = commentsBySlide.get(c.slideId);
+        if (arr) arr.push(c);
+        else commentsBySlide.set(c.slideId, [c]);
       }
       await recordSlidePartialRegen(
         prisma,
@@ -669,21 +782,9 @@ export const deckRegeneratePartial = inngest.createFunction(
     // only. Best-effort; failures don't fail the regen since the
     // user-visible work (the new version) is already committed above.
     if (data.jobId) {
-      const totals = regenResults.reduce(
-        (acc, r) => ({
-          inputTokens: acc.inputTokens + r.usage.inputTokens,
-          outputTokens: acc.outputTokens + r.usage.outputTokens,
-          cacheReadTokens: acc.cacheReadTokens + r.usage.cacheReadTokens,
-          cacheCreationTokens:
-            acc.cacheCreationTokens + r.usage.cacheCreationTokens,
-        }),
-        {
-          inputTokens: 0,
-          outputTokens: 0,
-          cacheReadTokens: 0,
-          cacheCreationTokens: 0,
-        },
-      );
+      const totals = regenResults
+        .map((r) => r.usage)
+        .reduce(sumUsage, EMPTY_USAGE);
       await prisma.job
         .update({
           where: { id: data.jobId },
@@ -714,17 +815,16 @@ export const deckRegeneratePartial = inngest.createFunction(
     // freeze, etc.) observers will still pick up the new slides on
     // their next poll / refresh — the regen state was persisted
     // before we got here.
-    for (const slideId of targetSlideIds) {
-      broadcastToProject(projectId, "slide.regen.finished", {
-        slideId,
-        actorPrismaUserId,
-      }).catch((err) => {
-        logger.warn("broadcast slide.regen.finished failed", {
+    fireAndForgetForSlides(
+      targetSlideIds,
+      "broadcast slide.regen.finished",
+      logger,
+      (slideId) =>
+        broadcastToProject(projectId, "slide.regen.finished", {
           slideId,
-          error: String(err),
-        });
-      });
-    }
+          actorPrismaUserId,
+        }),
+    );
 
     // Phase 16.E — bell notification per regen'd slide. The fan-out
     // helper's 10-minute group window merges N sequential slide
@@ -732,19 +832,18 @@ export const deckRegeneratePartial = inngest.createFunction(
     // that touched 4 slides produces ONE row ("X redesigned 4 slides")
     // rather than spamming the bell. Fire-and-forget per the same
     // rationale as the broadcasts above.
-    for (const slideId of targetSlideIds) {
-      fanOutNotification({
-        type: "slide.regen.finished",
-        projectId,
-        actorPrismaUserId,
-        payload: { slideKey: slideId },
-      }).catch((err) => {
-        logger.warn("notification slide.regen.finished fanOut failed", {
-          slideId,
-          error: String(err),
-        });
-      });
-    }
+    fireAndForgetForSlides(
+      targetSlideIds,
+      "notification slide.regen.finished fanOut",
+      logger,
+      (slideId) =>
+        fanOutNotification({
+          type: "slide.regen.finished",
+          projectId,
+          actorPrismaUserId,
+          payload: { slideKey: slideId },
+        }),
+    );
 
     return { success: true, regenerated: regenResults.length };
   },
