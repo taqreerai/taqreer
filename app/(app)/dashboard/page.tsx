@@ -53,7 +53,14 @@ export default async function DashboardPage() {
 
   const [projects, templates, subscription, usageCount] = await Promise.all([
     prisma.project.findMany({
-      where: { userId: dbUser.id },
+      // Hide cancelled projects from the dashboard's recent grid.
+      // The user explicitly stopped these mid-generation and any
+      // partial slides were discarded — keeping them in "Recent"
+      // surfaces dead rows that can't be opened (DeckView redirects
+      // a cancelled project into its recovery card). They still
+      // exist in the DB (so /projects can show them if we ever add
+      // a "Cancelled" filter), they're just hidden from this widget.
+      where: { userId: dbUser.id, status: { not: "cancelled" } },
       orderBy: { updatedAt: "desc" },
       take: 6,
       // Pinned columns only — keeps the SSR payload small and makes

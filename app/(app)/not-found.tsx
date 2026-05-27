@@ -1,49 +1,50 @@
-// Route-group-level 404 for the authed area. Mirrors the global
-// `app/not-found.tsx` exactly — same Arabic copy, same break-mode
-// paragraph-write icon. Lives here so `notFound()` calls from
-// inside `(app)/project/[id]/page.tsx`, `(app)/preview/[id]/page.tsx`,
-// or any other authed route resolve to THIS file (the nearest
-// `not-found.tsx` walking up the tree) instead of bouncing past
-// the (app) layout. End result: the same break animation that
-// plays for unmatched URLs also plays when a revoked user pastes
-// a project link they no longer have access to.
+// Route-group-level 404 for the authed area. `(app)/layout.tsx`
+// already wraps this file with the sidebar + header + `dashboard-bg`
+// background, so the 404 sits INSIDE the authed chrome — the user
+// still feels "logged in", the sidebar stays visible, but the deck
+// they tried to open is gone with a clear message + recovery affordance.
 //
-// Implementation note: we don't render the dashboard shell here.
-// The `(app)/layout.tsx` already wraps this file with the
-// sidebar + header, so the 404 sits inside the authed chrome —
-// the user still feels "logged in", but the deck they tried to
-// open is gone with a clear message + recovery affordances.
+// Resolution: Next walks UP from any unmatched URL looking for the
+// nearest `not-found.tsx`. Anything under the `(app)` group —
+// `/dashboard/*`, `/projects/*`, `/favorites/*`, `/settings/*`,
+// `/templates/*`, `/brand-kits/*`, `/project/*`, `/preview/*` — and
+// any in-page `notFound()` calls from those routes resolve HERE,
+// inside the dashboard chrome. URLs entirely outside the group
+// (like `/banana`) bubble up to the global `app/not-found.tsx`,
+// which paints its own full-bleed dashboard-bg canvas.
+//
+// Layout note: we DON'T add `<main>`, `min-h-screen`, `dashboard-bg`,
+// or `relative z-10` here — the parent shell already provides all
+// of those. Doubling up on `min-h-screen` was the source of the
+// stray scrollbar (100vh wrapper inside an already-100vh shell with
+// a `pt-28` content area would always overflow the viewport).
 
 import Link from "next/link";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 
 export default function AppNotFound() {
   return (
-    <main
-      className="dashboard-bg flex min-h-screen flex-col items-center justify-start gap-8 px-6 pt-[22vh] text-center"
+    <div
+      className="flex flex-col items-center gap-8 px-6 pt-[12vh] text-center"
       dir="rtl"
     >
-      {/* Lift content above the dashboard-bg pseudo-element gradient
-          — same `relative z-10` pattern the global not-found uses. */}
-      <div className="relative z-10 flex flex-col items-center gap-8">
-        <ParagraphWriteIcon size={88} className="text-white" mode="break" />
-        <p className="max-w-md whitespace-pre-line text-base leading-relaxed text-white/70">
-          {`هذه الصفحة ليست هنا.\nربما تجدها يومًا ما.\nوإن وجدتها، `}
-          <Link
-            href="/#contact"
-            className="text-white underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white"
-          >
-            أخبرنا كيف وصلت إليها
-          </Link>
-          .
-        </p>
+      <ParagraphWriteIcon size={88} className="text-white" mode="break" />
+      <p className="max-w-md whitespace-pre-line text-base leading-relaxed text-white/70">
+        {`هذه الصفحة ليست هنا.\nربما تجدها يومًا ما.\nوإن وجدتها، `}
         <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-5 py-2 text-sm font-medium text-white transition-colors hover:border-white/40 hover:bg-white/[0.08]"
+          href="/#contact"
+          className="text-white underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white"
         >
-          العودة إلى لوحة التحكم
+          أخبرنا كيف وصلت إليها
         </Link>
-      </div>
-    </main>
+        .
+      </p>
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-5 py-2 text-sm font-medium text-white transition-colors hover:border-white/40 hover:bg-white/[0.08]"
+      >
+        العودة إلى لوحة التحكم
+      </Link>
+    </div>
   );
 }

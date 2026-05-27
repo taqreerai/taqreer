@@ -26,24 +26,17 @@ const cards: Array<{
     path: '/mimic',
   },
   {
-    icon: 'grid_view',
-    title: 'إنشاء من قالب',
-    desc: 'اختر قالباً جاهزاً وأضف محتواك',
-    path: '/templates',
-  },
-  {
     icon: 'dataset',
     title: 'إنشاء من بيانات',
     desc: 'حوّل ملف Excel إلى عرض احترافي',
     path: '/datasheet',
-    comingSoon: true,
   },
 ];
 
 export function QuickActions() {
   return (
     <section>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((card) => (
           <a
             key={card.path}
