@@ -141,20 +141,43 @@ function parseSavedSlideVersions(
   return result;
 }
 
-function readSlideCountHint(aiPrompt: string | null): number | null {
+// Cross-flow brief shape persisted as JSON on `Project.aiPrompt`.
+// Only the fields the loader actually reads are typed — every entry
+// is optional because the column is unschemata'd at the DB layer,
+// and three different create flows (scratch / enhance / mimic /
+// data) write subtly different payloads. Narrow lives in
+// `parseAiPrompt` below.
+export type FlowSourceKind = "scratch" | "enhance" | "mimic" | "data";
+type AiPromptShape = {
+  slideCount?: number | null;
+  source?: { kind?: string };
+  brand?: {
+    slideCount?: { mode?: string; value?: number | null };
+  };
+};
+
+// Parse `Project.aiPrompt` into the narrow `AiPromptShape` once per
+// request. Returns null on JSON parse failure (the column is
+// best-effort — legacy / partially-written rows fall back to
+// per-reader defaults). Callers should reuse the returned object
+// across multiple readers instead of re-parsing the string three
+// times — that was the pattern this file had before the 2026-05-27
+// simplifier pass.
+function parseAiPrompt(aiPrompt: string | null): AiPromptShape | null {
   if (!aiPrompt) return null;
   try {
-    const parsed = JSON.parse(aiPrompt) as {
-      slideCount?: number | null;
-      brand?: { slideCount?: { value?: number | null } };
-    };
-    const direct = parsed?.slideCount;
-    if (typeof direct === "number" && direct > 0) return direct;
-    const fromBrand = parsed?.brand?.slideCount?.value;
-    if (typeof fromBrand === "number" && fromBrand > 0) return fromBrand;
+    return JSON.parse(aiPrompt) as AiPromptShape;
   } catch {
-    /* aiPrompt is best-effort */
+    return null;
   }
+}
+
+function readSlideCountHint(prompt: AiPromptShape | null): number | null {
+  if (!prompt) return null;
+  const direct = prompt.slideCount;
+  if (typeof direct === "number" && direct > 0) return direct;
+  const fromBrand = prompt.brand?.slideCount?.value;
+  if (typeof fromBrand === "number" && fromBrand > 0) return fromBrand;
   return null;
 }
 
@@ -165,66 +188,154 @@ function readSlideCountHint(aiPrompt: string | null): number | null {
 // Returns null for legacy briefs without a `source.kind` field or
 // for plain /create scratch text (no source means the default
 // "starting design" copy applies).
-export type FlowSourceKind = "scratch" | "enhance" | "mimic" | "data";
-
-function readSourceKind(aiPrompt: string | null): FlowSourceKind | null {
-  if (!aiPrompt) return null;
-  try {
-    const parsed = JSON.parse(aiPrompt) as {
-      source?: { kind?: string };
-    };
-    const kind = parsed?.source?.kind;
-    if (
-      kind === "scratch" ||
-      kind === "enhance" ||
-      kind === "mimic" ||
-      kind === "data"
-    ) {
-      return kind;
-    }
-  } catch {
-    /* aiPrompt is best-effort */
+function readSourceKind(
+  prompt: AiPromptShape | null,
+): FlowSourceKind | null {
+  const kind = prompt?.source?.kind;
+  if (
+    kind === "scratch" ||
+    kind === "enhance" ||
+    kind === "mimic" ||
+    kind === "data"
+  ) {
+    return kind;
   }
   return null;
 }
 
 // Did the user opt into "auto" slide-count (let Claude pick) or pick
-// an explicit number? Read from the same aiPrompt JSON shape the
-// create flows write. Defaults to `true` (auto) — legacy briefs
-// without the `brand.slideCount.mode` field land here as auto, which
-// matches their original UI semantics (no count chip on the brief).
+// an explicit number? Reads the same `AiPromptShape` the create
+// flows write. Defaults to `true` (auto) — legacy briefs without
+// the `brand.slideCount.mode` field land here as auto, which matches
+// their original UI semantics (no count chip on the brief).
 //
 // Used by DeckView's generating branch: in auto mode the sidebar
 // starts empty and grows tile-by-tile with a trailing "still working"
 // placeholder; in custom mode it shows the user-picked N placeholders
 // up-front and fills them as Claude finishes each slide.
-function readSlideCountAuto(aiPrompt: string | null): boolean {
-  if (!aiPrompt) return true;
-  try {
-    const parsed = JSON.parse(aiPrompt) as {
-      slideCount?: number | null;
-      brand?: { slideCount?: { mode?: string; value?: number | null } };
-    };
-    // Explicit mode signal wins — that's what /create + /enhance +
-    // /mimic + /datasheet write.
-    const mode = parsed?.brand?.slideCount?.mode;
-    if (mode === "custom") return false;
-    if (mode === "auto") return true;
-    // Legacy briefs without `mode` — fall back to "is the count
-    // pinned anywhere?". If yes, treat as custom; otherwise auto.
-    if (typeof parsed?.slideCount === "number" && parsed.slideCount > 0) {
-      return false;
-    }
-    if (
-      typeof parsed?.brand?.slideCount?.value === "number" &&
-      parsed.brand.slideCount.value > 0
-    ) {
-      return false;
-    }
-  } catch {
-    /* aiPrompt is best-effort */
+function readSlideCountAuto(prompt: AiPromptShape | null): boolean {
+  if (!prompt) return true;
+  // Explicit mode signal wins — that's what /create + /enhance +
+  // /mimic + /datasheet write.
+  const mode = prompt.brand?.slideCount?.mode;
+  if (mode === "custom") return false;
+  if (mode === "auto") return true;
+  // Legacy briefs without `mode` — fall back to "is the count pinned
+  // anywhere?". If yes, treat as custom; otherwise auto.
+  if (typeof prompt.slideCount === "number" && prompt.slideCount > 0) {
+    return false;
   }
+  const fromBrand = prompt.brand?.slideCount?.value;
+  if (typeof fromBrand === "number" && fromBrand > 0) return false;
   return true;
+}
+
+// Defensive narrow for `version.slideJson.slides.length`. Returns
+// the count when the manifest already has slides written (a
+// completed or partially-streamed version), or null when the
+// version is empty / unparsed.
+function readManifestSlideCount(slideJson: unknown): number | null {
+  if (!slideJson || typeof slideJson !== "object") return null;
+  const slides = (slideJson as { slides?: unknown }).slides;
+  if (!Array.isArray(slides) || slides.length === 0) return null;
+  return slides.length;
+}
+
+// Initial-slide-count priority: manifest length (whatever Claude
+// actually produced) > prompt hint (user-picked or auto-estimated)
+// > 6 (placeholder default). Explicit early returns make the
+// precedence visible at a glance — previously the same shape was
+// hidden in a 3-step `let initialSlideCount = ...` mutation.
+function resolveInitialSlideCount(
+  slideJson: unknown,
+  prompt: AiPromptShape | null,
+): number {
+  const fromManifest = readManifestSlideCount(slideJson);
+  if (fromManifest !== null) return fromManifest;
+  const hint = readSlideCountHint(prompt);
+  if (hint !== null) return hint;
+  return 6;
+}
+
+// Narrow the project's stored `format` string to the
+// `SlideFormat` union. `9:16` is the only non-default — anything
+// else (including null) collapses to `16:9`. Tiny helper, but
+// matches the file's "narrowing lives in a named helper" convention.
+function narrowFormat(value: string | null): SlideFormat {
+  return value === "9:16" ? "9:16" : "16:9";
+}
+
+// Load the version DeckView should mount on. Priority is the
+// presentation's pinned `currentVersionId` (partial regen leaves
+// this on the previously-completed version so the deck stays
+// visible mid-stream); falls back to the numerically-latest version
+// when no pointer is set (first generation, before /api/projects
+// has run the post-tx update). Returns null when there's no
+// presentation row at all — earlier this called
+// `findFirst({ presentationId: ... ?? "" })` which would execute a
+// guaranteed-empty query; short-circuiting here avoids the round-trip.
+async function loadCurrentVersion(
+  presentation: {
+    id: string;
+    currentVersionId: string | null;
+  } | null,
+): Promise<{ id: string; status: string; slideJson: unknown } | null> {
+  if (!presentation) return null;
+  if (presentation.currentVersionId) {
+    return prisma.presentationVersion.findUnique({
+      where: { id: presentation.currentVersionId },
+      select: { id: true, status: true, slideJson: true },
+    });
+  }
+  return prisma.presentationVersion.findFirst({
+    where: { presentationId: presentation.id },
+    orderBy: { versionNumber: "desc" },
+    select: { id: true, status: true, slideJson: true },
+  });
+}
+
+// Per-slide state for the pill (lock + version count + cached
+// comments). Returns `[]` when there's no presentation row (legacy
+// projects that pre-date the versioning migration). Versions are
+// bounded (MAX_VERSIONS_PER_SLIDE = 5) so serialising them inline
+// adds at most ~250 B per slide to the page payload — well worth
+// eliminating the popover's first-open glitch. Newest-first so the
+// client doesn't re-sort.
+async function loadInitialSlideStates(
+  presentationId: string | null,
+): Promise<InitialSlideState[]> {
+  if (!presentationId) return [];
+  const states = await prisma.slideState.findMany({
+    where: { presentationId },
+    select: {
+      slideKey: true,
+      currentVersionNumber: true,
+      lockedAt: true,
+      cachedComments: true,
+      versions: {
+        orderBy: { versionNumber: "desc" },
+        select: {
+          versionNumber: true,
+          source: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+  return states.map((s) => ({
+    slideKey: s.slideKey,
+    currentVersionNumber: s.currentVersionNumber,
+    lockedAt: s.lockedAt ? s.lockedAt.toISOString() : null,
+    // `hasCachedComments` is a boolean (not the payload) — the
+    // payload itself only travels to the server when "Try again"
+    // fires (step 6).
+    hasCachedComments: s.cachedComments != null,
+    versions: s.versions.map((v) => ({
+      versionNumber: v.versionNumber,
+      source: v.source,
+      createdAt: v.createdAt.toISOString(),
+    })),
+  }));
 }
 
 // Reload-defense lookup for partial-slide regen. Returns the target
@@ -306,17 +417,12 @@ export async function loadProject(
   });
   if (!project) return null;
 
-  const currentVersionId = project.presentation?.currentVersionId ?? null;
-  const version = currentVersionId
-    ? await prisma.presentationVersion.findUnique({
-        where: { id: currentVersionId },
-        select: { id: true, status: true, slideJson: true },
-      })
-    : await prisma.presentationVersion.findFirst({
-        where: { presentationId: project.presentation?.id ?? "" },
-        orderBy: { versionNumber: "desc" },
-        select: { id: true, status: true, slideJson: true },
-      });
+  // Parse `aiPrompt` ONCE — every `readX(prompt)` reader below
+  // shares the result instead of re-parsing the same string three
+  // times.
+  const prompt = parseAiPrompt(project.aiPrompt);
+
+  const version = await loadCurrentVersion(project.presentation ?? null);
 
   let manifest: SlideManifest | null = null;
   if (version?.slideJson && version.status === "completed") {
@@ -324,66 +430,10 @@ export async function loadProject(
     if (parsed.success) manifest = parsed.data;
   }
 
-  let initialSlideCount = 6;
-  const hint = readSlideCountHint(project.aiPrompt);
-  if (hint) initialSlideCount = hint;
-  if (version?.slideJson && typeof version.slideJson === "object") {
-    const slides = (version.slideJson as { slides?: unknown[] }).slides;
-    if (Array.isArray(slides) && slides.length > 0) initialSlideCount = slides.length;
-  }
-  const initialSlideCountAuto = readSlideCountAuto(project.aiPrompt);
-  const initialSourceKind = readSourceKind(project.aiPrompt);
-
-  const initialFormat: SlideFormat = project.format === "9:16" ? "9:16" : "16:9";
-
-  // Partial-regen reload defense — look up the newest non-terminal
-  // Job for this project of type `deck.regenerate.partial` and
-  // rehydrate its target slide IDs + target version id. See
-  // `readActiveRegen` for the defensive narrowing rationale.
   const initialActiveRegen = await readActiveRegen(projectId);
-
-  // Per-slide state for the pill (lock + version count + cached
-  // comments). Only fetched when we have a presentation row;
-  // legacy projects without a presentation skip this entirely.
-  // `hasCachedComments` is a boolean (not the payload) — the
-  // payload itself only travels to the server when "Try again"
-  // fires (step 6).
-  let initialSlideStates: InitialSlideState[] = [];
-  if (project.presentation?.id) {
-    const states = await prisma.slideState.findMany({
-      where: { presentationId: project.presentation.id },
-      select: {
-        slideKey: true,
-        currentVersionNumber: true,
-        lockedAt: true,
-        cachedComments: true,
-        // Versions are bounded (MAX_VERSIONS_PER_SLIDE = 5) so
-        // serialising them inline adds at most ~250 B per slide
-        // to the page payload — well worth eliminating the
-        // first-open glitch. Newest-first so the popover
-        // doesn't need to re-sort client-side.
-        versions: {
-          orderBy: { versionNumber: "desc" },
-          select: {
-            versionNumber: true,
-            source: true,
-            createdAt: true,
-          },
-        },
-      },
-    });
-    initialSlideStates = states.map((s) => ({
-      slideKey: s.slideKey,
-      currentVersionNumber: s.currentVersionNumber,
-      lockedAt: s.lockedAt ? s.lockedAt.toISOString() : null,
-      hasCachedComments: s.cachedComments != null,
-      versions: s.versions.map((v) => ({
-        versionNumber: v.versionNumber,
-        source: v.source,
-        createdAt: v.createdAt.toISOString(),
-      })),
-    }));
-  }
+  const initialSlideStates = await loadInitialSlideStates(
+    project.presentation?.id ?? null,
+  );
 
   return {
     projectTitle: project.title,
@@ -396,11 +446,11 @@ export async function loadProject(
       project.presentation?.savedSlideVersions ?? null,
     ),
     initialManifest: manifest,
-    initialSlideCount,
-    initialSlideCountAuto,
-    initialSourceKind,
+    initialSlideCount: resolveInitialSlideCount(version?.slideJson, prompt),
+    initialSlideCountAuto: readSlideCountAuto(prompt),
+    initialSourceKind: readSourceKind(prompt),
     initialSlideStates,
-    initialFormat,
+    initialFormat: narrowFormat(project.format),
     initialActiveRegen,
   };
 }
