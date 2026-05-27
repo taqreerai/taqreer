@@ -109,6 +109,7 @@ model Project {
   folderId      String?
   templateId    String?
   brandKitId    String?
+  brandKit      BrandKit?     @relation(fields: [brandKitId], references: [id], onDelete: SetNull)
   aiPrompt      String?
   // Share state. Phase 15.1 (2026-05-23).
   //
@@ -413,9 +414,26 @@ model BrandKit {
   fonts     Json?
   aiTone    String?
   assetUrls Json?
+  // Marks this kit as the user's default — the four landing flows
+  // (/create, /enhance, /mimic, /datasheet) auto-hydrate from the
+  // default kit on first mount when no in-flight brand session
+  // exists. At most one kit per user can be true; the API enforces
+  // this in a transaction (set all others to false before flipping
+  // one to true). No partial unique index because Postgres can't
+  // express "unique among rows where isDefault = true" in a way
+  // Prisma supports cleanly; the transactional update path is the
+  // canonical mechanism.
+  isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Reverse relation for Project.brandKitId. Configured `SetNull` on
+  // delete so removing a brand kit doesn't cascade-destroy the
+  // user's projects — the project's brand fields already live in
+  // `aiPrompt`, the FK is just a pointer that becomes meaningless.
+  projects  Project[]
+
+  @@index([userId, isDefault])
 }
 
 model Folder {

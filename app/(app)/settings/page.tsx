@@ -298,7 +298,10 @@ export default function SettingsPage() {
           <h2 className="settings-card-title text-red-400">حذف الحساب</h2>
           <div className="settings-divider" />
           <p className="text-muted text-sm mb-5">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع بياناتك نهائياً</p>
-          <button onClick={() => setShowDeleteModal(true)} className="btn-danger cursor-pointer">
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="btn-pill-danger px-4 py-2 text-sm cursor-pointer"
+          >
             حذف حسابي
           </button>
         </div>
@@ -358,14 +361,14 @@ export default function SettingsPage() {
                 <button
                   onClick={() => setShowDeleteModal(false)}
                   disabled={deleteLoading}
-                  className="flex-1 btn-outline-dark px-4 py-3 cursor-pointer disabled:opacity-50"
+                  className="btn-pill flex-1 px-4 py-3 text-sm cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   onClick={handleDeleteAccount}
                   disabled={deleteLoading}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl px-4 py-3 cursor-pointer transition-colors font-medium disabled:opacity-50"
+                  className="btn-pill-danger flex-1 px-4 py-3 text-sm cursor-pointer"
                 >
                   {deleteLoading ? "جاري الحذف..." : "حذف حسابي نهائياً"}
                 </button>

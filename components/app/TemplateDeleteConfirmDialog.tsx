@@ -103,7 +103,7 @@ export function TemplateDeleteConfirmDialog({
                   type="button"
                   onClick={onCancel}
                   disabled={busy}
-                  className="btn-outline-dark flex-1 px-4 py-3 disabled:opacity-50"
+                  className="btn-pill flex-1 px-4 py-3 text-sm"
                 >
                   إلغاء
                 </button>
@@ -111,7 +111,7 @@ export function TemplateDeleteConfirmDialog({
                   type="button"
                   onClick={onConfirm}
                   disabled={busy}
-                  className="btn-danger flex-1 px-4 py-3 font-medium disabled:opacity-50"
+                  className="btn-pill-danger flex-1 px-4 py-3 text-sm"
                 >
                   {busy ? "جاري الحذف..." : "حذف نهائياً"}
                 </button>

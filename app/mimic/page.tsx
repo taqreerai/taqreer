@@ -66,6 +66,12 @@ import { uploadAsset } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 import type { SourceMeta } from "@/lib/types/source";
 import { detectStringLanguage } from "@/lib/extract/language-text";
+import {
+  readBrandFromSession,
+  fetchDefaultBrandKit,
+  CREATE_BRAND_KEY,
+  type HydratedBrand,
+} from "@/lib/create/hydrate-brand-from-session";
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -167,12 +173,23 @@ function resolveFontSlot(
       family: slot.googleFamily,
     };
   }
-  if (!slot.uploadFile || !uploadedStorageUrl) return null;
+  // Upload mode resolves with either a fresh upload's storageUrl OR
+  // a hydrated slot's `uploadStorageUrl` (from a saved brand kit).
+  // Without this fallback a hydrated kit's font slot drops on submit.
+  const storageUrl = uploadedStorageUrl ?? slot.uploadStorageUrl ?? null;
+  if (!storageUrl) return null;
+  const inferredName =
+    slot.uploadName ?? slot.uploadFile?.name ?? slot.uploadFamily ?? "Custom font";
+  const inferredFamily =
+    slot.uploadFamily ||
+    slot.uploadFile?.name.replace(/\.[^.]+$/, "") ||
+    slot.uploadName?.replace(/\.[^.]+$/, "") ||
+    "Custom";
   return {
-    name: slot.uploadName ?? slot.uploadFile.name,
+    name: inferredName,
     url: null,
-    storageUrl: uploadedStorageUrl,
-    family: slot.uploadFamily || slot.uploadFile.name.replace(/\.[^.]+$/, ""),
+    storageUrl,
+    family: inferredFamily,
   };
 }
 
@@ -225,6 +242,69 @@ export default function MimicContentPage() {
 
   // ─── Logo (always available — own logo can ride on mimicked brand)
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  // Pre-loaded logo from a brand kit (or default kit). See /create's
+  // companion state for the rationale — same pattern repeated here
+  // so the LogoUploadSlot can show the remote SVG without forcing
+  // the user to re-upload.
+  const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
+
+  // ─── Brand-kit hydration on first mount ────────────────────────
+  // Read taqreer:create:brand sessionStorage (written by the
+  // brand-kits "use" flow). If absent, fall back to the user's
+  // default brand kit. Either path applies palette + fonts + logo.
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      let hydrated = readBrandFromSession();
+      if (!hydrated) hydrated = await fetchDefaultBrandKit();
+      if (aborted || !hydrated) return;
+      if (hydrated.colors.length > 0) setColors(hydrated.colors);
+      if (
+        hydrated.headingFontSlot.googleFamily ||
+        hydrated.headingFontSlot.uploadStorageUrl
+      ) {
+        setHeadingFontSlot(hydrated.headingFontSlot);
+      }
+      if (
+        hydrated.bodyFontSlot.googleFamily ||
+        hydrated.bodyFontSlot.uploadStorageUrl
+      ) {
+        setBodyFontSlot(hydrated.bodyFontSlot);
+      }
+      if (hydrated.logo) {
+        setLoadedLogo(hydrated.logo);
+        // /mimic doesn't expose logo position/exclude pickers, so
+        // we don't restore those — the submit path uses defaults.
+      }
+      // The user picked their own brand kit on the way in — they
+      // explicitly want THEIR brand on the deck, not the mimicked
+      // file's brand. Flip the "mimic branding" toggle off so the
+      // hydrated palette + fonts + logo actually reach the brief.
+      // (When the toggle is on, /mimic submits `colors: []` and
+      // tells Claude to lift visuals from the design file.)
+      // Only flip when there's something concrete to apply —
+      // skip for a hydrate that returned all-empty fields (a kit
+      // with no palette, fonts, or logo would be a no-op anyway).
+      const hasBrandPayload =
+        hydrated.colors.length > 0 ||
+        !!hydrated.headingFontSlot.googleFamily ||
+        !!hydrated.headingFontSlot.uploadStorageUrl ||
+        !!hydrated.bodyFontSlot.googleFamily ||
+        !!hydrated.bodyFontSlot.uploadStorageUrl ||
+        !!hydrated.logo;
+      if (hasBrandPayload) {
+        setBrandingMimicked(false);
+      }
+      try {
+        window.sessionStorage.removeItem(CREATE_BRAND_KEY);
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -492,14 +572,20 @@ export default function MimicContentPage() {
         ? null
         : resolveFontSlot(bodyFontSlot, bodyUploaded?.storageUrl ?? null);
 
+      // Resolve the logo's storageUrl in priority order: fresh
+      // upload first, then the hydrated kit's path. Server re-signs
+      // either path, so no client trust is assumed.
+      const resolvedLogoStorageUrl =
+        logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
+
       const brand = {
         colors: brandingMimicked ? [] : colors,
         paletteMode: "manual" as const,
         paletteScreenshotUrl: null,
         fonts: { heading: headingFont, body: bodyFont },
-        logo: logoUploaded
+        logo: resolvedLogoStorageUrl
           ? {
-              storageUrl: logoUploaded.storageUrl,
+              storageUrl: resolvedLogoStorageUrl,
               position: "top-right" as const,
               exclude: [] as ("cover" | "closing")[],
             }
@@ -725,8 +811,15 @@ export default function MimicContentPage() {
               <div className="flex-1">
                 <LogoUploadSlot
                   file={logoFile}
-                  onSelect={setLogoFile}
-                  onRemove={() => setLogoFile(null)}
+                  previewUrl={loadedLogo?.displayUrl ?? null}
+                  onSelect={(f) => {
+                    setLogoFile(f);
+                    setLoadedLogo(null);
+                  }}
+                  onRemove={() => {
+                    setLogoFile(null);
+                    setLoadedLogo(null);
+                  }}
                   compact
                   fillHeight
                 />

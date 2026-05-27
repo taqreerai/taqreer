@@ -56,6 +56,11 @@ import { uploadAsset } from "@/lib/brand/upload";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import { readSource, clearSource } from "@/lib/types/source";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import {
+  readBrandFromSession,
+  fetchDefaultBrandKit,
+  type HydratedBrand,
+} from "@/lib/create/hydrate-brand-from-session";
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
@@ -141,17 +146,24 @@ function resolveFontSlot(
       family: slot.googleFamily,
     };
   }
-  // Upload mode. Need the bytes already in storage. If the user
-  // selected a file but the upload hasn't been kicked off yet
-  // (we only upload on Generate click), uploadedStorageUrl is null
-  // here from the caller — return null and let the brief skip
-  // the slot rather than send a half-resolved entry.
-  if (!slot.uploadFile || !uploadedStorageUrl) return null;
+  // Upload mode. Need the bytes already in storage. A fresh upload
+  // produces `uploadedStorageUrl`; a hydrated brand-kit slot
+  // already carries `slot.uploadStorageUrl` from sessionStorage.
+  // Take whichever is present so the kit's fonts survive submit.
+  const storageUrl = uploadedStorageUrl ?? slot.uploadStorageUrl ?? null;
+  if (!storageUrl) return null;
+  const inferredName =
+    slot.uploadName ?? slot.uploadFile?.name ?? slot.uploadFamily ?? "Custom font";
+  const inferredFamily =
+    slot.uploadFamily ||
+    slot.uploadFile?.name.replace(/\.[^.]+$/, "") ||
+    slot.uploadName?.replace(/\.[^.]+$/, "") ||
+    "Custom";
   return {
-    name: slot.uploadName ?? slot.uploadFile.name,
+    name: inferredName,
     url: null,
-    storageUrl: uploadedStorageUrl,
-    family: slot.uploadFamily || slot.uploadFile.name.replace(/\.[^.]+$/, ""),
+    storageUrl,
+    family: inferredFamily,
   };
 }
 
@@ -172,12 +184,69 @@ export default function EnhanceContentPage() {
   // Brand picks — optional. Empty = Claude reads the brand identity
   // from the PDF visually. Filled = user's pick wins on the brief.
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  // Pre-loaded logo from a brand kit / default kit. Same shape
+  // /create + /mimic use — see those files for the rationale.
+  const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
   const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
     emptyFontSlot(),
   );
   const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>(
     emptyFontSlot(),
   );
+
+  // ─── Brand-kit hydration on first mount ────────────────────────
+  // Read taqreer:create:brand sessionStorage (the brand-kits "use"
+  // flow + the post-extraction `seedFromExtraction` BOTH write
+  // here). Falls back to the user's default brand kit. We DO NOT
+  // clear sessionStorage afterward on /enhance — the submit path
+  // below reads the same key to pick up colors (no palette UI on
+  // this page; colors live only in sessionStorage). Clearing
+  // would orphan the extraction's seeded colors.
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      let hydrated = readBrandFromSession();
+      let fromDefault = false;
+      if (!hydrated) {
+        hydrated = await fetchDefaultBrandKit();
+        fromDefault = true;
+      }
+      if (aborted || !hydrated) return;
+      if (
+        hydrated.headingFontSlot.googleFamily ||
+        hydrated.headingFontSlot.uploadStorageUrl
+      ) {
+        setHeadingFontSlot(hydrated.headingFontSlot);
+      }
+      if (
+        hydrated.bodyFontSlot.googleFamily ||
+        hydrated.bodyFontSlot.uploadStorageUrl
+      ) {
+        setBodyFontSlot(hydrated.bodyFontSlot);
+      }
+      if (hydrated.logo) setLoadedLogo(hydrated.logo);
+      // If the default-kit fetch was the source, ALSO write its
+      // colors to sessionStorage so the existing submit path
+      // (which reads colors from sessionStorage) sees them.
+      if (fromDefault && hydrated.colors.length > 0) {
+        try {
+          const existing = window.sessionStorage.getItem(
+            "taqreer:create:brand",
+          );
+          const blob = existing ? JSON.parse(existing) : {};
+          window.sessionStorage.setItem(
+            "taqreer:create:brand",
+            JSON.stringify({ ...blob, colors: hydrated.colors }),
+          );
+        } catch {
+          /* best-effort */
+        }
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   // ─── File selection (source PDF/PPTX) ────────────────────────
   // setStage("extracting") + setError("") moved here from the
@@ -433,6 +502,12 @@ export default function EnhanceContentPage() {
       // Logo position defaults to top-end (top-left in LTR/EN, top-right
       // in RTL/AR); the cover/closing exclude list is empty so Claude
       // places it on every slide.
+      // Resolve the logo's storageUrl in priority order: fresh
+      // upload wins, then the hydrated kit's stored path. Same
+      // pattern as /create + /mimic.
+      const resolvedLogoStorageUrl =
+        logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
+
       const mergedBrand = {
         colors: seededBrand.colors ?? [],
         paletteMode: seededBrand.paletteMode ?? "manual",
@@ -441,9 +516,9 @@ export default function EnhanceContentPage() {
           heading: headingFont,
           body: bodyFont,
         },
-        logo: logoUploaded
+        logo: resolvedLogoStorageUrl
           ? {
-              storageUrl: logoUploaded.storageUrl,
+              storageUrl: resolvedLogoStorageUrl,
               position: "top-right" as const,
               exclude: [] as ("cover" | "closing")[],
             }
@@ -835,8 +910,15 @@ export default function EnhanceContentPage() {
               </span>
               <LogoUploadSlot
                 file={logoFile}
-                onSelect={setLogoFile}
-                onRemove={() => setLogoFile(null)}
+                previewUrl={loadedLogo?.displayUrl ?? null}
+                onSelect={(f) => {
+                  setLogoFile(f);
+                  setLoadedLogo(null);
+                }}
+                onRemove={() => {
+                  setLogoFile(null);
+                  setLoadedLogo(null);
+                }}
                 compact
               />
             </div>
