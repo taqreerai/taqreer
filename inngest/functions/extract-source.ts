@@ -88,10 +88,15 @@ function parseExtractRequestedEvent(data: unknown): ExtractRequestedEvent {
     !ev.jobId ||
     !ev.supabaseUserId ||
     !ev.fileBucketPath ||
+    !ev.fileName ||
     !ev.mime
   ) {
+    // Without `fileName` the function would later throw a TypeError
+    // inside `toPdfFileName(fileName)` — fail fast with a clear
+    // message + NonRetriableError so Inngest doesn't burn retries on
+    // a deterministically-broken payload. CR #1 (PR #40).
     throw new NonRetriableError(
-      "extract-source: malformed event payload (missing jobId / userId / path / mime)",
+      "extract-source: malformed event payload (missing jobId / userId / path / fileName / mime)",
     );
   }
   return ev as ExtractRequestedEvent;

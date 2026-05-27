@@ -654,8 +654,16 @@ export const deckRegeneratePartial = inngest.createFunction(
           // forget). We don't await here — that would serialise the
           // per-slide Claude calls. Instead we settle the entire
           // queue once the Promise.all resolves, BEFORE the final
-          // validating-stage heartbeat. Errors are swallowed inside
-          // heartbeat() so a failed write can't fail the regen.
+          // validating-stage heartbeat.
+          //
+          // ⚠️ Heartbeat failures are swallowed by the
+          // `Promise.allSettled(heartbeatWrites)` below — NOT inside
+          // `writeHeartbeat` itself (the helper has no try/catch as
+          // of the 2026-05-27 simplifier pass). If you add a FOURTH
+          // call site that awaits `heartbeat(...)` directly, wrap
+          // it in `.catch(() => {})` or push into a queue that's
+          // later drained by `Promise.allSettled` — otherwise a
+          // single failed Prisma write will fail the whole regen.
           heartbeatWrites.push(heartbeat(completedSlides, "designing"));
           return {
             slideId,

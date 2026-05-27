@@ -314,6 +314,13 @@ async function loadInitialSlideStates(
       cachedComments: true,
       versions: {
         orderBy: { versionNumber: "desc" },
+        // Cap defensively at MAX_VERSIONS_PER_SLIDE. The insert path
+        // already enforces this bound on writes via rotation, but a
+        // long-lived deck pre-dating that rotation could carry more
+        // rows in storage — explicitly capping the read keeps the
+        // SSR payload size in line with what the surrounding comment
+        // documents. CR #3 (PR #40).
+        take: 5,
         select: {
           versionNumber: true,
           source: true,

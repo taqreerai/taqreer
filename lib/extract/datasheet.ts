@@ -296,8 +296,20 @@ function buildTruncatedSection(
   charsRemaining: number,
   sheetsRemaining: number,
 ): string {
-  const fitted = sheetMarkdown.slice(0, Math.max(0, charsRemaining - 200));
-  return `${fitted}\n\n_[Payload truncated to fit Claude's context window. ${sheetsRemaining} more sheet(s) omitted.]_`;
+  // Compute the footer FIRST so the payload slice can account for
+  // its exact length. The prior `slice(charsRemaining - 200)` used a
+  // hard-coded 200-char padding for the footer template, but the
+  // footer's actual length is `~95 + len(sheetsRemaining)` — within
+  // budget for normal counts, but can drift past `charsRemaining`
+  // on tight overflow edges (CR #2, PR #40). Now: derive the
+  // footer, subtract its length from the budget, slice the payload
+  // to that. Tight-budget fallback returns a trimmed footer so the
+  // total still respects `charsRemaining`.
+  const footer = `\n\n_[Payload truncated to fit Claude's context window. ${sheetsRemaining} more sheet(s) omitted.]_`;
+  const budget = Math.max(0, charsRemaining);
+  if (budget <= footer.length) return footer.slice(0, budget);
+  const fitted = sheetMarkdown.slice(0, budget - footer.length);
+  return `${fitted}${footer}`;
 }
 
 /**
