@@ -112,12 +112,30 @@ export const SourceMimicSchema = z
     },
   );
 
+// ─── Datasheet (Flow 5 — /datasheet) ─────────────────────────────
+// Spreadsheet uploads (xlsx/xls/csv) are parsed server-side to a
+// Markdown table instead of going to Anthropic Files API as a PDF
+// render. Reason: Claude needs the actual numbers + column headers
+// to draw accurate charts; a PDF render of a spreadsheet loses
+// table fidelity (page breaks slice wide sheets, formatting noise
+// dilutes the signal). Markdown tables are token-efficient and
+// Claude reads them natively.
+//
+// `markdown` is the parsed-and-truncated payload from
+// `lib/extract/datasheet.ts`. For oversized sheets the parser
+// already trims rows + prepends a column-stats summary so the
+// payload stays inside Claude's context window — this field is
+// trusted to be "send-ready" at write time.
+//
+// `userContext` is the optional "ركّز على..." textarea from the
+// /datasheet content card. Lets the user steer Claude toward a
+// specific angle without forcing them to.
 export const SourceDataSchema = z.object({
   kind: z.literal("data"),
-  // Anthropic Files API file_id. The uploaded XLSX bytes never
-  // touch our storage — they go directly to Anthropic. We delete
-  // the file via Anthropic's API after deck-generate completes.
-  dataFileId: z.string().min(1),
+  markdown: z.string().min(1),
+  sheetCount: z.number().int().min(1),
+  totalRows: z.number().int().min(0),
+  truncated: z.boolean(),
   userContext: z.string().optional(),
 });
 
