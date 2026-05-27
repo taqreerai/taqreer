@@ -14,6 +14,47 @@ import {
 } from "@/lib/types/quality";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 
+// Defence-in-depth strip list for user-uploaded SVG markup. Compiled
+// once at module load instead of being rebuilt on every request. The
+// real XSS gate is DOMPurify at slide-render time (`lib/export/
+// sanitize.ts`); this layer hardens two things on top:
+//
+//   - Execution vectors that DOMPurify would also block, removed early
+//     so the prompt body that reaches Claude is clean.
+//   - PROMPT-INJECTION vectors (<title>, <desc>, <metadata>, HTML
+//     comments, PI, DOCTYPE, CDATA, <foreignObject>) — Claude reads
+//     the inlined markup as part of the prompt body, so free-text
+//     payloads inside would otherwise look like instructions.
+//
+// We DO NOT strip <text>. Wordmark logos use <text> for the actual
+// visible brand name; stripping it would silently break a large
+// class of legitimate logos and isn't a meaningful injection
+// surface beyond <title>.
+const SVG_STRIP_PATTERNS: readonly RegExp[] = [
+  // Execution vectors
+  /<script[\s\S]*?<\/script>/gi,
+  /\son\w+\s*=\s*"[^"]*"/gi,
+  /\son\w+\s*=\s*'[^']*'/gi,
+  /javascript:/gi,
+  // Prompt-injection vectors — elements that carry arbitrary
+  // free-text Claude would otherwise read as instructions.
+  /<title[\s\S]*?<\/title>/gi,
+  /<desc[\s\S]*?<\/desc>/gi,
+  /<metadata[\s\S]*?<\/metadata>/gi,
+  /<foreignObject[\s\S]*?<\/foreignObject>/gi,
+  // HTML / XML comments (can hide injected directives in plain text)
+  /<!--[\s\S]*?-->/g,
+  // XML processing instructions + DOCTYPE — both carry free-text
+  // payloads and the export pipeline doesn't need them once the SVG
+  // is inlined.
+  /<\?[\s\S]*?\?>/g,
+  /<!DOCTYPE[\s\S]*?>/gi,
+  // CDATA sections wrap arbitrary text including unescaped HTML —
+  // nothing legitimate in our logo pipeline relies on CDATA-wrapped
+  // content.
+  /<!\[CDATA\[[\s\S]*?\]\]>/g,
+];
+
 // Allowlist client-supplied font URLs against the schema's trusted-host
 // set (HTTPS + `fonts.googleapis.com` / `fonts.gstatic.com`). Without this,
 // `payload.brand.fonts.{heading,body}.url` would be persisted + forwarded
@@ -77,31 +118,12 @@ async function readLogoSvgMarkup(path: string): Promise<string | null> {
     if (error || !data) return null;
     const text = await data.text();
     if (!text.includes("<svg")) return null;
-    const sanitized = text
-      // Execution vectors
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
-      .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
-      .replace(/javascript:/gi, "")
-      // Prompt-injection vectors — strip elements that carry arbitrary
-      // free-text Claude would otherwise read as instructions.
-      .replace(/<title[\s\S]*?<\/title>/gi, "")
-      .replace(/<desc[\s\S]*?<\/desc>/gi, "")
-      .replace(/<metadata[\s\S]*?<\/metadata>/gi, "")
-      .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "")
-      // HTML / XML comments (can hide injected directives in plain text)
-      .replace(/<!--[\s\S]*?-->/g, "")
-      // XML processing instructions (e.g. `<?xml-stylesheet ...?>`) and
-      // DOCTYPE declarations — both carry free-text payloads and the
-      // export pipeline doesn't need them once the SVG is inlined.
-      .replace(/<\?[\s\S]*?\?>/g, "")
-      .replace(/<!DOCTYPE[\s\S]*?>/gi, "")
-      // CDATA sections wrap arbitrary text including unescaped HTML —
-      // a clean removal target since nothing legitimate in our logo
-      // pipeline relies on CDATA-wrapped content.
-      .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "");
-
-    return sanitized;
+    // Run every pattern from the module-scope strip list. See the
+    // `SVG_STRIP_PATTERNS` declaration for the per-pattern rationale.
+    return SVG_STRIP_PATTERNS.reduce(
+      (acc, re) => acc.replace(re, ""),
+      text,
+    );
   } catch {
     return null;
   }
@@ -215,367 +237,390 @@ function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
 
-export async function POST(request: Request) {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+// Brief font slot. `family` aliased to `name` upstream — we only
+// forward `name` to Claude. `url` is allowlisted via `safeFontUrl`;
+// `storageUrl` is the uploaded-file path passed through verbatim.
+// Centralised so heading + body sides share one narrowing path.
+type BriefFontSlot =
+  | {
+      name?: string | null;
+      storageUrl?: string | null;
+      url?: string | null;
+      family?: string | null;
     }
+  | null
+  | undefined;
+function readBriefFont(slot: BriefFontSlot): {
+  name: string;
+  storageUrl: string | null;
+  url: string | null;
+} {
+  return {
+    name: slot?.name?.trim() || "Arial",
+    storageUrl: slot?.storageUrl || null,
+    url: safeFontUrl(slot?.url),
+  };
+}
 
-    const payload = (await request.json()) as CreateProjectPayload;
-    const title = buildProjectTitle(payload);
-    const projectType = payload.type === "enhance" ? "enhance" : "create";
+// Allowlist + size-clamp the brand-kit logo shape. Mirrors the
+// `safeLogo` filter in `/api/brand-kits` POST — without this the
+// `saveBrandKit` branch would persist `payload.brand.logo` verbatim,
+// including any base64 `previewDataUrl` that bloats the row by
+// 50-500 KB and rides along on every subsequent GET. Caller has
+// already verified `storageUrl` ownership via
+// `isOwnedBrandAssetPath`.
+function buildSafeLogoForKit(
+  logo:
+    | {
+        name?: string;
+        storageUrl?: string;
+        position?: string;
+        exclude?: ("cover" | "closing")[];
+      }
+    | null
+    | undefined,
+): {
+  name: string | null;
+  storageUrl: string | null;
+  position: string | null;
+  exclude: ("cover" | "closing")[];
+} | null {
+  if (!logo) return null;
+  return {
+    name: typeof logo.name === "string" ? logo.name.slice(0, 200) : null,
+    storageUrl:
+      typeof logo.storageUrl === "string"
+        ? logo.storageUrl.slice(0, 2000)
+        : null,
+    position:
+      typeof logo.position === "string" ? logo.position.slice(0, 32) : null,
+    exclude: Array.isArray(logo.exclude)
+      ? logo.exclude.filter(
+          (v): v is "cover" | "closing" => v === "cover" || v === "closing",
+        )
+      : [],
+  };
+}
 
-    // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000 input tokens).
-    // Also fill in font fallbacks — if the user didn't upload custom fonts,
-    // Arial is the universal default (available on every OS, supports both
-    // Arabic and Latin scripts).
-    // Brand page passes `url` for Google fonts (CSS link), `storageUrl`
-    // for uploaded font files, plus `family` (alias of `name`). Carry
-    // ALL of them through — earlier this only forwarded name + storageUrl,
-    // so Google fonts arrived at Claude as `{ name: "Playfair Display",
-    // storageUrl: null }` with no URL, forcing Claude to guess the
-    // Google CSS endpoint (and frequently miss).
-    const incomingFonts = (payload.brand?.fonts ?? null) as
-      | {
-          heading?: {
-            name?: string | null;
-            storageUrl?: string | null;
-            url?: string | null;
-            family?: string | null;
-          } | null;
-          body?: {
-            name?: string | null;
-            storageUrl?: string | null;
-            url?: string | null;
-            family?: string | null;
-          } | null;
+// Assemble the brand block that travels in the brief to Claude.
+// Pulls the per-font shape from `readBriefFont` and the logo block
+// (when set) from the inline shape — Claude needs `name`,
+// `storageUrl`, `url` (signed when private), `svgMarkup` (inline
+// markup when SVG fetch succeeded), `position`, `exclude`. Returns
+// the same `payload.brand` value when no brand is set, so calls
+// site stays a no-op for legacy payloads.
+function buildClaudeBrand(
+  rawBrand: CreateProjectPayload["brand"],
+  headingFont: ReturnType<typeof readBriefFont>,
+  bodyFont: ReturnType<typeof readBriefFont>,
+  logoSignedUrl: string | null,
+  logoSvgMarkup: string | null,
+): CreateProjectPayload["brand"] {
+  if (!rawBrand) return rawBrand;
+  return {
+    ...rawBrand,
+    fonts: {
+      // Carry `url` (Google CSS link) and `storageUrl` (uploaded
+      // file) BOTH through to the brief. The system prompt's OUTPUT
+      // schema asks Claude to emit `fontHeading.url` / `fontBody.url`;
+      // without `url` here Claude was guessing.
+      heading: headingFont,
+      body: bodyFont,
+    },
+    logo: rawBrand.logo
+      ? {
+          name: rawBrand.logo.name,
+          storageUrl: rawBrand.logo.storageUrl,
+          // Signed HTTPS URL — fallback when svgMarkup is missing
+          // (caller renders an <img> instead of inline SVG).
+          url: logoSignedUrl ?? rawBrand.logo.storageUrl,
+          // Inline SVG markup. When present, Claude inlines this
+          // directly per slide and sets `fill="#hex"` on the <svg>
+          // root for per-slide contrast. When null (fetch failed
+          // or non-SVG), buildUserMessage emits the URL-only block
+          // and Claude falls back to <img src="...">.
+          svgMarkup: logoSvgMarkup,
+          position: rawBrand.logo.position ?? "top-right",
+          exclude: rawBrand.logo.exclude ?? [],
         }
-      | null;
-    const headingFontName = incomingFonts?.heading?.name?.trim() || "Arial";
-    const headingFontStorageUrl = incomingFonts?.heading?.storageUrl || null;
-    const headingFontUrl = safeFontUrl(incomingFonts?.heading?.url);
-    const bodyFontName = incomingFonts?.body?.name?.trim() || "Arial";
-    const bodyFontStorageUrl = incomingFonts?.body?.storageUrl || null;
-    const bodyFontUrl = safeFontUrl(incomingFonts?.body?.url);
-    const logoPath = payload.brand?.logo?.storageUrl ?? null;
+      : rawBrand.logo,
+  } as CreateProjectPayload["brand"];
+}
+
+// Three small "validate-or-fallback" resolvers. Each is tiny on its
+// own; co-locating keeps the POST handler reading as orchestration
+// instead of a sequence of inline narrowings.
+function resolveLanguage(raw: unknown): ContentLanguage {
+  return isContentLanguage(raw) ? raw : "ar";
+}
+function resolveQuality(raw: unknown): Quality {
+  return isQuality(raw) ? raw : DEFAULT_QUALITY;
+}
+function resolveSource(raw: unknown): SourceMeta | null {
+  if (raw == null) return null;
+  const parsed = SourceMetaSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+export async function POST(request: Request) {
+  // No outer try/catch wrapping the whole POST — Next.js's error
+  // boundary returns 500 on unhandled throws and the inner Inngest-
+  // failure block (further down) does have domain-specific work
+  // (mark rows failed) that stays. Per project convention: only
+  // wrap when there's something concrete to translate. (2026-05-27
+  // simplifier pass.)
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const payload = (await request.json()) as CreateProjectPayload;
+  const title = buildProjectTitle(payload);
+  const projectType = payload.type === "enhance" ? "enhance" : "create";
+
+  // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000
+  // input tokens). Falls back to Arial when no font configured — the
+  // universal default available on every OS, supports both Arabic and
+  // Latin scripts.
+  const incomingFonts = payload.brand?.fonts as
+    | { heading?: BriefFontSlot; body?: BriefFontSlot }
+    | undefined;
+  const headingFont = readBriefFont(incomingFonts?.heading);
+  const bodyFont = readBriefFont(incomingFonts?.body);
+  const logoPath = payload.brand?.logo?.storageUrl ?? null;
     // AUTHORIZE the logo path before we touch Supabase. The helpers below
     // both run with service-role credentials (signed URL → embedded in
     // brief; SVG markup → inlined into the Claude prompt and every
     // slide), so an unowned path would leak any object whose key the
     // attacker can guess. Match by the upload namespace prefix (the
     // upload route writes `${supabaseUserId}/create/...` paths).
-    if (logoPath && !isOwnedBrandAssetPath(logoPath, user.id)) {
-      return NextResponse.json(
-        { error: "Logo storageUrl is not owned by the current user" },
-        { status: 403 },
-      );
-    }
-    // Fetch sign URL + SVG markup in parallel — both hit Supabase Storage so
-    // pipelining saves a round trip. svgMarkup is the Option B addition:
-    // Claude inlines the SVG directly per slide and overrides `fill` for
-    // per-slide contrast instead of using <img src="..."> with a runtime
-    // fetch / recolour step. See `inngest/functions/deck-generate.ts` for
-    // how the markup is presented to Claude.
-    const [logoSignedUrl, logoSvgMarkup] = logoPath
-      ? await Promise.all([
-          signBrandAssetUrl(logoPath),
-          readLogoSvgMarkup(logoPath),
-        ])
-      : [null, null];
-    const claudeBrand = payload.brand
-      ? {
-          ...payload.brand,
-          fonts: {
-            // Carry `url` (Google CSS link) and `storageUrl` (uploaded
-            // file) BOTH through to the brief. The system prompt's
-            // OUTPUT schema asks Claude to emit `fontHeading.url` /
-            // `fontBody.url`; without `url` here Claude was guessing.
-            heading: {
-              name: headingFontName,
-              storageUrl: headingFontStorageUrl,
-              url: headingFontUrl,
-            },
-            body: {
-              name: bodyFontName,
-              storageUrl: bodyFontStorageUrl,
-              url: bodyFontUrl,
-            },
-          },
-          logo: payload.brand.logo
-            ? {
-                name: payload.brand.logo.name,
-                storageUrl: payload.brand.logo.storageUrl,
-                // Signed HTTPS URL — fallback when svgMarkup is missing
-                // (caller renders an <img> instead of inline SVG).
-                url: logoSignedUrl ?? payload.brand.logo.storageUrl,
-                // Inline SVG markup. When present, Claude inlines this
-                // directly per slide and sets `fill="#hex"` on the <svg>
-                // root for per-slide contrast. When null (fetch failed
-                // or non-SVG), buildUserMessage emits the URL-only block
-                // and Claude falls back to <img src="...">.
-                svgMarkup: logoSvgMarkup,
-                position: payload.brand.logo.position ?? "top-right",
-                exclude: payload.brand.logo.exclude ?? [],
-              }
-            : payload.brand.logo,
-        }
-      : payload.brand;
+  if (logoPath && !isOwnedBrandAssetPath(logoPath, user.id)) {
+    return NextResponse.json(
+      { error: "Logo storageUrl is not owned by the current user" },
+      { status: 403 },
+    );
+  }
+  // Fetch signed URL + SVG markup in parallel — both hit Supabase
+  // Storage so pipelining saves a round trip. `svgMarkup` enables
+  // the inline-per-slide path (Claude overrides `fill` for per-slide
+  // contrast); `signedUrl` is the fallback to <img src=...>.
+  const [logoSignedUrl, logoSvgMarkup] = logoPath
+    ? await Promise.all([
+        signBrandAssetUrl(logoPath),
+        readLogoSvgMarkup(logoPath),
+      ])
+    : [null, null];
+  const claudeBrand = buildClaudeBrand(
+    payload.brand,
+    headingFont,
+    bodyFont,
+    logoSignedUrl,
+    logoSvgMarkup,
+  );
 
-    // Auto slide-count when the user defers ("auto" mode on /create/summary):
-    // estimate from the input text (cover + content slides distributed at
-    // ~100 words/slide + closing). For file uploads we don't have the text
-    // in-hand, so fall back to null and let the prompt's "8–12 if unset"
-    // guidance stand. See estimateSlideCountFromText for the formula.
-    const resolvedSlideCount =
-      payload.slideCount ??
-      (payload.content?.type === "text"
-        ? estimateSlideCountFromText(payload.content.text)
-        : null);
+  // Auto slide-count when the user defers ("auto" mode on
+  // /create/summary): estimate from the input text. For file uploads
+  // we don't have the text in-hand, so fall back to null and let the
+  // prompt's "8–12 if unset" guidance stand.
+  const resolvedSlideCount =
+    payload.slideCount ??
+    (payload.content?.type === "text"
+      ? estimateSlideCountFromText(payload.content.text)
+      : null);
 
-    // User-picked language from /create/content (since 2026-05-20).
-    // Falls back to "ar" if the payload doesn't carry the field —
-    // covers legacy clients + bookmarklets that POST without
-    // language. Anything off-axis (string we don't recognise)
-    // also collapses to "ar"; we don't 400 here because the union
-    // is a UX detail, not a security boundary. Phase B/C will
-    // branch on this for prompt selection + BiDi gating.
-    const contentLanguage: ContentLanguage = isContentLanguage(payload.language)
-      ? payload.language
-      : "ar";
-    const contentDirection = directionForLanguage(contentLanguage);
+  const contentLanguage = resolveLanguage(payload.language);
+  const contentDirection = directionForLanguage(contentLanguage);
+  const validatedSource = resolveSource(payload.source);
+  const quality = resolveQuality(payload.quality);
 
-    // Phase 17.A — validate the SourceMeta blob if present. Invalid
-    // or missing → null, in which case deck-generate sees no source
-    // and falls back to the scratch flow (existing default). Schema
-    // failure is silently downgraded rather than 400'd because the
-    // upload-driven flows can still produce a usable deck without
-    // the source URLs (Claude would just generate from scratch using
-    // the brand fields the user filled on /create/brand) — failing
-    // the whole POST would lose user-typed brand state. Tolerant by
-    // design; the seed-from-extraction helper validates upstream too.
-    let validatedSource: SourceMeta | null = null;
-    if (payload.source != null) {
-      const parsed = SourceMetaSchema.safeParse(payload.source);
-      validatedSource = parsed.success ? parsed.data : null;
-    }
+  const brief = {
+    title,
+    language: contentLanguage,
+    direction: contentDirection,
+    content: payload.content,
+    brand: claudeBrand,
+    rules: payload.rules ?? null,
+    slideCount: resolvedSlideCount,
+    // Only include `source` when a valid SourceMeta was provided.
+    // deck-generate's readSource() also treats `kind: "scratch"`
+    // as null, so a future explicit-scratch payload remains a
+    // no-op on the multipart message shape.
+    ...(validatedSource ? { source: validatedSource } : {}),
+  };
+  const eventPayload = {
+    type: projectType,
+    enhance: projectType === "enhance" ? payload.enhance ?? null : null,
+    brief,
+    quality,
+  };
 
-    const brief = {
-      title,
-      language: contentLanguage,
-      direction: contentDirection,
-      content: payload.content,
-      brand: claudeBrand,
-      rules: payload.rules ?? null,
-      slideCount: resolvedSlideCount,
-      // Only include `source` when a valid SourceMeta was provided.
-      // deck-generate's readSource() also treats `kind: "scratch"`
-      // as null, so a future explicit-scratch payload remains a
-      // no-op on the multipart message shape.
-      ...(validatedSource ? { source: validatedSource } : {}),
-    };
-    // Quality preset — user-picked on /create/summary. Validated
-    // here so a malformed value can't drive the Claude call params.
-    // Defaults to "medium" (current backend baseline) on missing /
-    // unknown values, including from older queued jobs that
-    // predate this field.
-    const quality: Quality = isQuality(payload.quality)
-      ? payload.quality
-      : DEFAULT_QUALITY;
-    const eventPayload = {
-      type: projectType,
-      enhance: projectType === "enhance" ? payload.enhance ?? null : null,
-      brief,
-      quality,
-    };
+  // Allowlist-filtered logo blob for the optional brand-kit save.
+  // Lives outside the tx because it's pure data shaping — no DB
+  // dependency. See `buildSafeLogoForKit` for the per-field rules
+  // (size clamps, position/exclude allowlist). The `storageUrl`
+  // ownership check already ran above (`isOwnedBrandAssetPath`).
+  const safeLogoForKit = buildSafeLogoForKit(payload.brand?.logo);
 
-    const result = await prisma.$transaction(async (tx) => {
-      // Upsert is inside the tx so a tx failure rolls back the user row too;
-      // also lets concurrent first-time-user requests resolve cleanly via the
-      // unique constraint on supabaseUserId.
-      const dbUser = await tx.user.upsert({
-        where: { supabaseUserId: user.id },
-        update: {
-          email: user.email ?? `${user.id}@supabase.local`,
-          name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-          image: user.user_metadata?.avatar_url ?? null,
-        },
-        create: {
-          supabaseUserId: user.id,
-          email: user.email ?? `${user.id}@supabase.local`,
-          name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-          image: user.user_metadata?.avatar_url ?? null,
-          plan: "free",
-        },
-      });
-
-      // Mirror the `safeLogo` filter from /api/brand-kits POST — without
-      // it the saveBrandKit branch would persist `payload.brand.logo`
-      // verbatim, including any base64 `previewDataUrl` that bloats the
-      // row by 50–500 KB and rides along on every subsequent GET. The
-      // shape allowlist also clamps `position` / `exclude` to known
-      // values so unrelated fields the client may have stuffed into the
-      // logo object don't end up in storage. The `storageUrl` ownership
-      // check already ran above (`isOwnedBrandAssetPath`).
-      const safeLogoForKit = payload.brand?.logo
-        ? {
-            name:
-              typeof payload.brand.logo.name === "string"
-                ? payload.brand.logo.name.slice(0, 200)
-                : null,
-            storageUrl:
-              typeof payload.brand.logo.storageUrl === "string"
-                ? payload.brand.logo.storageUrl.slice(0, 2000)
-                : null,
-            position:
-              typeof payload.brand.logo.position === "string"
-                ? payload.brand.logo.position.slice(0, 32)
-                : null,
-            exclude: Array.isArray(payload.brand.logo.exclude)
-              ? payload.brand.logo.exclude.filter(
-                  (v): v is "cover" | "closing" =>
-                    v === "cover" || v === "closing",
-                )
-              : [],
-          }
-        : null;
-
-      const brandKit = payload.saveBrandKit
-        ? await tx.brandKit.create({
-            data: {
-              userId: dbUser.id,
-              name: `${title} — هوية بصرية`,
-              logo: safeLogoForKit?.storageUrl ?? null,
-              colors: toJson(payload.brand?.colors ?? null),
-              fonts: toJson(payload.brand?.fonts ?? null),
-              assetUrls: toJson({ logo: safeLogoForKit }),
-            },
-          })
-        : null;
-
-      const project = await tx.project.create({
-        data: {
-          userId: dbUser.id,
-          title,
-          type: projectType,
-          language: contentLanguage,
-          format: payload.brand?.slideSize ?? "16:9",
-          status: "queued",
-          brandKitId: brandKit?.id,
-          aiPrompt: JSON.stringify({
-            type: projectType,
-            content: payload.content,
-            brand: payload.brand,
-            enhance: payload.enhance,
-            rules: payload.rules,
-            slideCount: resolvedSlideCount,
-            // Persist only the SOURCE KIND — `loadProject`'s
-            // `readSourceKind` keys off `source.kind` to pick the
-            // generating-state status copy in DeckView ("جارٍ تحليل
-            // البيانات..." for datasheet, etc.). Storing the full
-            // SourceMeta here would bloat aiPrompt with the entire
-            // parsed-markdown / file_id payload — that data already
-            // lives in PresentationVersion.slideJson.brief.source,
-            // which is the canonical place deck-generate reads it
-            // from on retry. aiPrompt is the lightweight client-side
-            // hint surface, not the source of truth for the brief.
-            ...(validatedSource
-              ? { source: { kind: validatedSource.kind } }
-              : {}),
-          }),
-        },
-      });
-
-      // Presentation.language + .direction now reflect the user's
-      // pick (see `contentLanguage` above for the validation +
-      // fallback contract).
-      const presentation = await tx.presentation.create({
-        data: {
-          projectId: project.id,
-          title,
-          language: contentLanguage,
-          direction: contentDirection,
-        },
-      });
-
-      const version = await tx.presentationVersion.create({
-        data: {
-          presentationId: presentation.id,
-          versionNumber: 1,
-          status: "queued",
-          slideJson: toJson({
-            status: "queued",
-            slides: [],
-            brief: {
-              ...brief,
-              enhance: payload.enhance,
-            },
-          }),
-        },
-      });
-
-      await tx.presentation.update({
-        where: { id: presentation.id },
-        data: { currentVersionId: version.id },
-      });
-
-      const job = await tx.job.create({
-        data: {
-          projectId: project.id,
-          type: "deck.generate",
-          status: "queued",
-          inputJson: toJson(eventPayload),
-        },
-      });
-
-      return { project, presentation, version, job, dbUser };
+  const result = await prisma.$transaction(async (tx) => {
+    // Upsert is inside the tx so a tx failure rolls back the user row
+    // too; also lets concurrent first-time-user requests resolve cleanly
+    // via the unique constraint on supabaseUserId.
+    const dbUser = await tx.user.upsert({
+      where: { supabaseUserId: user.id },
+      update: {
+        email: user.email ?? `${user.id}@supabase.local`,
+        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+        image: user.user_metadata?.avatar_url ?? null,
+      },
+      create: {
+        supabaseUserId: user.id,
+        email: user.email ?? `${user.id}@supabase.local`,
+        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+        image: user.user_metadata?.avatar_url ?? null,
+        plan: "free",
+      },
     });
 
-    try {
-      await sendInngestEventWithRetry({
-        name: "deck.generate.requested",
-        data: {
-          projectId: result.project.id,
-          presentationId: result.presentation.id,
-          versionId: result.version.id,
-          jobId: result.job.id,
-          // Phase 16.D — actor for `deck.regen.{started,finished}`.
-          // On initial create no other collaborator can be on the
-          // project yet (it was just created); the broadcast still
-          // fires harmlessly and the field's there for downstream
-          // notification fan-out (Phase 16.E will reuse it).
-          actorPrismaUserId: result.dbUser.id,
-          ...eventPayload,
-        },
-      });
-    } catch (error) {
-      // Inngest unreachable after retries — mark the rows so the user sees a
-      // failed state instead of an indefinite "queued".
-      await prisma.project
-        .update({ where: { id: result.project.id }, data: { status: "failed" } })
-        .catch(() => undefined);
-      await prisma.presentationVersion
-        .update({ where: { id: result.version.id }, data: { status: "failed" } })
-        .catch(() => undefined);
-      await prisma.job
-        .update({
-          where: { id: result.job.id },
-          data: { status: "failed", outputJson: toJson({ error: String(error) }) },
+    const brandKit = payload.saveBrandKit
+      ? await tx.brandKit.create({
+          data: {
+            userId: dbUser.id,
+            name: `${title} — هوية بصرية`,
+            logo: safeLogoForKit?.storageUrl ?? null,
+            colors: toJson(payload.brand?.colors ?? null),
+            fonts: toJson(payload.brand?.fonts ?? null),
+            assetUrls: toJson({ logo: safeLogoForKit }),
+          },
         })
-        .catch(() => undefined);
-      throw error;
-    }
+      : null;
 
-    return NextResponse.json({
-      projectId: result.project.id,
-      presentationId: result.presentation.id,
+    const project = await tx.project.create({
+      data: {
+        userId: dbUser.id,
+        title,
+        type: projectType,
+        language: contentLanguage,
+        format: payload.brand?.slideSize ?? "16:9",
+        status: "queued",
+        brandKitId: brandKit?.id,
+        aiPrompt: JSON.stringify({
+          type: projectType,
+          content: payload.content,
+          brand: payload.brand,
+          enhance: payload.enhance,
+          rules: payload.rules,
+          slideCount: resolvedSlideCount,
+          // Persist only the SOURCE KIND — `loadProject`'s
+          // `readSourceKind` keys off `source.kind` to pick the
+          // generating-state status copy in DeckView ("جارٍ تحليل
+          // البيانات..." for datasheet, etc.). Storing the full
+          // SourceMeta here would bloat aiPrompt with the entire
+          // parsed-markdown / file_id payload — that data already
+          // lives in PresentationVersion.slideJson.brief.source,
+          // which is the canonical place deck-generate reads it
+          // from on retry. aiPrompt is the lightweight client-side
+          // hint surface, not the source of truth for the brief.
+          ...(validatedSource
+            ? { source: { kind: validatedSource.kind } }
+            : {}),
+        }),
+      },
+    });
+
+    // Presentation.language + .direction reflect the user's pick
+    // (see `contentLanguage` above for the validation + fallback
+    // contract).
+    const presentation = await tx.presentation.create({
+      data: {
+        projectId: project.id,
+        title,
+        language: contentLanguage,
+        direction: contentDirection,
+      },
+    });
+
+    const version = await tx.presentationVersion.create({
+      data: {
+        presentationId: presentation.id,
+        versionNumber: 1,
+        status: "queued",
+        slideJson: toJson({
+          status: "queued",
+          slides: [],
+          brief: {
+            ...brief,
+            enhance: payload.enhance,
+          },
+        }),
+      },
+    });
+
+    await tx.presentation.update({
+      where: { id: presentation.id },
+      data: { currentVersionId: version.id },
+    });
+
+    const job = await tx.job.create({
+      data: {
+        projectId: project.id,
+        type: "deck.generate",
+        status: "queued",
+        inputJson: toJson(eventPayload),
+      },
+    });
+
+    return { project, presentation, version, job, dbUser };
+  });
+
+  try {
+    await sendInngestEventWithRetry({
+      name: "deck.generate.requested",
+      data: {
+        projectId: result.project.id,
+        presentationId: result.presentation.id,
+        versionId: result.version.id,
+        jobId: result.job.id,
+        // Phase 16.D — actor for `deck.regen.{started,finished}`.
+        // On initial create no other collaborator can be on the
+        // project yet (it was just created); the broadcast still
+        // fires harmlessly and the field's there for downstream
+        // notification fan-out.
+        actorPrismaUserId: result.dbUser.id,
+        ...eventPayload,
+      },
     });
   } catch (error) {
-    console.error("Create project error:", error);
-    return NextResponse.json({ error: "Failed to create project" }, { status: 500 });
+    // Inngest unreachable after retries — mark the rows so the user
+    // sees a failed state instead of an indefinite "queued". All
+    // three writes can run in parallel; `Promise.allSettled` swallows
+    // per-row blips uniformly (any of these could fail if the row
+    // was deleted underneath us — best-effort cleanup either way).
+    await Promise.allSettled([
+      prisma.project.update({
+        where: { id: result.project.id },
+        data: { status: "failed" },
+      }),
+      prisma.presentationVersion.update({
+        where: { id: result.version.id },
+        data: { status: "failed" },
+      }),
+      prisma.job.update({
+        where: { id: result.job.id },
+        data: {
+          status: "failed",
+          outputJson: toJson({ error: String(error) }),
+        },
+      }),
+    ]);
+    throw error;
   }
+
+  return NextResponse.json({
+    projectId: result.project.id,
+    presentationId: result.presentation.id,
+  });
 }

@@ -1,14 +1,5 @@
-import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
-import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
-import { prisma } from "@/lib/prisma";
-import { resolveProjectAccess } from "@/lib/api/project-access";
-import { isQuality, type Quality } from "@/lib/types/quality";
-
-function toJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
-}
-
+// POST /api/projects/[id]/regenerate-partial
+//
 // Apply the user's draft comments by:
 //   1. promoting them to status="applied" (so they can't be edited / re-fired)
 //   2. allocating a new PresentationVersion (v_n+1) as a copy of the current
@@ -18,6 +9,128 @@ function toJson(value: unknown): Prisma.InputJsonValue {
 // Body: empty — the server reads draft comments from the DB. Stateless apply
 // (passing comments in the body) is intentionally not supported in v1 so the
 // only source of truth is the DB.
+
+import { NextResponse } from "next/server";
+import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
+import { prisma } from "@/lib/prisma";
+import { resolveProjectAccess } from "@/lib/api/project-access";
+import {
+  allocateNextVersionInTx,
+  getOriginalQuality,
+  retryOnP2002,
+  rollbackVersionAndJob,
+  toJson,
+  type RegenTx,
+} from "@/lib/api/regen-helpers";
+
+// Promoted comment shape returned from the snapshot tx — what the
+// Inngest dispatch ships to the worker.
+type Promoted = {
+  id: string;
+  slideId: string;
+  content: string;
+  boundsJson: unknown;
+};
+// Discriminated union for the snapshot-tx result. `empty` covers two
+// legitimate "no work to do" paths (no drafts at request time, or a
+// concurrent apply won the race and promoted every draft we saw);
+// caller surfaces both as a 400 with the same message.
+type TxResult =
+  | { kind: "empty" }
+  | {
+      kind: "ok";
+      promoted: Promoted[];
+      newVersion: { id: string; versionNumber: number };
+    };
+
+/**
+ * Atomic snapshot + promote: read drafts, allocate v_n+1, promote
+ * the read drafts to "applied" inside the same transaction. The
+ * returned `promoted` rows are the exact set we dispatch to Inngest
+ * — no drift window between the read snapshot and the emitted
+ * payload (CR #25 #3 / #4). Wrapped in `retryOnP2002` for the
+ * (presentationId, versionNumber) unique-index race; that's a
+ * transient retry-able failure, not a logical conflict.
+ */
+async function runSnapshotAndPromoteTx(args: {
+  presentationId: string;
+  sourceVersionId: string;
+}): Promise<TxResult> {
+  const { presentationId, sourceVersionId } = args;
+  return retryOnP2002(() =>
+    prisma.$transaction(async (tx: RegenTx) => {
+      const drafts = await tx.comment.findMany({
+        where: {
+          presentationId,
+          versionId: sourceVersionId,
+          status: "draft",
+        },
+        select: { id: true, slideId: true, content: true, boundsJson: true },
+      });
+      if (drafts.length === 0) return { kind: "empty" as const };
+
+      const newVersion = await allocateNextVersionInTx(tx, presentationId);
+
+      // Promote the drafts. The `status: "draft"` guard means concurrent
+      // deletions / concurrent applies show up as `count < drafts.length`.
+      // If `count === 0` another request fully won the race — every draft
+      // we saw was already promoted by another in-flight apply — so we
+      // bail to avoid dispatching a duplicate regenerate event for the
+      // same rows.
+      const updated = await tx.comment.updateMany({
+        where: {
+          id: { in: drafts.map((c) => c.id) },
+          status: "draft",
+        },
+        data: { status: "applied" },
+      });
+      if (updated.count === 0) return { kind: "empty" as const };
+
+      // Re-read the promoted rows so the dispatched snapshot is exactly
+      // what's now in `applied` state — current content, no rows that
+      // vanished between findMany and updateMany.
+      const promoted = await tx.comment.findMany({
+        where: {
+          id: { in: drafts.map((c) => c.id) },
+          status: "applied",
+        },
+        select: { id: true, slideId: true, content: true, boundsJson: true },
+      });
+      if (promoted.length === 0) return { kind: "empty" as const };
+      return { kind: "ok" as const, promoted, newVersion };
+    }),
+  );
+}
+
+/**
+ * Dedupe the slide IDs touched by the promoted comments. A single
+ * slide can carry multiple comments; the partial-regen function
+ * regenerates each slide once.
+ */
+function uniqueSlideIds(promoted: ReadonlyArray<Promoted>): string[] {
+  return Array.from(new Set(promoted.map((c) => c.slideId)));
+}
+
+/**
+ * Local rollback shim — calls the shared `rollbackVersionAndJob` AND
+ * un-promotes the comment rows back to "draft" so the user can retry
+ * without losing their drafts. Best-effort; per-row blips don't
+ * propagate.
+ */
+async function rollbackPartialRegen(args: {
+  versionId: string;
+  jobId: string | null;
+  promotedIds: string[];
+}): Promise<void> {
+  await Promise.allSettled([
+    rollbackVersionAndJob({ versionId: args.versionId, jobId: args.jobId }),
+    prisma.comment.updateMany({
+      where: { id: { in: args.promotedIds }, status: "applied" },
+      data: { status: "draft" },
+    }),
+  ]);
+}
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -30,106 +143,32 @@ export async function POST(
   }
   const project = await prisma.project.findUnique({
     where: { id },
-    include: {
-      presentation: { include: { versions: { orderBy: { versionNumber: "desc" }, take: 1 } } },
+    select: {
+      id: true,
+      presentation: { select: { id: true, currentVersionId: true } },
     },
   });
-  if (!project || !project.presentation || !project.presentation.currentVersionId) {
+  if (
+    !project ||
+    !project.presentation ||
+    !project.presentation.currentVersionId
+  ) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
   const presentation = project.presentation;
+  // TS can't carry the `if (!presentation.currentVersionId)` narrow
+  // through the `const presentation = ...` aliasing — guard above
+  // already guarantees non-null. Same pattern as the sibling regen
+  // route.
   const sourceVersionId = presentation.currentVersionId!;
 
-  // Atomic snapshot + promote: read drafts, allocate v_n+1, and promote
-  // the read drafts to "applied" INSIDE the same transaction. The
-  // returned `promoted` rows are the exact set we dispatch to Inngest —
-  // no drift window between the read snapshot and the emitted payload
-  // (CR #25 #3 / #4). Retry the whole tx on the (presentationId,
-  // versionNumber) unique-index race; that's a transient retry-able
-  // failure, not a logical conflict.
-  type Promoted = {
-    id: string;
-    slideId: string;
-    content: string;
-    boundsJson: unknown;
-  };
-  type TxResult =
-    | { kind: "empty" }
-    | {
-        kind: "ok";
-        promoted: Promoted[];
-        newVersion: { id: string; versionNumber: number };
-      };
-
-  const MAX_ATTEMPTS = 3;
-  let result: TxResult | null = null;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    try {
-      result = await prisma.$transaction(async (tx) => {
-        const drafts = await tx.comment.findMany({
-          where: {
-            presentationId: presentation.id,
-            versionId: sourceVersionId,
-            status: "draft",
-          },
-          select: { id: true, slideId: true, content: true, boundsJson: true },
-        });
-        if (drafts.length === 0) return { kind: "empty" as const };
-
-        const latest = await tx.presentationVersion.findFirst({
-          where: { presentationId: presentation.id },
-          orderBy: { versionNumber: "desc" },
-          select: { versionNumber: true, slideJson: true },
-        });
-        const nextNumber = (latest?.versionNumber ?? 0) + 1;
-        const newVersion = await tx.presentationVersion.create({
-          data: {
-            presentationId: presentation.id,
-            versionNumber: nextNumber,
-            status: "queued",
-            // Seed the new version with the source manifest. Partial regen
-            // splices the regenerated slides INTO this copy; everything else
-            // stays as it was. NOTE: we deliberately do NOT change
-            // project.status here — partial regen keeps the deck visible
-            // while a subset of slides is re-rendered. DeckView decides
-            // per-slide overlays from the client-side `applyingState`.
-            slideJson: toJson(latest?.slideJson ?? { status: "queued", slides: [] }),
-          },
-        });
-        // Promote the drafts. The `status: "draft"` guard means concurrent
-        // deletions / concurrent applies show up as `count < drafts.length`.
-        // If `count === 0` another request fully won the race — every draft
-        // we saw was already promoted by another in-flight apply — so we
-        // bail to avoid dispatching a duplicate regenerate event for the
-        // same rows.
-        const updated = await tx.comment.updateMany({
-          where: {
-            id: { in: drafts.map((c) => c.id) },
-            status: "draft",
-          },
-          data: { status: "applied" },
-        });
-        if (updated.count === 0) return { kind: "empty" as const };
-        // Re-read the promoted rows so the dispatched snapshot is exactly
-        // what's now in `applied` state — current content, no rows that
-        // vanished between findMany and updateMany.
-        const promoted = await tx.comment.findMany({
-          where: {
-            id: { in: drafts.map((c) => c.id) },
-            status: "applied",
-          },
-          select: { id: true, slideId: true, content: true, boundsJson: true },
-        });
-        if (promoted.length === 0) return { kind: "empty" as const };
-        return { kind: "ok" as const, promoted, newVersion };
-      });
-      break;
-    } catch (error) {
-      const code = (error as { code?: string })?.code;
-      if (code !== "P2002" || attempt === MAX_ATTEMPTS - 1) throw error;
-    }
-  }
-  if (!result) {
+  let result: TxResult;
+  try {
+    result = await runSnapshotAndPromoteTx({
+      presentationId: presentation.id,
+      sourceVersionId,
+    });
+  } catch {
     return NextResponse.json(
       { error: "Failed to allocate a new presentation version" },
       { status: 500 },
@@ -143,38 +182,22 @@ export async function POST(
   }
 
   const { promoted, newVersion } = result;
-  const targetSlideIds = Array.from(new Set(promoted.map((c) => c.slideId)));
+  const targetSlideIds = uniqueSlideIds(promoted);
+  const originalQuality = await getOriginalQuality(project.id);
 
-  // Look up the original deck's quality preset from the most recent
-  // successful generation job for this project. Forwarded to the
-  // partial-regen function so the single-slide redesign uses the SAME
-  // model + thinking the user picked when generating — without it
-  // every regen burned Opus tier regardless of the user's fast/medium
-  // choice. Falls through to `medium` (paramsForQuality default) when
-  // no successful job exists or the field is missing on older jobs.
-  const lastJob = await prisma.job.findFirst({
-    where: { projectId: project.id, type: "deck.generate", status: "succeeded" },
-    orderBy: { createdAt: "desc" },
-    select: { inputJson: true },
-  });
-  const lastInput = (lastJob?.inputJson ?? null) as { quality?: unknown } | null;
-  const originalQuality: Quality | null = isQuality(lastInput?.quality)
-    ? lastInput.quality
-    : null;
-
-  // Job row to record token-usage telemetry for the regen + Inngest
-  // event dispatch. Both wrapped in one try/catch so a failure at
-  // EITHER step rolls back the version + comment promotions that the
-  // tx above already committed. Previously the Job.create call sat
-  // OUTSIDE the catch — when it threw (e.g. Prisma XOR rejection on a
-  // newly-added scalar), the 500 left the comment stranded in
-  // "applied" and version 2 stranded in "queued" with no Inngest run.
+  // Job row + Inngest dispatch. A failure at either step rolls back
+  // the version, the comment promotions, AND (if it got created) the
+  // telemetry Job row — so the user can retry without losing drafts.
+  // Previously Job.create sat OUTSIDE the catch — when it threw
+  // (e.g. Prisma XOR rejection on a newly-added scalar), the 500
+  // left the comment stranded in "applied" and version 2 stranded
+  // in "queued" with no Inngest run.
   //
-  // Use `project: { connect }` (strict relation form) rather than raw
-  // `projectId` (unchecked FK form). Mixing the FK shorthand with the
-  // newly-added scalar columns (`quality`, etc.) flips Prisma's XOR
-  // resolution to JobCreateInput-strict at runtime and rejects
-  // `projectId` as "unknown argument". Connect form is unambiguous.
+  // `project: { connect }` is the strict relation form. Raw
+  // `projectId` (unchecked FK form) mixed with the scalar columns
+  // (`quality`, etc.) flips Prisma's XOR resolution to
+  // JobCreateInput-strict at runtime and rejects `projectId` as
+  // "unknown argument".
   let regenJobId: string | null = null;
   try {
     const regenJob = await prisma.job.create({
@@ -214,30 +237,18 @@ export async function POST(
       },
     });
   } catch (error) {
-    // Reverse the version allocation + applied transition + telemetry
-    // job so the user can retry without losing their drafts.
-    await prisma.presentationVersion
-      .update({ where: { id: newVersion.id }, data: { status: "failed" } })
-      .catch(() => undefined);
-    await prisma.comment
-      .updateMany({
-        where: {
-          id: { in: promoted.map((c) => c.id) },
-          status: "applied",
-        },
-        data: { status: "draft" },
-      })
-      .catch(() => undefined);
-    // Only attempt to roll the job to "failed" when it actually got
-    // created. If Job.create itself was the failure point, there's
-    // no row to update.
-    if (regenJobId) {
-      await prisma.job
-        .update({ where: { id: regenJobId }, data: { status: "failed" } })
-        .catch(() => undefined);
-    }
+    await rollbackPartialRegen({
+      versionId: newVersion.id,
+      jobId: regenJobId,
+      promotedIds: promoted.map((c) => c.id),
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to dispatch regenerate" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to dispatch regenerate",
+      },
       { status: 500 },
     );
   }

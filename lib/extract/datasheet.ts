@@ -76,20 +76,7 @@ export function parseDatasheet(
 ): DatasheetParseResult {
   const { buffer, mime, fileName } = input;
 
-  // XLSX.read auto-detects the format from the buffer magic bytes for
-  // xlsx (zip) and xls (CFB), and parses CSV as plain text when type
-  // is "string". We branch on mime/extension to pick the right call
-  // signature — CSVs need string input + raw:false to avoid the
-  // package eagerly inferring numeric types on every cell.
-  const lower = fileName.toLowerCase();
-  const isCsv =
-    mime === "text/csv" ||
-    mime === "text/plain" ||
-    lower.endsWith(".csv");
-
-  const workbook = isCsv
-    ? XLSX.read(buffer.toString("utf-8"), { type: "string", raw: false })
-    : XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const workbook = readWorkbook(buffer, mime, fileName);
 
   if (!workbook.SheetNames.length) {
     throw new Error("Spreadsheet contained no sheets.");
@@ -167,17 +154,17 @@ export function parseDatasheet(
     });
 
     // Global char cap — if appending this sheet would blow the budget,
-    // append what fits + a "[truncated]" stub, flip the overflow
-    // flag, and let the loop continue (so subsequent sheets still
-    // contribute to `totalRows`). The renderer + sections list no
-    // longer grow after this point because `budgetOverflowed` short-
-    // circuits the next iteration.
+    // append what fits + a "[truncated]" stub, flip the overflow flag,
+    // and let the loop continue (so subsequent sheets still contribute
+    // to `totalRows`). The renderer + sections list no longer grow
+    // after this point because `budgetOverflowed` short-circuits the
+    // next iteration. See `buildTruncatedSection` for the slice +
+    // footer composition.
     if (sheetMarkdown.length > charsRemaining) {
-      const fitted = sheetMarkdown.slice(0, Math.max(0, charsRemaining - 200));
+      const sheetsRemaining =
+        workbook.SheetNames.length - sections.length - 1;
       sections.push(
-        `${fitted}\n\n_[Payload truncated to fit Claude's context window. ${
-          workbook.SheetNames.length - sections.length - 1
-        } more sheet(s) omitted.]_`,
+        buildTruncatedSection(sheetMarkdown, charsRemaining, sheetsRemaining),
       );
       truncated = true;
       budgetOverflowed = true;
@@ -196,7 +183,15 @@ export function parseDatasheet(
 }
 
 // ─── Sheet section renderer ──────────────────────────────────────
-function renderSheetSection(args: {
+function renderSheetSection({
+  sheetName,
+  headerRow,
+  rows,
+  columnStats,
+  truncated,
+  totalRowCount,
+  includeStatsHeader,
+}: {
   sheetName: string;
   headerRow: unknown[];
   rows: unknown[][];
@@ -205,16 +200,6 @@ function renderSheetSection(args: {
   totalRowCount: number;
   includeStatsHeader: boolean;
 }): string {
-  const {
-    sheetName,
-    headerRow,
-    rows,
-    columnStats,
-    truncated,
-    totalRowCount,
-    includeStatsHeader,
-  } = args;
-
   const parts: string[] = [`## Sheet: "${sheetName}"`];
 
   if (includeStatsHeader) {
@@ -258,20 +243,74 @@ function renderStatsTable(stats: ColumnStats[]): string {
   lines.push("| Column | Type | Min | Max | Mean | Sample values |");
   lines.push("| --- | --- | --- | --- | --- | --- |");
   for (const s of stats) {
-    const min = s.numericMin === null ? "—" : formatNumber(s.numericMin);
-    const max = s.numericMax === null ? "—" : formatNumber(s.numericMax);
-    const mean = s.numericMean === null ? "—" : formatNumber(s.numericMean);
     const sample = s.distinctSample.length
       ? s.distinctSample.map((v) => `\`${v}\``).join(", ")
       : "—";
     lines.push(
-      `| ${escapeCell(s.header)} | ${s.kind} | ${min} | ${max} | ${mean} | ${sample} |`,
+      `| ${escapeCell(s.header)} | ${s.kind} | ${fmtNumOrDash(s.numericMin)} | ${fmtNumOrDash(s.numericMax)} | ${fmtNumOrDash(s.numericMean)} | ${sample} |`,
     );
   }
   return lines.join("\n");
 }
 
+// Tiny helper for the three "numeric-or-em-dash" cells in the stats
+// table row above. Trips the repetition that previously read as
+// three near-identical guards.
+function fmtNumOrDash(n: number | null): string {
+  return n === null ? "—" : formatNumber(n);
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────
+
+/**
+ * Open the workbook from the request buffer. XLSX.read auto-detects
+ * xlsx (zip) and xls (CFB) from the magic bytes when `type: "buffer"`,
+ * but CSVs need string input + `raw: false` to stop SheetJS eagerly
+ * inferring numeric types on every cell. Branch on mime/extension —
+ * the route's allowlist already ensures one of these three formats.
+ */
+function readWorkbook(
+  buffer: Buffer,
+  mime: string,
+  fileName: string,
+): XLSX.WorkBook {
+  const isCsv =
+    mime === "text/csv" ||
+    mime === "text/plain" ||
+    fileName.toLowerCase().endsWith(".csv");
+  return isCsv
+    ? XLSX.read(buffer.toString("utf-8"), { type: "string", raw: false })
+    : XLSX.read(buffer, { type: "buffer", cellDates: true });
+}
+
+/**
+ * Build the final-section payload when a sheet's markdown overflows
+ * the workbook-wide character cap. Slices the sheet to fit the
+ * remaining budget (minus 200 chars headroom for the footer) and
+ * appends a "[N more sheet(s) omitted]" stub so Claude knows the
+ * payload was cut. Pure transform — caller manages the
+ * `budgetOverflowed` + `truncated` flags around it.
+ */
+function buildTruncatedSection(
+  sheetMarkdown: string,
+  charsRemaining: number,
+  sheetsRemaining: number,
+): string {
+  // Compute the footer FIRST so the payload slice can account for
+  // its exact length. The prior `slice(charsRemaining - 200)` used a
+  // hard-coded 200-char padding for the footer template, but the
+  // footer's actual length is `~95 + len(sheetsRemaining)` — within
+  // budget for normal counts, but can drift past `charsRemaining`
+  // on tight overflow edges (CR #2, PR #40). Now: derive the
+  // footer, subtract its length from the budget, slice the payload
+  // to that. Tight-budget fallback returns a trimmed footer so the
+  // total still respects `charsRemaining`.
+  const footer = `\n\n_[Payload truncated to fit Claude's context window. ${sheetsRemaining} more sheet(s) omitted.]_`;
+  const budget = Math.max(0, charsRemaining);
+  if (budget <= footer.length) return footer.slice(0, budget);
+  const fitted = sheetMarkdown.slice(0, budget - footer.length);
+  return `${fitted}${footer}`;
+}
 
 /**
  * Classify a column as empty / numeric / string / mixed from the

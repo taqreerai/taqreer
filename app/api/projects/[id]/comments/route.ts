@@ -32,16 +32,90 @@ const CreateCommentSchema = z.object({
   boundsJson: BoundsSchema,
 });
 
+// PII guard — `author` joins on Comment.findMany / .create. Email is
+// OMITTED on purpose: anyone with `comment` access hits this route,
+// and exposing the email turns the panel into a PII directory.
+// Name + image is all the UI renders. Single source of truth so the
+// GET + POST shapes can't drift.
+const COMMENT_AUTHOR_SELECT = {
+  id: true,
+  name: true,
+  image: true,
+} as const;
+const COMMENT_INCLUDE = {
+  author: { select: COMMENT_AUTHOR_SELECT },
+} as const;
+
+// Cap the number of ids accepted via `?ids=`. Prisma's `IN (...)`
+// clause can blow up with megabyte-scale lists; the realtime fan-out
+// path that uses this fetches at most one id per `comment.created`
+// broadcast anyway.
+const MAX_IDS_PER_QUERY = 50;
+const ID_PATTERN = /^[a-zA-Z0-9_]+$/;
+
+/**
+ * Parse the `?ids=` query param into a sanitised list, or `null`
+ * when missing / all-rejected (caller falls through to the full
+ * draft list). Each id is: trimmed, length-clamped (Prisma cuids
+ * are alphanumeric + `_`, capped at 64 chars), pattern-validated.
+ * The whole list is then capped at `MAX_IDS_PER_QUERY`.
+ */
+function parseIdsParam(raw: string | null): string[] | null {
+  if (!raw) return null;
+  const cleaned = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s.length <= 64 && ID_PATTERN.test(s))
+    .slice(0, MAX_IDS_PER_QUERY);
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
+ * Bounded fan-out for the bell notification on comment-create. Awaited
+ * (not fire-and-forget) because Next.js API routes can have the
+ * runtime frozen the moment `NextResponse` is returned — a detached
+ * `.catch()` promise can be killed mid-Prisma-write and drop the
+ * notification row. CR PR #33 flagged this 2026-05-24.
+ *
+ * `fanOutNotification` isolates per-recipient failures internally so
+ * awaiting CAN'T fail the surrounding comment-create. The timeout
+ * cap is a belt: a slow DB write shouldn't punish the POST response
+ * time; fan-out continues in the background and the next
+ * visibility-regain refetch backfills (worst case).
+ */
+async function runBoundedFanOut(
+  args: Parameters<typeof fanOutNotification>[0],
+  projectId: string,
+  timeoutMs = 2_000,
+): Promise<void> {
+  const fanOut = fanOutNotification(args).catch((err) => {
+    console.warn("[notifications] comment.created fanOut failed", {
+      projectId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+  const timer = new Promise<void>((resolve) =>
+    setTimeout(resolve, timeoutMs),
+  );
+  await Promise.race([fanOut, timer]);
+}
+
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
 
 // Resolve authed user + role + presentation/version in one shot. Phase
 // 15.A: gated by the minimum required role (comment for create / read /
-// delete in this file; "view" callers don't see comments at all).
-// The `authorPrismaUserId` field is needed by POST to stamp the
-// new comment with its author (Phase 15.D author display).
-async function resolveContext(projectId: string, requiredRole: ProjectRole) {
+// delete in this file; "view" callers don't see comments at all). The
+// `withAuthor` flag controls whether we also translate the supabase
+// userId into the prisma User row id — only POST needs that (to stamp
+// the new comment's author), so GET skips the extra `prisma.user
+// .findUnique` round-trip on every realtime `?ids=` refetch.
+async function resolveContext(
+  projectId: string,
+  requiredRole: ProjectRole,
+  opts: { withAuthor: boolean } = { withAuthor: false },
+) {
   const access = await resolveProjectAccess(projectId, requiredRole);
   if ("error" in access) {
     return { error: access.error, status: access.status };
@@ -53,11 +127,11 @@ async function resolveContext(projectId: string, requiredRole: ProjectRole) {
   if (!presentation || !presentation.currentVersionId) {
     return { error: "Project not found" as const, status: 404 as const };
   }
-  // Translate the supabase userId on `access.user.id` into the
-  // prisma User row's id. The two are distinct: supabaseUserId is
-  // the auth.users foreign key; we want the application User row.
   let authorPrismaUserId: string | null = null;
-  if (access.user.id) {
+  if (opts.withAuthor && access.user.id) {
+    // Translate the supabase userId on `access.user.id` into the
+    // prisma User row's id. The two are distinct: supabaseUserId is
+    // the auth.users foreign key; we want the application User row.
     const prismaUser = await prisma.user.findUnique({
       where: { supabaseUserId: access.user.id },
       select: { id: true },
@@ -84,48 +158,29 @@ export async function GET(
 
   // Optional ?versionId=… override — defaults to current version.
   // Optional ?ids=foo,bar dereferences specific comment ids — used by
-  // the Phase 16.C realtime channel: when a `comment.created` broadcast
-  // arrives, the receiving client GETs only the new id(s) instead of
-  // re-fetching the full draft list. IDs are filtered through a
-  // length + character whitelist so we don't pass arbitrary user
-  // input straight into prisma's `IN (…)`. Empty `ids=` (missing or
-  // all-rejected) falls through to the normal full-list path so the
-  // page-load seed still works.
+  // the Phase 16.C realtime channel: when a `comment.created`
+  // broadcast arrives, the receiving client GETs only the new id(s)
+  // instead of re-fetching the full draft list. See `parseIdsParam`
+  // for the sanitisation + cap rules.
   const url = new URL(request.url);
-  const requestedVersionId = url.searchParams.get("versionId") ?? ctx.versionId;
-  const idsParam = url.searchParams.get("ids");
-  const requestedIds = idsParam
-    ? idsParam
-        .split(",")
-        .map((s) => s.trim())
-        // Prisma cuids are alphanumeric + `_`; cap at 64 chars so a
-        // malicious `?ids=` with megabytes can't blow up the SQL.
-        .filter((s) => s.length > 0 && s.length <= 64 && /^[a-zA-Z0-9_]+$/.test(s))
-    : null;
+  const requestedVersionId =
+    url.searchParams.get("versionId") ?? ctx.versionId;
+  const requestedIds = parseIdsParam(url.searchParams.get("ids"));
 
   // Drafts only — applied comments are immutable history (the prompt
   // that was actually sent to Claude) and shouldn't surface to the
-  // editor. JOIN the author for the panel's per-row display
-  // (name / avatar / createdAt). Author is null for pre-Phase-15.D
-  // rows; the UI shows "غير معروف" in that case.
+  // editor. Author joined per the PII rule documented at
+  // `COMMENT_AUTHOR_SELECT`. Author is null for pre-Phase-15.D rows;
+  // the UI shows "غير معروف" in that case.
   const comments = await prisma.comment.findMany({
     where: {
       presentationId: ctx.presentationId,
       versionId: requestedVersionId,
       status: "draft",
-      ...(requestedIds && requestedIds.length > 0
-        ? { id: { in: requestedIds } }
-        : {}),
+      ...(requestedIds ? { id: { in: requestedIds } } : {}),
     },
     orderBy: { createdAt: "asc" },
-    include: {
-      author: {
-        // Email omitted on purpose — anyone with `comment` access
-        // hits this route, and exposing the email turns the panel
-        // into a PII directory. Name + image is all the UI renders.
-        select: { id: true, name: true, image: true },
-      },
-    },
+    include: COMMENT_INCLUDE,
   });
 
   return NextResponse.json({ comments, versionId: requestedVersionId });
@@ -136,7 +191,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const ctx = await resolveContext(id, "comment");
+  const ctx = await resolveContext(id, "comment", { withAuthor: true });
   if ("error" in ctx) {
     return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   }
@@ -173,10 +228,7 @@ export async function POST(
   //
   // 423 = Locked. The fetch closer in DeckView's optimistic create
   // path surfaces this via `throwApiError` — matching the 409 / 401
-  // / 404 handling pattern already there. Falls through to the
-  // generic Arabic fallback if neither side surfaces a specific
-  // string, but the response shape includes a message for explicit
-  // handling.
+  // / 404 handling pattern already there.
   const lockState = await prisma.slideState.findUnique({
     where: {
       presentationId_slideKey: {
@@ -205,22 +257,15 @@ export async function POST(
       // creator can later edit / delete their own comment.
       authorId: ctx.authorPrismaUserId,
     },
-    include: {
-      author: {
-        // Email omitted on purpose — anyone with `comment` access
-        // hits this route, and exposing the email turns the panel
-        // into a PII directory. Name + image is all the UI renders.
-        select: { id: true, name: true, image: true },
-      },
-    },
+    include: COMMENT_INCLUDE,
   });
 
   // Phase 16.C — emit a Realtime broadcast so concurrent viewers of
   // the same project see the new comment without refreshing. Payload
   // is pointers-only (commentId, slideId, actorPrismaUserId); the
   // receiving client GETs the full row via `?ids=`. Best-effort —
-  // `broadcastToProject` swallows its own errors so a Supabase outage
-  // can't roll back a successful Prisma write.
+  // `broadcastToProject` swallows its own errors so a Supabase
+  // outage can't roll back a successful Prisma write.
   await broadcastToProject(id, "comment.created", {
     commentId: created.id,
     slideId: created.slideId,
@@ -228,35 +273,17 @@ export async function POST(
   });
 
   // Phase 16.E — fan-out a bell notification to every project member
-  // except the author. AWAITED with a bounded timeout (not fire-and-
-  // forget): unlike the Inngest broadcast paths (function lifetime is
-  // 1-3 min — plenty of slack for unsettled promises to flush),
-  // Next.js API routes can have the runtime frozen the moment
-  // NextResponse is returned (Vercel + serverless). A detached
-  // .catch() promise here can be killed mid-Prisma-write, dropping
-  // the notification row entirely. CR PR #33 flagged 2026-05-24.
-  //
-  // The helper isolates per-recipient failures internally, so
-  // awaiting CAN'T fail the whole comment creation — fanOutNotification
-  // catches each recipient's error and logs without rethrowing. The
-  // 2 s Promise.race cap is a belt: a slow DB write shouldn't punish
-  // the POST response time, the fan-out continues in the background
-  // and (worst case) the next visibility-regain refetch backfills.
-  const fanOutPromise = fanOutNotification({
-    type: "comment.created",
-    projectId: id,
-    actorPrismaUserId: ctx.authorPrismaUserId,
-    payload: { commentId: created.id, slideKey: created.slideId },
-  }).catch((err) => {
-    console.warn("[notifications] comment.created fanOut failed", {
+  // except the author. See `runBoundedFanOut` for the rationale on
+  // awaited-with-timeout vs fire-and-forget.
+  await runBoundedFanOut(
+    {
+      type: "comment.created",
       projectId: id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  });
-  const fanOutTimeout = new Promise<void>((resolve) =>
-    setTimeout(resolve, 2_000),
+      actorPrismaUserId: ctx.authorPrismaUserId,
+      payload: { commentId: created.id, slideKey: created.slideId },
+    },
+    id,
   );
-  await Promise.race([fanOutPromise, fanOutTimeout]);
 
   return NextResponse.json({ comment: created }, { status: 201 });
 }
