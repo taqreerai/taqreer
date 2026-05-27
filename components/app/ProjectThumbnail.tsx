@@ -56,6 +56,7 @@ import { ProjectActionsMenu } from "@/components/app/ProjectActionsMenu";
 import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";
 import { SaveAsTemplateDialog } from "@/components/app/SaveAsTemplateDialog";
 import { ShareDialog } from "@/components/app/ShareDialog";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 
 // Pixels of cursor travel required to consider the user actually
 // scrubbing (not just hovering at rest). ~2 trackpad ticks.
@@ -394,21 +395,21 @@ export function ProjectThumbnail({
               draggable={false}
             />
           ) : thumbnailsPending ? (
-            // Deck just saved — Inngest thumbnail job in flight.
-            // `progress_activity` is Material Symbols' canonical
-            // circular loader glyph; `animate-spin` provides the
-            // rotation. `.tq-icon-lg` pins the font-size at 32 px
-            // (chained-selector override of the global FILL=0 +
-            // font-size:1em rules — same cascade fix family as
-            // `.tq-fav-indicator`).
+            // Deck just saved (Inngest thumbnail job in flight) OR
+            // still mid-generation (initial deck-generate run hasn't
+            // finished yet). Both cases render the branded paragraph-
+            // write animation — replaced the Material Symbols
+            // `progress_activity` glyph 2026-05-27 so the dashboard
+            // tile, slide-nav thumbnails, and canvas overlay all
+            // share ONE loading vocabulary across the app. Sized to
+            // match the prior `.tq-icon-lg` (32 px) so the visual
+            // footprint inside the tile doesn't shift.
             <span
               role="status"
               aria-label="جاري إنشاء المعاينة"
-              className="flex h-full w-full items-center justify-center"
+              className="flex h-full w-full items-center justify-center text-muted"
             >
-              <span className="material-symbols-outlined tq-icon-lg animate-spin text-muted">
-                progress_activity
-              </span>
+              <ParagraphWriteIcon size={32} />
             </span>
           ) : (
             <span className="flex h-full w-full items-center justify-center">

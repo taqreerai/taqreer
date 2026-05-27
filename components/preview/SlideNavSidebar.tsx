@@ -79,6 +79,8 @@ export function SlideNavSidebar({
   // `slideStates` source of truth across all UI that reads it.
   onLockAll,
   onUnlockAll,
+  onCancelGeneration,
+  cancelDisabled = false,
   // Phase 16.B presence — viewers currently focused on each slide
   // (already filtered to NOT-self by the caller). Map slideIndex →
   // array, empty / missing index means no avatars rendered for
@@ -109,6 +111,15 @@ export function SlideNavSidebar({
   onLockAll?: () => void | Promise<void>;
   onUnlockAll?: () => void | Promise<void>;
   viewersBySlide?: Record<number, PresenceViewer[]>;
+  // Cancel pill — shown at the bottom of the sidebar during the
+  // generating phase only. Caller (DeckView) handles the
+  // confirmation modal + POST to /api/projects/[id]/cancel; we just
+  // surface the trigger. Omit to hide the pill (e.g. on completed
+  // decks where there's nothing to cancel).
+  onCancelGeneration?: () => void;
+  // Disable the pill during the cancel request's in-flight window
+  // (between user click + server ack) so they can't double-fire.
+  cancelDisabled?: boolean;
 }) {
   const { width: canvasW, height: canvasH } = dimensionsForFormat(format);
   const aspectRatio = `${canvasW} / ${canvasH}`;
@@ -400,11 +411,21 @@ export function SlideNavSidebar({
               </div>
 
               {/* Regenerating overlay — when applying drafts for
-                  this slide, dim the thumbnail and show a spinner.
-                  Same affordance as the hero's in-flight overlay. */}
+                  this slide, dim the thumbnail and show the branded
+                  paragraph-write animation. Same affordance as the
+                  hero's in-flight overlay; matches the streaming-
+                  generation placeholder cells above so a peer who
+                  joins mid-generation sees ONE loading vocabulary
+                  across the deck instead of two (generic spinner +
+                  branded icon). 2026-05-27 — replaced the legacy
+                  `.spinner` ring with `<ParagraphWriteIcon />`. */}
               {item.kind === "slide" && item.regenerating ? (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55">
-                  <span className="spinner h-5 w-5 rounded-full border-2 border-white/30 border-t-white" />
+                  <ParagraphWriteIcon
+                    rtl={language === "ar"}
+                    size={20}
+                    className="text-white/70"
+                  />
                 </div>
               ) : null}
 
@@ -518,6 +539,32 @@ export function SlideNavSidebar({
               : allLocked
                 ? "إلغاء قفل الكل"
                 : "قفل الكل"}
+          </button>
+        </footer>
+      ) : null}
+      {/* Cancel pill — shown ONLY when the parent (DeckView)
+          wires `onCancelGeneration` (i.e. the project is mid-
+          generation AND the viewer has edit rights). Distinct red-
+          tinted variant of the lock pill chrome so it reads as a
+          destructive action without competing visually with the
+          deck-nav above. The actual confirm modal lives in DeckView
+          to keep this component layout-only. */}
+      {onCancelGeneration ? (
+        <footer className="border-t border-white/[0.08] pt-3 px-1">
+          <button
+            type="button"
+            onClick={onCancelGeneration}
+            disabled={cancelDisabled}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition-colors hover:border-red-400/50 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span
+              className="material-symbols-outlined leading-none"
+              style={{ fontSize: 16 }}
+              aria-hidden
+            >
+              stop_circle
+            </span>
+            {cancelDisabled ? "جارٍ الإلغاء..." : "إلغاء الإنشاء"}
           </button>
         </footer>
       ) : null}
