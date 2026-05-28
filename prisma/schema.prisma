@@ -417,12 +417,17 @@ model BrandKit {
   // Marks this kit as the user's default — the four landing flows
   // (/create, /enhance, /mimic, /datasheet) auto-hydrate from the
   // default kit on first mount when no in-flight brand session
-  // exists. At most one kit per user can be true; the API enforces
-  // this in a transaction (set all others to false before flipping
-  // one to true). No partial unique index because Postgres can't
-  // express "unique among rows where isDefault = true" in a way
-  // Prisma supports cleanly; the transactional update path is the
-  // canonical mechanism.
+  // exists. At most one kit per user can be true.
+  //
+  // Invariant is enforced at the DB level by a partial unique index
+  // `BrandKit_userId_default_unique` (migration
+  // 20260528000127_brandkit_isdefault_partial_unique) — Postgres
+  // partial unique indexes can't be expressed declaratively in
+  // schema.prisma yet, so it lives in raw SQL. The API route still
+  // does the two-step transaction (clear-others → flip-self) as
+  // the happy-path mechanism; the partial unique index catches
+  // concurrent set-default races and surfaces a Prisma P2002 error
+  // the route translates into a 409 for the client.
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

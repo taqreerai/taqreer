@@ -32,7 +32,7 @@ export default async function DatasheetLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/datasheet");
+    redirect("/login?next=/datasheet");
   }
 
   const cookieStore = await cookies();

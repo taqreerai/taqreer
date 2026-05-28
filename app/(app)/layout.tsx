@@ -28,7 +28,7 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login?next=/dashboard");
+    redirect("/login?next=/dashboard");
   }
 
   const cookieStore = await cookies();

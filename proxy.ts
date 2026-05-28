@@ -12,7 +12,7 @@ const protectedRoutes = [
   "/folders",
 ];
 
-const authRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
+const authRoutes = ["/login", "/signup", "/forgot-password"];
 
 function getSafeRedirectPath(next: string | null, origin: string) {
   if (!next) return "/dashboard";
@@ -49,16 +49,11 @@ export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   const origin = request.nextUrl.origin;
 
-  // Bypass the coming-soon gate on localhost / development
-  const isDev = process.env.NODE_ENV === "development";
-  const host = request.headers.get("host") ?? "";
-  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  if ((isDev || isLocalhost) && pathname === "/") {
-    return preserveAuthCookies(
-      NextResponse.rewrite(new URL("/preview?key=taqreer2025", request.url)),
-      response
-    );
-  }
+  // Removed 2026-05-28: the localhost/dev rewrite `/` →
+  // `/preview?key=taqreer2025` was wired when the full landing
+  // lived behind a key-gate at /preview. Now `app/page.tsx` IS
+  // the public landing, so `/` should render it directly without
+  // any rewrite.
 
   // Get session
   const {
@@ -72,7 +67,7 @@ export async function proxy(request: NextRequest) {
 
   // Redirect unauthenticated users to login
   if (isProtectedRoute && !session) {
-    const loginUrl = new URL("/auth/login", request.url);
+    const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname + (searchParams.toString() ? `?${searchParams}` : ""));
     return preserveAuthCookies(NextResponse.redirect(loginUrl), response);
   }

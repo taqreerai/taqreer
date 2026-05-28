@@ -25,7 +25,7 @@ export default async function FavoritesPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/favorites");
+    redirect("/login?next=/favorites");
   }
 
   const dbUser = await prisma.user.findUnique({

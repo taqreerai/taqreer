@@ -149,13 +149,16 @@ export function DashboardShell({
 
   return (
     <div className="dashboard-bg min-h-screen relative opacity-100">
-      <Sidebar isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} transitionClass={transitionClass} />
+      <Sidebar isCollapsed={isCollapsed} transitionClass={transitionClass} />
 
       <main
         className={`min-h-screen text-on-background relative ${transitionClass}`}
         style={{ marginRight: `${sidebarWidth}px`, marginLeft: 0, zIndex: 1 }}
       >
-        <Header isCollapsed={isCollapsed} />
+        <Header
+          isCollapsed={isCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
         <div className={contentClasses}>{children}</div>
       </main>
     </div>

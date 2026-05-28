@@ -43,11 +43,15 @@ export async function GET(request: NextRequest) {
         // Continue even if sync fails
       }
 
-      // Always go through the confirmation page first, then /dashboard
-      return NextResponse.redirect(new URL("/auth/confirmed", request.url));
+      // Redirect straight to the dashboard. The `/confirmed`
+      // interstitial was removed 2026-05-28 — it served only as a
+      // 2.5 s checkmark + redirect, which added a noticeable pause
+      // without conveying anything the dashboard's own load state
+      // doesn't already.
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 
   // Return user to login page with error
-  return NextResponse.redirect(new URL("/auth/login", request.url));
+  return NextResponse.redirect(new URL("/login", request.url));
 }

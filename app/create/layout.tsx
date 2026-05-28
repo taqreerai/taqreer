@@ -37,7 +37,7 @@ export default async function CreateLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/create");
+    redirect("/login?next=/create");
   }
 
   const cookieStore = await cookies();

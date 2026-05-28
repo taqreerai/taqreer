@@ -1,5 +1,12 @@
 "use client";
 
+// Signup form — renders inside the auth-layout glass modal (logo +
+// terms-fine-print are owned by `app/(auth)/layout.tsx`, this file
+// just owns the form). Gamma-inspired hierarchy: big right-anchored
+// heading + subtitle, then Google primary at the top, then "أو"
+// divider, then email/password/name fields, then submit. The auth
+// modal layout supplies the legal fine print.
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -55,7 +62,16 @@ export default function SignupPage() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: name, name } },
+        options: {
+          data: { full_name: name, name },
+          // After Supabase verifies the email-confirm token, send the
+          // user to our `/callback` handler (which exchanges the code,
+          // syncs the Prisma User row, and lands them on /dashboard).
+          // Without this option Supabase falls back to the project's
+          // Site URL — users would land on the marketing landing with
+          // a session sitting in the URL hash and no clear next step.
+          emailRedirectTo: `${window.location.origin}/callback?next=/dashboard`,
+        },
       });
 
       if (signUpError) {
@@ -101,7 +117,7 @@ export default function SignupPage() {
     try {
       const { error: signUpError } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
+        options: { redirectTo: `${window.location.origin}/callback?next=/dashboard` },
       });
       if (signUpError) setError(toArabicError(signUpError.message));
     } catch {
@@ -130,7 +146,7 @@ export default function SignupPage() {
             تم إرسال رابط التأكيد إلى بريدك الإلكتروني. يرجى التحقق من صندوق الوارد
           </p>
         </div>
-        <Link href="/auth/login" className="text-white hover:text-cyan-400 transition-colors cursor-pointer">
+        <Link href="/login" className="text-white hover:underline cursor-pointer">
           العودة إلى تسجيل الدخول
         </Link>
       </motion.div>
@@ -144,11 +160,15 @@ export default function SignupPage() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="space-y-6"
+      className="space-y-5"
     >
+      {/* Heading + subtitle — center-aligned, `text-2xl` per user
+          direction 2026-05-28 (was text-4xl, scaled down to sit
+          closer to the body copy now that the smaller logo above
+          gives the wordmark room). */}
       <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-3xl font-bold mb-2">إنشاء حساب جديد</h1>
-        <p className="text-muted">انضم إلى تقرير الآن</p>
+        <h1 className="text-2xl font-bold mb-2">إنشاء حساب</h1>
+        <p className="text-sm text-muted">ابدأ مجاناً. لا حاجة لبطاقة ائتمان.</p>
       </motion.div>
 
       {error && (
@@ -157,7 +177,34 @@ export default function SignupPage() {
         </motion.div>
       )}
 
-      <motion.form {...fadeUp(0.1)} onSubmit={handleEmailSignup} className="space-y-4">
+      {/* Google primary — sits at the top of the form per Gamma's
+          single-CTA hierarchy. Uses `btn-gradient` so the OAuth path
+          reads as the recommended choice; email is the fallback. */}
+      <motion.button
+        {...fadeUp(0.1)}
+        onClick={handleGoogleSignup}
+        disabled={loading}
+        className="btn-gradient w-full px-4 py-3 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+      >
+        {googleIcon}
+        المتابعة بحساب جوجل
+      </motion.button>
+
+      <motion.div {...fadeUp(0.15)} className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[var(--tq-border-glass)]" />
+        </div>
+        <div className="relative flex justify-center text-sm">
+          {/* "أو" pill sits over the divider — `--tq-bg-glass` so the
+              line breaks cleanly through the label without exposing
+              the marquee. */}
+          <span className="px-3 py-0.5 rounded-full bg-[var(--tq-bg-glass)] border border-[var(--tq-border-glass)] text-xs text-muted">
+            أو
+          </span>
+        </div>
+      </motion.div>
+
+      <motion.form {...fadeUp(0.2)} onSubmit={handleEmailSignup} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-2">الاسم الكامل</label>
           <input
@@ -195,34 +242,15 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
+          className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? "جاري الإنشاء..." : "إنشاء الحساب"}
         </button>
       </motion.form>
 
-      <motion.div {...fadeUp(0.2)} className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-white/[var(--glass-border-opacity)]" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-[var(--tq-bg)] text-muted">أو</span>
-        </div>
-      </motion.div>
-
-      <motion.button
-        {...fadeUp(0.25)}
-        onClick={handleGoogleSignup}
-        disabled={loading}
-        className="input-dark hover:bg-white/5 disabled:opacity-50 text-white font-medium px-4 py-3 transition-colors flex items-center justify-center gap-2 cursor-pointer"
-      >
-        {googleIcon}
-        التسجيل بجوجل
-      </motion.button>
-
-      <motion.p {...fadeUp(0.3)} className="text-sm text-center">
+      <motion.p {...fadeUp(0.3)} className="text-sm text-muted">
         هل لديك حساب بالفعل؟{" "}
-        <Link href="/auth/login" className="text-white hover:text-cyan-400 transition-colors cursor-pointer">
+        <Link href="/login" className="text-white hover:underline cursor-pointer">
           تسجيل الدخول
         </Link>
       </motion.p>

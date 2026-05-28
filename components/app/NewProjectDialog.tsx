@@ -23,6 +23,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import { BRAND_FLOW_CARDS } from "@/components/app/brandFlowCards";
 
 export function NewProjectDialog({
@@ -103,7 +104,10 @@ export function NewProjectDialog({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {BRAND_FLOW_CARDS.map((card) => (
-                  <a
+                  // `next/link` for SPA routing — was a plain anchor
+                  // that forced a full page reload on every flow pick
+                  // (CR #41 finding).
+                  <Link
                     key={card.flow}
                     href={`/${card.flow}`}
                     onClick={onClose}
@@ -125,7 +129,7 @@ export function NewProjectDialog({
                         {card.desc}
                       </p>
                     </div>
-                  </a>
+                  </Link>
                 ))}
               </div>
             </motion.div>

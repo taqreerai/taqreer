@@ -187,6 +187,14 @@ export default function EnhanceContentPage() {
   // Pre-loaded logo from a brand kit / default kit. Same shape
   // /create + /mimic use — see those files for the rationale.
   const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
+  // Pre-loaded palette from the same brand-kit hydration. Captured in
+  // local state because `seedFromExtraction` will OVERWRITE the
+  // `taqreer:create:brand` sessionStorage entry with the extraction's
+  // colors after the PDF is parsed — without this snapshot, the
+  // brand-kit colors would silently get replaced by whatever the
+  // extraction guessed. `handleGenerate` prefers this when assembling
+  // `mergedBrand.colors` (CR #41 finding, 2026-05-28).
+  const [loadedColors, setLoadedColors] = useState<string[]>([]);
   const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
     emptyFontSlot(),
   );
@@ -225,6 +233,12 @@ export default function EnhanceContentPage() {
         setBodyFontSlot(hydrated.bodyFontSlot);
       }
       if (hydrated.logo) setLoadedLogo(hydrated.logo);
+      // Snapshot the kit's palette into local state — `mergedBrand`
+      // at submit time prefers this over sessionStorage so the
+      // extraction's seeded colors (written by `seedFromExtraction`
+      // after the PDF parses) don't clobber the user's deliberate
+      // brand-kit pick.
+      if (hydrated.colors.length > 0) setLoadedColors(hydrated.colors);
       // If the default-kit fetch was the source, ALSO write its
       // colors to sessionStorage so the existing submit path
       // (which reads colors from sessionStorage) sees them.
@@ -508,8 +522,15 @@ export default function EnhanceContentPage() {
       const resolvedLogoStorageUrl =
         logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
 
+      // Brand-kit colors win over the extraction-seeded sessionStorage
+      // colors. `seedFromExtraction` runs after hydration completes
+      // and overwrites the sessionStorage entry, so without this
+      // preference order an explicit brand-kit pick would silently be
+      // replaced by Claude's extracted palette guess (CR #41 finding,
+      // 2026-05-28).
       const mergedBrand = {
-        colors: seededBrand.colors ?? [],
+        colors:
+          loadedColors.length > 0 ? loadedColors : seededBrand.colors ?? [],
         paletteMode: seededBrand.paletteMode ?? "manual",
         paletteScreenshotUrl: seededBrand.paletteScreenshotUrl ?? null,
         fonts: {

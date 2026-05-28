@@ -192,8 +192,12 @@ export function readBrandFromSession(): HydratedBrand | null {
  * blob exists.
  */
 export async function fetchDefaultBrandKit(): Promise<HydratedBrand | null> {
-  let body: {
-    kit: {
+  // Response shape declared loosely because the body is parsed
+  // from a network response — TypeScript only protects against
+  // compile-time type drift, not runtime API-shape drift. Runtime
+  // validation below before any property reads.
+  type DefaultBody = {
+    kit?: {
       colors?: unknown;
       fonts?: { heading?: unknown; body?: unknown } | null;
       logo?: {
@@ -205,18 +209,24 @@ export async function fetchDefaultBrandKit(): Promise<HydratedBrand | null> {
       } | null;
     } | null;
   };
+  let body: DefaultBody;
   try {
     const res = await fetch("/api/brand-kits/default", {
       method: "GET",
       cache: "no-store",
     });
     if (!res.ok) return null;
-    body = await res.json();
+    body = (await res.json()) as DefaultBody;
   } catch {
     return null;
   }
 
-  if (!body.kit) return null;
+  // Runtime shape guard — if the response isn't an object (malformed
+  // JSON proxied as "OK", e.g. an HTML error page that slipped past
+  // res.ok), bail before reading `.kit` would crash.
+  if (!body || typeof body !== "object" || !("kit" in body) || !body.kit) {
+    return null;
+  }
 
   const logoBlob = body.kit.logo;
   const logo =

@@ -5,6 +5,7 @@
 // (the bucket is private; a raw path won't load in an <img>), then
 // hand off to the client wrapper for the grid + handlers.
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
@@ -55,7 +56,7 @@ export default async function BrandKitsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/brand-kits");
+    redirect("/login?next=/brand-kits");
   }
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
@@ -122,7 +123,7 @@ export default async function BrandKitsPage() {
             أو احذفها من قائمة الخيارات.
           </p>
         </div>
-        <a
+        <Link
           href="/brand-kits/new"
           className="btn-gradient flex shrink-0 items-center gap-2 px-4 py-2 text-sm"
         >
@@ -134,7 +135,7 @@ export default async function BrandKitsPage() {
             add
           </span>
           هوية جديدة
-        </a>
+        </Link>
       </header>
       <BrandKitsPageClient kits={tiles} />
     </div>

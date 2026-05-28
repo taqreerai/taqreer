@@ -21,11 +21,9 @@ function Tooltip({ isCollapsed, text }: { isCollapsed: boolean; text: string }) 
 
 export function Sidebar({
   isCollapsed = false,
-  toggleSidebar,
   transitionClass = "transition-all duration-300 ease-in-out"
 }: {
   isCollapsed?: boolean;
-  toggleSidebar?: () => void;
   transitionClass?: string;
 }) {
   const pathname = usePathname();
@@ -88,7 +86,7 @@ export function Sidebar({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/auth/login");
+    router.push("/login");
     router.refresh();
   };
 
@@ -171,30 +169,10 @@ export function Sidebar({
       {/* ── Scrollable body ── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col w-full hide-scrollbar">
 
-        {/* Burger + Home */}
+        {/* Home — the burger toggle that used to live here was lifted
+            to the Header (single sidebar control, matched to the bell
+            button's glass recipe). */}
         <div className="flex flex-col py-3 w-full">
-          {/* Burger */}
-          <button
-            onClick={toggleSidebar}
-            // `rounded-full` to match the other nav items now that
-            // `.nav-item` no longer carries `border-radius` in CSS
-            // (single-source-of-truth pattern: JSX className owns shape).
-            className="nav-item flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] mb-1 rounded-full"
-            aria-label="Toggle sidebar"
-          >
-            <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-              <span className={`${iconClass} transition-transform duration-300 ease-in-out`}
-                style={{ transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>
-                {isCollapsed ? 'menu' : 'close'}
-              </span>
-            </div>
-            <span className={`font-medium text-sm transition-all duration-300 ${
-              isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
-            }`}>
-              القائمة
-            </span>
-          </button>
-
           {/* Home */}
           <div className="relative group w-full">
             <Link

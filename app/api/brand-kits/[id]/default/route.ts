@@ -1,10 +1,14 @@
 // PATCH /api/brand-kits/[id]/default
 //
 // Set or clear the user's default brand kit. At most one kit per
-// user can be the default — when setting one to true we transaction-
-// ally clear every other kit's `isDefault` flag first, then flip
-// this one. The migration adds a `(userId, isDefault)` index so
-// the bulk update is cheap.
+// user can be the default — happy path: transactionally clear other
+// `isDefault=true` rows, then flip this one. Concurrency: enforced
+// by a partial unique index `BrandKit_userId_default_unique`
+// (migration 20260528000127_brandkit_isdefault_partial_unique). If
+// two requests race past the in-app clear step, Postgres rejects
+// the second flip with a unique-constraint violation (Prisma
+// P2002), which we translate into 409 — the client should retry
+// after refetching the list to see which kit actually won.
 //
 // Body: { isDefault: boolean }
 //
@@ -15,6 +19,7 @@
 // stays private.
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveUserContext } from "@/lib/api/user-context";
 
@@ -49,19 +54,38 @@ export async function PATCH(
   }
 
   if (nextIsDefault) {
-    // Transactionally clear other defaults, then flip this one. Two
-    // statements so concurrent set-default calls from two tabs land
-    // in a consistent state (no double-default).
-    await prisma.$transaction([
-      prisma.brandKit.updateMany({
-        where: { userId: ctx.userId, isDefault: true, NOT: { id } },
-        data: { isDefault: false },
-      }),
-      prisma.brandKit.update({
-        where: { id },
-        data: { isDefault: true },
-      }),
-    ]);
+    // Happy path: clear sibling defaults, then flip this one. The
+    // partial unique index `BrandKit_userId_default_unique` is the
+    // belt-and-suspenders guarantee against concurrent set-default
+    // races; if two requests interleave past the updateMany, the
+    // second `update` will hit P2002 and we surface 409 to the
+    // client.
+    try {
+      await prisma.$transaction([
+        prisma.brandKit.updateMany({
+          where: { userId: ctx.userId, isDefault: true, NOT: { id } },
+          data: { isDefault: false },
+        }),
+        prisma.brandKit.update({
+          where: { id },
+          data: { isDefault: true },
+        }),
+      ]);
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Another default brand kit was selected at the same time. Please refresh and try again.",
+          },
+          { status: 409 },
+        );
+      }
+      throw err;
+    }
   } else {
     await prisma.brandKit.update({
       where: { id },

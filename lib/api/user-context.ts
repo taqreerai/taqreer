@@ -11,8 +11,8 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
 export type UserContextError = {
-  error: "Unauthorized" | "User not found";
-  status: 401 | 404;
+  error: "Unauthorized" | "User not found" | "Auth backend unavailable";
+  status: 401 | 404 | 503;
 };
 
 export type UserContext = {
@@ -34,10 +34,30 @@ export async function resolveUserContext(): Promise<
   UserContext | UserContextError
 > {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized", status: 401 };
+  const { data, error: authError } = await supabase.auth.getUser();
+  if (authError) {
+    // Distinguish "no session" (normal unauth state, returns
+    // AuthSessionMissingError or similar with a benign message)
+    // from genuine backend failures. We treat the AuthSessionMissing
+    // and AuthApiError-with-401 cases as 401, everything else as
+    // 503 so transient network/backend issues don't get logged
+    // as "user not authenticated" — that misclassification hides
+    // real outages behind benign-looking metrics.
+    const isSessionMissing =
+      authError.name === "AuthSessionMissingError" ||
+      ("status" in authError && authError.status === 401);
+    if (isSessionMissing) {
+      return { error: "Unauthorized", status: 401 };
+    }
+    console.error("[user-context] getUser failed", {
+      name: authError.name,
+      status: "status" in authError ? authError.status : undefined,
+      message: authError.message,
+    });
+    return { error: "Auth backend unavailable", status: 503 };
+  }
+  if (!data.user) return { error: "Unauthorized", status: 401 };
+  const user = data.user;
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },

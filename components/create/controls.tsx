@@ -631,8 +631,14 @@ export function ExclusionDropdown({
           // GoogleFontSlot — backdrop-blur-glass + bg-glass + glass
           // border + shadow-2xl. Keeps the dropdown family visually
           // consistent across /create.
+          // ARIA: this is a group of independent checkbox toggles
+          // (cover + closing), not a single-select listbox — `listbox`
+          // / `option` / `aria-selected` would mislead screen readers
+          // into announcing one-of-many semantics. Switched to
+          // `group` so the inner `checkbox`-role buttons read as
+          // independent toggles (CR #41 finding, 2026-05-28).
           className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
-          role="listbox"
+          role="group"
           aria-label="استثناء"
         >
           <ExclusionItem
@@ -667,8 +673,8 @@ function ExclusionItem({
   return (
     <button
       type="button"
-      role="option"
-      aria-selected={checked}
+      role="checkbox"
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
       className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-white/5"
     >
