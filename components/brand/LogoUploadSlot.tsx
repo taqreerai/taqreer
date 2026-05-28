@@ -67,6 +67,13 @@ export function LogoUploadSlot({
   // the Arabic-first chrome on every flow. Callers can pass an empty
   // string or a flow-specific copy without rewriting the primitive.
   emptyLabel = "شعار SVG فقط",
+  // Optional remote preview URL — when set AND no `file` is picked,
+  // render the picked-state preview using this URL instead of the
+  // empty dropzone. Used by the four landing flows when hydrating
+  // from a saved brand kit: the logo lives in storage already, so
+  // the user shouldn't have to re-upload it. `onRemove` still
+  // clears the parent state when the user wants to swap it out.
+  previewUrl = null,
 }: {
   file: File | null;
   onSelect: (file: File) => void;
@@ -74,6 +81,7 @@ export function LogoUploadSlot({
   compact?: boolean;
   fillHeight?: boolean;
   emptyLabel?: string;
+  previewUrl?: string | null;
 }) {
   const slotHeightPx = compact ? SLOT_HEIGHT_COMPACT_PX : SLOT_HEIGHT_DEFAULT_PX;
   // Logo image's max height — leaves ~12 px breathing room above +
@@ -111,7 +119,6 @@ export function LogoUploadSlot({
       // parent owns) which is exactly the canonical "subscribe to
       // external state" shape the lint rule allows. The functional
       // updater also revokes the prior URL so the cleanup is atomic.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setObjectUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         liveObjectUrlRef.current = null;
@@ -123,7 +130,6 @@ export function LogoUploadSlot({
     const url = URL.createObjectURL(file);
     // Same shape — external file changed, sync the URL cache. See
     // comment above for the lint-suppression rationale.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setObjectUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       liveObjectUrlRef.current = url;
@@ -145,12 +151,18 @@ export function LogoUploadSlot({
     };
   }, []);
 
+  // Pick the active preview URL: the local blob takes precedence
+  // when the user has just picked a file; otherwise we fall back to
+  // the optional remote `previewUrl` (e.g. logo signed URL from a
+  // saved brand kit). Falsey on both → render the empty dropzone.
+  const activePreviewUrl = objectUrl ?? previewUrl ?? null;
+
   // Empty state → exactly the dropzone every flow used before this
   // primitive landed. The `compact` + `fillHeight` props forward
   // so /enhance keeps its tighter 72 px stack, /mimic stretches to
   // its sibling's height, and /create + /datasheet get the standard
   // 100 px slot. No layout shift, no visual change.
-  if (!file || !objectUrl) {
+  if (!activePreviewUrl) {
     return (
       <CompactUploadZone
         label={emptyLabel}
@@ -183,7 +195,7 @@ export function LogoUploadSlot({
     <div className={containerClass} style={containerStyle}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={objectUrl}
+        src={activePreviewUrl}
         alt="معاينة الشعار"
         // `brightness(0) invert(1)` flattens any color (mono OR
         // polychrome) to solid white. See file header for the

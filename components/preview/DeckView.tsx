@@ -2288,7 +2288,7 @@ export function DeckView({
               ) : null}
               حاول مرة أخرى
             </button>
-            <Link href="/dashboard" className="btn-outline-dark px-6 py-3 no-underline">
+            <Link href="/dashboard" className="btn-pill px-6 py-3 text-sm no-underline">
               العودة للرئيسية
             </Link>
           </div>
@@ -2312,7 +2312,7 @@ export function DeckView({
   // top of the content well. `.glass-card` is the canonical neutral
   // surface (token-driven background + backdrop-blur, see globals.css
   // — no inline `style` overrides). Buttons use `.btn-gradient` +
-  // `.btn-outline-dark` to match the failed-state recovery card.
+  // `.btn-pill` to match the failed-state recovery card.
   if (status === "cancelled") {
     return (
       <section

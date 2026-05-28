@@ -106,8 +106,7 @@
  *    .btn-gradient           CTA surface (pill + brand gradient + shadow)
  *    .btn-gradient-anim      AI button (animated mesh-stroke + hover fill)
  *    .canvas-gradient-border AI surface ring (non-button equivalent)
- *    .btn-outline-dark       Legacy ghost border — prefer <PillButton ghost>
- *    .btn-danger             Destructive action
+ *    .btn-pill-danger        Destructive pill (red-tinted variant of .btn-pill)
  *
  *  Navigation / chrome
  *    .dropdown-item          Item inside a .glass-dropdown
@@ -429,18 +428,34 @@ textarea.input-dark {
   cursor: not-allowed;
 }
 
-.btn-danger {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #f87171;
-  border-radius: 12px;
-  padding: 12px 24px;
-  font-weight: 500;
-  transition: background 0.2s ease;
+/* Destructive pill — mirrors the cancel-generation button on
+   SlideNavSidebar (the canonical destructive recipe). Pill-rounded
+   like .btn-pill but with the red-400/200 palette so the visual
+   weight reads as "this destroys something". Replaced legacy
+   .btn-danger (rectangular rounded-md) per user direction
+   2026-05-27 — we only use pill-shaped buttons. */
+.btn-pill-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(248, 113, 113, 0.30);
+  color: rgb(254, 202, 202);
+  border-radius: 9999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.2);
+.btn-pill-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(248, 113, 113, 0.50);
+}
+
+.btn-pill-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Preset-linked backdrop-blur token. Tailwind v4 generates a utility
@@ -517,8 +532,8 @@ textarea.input-dark {
      gap between G=36 and B=59 gave the border a dark plum cast that
      read as blue-purple inside modals/menus once the v17 bg
      switched to neutral gray-black. Perceptual luminance preserved
-     (Y' ~40), just hue stripped — propagates to .btn-outline-dark,
-     .input-search, and every other consumer. */
+     (Y' ~40), just hue stripped — propagates to .input-search,
+     .btn-pill, and every other border-token consumer. */
   --tq-border: rgba(40, 40, 40, 0.8);
   --tq-muted: #b4b4b4;
 
@@ -1040,25 +1055,6 @@ body {
 .btn-pill:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-.btn-outline-dark {
-  background: transparent;
-  border: 1px solid var(--tq-border);
-  color: white;
-  border-radius: 8px;
-  font-weight: 500;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.btn-outline-dark:hover {
-  /* Neutralized 2026-05-24: was rgba(125, 45, 255, 0.4) /
-     rgba(125, 45, 255, 0.08) (brand Electric Violet) which read as
-     a violet wash inside modals after the v17 background switched
-     to a neutral gray-black gradient. White-at-low-alpha matches
-     the rest of the modal chrome's neutral palette. */
-  border-color: rgba(255, 255, 255, 0.30);
-  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ─── Sidebar ─── */

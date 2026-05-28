@@ -76,6 +76,12 @@ import {
 } from "@/lib/brand/fonts";
 import { uploadAsset } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import {
+  readBrandFromSession,
+  fetchDefaultBrandKit,
+  CREATE_BRAND_KEY,
+  type HydratedBrand,
+} from "@/lib/create/hydrate-brand-from-session";
 
 // ─── Constants ────────────────────────────────────────────────────
 // 25 MB cap matches /api/datasheet/parse's server-side limit. Lower
@@ -140,12 +146,22 @@ function resolveFontSlot(
       family: slot.googleFamily,
     };
   }
-  if (!slot.uploadFile || !uploadedStorageUrl) return null;
+  // Upload mode accepts either a fresh upload's storageUrl OR a
+  // hydrated kit's `slot.uploadStorageUrl` (sessionStorage-restored).
+  const storageUrl = uploadedStorageUrl ?? slot.uploadStorageUrl ?? null;
+  if (!storageUrl) return null;
+  const inferredName =
+    slot.uploadName ?? slot.uploadFile?.name ?? slot.uploadFamily ?? "Custom font";
+  const inferredFamily =
+    slot.uploadFamily ||
+    slot.uploadFile?.name.replace(/\.[^.]+$/, "") ||
+    slot.uploadName?.replace(/\.[^.]+$/, "") ||
+    "Custom";
   return {
-    name: slot.uploadName ?? slot.uploadFile.name,
+    name: inferredName,
     url: null,
-    storageUrl: uploadedStorageUrl,
-    family: slot.uploadFamily || slot.uploadFile.name.replace(/\.[^.]+$/, ""),
+    storageUrl,
+    family: inferredFamily,
   };
 }
 
@@ -189,10 +205,64 @@ export default function DatasheetPage() {
     emptyFontSlot(),
   );
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  // Pre-loaded logo from brand kit / default kit. See /create's
+  // companion state for the rationale.
+  const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
   const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
   const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(false);
   const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
+
+  // ─── Brand-kit hydration on first mount ────────────────────────
+  // Read taqreer:create:brand sessionStorage (the brand-kits "use"
+  // flow writes here). Falls back to the user's default brand kit.
+  // Clears the key after applying so refresh doesn't keep
+  // re-hydrating. Mirrors /create's effect exactly.
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      let hydrated = readBrandFromSession();
+      if (!hydrated) hydrated = await fetchDefaultBrandKit();
+      if (aborted || !hydrated) return;
+      if (hydrated.colors.length > 0) setColors(hydrated.colors);
+      if (
+        hydrated.headingFontSlot.googleFamily ||
+        hydrated.headingFontSlot.uploadStorageUrl
+      ) {
+        setHeadingFontSlot(hydrated.headingFontSlot);
+      }
+      if (
+        hydrated.bodyFontSlot.googleFamily ||
+        hydrated.bodyFontSlot.uploadStorageUrl
+      ) {
+        setBodyFontSlot(hydrated.bodyFontSlot);
+      }
+      if (hydrated.logo) {
+        setLoadedLogo(hydrated.logo);
+        const pos = hydrated.logo.position as CornerPosition;
+        if (
+          pos === "top-left" ||
+          pos === "top-center" ||
+          pos === "top-right" ||
+          pos === "bottom-left" ||
+          pos === "bottom-center" ||
+          pos === "bottom-right"
+        ) {
+          setLogoPosition(pos);
+        }
+        setLogoExcludeCover(hydrated.logo.exclude.includes("cover"));
+        setLogoExcludeClosing(hydrated.logo.exclude.includes("closing"));
+      }
+      try {
+        window.sessionStorage.removeItem(CREATE_BRAND_KEY);
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   // ─── Output / rules state (identical to /create) ───────────────
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
@@ -381,9 +451,11 @@ export default function DatasheetPage() {
         paletteMode: "manual" as const,
         paletteScreenshotUrl: null,
         fonts: { heading: headingFont, body: bodyFont },
-        logo: logoUploaded
+        // Logo storageUrl resolves to a fresh upload first, then a
+        // hydrated kit's stored path. Server re-signs either path.
+        logo: (logoUploaded?.storageUrl ?? loadedLogo?.storageUrl)
           ? {
-              storageUrl: logoUploaded.storageUrl,
+              storageUrl: (logoUploaded?.storageUrl ?? loadedLogo?.storageUrl)!,
               position: logoPosition,
               exclude: logoExclude,
             }
@@ -730,8 +802,15 @@ export default function DatasheetPage() {
 
             <LogoUploadSlot
               file={logoFile}
-              onSelect={setLogoFile}
-              onRemove={() => setLogoFile(null)}
+              previewUrl={loadedLogo?.displayUrl ?? null}
+              onSelect={(f) => {
+                setLogoFile(f);
+                setLoadedLogo(null);
+              }}
+              onRemove={() => {
+                setLogoFile(null);
+                setLoadedLogo(null);
+              }}
             />
 
             <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
@@ -744,12 +823,12 @@ export default function DatasheetPage() {
                   excludeClosing={logoExcludeClosing}
                   onCoverChange={setLogoExcludeCover}
                   onClosingChange={setLogoExcludeClosing}
-                  disabled={!logoFile}
+                  disabled={!logoFile && !loadedLogo}
                 />
                 <PositionDropdown
                   value={logoPosition}
                   onChange={setLogoPosition}
-                  disabled={!logoFile}
+                  disabled={!logoFile && !loadedLogo}
                 />
               </div>
             </div>

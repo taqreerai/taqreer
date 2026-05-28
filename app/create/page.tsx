@@ -42,7 +42,6 @@ import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
 import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
 import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
-import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import {
   InlineStepper,
   SlideSizeFields,
@@ -51,6 +50,8 @@ import {
 } from "@/components/create/OutputCards";
 import {
   CardHeader,
+  ExclusionDropdown,
+  InlinePaletteSwatch,
   PositionDropdown,
   SegmentedToggle,
   Toggle,
@@ -70,6 +71,12 @@ import {
 import { uploadAsset } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 import { readTemplateSeed } from "@/lib/create/seed-from-template";
+import {
+  readBrandFromSession,
+  fetchDefaultBrandKit,
+  CREATE_BRAND_KEY,
+  type HydratedBrand,
+} from "@/lib/create/hydrate-brand-from-session";
 
 // ─── Constants ────────────────────────────────────────────────────
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
@@ -145,12 +152,25 @@ function resolveFontSlot(
       family: slot.googleFamily,
     };
   }
-  if (!slot.uploadFile || !uploadedStorageUrl) return null;
+  // Upload mode resolves with either a fresh upload's storageUrl
+  // OR a hydrated slot's `uploadStorageUrl` (from a brand kit) —
+  // both point at the same bucket, so the brief can re-sign
+  // identically. Without this fallback a hydrated kit's font
+  // slot would silently drop on submit.
+  const storageUrl = uploadedStorageUrl ?? slot.uploadStorageUrl ?? null;
+  if (!storageUrl) return null;
+  const inferredName =
+    slot.uploadName ?? slot.uploadFile?.name ?? slot.uploadFamily ?? "Custom font";
+  const inferredFamily =
+    slot.uploadFamily ||
+    slot.uploadFile?.name.replace(/\.[^.]+$/, "") ||
+    slot.uploadName?.replace(/\.[^.]+$/, "") ||
+    "Custom";
   return {
-    name: slot.uploadName ?? slot.uploadFile.name,
+    name: inferredName,
     url: null,
-    storageUrl: uploadedStorageUrl,
-    family: slot.uploadFamily || slot.uploadFile.name.replace(/\.[^.]+$/, ""),
+    storageUrl,
+    family: inferredFamily,
   };
 }
 
@@ -186,6 +206,12 @@ export default function CreatePage() {
     emptyFontSlot(),
   );
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  // Pre-loaded logo from a brand kit (or default kit). When set,
+  // the LogoUploadSlot shows the remote SVG via `previewUrl`; the
+  // submit pipeline passes the storageUrl through without
+  // re-uploading. Cleared if the user picks a fresh file via the
+  // logo's onRemove → onSelect cycle.
+  const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
   const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
   // Logo cover / closing excludes — same toggles the legacy /create
   // had on the logo card. Server reads brand.logo.exclude to skip
@@ -204,16 +230,16 @@ export default function CreatePage() {
     if (!seed) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "hydrate component state from a one-shot session-storage marker on mount" shape; only fires once per page load
     setTemplateSeedId(seed.id);
-    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+     
     setTemplateSeedTitle(seed.title);
-    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+     
     setColors(seed.brand.palette.length > 0 ? seed.brand.palette : DEFAULT_PALETTE);
-    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+     
     setSlideSize(seed.brand.format);
-    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+     
     setLanguage(seed.brand.language === "en" ? "en" : "ar");
     if (seed.brand.fontHeading?.name) {
-      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+       
       setHeadingFontSlot({
         mode: "google",
         googleFamily: seed.brand.fontHeading.name,
@@ -224,7 +250,7 @@ export default function CreatePage() {
       });
     }
     if (seed.brand.fontBody?.name) {
-      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+       
       setBodyFontSlot({
         mode: "google",
         googleFamily: seed.brand.fontBody.name,
@@ -234,6 +260,65 @@ export default function CreatePage() {
         uploadFamily: "",
       });
     }
+  }, []);
+
+  // ─── Brand-kit hydration (on first mount, skip if template seed) ──
+  // Read sessionStorage first (the brand-kits "use" flow writes
+  // here). If nothing's there, fall back to the user's default
+  // brand kit. Skip entirely when arriving from a template — the
+  // template's brand wins by user intent. Single-shot per mount;
+  // we clear the sessionStorage key after applying so refresh
+  // doesn't keep re-hydrating an old kit's logo.
+  useEffect(() => {
+    if (readTemplateSeed()) return;
+    let aborted = false;
+    (async () => {
+      let hydrated = readBrandFromSession();
+      if (!hydrated) hydrated = await fetchDefaultBrandKit();
+      if (aborted || !hydrated) return;
+      if (hydrated.colors.length > 0) setColors(hydrated.colors);
+      if (
+        hydrated.headingFontSlot.googleFamily ||
+        hydrated.headingFontSlot.uploadStorageUrl
+      ) {
+        setHeadingFontSlot(hydrated.headingFontSlot);
+      }
+      if (
+        hydrated.bodyFontSlot.googleFamily ||
+        hydrated.bodyFontSlot.uploadStorageUrl
+      ) {
+        setBodyFontSlot(hydrated.bodyFontSlot);
+      }
+      if (hydrated.logo) {
+        setLoadedLogo(hydrated.logo);
+        // Restore position + exclude flags from the saved kit so
+        // the user sees the kit's exact configuration, not the
+        // page's defaults.
+        const pos = hydrated.logo.position as CornerPosition;
+        if (
+          pos === "top-left" ||
+          pos === "top-center" ||
+          pos === "top-right" ||
+          pos === "bottom-left" ||
+          pos === "bottom-center" ||
+          pos === "bottom-right"
+        ) {
+          setLogoPosition(pos);
+        }
+        setLogoExcludeCover(hydrated.logo.exclude.includes("cover"));
+        setLogoExcludeClosing(hydrated.logo.exclude.includes("closing"));
+      }
+      // Burn the sessionStorage key — single-shot. The default-kit
+      // path doesn't write it, so the clear is a no-op there.
+      try {
+        window.sessionStorage.removeItem(CREATE_BRAND_KEY);
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
   }, []);
 
   // ─── Output / rules state ──────────────────────────────────────
@@ -457,14 +542,22 @@ export default function CreatePage() {
         logoExcludeClosing ? "closing" : null,
       ].filter((v): v is "cover" | "closing" => v !== null);
 
+      // Resolve the logo's storageUrl in priority order: a freshly
+      // uploaded file wins (just-completed upload). If none, fall
+      // back to a hydrated kit's storageUrl. Either way the
+      // server re-signs the path itself, so no client trust is
+      // assumed.
+      const resolvedLogoStorageUrl =
+        logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
+
       const brand = {
         colors,
         paletteMode: "manual" as const,
         paletteScreenshotUrl: null,
         fonts: { heading: headingFont, body: bodyFont },
-        logo: logoUploaded
+        logo: resolvedLogoStorageUrl
           ? {
-              storageUrl: logoUploaded.storageUrl,
+              storageUrl: resolvedLogoStorageUrl,
               position: logoPosition,
               exclude: logoExclude,
             }
@@ -847,8 +940,15 @@ export default function CreatePage() {
 
             <LogoUploadSlot
               file={logoFile}
-              onSelect={setLogoFile}
-              onRemove={() => setLogoFile(null)}
+              previewUrl={loadedLogo?.displayUrl ?? null}
+              onSelect={(f) => {
+                setLogoFile(f);
+                setLoadedLogo(null);
+              }}
+              onRemove={() => {
+                setLogoFile(null);
+                setLoadedLogo(null);
+              }}
             />
 
             <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
@@ -861,12 +961,12 @@ export default function CreatePage() {
                   excludeClosing={logoExcludeClosing}
                   onCoverChange={setLogoExcludeCover}
                   onClosingChange={setLogoExcludeClosing}
-                  disabled={!logoFile}
+                  disabled={!logoFile && !loadedLogo}
                 />
                 <PositionDropdown
                   value={logoPosition}
                   onChange={setLogoPosition}
-                  disabled={!logoFile}
+                  disabled={!logoFile && !loadedLogo}
                 />
               </div>
             </div>
@@ -1035,179 +1135,6 @@ export default function CreatePage() {
           {error || " "}
         </p>
       </div>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────
-// ExclusionDropdown — pill button that opens a popover with two
-// checkbox-style toggles (exclude cover, exclude closing). Same
-// chrome as PositionDropdown so the two read as a pair: identical
-// h-8 trigger, identical glass popover. Single-pill replacement for
-// the legacy two-pill "استثناء الغلاف / استثناء الشريحة الأخيرة" layout.
-// ───────────────────────────────────────────────────────────────────
-function ExclusionDropdown({
-  excludeCover,
-  excludeClosing,
-  onCoverChange,
-  onClosingChange,
-  disabled,
-}: {
-  excludeCover: boolean;
-  excludeClosing: boolean;
-  onCoverChange: (next: boolean) => void;
-  onClosingChange: (next: boolean) => void;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const count = (excludeCover ? 1 : 0) + (excludeClosing ? 1 : 0);
-  const label = count > 0 ? `استثناء (${count})` : "استثناء";
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      <button
-        type="button"
-        onClick={() => !disabled && setOpen((v) => !v)}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className={`backdrop-blur-glass flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-          open ? "border-white/40" : "border-white/15 hover:border-white/30"
-        }`}
-        style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
-        }}
-      >
-        <span
-          className={`material-symbols-outlined transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-          style={{ fontSize: 14 }}
-        >
-          expand_more
-        </span>
-        <span className="whitespace-nowrap">{label}</span>
-      </button>
-      {open ? (
-        <div
-          // Same glass-popover recipe as PositionDropdown +
-          // GoogleFontSlot — backdrop-blur-glass + bg-glass + glass
-          // border + shadow-2xl. Keeps the dropdown family visually
-          // consistent across /create.
-          className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
-          role="listbox"
-          aria-label="استثناء"
-        >
-          <ExclusionItem
-            label="استثناء الغلاف"
-            checked={excludeCover}
-            onChange={onCoverChange}
-          />
-          <ExclusionItem
-            label="استثناء الشريحة الأخيرة"
-            checked={excludeClosing}
-            onChange={onClosingChange}
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ExclusionItem({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="option"
-      aria-selected={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-white/5"
-    >
-      <span className="whitespace-nowrap">{label}</span>
-      <span
-        className={`material-symbols-outlined transition-opacity ${
-          checked ? "opacity-100 text-white" : "opacity-0"
-        }`}
-        style={{ fontSize: 16 }}
-      >
-        check
-      </span>
-    </button>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────
-// InlinePaletteSwatch — small fixed-size swatch (h-7 w-7) used in
-// /create's palette row where swatches sit inline next to the
-// "الألوان" label. Each swatch is square; the row sizes naturally
-// so adding colours grows the row's width (still within the card)
-// without ever wrapping to a second line.
-// ───────────────────────────────────────────────────────────────────
-function InlinePaletteSwatch({
-  value,
-  index,
-  removable,
-  onChange,
-  onRemove,
-}: {
-  value: string;
-  index: number;
-  removable: boolean;
-  onChange: (next: string) => void;
-  onRemove: () => void;
-}) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setPickerOpen((v) => !v)}
-        className="block h-7 w-7 shrink-0 rounded-md border border-white/15 transition-shadow hover:shadow-md"
-        style={{ backgroundColor: value }}
-        aria-label={`اللون ${index + 1}`}
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={!removable}
-        aria-label="إزالة اللون"
-        className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
-          close
-        </span>
-      </button>
-      <ColorPickerPopover
-        open={pickerOpen}
-        value={value}
-        onChange={onChange}
-        onClose={() => setPickerOpen(false)}
-      />
     </div>
   );
 }

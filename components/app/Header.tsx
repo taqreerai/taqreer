@@ -1,8 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { BellDropdown } from "@/components/app/BellDropdown";
+import { NewProjectDialog } from "@/components/app/NewProjectDialog";
 
 export function Header({ isCollapsed }: { isCollapsed?: boolean }) {
+  // Owns the global "Start a new project" picker. Triggered from
+  // the header so the four landing flows are reachable from any
+  // page, not just the dashboard's QuickActions row.
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+
   return (
     <header
       className={`header-bg backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed top-0 left-0 z-40 h-20 flex items-center px-8 transition-all duration-300 ease-in-out ${
@@ -33,12 +40,21 @@ export function Header({ isCollapsed }: { isCollapsed?: boolean }) {
         {/* Left: Actions */}
         <div className="flex items-center gap-4">
           <BellDropdown />
-          <button className="btn-gradient px-6 py-2.5 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setNewProjectOpen(true)}
+            className="btn-gradient px-6 py-2.5 flex items-center gap-1"
+          >
             <span className="material-symbols-outlined text-sm">add</span>
             مشروع جديد
           </button>
         </div>
       </div>
+
+      <NewProjectDialog
+        open={newProjectOpen}
+        onClose={() => setNewProjectOpen(false)}
+      />
     </header>
   );
 }
