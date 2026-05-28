@@ -28,7 +28,7 @@ export default async function EnhanceLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/enhance");
+    redirect("/login?next=/enhance");
   }
 
   const cookieStore = await cookies();

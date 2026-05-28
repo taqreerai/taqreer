@@ -17,6 +17,7 @@
 // touching the deck-generation flow.
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
 import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
@@ -264,9 +265,24 @@ export default function NewBrandKitPage() {
     }
   };
 
+  // Wrap in a semantic `<form>` so Enter submits from any input + the
+  // save button is `type="submit"` instead of an `onClick` `<button
+  // type="button">` (CR #41 finding, 2026-05-28). `handleSubmit`
+  // itself is async + sequenced (uploads, etc.), so we wrap it in a
+  // sync `onSubmit` that calls `preventDefault()` then awaits the
+  // existing logic — no behavioural change beyond enabling keyboard
+  // submission.
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void handleSubmit();
+  };
+
   return (
     <div className="page-container flex w-full justify-center" dir="rtl">
-      <div className="flex w-full flex-col items-center gap-6">
+      <form
+        onSubmit={handleFormSubmit}
+        className="flex w-full flex-col items-center gap-6"
+      >
         <header className="text-center">
           <h1 className="tq-h1">هوية جديدة</h1>
           <p className="tq-subhead mt-2">
@@ -414,15 +430,14 @@ export default function NewBrandKitPage() {
             {error ?? null}
           </div>
           <div className="flex items-center gap-3">
-            <a
+            <Link
               href="/brand-kits"
               className="rounded-full border border-white/15 px-5 py-2 text-sm text-white/70 transition-colors hover:border-white/30 hover:text-white"
             >
               إلغاء
-            </a>
+            </Link>
             <button
-              type="button"
-              onClick={handleSubmit}
+              type="submit"
               disabled={submitting}
               className="btn-gradient flex items-center gap-2 px-5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -452,7 +467,7 @@ export default function NewBrandKitPage() {
             </button>
           </div>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

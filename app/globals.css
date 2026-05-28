@@ -354,9 +354,15 @@ button, a, [role="button"] {
 }
 
 .input-dark {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* Glass-preset-linked surface — fill + blur + saturation all
+     ride the user's Settings → glass preset (`--glass-opacity`,
+     `--glass-blur`, `--glass-saturation`) so this input reads as
+     the same family as `.input-search` + every `.glass-*` card
+     and responds to the preset toggle in real time. Was
+     hardcoded `rgba(...,0.05)` + `blur(8px)` before 2026-05-27. */
+  background: rgba(255, 255, 255, var(--glass-opacity));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
   color: white;
   /* Fully rounded ends — visual rhyme with `.btn-pill` so inputs +
@@ -474,6 +480,65 @@ textarea.input-dark {
   --backdrop-blur-glass: calc(var(--glass-blur) * 2.5);
 }
 
+/* Boosted backdrop-blur variant — 1.5× the standard glass blur.
+   Used on the auth-modal so it reads heavier through the busy
+   marquee wall while still tracking the user's Settings glass
+   preset (chain: `--backdrop-blur-glass` is calc'd from
+   `--glass-blur`).
+
+   Why a plain CSS class instead of an @theme addition: Turbopack +
+   Tailwind v4 don't reliably hot-reload new `@theme` token additions
+   (verified 2026-05-28 — added `--backdrop-blur-glass-auth` to
+   @theme and the compiled chunk never picked it up even after touch
+   + page-request triggers). A regular CSS class sidesteps the JIT
+   utility pipeline entirely and recompiles on every globals.css
+   edit.
+
+   Why it works despite Tailwind's compositional `backdrop-filter`
+   rule: this class sets `--tw-backdrop-blur` (the same variable the
+   `backdrop-blur-glass` utility writes), so it PARTICIPATES in the
+   compositional chain rather than fighting it. The universal
+   `* { backdrop-filter: var(--tw-backdrop-blur) … }` rule reads
+   whatever the last writer left there.
+
+   Why this is unlayered: Tailwind v4 puts its utilities in a
+   `utilities` cascade layer; unlayered rules beat layered rules per
+   CSS spec regardless of source order, so this class reliably wins
+   over `backdrop-blur-glass` even when both are on the same element. */
+/* Custom utility for the auth-modal's heavy backdrop blur.
+   Multiplier `7` on `--glass-blur` (tracks the user's Settings
+   glass preset).
+
+   Why this shape: Lightning CSS in this codebase strips standard
+   `backdrop-filter: blur(…)` from custom classes (keeps only the
+   `-webkit-` prefix variant, breaking Chrome/Firefox). The
+   workaround is to participate in Tailwind v4's `--tw-backdrop-*`
+   composition chain — Lightning CSS preserves the chain form
+   (var(--tw-…)…) because it matches Tailwind's own utility output.
+   So we set `--tw-backdrop-blur` AND restate the full chain. The
+   chain MUST be byte-identical to Tailwind's built-in utility
+   output or unset --tw-* properties will wipe out the filter at
+   browser-compute time. */
+@utility backdrop-blur-glass-boost {
+  --tw-backdrop-blur: blur(calc(var(--glass-blur) * 7));
+  -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+}
+
+/* Auth-modal control sizing — every input + pill button + gradient
+   button inside the auth modal is locked to 48 px tall
+   (`calc(var(--spacing) * 12)` — Tailwind v4's 4 px spacing base ×
+   12 = 48 px, no hardcoded values). Scoped via the
+   `.backdrop-blur-glass-boost` class, which is unique to the auth
+   modal panel — other surfaces' inputs/buttons keep their own
+   sizing. Per user direction 2026-05-28: matches the Google login
+   button's visual weight across the form. */
+.backdrop-blur-glass-boost .input-dark,
+.backdrop-blur-glass-boost .btn-pill,
+.backdrop-blur-glass-boost .btn-gradient {
+  height: calc(var(--spacing) * 12);
+}
+
 @theme inline {
   --color-brand-purple-400: #C084FC;
   --color-brand-purple-500: #A855F7;
@@ -561,12 +626,19 @@ textarea.input-dark {
    on every page, even when content fits — that's the simplest,
    most portable guarantee against the shift. `scrollbar-gutter`
    alone wasn't being honoured for html in this layout chain. */
+/* `--tq-bg` lives on `html` (the root box), not `body`. Moved
+   2026-05-28 — body's solid bg was sitting between any layout-level
+   background layer (e.g. the auth marquee + dashboard-bg violet
+   glow) and the page beneath, "blocking" anything a layout wanted
+   to paint below body. `html` paints the deepest layer instead, and
+   `body` stays transparent so layouts compose freely on top. Visual
+   backdrop is identical for every existing page. */
 html {
+  background-color: var(--tq-bg);
   overflow-y: scroll;
 }
 
 body {
-  background-color: var(--tq-bg);
   color: #ffffff;
 }
 
@@ -1222,7 +1294,11 @@ body {
   transform: translate(-50%, -50%);
   width: 80%;
   height: 80%;
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+  /* Tokenized 2026-05-28: was hardcoded `rgba(168, 85, 247, 0.15)`
+     (purple-500) — swapped to `--tq-violet-rgb` so the landing's
+     section glow and the dashboard's page glow read as ONE brand
+     color. See `.dashboard-bg::before` for the matching backdrop. */
+  background: radial-gradient(circle, rgba(var(--tq-violet-rgb), 0.15) 0%, rgba(0, 0, 0, 0) 70%);
   z-index: -1;
   filter: blur(40px);
 }
@@ -1309,6 +1385,48 @@ body {
 .animate-scroll-up {
   animation: scroll-vertical-up 30s linear infinite;
   will-change: transform;
+}
+
+/* Slower variants used by the auth-marquee background (6-column wall
+   behind the signup/login glass modal). 600 s is a third dial-back
+   (90 s → 200 s → 400 s → 600 s, user direction 2026-05-28): each
+   tile takes ~20 s to traverse a column at this rate — the wall
+   reads as nearly-static with a faint hint of life. User reported
+   earlier passes as "dizzying"; anything above 500 s reads as
+   ambient chrome, not motion. Columns alternate `down-slow` /
+   `up-slow` to
+   build a woven cadence instead of a single conveyor belt.
+   `will-change: transform` dropped — Safari was treating heavy
+   `will-change` declarations on tall scroll containers as a memory-
+   pressure signal and skipping frames; the compositor handles the
+   translateY just fine without the hint. */
+.animate-scroll-down-slow {
+  animation: scroll-vertical-down 600s linear infinite;
+}
+
+.animate-scroll-up-slow {
+  animation: scroll-vertical-up 600s linear infinite;
+}
+
+/* Per-tile fade-in for the auth-marquee thumbnails. Each tile in
+   `AuthMarqueeBackground` carries a deterministic id-hashed
+   `animationDelay` (0-4500 ms range) so the wall populates as a
+   slow staggered cascade — like a Polaroid wave across the grid.
+   `both` fill-mode is critical: it makes the `0%` opacity state
+   apply BEFORE the animation starts (during the delay) AND retains
+   the `100%` state after completion. Without `both`, the tile would
+   flash at opacity 1 for the entire delay window. Was `forwards`
+   before — the spec defines `forwards` as "after only", so the
+   tile was visible during the delay even though we'd set
+   `opacity: 0` on the class as a workaround. `both` is the correct
+   knob. */
+@keyframes tile-fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.tile-fade-in {
+  animation: tile-fade-in 2.5s ease-out both;
 }
 
 .mask-vertical-edges {
@@ -1428,81 +1546,57 @@ body {
 }
 
 /* ─── Dashboard background ───
-   Three-layer composition so descendants with `backdrop-filter` (the
+   Two-layer composition so descendants with `backdrop-filter` (the
    main sidebar, slide-nav sidebar, header, comments panel) can
-   actually blur the aurora + noise behind them:
+   actually blur the glow behind them:
 
      0. `body { background-color: var(--tq-bg); }` paints the deepest
-        layer. `.dashboard-bg` itself NO LONGER sets a background-color
-        — its previous hardcoded `#03030D` overpainted the body
-        (and was the reason the dashboard read as darker than the
-        theme intended). Body is the single source of truth.
-     1. `::before` pseudo (z:0, fixed, inset:0) — the aurora gradient
-        blobs. Pseudo-element so it sits in its own compositing
-        layer that child backdrop-filter can reach.
-     2. `::after` pseudo (z:0, fixed, inset:0, paints AFTER ::before)
-        — subtle film-grain noise via inline SVG `feTurbulence`.
-        Adds organic texture so the gradients don't read as flat
-        rendered blobs.
+        layer. `.dashboard-bg` itself does not set a background-color
+        — body is the single source of truth.
+     1. `::before` pseudo (z:0, fixed, centered) — the brand-violet
+        glow. Pseudo-element so it sits in its own compositing layer
+        that child backdrop-filter can reach.
 
-   The 2026-05-22 tune: the gradients used to be quite saturated
-   (`rgba(55,11,244,0.28)` etc.) with a sharp 0%→transparent 55%
-   curve — they read as round colored disks rather than aurora.
-   Now: ~40 % lower alpha, desaturated toward soft brand-adjacent
-   hues, multi-stop fade out to 85% so the merge with the page
-   base is smooth instead of edged.
+   Recipe matches the landing's `.glow-effect` (rgba on `--tq-violet`,
+   radial fade, soft blur) so marketing + app share one chrome
+   (2026-05-28). Previous tuning history (aurora blobs, film-grain
+   noise, gray-radial baseline) lived here for visual experiments
+   that the brand chrome ultimately superseded.
 
-   Why this matters: the previous `background-attachment: fixed`
-   recipe rendered the gradients into the SAME paint layer as the
-   .dashboard-bg element, and some browsers (Safari + Chromium
-   under certain GPU pipelines) won't let a child with
-   backdrop-filter blur a `background-attachment: fixed`
-   ancestor — the sidebar's glass effect was invisible against
-   the solid base (user-reported 2026-05-21). */
+   The `background-attachment: fixed` trap: some browsers (Safari +
+   Chromium under certain GPU pipelines) won't let a child with
+   backdrop-filter blur a `background-attachment: fixed` ancestor.
+   Using a fixed-position pseudo-element instead keeps the glow in
+   its own paint layer, so the sidebar's glass effect still works
+   over it (user-reported 2026-05-21). */
 .dashboard-bg {
   position: relative;
   min-height: 100vh;
   isolation: isolate;
 }
 
+/* Bottom-anchored brand-violet glow. Recipe uses `--tq-violet-rgb`
+   to stay in lock-step with the landing's `.glow-effect` color
+   token. The element is full-width and positioned at `top: 90%`
+   so its top edge sits 90 % down the viewport — only the upper
+   sliver of the ellipse reads, giving the page a soft violet
+   wash rising from the bottom edge (user direction 2026-05-28). */
 .dashboard-bg::before {
   content: "";
   position: fixed;
-  inset: 0;
+  top: 90%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
-  /* Single large radial — radial conversion of the user-supplied
-     reference linear gradient `to right, #434343 0%, black 100%`.
-     The anchor sits at the LEFT edge (15 % horizontal; vertical
-     defaults to 50 % when omitted from `at`) with a wide ellipse
-     (130 % × 110 %) so the gray "core" reads on the left side of
-     the viewport and fades smoothly to black across the rest.
-     2026-05-24 v18: darkened the gray core from #434343 → #3b3b3b
-     per design direction — slightly deeper baseline keeps the
-     dashboard chrome reading without competing for attention. */
-  background-image:
-    radial-gradient(130% 110% at 15%,
-      #3b3b3b 0%,
-      #000 100%);
-}
-
-.dashboard-bg::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  /* Film-grain noise via inline SVG `feTurbulence`. The fractal
-     noise generator produces monochrome static; the feColorMatrix
-     pins it to a low alpha (0.35) so the grain is subtle on top of
-     the gradients. Tile size 200×200; repeating across the viewport
-     gives organic texture that never visibly tiles at the seams
-     thanks to `stitchTiles='stitch'`. The outer opacity:0.5 + the
-     SVG's own 0.35 alpha multiply to ~0.18 effective intensity. */
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  background-size: 200px 200px;
-  background-repeat: repeat;
-  opacity: 0.5;
+  background: radial-gradient(
+    ellipse at bottom,
+    rgba(var(--tq-violet-rgb), 0.12) 0%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  filter: blur(80px);
 }
 
 /* ─── Avatar ─── */

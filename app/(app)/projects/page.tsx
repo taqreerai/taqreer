@@ -34,7 +34,7 @@ export default async function ProjectsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/projects");
+    redirect("/login?next=/projects");
   }
 
   const dbUser = await prisma.user.findUnique({

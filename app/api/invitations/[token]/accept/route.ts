@@ -46,7 +46,7 @@ export async function GET(
     // login flow can preserve it through email-confirmation
     // redirects (relative URLs don't round-trip well there).
     const next = `${url.origin}/api/invitations/${encodeURIComponent(token)}/accept`;
-    const loginUrl = new URL("/auth/login", url.origin);
+    const loginUrl = new URL("/login", url.origin);
     loginUrl.searchParams.set("next", next);
     return NextResponse.redirect(loginUrl);
   }

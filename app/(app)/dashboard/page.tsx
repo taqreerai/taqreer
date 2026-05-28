@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login?next=/dashboard");
+    redirect("/login?next=/dashboard");
   }
 
   const existingUser = await prisma.user.findUnique({

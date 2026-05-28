@@ -23,7 +23,7 @@ export default async function MimicLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/mimic");
+    redirect("/login?next=/mimic");
   }
 
   const cookieStore = await cookies();

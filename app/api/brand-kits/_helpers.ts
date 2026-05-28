@@ -65,6 +65,15 @@ export async function buildLogoResponse(
     signedUrl,
     name: logoBlob.name ?? null,
     position: logoBlob.position ?? "top-right",
-    exclude: Array.isArray(logoBlob.exclude) ? logoBlob.exclude : [],
+    // Filter to the declared enum — the column is `Json` so a hand-
+    // edited or legacy row could carry anything (e.g. extra slide
+    // names from an older schema). Return values must match the
+    // `BrandKitLogoResponse.exclude` contract or downstream consumers
+    // hit invariant violations.
+    exclude: Array.isArray(logoBlob.exclude)
+      ? logoBlob.exclude.filter(
+          (v): v is "cover" | "closing" => v === "cover" || v === "closing",
+        )
+      : [],
   };
 }

@@ -12,7 +12,7 @@ const protectedRoutes = [
   "/folders",
 ];
 
-const authRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
+const authRoutes = ["/login", "/signup", "/forgot-password"];
 
 function getSafeRedirectPath(next: string | null, origin: string) {
   if (!next) return "/dashboard";
@@ -49,30 +49,31 @@ export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   const origin = request.nextUrl.origin;
 
-  // Bypass the coming-soon gate on localhost / development
-  const isDev = process.env.NODE_ENV === "development";
-  const host = request.headers.get("host") ?? "";
-  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  if ((isDev || isLocalhost) && pathname === "/") {
-    return preserveAuthCookies(
-      NextResponse.rewrite(new URL("/preview?key=taqreer2025", request.url)),
-      response
-    );
-  }
+  // Removed 2026-05-28: the localhost/dev rewrite `/` →
+  // `/preview?key=taqreer2025` was wired when the full landing
+  // lived behind a key-gate at /preview. Now `app/page.tsx` IS
+  // the public landing, so `/` should render it directly without
+  // any rewrite.
 
   // Get session
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+  // Anchored route matching — `startsWith` alone would match
+  // unrelated paths like `/login-help` or `/signup-banner` and
+  // (a) treat them as protected when they're not, (b) bounce
+  // authenticated users away from them as if they were auth pages.
+  // Match either the exact pathname or the route followed by a `/`
+  // so only true sub-trees count (CR #42 finding, 2026-05-28).
+  const matchesRoute = (route: string) =>
+    pathname === route || pathname.startsWith(`${route}/`);
+  const isProtectedRoute = protectedRoutes.some(matchesRoute);
+  const isAuthRoute = authRoutes.some(matchesRoute);
 
   // Redirect unauthenticated users to login
   if (isProtectedRoute && !session) {
-    const loginUrl = new URL("/auth/login", request.url);
+    const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname + (searchParams.toString() ? `?${searchParams}` : ""));
     return preserveAuthCookies(NextResponse.redirect(loginUrl), response);
   }

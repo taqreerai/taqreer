@@ -25,7 +25,13 @@ export default function ForgotPasswordPage() {
     setError(null);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        // Supabase verifies the recovery token, creates a recovery
+        // session, then redirects to this URL with the session in the
+        // URL hash. `/reset-password` renders a form that calls
+        // `auth.updateUser({ password })` against the recovery session.
+        // Path was `/auth/reset-password` before the auth-URL
+        // migration — corrected 2026-05-28.
+        redirectTo: `${window.location.origin}/reset-password`,
       });
       if (resetError) {
         setError("حدث خطأ. يرجى المحاولة مرة أخرى");
@@ -58,7 +64,7 @@ export default function ForgotPasswordPage() {
             تحقق من بريدك الإلكتروني لتلقي رابط استعادة كلمة المرور. قد يستغرق وصول الرسالة بضع دقائق.
           </p>
         </div>
-        <Link href="/auth/login" className="text-white hover:text-cyan-400 transition-colors cursor-pointer">
+        <Link href="/login" className="text-white hover:underline cursor-pointer">
           العودة إلى تسجيل الدخول
         </Link>
       </motion.div>
@@ -72,11 +78,13 @@ export default function ForgotPasswordPage() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="space-y-6"
+      className="space-y-5"
     >
+      {/* Heading + subtitle — same hierarchy as signup/login forms,
+          center-aligned, `text-2xl` per user direction 2026-05-28. */}
       <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-3xl font-bold mb-2">استعادة كلمة المرور</h1>
-        <p className="text-muted">أدخل بريدك الإلكتروني لاستعادة كلمة المرور</p>
+        <h1 className="text-2xl font-bold mb-2">استعادة كلمة المرور</h1>
+        <p className="text-sm text-muted">سنرسل لك رابط استعادة على بريدك الإلكتروني.</p>
       </motion.div>
 
       {error && (
@@ -106,9 +114,9 @@ export default function ForgotPasswordPage() {
         </button>
       </motion.form>
 
-      <motion.p {...fadeUp(0.2)} className="text-sm text-center">
+      <motion.p {...fadeUp(0.2)} className="text-sm text-muted">
         تذكرت كلمة المرور؟{" "}
-        <Link href="/auth/login" className="text-white hover:text-cyan-400 transition-colors cursor-pointer">
+        <Link href="/login" className="text-white hover:underline cursor-pointer">
           تسجيل الدخول
         </Link>
       </motion.p>

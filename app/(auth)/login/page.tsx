@@ -97,7 +97,7 @@ export default function LoginPage() {
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}${templateId ? `&template=${templateId}` : ""}`,
+          redirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(nextUrl)}${templateId ? `&template=${templateId}` : ""}`,
         },
       });
       if (signInError) setError(toArabicError(signInError.message));
@@ -115,15 +115,17 @@ export default function LoginPage() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="space-y-6"
+      className="space-y-5"
     >
+      {/* Heading + subtitle — center-aligned, `text-2xl` per user
+          direction 2026-05-28. Matches the signup form's hierarchy. */}
       <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-3xl font-bold mb-2">تسجيل الدخول</h1>
-        <p className="text-muted">مرحباً بك في تقرير</p>
+        <h1 className="text-2xl font-bold mb-2">تسجيل الدخول</h1>
+        <p className="text-sm text-muted">مرحباً بعودتك إلى تقرير.</p>
       </motion.div>
 
       {deleted && (
-        <motion.div {...fadeUp(0.03)} className="bg-green-500/20 border border-green-500/40 rounded-xl p-3 text-green-200 text-sm text-center">
+        <motion.div {...fadeUp(0.03)} className="bg-green-500/20 border border-green-500/40 rounded-xl p-3 text-green-200 text-sm">
           تم حذف حسابك بنجاح
         </motion.div>
       )}
@@ -134,7 +136,30 @@ export default function LoginPage() {
         </motion.div>
       )}
 
-      <motion.form {...fadeUp(0.1)} onSubmit={handleEmailLogin} className="space-y-4">
+      {/* Google primary — top of the form for Gamma-style single-CTA
+          hierarchy. Email/password sits below the "أو" divider. */}
+      <motion.button
+        {...fadeUp(0.1)}
+        onClick={handleGoogleLogin}
+        disabled={loading}
+        className="btn-gradient w-full px-4 py-3 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+      >
+        {googleIcon}
+        المتابعة بحساب جوجل
+      </motion.button>
+
+      <motion.div {...fadeUp(0.15)} className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[var(--tq-border-glass)]" />
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="px-3 py-0.5 rounded-full bg-[var(--tq-bg-glass)] border border-[var(--tq-border-glass)] text-xs text-muted">
+            أو
+          </span>
+        </div>
+      </motion.div>
+
+      <motion.form {...fadeUp(0.2)} onSubmit={handleEmailLogin} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-2">البريد الإلكتروني</label>
           <input
@@ -147,12 +172,12 @@ export default function LoginPage() {
           />
         </div>
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">كلمة المرور</label>
-            <Link href="/auth/forgot-password" className="text-xs text-white hover:text-cyan-400 transition-colors cursor-pointer">
-              نسيت كلمة المرور؟
-            </Link>
-          </div>
+          {/* Password label sits alone now — the forgot-password
+              link used to live here on the right side of the row,
+              moved to the form footer next to the signup CTA per
+              user direction 2026-05-28 so both secondary navs
+              cluster together. */}
+          <label className="block text-sm font-medium mb-2">كلمة المرور</label>
           <input
             type="password"
             value={password}
@@ -165,37 +190,36 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
+          className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? "جاري الدخول..." : "تسجيل الدخول"}
         </button>
       </motion.form>
 
-      <motion.div {...fadeUp(0.2)} className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-white/[var(--glass-border-opacity)]" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-[var(--tq-bg)] text-muted">أو</span>
-        </div>
-      </motion.div>
-
-      <motion.button
-        {...fadeUp(0.25)}
-        onClick={handleGoogleLogin}
-        disabled={loading}
-        className="input-dark hover:bg-white/5 disabled:opacity-50 text-white font-medium px-4 py-3 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+      {/* Footer cluster — both secondary navs sit together at the
+          bottom of the form: signup CTA on the left of the row,
+          forgot-password on the right (or in RTL, signup at the
+          start of the inline axis, forgot-password at the end).
+          Single row with `justify-between` so they sit on opposite
+          ends. Forgot-password label kept its `text-xs` to read as
+          the smaller of the two secondaries. */}
+      <motion.div
+        {...fadeUp(0.3)}
+        className="flex items-center justify-between gap-3 text-sm text-muted"
       >
-        {googleIcon}
-        تسجيل الدخول بجوجل
-      </motion.button>
-
-      <motion.p {...fadeUp(0.3)} className="text-sm text-center">
-        ليس لديك حساب؟{" "}
-        <Link href="/auth/signup" className="text-white hover:text-cyan-400 transition-colors cursor-pointer">
-          إنشاء حساب جديد
+        <span>
+          ليس لديك حساب؟{" "}
+          <Link href="/signup" className="text-white hover:underline cursor-pointer">
+            إنشاء حساب جديد
+          </Link>
+        </span>
+        <Link
+          href="/forgot-password"
+          className="text-xs text-white hover:underline cursor-pointer whitespace-nowrap"
+        >
+          نسيت كلمة المرور؟
         </Link>
-      </motion.p>
+      </motion.div>
     </motion.div>
   );
 }

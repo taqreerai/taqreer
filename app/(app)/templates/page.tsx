@@ -29,7 +29,7 @@ export default async function TemplatesPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/auth/login?next=/templates");
+    redirect("/login?next=/templates");
   }
 
   const dbUser = await prisma.user.findFirst({
@@ -37,7 +37,7 @@ export default async function TemplatesPage() {
     select: { id: true },
   });
   if (!dbUser) {
-    redirect("/auth/login?next=/templates");
+    redirect("/login?next=/templates");
   }
 
   const selectShape = {

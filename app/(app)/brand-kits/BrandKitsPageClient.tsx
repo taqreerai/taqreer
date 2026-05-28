@@ -12,6 +12,7 @@
 // `UseBrandKitDialog` for the per-modal recipes.
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandKitTile, type BrandKitTileData } from "@/components/app/BrandKitTile";
 import { BrandKitActionsMenu } from "@/components/app/BrandKitActionsMenu";
@@ -138,10 +139,13 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
     const next = !kit.isDefault;
     // Optimistic: setting next=true also clears every other kit's
     // default flag so the server's transactional "only one default"
-    // behavior is mirrored in the UI immediately.
+    // behavior is mirrored in the UI immediately. Source `visibleKits`
+    // (the override-aware view) not `kits` (the stale SSR snapshot)
+    // so rapid toggles before `router.refresh()` returns don't drift
+    // off the latest UI state (CR #41 finding, 2026-05-28).
     const nextOverride = new Map<string, boolean>();
     if (next) {
-      for (const k of kits) {
+      for (const k of visibleKits) {
         if (k.id !== kit.id && k.isDefault) nextOverride.set(k.id, false);
       }
     }
@@ -208,7 +212,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
           احفظ شعارك وألوانك وخطوطك مرة واحدة ثم استخدمها بضغطة زر في أي
           تدفق إنشاء.
         </p>
-        <a
+        <Link
           href="/brand-kits/new"
           className="btn-gradient mt-2 inline-flex items-center gap-2 px-4 py-2 text-sm"
         >
@@ -220,7 +224,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
             add
           </span>
           إنشاء هوية جديدة
-        </a>
+        </Link>
       </div>
     );
   }

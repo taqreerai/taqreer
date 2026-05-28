@@ -19,7 +19,7 @@
 //
 // Why not a catch-all under `(app)`? A `(app)/[[...slug]]/page.tsx`
 // catch-all would route unmatched URLs through `(app)/layout.tsx`,
-// which redirects unauth visitors to `/auth/login`. That changes
+// which redirects unauth visitors to `/login`. That changes
 // behavior for unauth users on `/banana` (they'd lose the brand 404
 // and get bounced to login). Doing the auth check HERE keeps both
 // the auth and unauth experiences correct in one place.

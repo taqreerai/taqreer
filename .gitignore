@@ -22,3 +22,8 @@ comments.txt
 public/_test/
 public/raw-deck-*.html
 scratch/
+
+# Playwright MCP scratch directory: console logs, page snapshots,
+# and screenshots written during in-session browser automation.
+# Never committed.
+.playwright-mcp/
