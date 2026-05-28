@@ -17,9 +17,10 @@
 // Change this constant to point the wall at a different curator.
 const MARQUEE_OWNER_EMAIL = "taqreermail@gmail.com";
 //
-// Output shape: 12 columns × variable thumbs. The shuffler interleaves
-// 16:9 and 9:16 formats across columns so the mosaic doesn't end up
-// with all landscape on one side and all portrait on the other.
+// Output shape: 4 columns × variable thumbs (see `COLUMN_COUNT`).
+// The shuffler interleaves 16:9 and 9:16 formats across columns so
+// the mosaic doesn't end up with all landscape on one side and all
+// portrait on the other.
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -45,7 +46,7 @@ const ROWS_PER_COLUMN = 10;
 const SAMPLE_SIZE = COLUMN_COUNT * ROWS_PER_COLUMN;
 
 /**
- * Fetch a random batch of project thumbnails grouped into 12 columns.
+ * Fetch a random batch of project thumbnails grouped into `COLUMN_COUNT` columns.
  * Cached 60 s so repeated /signup hits during the same session reuse
  * the same wall (avoids the visual flicker of every page-nav reshuffling).
  */

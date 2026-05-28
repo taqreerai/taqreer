@@ -312,7 +312,7 @@ export default async function LandingPage() {
                 className="h-7 w-auto object-contain opacity-80"
               />
             </div>
-            <p>© 2024 taqreer.ai جميع الحقوق محفوظة.</p>
+            <p>© {new Date().getFullYear()} taqreer.ai جميع الحقوق محفوظة.</p>
           </div>
         </div>
       </footer>

@@ -525,6 +525,20 @@ textarea.input-dark {
   backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
 }
 
+/* Auth-modal control sizing — every input + pill button + gradient
+   button inside the auth modal is locked to 48 px tall
+   (`calc(var(--spacing) * 12)` — Tailwind v4's 4 px spacing base ×
+   12 = 48 px, no hardcoded values). Scoped via the
+   `.backdrop-blur-glass-boost` class, which is unique to the auth
+   modal panel — other surfaces' inputs/buttons keep their own
+   sizing. Per user direction 2026-05-28: matches the Google login
+   button's visual weight across the form. */
+.backdrop-blur-glass-boost .input-dark,
+.backdrop-blur-glass-boost .btn-pill,
+.backdrop-blur-glass-boost .btn-gradient {
+  height: calc(var(--spacing) * 12);
+}
+
 @theme inline {
   --color-brand-purple-400: #C084FC;
   --color-brand-purple-500: #A855F7;

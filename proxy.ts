@@ -60,10 +60,16 @@ export async function proxy(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+  // Anchored route matching — `startsWith` alone would match
+  // unrelated paths like `/login-help` or `/signup-banner` and
+  // (a) treat them as protected when they're not, (b) bounce
+  // authenticated users away from them as if they were auth pages.
+  // Match either the exact pathname or the route followed by a `/`
+  // so only true sub-trees count (CR #42 finding, 2026-05-28).
+  const matchesRoute = (route: string) =>
+    pathname === route || pathname.startsWith(`${route}/`);
+  const isProtectedRoute = protectedRoutes.some(matchesRoute);
+  const isAuthRoute = authRoutes.some(matchesRoute);
 
   // Redirect unauthenticated users to login
   if (isProtectedRoute && !session) {
