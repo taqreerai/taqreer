@@ -9,6 +9,66 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase/client";
 import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
+import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
+import type { AnimatedIconHandle } from "@/components/icons/types";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+
+// One sidebar nav link. Each instance owns its own icon ref so the
+// pill's mouseenter / mouseleave can drive the animated icon
+// imperatively (per user direction 2026-05-28: "hover animation
+// should start on button hover not icon hover"). The icons
+// themselves had their own `onHoverStart` / `onHoverEnd` SVG props
+// stripped — animation is parent-driven only.
+function SidebarNavLink({
+  href,
+  icon,
+  label,
+  isActive,
+  isCollapsed,
+  comingSoon = false,
+}: {
+  href: string;
+  icon: string;
+  label: string;
+  isActive: boolean;
+  isCollapsed: boolean;
+  comingSoon?: boolean;
+}) {
+  const iconRef = useRef<AnimatedIconHandle>(null);
+  return (
+    <div className="relative group w-full">
+      <Link
+        href={href}
+        onMouseEnter={() => iconRef.current?.startAnimation()}
+        onMouseLeave={() => iconRef.current?.stopAnimation()}
+        className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full relative ${
+          isActive ? 'nav-active' : 'nav-item'
+        }`}
+      >
+        <div
+          className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0 nav-icon transition-colors duration-200"
+          style={{ color: isActive ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
+        >
+          <AnimatedIcon ref={iconRef} name={icon} size={20} />
+        </div>
+        <span className={`font-medium text-sm transition-all duration-300 ${
+          isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
+        }`}>
+          {label}
+        </span>
+        {comingSoon && !isCollapsed && (
+          <span className="ml-auto mr-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+            قريباً
+          </span>
+        )}
+      </Link>
+      <Tooltip
+        isCollapsed={isCollapsed}
+        text={comingSoon ? `${label} (قريباً)` : label}
+      />
+    </div>
+  );
+}
 
 function Tooltip({ isCollapsed, text }: { isCollapsed: boolean; text: string }) {
   if (!isCollapsed) return null;
@@ -133,8 +193,6 @@ export function Sidebar({
     { path: '/settings', icon: 'settings', label: 'الإعدادات' },
   ];
 
-  const iconClass = "material-symbols-outlined text-[20px] flex-shrink-0";
-
   return (
     <aside
       aria-label="Sidebar"
@@ -150,12 +208,22 @@ export function Sidebar({
       {/* ── Logo ── */}
       <div className="h-20 flex items-center px-[18px] flex-shrink-0 border-b border-white/[0.08]">
         <div className="relative flex items-center h-full w-full">
-          {/* Collapsed: icon only */}
-          <div className={`absolute right-0 flex items-center justify-center w-[44px] h-[44px] transition-opacity duration-300 ${
-            isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}>
-            <Image src="/icon-colored.svg" alt="Taqreer Icon" width={22} height={22} className="object-contain" />
-          </div>
+          {/* Collapsed: icon only — wrapped in a Link to /dashboard so
+              clicking the brand mark always returns home, and animated
+              via `ParagraphWriteIcon` in "hover" mode so the three
+              white bars sit static at rest and only play the infinite
+              write-loop while the user hovers the logo button.
+              `pw-hover-trigger` is the CSS hook the icon's hover-mode
+              rules gate on. User direction 2026-05-28. */}
+          <Link
+            href="/dashboard"
+            aria-label="الرئيسية"
+            className={`pw-hover-trigger absolute right-0 flex items-center justify-center w-[44px] h-[44px] transition-opacity duration-300 ${
+              isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+          >
+            <ParagraphWriteIcon mode="hover" size={30} />
+          </Link>
           {/* Expanded: full logo */}
           <div className={`absolute right-0 flex items-center h-[44px] transition-opacity duration-300 ${
             isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
@@ -174,74 +242,37 @@ export function Sidebar({
             button's glass recipe). */}
         <div className="flex flex-col py-3 w-full">
           {/* Home */}
-          <div className="relative group w-full">
-            <Link
-              href="/dashboard"
-              className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full ${
-                pathname === '/dashboard' ? 'nav-active' : 'nav-item'
-              }`}
-            >
-              <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-                <span
-                  className={`${iconClass} nav-icon transition-colors duration-200`}
-                  style={{ color: pathname === '/dashboard' ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
-                >
-                  home
-                </span>
-              </div>
-              <span className={`font-medium text-sm transition-all duration-300 ${
-                isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
-              }`}>
-                الرئيسية
-              </span>
-            </Link>
-            <Tooltip isCollapsed={isCollapsed} text="الرئيسية" />
-          </div>
+          <SidebarNavLink
+            href="/dashboard"
+            icon="home"
+            label="الرئيسية"
+            isActive={pathname === '/dashboard'}
+            isCollapsed={isCollapsed}
+          />
         </div>
 
         {/* Divider */}
         <div className="divider-dark flex-shrink-0" />
 
-        {/* ── Action Buttons ── */}
+        {/* ── Action Buttons ──
+            Active vs. idle uses the same `.nav-active` / `.nav-item`
+            classes as the lower nav links so every sidebar item shares
+            one active vocabulary. No per-flow background-color or
+            boxShadow — see actionButtons docstring above for the
+            rationale. SidebarNavLink owns the animated-icon ref so
+            hovering the pill drives the animation. */}
         <div className="flex flex-col py-3 gap-1 w-full">
-          {actionButtons.map((btn) => {
-            const isActive = pathname === btn.path;
-            return (
-              <div key={btn.path} className="relative group w-full">
-                <Link
-                  href={btn.path}
-                  // Active vs. idle uses the same `.nav-active` /
-                  // `.nav-item` classes as the lower nav links so
-                  // every sidebar item shares one active vocabulary.
-                  // No per-flow background-color or boxShadow — see
-                  // actionButtons docstring above for the rationale.
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full relative ${
-                    isActive ? 'nav-active' : 'nav-item'
-                  }`}
-                >
-                  <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-                    <span
-                      className={`${iconClass} nav-icon transition-colors duration-200`}
-                      style={{ color: isActive ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
-                    >
-                      {btn.icon}
-                    </span>
-                  </div>
-                  <span className={`font-medium text-sm transition-all duration-300 ${
-                    isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
-                  } text-white`}>
-                    {btn.label}
-                  </span>
-                  {btn.comingSoon && !isCollapsed && (
-                    <span className="ml-auto mr-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
-                      قريباً
-                    </span>
-                  )}
-                </Link>
-                <Tooltip isCollapsed={isCollapsed} text={btn.comingSoon ? `${btn.label} (قريباً)` : btn.label} />
-              </div>
-            );
-          })}
+          {actionButtons.map((btn) => (
+            <SidebarNavLink
+              key={btn.path}
+              href={btn.path}
+              icon={btn.icon}
+              label={btn.label}
+              isActive={pathname === btn.path}
+              isCollapsed={isCollapsed}
+              comingSoon={btn.comingSoon}
+            />
+          ))}
         </div>
 
         {/* Divider */}
@@ -249,34 +280,16 @@ export function Sidebar({
 
         {/* ── Nav Links ── */}
         <nav className="flex flex-col py-3 gap-1 flex-1 w-full">
-          {navLinks.map((item) => {
-            const active = pathname === item.path;
-            return (
-              <div key={item.path} className="relative group w-full">
-                <Link
-                  href={item.path}
-                  className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full ${
-                    active ? 'nav-active' : 'nav-item'
-                  }`}
-                >
-                  <div className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0">
-                    <span
-                      className={`${iconClass} nav-icon transition-colors duration-200`}
-                      style={{ color: active ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
-                    >
-                      {item.icon}
-                    </span>
-                  </div>
-                  <span className={`font-medium text-sm transition-all duration-300 ${
-                    isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
-                  }`}>
-                    {item.label}
-                  </span>
-                </Link>
-                <Tooltip isCollapsed={isCollapsed} text={item.label} />
-              </div>
-            );
-          })}
+          {navLinks.map((item) => (
+            <SidebarNavLink
+              key={item.path}
+              href={item.path}
+              icon={item.icon}
+              label={item.label}
+              isActive={pathname === item.path}
+              isCollapsed={isCollapsed}
+            />
+          ))}
         </nav>
 
         {/* Divider — hidden with usage bar when collapsed */}

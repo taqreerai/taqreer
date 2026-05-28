@@ -21,7 +21,8 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { Hero } from "@/components/marketing/Hero";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import { TemplatesScroll } from "@/components/marketing/TemplatesScroll";
+import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
+import { getMarqueeColumns } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 
 // Platform-wide "decks created" counter shown in the Hero status chip.
@@ -120,9 +121,10 @@ export default async function LandingPage() {
   const supabase = await createClient();
   // `getUser()` round-trips to Supabase for a verified check;
   // `getSession()` reads the cookie only and can be spoofed.
-  const [{ data: { user } }, projectCount] = await Promise.all([
+  const [{ data: { user } }, projectCount, marqueeColumns] = await Promise.all([
     supabase.auth.getUser(),
     getProjectCount(),
+    getMarqueeColumns(),
   ]);
 
   return (
@@ -181,7 +183,7 @@ export default async function LandingPage() {
       <section className="py-32">
         <ScrollReveal direction="up">
           <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <h2 className="mb-12 text-4xl font-bold md:text-5xl">موثوق بنا من قبل</h2>
+            <h2 className="mb-12 text-3xl font-medium md:text-4xl">موثوق بنا من قبل</h2>
             <div className="mask-edges relative w-full overflow-hidden" dir="ltr">
               <div className="animate-marquee-rtl pause-on-hover flex w-max opacity-60 grayscale transition-all duration-500 hover:grayscale-0">
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -203,7 +205,7 @@ export default async function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal direction="up">
             <div className="mb-16 text-center">
-              <h2 className="mb-8 text-4xl font-bold md:text-5xl">
+              <h2 className="mb-8 text-3xl font-medium md:text-4xl">
                 كل ما تحتاجه لإنشاء عرض <br /> تقديمي احترافي
               </h2>
               <p className="mb-8 text-lg text-muted">
@@ -214,53 +216,21 @@ export default async function LandingPage() {
             </div>
           </ScrollReveal>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <ScrollReveal direction="up" delay={0.1}>
-              <FeatureCard
-                icon="inventory_2"
-                title={"أنشئ عرضًا مصممًا بالكامل\nبدون أي Prompt"}
-                body="اجمع المحتوى والهوية البصرية معًا، وسيقوم تقرير بإنشاء عرض PowerPoint كامل، بتصميم احترافي، مع مراعاة ألوان العلامة، الخطوط، الشعار، وأسلوب التوجيه البصري."
-              />
-            </ScrollReveal>
-            <ScrollReveal direction="up" delay={0.2}>
-              <FeatureCard
-                icon="bolt"
-                title={"حسّن عرض PowerPoint\nموجود مسبقًا"}
-                body="ارفع ملف PowerPoint الحالي، وسيقوم تقرير بتحسين التصميم، الألوان، المساحات، التسلسل الهرمي، وتنسيق النصوص، مع الحفاظ على المحتوى الأساسي للعرض."
-              />
-            </ScrollReveal>
-          </div>
-
-          {/* Wide 50/50 feature card paired with the live TemplatesScroll. */}
-          <ScrollReveal direction="up" delay={0.3}>
-            <div className="glass-card feature-card-glow relative mt-6 flex flex-col items-center gap-12 overflow-hidden rounded-3xl p-8 md:flex-row">
-              <div className="z-10 w-full md:w-1/2">
-                <FeatureIcon icon="dashboard_customize" />
-                <h3 className="mb-4 text-3xl font-bold">قوالب جاهزة تدعم RTL</h3>
-                <p className="mb-8 text-sm leading-relaxed text-muted">
-                  ابدأ من قوالب مصممة للعروض العربية والإنجليزية، مع دعم كامل
-                  لاتجاه النص من اليمين إلى اليسار، وتنسيق مناسب للعناوين،
-                  الفقرات، الجداول، والشرائح ثنائية اللغة.
-                </p>
-                <Link href="/signup" className="btn-gradient inline-block px-6 py-2 text-xs">
-                  ابدأ مجانًا
-                </Link>
-              </div>
-              <div className="relative mt-8 flex w-full justify-center md:mt-0 md:w-1/2">
-                <div className="w-full px-2 sm:px-0">
-                  <TemplatesScroll />
-                </div>
-              </div>
-            </div>
+          {/* Four animated flow cards (2 × 2) + the wide templates
+              card, all sharing the same glass chrome (content LEFT,
+              visual RIGHT). The templates card's marquee is fed the
+              real curator-gated recent-project thumbnails. */}
+          <ScrollReveal direction="up" delay={0.1}>
+            <FeatureFlowCards thumbnails={marqueeColumns.flat()} />
           </ScrollReveal>
         </div>
       </section>
 
-      <section id="pricing" className="glow-effect relative py-32">
+      <section id="pricing" className="relative py-32">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal direction="up">
             <div className="mb-16 text-center">
-              <h2 className="mb-8 text-4xl font-bold md:text-5xl">
+              <h2 className="mb-8 text-3xl font-medium md:text-4xl">
                 خطط بسيطة حسب <br /> احتياجك
               </h2>
               <p className="mb-8 text-lg text-muted">
@@ -289,7 +259,7 @@ export default async function LandingPage() {
           <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
             {FOOTER_GROUPS.map((group) => (
               <div key={group.title}>
-                <h4 className="mb-6 font-bold text-white">{group.title}</h4>
+                <h4 className="mb-6 font-medium text-white">{group.title}</h4>
                 <ul className="space-y-3 text-sm text-muted">
                   {group.links.map((link) => (
                     <li key={link}>
@@ -336,44 +306,6 @@ function pricingRevealDirection(idx: number): "right" | "left" | "up" {
   }
 }
 
-// Square icon chip used at the top of every feature card.
-function FeatureIcon({ icon }: { icon: string }) {
-  return (
-    <div
-      className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl"
-      style={{
-        background: "rgba(var(--tq-violet-rgb), 0.18)",
-        color: "var(--tq-violet)",
-        border: "1px solid rgba(var(--tq-violet-rgb), 0.30)",
-      }}
-    >
-      <span className="material-symbols-outlined" style={{ fontSize: 24 }}>
-        {icon}
-      </span>
-    </div>
-  );
-}
-
-// `whitespace-pre-line` honors `\n` in the `title` string for explicit
-// line breaks without leaking <br />s into the data.
-function FeatureCard({
-  icon,
-  title,
-  body,
-}: {
-  icon: string;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="glass-card feature-card-glow group rounded-3xl p-8 transition-colors">
-      <FeatureIcon icon={icon} />
-      <h3 className="mb-4 whitespace-pre-line text-2xl font-bold">{title}</h3>
-      <p className="text-sm leading-relaxed text-muted">{body}</p>
-    </div>
-  );
-}
-
 // Pricing tier card. The popular tier gets a violet glow + the
 // .badge-purple "الأكثر شعبية" chip; every tier's CTA stays on
 // .btn-gradient.
@@ -395,7 +327,7 @@ function PricingCard({ tier }: { tier: Tier }) {
             : undefined
         }
       >
-        <h3 className="mb-4 text-center text-2xl font-bold">{tier.name}</h3>
+        <h3 className="mb-4 text-center text-xl font-medium">{tier.name}</h3>
         <p className="mb-8 h-10 whitespace-pre-line text-center text-sm text-muted">
           {tier.description}
         </p>

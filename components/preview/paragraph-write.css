@@ -144,3 +144,45 @@
 .paragraph-write-icon[data-mode="break"] .pw-line-3 {
   animation: paragraph-break-3 3s 0.3s linear forwards;
 }
+
+/* ─── Hover mode ───────────────────────────────────────────────
+   Used by the collapsed-sidebar logo (Sidebar.tsx +
+   DashboardPreview.tsx). User direction 2026-05-28: brand mark
+   sits idle at rest (lines fully visible), and on hover the lines
+   play a ONE-SHOT write-out/write-in cycle that starts immediately
+   (no delay) and ends back at the visible rest state.
+
+   The default loop keyframes (`paragraph-write-1/2/3`) have a long
+   "hold" phase between 25 % and 85 % — that hold reads as a delay
+   on hover ("nothing happens for 2 seconds"). So we use dedicated
+   `pw-hover-cycle` keyframes here: visible → wipe out to the left →
+   wipe back in from the left → visible. No hold, no fade-to-stays-
+   invisible. `forwards` fill-mode pins the final frame (visible)
+   so the icon stays in its rest state after the animation ends.
+
+   Per-line stagger (`delay: 0 / 0.08 / 0.16s`) gives the 3 bars a
+   "wave" sequence rather than firing in unison.
+*/
+@keyframes pw-hover-cycle {
+  0%   { transform: scaleX(1); opacity: 1; }
+  35%  { transform: scaleX(0); opacity: 0; }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+
+/* Rest: no animation, lines fully visible. */
+.paragraph-write-icon[data-mode="hover"] .pw-line {
+  animation: none;
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+/* Hover: one-shot cycle, starts immediately. */
+.pw-hover-trigger:hover .paragraph-write-icon[data-mode="hover"] .pw-line-1 {
+  animation: pw-hover-cycle 0.8s 0s ease-out forwards;
+}
+.pw-hover-trigger:hover .paragraph-write-icon[data-mode="hover"] .pw-line-2 {
+  animation: pw-hover-cycle 0.8s 0.08s ease-out forwards;
+}
+.pw-hover-trigger:hover .paragraph-write-icon[data-mode="hover"] .pw-line-3 {
+  animation: pw-hover-cycle 0.8s 0.16s ease-out forwards;
+}
