@@ -1,17 +1,19 @@
-// Server-side data loader for the auth-layout marquee background.
+// Server-side data loader for the auth-layout marquee background AND the
+// landing "قوالب جاهزة" slideshow (both consume getMarqueeColumns).
 //
-// Picks a randomized batch of project thumbnails to scroll behind the
-// signup / login / forgot-password modal. Cached for 60 s via
+// Picks a randomized batch of TEMPLATE slide thumbnails — the curator
+// account's PUBLIC templates — to scroll behind the signup / login /
+// forgot-password modal + the landing card. Cached for 60 s via
 // `unstable_cache` so a refresh during testing doesn't hammer Postgres,
 // but short enough that the wall stays "alive" across sessions.
 //
-// Privacy policy (user-direction 2026-05-28): the marquee is gated to
-// thumbnails from a single source account (`MARQUEE_OWNER_EMAIL`
-// below) — we do NOT surface other users' decks on the public auth
-// pages. Earlier draft pulled from ALL projects with a thumbnail;
-// reverted because it exposed unrelated users' work-in-progress.
-// To rotate accounts (or open up to a list), update the constant or
-// switch to an `IN (...)` filter.
+// The synthetic typography + palette showcase slides are excluded — only
+// the real deck slides (cover + rest) ride the marquee.
+//
+// Privacy / curation policy: gated to a single curator account
+// (`MARQUEE_OWNER_EMAIL`) — we do NOT surface other users' templates on
+// the public surfaces. To rotate accounts (or open up to a list),
+// update the constant or switch to an `IN (...)` filter.
 
 // The marquee is fed exclusively by this account's published work.
 // Change this constant to point the wall at a different curator.
@@ -26,7 +28,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 export type MarqueeThumbnail = {
-  // Composite key (project id + slide index) so React's `key` prop stays
+  // Composite key (template id + slide index) so React's `key` prop stays
   // stable across renders even though we de-aggregate the per-slide URLs.
   id: string;
   thumbnail: string;
@@ -46,7 +48,8 @@ const ROWS_PER_COLUMN = 10;
 const SAMPLE_SIZE = COLUMN_COUNT * ROWS_PER_COLUMN;
 
 /**
- * Fetch a random batch of project thumbnails grouped into `COLUMN_COUNT` columns.
+ * Fetch a random batch of public-template slide thumbnails grouped into
+ * `COLUMN_COUNT` columns (showcase typography/palette slides excluded).
  * Cached 60 s so repeated /signup hits during the same session reuse
  * the same wall (avoids the visual flicker of every page-nav reshuffling).
  */
@@ -57,33 +60,37 @@ export const getMarqueeColumns = unstable_cache(
       // it in JS over a large set would mean reading every row. The
       // LIMIT after random() lets Postgres do the work efficiently.
       //
-      // Source is `Project.thumbnailUrls` (an array of per-slide WebP
-      // URLs in Supabase storage), NOT `Project.thumbnail` (legacy
-      // single-shot column that's empty on most decks). UNNEST so each
-      // slide becomes its own marquee tile — a 5-slide deck contributes
-      // 5 distinct images, giving the wall more variety. The composite
-      // `id || '-' || slide_index` keeps React keys stable across
-      // re-renders.
+      // Source is `Template.thumbnailUrls` (per-slide WebP URLs).
+      // UNNEST so each slide becomes its own marquee tile. The outer
+      // `NOT LIKE '%/showcase-%'` drops the synthetic typography +
+      // palette slides (template-prefix files) — only real deck slides
+      // ride the wall. `format` comes from the brand JSON. The composite
+      // `id || '-' || slide_index` keeps React keys stable.
       //
-      // Inner join on `User` filters to the curator account
-      // (`MARQUEE_OWNER_EMAIL`) so the public auth pages only ever
-      // show that account's work — no risk of leaking other users'
-      // private decks.
+      // Inner join on `User` + `isPublic = true` gates to the curator
+      // account's PUBLISHED templates — no other users' templates leak
+      // onto the public surfaces.
       const rows = await prisma.$queryRaw<MarqueeThumbnail[]>`
         SELECT
           id || '-' || slide_index AS id,
           thumbnail,
           format
         FROM (
-          SELECT p.id, p.format,
-                 unnest(p."thumbnailUrls") AS thumbnail,
-                 generate_subscripts(p."thumbnailUrls", 1) AS slide_index
-          FROM "Project" p
-          INNER JOIN "User" u ON p."userId" = u.id
+          SELECT t.id, (t.brand->>'format') AS format,
+                 unnest(t."thumbnailUrls") AS thumbnail,
+                 generate_subscripts(t."thumbnailUrls", 1) AS slide_index
+          FROM "Template" t
+          INNER JOIN "User" u ON t."ownerId" = u.id
           WHERE u.email = ${MARQUEE_OWNER_EMAIL}
-            AND p."thumbnailUrls" IS NOT NULL
-            AND array_length(p."thumbnailUrls", 1) > 0
+            AND t."isPublic" = true
+            AND t."thumbnailUrls" IS NOT NULL
+            AND array_length(t."thumbnailUrls", 1) > 0
         ) slides
+        -- Exclude the synthetic typography + palette showcase slides
+        -- (stored under the template prefix as showcase-*.webp). Only the
+        -- real deck slides (cover + rest, which point at the project's
+        -- own storage path) should ride the marquee.
+        WHERE thumbnail NOT LIKE '%/showcase-%'
         ORDER BY random()
         LIMIT ${SAMPLE_SIZE}
       `;
