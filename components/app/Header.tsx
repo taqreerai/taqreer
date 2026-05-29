@@ -4,6 +4,7 @@ import { useState } from "react";
 import { BellDropdown } from "@/components/app/BellDropdown";
 import { HeaderSearch } from "@/components/app/HeaderSearch";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
+import { ServerStatusChip } from "@/components/app/ServerStatusChip";
 
 type Props = {
   isCollapsed?: boolean;
@@ -62,6 +63,7 @@ export function Header({ isCollapsed, onToggleSidebar }: Props) {
 
         {/* Left: Actions */}
         <div className="flex items-center gap-4">
+          <ServerStatusChip />
           <BellDropdown />
           <button
             type="button"

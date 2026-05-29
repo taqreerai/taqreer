@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
   SlideManifestSchema,
   SlideSchema,
@@ -480,10 +481,11 @@ export function DeckView({
   const [polledCompleted, setPolledCompleted] = useState(false);
 
   // Generation-clock state. SLOW threshold (6 min) flips an in-page
-  // caption ("الخادم تحت ضغط عالٍ حالياً") so the user sees the run
-  // is just running long, not silently dead. The old "STUCK" bell
-  // notification was removed — it kept misfiring on legitimately
-  // slow phases.
+  // caption so the user sees the run is just running long, not silently
+  // dead. The caption is status-aware (see `slowCaption` below): it only
+  // blames upstream load when the real provider status says so. The old
+  // "STUCK" bell notification was removed — it kept misfiring on
+  // legitimately slow phases.
   //
   // `nowTick` increments every 10 s so the derived `elapsedMs` stays
   // current even when the polling effect doesn't fire (Claude is
@@ -491,6 +493,9 @@ export function DeckView({
   // isn't re-evaluated on every re-render.
   const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  // Real upstream-provider status — lets the "slow" caption (below) tell
+  // a genuine load issue apart from a merely long-running deck.
+  const serverStatus = useServerStatus();
 
   // Slide aspect ratio. During generation `manifest` is null, so we fall
   // back to `initialFormat` (passed from the server-side preview page,
@@ -1664,7 +1669,7 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
-  // SLOW just nudges in-page copy ("الخادم تحت ضغط عالٍ حالياً").
+  // SLOW just nudges in-page copy (status-aware `slowCaption` below).
   // The stuck-detection bell notification was removed entirely
   // (was producing false positives even with tightened thresholds —
   // notifications persist in localStorage so any old alert kept
@@ -1677,6 +1682,12 @@ export function DeckView({
     status === "generating" &&
     !!genStartedAt &&
     elapsedMs > SLOW_WARN_MS;
+  // Truthful caption: only blame upstream load when the provider status
+  // actually reports degraded/down; otherwise it's just a long deck.
+  const slowCaption =
+    serverStatus?.level === "degraded" || serverStatus?.level === "down"
+      ? "الخادم يواجه ضغطاً حالياً — قد يطول الانتظار"
+      : "العملية تستغرق وقتاً أطول من المعتاد — لا يزال العمل جارياً";
 
   // Fetch draft comments once on completed mount. The server filters by the
   // presentation's currentVersionId, so refetching on manifest swap (after
@@ -2629,7 +2640,7 @@ export function DeckView({
                 </div>
                 {isSlow && (
                   <span className="text-[11px] leading-relaxed text-white/60">
-                    الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي
+                    {slowCaption}
                   </span>
                 )}
               </div>

@@ -33,6 +33,7 @@
 // components/brand/ 2026-05-25 per "reuse > extend > fork > build new".
 
 import { useEffect, useRef, useState } from "react";
+import { ServerStatusBanner } from "@/components/app/ServerStatusBanner";
 import { useRouter } from "next/navigation";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
@@ -621,6 +622,7 @@ export default function EnhanceContentPage() {
     // dead-center where it'd float low on tall screens.
     <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full max-w-3xl flex-col items-center gap-6 px-4">
+        <ServerStatusBanner />
         <header className="text-center">
           <h1 className="tq-h1">حسّن عرضك التقديمي</h1>
           <p className="tq-subhead mt-2">

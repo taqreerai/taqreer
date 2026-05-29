@@ -26,6 +26,7 @@
 //     `items-stretch` to equalize the three cards to the tallest.
 
 import { useEffect, useRef, useState } from "react";
+import { ServerStatusBanner } from "@/components/app/ServerStatusBanner";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
@@ -693,6 +694,7 @@ export default function MimicFlow({
   return (
     <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+        <ServerStatusBanner />
         <header className="text-center">
           <h1 className="tq-h1">
             {isTemplate ? "استخدام كقالب" : "حاكِ تصميم عرض آخر"}
