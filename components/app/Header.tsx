@@ -23,7 +23,7 @@ export function Header({ isCollapsed, onToggleSidebar }: Props) {
         isCollapsed ? "right-[80px]" : "right-[260px]"
       }`}
     >
-      <div className="w-full flex items-center justify-between">
+      <div className="relative w-full flex items-center justify-between">
         {/* Right: Sidebar toggle — same glass-button recipe as the
             bell (h-11 w-11 rounded-full + backdrop-blur + low-alpha
             border). Replaced the previous "مرحباً" greeting so the
@@ -55,10 +55,16 @@ export function Header({ isCollapsed, onToggleSidebar }: Props) {
           </span>
         </button>
 
-        {/* Center: HeaderSearch owns its own dropdown — anchored
-            wrapper-relative so it inherits this column's width. */}
-        <div className="flex-1 max-w-xl mx-8">
-          <HeaderSearch />
+        {/* Center: HeaderSearch — absolutely centered in the header so it
+            stays visually centered no matter how wide the side groups get
+            (the status chip would otherwise nudge it off-center).
+            pointer-events-none on the wrapper + auto on the field keeps
+            the empty side-padding from intercepting clicks meant for the
+            actions behind it on narrow widths. */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 w-full max-w-xl -translate-x-1/2 -translate-y-1/2 px-4">
+          <div className="pointer-events-auto">
+            <HeaderSearch />
+          </div>
         </div>
 
         {/* Left: Actions */}
