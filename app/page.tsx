@@ -233,20 +233,35 @@ export default async function LandingPage() {
           <ScrollReveal direction="up" delay={0.1}>
             <FeatureFlowCards thumbnails={marqueeColumns.flat()} />
           </ScrollReveal>
+        </div>
+      </section>
 
-          {/* Templates grid — full-wrapper-width 2 × 4 of public
-              template covers, no heading, each scrubbing its slides on
-              hover like the dashboard's Recent Projects; a click opens
-              the shared TemplateLightbox (user direction 2026-05-29).
-              `id="templates"` is the nav "القوالب" anchor; scroll-mt
-              clears the fixed h-20 nav bar. */}
-          <ScrollReveal direction="up" delay={0.15} className="mt-6">
-            <div id="templates" className="scroll-mt-24">
-              <LandingTemplatesGrid
-                templates={landingTemplates}
-                isAuthed={!!user}
-              />
+      {/* Templates section — its own band (the spacer the 4-card
+          feature grid needed) with a heading + subhead, then the
+          full-wrapper-width 2 × 4 grid of public template covers. Tiles
+          stay title-less + scrub their slides on hover like the
+          dashboard's Recent Projects; a click opens the shared
+          TemplateLightbox. `id="templates"` is the nav "القوالب"
+          anchor (py-32 top clears the fixed h-20 nav). */}
+      <section id="templates" className="relative py-32">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <ScrollReveal direction="up">
+            <div className="mb-16 text-center">
+              <h2 className="mb-8 text-3xl font-medium md:text-4xl">
+                ابدأ من قالب
+              </h2>
+              <p className="mb-8 text-lg text-muted">
+                استكشف قوالبنا الجاهزة المناسبة لمشروعك دون الاعتماد على
+                توجيه التصميم من الذكاء الاصطناعي — ما تراه هو ما تحصل عليه.
+              </p>
             </div>
+          </ScrollReveal>
+
+          <ScrollReveal direction="up" delay={0.1}>
+            <LandingTemplatesGrid
+              templates={landingTemplates}
+              isAuthed={!!user}
+            />
           </ScrollReveal>
         </div>
       </section>
