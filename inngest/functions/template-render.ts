@@ -41,6 +41,7 @@ import puppeteer from "puppeteer";
 import sharp from "sharp";
 import { SlideManifestSchema, dimensionsForFormat } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
+import { MAX_TEMPLATE_SLIDES } from "@/lib/template/constants";
 
 const BUCKET = "slide-previews";
 // Same width / quality knobs as thumbnail-render — keeps template tiles
@@ -123,7 +124,14 @@ export const templateRender = inngest.createFunction(
           `Source manifest failed validation: ${JSON.stringify(parsed.error.issues).slice(0, 400)}`,
         );
       }
-      return { supabaseUserId, manifest: parsed.data };
+      // Cap to the first MAX_TEMPLATE_SLIDES — both the PDF and the
+      // thumbnails render from this capped slice, matching the
+      // slideCount the save route stored.
+      const manifest = {
+        ...parsed.data,
+        slides: parsed.data.slides.slice(0, MAX_TEMPLATE_SLIDES),
+      };
+      return { supabaseUserId, manifest };
     });
 
     // ─── Step 2: render thumbnails + PDF, upload all ────────────────

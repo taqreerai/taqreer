@@ -55,6 +55,7 @@ import { resolveProjectContext } from "@/lib/api/project-context";
 import { inngest } from "@/inngest/client";
 import { deriveBrandSnapshot } from "@/lib/template/derive-brand";
 import { SlideManifestSchema } from "@/lib/schema/slide";
+import { MAX_TEMPLATE_SLIDES } from "@/lib/template/constants";
 import type { Prisma } from "@prisma/client";
 
 type SaveAsTemplateBody = {
@@ -150,14 +151,14 @@ export async function POST(
   // somehow lands here before its templateName Haiku call completes.
   const title = project.templateName ?? project.title;
 
-  // Real slide count of the source deck — the template now mirrors the
-  // actual project (full PDF + real thumbnails), so slideCount is the
-  // manifest's slide count, not a fixed showcase count. Best-effort
-  // parse; brand derivation already succeeded so the manifest is sound.
+  // Slide count of the source deck, capped at MAX_TEMPLATE_SLIDES — a
+  // template only captures the first few slides (the render job renders
+  // the same capped slice to PDF + thumbnails). Best-effort parse;
+  // brand derivation already succeeded so the manifest is sound.
   const parsedManifest = SlideManifestSchema.safeParse(manifest);
   const slideCount = parsedManifest.success
-    ? parsedManifest.data.slides.length
-    : 3;
+    ? Math.min(parsedManifest.data.slides.length, MAX_TEMPLATE_SLIDES)
+    : Math.min(3, MAX_TEMPLATE_SLIDES);
 
   const now = new Date();
   const template = await prisma.template.create({
