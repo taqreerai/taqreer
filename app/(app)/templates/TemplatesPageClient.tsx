@@ -28,7 +28,7 @@ import {
   bucketize,
 } from "@/lib/project/derive-color-tags";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
-import { prepareTemplateUse } from "@/lib/mimic/template-seed";
+import { prepareTemplateUse, TemplateUseError } from "@/lib/mimic/template-seed";
 import type { SlideFormat } from "@/lib/schema/slide";
 import type { TemplateForBrowse } from "./types";
 
@@ -77,6 +77,11 @@ export function TemplatesPageClient({
       await prepareTemplateUse("template", preview.id);
       window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
+      // 402 = premium template, user isn't on Pro → route to pricing.
+      if (err instanceof TemplateUseError && err.status === 402) {
+        window.location.assign("/#pricing");
+        return;
+      }
       console.warn("[TemplatesPageClient] use prep failed", err);
       setUseBusy(false);
     }
@@ -254,6 +259,7 @@ export function TemplatesPageClient({
         slides={preview?.thumbnailUrls ?? []}
         format={previewFormat}
         title={preview?.title ?? ""}
+        isPremium={preview?.isPremium ?? false}
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}

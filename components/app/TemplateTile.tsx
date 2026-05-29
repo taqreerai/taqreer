@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 
 export type TemplateTileBrand = {
@@ -47,6 +48,9 @@ export type TemplateTileData = {
   // ("اجعله عاماً" when private, "اجعله خاصاً" when public).
   // Optimistically updated on toggle before router.refresh re-fetches.
   isPublic: boolean;
+  // Premium templates show the "مميز" badge. Optional so callers that
+  // don't carry it compile; the use-gate itself is enforced server-side.
+  isPremium?: boolean;
 };
 
 export function TemplateTile({
@@ -104,7 +108,7 @@ export function TemplateTile({
     }
   };
 
-  const { brand, title, isMine, id, thumbnailUrls } = template;
+  const { brand, title, isMine, id, thumbnailUrls, isPremium } = template;
   const cover = thumbnailUrls?.[0] ?? null;
   const primary = brand.palette[0] ?? brand.text;
   const secondary = brand.palette[1] ?? brand.text;
@@ -230,6 +234,11 @@ export function TemplateTile({
           </div>
         </>
       )}
+      {/* Premium marker — top-start corner. */}
+      {isPremium ? (
+        <PremiumBadge className="pointer-events-none absolute top-2 start-2 z-10" />
+      ) : null}
+
       {useBusy ? (
         <div
           role="status"

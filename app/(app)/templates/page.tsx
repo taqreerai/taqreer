@@ -50,6 +50,7 @@ export default async function TemplatesPage() {
     // 3-dots menu. Selected on every row (own + community) so the
     // narrow function can populate it uniformly.
     isPublic: true,
+    isPremium: true,
     createdAt: true,
   } as const;
 
@@ -95,6 +96,7 @@ function narrow(
     thumbnailUrls: string[];
     language: string;
     isPublic: boolean;
+    isPremium: boolean;
   },
   isMine: boolean,
 ): TemplateForBrowse {
@@ -106,6 +108,7 @@ function narrow(
     language: row.language,
     isMine,
     isPublic: row.isPublic,
+    isPremium: row.isPremium,
     // Pending = row exists but the Inngest showcase-render hasn't
     // produced the 4 PNGs yet. Drives auto-refresh on the client.
     thumbnailsPending: row.thumbnailUrls.length === 0,
