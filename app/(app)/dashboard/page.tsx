@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getStartOfMonthUTC } from "@/lib/utils";
+import { normalizePlan } from "@/lib/plan";
 
 // Fresh SSR every navigation. Without this Next.js may serve a
 // cached render from before the Inngest thumbnail-render job
@@ -47,7 +48,7 @@ export default async function DashboardPage() {
   }
 
   const planLimits = { free: 10, plus: 60, pro: 90 };
-  const plan = isKnownPlan(dbUser.plan) ? dbUser.plan : "free";
+  const plan = normalizePlan(dbUser.plan);
   const limit = planLimits[plan];
   const startOfMonth = getStartOfMonthUTC();
 
@@ -209,8 +210,4 @@ export default async function DashboardPage() {
       />
     </div>
   );
-}
-
-function isKnownPlan(plan: string): plan is "free" | "plus" | "pro" {
-  return plan === "free" || plan === "plus" || plan === "pro";
 }

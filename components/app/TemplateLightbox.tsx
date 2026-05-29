@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { PremiumBadge } from "@/components/app/PremiumBadge";
 import type { SlideFormat } from "@/lib/schema/slide";
 
 // Stage dimensions — driven by the actual rendered showcase WebP
@@ -51,6 +52,9 @@ type Props = {
   // use-template flow. The button stays visible (with reduced opacity)
   // so the user gets feedback that their click registered.
   useBusy?: boolean;
+  // Show the "مميز" badge in the header when previewing a premium
+  // template. The actual use-gate lives in the caller's onUseTemplate.
+  isPremium?: boolean;
 };
 
 export function TemplateLightbox({
@@ -61,6 +65,7 @@ export function TemplateLightbox({
   onClose,
   onUseTemplate,
   useBusy,
+  isPremium,
 }: Props) {
   const [index, setIndex] = useState(0);
   const total = slides.length;
@@ -173,12 +178,15 @@ export function TemplateLightbox({
             >
               {/* Header */}
               <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
-                <h2
-                  id="tpl-lbx-title"
-                  className="truncate text-base font-semibold text-white"
-                >
-                  {title}
-                </h2>
+                <div className="flex min-w-0 items-center gap-2">
+                  <h2
+                    id="tpl-lbx-title"
+                    className="truncate text-base font-semibold text-white"
+                  >
+                    {title}
+                  </h2>
+                  {isPremium ? <PremiumBadge className="shrink-0" /> : null}
+                </div>
                 <div className="flex items-center gap-3">
                   {isMulti ? (
                     <span className="text-xs text-white/50" dir="ltr">

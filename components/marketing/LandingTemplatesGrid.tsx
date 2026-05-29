@@ -12,8 +12,9 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
+import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import { prepareTemplateUse } from "@/lib/mimic/template-seed";
+import { prepareTemplateUse, TemplateUseError } from "@/lib/mimic/template-seed";
 import type { LandingTemplate } from "@/lib/auth/marquee-projects";
 import type { SlideFormat } from "@/lib/schema/slide";
 
@@ -60,6 +61,11 @@ export function LandingTemplatesGrid({
       await prepareTemplateUse("template", preview.id);
       window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
+      // 402 = premium template, user isn't on Pro → route to pricing.
+      if (err instanceof TemplateUseError && err.status === 402) {
+        window.location.assign("/#pricing");
+        return;
+      }
       console.warn("[LandingTemplatesGrid] use prep failed", err);
       setUseBusy(false);
     }
@@ -97,6 +103,7 @@ export function LandingTemplatesGrid({
         slides={preview?.slides ?? []}
         format={previewFormat}
         title={preview?.title ?? ""}
+        isPremium={preview?.isPremium ?? false}
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}
@@ -191,6 +198,12 @@ function LandingTemplateTile({
         >
           {hoverIndex + 1} / {slides.length}
         </span>
+      ) : null}
+
+      {/* Premium marker — top-start, diagonal-opposite the scrub
+          counter so the two never crowd. */}
+      {template.isPremium ? (
+        <PremiumBadge className="pointer-events-none absolute top-2 start-2 z-10" />
       ) : null}
     </div>
   );

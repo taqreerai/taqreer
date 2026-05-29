@@ -134,6 +134,9 @@ export type LandingTemplate = {
   title: string;
   // "16:9" | "9:16" — drives the tile's object-fit crop.
   format: string;
+  // Premium templates show the "مميز" badge + gate their use behind the
+  // Pro plan (enforced server-side in /api/templates/[id]/use).
+  isPremium: boolean;
   // Per-slide WebP URLs in deck order (cover first), showcase slides
   // excluded. The hover-scrub walks this array.
   slides: string[];
@@ -151,11 +154,18 @@ export const getLandingTemplates = unstable_cache(
   async (): Promise<LandingTemplate[]> => {
     try {
       const rows = await prisma.$queryRaw<
-        { id: string; title: string; format: string | null; thumbnails: string[] }[]
+        {
+          id: string;
+          title: string;
+          format: string | null;
+          isPremium: boolean;
+          thumbnails: string[];
+        }[]
       >`
         SELECT t.id,
                t.title,
                (t.brand->>'format') AS format,
+               t."isPremium" AS "isPremium",
                t."thumbnailUrls" AS thumbnails
         FROM "Template" t
         INNER JOIN "User" u ON t."ownerId" = u.id
@@ -172,6 +182,7 @@ export const getLandingTemplates = unstable_cache(
           id: row.id,
           title: row.title,
           format: row.format ?? "16:9",
+          isPremium: row.isPremium,
           // Drop the synthetic typography + palette showcase slides
           // (template-prefix showcase-*.webp); keep the real deck
           // slides (cover + rest) in their stored order.

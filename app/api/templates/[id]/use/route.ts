@@ -15,16 +15,17 @@
 // can only use a template flagged `isPublic: true`. 403 (not 404) when
 // the row exists but is gated.
 //
-// Premium gate: `isPremium` templates are reserved for paid plans. The
-// enforcement is STUBBED to allow everyone for now — wired to the
-// subscription model later (see T4). The flag rides in the response so
-// the UI can badge it.
+// Premium gate: `isPremium` templates require the paid "pro" plan
+// (non-owners only — owners can always use their own). Returns 402 so
+// the client can route the user to pricing. The flag also rides in the
+// response so the UI can badge it.
 //
 // Side effect: atomically increments `useCount`.
 //
 // Response:
 //   200 { title, brand, designAnthropicFileId, format, language, isPremium, useCount }
 //   401 unauthorised
+//   402 premium template + user isn't on the Pro plan
 //   403 template is private + user isn't the owner
 //   404 template not found
 //   409 template PDF not rendered yet (try again shortly)
@@ -36,6 +37,7 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { BrandSnapshotSchema } from "@/lib/template/derive-brand";
 import { uploadFileToAnthropic } from "@/lib/anthropic/files";
+import { isProPlan } from "@/lib/plan";
 
 // Node runtime — the Anthropic SDK + Buffer handling need it; the
 // download + upload can take a few seconds for a large deck.
@@ -81,10 +83,22 @@ export async function POST(
     );
   }
 
-  // Premium gate — STUB. Wired to the subscription model in T4; until
-  // then premium templates are usable by everyone so the flow is
-  // testable. When enforced this becomes: if (template.isPremium &&
-  // !userHasPlan(user, "pro")) return 402.
+  // Premium gate — premium templates require the paid "pro" plan
+  // (product decision 2026-05-29). Owners can always use their own. The
+  // plan is only fetched when it matters (premium + non-owner). 402
+  // Payment Required → the client routes the user to the pricing section.
+  if (template.isPremium && !isOwner) {
+    const dbUser = await prisma.user.findUnique({
+      where: { supabaseUserId: user.id },
+      select: { plan: true },
+    });
+    if (!isProPlan(dbUser?.plan)) {
+      return NextResponse.json(
+        { error: "This template requires a Pro plan" },
+        { status: 402 },
+      );
+    }
+  }
 
   // Re-validate the stored snapshot (schema may have shifted since the
   // row was written). 500 so the client shows "couldn't load template"
