@@ -1,34 +1,46 @@
 // POST /api/templates/[id]/use
 //
-// "Start a new deck seeded from this template." Returns the template's
-// BrandSnapshot + title so the client can hydrate the /create flow's
-// sessionStorage keys (brand colors+fonts, output format+language)
-// before navigating to step 1.
+// "Use this template in the Mimic flow." Returns the template's brand
+// tags (palette/fonts → pre-fills the Mimic branding card) AND a fresh
+// Anthropic Files `file_id` for the template's stored deck PDF, which
+// becomes the Mimic flow's design reference (`designAnthropicFileId`).
+//
+// Why mint the file_id here: Anthropic file_ids expire, so we can't
+// persist one on the Template. Instead the deck PDF lives in Supabase
+// (Template.pdfUrl, written by the template-render Inngest job); at
+// use-time we download it and re-upload to the Files API to get a fresh
+// id. This is the seam the whole "templates feed Mimic" rework hangs on.
 //
 // Visibility gate: owner can always use their own template; non-owners
 // can only use a template flagged `isPublic: true`. 403 (not 404) when
-// the row exists but is gated — leaking "this template exists" to the
-// requester is fine; what matters is that the gate is enforced.
-// Compare with DELETE/PATCH which lean on `findFirst({ ownerId })` to
-// hide existence — those are destructive and must not signal "row
-// exists but you can't touch it."
+// the row exists but is gated.
 //
-// Side effect: atomically increments `useCount`. Powers the future
-// "popular templates" sort even though no consumer exposes the field
-// today; coupling the increment to a successful use here means the
-// counter stays accurate without separate analytics plumbing.
+// Premium gate: `isPremium` templates are reserved for paid plans. The
+// enforcement is STUBBED to allow everyone for now — wired to the
+// subscription model later (see T4). The flag rides in the response so
+// the UI can badge it.
+//
+// Side effect: atomically increments `useCount`.
 //
 // Response:
-//   200 { title, brand: BrandSnapshot, useCount }
+//   200 { title, brand, designAnthropicFileId, format, language, isPremium, useCount }
 //   401 unauthorised
 //   403 template is private + user isn't the owner
 //   404 template not found
+//   409 template PDF not rendered yet (try again shortly)
 //   500 brand snapshot failed schema validation (corrupt row)
+//   502 could not prepare the design reference (download / Files API)
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { BrandSnapshotSchema } from "@/lib/template/derive-brand";
+import { uploadFileToAnthropic } from "@/lib/anthropic/files";
+
+// Node runtime — the Anthropic SDK + Buffer handling need it; the
+// download + upload can take a few seconds for a large deck.
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(
   _request: Request,
@@ -44,18 +56,15 @@ export async function POST(
 
   const { id: templateId } = await params;
 
-  // Fetch by id only — visibility check is the next gate. This
-  // contrasts with DELETE / PATCH which scope by owner up-front to
-  // hide existence of others' rows; here we WANT to signal "exists
-  // but locked" via 403 so the caller knows the difference between
-  // "deleted" and "made private."
   const template = await prisma.template.findUnique({
     where: { id: templateId },
     select: {
       id: true,
       title: true,
       brand: true,
+      pdfUrl: true,
       isPublic: true,
+      isPremium: true,
       ownerId: true,
       owner: { select: { supabaseUserId: true } },
     },
@@ -72,12 +81,14 @@ export async function POST(
     );
   }
 
-  // Re-validate the stored snapshot. Templates persist `brand` as a
-  // JSON column written at save-time; if the BrandSnapshot schema
-  // shifts shape (added a required field, regex tightened) an older
-  // row could fail to parse. Surface a 500 here so the client shows
-  // "couldn't load template" instead of seeding garbage into the
-  // create flow and crashing /create/summary mid-render.
+  // Premium gate — STUB. Wired to the subscription model in T4; until
+  // then premium templates are usable by everyone so the flow is
+  // testable. When enforced this becomes: if (template.isPremium &&
+  // !userHasPlan(user, "pro")) return 402.
+
+  // Re-validate the stored snapshot (schema may have shifted since the
+  // row was written). 500 so the client shows "couldn't load template"
+  // rather than seeding garbage into the Mimic flow.
   const parsed = BrandSnapshotSchema.safeParse(template.brand);
   if (!parsed.success) {
     return NextResponse.json(
@@ -85,11 +96,47 @@ export async function POST(
       { status: 500 },
     );
   }
+  const brand = parsed.data;
 
-  // Atomic useCount bump. `update` not `updateMany` since we just
-  // proved the row exists — and we want the post-increment value
-  // back so the client could optimistically reflect it (not exposed
-  // anywhere yet, but the field is in the response for free).
+  // The deck PDF is rendered asynchronously by template-render. If it
+  // hasn't landed yet, the template can't drive Mimic — 409 so the
+  // client can ask the user to retry shortly (the tile shows a
+  // "rendering" state in the gallery anyway).
+  if (!template.pdfUrl) {
+    return NextResponse.json(
+      { error: "Template is still rendering. Try again in a moment." },
+      { status: 409 },
+    );
+  }
+
+  // Download the stored PDF + re-upload to the Anthropic Files API to
+  // mint a fresh design-reference file_id (ids expire, so we never
+  // persist one). Failures here are upstream/transient → 502.
+  let designAnthropicFileId: string;
+  try {
+    const pdfRes = await fetch(template.pdfUrl);
+    if (!pdfRes.ok) {
+      throw new Error(`PDF download failed (${pdfRes.status})`);
+    }
+    const bytes = Buffer.from(await pdfRes.arrayBuffer());
+    designAnthropicFileId = await uploadFileToAnthropic({
+      bytes,
+      fileName: `${template.title || "template"}.pdf`,
+      contentType: "application/pdf",
+    });
+  } catch (err) {
+    console.error("[templates/use] design reference prep failed", {
+      templateId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      { error: "Could not prepare the template's design reference" },
+      { status: 502 },
+    );
+  }
+
+  // Atomic useCount bump — only after the reference is ready, so a
+  // failed prep doesn't inflate the counter.
   const updated = await prisma.template.update({
     where: { id: templateId },
     data: { useCount: { increment: 1 } },
@@ -98,7 +145,11 @@ export async function POST(
 
   return NextResponse.json({
     title: template.title,
-    brand: parsed.data,
+    brand,
+    designAnthropicFileId,
+    format: brand.format,
+    language: brand.language,
+    isPremium: template.isPremium,
     useCount: updated.useCount,
   });
 }
