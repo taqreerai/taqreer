@@ -179,11 +179,12 @@ export async function POST(
       // synchronously on the create when isPublic=true; the
       // visibility-toggle route does the same dance on later flips.
       publishedAt: isPublic ? now : null,
-      // Seed with the project's real cover so the tile shows the actual
-      // design immediately. The template-render job then composes the
-      // full 3-slide preview ([cover, typography, palette]) + the PDF
-      // (the Mimic reference) in the background.
-      thumbnailUrls: project.thumbnailUrls.slice(0, 1),
+      // Seed with the project's real slides so the tile + lightbox show
+      // the actual deck immediately. The template-render job then
+      // composes the final preview ([cover, typography, palette, ...rest]
+      // capped at 10) + the deck PDF (the Mimic reference) in the
+      // background.
+      thumbnailUrls: project.thumbnailUrls.slice(0, MAX_TEMPLATE_SLIDES),
     },
     select: { id: true },
   });

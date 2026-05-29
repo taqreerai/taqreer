@@ -116,7 +116,9 @@ export const templateRender = inngest.createFunction(
         supabaseUserId,
         title: tpl.title,
         brand: brandParsed.data,
-        cover: project?.thumbnailUrls[0] ?? null,
+        // The project's own slide images (cover first). Composed with
+        // the showcase slides below.
+        projectThumbs: project?.thumbnailUrls ?? [],
         manifest: {
           ...manifestParsed.data,
           slides: manifestParsed.data.slides.slice(0, MAX_TEMPLATE_SLIDES),
@@ -215,11 +217,14 @@ export const templateRender = inngest.createFunction(
       const pdfUrl = admin.storage.from(BUCKET).getPublicUrl(pdfPath).data
         .publicUrl;
 
-      // Compose: [project cover, typography, palette]. Cover may be
-      // absent (project never thumbnailed) — then just the two showcases.
-      const thumbnailUrls = [ctx.cover, ...showcaseUrls].filter(
-        (u): u is string => typeof u === "string" && u.length > 0,
-      );
+      // Compose: [cover, typography, palette, ...rest of the project's
+      // real slides], capped at MAX_TEMPLATE_SLIDES. Cover = the
+      // project's first slide; rest = the slides after it.
+      const cover = ctx.projectThumbs[0] ?? null;
+      const rest = ctx.projectThumbs.slice(1);
+      const thumbnailUrls = [cover, ...showcaseUrls, ...rest]
+        .filter((u): u is string => typeof u === "string" && u.length > 0)
+        .slice(0, MAX_TEMPLATE_SLIDES);
       return { thumbnailUrls, pdfUrl, uploadedPaths };
     });
 
