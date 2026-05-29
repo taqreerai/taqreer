@@ -14,7 +14,10 @@ import { useRouter } from "next/navigation";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import { prepareTemplateUse, TemplateUseError } from "@/lib/mimic/template-seed";
+import {
+  prepareTemplateUse,
+  redirectToPricingIfGated,
+} from "@/lib/mimic/template-seed";
 import type { LandingTemplate } from "@/lib/auth/marquee-projects";
 import type { SlideFormat } from "@/lib/schema/slide";
 
@@ -62,10 +65,7 @@ export function LandingTemplatesGrid({
       window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
       // 402 = premium template, user isn't on Pro → route to pricing.
-      if (err instanceof TemplateUseError && err.status === 402) {
-        window.location.assign("/#pricing");
-        return;
-      }
+      if (redirectToPricingIfGated(err)) return;
       console.warn("[LandingTemplatesGrid] use prep failed", err);
       setUseBusy(false);
     }

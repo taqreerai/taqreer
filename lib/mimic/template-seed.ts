@@ -50,7 +50,7 @@ const CACHE_PREFIX = "taqreer:mimic:templateUse:";
 // Both return the same MimicTemplateUse shape.
 export type TemplateSource = "template" | "project";
 
-function useRoute(source: TemplateSource, id: string): string {
+function buildUseRoute(source: TemplateSource, id: string): string {
   return source === "template"
     ? `/api/templates/${id}/use`
     : `/api/projects/${id}/use-as-template`;
@@ -67,12 +67,29 @@ export class TemplateUseError extends Error {
   }
 }
 
+/** Landing pricing section — where premium-gated (402) users are sent. */
+export const PRICING_HREF = "/#pricing";
+
+/**
+ * If `err` is the premium-gate 402 from the use route (premium template,
+ * non-Pro user), send the user to the pricing section and return true
+ * (handled). Otherwise return false so the caller can fall through to its
+ * own error handling. Shared by every template "use" CTA.
+ */
+export function redirectToPricingIfGated(err: unknown): boolean {
+  if (err instanceof TemplateUseError && err.status === 402) {
+    window.location.assign(PRICING_HREF);
+    return true;
+  }
+  return false;
+}
+
 /** POST the appropriate use route, validate the response. */
 export async function fetchUse(
   source: TemplateSource,
   id: string,
 ): Promise<MimicTemplateUse> {
-  const res = await fetch(useRoute(source, id), { method: "POST" });
+  const res = await fetch(buildUseRoute(source, id), { method: "POST" });
   if (!res.ok) {
     const data = (await res.json().catch(() => null)) as
       | { error?: string }
