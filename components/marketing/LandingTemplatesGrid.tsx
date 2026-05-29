@@ -12,6 +12,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
+import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 import type { LandingTemplate } from "@/lib/auth/marquee-projects";
 import type { SlideFormat } from "@/lib/schema/slide";
@@ -20,6 +21,16 @@ import type { SlideFormat } from "@/lib/schema/slide";
 // tiles feel identical to the dashboard ones: bare hover doesn't scrub
 // until the cursor has moved past this many px from where it entered.
 const SCRUB_ACTIVATION_PX = 6;
+
+// Deterministic 0..MAX pseudo-random delay per tile index. Tiles fade
+// in scattered (not sequentially, not all at once) on scroll. Sin-hash
+// instead of Math.random() so the value is identical on the server and
+// client render — no hydration mismatch, no animation restart.
+const FADE_STAGGER_MAX_S = 0.9;
+function scatterDelay(index: number): number {
+  const x = Math.sin((index + 1) * 12.9898) * 43758.5453;
+  return (x - Math.floor(x)) * FADE_STAGGER_MAX_S;
+}
 
 export function LandingTemplatesGrid({
   templates,
@@ -64,12 +75,20 @@ export function LandingTemplatesGrid({
   return (
     <>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {templates.map((tpl) => (
-          <LandingTemplateTile
+        {templates.map((tpl, i) => (
+          // Each tile fades in on its own (pure opacity, slow) with a
+          // scattered delay so the grid doesn't pop in all at once.
+          <ScrollReveal
             key={tpl.id}
-            template={tpl}
-            onOpen={() => setPreview(tpl)}
-          />
+            direction="none"
+            duration={1.1}
+            delay={scatterDelay(i)}
+          >
+            <LandingTemplateTile
+              template={tpl}
+              onOpen={() => setPreview(tpl)}
+            />
+          </ScrollReveal>
         ))}
       </div>
 

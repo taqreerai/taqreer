@@ -267,13 +267,15 @@ export default async function LandingPage() {
 
           {/* Full-wrapper-width 2 × 4 grid of public template covers —
               title-less tiles that scrub their slides on hover; a click
-              opens the shared TemplateLightbox. */}
-          <ScrollReveal direction="up" delay={0.15} className="mt-6">
+              opens the shared TemplateLightbox. The grid owns its own
+              per-tile scattered fade-in, so no wrapping ScrollReveal
+              here (that would reveal the whole block at once). */}
+          <div className="mt-6">
             <LandingTemplatesGrid
               templates={landingTemplates}
               isAuthed={!!user}
             />
-          </ScrollReveal>
+          </div>
         </div>
       </section>
 
