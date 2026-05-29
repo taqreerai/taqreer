@@ -569,6 +569,9 @@ export function ProjectThumbnail({
         onRename={enterRenameMode}
         onToggleFavorite={handleToggleFavorite}
         onCopyLink={handleCopyLink}
+        onUseAsTemplate={() =>
+          router.push(`/use-template/project/${projectId}`)
+        }
         onSaveAsTemplate={() => setSaveTemplateOpen(true)}
         onSendToTrash={() => setTrashOpen(true)}
       />

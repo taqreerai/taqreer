@@ -24,9 +24,8 @@
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import puppeteer from "puppeteer";
-import { SlideManifestSchema, dimensionsForFormat } from "@/lib/schema/slide";
-import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
+import { SlideManifestSchema } from "@/lib/schema/slide";
+import { renderDeckPdf } from "@/lib/export/render-deck-pdf";
 import { MAX_TEMPLATE_SLIDES } from "@/lib/template/constants";
 
 const BUCKET = "slide-previews";
@@ -104,9 +103,6 @@ export const templateRender = inngest.createFunction(
 
     // ─── Step 2: render the PDF + upload ────────────────────────────
     const pdf = await step.run("render-and-upload-pdf", async () => {
-      const { width: canvasW, height: canvasH } = dimensionsForFormat(
-        ctx.manifest.format,
-      );
       const admin = createSupabaseAdminClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -114,67 +110,21 @@ export const templateRender = inngest.createFunction(
       );
       const pdfPath = `${ctx.supabaseUserId}/templates/${templateId}/deck.pdf`;
 
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-dev-shm-usage"],
-      });
-      try {
-        const page = await browser.newPage();
-        await page.setViewport({
-          width: canvasW,
-          height: canvasH,
-          deviceScaleFactor: 1,
+      const pdfBytes = await renderDeckPdf(ctx.manifest);
+      const { error: pdfUploadError } = await admin.storage
+        .from(BUCKET)
+        .upload(pdfPath, pdfBytes, {
+          contentType: "application/pdf",
+          upsert: true,
         });
-        // `printPageBreaks: true` emits @page + per-slide
-        // page-break-after, so page.pdf() paginates one slide per page
-        // at canvas dimensions (see the /export/pdf route).
-        await page.setContent(
-          buildHtmlDocumentServer(ctx.manifest, { printPageBreaks: true }),
-          { waitUntil: ["domcontentloaded", "networkidle2"], timeout: 30_000 },
+      if (pdfUploadError) {
+        throw new Error(
+          `Upload failed for ${pdfPath}: ${pdfUploadError.message}`,
         );
-        await page.evaluate(() => {
-          const docFonts = (
-            document as Document & { fonts?: { ready?: Promise<unknown> } }
-          ).fonts;
-          return docFonts?.ready ?? Promise.resolve();
-        });
-        // One extra settled frame after fonts load.
-        await page.evaluate(
-          () =>
-            new Promise((resolve) =>
-              requestAnimationFrame(() => requestAnimationFrame(resolve)),
-            ),
-        );
-        // Inches, not px — page.pdf() mis-handles px units on portrait
-        // (9:16 returned 0-byte PDFs). 1 px = 1/96in.
-        const pxToIn = (px: number): string => `${px / 96}in`;
-        const rawPdf = await page.pdf({
-          width: pxToIn(canvasW),
-          height: pxToIn(canvasH),
-          printBackground: true,
-          displayHeaderFooter: false,
-          margin: { top: 0, right: 0, bottom: 0, left: 0 },
-        });
-
-        const { error: pdfUploadError } = await admin.storage
-          .from(BUCKET)
-          .upload(pdfPath, Buffer.from(rawPdf), {
-            contentType: "application/pdf",
-            upsert: true,
-          });
-        if (pdfUploadError) {
-          throw new Error(
-            `Upload failed for ${pdfPath}: ${pdfUploadError.message}`,
-          );
-        }
-        const pdfUrl = admin.storage.from(BUCKET).getPublicUrl(pdfPath).data
-          .publicUrl;
-        return { pdfUrl, pdfPath };
-      } finally {
-        await browser.close().catch((err) => {
-          logger.warn("template-render: browser.close failed", { err });
-        });
       }
+      const pdfUrl = admin.storage.from(BUCKET).getPublicUrl(pdfPath).data
+        .publicUrl;
+      return { pdfUrl, pdfPath };
     });
 
     // ─── Step 3: write pdfUrl back to Template ──────────────────────

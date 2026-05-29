@@ -44,6 +44,18 @@ export type MimicTemplateSeed = {
 
 const CACHE_PREFIX = "taqreer:mimic:templateUse:";
 
+// Where the design reference comes from:
+//   "template" → a saved Template (POST /api/templates/[id]/use)
+//   "project"  → a project used directly (POST /api/projects/[id]/use-as-template)
+// Both return the same MimicTemplateUse shape.
+export type TemplateSource = "template" | "project";
+
+function useRoute(source: TemplateSource, id: string): string {
+  return source === "template"
+    ? `/api/templates/${id}/use`
+    : `/api/projects/${id}/use-as-template`;
+}
+
 // HTTP error carrying the status so callers can branch (401 → sign in,
 // 409 → still rendering).
 export class TemplateUseError extends Error {
@@ -55,13 +67,12 @@ export class TemplateUseError extends Error {
   }
 }
 
-/** POST the use route, validate the response. Throws TemplateUseError. */
-export async function fetchTemplateUse(
-  templateId: string,
+/** POST the appropriate use route, validate the response. */
+export async function fetchUse(
+  source: TemplateSource,
+  id: string,
 ): Promise<MimicTemplateUse> {
-  const res = await fetch(`/api/templates/${templateId}/use`, {
-    method: "POST",
-  });
+  const res = await fetch(useRoute(source, id), { method: "POST" });
   if (!res.ok) {
     const data = (await res.json().catch(() => null)) as
       | { error?: string }
@@ -125,13 +136,18 @@ export function applyTemplateUse(
   };
 }
 
-/** Read the cached use-result for this template id (survives refresh). */
-export function readCachedTemplateUse(
-  templateId: string,
+function cacheKey(source: TemplateSource, id: string): string {
+  return `${CACHE_PREFIX}${source}:${id}`;
+}
+
+/** Read the cached use-result (survives refresh; avoids re-minting). */
+export function readCachedUse(
+  source: TemplateSource,
+  id: string,
 ): MimicTemplateUse | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.sessionStorage.getItem(CACHE_PREFIX + templateId);
+    const raw = window.sessionStorage.getItem(cacheKey(source, id));
     if (!raw) return null;
     const parsed = MimicTemplateUseSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : null;
@@ -140,15 +156,13 @@ export function readCachedTemplateUse(
   }
 }
 
-export function writeCachedTemplateUse(
-  templateId: string,
+export function writeCachedUse(
+  source: TemplateSource,
+  id: string,
   use: MimicTemplateUse,
 ): void {
   try {
-    window.sessionStorage.setItem(
-      CACHE_PREFIX + templateId,
-      JSON.stringify(use),
-    );
+    window.sessionStorage.setItem(cacheKey(source, id), JSON.stringify(use));
   } catch {
     /* best-effort */
   }
