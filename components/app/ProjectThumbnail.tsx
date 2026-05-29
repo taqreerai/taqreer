@@ -57,6 +57,7 @@ import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";
 import { SaveAsTemplateDialog } from "@/components/app/SaveAsTemplateDialog";
 import { ShareDialog } from "@/components/app/ShareDialog";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 
 // Pixels of cursor travel required to consider the user actually
 // scrubbing (not just hovering at rest). ~2 trackpad ticks.
@@ -159,6 +160,25 @@ export function ProjectThumbnail({
   // from the actions menu. The modal handles its own preview fetch +
   // save POST; we just track open/closed here.
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  // "Use as a template" busy gate — while true the thumbnail dims +
+  // shows the paragraph-write loader (no full-screen route loader). It
+  // stays set after a successful navigate (the tile unmounts); cleared
+  // only on error so the user can retry.
+  const [useTplBusy, setUseTplBusy] = useState(false);
+
+  const handleUseAsTemplate = async () => {
+    if (useTplBusy) return;
+    setUseTplBusy(true);
+    try {
+      // Render the project's PDF + mint the Anthropic reference here, on
+      // the dimmed tile, then navigate to the (now-cached) Mimic flow.
+      await prepareTemplateUse("project", projectId);
+      window.location.assign(`/use-template/project/${projectId}`);
+    } catch (err) {
+      console.warn("[ProjectThumbnail] use-as-template prep failed", err);
+      setUseTplBusy(false);
+    }
+  };
   // Share modal — opens when the user picks "مشاركة" from the actions
   // menu. ShareDialog handles its own fetch + mutations against
   // /api/projects/[id]/share; we just track open/closed here.
@@ -420,6 +440,20 @@ export function ProjectThumbnail({
           )}
         </button>
 
+        {/* "Use as a template" loader — dims THIS thumbnail + shows the
+            shared paragraph-write animation while the project's PDF +
+            Mimic reference are prepared (instead of a full-screen route
+            loader). Covers the click surface so it can't be re-fired. */}
+        {useTplBusy ? (
+          <div
+            role="status"
+            aria-label="جارٍ تجهيز القالب"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white"
+          >
+            <ParagraphWriteIcon size={32} />
+          </div>
+        ) : null}
+
         {/* Scrub counter — bottom-end (left in RTL). Only while
             scrubbing a multi-slide deck. Outside the click surface
             but inside the rounded thumbnail container. */}
@@ -569,9 +603,7 @@ export function ProjectThumbnail({
         onRename={enterRenameMode}
         onToggleFavorite={handleToggleFavorite}
         onCopyLink={handleCopyLink}
-        onUseAsTemplate={() =>
-          router.push(`/use-template/project/${projectId}`)
-        }
+        onUseAsTemplate={handleUseAsTemplate}
         onSaveAsTemplate={() => setSaveTemplateOpen(true)}
         onSendToTrash={() => setTrashOpen(true)}
       />

@@ -140,6 +140,28 @@ function cacheKey(source: TemplateSource, id: string): string {
   return `${CACHE_PREFIX}${source}:${id}`;
 }
 
+/**
+ * Resolve a template/project for the Mimic flow IN PLACE (from the tile
+ * that was clicked), so the heavy work — render PDF + mint the Anthropic
+ * reference — happens behind a dimmed-thumbnail loader instead of a
+ * full-screen route loader. Fetches, caches the result (so the
+ * destination page renders instantly), and writes the branding session.
+ * The caller then navigates to /use-template/[id] (or /project/[id]),
+ * which reads the cache and shows MimicFlow with no loading screen.
+ * Throws on failure so the caller can clear its busy state.
+ */
+export async function prepareTemplateUse(
+  source: TemplateSource,
+  id: string,
+): Promise<void> {
+  let use = readCachedUse(source, id);
+  if (!use) {
+    use = await fetchUse(source, id);
+    writeCachedUse(source, id, use);
+  }
+  applyTemplateUse(id, use);
+}
+
 /** Read the cached use-result (survives refresh; avoids re-minting). */
 export function readCachedUse(
   source: TemplateSource,

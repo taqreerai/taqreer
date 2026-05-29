@@ -25,6 +25,7 @@ import {
 } from "@/components/app/TemplateTile";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 import type { SlideFormat } from "@/lib/schema/slide";
 
 export type MyTemplatesTemplate = TemplateTileData & {
@@ -52,13 +53,19 @@ export function MyTemplates({
   // useBusy state — same UX contract, different surface.
   const [useBusy, setUseBusy] = useState(false);
 
-  const handleUseTemplate = () => {
+  const handleUseTemplate = async () => {
     if (!preview || useBusy) return;
     setUseBusy(true);
-    // Navigate to the forked Mimic flow ("استخدام كقالب") — it mints
-    // the Anthropic design reference + pre-fills branding, then renders
-    // MimicFlow in template mode.
-    window.location.assign(`/use-template/${preview.id}`);
+    try {
+      // Prepare the Mimic reference (lightbox CTA shows its busy
+      // spinner), then navigate to the forked flow which reads the
+      // cache → no full-screen loader.
+      await prepareTemplateUse("template", preview.id);
+      window.location.assign(`/use-template/${preview.id}`);
+    } catch (err) {
+      console.warn("[MyTemplates] use prep failed", err);
+      setUseBusy(false);
+    }
   };
 
   // Auto-refresh on freshly-saved templates so the user's just-saved

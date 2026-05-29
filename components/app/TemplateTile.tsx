@@ -20,6 +20,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 
 export type TemplateTileBrand = {
   background: string;
@@ -88,13 +90,18 @@ export function TemplateTile({
   // sessionStorage write against the next page's hydrate).
   const [useBusy, setUseBusy] = useState(false);
 
-  const handleUseAsTemplate = () => {
+  const handleUseAsTemplate = async () => {
     if (useBusy) return;
     setUseBusy(true);
-    // Navigate to the forked Mimic flow ("استخدام كقالب") — it mints
-    // the Anthropic design reference + pre-fills branding, then renders
-    // MimicFlow in template mode.
-    window.location.assign(`/use-template/${id}`);
+    try {
+      // Prepare the Mimic reference here (tile dims + loader) so the
+      // forked flow opens instantly with no full-screen loader.
+      await prepareTemplateUse("template", id);
+      window.location.assign(`/use-template/${id}`);
+    } catch (err) {
+      console.warn("[TemplateTile] use prep failed", err);
+      setUseBusy(false);
+    }
   };
 
   const { brand, title, isMine, id, thumbnailUrls } = template;
@@ -223,6 +230,15 @@ export function TemplateTile({
           </div>
         </>
       )}
+      {useBusy ? (
+        <div
+          role="status"
+          aria-label="جارٍ تجهيز القالب"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white"
+        >
+          <ParagraphWriteIcon size={32} />
+        </div>
+      ) : null}
     </div>
   );
 

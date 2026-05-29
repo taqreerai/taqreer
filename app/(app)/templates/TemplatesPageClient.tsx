@@ -28,6 +28,7 @@ import {
   bucketize,
 } from "@/lib/project/derive-color-tags";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 import type { SlideFormat } from "@/lib/schema/slide";
 import type { TemplateForBrowse } from "./types";
 
@@ -66,14 +67,19 @@ export function TemplatesPageClient({
   // failure (releases the gate so the user can retry).
   const [useBusy, setUseBusy] = useState(false);
 
-  const handleUseTemplate = () => {
+  const handleUseTemplate = async () => {
     if (!preview || useBusy) return;
     setUseBusy(true);
-    // Navigate to the forked Mimic flow ("استخدام كقالب"). That page
-    // mints the Anthropic design reference + pre-fills branding, then
-    // renders MimicFlow in template mode. Hard navigation so the page
-    // mounts cleanly (useBusy stays set — this view unmounts).
-    window.location.assign(`/use-template/${preview.id}`);
+    try {
+      // Prepare the Mimic reference while the lightbox CTA shows its
+      // busy spinner, then hard-navigate to the forked flow (which
+      // reads the cache → no full-screen loader).
+      await prepareTemplateUse("template", preview.id);
+      window.location.assign(`/use-template/${preview.id}`);
+    } catch (err) {
+      console.warn("[TemplatesPageClient] use prep failed", err);
+      setUseBusy(false);
+    }
   };
 
   // Bucketed swatches across every visible template. Each palette
