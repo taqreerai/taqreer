@@ -32,6 +32,11 @@ export type TemplateTileData = {
   id: string;
   title: string;
   brand: TemplateTileBrand;
+  // The template's real slide images (the source project's own
+  // thumbnails). When present, the tile renders the cover slide; it
+  // falls back to the brand-palette mock when absent (still rendering
+  // or a legacy row). Optional so callers that don't carry it compile.
+  thumbnailUrls?: string[];
   // True when the viewing user owns this template. Drives the 3-dots
   // affordance — community tiles get no menu at all. Defaults false
   // is safer, but every call site sets it explicitly today.
@@ -92,7 +97,8 @@ export function TemplateTile({
     window.location.assign(`/use-template/${id}`);
   };
 
-  const { brand, title, isMine, id } = template;
+  const { brand, title, isMine, id, thumbnailUrls } = template;
+  const cover = thumbnailUrls?.[0] ?? null;
   const primary = brand.palette[0] ?? brand.text;
   const secondary = brand.palette[1] ?? brand.text;
   const accent = brand.palette[2] ?? primary;
@@ -157,48 +163,66 @@ export function TemplateTile({
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${brand.text} 12%, transparent)`,
       }}
     >
-      {/* Accent column — full-height stripe on the start side. */}
-      <div
-        className="absolute inset-y-0 start-0 w-[14%]"
-        style={{ background: primary }}
-        aria-hidden
-      />
-      {/* Layout content — title bar, subtitle bar, three blocks. */}
-      <div className="absolute inset-0 flex flex-col justify-center gap-[5%] px-[10%] py-[12%] ps-[18%]">
-        <div
-          className="h-[10%] w-[55%] rounded-[3px]"
-          style={{ background: primary }}
+      {cover ? (
+        // Real cover slide (the source project's own image). Native
+        // <img> — Supabase storage URLs aren't in next remotePatterns.
+        <img
+          src={cover}
+          alt=""
           aria-hidden
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover object-top"
         />
-        <div
-          className="h-[5%] w-[38%] rounded-[2px]"
-          style={{
-            background: `color-mix(in srgb, ${brand.text} 50%, transparent)`,
-          }}
-          aria-hidden
-        />
-        <div className="mt-[3%] flex h-[45%] gap-[3%]">
+      ) : (
+        // Fallback: brand-palette mock (template still rendering, or a
+        // legacy row with no images).
+        <>
+          {/* Accent column — full-height stripe on the start side. */}
           <div
-            className="flex-1 rounded-[5px]"
-            style={{
-              background: secondary,
-              opacity: 0.85,
-              border: `1px solid color-mix(in srgb, ${brand.text} 14%, transparent)`,
-            }}
+            className="absolute inset-y-0 start-0 w-[14%]"
+            style={{ background: primary }}
             aria-hidden
           />
-          <div
-            className="flex-1 rounded-[5px]"
-            style={{ background: primary, opacity: 0.55 }}
-            aria-hidden
-          />
-          <div
-            className="flex-1 rounded-[5px]"
-            style={{ background: accent, opacity: 0.7 }}
-            aria-hidden
-          />
-        </div>
-      </div>
+          {/* Layout content — title bar, subtitle bar, three blocks. */}
+          <div className="absolute inset-0 flex flex-col justify-center gap-[5%] px-[10%] py-[12%] ps-[18%]">
+            <div
+              className="h-[10%] w-[55%] rounded-[3px]"
+              style={{ background: primary }}
+              aria-hidden
+            />
+            <div
+              className="h-[5%] w-[38%] rounded-[2px]"
+              style={{
+                background: `color-mix(in srgb, ${brand.text} 50%, transparent)`,
+              }}
+              aria-hidden
+            />
+            <div className="mt-[3%] flex h-[45%] gap-[3%]">
+              <div
+                className="flex-1 rounded-[5px]"
+                style={{
+                  background: secondary,
+                  opacity: 0.85,
+                  border: `1px solid color-mix(in srgb, ${brand.text} 14%, transparent)`,
+                }}
+                aria-hidden
+              />
+              <div
+                className="flex-1 rounded-[5px]"
+                style={{ background: primary, opacity: 0.55 }}
+                aria-hidden
+              />
+              <div
+                className="flex-1 rounded-[5px]"
+                style={{ background: accent, opacity: 0.7 }}
+                aria-hidden
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 

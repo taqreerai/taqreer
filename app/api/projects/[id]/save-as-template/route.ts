@@ -108,6 +108,10 @@ export async function POST(
       templateName: true,
       language: true,
       format: true,
+      // The project's own rendered slide thumbnails — the template
+      // reuses these as-is (user direction: "save the same images of
+      // the project"), capped to MAX_TEMPLATE_SLIDES below.
+      thumbnailUrls: true,
       presentation: {
         select: {
           versions: {
@@ -175,7 +179,11 @@ export async function POST(
       // synchronously on the create when isPublic=true; the
       // visibility-toggle route does the same dance on later flips.
       publishedAt: isPublic ? now : null,
-      thumbnailUrls: [],
+      // Reuse the project's own slide images (capped) so the template
+      // shows the real deck on its tile + lightbox immediately. The
+      // template-render job fills pdfUrl (the Mimic reference) in the
+      // background; thumbnails don't wait on it.
+      thumbnailUrls: project.thumbnailUrls.slice(0, MAX_TEMPLATE_SLIDES),
     },
     select: { id: true },
   });
