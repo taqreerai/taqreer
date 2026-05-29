@@ -18,27 +18,29 @@
 //     because the structured JSON skeleton dominates output. Not
 //     worth a menu slot.
 //
-// Menu (key → API config → label shown to user):
-//   sonnet-fast    → claude-sonnet-4-6 + thinking disabled              "Sonnet 4.6 · fast"
-//   opus-fast      → claude-opus-4-7   + thinking disabled              "Opus 4.7 · fast"
-//   opus-balanced  → claude-opus-4-7   + adaptive + effort:medium       "Opus 4.7 · medium"     (DEFAULT)
-//   opus-max       → claude-opus-4-7   + adaptive + effort:high         "Opus 4.7 · high"
+// Menu (key → API config → label shown to user) — 3 presets:
+//   sonnet-fast    → claude-sonnet-4-6 + thinking disabled    "Sonnet · سريع"
+//   opus-fast      → claude-opus-4-8   + thinking disabled    "Opus · سريع"
+//   opus-balanced  → claude-opus-4-8   + adaptive + effort:low  "Opus · تفكير"  (DEFAULT, green thinking chip)
 //
-// Labels mirror Anthropic's documented effort-tier names verbatim
-// (medium / high) so the menu surfaces the actual knob rather
-// than product-side aliases. Keys stay stable for already-shipped
-// tiers (opus-balanced / opus-max) so legacy Job rows still
-// resolve to the same API config via paramsForQuality().
+// Two no-thinking "سريع" options (Sonnet cheapest, Opus stronger) +
+// one light-thinking "تفكير" option. The deep tier (opus-max,
+// effort:high) was removed entirely 2026-05-29: on Opus 4.8 it
+// over-thought this structured-deck task (a 5-slide deck ran 16 min
+// / $1.69) with no quality gain over `low`. Any legacy `opus-max`
+// Job row still resolves — paramsForQuality takes a raw string and
+// falls through to the `low` default — so no DB migration is needed.
 //
 // ─── What got dropped (2026-05-25) ────────────────────────────────
 // • Sonnet adaptive variants (sonnet-low/medium/high/max) — verified
 //   broken-slow on multi-slide JSON (sonnet-low test sat in thinking
 //   10+ min on a 9-slide enhance with no text emitted).
 // • Opus effort tiers low / high / xhigh — collapsed into `balanced`
-//   (effort:medium). Cost data showed no meaningful differentiation
-//   between low/medium/high on our task. xhigh and max were
-//   indistinguishable in early tests; kept `max` as the headline
-//   "go deep" option.
+//   (effort:low as of 2026-05-29). Cost data showed no meaningful
+//   differentiation between low/medium/high on our task; the deep
+//   `opus-max` (effort:high) option was removed entirely 2026-05-29
+//   (over-thinks on Opus 4.8 — 16 min/$1.69 for 5 slides — no quality
+//   gain over `low`).
 //
 // ─── Legacy compatibility ─────────────────────────────────────────
 // All previous Quality keys are accepted at the runtime layer and
@@ -57,8 +59,7 @@
 export type Quality =
   | "sonnet-fast"
   | "opus-fast"
-  | "opus-balanced"
-  | "opus-max";
+  | "opus-balanced";
 
 export const QUALITY_PRESETS: ReadonlyArray<{
   key: Quality;
@@ -84,31 +85,30 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   secsPerSlide: number;
   baseOverheadSecs: number;
 }> = [
-  // Labels mirror Anthropic's effort-tier names verbatim
-  // (medium / high / max — see /docs/en/build-with-claude/effort)
-  // so the menu reads as a direct knob over the API config rather
-  // than inventing product-side aliases ("balanced", "extreme", etc.)
-  // that obscured what was actually being requested. Keys stay
-  // stable so existing Job rows storing legacy `quality` strings
-  // still resolve to the same API config via paramsForQuality().
-  { key: "sonnet-fast",    label: "Sonnet 4.6 · fast",     thinking: false, secsPerSlide: 15, baseOverheadSecs: 15 },
-  { key: "opus-fast",      label: "Opus 4.7 · fast",       thinking: false, secsPerSlide: 20, baseOverheadSecs: 30 },
-  { key: "opus-balanced",  label: "Opus 4.7 · medium",     thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
-  { key: "opus-max",       label: "Opus 4.7 · high",       thinking: true,  secsPerSlide: 40, baseOverheadSecs: 90 },
+  // Labels are intent-based Arabic (سريع = fast / no thinking,
+  // تفكير = thinking) — the distinction users care about is "does it
+  // reason or not", not the raw effort knob. The green thinking chip
+  // (driven by `thinking`) marks the تفكير preset. Keys stay stable
+  // so legacy Job rows still resolve via paramsForQuality().
+  // 3 presets: two no-thinking "سريع" options (Sonnet cheapest, Opus
+  // stronger) + one light-thinking "تفكير" option (green thinking
+  // chip, driven by `thinking: true`). opus-max (effort:high) was
+  // retired from the menu 2026-05-29.
+  { key: "sonnet-fast",    label: "Sonnet 4.6 · سريع", thinking: false, secsPerSlide: 15, baseOverheadSecs: 15 },
+  { key: "opus-fast",      label: "Opus 4.8 · سريع",   thinking: false, secsPerSlide: 20, baseOverheadSecs: 30 },
+  { key: "opus-balanced",  label: "Opus 4.8 · تفكير",  thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
 ];
 
-// Default — Opus 4.7 + adaptive medium thinking. The "balanced"
-// tier: enough thinking for the editorial-deck task without the
-// runtime tail of `max`. New default after the 2026-05-25 collapse
-// from 7 → 4 presets.
+// Default — `opus-balanced` = "Opus · تفكير": Opus 4.8 + adaptive
+// low thinking. The smart-but-fast middle option (~3.4 min / ~$0.68
+// for a 5-slide deck, measured on 4.8 2026-05-29).
 export const DEFAULT_QUALITY: Quality = "opus-balanced";
 
 export function isQuality(value: unknown): value is Quality {
   return (
     value === "sonnet-fast" ||
     value === "opus-fast" ||
-    value === "opus-balanced" ||
-    value === "opus-max"
+    value === "opus-balanced"
   );
 }
 

@@ -28,12 +28,6 @@ type SlideJson = {
   // SlideRenderer doesn't assume RTL/Arabic.
   streamingDirection?: unknown;
   streamingLanguage?: unknown;
-  // Parallel boolean array (indexed same as streamingPreview) marking
-  // which slides came from Claude's FIRST manifest pass. DeckView reads
-  // this to render a "مسودة" chip on draft tiles during /enhance gen.
-  // Only emitted by enhance/mimic/data flows (deck-generate gates the
-  // write); /create runs single-pass so the field stays absent.
-  streamingPreviewDraft?: unknown;
   // Monotonic manifest-version token written by deck-generate. Strictly
   // non-decreasing across the lifetime of a versionId; bumped on parser
   // `didReset()` AND on every retry-attempt restart. DeckView uses it
@@ -166,14 +160,6 @@ export async function GET(
     slideJson?.streamingLanguage === "ar" || slideJson?.streamingLanguage === "en"
       ? slideJson.streamingLanguage
       : null;
-  // Coerce the parallel draft-flag array to a clean boolean[]. Null when
-  // the field is absent (i.e. /create flow — deck-generate skips writing
-  // it). Capped to the same 60-entry defensive limit as streamingPreview
-  // so the two arrays stay zip-aligned on the client even under runaway
-  // parsers.
-  const streamingPreviewDraft = Array.isArray(slideJson?.streamingPreviewDraft)
-    ? slideJson.streamingPreviewDraft.slice(0, 60).map((v) => v === true)
-    : null;
   // Coerce the monotonic version token. Default 0 keeps older in-flight
   // runs / non-enhance flows safe — clients should treat "missing" as
   // "no version info, fall back to legacy length-only guard" rather
@@ -260,7 +246,6 @@ export async function GET(
     slideCount,
     progress,
     streamingPreview,
-    streamingPreviewDraft,
     streamingManifestVersion,
     streamingTheme,
     streamingDirection,

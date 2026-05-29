@@ -7,13 +7,13 @@
 //   2. Rename         — switches the tile into inline-edit mode
 //   3. Favorites      — toggles Project.isFavorite (PATCH /favorite)
 //   4. Copy link      — copies /preview/<id> to clipboard
-//   5. Use as template— navigates to /create/from/<id> (route ships
-//                       in step 13 — for now the link is rendered
-//                       but the destination 404s, which is the
-//                       documented contract for 9f)
-//   6. Save copy as template — parent opens SaveAsTemplateDialog;
-//                       the modal handles preview + isPublic toggle
-//                       + POST /api/projects/<id>/save-as-template
+//   5. Use as template— navigates to /use-template/project/<id>: mimic
+//                       this project's design now (renders its deck to
+//                       PDF + mints the Anthropic reference on the fly;
+//                       nothing is saved).
+//   6. Save as template — parent opens SaveAsTemplateDialog; the modal
+//                       handles preview + isPublic toggle + POST
+//                       /api/projects/<id>/save-as-template.
 //   7. Send to trash  — destructive; parent opens TrashConfirmDialog
 //
 // Anchoring + open/close mirror HistoryPopover.tsx (which mirrors
@@ -49,15 +49,13 @@ export type ProjectActionsMenuActions = {
   onRename?: () => void;
   onToggleFavorite?: () => void;
   onCopyLink?: () => void;
-  // `onUseAsTemplate` removed 2026-05-25 — the project-tile "use
-  // as template" entry pointed to a Phase 9f stub route
-  // (`/create/from/[projectId]`) that was never built, AND it
-  // conflicted with /enhance and /mimic flows where "use the
-  // project's brand to seed a new deck" doesn't have a clear
-  // shape. Templates from the /templates page still work via
-  // TemplateTile.handleUseAsTemplate → seedFromTemplate() →
-  // /create-from-template/content. Surface the working path
-  // through Save copy as template → /templates → Use this template.
+  // "Use as a template" — mimic this project's design now. Navigates to
+  // /use-template/project/[id] (the forked Mimic flow), which renders
+  // the project's deck to a PDF + mints the Anthropic reference on the
+  // fly. Nothing is persisted.
+  onUseAsTemplate?: () => void;
+  // "Save as a template" — parent opens SaveAsTemplateDialog (preview +
+  // public/private + POST save-as-template). Lands on the templates page.
   onSaveAsTemplate?: () => void;
   onSendToTrash?: () => void;
 };
@@ -72,6 +70,7 @@ export function ProjectActionsMenu({
   onRename,
   onToggleFavorite,
   onCopyLink,
+  onUseAsTemplate,
   onSaveAsTemplate,
   onSendToTrash,
   onExitComplete,
@@ -229,13 +228,22 @@ export function ProjectActionsMenu({
               closeAfter
               onClose={onClose}
             />
-            {/* "Save copy as template" — opens SaveAsTemplateDialog
-                via the parent's onSaveAsTemplate handler. The modal
-                fetches /template-preview, renders the live brand
-                preview, then POSTs save-as-template on confirm. */}
+            {/* "Use as a template" — mimic this project now. Navigates
+                to /use-template/project/[id] (forked Mimic flow). */}
+            <MenuItem
+              icon="auto_awesome"
+              label="استخدام كقالب"
+              onClick={onUseAsTemplate}
+              closeAfter
+              onClose={onClose}
+            />
+            {/* "Save as a template" — opens SaveAsTemplateDialog via the
+                parent's onSaveAsTemplate handler. The modal fetches
+                /template-preview, renders the live brand preview, then
+                POSTs save-as-template on confirm. */}
             <MenuItem
               icon="bookmark_add"
-              label="حفظ نسخة كقالب"
+              label="حفظ كقالب"
               onClick={onSaveAsTemplate}
               closeAfter
               onClose={onClose}

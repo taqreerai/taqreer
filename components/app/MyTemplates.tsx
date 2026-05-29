@@ -25,7 +25,7 @@ import {
 } from "@/components/app/TemplateTile";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
-import { seedFromTemplate } from "@/lib/create/seed-from-template";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 import type { SlideFormat } from "@/lib/schema/slide";
 
 export type MyTemplatesTemplate = TemplateTileData & {
@@ -57,13 +57,13 @@ export function MyTemplates({
     if (!preview || useBusy) return;
     setUseBusy(true);
     try {
-      await seedFromTemplate(preview.id);
-      // Full navigation (not router.push) so /create's mount effect
-      // sees the fresh sessionStorage on first render. Phase 17.D
-      // unified the template-seeded flow into the regular /create.
-      window.location.assign("/create");
+      // Prepare the Mimic reference (lightbox CTA shows its busy
+      // spinner), then navigate to the forked flow which reads the
+      // cache → no full-screen loader.
+      await prepareTemplateUse("template", preview.id);
+      window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
-      console.warn("[MyTemplates] seedFromTemplate failed", err);
+      console.warn("[MyTemplates] use prep failed", err);
       setUseBusy(false);
     }
   };
@@ -128,6 +128,7 @@ export function MyTemplates({
         slides={preview?.thumbnailUrls ?? []}
         format={previewFormat}
         title={preview?.title ?? ""}
+        isPremium={preview?.isPremium ?? false}
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}

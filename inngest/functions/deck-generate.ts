@@ -1474,46 +1474,17 @@ export const deckGenerate = inngest.createFunction(
       // DOMPurify pass at end-of-stream, so this preview path can never
       // become the authoritative manifest.
       const streamingPreview: SlideType[] = [];
-      // Parallel boolean array marking which streamingPreview slides came
-      // from the FIRST manifest pass (Claude's draft) vs a subsequent pass
-      // (his polished re-emit). DeckView surfaces a small "مسودة" chip on
-      // tiles where this is true so the user knows the visual will be
-      // replaced. Indexed identically to streamingPreview so the client
-      // can zip them by position without an extra slideId lookup.
+      // Monotonic manifest-version token (surfaced below as
+      // `streamingManifestVersion`): bumped on parser didReset() and on
+      // every retry restart, so the client rejects stale, out-of-order
+      // poll snapshots. Strictly non-decreasing across this versionId's
+      // lifetime.
       //
-      // Lifecycle:
-      //   • `manifestVersion === 1` → every push is `true` (draft)
-      //   • On `didReset()` → cleared in lockstep with streamingPreview
-      //     (existing behavior), `manifestVersion++`
-      //   • `manifestVersion > 1` → every push is `false` (final). When
-      //     these arrive, DeckView's monotonic guard swaps the previous
-      //     full draft list out for the polished list and the chips
-      //     vanish in one snap.
-      //
-      // Gating: BOTH conditions must hold.
-      //  1. Upload-driven source (enhance / mimic / data) — these are
-      //     the flows where Claude's two-pass draft→polish pattern
-      //     was ever observed. /create runs single-pass.
-      //  2. effectiveQuality === "opus-max" (label "Opus 4.7 · high"
-      //     in the UI) — the two-pass behavior is specific to
-      //     adaptive thinking at higher effort tiers. Sonnet (no
-      //     thinking), opus-fast (no thinking), and opus-balanced
-      //     (effort:medium) all produce single-pass output, so a
-      //     draft chip there would stay on through the entire run
-      //     without ever clearing — misleading. Restricting to the
-      //     "high" preset matches where the chip actually has a
-      //     real signal to surface.
-      const streamingPreviewDraft: boolean[] = [];
+      // The old draft→polish "مسودة" chip (streamingPreviewDraft) was
+      // removed 2026-05-29: it only ever fired on opus-max's two-pass
+      // higher-effort output, and that tier is gone. Every current
+      // preset is single-pass (no thinking, or low effort).
       let manifestVersion = 1;
-      const briefSourceKind =
-        (data.brief as { source?: { kind?: string } } | null)?.source?.kind ??
-        null;
-      const isUploadSourceFlow =
-        briefSourceKind === "enhance" ||
-        briefSourceKind === "mimic" ||
-        briefSourceKind === "data";
-      const enableDraftBadges =
-        isUploadSourceFlow && effectiveQuality === "opus-max";
       // Latest theme JSON pulled out of the stream — captured once by
       // the parser as Claude closes the `theme` object. DeckView needs
       // it to wire palette / font CSS vars on the live preview slides;
@@ -1553,15 +1524,6 @@ export const deckGenerate = inngest.createFunction(
                 // Snapshot of the live-preview slides so far. Replaced
                 // by the canonical `slides` array on the final save.
                 streamingPreview: streamingPreview.slice(),
-                // Parallel draft markers — only emitted on enhance/mimic/data
-                // (the flows where Claude's two-pass behavior shows up). For
-                // /create we skip the field entirely so the slideJson payload
-                // is byte-identical to the pre-change shape. Snapshot via
-                // .slice() for the same defensive-copy reason as
-                // streamingPreview above.
-                ...(enableDraftBadges
-                  ? { streamingPreviewDraft: streamingPreviewDraft.slice() }
-                  : {}),
                 // Monotonic manifest-version token. Always emitted (even
                 // when draft badges are off — non-enhance flows still
                 // benefit from the client-side stale-poll guard built on
@@ -1614,7 +1576,6 @@ export const deckGenerate = inngest.createFunction(
         // / stale frames and the post-success snapshot to slideJson can
         // include slides that never made it into the canonical manifest.
         streamingPreview.length = 0;
-        streamingPreviewDraft.length = 0;
         // INCREMENT (not reset to 1) so `manifestVersion` is strictly
         // monotonic across the lifetime of this `versionId`. Pre-fix
         // we reset to 1 on each retry attempt, which let an old poll
@@ -1766,11 +1727,6 @@ export const deckGenerate = inngest.createFunction(
               const parsed = SlideSchema.safeParse(candidate);
               if (parsed.success) {
                 streamingPreview.push(parsed.data);
-                // Tag each slide with whether it belongs to the FIRST
-                // manifest pass (Claude's draft) or a subsequent polished
-                // pass. The flag rides in a parallel array so the SlideType
-                // schema stays untouched. v1 = draft, v2+ = final.
-                streamingPreviewDraft.push(manifestVersion === 1);
               }
             } catch {
               // Malformed mid-stream JSON (rare — Claude usually closes
@@ -1789,14 +1745,12 @@ export const deckGenerate = inngest.createFunction(
           // end of stream uses lastIndexOf("}") so the saved canonical
           // manifest is the polished one regardless.
           //
-          // We also bump `manifestVersion` so the NEXT batch of pushes lands
-          // with `draft=false` — when DeckView's monotonic guard finally
-          // swaps the old drafts out for the new full-length polished list,
-          // every chip clears in one frame (the user reads it as "ah, those
-          // are the final versions now").
+          // We also bump `manifestVersion` so the post-reset snapshot carries
+          // a higher version than the dropped draft — DeckView's monotonic
+          // guard then accepts the polished list and rejects any late,
+          // out-of-order poll that still carries the stale draft.
           if (sliceParser.didReset()) {
             streamingPreview.length = 0;
-            streamingPreviewDraft.length = 0;
             streamingTheme = null;
             manifestVersion += 1;
           }

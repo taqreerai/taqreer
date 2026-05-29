@@ -338,7 +338,6 @@ export function DeckView({
   // popover open; reset to false by HistoryPopover's
   // onExitComplete after the fade-out finishes.
   const [popoverEngaged, setPopoverEngaged] = useState(false);
-  const [historyBusy, setHistoryBusy] = useState(false);
   // Splice helper used by both Undo and Restore. Updates the live
   // manifest (so the renderer immediately shows the older slide
   // content) AND the per-slide pill state (currentVersionNumber).
@@ -426,17 +425,6 @@ export function DeckView({
   // first slide closes in the stream — typically 30–60 s into a
   // generation. Reset to [] when status leaves "generating".
   const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
-  // Parallel boolean array (indexed identical to streamingPreview) flagging
-  // tiles whose slide is still showing Claude's FIRST-pass DRAFT (vs the
-  // polished re-emit). Server only emits this field on enhance/mimic/data
-  // flows; for /create it stays empty and no draft chips render. Kept in
-  // strict zip-alignment with streamingPreview via the same monotonic
-  // guard below — when we accept a new streamingPreview snapshot we also
-  // accept the matching draft array; when we preserve the prior snapshot
-  // we preserve the prior draft array too.
-  const [streamingPreviewDraft, setStreamingPreviewDraft] = useState<boolean[]>(
-    [],
-  );
   // Stale-poll guards for the streaming preview. The pre-fix monotonic
   // guard was length-only (`validated.length >= prev.length`), which
   // worked for retry-induced shrinkage but couldn't reject the case
@@ -447,10 +435,10 @@ export function DeckView({
   // `streamingManifestVersion` we've accepted; incoming snapshots with
   // a lower version are rejected outright. `highWatermarkRef` retains
   // the length of the highest version accepted so far, so when a NEW
-  // version arrives (parser reset → second manifest pass) we keep
-  // showing the previous full-length list until the new version
-  // catches up to that watermark — preserves the deliberate UX where
-  // draft slides stay visible until the polished pass replaces them.
+  // version arrives (parser reset → second manifest pass, or a retry
+  // restart) we keep showing the previous full-length list until the
+  // new version catches up to that watermark — so the live preview
+  // never visibly shrinks mid-stream.
   const lastManifestVersionRef = useRef(0);
   const highWatermarkRef = useRef(0);
   // Theme captured from the same stream once Claude closes the
@@ -651,6 +639,11 @@ export function DeckView({
     }
     versionNumbersRef.current = nextVersions;
     if (newlyBumped.length === 0) return;
+    // Clear peer-regen overlays for slides whose version just bumped
+    // (their regen finished) — a guarded resync of external state that
+    // only fires when something actually bumped, so the cascading-render
+    // concern is moot here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPeerRegenInProgress((prev) => {
       if (prev.size === 0) return prev;
       let dirty = false;
@@ -785,7 +778,8 @@ export function DeckView({
       localHandle = openProjectChannel(projectId, currentUserId);
       localHandle.onPresenceSync((state) => {
         if (!cancelled) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape; the channel is what owns the state, this just mirrors it into React
+          // Subscribe to external source: the channel owns this state,
+          // we just mirror it into React.
           setPresence(state);
         }
       });
@@ -818,7 +812,8 @@ export function DeckView({
             const data = (await res.json()) as { comments?: CommentRow[] };
             const incoming = data.comments?.[0];
             if (!incoming || cancelled) return;
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape; the channel is the source of truth, this just mirrors fresh rows in
+            // Subscribe to external source: the channel is the source of
+            // truth, we just mirror fresh rows in.
             setComments((prev) =>
               prev.some((c) => c.id === incoming.id)
                 ? prev
@@ -837,7 +832,7 @@ export function DeckView({
         ) {
           return;
         }
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape
+        // Subscribe to external source (channel is the source of truth).
         setComments((prev) => prev.filter((c) => c.id !== payload.commentId));
       });
 
@@ -1491,10 +1486,6 @@ export function DeckView({
           slideCount: number;
           progress: Progress | null;
           streamingPreview?: unknown[] | null;
-          // Parallel boolean array — see comment on the matching server
-          // field. Null/missing for /create runs; present and zip-aligned
-          // with streamingPreview on /enhance|mimic|data.
-          streamingPreviewDraft?: unknown[] | null;
           // Monotonic manifest-version token. See refs above for how
           // this drives the version-aware stale-poll guard. Null
           // /missing on older in-flight runs (treated as version 0
@@ -1522,19 +1513,6 @@ export function DeckView({
             const parsed = SlideSchema.safeParse(candidate);
             if (parsed.success) validated.push(parsed.data);
           }
-          // Coerce the parallel draft array to clean booleans (defensive
-          // even though the server already validated). Pad to the validated
-          // length with `false` so the two arrays stay strictly zip-aligned
-          // even if the server briefly emitted one before the other (race
-          // window during writeProgress snapshot — `.slice()` is per-array
-          // and a poll in between could see mismatched lengths).
-          const draftFlags: boolean[] = [];
-          const rawDraft = Array.isArray(data.streamingPreviewDraft)
-            ? data.streamingPreviewDraft
-            : [];
-          for (let i = 0; i < validated.length; i += 1) {
-            draftFlags.push(rawDraft[i] === true);
-          }
           // ─── Stale-poll guard (2026-05-25, version-aware) ──────────
           // Three layered conditions decide whether to accept this
           // snapshot:
@@ -1546,11 +1524,12 @@ export function DeckView({
           //       `streamingPreview.length`.
           //   (b) `incomingVersion > lastAccepted` → only accept once
           //       the new version's length catches up to the
-          //       high-watermark of the previous version. Preserves
-          //       the deliberate UX where draft slides stay visible
-          //       until the polished pass replaces them (server
-          //       clears its array on `didReset` + bumps version;
-          //       the brief empty window shouldn't blank the screen).
+          //       high-watermark of the previous version. Keeps the
+          //       previous full-length list on screen while a fresh
+          //       manifest (server clears its array on `didReset` +
+          //       bumps version, or a retry restart) is still
+          //       streaming — the brief empty window shouldn't blank
+          //       the screen.
           //   (c) Same version → fall back to length-only monotonic
           //       (catches retry-induced shrinkage within a manifest
           //       attempt). Always update the high-watermark when
@@ -1572,12 +1551,11 @@ export function DeckView({
             }
             // (b) Newer version — gate on catching up to the prior
             // version's high-watermark to avoid blanking the preview
-            // during the draft→polished transition.
+            // while the fresh manifest is still streaming.
             if (incomingVersion > lastVersion) {
               if (validated.length >= highWatermarkRef.current) {
                 lastManifestVersionRef.current = incomingVersion;
                 highWatermarkRef.current = validated.length;
-                setStreamingPreviewDraft(draftFlags);
                 return validated;
               }
               // Polished pass still ramping up — hold the prior view.
@@ -1588,21 +1566,39 @@ export function DeckView({
               if (validated.length > highWatermarkRef.current) {
                 highWatermarkRef.current = validated.length;
               }
-              setStreamingPreviewDraft(draftFlags);
               return validated;
             }
             return prev;
           });
         }
-        if (data.streamingTheme) {
-          const parsed = ThemeSchema.safeParse(data.streamingTheme);
-          if (parsed.success) setStreamingTheme(parsed.data);
-        }
-        if (data.streamingDirection === "rtl" || data.streamingDirection === "ltr") {
-          setStreamingDirection(data.streamingDirection);
-        }
-        if (data.streamingLanguage === "ar" || data.streamingLanguage === "en") {
-          setStreamingLanguage(data.streamingLanguage);
+        // Theme / direction / language ride the same manifest version as
+        // the preview slides, so gate them behind the same staleness check
+        // — otherwise a slower OLDER-version poll could repaint the freshly
+        // accepted slides with a stale theme/direction until the next poll.
+        // (The setStreamingPreview updater above runs async, so this ref
+        // still holds the pre-poll accepted version when we read it here.)
+        const metaVersion =
+          typeof data.streamingManifestVersion === "number" &&
+          Number.isFinite(data.streamingManifestVersion)
+            ? data.streamingManifestVersion
+            : 0;
+        if (metaVersion >= lastManifestVersionRef.current) {
+          if (data.streamingTheme) {
+            const parsed = ThemeSchema.safeParse(data.streamingTheme);
+            if (parsed.success) setStreamingTheme(parsed.data);
+          }
+          if (
+            data.streamingDirection === "rtl" ||
+            data.streamingDirection === "ltr"
+          ) {
+            setStreamingDirection(data.streamingDirection);
+          }
+          if (
+            data.streamingLanguage === "ar" ||
+            data.streamingLanguage === "en"
+          ) {
+            setStreamingLanguage(data.streamingLanguage);
+          }
         }
         if (data.status === "failed") {
           setPolledFailure(true);
@@ -2427,11 +2423,6 @@ export function DeckView({
             index: idx,
             slide: previewSlide,
             commentCount: 0,
-            // Flag drives the small "مسودة" chip in SlideNavSidebar. True
-            // only when the server tagged this slide as belonging to
-            // Claude's first manifest pass (drafting). Undefined / false
-            // → no chip. Field is absent on /create runs by design.
-            draft: streamingPreviewDraft[idx] === true,
           };
         }
         const isAutoTail =
@@ -2607,7 +2598,12 @@ export function DeckView({
                               ? "جارٍ تحليل البيانات..."
                               : initialSourceKind === "mimic"
                                 ? "جارٍ قراءة المصدر وأسلوب التصميم..."
-                                : "جارٍ استخراج النص والهوية البصرية..."
+                                : initialSourceKind === "enhance"
+                                  ? "جارٍ استخراج النص والهوية البصرية..."
+                                  : // scratch / null = /create — nothing to
+                                    // extract; Claude is composing the deck
+                                    // from the idea text.
+                                    "جارٍ كتابة المحتوى وتصميم الشرائح..."
                             : "بدء التصميم..."}
                   </span>
                 </div>
@@ -3214,7 +3210,7 @@ export function DeckView({
             ? (slideStates[historySlideKey]?.currentVersionNumber ?? null)
             : null
         }
-        busy={historyBusy}
+        busy={false}
         onClose={() => {
           setHistoryAnchor(null);
           setHistorySlideKey(null);

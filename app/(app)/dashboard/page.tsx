@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getStartOfMonthUTC } from "@/lib/utils";
+import { normalizePlan } from "@/lib/plan";
 
 // Fresh SSR every navigation. Without this Next.js may serve a
 // cached render from before the Inngest thumbnail-render job
@@ -47,7 +48,7 @@ export default async function DashboardPage() {
   }
 
   const planLimits = { free: 10, plus: 60, pro: 90 };
-  const plan = isKnownPlan(dbUser.plan) ? dbUser.plan : "free";
+  const plan = normalizePlan(dbUser.plan);
   const limit = planLimits[plan];
   const startOfMonth = getStartOfMonthUTC();
 
@@ -107,7 +108,14 @@ export default async function DashboardPage() {
       // (`اجعله عاماً` vs `اجعله خاصاً`). All dashboard rows are the
       // user's own (filtered by ownerId above), so `isMine` is always
       // true at the call site — not selected from the DB.
-      select: { id: true, title: true, brand: true, thumbnailUrls: true, isPublic: true },
+      select: {
+        id: true,
+        title: true,
+        brand: true,
+        thumbnailUrls: true,
+        isPublic: true,
+        isPremium: true,
+      },
     }),
     prisma.subscription.findFirst({
       where: { userId: dbUser.id },
@@ -164,6 +172,7 @@ export default async function DashboardPage() {
       // render the actions trigger.
       isMine: true,
       isPublic: t.isPublic,
+      isPremium: t.isPremium,
       thumbnailUrls: t.thumbnailUrls,
       // Drives the dashboard widget's auto-refresh hook so a saved
       // template's PNGs appear without a manual reload once Inngest
@@ -209,8 +218,4 @@ export default async function DashboardPage() {
       />
     </div>
   );
-}
-
-function isKnownPlan(plan: string): plan is "free" | "plus" | "pro" {
-  return plan === "free" || plan === "plus" || plan === "pro";
 }

@@ -3,16 +3,17 @@
 // (single-slide redesign) so a partial regen uses the SAME model + thinking
 // configuration that produced the original deck.
 //
-// ─── Collapsed preset matrix (2026-05-25, fifth revision) ───────
-// 4 preset keys, each named by its API config:
+// ─── Collapsed preset matrix (2026-05-29, sixth revision) ───────
+// 3 active preset keys, each named by its API config:
 //
 //   sonnet-fast    → claude-sonnet-4-6 + thinking disabled
-//   opus-fast      → claude-opus-4-7   + thinking disabled
-//   opus-balanced  → claude-opus-4-7   + adaptive + effort:medium  (DEFAULT)
-//   opus-max       → claude-opus-4-7   + adaptive + effort:high
+//   opus-fast      → claude-opus-4-8   + thinking disabled
+//   opus-balanced  → claude-opus-4-8   + adaptive + effort:low     (DEFAULT)
+//   (opus-max retired 2026-05-29 — effort:high path removed; the key
+//    now falls through to the `low` default below.)
 //
-// Why 4 not 11: Anthropic's published Opus 4.7 pricing ($5/$25 per
-// MTok, ~3× cheaper than Opus 4.1) + our measured cost data
+// Why 3 not 11: Opus 4.8 pricing ($5/$25 per MTok, unchanged from
+// 4.7, ~3× cheaper than Opus 4.1) + our measured cost data
 // confirmed Opus effort tiers low/medium/high all cost ~$0.83-0.85
 // per 8-slide deck. Decision fatigue with no cost or output
 // differentiation. The 11-config matrix is documented in
@@ -53,8 +54,10 @@
 //   • Original Phase 16 ("fast" / "medium" / "quality" / "extreme")
 //   • Phase 17.B 11-config expansion (sonnet-low/medium/high/max,
 //     opus-low/medium/high/xhigh)
-// `sonnet-fast`, `opus-fast`, `opus-balanced`, and `opus-max` are
-// the only keys with explicit cases below.
+//   • opus-max — menu-retired 2026-05-29; its explicit case was
+//     removed, so it now lands on the default too.
+// `sonnet-fast`, `opus-fast`, and `opus-balanced` are the only keys
+// with explicit cases below; everything else hits the default.
 
 export type AnthropicCallParams = {
   model: string;
@@ -63,7 +66,14 @@ export type AnthropicCallParams = {
 };
 
 const SONNET = "claude-sonnet-4-6";
-const OPUS = "claude-opus-4-7";
+// Bumped 4-7 → 4-8 (2026-05-29, Opus 4.8 launch). No API-shape change:
+// 4.8 keeps adaptive thinking + output_config.effort and the same
+// $5/$25 pricing, and the migration guide confirms no breaking changes
+// from 4.7. ⚠️ 4.8 RECALIBRATES the token budget behind each effort
+// tier vs 4.7 (medium = somewhat more thinking, high = somewhat less),
+// so the measured cost/quality numbers in the comments below are
+// 4.7-era and need re-baselining on 4.8.
+const OPUS = "claude-opus-4-8";
 
 export function paramsForQuality(
   quality: string | undefined | null,
@@ -73,28 +83,25 @@ export function paramsForQuality(
       return { model: SONNET, thinking: { type: "disabled" } };
     case "opus-fast":
       return { model: OPUS, thinking: { type: "disabled" } };
-    case "opus-max":
-      // opus-max — the bounded top tier. Was "max" before the 2026-05-25
-      // stall (a 9-slide enhance sat in Anthropic processing for 20+ min
-      // returning zero bytes); dropped to "high" alongside the watchdog
-      // fix in deck-generate.ts. "high" is fast, predictable, and our
-      // earlier notes flagged xhigh/max as empirically indistinguishable
-      // on editorial tasks — so this is the user-friendly upper bound.
-      return {
-        model: OPUS,
-        thinking: { type: "adaptive" },
-        outputConfig: { effort: "high" },
-      };
     // ─── Default + legacy fallback ──────────────────────────────
     // Catches `opus-balanced` (canonical default) AND any legacy
-    // quality string from earlier menu shapes. All resolve to Opus
-    // + adaptive + effort:medium — the new "balanced" tier.
+    // quality string from earlier menu shapes — including `opus-max`,
+    // retired from the menu 2026-05-29 (its old effort:high path was
+    // removed; it now lands here on `low` like everything else). All
+    // resolve to Opus + adaptive + effort:low.
+    //
+    // Was effort:medium until 2026-05-29: on Opus 4.8 the `medium`
+    // budget over-thought this structured-output deck task — a
+    // 5-slide deck ran 16 min / ~$1.69 (~60k output tokens, roughly
+    // half of it thinking). 4.7 data already showed low/medium/high
+    // were quality-indistinguishable here, so dropped to `low` to cut
+    // the thinking tax. Re-baselining low's cost/time on 4.8.
     case "opus-balanced":
     default:
       return {
         model: OPUS,
         thinking: { type: "adaptive" },
-        outputConfig: { effort: "medium" },
+        outputConfig: { effort: "low" },
       };
   }
 }

@@ -33,6 +33,13 @@ export function ParagraphWriteIcon({
   //     in, hold briefly, then tilt + fall off-screen with a
   //     slight per-line rotation. `forwards` fill mode keeps them
   //     gone after the fall.
+  //   • "hover" — STATIC rest state (all 3 lines fully visible) UNLESS
+  //     an ancestor element carries the `.pw-hover-trigger` class AND
+  //     is hovered, in which case the lines play the same loop as the
+  //     default mode. Used by the dashboard sidebar logo so the icon
+  //     sits idle as a brand mark and only "writes" while the user
+  //     hovers the logo button. CSS in `paragraph-write.css` handles
+  //     the gating.
   // The CSS in `paragraph-write.css` handles the actual keyframes;
   // this prop just sets the `data-mode` attribute the CSS gates on.
   mode = "loop",
@@ -40,13 +47,13 @@ export function ParagraphWriteIcon({
   rtl?: boolean;
   size?: number;
   className?: string;
-  mode?: "loop" | "break";
+  mode?: "loop" | "break" | "hover";
 }) {
   return (
     <svg
       className={`paragraph-write-icon${className ? ` ${className}` : ""}`}
       data-rtl={rtl ? "true" : undefined}
-      data-mode={mode === "break" ? "break" : undefined}
+      data-mode={mode === "loop" ? undefined : mode}
       viewBox="0 0 200 200"
       width={size}
       height={size}

@@ -1,13 +1,17 @@
 // POST /api/projects/[id]/save-as-template
 //
 // Creates a Template row from the project's latest completed manifest,
-// then dispatches the showcase-render Inngest job. The Template is
-// "brand-only" by construction — derive-brand.ts strips out logo,
-// project title, and slide content, keeping only palette + fonts +
-// language + direction + format. The originating project is recorded
-// in `Template.sourceProjectId` purely for provenance ("which deck
-// did this come from"); it's a non-FK pointer so deleting the source
-// project does not cascade-delete the template.
+// then dispatches the template-render Inngest job. The Template carries
+// two things: (1) the brand TAGS — derive-brand.ts keeps palette +
+// fonts + language + direction + format (used for filtering + to
+// pre-fill the Mimic branding card), and (2) the real-deck artifacts —
+// the render job produces a multi-page PDF (the "layout", re-uploaded
+// to Anthropic Files at use-time to drive the Mimic flow) plus the real
+// per-slide thumbnails. The originating project is recorded in
+// `Template.sourceProjectId` (non-FK) so the render job can load its
+// manifest; deleting the source project does not cascade-delete the
+// template (but a template saved before its first completed manifest
+// has nothing to render — guarded below).
 //
 // Request body:
 //   {
@@ -33,13 +37,12 @@
 //
 // Side effects:
 //   1. INSERT INTO Template (owner, title, brand, sourceProjectId,
-//      isPublic, publishedAt, language, direction, slideCount=3,
-//      thumbnailUrls=[]).
-//   2. fire `template.showcase.render` Inngest event. The function
-//      renders the 3 brand-showcase PNGs in the background (cover +
-//      typography + palette — the abstract layout slide was retired
-//      2026-05-22) and writes thumbnailUrls back. Until then the
-//      template renders as a placeholder tile on /templates.
+//      isPublic, publishedAt, language, direction, slideCount,
+//      thumbnailUrls=[], pdfUrl=null).
+//   2. fire `template.render` Inngest event. The function renders the
+//      source deck's real PDF + per-slide thumbnails in the background
+//      and writes pdfUrl + thumbnailUrls back. Until then the template
+//      renders as a placeholder tile on /templates.
 //
 // Failure isolation: the Inngest dispatch is wrapped in a catch — a
 // dispatch failure logs but does not abort the response, because the
@@ -51,6 +54,8 @@ import { prisma } from "@/lib/prisma";
 import { resolveProjectContext } from "@/lib/api/project-context";
 import { inngest } from "@/inngest/client";
 import { deriveBrandSnapshot } from "@/lib/template/derive-brand";
+import { SlideManifestSchema } from "@/lib/schema/slide";
+import { MAX_TEMPLATE_SLIDES } from "@/lib/template/constants";
 import type { Prisma } from "@prisma/client";
 
 type SaveAsTemplateBody = {
@@ -103,6 +108,10 @@ export async function POST(
       templateName: true,
       language: true,
       format: true,
+      // The project's own rendered slide thumbnails — the template
+      // reuses these as-is (user direction: "save the same images of
+      // the project"), capped to MAX_TEMPLATE_SLIDES below.
+      thumbnailUrls: true,
       presentation: {
         select: {
           versions: {
@@ -146,6 +155,15 @@ export async function POST(
   // somehow lands here before its templateName Haiku call completes.
   const title = project.templateName ?? project.title;
 
+  // Slide count of the source deck, capped at MAX_TEMPLATE_SLIDES — a
+  // template only captures the first few slides (the render job renders
+  // the same capped slice to PDF + thumbnails). Best-effort parse;
+  // brand derivation already succeeded so the manifest is sound.
+  const parsedManifest = SlideManifestSchema.safeParse(manifest);
+  const slideCount = parsedManifest.success
+    ? Math.min(parsedManifest.data.slides.length, MAX_TEMPLATE_SLIDES)
+    : Math.min(3, MAX_TEMPLATE_SLIDES);
+
   const now = new Date();
   const template = await prisma.template.create({
     data: {
@@ -153,12 +171,7 @@ export async function POST(
       title,
       language: brand.language,
       direction: brand.direction,
-      // Brand showcase is 3 slides as of 2026-05-22 (cover +
-      // typography + palette). The schema column default is still 4
-      // for legacy rows; new rows override here so the count matches
-      // the actual rendered output. (`SHOWCASE_SLIDE_IDS.length` is
-      // the source of truth in `lib/template/build-showcase-html.ts`.)
-      slideCount: 3,
+      slideCount,
       brand: brand as unknown as Prisma.InputJsonValue,
       sourceProjectId: project.id,
       isPublic,
@@ -166,7 +179,12 @@ export async function POST(
       // synchronously on the create when isPublic=true; the
       // visibility-toggle route does the same dance on later flips.
       publishedAt: isPublic ? now : null,
-      thumbnailUrls: [],
+      // Seed with the project's real slides so the tile + lightbox show
+      // the actual deck immediately. The template-render job then
+      // composes the final preview ([cover, typography, palette, ...rest]
+      // capped at 10) + the deck PDF (the Mimic reference) in the
+      // background.
+      thumbnailUrls: project.thumbnailUrls.slice(0, MAX_TEMPLATE_SLIDES),
     },
     select: { id: true },
   });
@@ -176,13 +194,13 @@ export async function POST(
     .send({
       // Per-template dedup key so Inngest's at-least-once delivery
       // doesn't spawn duplicate render runs against the same row.
-      id: `template-showcase:${template.id}`,
-      name: "template.showcase.render",
+      id: `template-render:${template.id}`,
+      name: "template.render",
       data: { templateId: template.id },
     })
     .catch((err) => {
       console.error(
-        "[save-as-template] inngest.send(template.showcase.render) failed:",
+        "[save-as-template] inngest.send(template.render) failed:",
         err,
       );
     });

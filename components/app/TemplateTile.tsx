@@ -20,7 +20,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
-import { seedFromTemplate } from "@/lib/create/seed-from-template";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { PremiumBadge } from "@/components/app/PremiumBadge";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 
 export type TemplateTileBrand = {
   background: string;
@@ -33,6 +35,11 @@ export type TemplateTileData = {
   id: string;
   title: string;
   brand: TemplateTileBrand;
+  // The template's real slide images (the source project's own
+  // thumbnails). When present, the tile renders the cover slide; it
+  // falls back to the brand-palette mock when absent (still rendering
+  // or a legacy row). Optional so callers that don't carry it compile.
+  thumbnailUrls?: string[];
   // True when the viewing user owns this template. Drives the 3-dots
   // affordance — community tiles get no menu at all. Defaults false
   // is safer, but every call site sets it explicitly today.
@@ -41,6 +48,9 @@ export type TemplateTileData = {
   // ("اجعله عاماً" when private, "اجعله خاصاً" when public).
   // Optimistically updated on toggle before router.refresh re-fetches.
   isPublic: boolean;
+  // Premium templates show the "مميز" badge. Optional so callers that
+  // don't carry it compile; the use-gate itself is enforced server-side.
+  isPremium?: boolean;
 };
 
 export function TemplateTile({
@@ -88,22 +98,18 @@ export function TemplateTile({
     if (useBusy) return;
     setUseBusy(true);
     try {
-      await seedFromTemplate(id);
-      // Hard navigation rather than router.push so /create's mount
-      // effect reads the fresh templateSeed sessionStorage on first
-      // render. Phase 17.D collapsed /create-from-template into the
-      // unified single-page /create — the seed marker is enough to
-      // pre-fill the branding card + surface the "من قالب" pill.
-      window.location.assign("/create");
+      // Prepare the Mimic reference here (tile dims + loader) so the
+      // forked flow opens instantly with no full-screen loader.
+      await prepareTemplateUse("template", id);
+      window.location.assign(`/use-template/${id}`);
     } catch (err) {
-      // No toast infra yet — surface to console + release the gate so
-      // the user can retry. Matches the rest of TemplateTile's error UX.
-      console.warn("[TemplateTile] seedFromTemplate failed", err);
+      console.warn("[TemplateTile] use prep failed", err);
       setUseBusy(false);
     }
   };
 
-  const { brand, title, isMine, id } = template;
+  const { brand, title, isMine, id, thumbnailUrls, isPremium } = template;
+  const cover = thumbnailUrls?.[0] ?? null;
   const primary = brand.palette[0] ?? brand.text;
   const secondary = brand.palette[1] ?? brand.text;
   const accent = brand.palette[2] ?? primary;
@@ -168,48 +174,80 @@ export function TemplateTile({
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${brand.text} 12%, transparent)`,
       }}
     >
-      {/* Accent column — full-height stripe on the start side. */}
-      <div
-        className="absolute inset-y-0 start-0 w-[14%]"
-        style={{ background: primary }}
-        aria-hidden
-      />
-      {/* Layout content — title bar, subtitle bar, three blocks. */}
-      <div className="absolute inset-0 flex flex-col justify-center gap-[5%] px-[10%] py-[12%] ps-[18%]">
-        <div
-          className="h-[10%] w-[55%] rounded-[3px]"
-          style={{ background: primary }}
+      {cover ? (
+        // Real cover slide (the source project's own image). Native
+        // <img> — Supabase storage URLs aren't in next remotePatterns.
+        <img
+          src={cover}
+          alt=""
           aria-hidden
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover object-top"
         />
+      ) : (
+        // Fallback: brand-palette mock (template still rendering, or a
+        // legacy row with no images).
+        <>
+          {/* Accent column — full-height stripe on the start side. */}
+          <div
+            className="absolute inset-y-0 start-0 w-[14%]"
+            style={{ background: primary }}
+            aria-hidden
+          />
+          {/* Layout content — title bar, subtitle bar, three blocks. */}
+          <div className="absolute inset-0 flex flex-col justify-center gap-[5%] px-[10%] py-[12%] ps-[18%]">
+            <div
+              className="h-[10%] w-[55%] rounded-[3px]"
+              style={{ background: primary }}
+              aria-hidden
+            />
+            <div
+              className="h-[5%] w-[38%] rounded-[2px]"
+              style={{
+                background: `color-mix(in srgb, ${brand.text} 50%, transparent)`,
+              }}
+              aria-hidden
+            />
+            <div className="mt-[3%] flex h-[45%] gap-[3%]">
+              <div
+                className="flex-1 rounded-[5px]"
+                style={{
+                  background: secondary,
+                  opacity: 0.85,
+                  border: `1px solid color-mix(in srgb, ${brand.text} 14%, transparent)`,
+                }}
+                aria-hidden
+              />
+              <div
+                className="flex-1 rounded-[5px]"
+                style={{ background: primary, opacity: 0.55 }}
+                aria-hidden
+              />
+              <div
+                className="flex-1 rounded-[5px]"
+                style={{ background: accent, opacity: 0.7 }}
+                aria-hidden
+              />
+            </div>
+          </div>
+        </>
+      )}
+      {/* Premium marker — top-start corner. */}
+      {isPremium ? (
+        <PremiumBadge className="pointer-events-none absolute top-2 start-2 z-10" />
+      ) : null}
+
+      {useBusy ? (
         <div
-          className="h-[5%] w-[38%] rounded-[2px]"
-          style={{
-            background: `color-mix(in srgb, ${brand.text} 50%, transparent)`,
-          }}
-          aria-hidden
-        />
-        <div className="mt-[3%] flex h-[45%] gap-[3%]">
-          <div
-            className="flex-1 rounded-[5px]"
-            style={{
-              background: secondary,
-              opacity: 0.85,
-              border: `1px solid color-mix(in srgb, ${brand.text} 14%, transparent)`,
-            }}
-            aria-hidden
-          />
-          <div
-            className="flex-1 rounded-[5px]"
-            style={{ background: primary, opacity: 0.55 }}
-            aria-hidden
-          />
-          <div
-            className="flex-1 rounded-[5px]"
-            style={{ background: accent, opacity: 0.7 }}
-            aria-hidden
-          />
+          role="status"
+          aria-label="جارٍ تجهيز القالب"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white"
+        >
+          <ParagraphWriteIcon size={32} />
         </div>
-      </div>
+      ) : null}
     </div>
   );
 

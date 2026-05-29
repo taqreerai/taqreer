@@ -4,18 +4,19 @@
 // DELETE in structure:
 //   1. Owner check via Prisma (findFirst with the user.id constraint)
 //      so we don't leak existence of templates owned by others.
-//   2. Best-effort storage cleanup of the 3 showcase PNGs the
-//      Inngest job wrote to the slide-previews bucket — log + carry
-//      on if storage flakes; an orphaned PNG is preferable to "DB
-//      row gone but tile still rendering because storage 500'd".
+//   2. Best-effort storage cleanup of the render artifacts the Inngest
+//      job wrote to the slide-previews bucket (per-slide WebP thumbnails
+//      + deck.pdf) — log + carry on if storage flakes; an orphaned file
+//      is preferable to "DB row gone but tile still rendering because
+//      storage 500'd".
 //   3. Atomic `deleteMany({ where: { id, ownerId } })` so a TOCTOU
 //      flip between findFirst and delete doesn't drop someone else's
 //      row.
 //
 // Storage prefix: `${supabaseUserId}/templates/${templateId}/` —
-// shape set by inngest/functions/template-showcase-render.ts.
-// Templates have a fixed 4-file footprint (no per-version subtree
-// like projects), so cleanup is a single list + remove.
+// shape set by inngest/functions/template-render.ts. The file set is
+// variable (one WebP per real slide + a deck.pdf), so cleanup lists the
+// prefix and removes whatever it finds.
 //
 // No soft-delete column. Deletion is permanent; the 3-dots menu's
 // confirm dialog gates the destructive action client-side.

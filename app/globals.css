@@ -1177,14 +1177,13 @@ body {
    the popover / modal panels. Keeps all elevated surfaces in lock-step
    under the user's glass-preset. */
 .header-bg {
-  /* Header glass — same recipe as `.sidebar-bg` (white-tint at the
-     user's --glass-opacity preset) so the chrome panels share one
-     visual language. Was rgba(3,3,13,0.6) — 60% solid dark over
-     --tq-bg, invisible glass. Blur + saturation come from Tailwind
-     utilities on the <header> element (see components/app/Header.tsx)
-     so the panel responds to the Settings glass preset like every
-     other elevated surface. */
-  background: rgba(255, 255, 255, var(--glass-opacity));
+  /* Header chrome — background tint removed 2026-05-28 (user
+     direction) so the header reads as pure glass: backdrop blur +
+     saturation only, no white-alpha fill on top. Blur + saturation
+     are still applied via the Tailwind `backdrop-blur-glass` +
+     `backdrop-saturate-(--glass-saturation)` utilities on the
+     <header> element so the panel responds to the Settings glass
+     preset. Only the hairline border remains as visible chrome. */
   border-bottom: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
 }
 
@@ -1282,25 +1281,16 @@ body {
 }
 
 /* ─── Glow Effects ─── */
+/* Positioning + clipping context for the Hero's glow. The actual
+   glow is the `HeroImageGlow` component (components/marketing/Hero.tsx)
+   — a `GLOW_BARS` array of stacked radial-gradient bars behind the
+   dashboard image; all its gradient values live in the JSX so tuning
+   stays close to the markup. `.glow-effect` just gives the section a
+   `position: relative; overflow: hidden;` so glow that extends past
+   the section edges doesn't bleed into sibling sections. */
 .glow-effect {
   position: relative;
-}
-
-.glow-effect::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80%;
-  height: 80%;
-  /* Tokenized 2026-05-28: was hardcoded `rgba(168, 85, 247, 0.15)`
-     (purple-500) — swapped to `--tq-violet-rgb` so the landing's
-     section glow and the dashboard's page glow read as ONE brand
-     color. See `.dashboard-bg::before` for the matching backdrop. */
-  background: radial-gradient(circle, rgba(var(--tq-violet-rgb), 0.15) 0%, rgba(0, 0, 0, 0) 70%);
-  z-index: -1;
-  filter: blur(40px);
+  overflow: hidden;
 }
 
 .feature-card-glow {
@@ -1434,22 +1424,52 @@ body {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
 }
 
+/* Soft feather on ALL four edges (horizontal + vertical gradients
+   intersected). Shared by the feature-flow animation SVGs so content
+   fades at the card bounds instead of leaking out — was an identical
+   inline style object copy-pasted into all 4 components. Tune the 7%
+   feather here once. */
+.mask-soft-edges {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, black 7%, black 93%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, black 7%, black 93%, transparent 100%);
+  mask-composite: intersect;
+}
+
 .templates-scroll-container:hover .animate-scroll-down,
 .templates-scroll-container:hover .animate-scroll-up {
   animation-play-state: paused;
 }
 
 .template-card {
+  /* Static tile chrome (was duplicated inline in both the thumbnail
+     and gradient-fallback columns of TemplatesScroll). */
+  border-radius: 12px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   filter: brightness(0.45) saturate(0.7);
-  transition: filter 0.4s ease, transform 0.4s ease;
+  transition: filter 0.4s ease;
 }
 
-.templates-scroll-container:hover .template-card {
+/* Brightening is triggered by hovering the whole templates CARD
+   (.templates-host), not just the marquee column — user direction
+   2026-05-28. The per-tile scale-on-hover zoom was also removed. */
+.templates-host:hover .template-card {
   filter: brightness(1) saturate(1);
 }
 
-.template-card:hover {
-  transform: scale(1.03);
+/* Hero "social-proof" pill (e.g. "تم إنشاء N عرض حتى الآن"). Brand
+   violet on a 12%-alpha violet bg read low-contrast against the dark
+   page, so the text is the brand violet mixed 30/70 with white in
+   oklab (perceptually uniform) — a bright lavender that still reads
+   as the brand colour. Folded out of an inline `style` in Hero.tsx
+   so the surface stays token-driven, no hardcoded color. */
+.hero-stat-pill {
+  background: rgba(var(--tq-violet-rgb), 0.12);
+  color: color-mix(in oklab, var(--tq-violet) 30%, white);
+  border: 1px solid rgba(var(--tq-violet-rgb), 0.3);
 }
 
 .group:hover .nav-icon {

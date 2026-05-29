@@ -135,7 +135,6 @@ export function ColorPickerPopover({
     if (open) {
       /* eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "rehydrate internal state when external prop changes" shape for a popover that gets re-opened */
       setHsv(hexToHsv(value));
-      /* eslint-disable-next-line react-hooks/set-state-in-effect */
       setHexInput(value.toUpperCase());
     }
   }, [open, value]);

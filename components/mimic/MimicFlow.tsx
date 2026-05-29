@@ -5,33 +5,25 @@
 // Layout (RTL — DOM-first appears visual-right):
 //   1. CONTENT card (visual right): textarea XOR file dropzone +
 //      a horizontal row holding the logo slot (visual right) and the
-//      slide-size picker stacked vertically (visual left). The row
-//      splits the card's bottom half in two so the card stays close
-//      to /enhance's height instead of growing tall.
-//   2. BRANDING card (visual middle, CONDITIONAL): palette swatches
-//      (compact ColorPickerPopover, same as /create) + heading +
-//      body font slots. Hidden by default — animates in when the
-//      "mimic branding" toggle in the WHAT-TO-MIMIC card is flipped
-//      OFF (user wants their own brand on top of a mimicked design).
+//      logo-position picker (visual left). The row splits the card's
+//      bottom half in two so the card stays close to /enhance's
+//      height instead of growing tall.
+//   2. BRANDING card (visual middle): palette swatches (compact
+//      ColorPickerPopover, same as /create) + heading + body font
+//      slots + the slide-size (ratio) picker. Always shown — the old
+//      "mimic branding" toggle was removed (2026-05-29) so users
+//      always supply their own brand (pre-filled from the chosen
+//      template / default brand kit when available).
 //   3. WHAT TO MIMIC card (visual left): drop-zone for the design
 //      reference file. Wrapped in `.canvas-gradient-border` with
 //      `data-active="true"` so it carries the animated mesh halo
 //      (visual cue: "this is the file whose design we're copying").
-//      Houses the "mimic branding" toggle in its header — ON by
-//      default (also mimic palette + fonts → no branding card);
-//      OFF reveals the branding card.
 //
-// Card sizing + animation:
-//   • Each card uses a fixed width (W_CARD_PX, currently 360 px) to
-//     match /enhance's card width. That makes the row total either
-//     2 × W_CARD (branding hidden, default) or 3 × W_CARD.
-//   • Row uses `justify-center` so when the branding card unmounts
-//     the row recenters automatically — the flanking cards visually
-//     slide inward to the page center.
-//   • Each card carries `layout` from framer-motion so the FLIP
-//     animation tweens position changes when the row width shifts.
-//     Combined with AnimatePresence's mount/unmount on the branding
-//     card, both transitions read as a single coordinated motion.
+// Card sizing:
+//   • Each card uses a fixed width (CARD_W_CLASS, 360 px) to match
+//     /enhance's card width; the row is always 3 × that width.
+//   • Row uses `justify-center` to keep the trio centered and
+//     `items-stretch` to equalize the three cards to the tallest.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -49,8 +41,10 @@ import {
 } from "@/components/create/OutputCards";
 import {
   CardHeader,
+  PositionDropdown,
   SegmentedToggle,
-  Toggle,
+  CORNER_POSITIONS,
+  type CornerPosition,
 } from "@/components/create/controls";
 import {
   emptyFontSlot,
@@ -72,6 +66,7 @@ import {
   CREATE_BRAND_KEY,
   type HydratedBrand,
 } from "@/lib/create/hydrate-brand-from-session";
+import type { MimicTemplateSeed } from "@/lib/mimic/template-seed";
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -91,7 +86,6 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // max-w-3xl container (768 px - 32 px padding - 16 px gap) / 2 ≈ 360 px.
 // Inline arbitrary value so the value is local to this file; if we
 // later promote a shared "flow card" primitive we can hoist this.
-const W_CARD_PX = 360;
 const CARD_W_CLASS = "w-[360px]";
 // Fixed card height — pinned to /enhance's empty-state card height
 // measured live (2026-05-25, after /enhance content page polish):
@@ -193,16 +187,44 @@ function resolveFontSlot(
   };
 }
 
-export default function MimicContentPage() {
+export default function MimicFlow({
+  mode = "standalone",
+  templateSeed = null,
+}: {
+  // "standalone" = /mimic (upload your own design reference).
+  // "template"   = /use-template/[id] (design reference + branding are
+  //                preset from a chosen template; header reads
+  //                "استخدام كقالب"). Same generation engine either way.
+  mode?: "standalone" | "template";
+  templateSeed?: MimicTemplateSeed | null;
+} = {}) {
+  const isTemplate = mode === "template" && !!templateSeed;
   const router = useRouter();
   const designInputRef = useRef<HTMLInputElement>(null);
   const contentInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Design ref state (always required) ────────────────────────
+  // Template mode presets the design reference from the chosen
+  // template: the Anthropic file_id is already minted (by the
+  // /use-template page via the use route), so the reference is "ready"
+  // on first paint with no upload/extract step.
   const [designFile, setDesignFile] = useState<File | null>(null);
-  const [designStage, setDesignStage] = useState<FileStage>("idle");
+  const [designStage, setDesignStage] = useState<FileStage>(
+    isTemplate ? "ready" : "idle",
+  );
   const [designExtracted, setDesignExtracted] =
-    useState<ExtractCompletedResult | null>(null);
+    useState<ExtractCompletedResult | null>(
+      isTemplate
+        ? {
+            anthropicFileId: templateSeed!.designAnthropicFileId,
+            fonts: [],
+            colors: [],
+            pageCount: 0,
+            format: templateSeed!.format,
+            language: null,
+          }
+        : null,
+    );
   const [designDragging, setDesignDragging] = useState(false);
 
   // ─── Content state (file OR text — either works) ───────────────
@@ -214,7 +236,9 @@ export default function MimicContentPage() {
   const [contentText, setContentText] = useState("");
 
   // ─── User-picked output settings ───────────────────────────────
-  const [slideSize, setSlideSize] = useState<SlideSize>("16:9");
+  const [slideSize, setSlideSize] = useState<SlideSize>(
+    isTemplate ? templateSeed!.format : "16:9",
+  );
   // Slide count — defaults to "auto" so Claude picks based on content
   // (8 fallback in the prompt). When "custom" the user enters an
   // explicit number 1..20; we forward that as the brief's slideCount
@@ -222,16 +246,10 @@ export default function MimicContentPage() {
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
 
-  // ─── Brand pickers (only consulted when toggle is OFF) ─────────
-  const [brandingMimicked, setBrandingMimicked] = useState(true);
-  // The branding-card wrapper needs `overflow: hidden` ONLY during
-  // its enter/exit width animation (so the card content gets clipped
-  // as the wrapper grows from 0 to W_CARD_PX). After the animation
-  // settles we must switch to `overflow: visible` or popovers
-  // anchored inside the card (ColorPickerPopover, GoogleFontSlot's
-  // dropdown) would be cropped at the card edge. Flipped by the
-  // motion.div's onAnimationStart / onAnimationComplete callbacks.
-  const [brandingOverflowVisible, setBrandingOverflowVisible] = useState(false);
+  // ─── Brand pickers — always shown. The "mimic branding" toggle was
+  //     removed (2026-05-29): the branding card is now permanent, so
+  //     the user always supplies their palette + fonts (pre-filled
+  //     from the chosen template / default brand kit when available).
   const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
   const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
     emptyFontSlot(),
@@ -247,6 +265,10 @@ export default function MimicContentPage() {
   // so the LogoUploadSlot can show the remote SVG without forcing
   // the user to re-upload.
   const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
+  // Logo placement corner — mirrors /create's PositionDropdown.
+  // Defaults to top-right; restored from a hydrated brand kit's saved
+  // position when it's one of our 6 known corners.
+  const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
 
   // ─── Brand-kit hydration on first mount ────────────────────────
   // Read taqreer:create:brand sessionStorage (written by the
@@ -273,27 +295,16 @@ export default function MimicContentPage() {
       }
       if (hydrated.logo) {
         setLoadedLogo(hydrated.logo);
-        // /mimic doesn't expose logo position/exclude pickers, so
-        // we don't restore those — the submit path uses defaults.
-      }
-      // The user picked their own brand kit on the way in — they
-      // explicitly want THEIR brand on the deck, not the mimicked
-      // file's brand. Flip the "mimic branding" toggle off so the
-      // hydrated palette + fonts + logo actually reach the brief.
-      // (When the toggle is on, /mimic submits `colors: []` and
-      // tells Claude to lift visuals from the design file.)
-      // Only flip when there's something concrete to apply —
-      // skip for a hydrate that returned all-empty fields (a kit
-      // with no palette, fonts, or logo would be a no-op anyway).
-      const hasBrandPayload =
-        hydrated.colors.length > 0 ||
-        !!hydrated.headingFontSlot.googleFamily ||
-        !!hydrated.headingFontSlot.uploadStorageUrl ||
-        !!hydrated.bodyFontSlot.googleFamily ||
-        !!hydrated.bodyFontSlot.uploadStorageUrl ||
-        !!hydrated.logo;
-      if (hasBrandPayload) {
-        setBrandingMimicked(false);
+        // Restore the saved logo corner when it's one of our 6 known
+        // positions (the kit stores it as a free string); otherwise
+        // keep the top-right default.
+        if (
+          (CORNER_POSITIONS as readonly string[]).includes(
+            hydrated.logo.position,
+          )
+        ) {
+          setLogoPosition(hydrated.logo.position as CornerPosition);
+        }
       }
       try {
         window.sessionStorage.removeItem(CREATE_BRAND_KEY);
@@ -536,7 +547,9 @@ export default function MimicContentPage() {
 
   // ─── Submit ────────────────────────────────────────────────────
   const handleGenerate = async () => {
-    if (stage !== "ready" || !designExtracted || !designFile) return;
+    // Template mode has no designFile (the reference is a preset
+    // file_id), so the guard checks designExtracted only.
+    if (stage !== "ready" || !designExtracted) return;
     if (!contentFileReady && !contentTextReady) return;
 
     setError("");
@@ -544,33 +557,26 @@ export default function MimicContentPage() {
     try {
       const [logoUploaded, headingUploaded, bodyUploaded] = await Promise.all([
         uploadAsset("brand-assets", "logos", logoFile),
-        brandingMimicked
-          ? null
-          : uploadAsset(
-              "brand-assets",
-              "fonts",
-              headingFontSlot.mode === "upload"
-                ? headingFontSlot.uploadFile
-                : null,
-            ),
-        brandingMimicked
-          ? null
-          : uploadAsset(
-              "brand-assets",
-              "fonts",
-              bodyFontSlot.mode === "upload" ? bodyFontSlot.uploadFile : null,
-            ),
+        uploadAsset(
+          "brand-assets",
+          "fonts",
+          headingFontSlot.mode === "upload" ? headingFontSlot.uploadFile : null,
+        ),
+        uploadAsset(
+          "brand-assets",
+          "fonts",
+          bodyFontSlot.mode === "upload" ? bodyFontSlot.uploadFile : null,
+        ),
       ]);
 
-      const headingFont = brandingMimicked
-        ? null
-        : resolveFontSlot(
-            headingFontSlot,
-            headingUploaded?.storageUrl ?? null,
-          );
-      const bodyFont = brandingMimicked
-        ? null
-        : resolveFontSlot(bodyFontSlot, bodyUploaded?.storageUrl ?? null);
+      const headingFont = resolveFontSlot(
+        headingFontSlot,
+        headingUploaded?.storageUrl ?? null,
+      );
+      const bodyFont = resolveFontSlot(
+        bodyFontSlot,
+        bodyUploaded?.storageUrl ?? null,
+      );
 
       // Resolve the logo's storageUrl in priority order: fresh
       // upload first, then the hydrated kit's path. Server re-signs
@@ -579,14 +585,14 @@ export default function MimicContentPage() {
         logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
 
       const brand = {
-        colors: brandingMimicked ? [] : colors,
+        colors,
         paletteMode: "manual" as const,
         paletteScreenshotUrl: null,
         fonts: { heading: headingFont, body: bodyFont },
         logo: resolvedLogoStorageUrl
           ? {
               storageUrl: resolvedLogoStorageUrl,
-              position: "top-right" as const,
+              position: logoPosition,
               exclude: [] as ("cover" | "closing")[],
             }
           : null,
@@ -602,12 +608,10 @@ export default function MimicContentPage() {
             kind: "mimic",
             uglyAnthropicFileId: contentExtracted!.anthropicFileId,
             designAnthropicFileId: designExtracted.anthropicFileId,
-            fonts: brandingMimicked
-              ? designExtracted.fonts
-              : [
-                  ...designExtracted.fonts,
-                  ...(contentExtracted?.fonts ?? []),
-                ],
+            fonts: [
+              ...designExtracted.fonts,
+              ...(contentExtracted?.fonts ?? []),
+            ],
           }
         : {
             kind: "mimic",
@@ -690,19 +694,20 @@ export default function MimicContentPage() {
     <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
-          <h1 className="tq-h1">حاكِ تصميم عرض آخر</h1>
+          <h1 className="tq-h1">
+            {isTemplate ? "استخدام كقالب" : "حاكِ تصميم عرض آخر"}
+          </h1>
           <p className="tq-subhead mt-2">
-            اختر عرضاً مرجعياً للتصميم، أضف محتواك، وسنبني عرضاً جديداً يحاكي
-            أسلوب المرجع ويحافظ على محتواك حرفياً.
+            {isTemplate
+              ? "أضف محتواك وسنبني عرضاً جديداً يحاكي تصميم القالب المختار ويحافظ على محتواك حرفياً."
+              : "اختر عرضاً مرجعياً للتصميم، أضف محتواك، وسنبني عرضاً جديداً يحاكي أسلوب المرجع ويحافظ على محتواك حرفياً."}
           </p>
         </header>
 
-        {/* Row: 3 fixed-width cards centered. The branding card uses
-            AnimatePresence — when it unmounts, `layout` on the
-            content + mimic cards interpolates their new positions so
-            they translate inward to the new row center. items-stretch
-            lets the cards share the tallest card's height (branding
-            grows the row when present). */}
+        {/* Row: 3 fixed-width cards centered, always all three.
+            items-stretch lets the cards share the tallest card's
+            height (the branding card, carrying palette + fonts +
+            ratio, is the tallest and pulls the row to its height). */}
         {/* flex-wrap so the row collapses gracefully as the viewport
             narrows. Same responsive pattern /create + /enhance use:
             cards wrap into multiple rows when total width exceeds
@@ -793,21 +798,18 @@ export default function MimicContentPage() {
               />
             </div>
 
-            {/* Bottom row: logo (visual right = DOM 1st) + ratios
-                (visual left = DOM 2nd, stacked). Border-t + pt-3
-                matches /create's section-separator pattern (no
-                stand-alone hairline div). Section labels live
-                INSIDE each side so the row stays a single
-                horizontal band of equal height. Logo uses
-                hideFilename to keep its tile height stable when a
-                file lands; an absolute × in the corner replaces
-                the "إزالة" text row that used to sit underneath
-                and grow the card. */}
+            {/* Bottom row: logo (visual right = DOM 1st) + logo-position
+                picker (visual left = DOM 2nd). Border-t + pt-3 matches
+                /create's section-separator pattern (no stand-alone
+                hairline div). Section labels live INSIDE each side so
+                the row stays a single horizontal band of equal height.
+                The slide-size (ratio) picker now lives in the branding
+                card; the freed half here holds the logo position. */}
             <div className="flex gap-3 border-t border-[var(--tq-border-glass)] pt-3">
               {/* Logo — half-width. LogoUploadSlot's `fillHeight`
-                  mode stretches it to match the stacked ratio
-                  picker beside it; otherwise we'd leave an
-                  awkward gap below the slot at its natural 72 px. */}
+                  mode stretches it to match the position column
+                  beside it; otherwise we'd leave an awkward gap
+                  below the slot at its natural 72 px. */}
               <div className="flex-1">
                 <LogoUploadSlot
                   file={logoFile}
@@ -825,48 +827,31 @@ export default function MimicContentPage() {
                 />
               </div>
 
-              {/* Ratios — half-width, stacked vertically. Reuses the
-                  /create flow's SlideSizeFields with the `stacked`
-                  prop (grid-cols-1). Same SizeChoice tiles, same
-                  a11y + active state — no fork. */}
-              <div className="flex flex-1 flex-col">
-                <SlideSizeFields
-                  slideSize={slideSize}
-                  onSlideSize={setSlideSize}
-                  stacked
-                  hideLabel
+              {/* Logo position — half-width. Mirrors /create's
+                  "موضع الشعار" section (label over a PositionDropdown
+                  pill) — same primitive, no fork. Disabled until a
+                  logo is present (fresh upload OR hydrated kit). */}
+              <div className="flex flex-1 flex-col gap-1.5">
+                <span className="block text-xs font-semibold text-white/70">
+                  موضع الشعار
+                </span>
+                <PositionDropdown
+                  value={logoPosition}
+                  onChange={setLogoPosition}
+                  disabled={!logoFile && !loadedLogo}
                 />
               </div>
             </div>
           </motion.div>
 
           {/* ═══════════════════════════════════════════════════════
-              BRANDING CARD (DOM 2nd, visual middle — CONDITIONAL)
+              BRANDING CARD (DOM 2nd, visual middle — always shown)
               ═══════════════════════════════════════════════════════ */}
-          <AnimatePresence initial={false}>
-            {!brandingMimicked ? (
-              <motion.div
-                key="branding-card"
-                layout
-                // Width animation: motion-wrapper grows from 0 to
-                // W_CARD_PX (the card's natural width). The inner
-                // card itself is still `w-[360px]` so during the
-                // transition the wrapper's overflow:hidden clips
-                // it cleanly. Opacity fades in/out separately so
-                // the card appears to materialize, not just expand.
-                initial={{ width: 0, opacity: 0, marginInlineStart: -16 }}
-                animate={{ width: W_CARD_PX, opacity: 1, marginInlineStart: 0 }}
-                exit={{ width: 0, opacity: 0, marginInlineStart: -16 }}
-                transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-                // Clip during transitions, unclip when settled so
-                // popovers (ColorPickerPopover, GoogleFontSlot
-                // dropdown) can escape the card's edge.
-                onAnimationStart={() => setBrandingOverflowVisible(false)}
-                onAnimationComplete={() => setBrandingOverflowVisible(true)}
-                style={{
-                  overflow: brandingOverflowVisible ? "visible" : "hidden",
-                }}
-              >
+          <motion.div
+            layout
+            transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+            className={`${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
+          >
                 <div className={`glass-card flex h-full ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}>
                   <CardHeader icon="palette" title="الهوية البصرية" />
 
@@ -1030,14 +1015,23 @@ export default function MimicContentPage() {
                       />
                     )}
                   </div>
+
+                  {/* Slide size (ratio) — moved here from the content
+                      card (2026-05-29). Reuses /create's SlideSizeFields
+                      in its default one-row (grid-cols-2) layout, no
+                      fork. The border-t matches the section rhythm. */}
+                  <div className="border-t border-[var(--tq-border-glass)] pt-3">
+                    <SlideSizeFields
+                      slideSize={slideSize}
+                      onSlideSize={setSlideSize}
+                    />
+                  </div>
                 </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+          </motion.div>
 
           {/* ═══════════════════════════════════════════════════════
               WHAT TO MIMIC CARD (DOM 3rd, visual left)
-              Animated gradient halo + branding toggle in header.
+              Animated gradient halo around the design-reference drop.
               ═══════════════════════════════════════════════════════ */}
           <motion.div
             layout
@@ -1060,21 +1054,6 @@ export default function MimicContentPage() {
 
               <CardHeader icon="auto_awesome" title="ما الذي نُحاكيه" />
 
-              {/* Branding-mimic toggle — same Toggle primitive every
-                  other card uses (RTL-aware spring knob via
-                  /create/controls). Sits as the first labelled
-                  section under the header. */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-white/70">
-                  مُحاكاة الهوية البصرية
-                </span>
-                <Toggle
-                  ariaLabel="مُحاكاة الهوية البصرية"
-                  value={brandingMimicked}
-                  onChange={setBrandingMimicked}
-                />
-              </div>
-
               {/* Slide count — unified with /create's animated layout
                   (2026-05-26, user direction "use the one at create
                   on mimic, same animation and layout"):
@@ -1090,7 +1069,7 @@ export default function MimicContentPage() {
                       marginInlineStart with a spring (stiffness 500,
                       damping 35) matching the SegmentedToggle's
                       indicator spring. */}
-              <div className="flex min-h-[24px] items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-3">
+              <div className="flex min-h-[24px] items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
                   عدد الشرائح
                 </span>
@@ -1145,17 +1124,37 @@ export default function MimicContentPage() {
                   so it claims whatever vertical space is left after
                   the header + toggle + slide-count rows. */}
               <div className="flex flex-1 flex-col border-t border-[var(--tq-border-glass)] pt-3">
-                <FileDropzone
-                  file={designFile}
-                  stage={designStage}
-                  submitting={submitting}
-                  dragging={designDragging}
-                  setDragging={setDesignDragging}
-                  onOpen={() => designInputRef.current?.click()}
-                  onDrop={(f) => setDesignFromInput(f)}
-                  onRemove={removeDesignFile}
-                  compact
-                />
+                {isTemplate ? (
+                  // Template mode — the design reference is the chosen
+                  // template (locked, no upload). Reuses the dropzone's
+                  // "ready" visual vocabulary, non-interactive.
+                  <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-4 text-center">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]">
+                      <span
+                        className="material-symbols-outlined text-emerald-300"
+                        style={{ fontSize: "22px" }}
+                      >
+                        check_circle
+                      </span>
+                    </span>
+                    <p className="truncate px-2 text-sm font-semibold text-white">
+                      {templateSeed!.title}
+                    </p>
+                    <p className="text-xs text-white/60">قالب مختار · PDF</p>
+                  </div>
+                ) : (
+                  <FileDropzone
+                    file={designFile}
+                    stage={designStage}
+                    submitting={submitting}
+                    dragging={designDragging}
+                    setDragging={setDesignDragging}
+                    onOpen={() => designInputRef.current?.click()}
+                    onDrop={(f) => setDesignFromInput(f)}
+                    onRemove={removeDesignFile}
+                    compact
+                  />
+                )}
               </div>
             </div>
           </motion.div>

@@ -10,10 +10,11 @@
 //                             position, exclude } | null
 //
 // Why a sessionStorage hop and not a direct prop:
-// `seedFromBrandKit` (the brand-kits use path) and `seedFromTemplate`
-// (the templates use path) both navigate via `window.location.assign`,
-// so the landing flow re-mounts with no React props from the source
-// page. sessionStorage is the canonical handoff channel for both.
+// `seedFromBrandKit` (the brand-kits use path) and the templates use
+// path (`applyTemplateUse` in lib/mimic/template-seed) both write here
+// before a `window.location.assign`, so the landing flow re-mounts with
+// no React props from the source page. sessionStorage is the canonical
+// handoff channel.
 //
 // The "default brand kit" code path is a bonus on top: when no
 // sessionStorage blob exists on first mount, the flow can call

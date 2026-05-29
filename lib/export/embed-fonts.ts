@@ -72,10 +72,6 @@ export type EmbedFontStats = {
 };
 
 type WeightKey = "regular" | "bold";
-const WEIGHT_MAP: Record<WeightKey, 400 | 700> = {
-  regular: 400,
-  bold: 700,
-};
 
 type FontFile = { weight: WeightKey; fontBytes: Uint8Array };
 

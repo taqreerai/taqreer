@@ -1,0 +1,160 @@
+"use client";
+
+// ─── Landing feature-flow cards ───────────────────────────────────
+//
+// The four animated flow cards (Create / Enhance / Mimic / Datasheet)
+// in a 2 × 2 grid. Each card:
+//   • glass-card chrome, content on the LEFT, visual on the RIGHT
+//     (DOM order locked LTR so the layout holds under the page's RTL
+//     flow; the text block re-anchors RTL).
+//   • plays its SVG animation on hover.
+//
+// The templates surface is now a separate, title-less hover-scrub grid
+// (components/marketing/LandingTemplatesGrid.tsx) rendered by the page,
+// not a card here.
+//
+// The flow animations live in components/marketing/feature-animations/
+// and are shared verbatim across these cards.
+
+import { useRef } from "react";
+import CreateFlowAnimation, {
+  type CreateFlowAnimationHandle,
+} from "@/components/marketing/feature-animations/CreateFlowAnimation";
+import EnhanceFlowAnimation, {
+  type EnhanceFlowAnimationHandle,
+} from "@/components/marketing/feature-animations/EnhanceFlowAnimation";
+import MimicFlowAnimation, {
+  type MimicFlowAnimationHandle,
+} from "@/components/marketing/feature-animations/MimicFlowAnimation";
+import DatasheetFlowAnimation, {
+  type DatasheetFlowAnimationHandle,
+} from "@/components/marketing/feature-animations/DatasheetFlowAnimation";
+import { ScrollReveal } from "@/components/marketing/ScrollReveal";
+
+export function FeatureFlowCards() {
+  // Each card gets the landing page's framer-motion fade-up-on-scroll
+  // (ScrollReveal), staggered so the grid reveals in a cascade — same
+  // treatment as the rest of the landing's sections.
+  return (
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <ScrollReveal direction="up" delay={0.05}>
+        <CreateCard />
+      </ScrollReveal>
+      <ScrollReveal direction="up" delay={0.1}>
+        <EnhanceCard />
+      </ScrollReveal>
+      <ScrollReveal direction="up" delay={0.15}>
+        <MimicCard />
+      </ScrollReveal>
+      <ScrollReveal direction="up" delay={0.2}>
+        <DatasheetCard />
+      </ScrollReveal>
+    </div>
+  );
+}
+
+// ─── Shared card chrome (flow cards) ──────────────────────────────
+
+function FlowShell({
+  title,
+  description,
+  onEnter,
+  onLeave,
+  children,
+}: {
+  title: string;
+  description: string;
+  onEnter: () => void;
+  onLeave: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="glass-card max-h-[250px] self-start rounded-2xl px-6"
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+    >
+      {/* `dir="ltr"` locks DOM order so text lands LEFT, animation
+          RIGHT regardless of the page's RTL flow; the text block
+          re-anchors RTL for natural Arabic reading. */}
+      <div dir="ltr" className="flex items-stretch gap-3 sm:gap-5">
+        <div
+          dir="rtl"
+          className="flex min-w-0 flex-1 flex-col justify-center sm:min-w-[160px]"
+        >
+          <h3 className="mb-2 text-xl font-medium leading-snug text-white">
+            {title}
+          </h3>
+          <p className="text-sm leading-relaxed text-muted">{description}</p>
+        </div>
+        {/* Slot shrinks on narrow phones so the fixed-width split can't
+            overflow (250 + 160 text floor + gap > a ~360px viewport). */}
+        <div
+          className="flex aspect-square w-[180px] min-w-0 shrink-0 items-center justify-center text-white/80 sm:w-[250px]"
+          aria-hidden
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Flow cards (each owns its own correctly-typed handle ref) ────
+
+function CreateCard() {
+  const ref = useRef<CreateFlowAnimationHandle>(null);
+  return (
+    <FlowShell
+      title="إنشاء عرض جديد"
+      description="اكتب فكرتك أو ارفع ملفاً، وسيقوم تقرير ببناء عرض تقديمي كامل، بتصميم احترافي يحاكي ذوقك ومراعاة هويتك البصرية."
+      onEnter={() => ref.current?.startAnimation()}
+      onLeave={() => ref.current?.stopAnimation()}
+    >
+      <CreateFlowAnimation ref={ref} />
+    </FlowShell>
+  );
+}
+
+function EnhanceCard() {
+  const ref = useRef<EnhanceFlowAnimationHandle>(null);
+  return (
+    <FlowShell
+      title="تحسين عرض موجود"
+      description="ارفع عرضك الحالي بصيغة PowerPoint أو PDF، وسنعيد تصميمه بهويتك البصرية الجديدة مع الحفاظ على المحتوى الأساسي."
+      onEnter={() => ref.current?.startAnimation()}
+      onLeave={() => ref.current?.stopAnimation()}
+    >
+      <EnhanceFlowAnimation ref={ref} />
+    </FlowShell>
+  );
+}
+
+function MimicCard() {
+  const ref = useRef<MimicFlowAnimationHandle>(null);
+  return (
+    <FlowShell
+      title="محاكاة أسلوب عرض"
+      description="أرفق عرضاً مرجعياً تعجبك ألوانه وخطوطه وتخطيطه، وسنطبّق نفس الأسلوب البصري على محتواك الجديد."
+      onEnter={() => ref.current?.startAnimation()}
+      onLeave={() => ref.current?.stopAnimation()}
+    >
+      <MimicFlowAnimation ref={ref} />
+    </FlowShell>
+  );
+}
+
+function DatasheetCard() {
+  const ref = useRef<DatasheetFlowAnimationHandle>(null);
+  return (
+    <FlowShell
+      title="إنشاء من بيانات"
+      description="حوّل ملف Excel أو CSV إلى عرض احترافي كامل، مع رسوم بيانية مناسبة وتنسيق احترافي لكل شريحة."
+      onEnter={() => ref.current?.startAnimation()}
+      onLeave={() => ref.current?.stopAnimation()}
+    >
+      <DatasheetFlowAnimation ref={ref} />
+    </FlowShell>
+  );
+}
+

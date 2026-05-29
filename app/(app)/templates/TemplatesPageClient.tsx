@@ -28,7 +28,10 @@ import {
   bucketize,
 } from "@/lib/project/derive-color-tags";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
-import { seedFromTemplate } from "@/lib/create/seed-from-template";
+import {
+  prepareTemplateUse,
+  redirectToPricingIfGated,
+} from "@/lib/mimic/template-seed";
 import type { SlideFormat } from "@/lib/schema/slide";
 import type { TemplateForBrowse } from "./types";
 
@@ -71,15 +74,15 @@ export function TemplatesPageClient({
     if (!preview || useBusy) return;
     setUseBusy(true);
     try {
-      await seedFromTemplate(preview.id);
-      // Hard navigation so /create's mount effect reads the fresh
-      // templateSeed marker on first render. Phase 17.D collapsed the
-      // separate /create-from-template tree into the unified single-
-      // page /create — the templateSeed marker is enough signal to
-      // pre-fill the branding card + render the "من قالب" pill.
-      window.location.assign("/create");
+      // Prepare the Mimic reference while the lightbox CTA shows its
+      // busy spinner, then hard-navigate to the forked flow (which
+      // reads the cache → no full-screen loader).
+      await prepareTemplateUse("template", preview.id);
+      window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
-      console.warn("[TemplatesPageClient] seedFromTemplate failed", err);
+      // 402 = premium template, user isn't on Pro → route to pricing.
+      if (redirectToPricingIfGated(err)) return;
+      console.warn("[TemplatesPageClient] use prep failed", err);
       setUseBusy(false);
     }
   };
@@ -256,6 +259,7 @@ export function TemplatesPageClient({
         slides={preview?.thumbnailUrls ?? []}
         format={previewFormat}
         title={preview?.title ?? ""}
+        isPremium={preview?.isPremium ?? false}
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}
