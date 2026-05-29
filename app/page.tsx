@@ -22,7 +22,8 @@ import { prisma } from "@/lib/prisma";
 import { Hero } from "@/components/marketing/Hero";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
-import { getMarqueeColumns } from "@/lib/auth/marquee-projects";
+import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
+import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 
 // Platform-wide "decks created" counter shown in the Hero status chip.
@@ -121,10 +122,10 @@ export default async function LandingPage() {
   const supabase = await createClient();
   // `getUser()` round-trips to Supabase for a verified check;
   // `getSession()` reads the cookie only and can be spoofed.
-  const [{ data: { user } }, projectCount, marqueeColumns] = await Promise.all([
+  const [{ data: { user } }, projectCount, landingTemplates] = await Promise.all([
     supabase.auth.getUser(),
     getProjectCount(),
-    getMarqueeColumns(),
+    getLandingTemplates(),
   ]);
 
   return (
@@ -153,7 +154,7 @@ export default async function LandingPage() {
               <a className="cursor-pointer text-sm text-muted transition-colors hover:text-white" href="#pricing">
                 الأسعار
               </a>
-              <a className="cursor-pointer text-sm text-muted transition-colors hover:text-white" href="#">
+              <a className="cursor-pointer text-sm text-muted transition-colors hover:text-white" href="#templates">
                 القوالب
               </a>
             </div>
@@ -216,12 +217,24 @@ export default async function LandingPage() {
             </div>
           </ScrollReveal>
 
-          {/* Four animated flow cards (2 × 2) + the wide templates
-              card, all sharing the same glass chrome (content LEFT,
-              visual RIGHT). The templates card's marquee is fed the
-              real curator-gated recent-project thumbnails. */}
+          {/* Four animated flow cards (2 × 2), sharing the same glass
+              chrome (content LEFT, visual RIGHT). */}
           <ScrollReveal direction="up" delay={0.1}>
-            <FeatureFlowCards thumbnails={marqueeColumns.flat()} />
+            <FeatureFlowCards />
+          </ScrollReveal>
+
+          {/* Templates — title-less 2 × 4 grid of public template
+              covers, each scrubbing its slides on hover like the
+              dashboard's Recent Projects (user direction 2026-05-29).
+              `id="templates"` is the nav "القوالب" anchor; scroll-mt
+              clears the fixed h-20 nav bar. */}
+          <ScrollReveal direction="up" delay={0.15} className="mt-6">
+            <div id="templates" className="scroll-mt-24">
+              <LandingTemplatesGrid
+                templates={landingTemplates}
+                isAuthed={!!user}
+              />
+            </div>
           </ScrollReveal>
         </div>
       </section>

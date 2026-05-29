@@ -120,3 +120,68 @@ export const getMarqueeColumns = unstable_cache(
 );
 
 export const MARQUEE_COLUMN_COUNT = COLUMN_COUNT;
+
+// ─── Landing-page templates grid ──────────────────────────────────
+//
+// Distinct from the marquee: the landing "#templates" section renders a
+// 2 × 4 grid of whole templates (not de-aggregated slides), each tile
+// scrubbing through its own deck slides on hover. So this loader returns
+// per-template slide arrays rather than a flat thumbnail list.
+
+export type LandingTemplate = {
+  id: string;
+  // "16:9" | "9:16" — drives the tile's object-fit crop.
+  format: string;
+  // Per-slide WebP URLs in deck order (cover first), showcase slides
+  // excluded. The hover-scrub walks this array.
+  slides: string[];
+};
+
+// 2 rows × 4 columns on the landing templates section.
+const LANDING_TEMPLATE_COUNT = 8;
+
+/**
+ * Fetch up to 8 random public curator templates for the landing grid,
+ * each with its real deck slides (synthetic typography/palette showcase
+ * slides stripped). Same curator-gating + 60 s cache as the marquee.
+ */
+export const getLandingTemplates = unstable_cache(
+  async (): Promise<LandingTemplate[]> => {
+    try {
+      const rows = await prisma.$queryRaw<
+        { id: string; format: string | null; thumbnails: string[] }[]
+      >`
+        SELECT t.id,
+               (t.brand->>'format') AS format,
+               t."thumbnailUrls" AS thumbnails
+        FROM "Template" t
+        INNER JOIN "User" u ON t."ownerId" = u.id
+        WHERE u.email = ${MARQUEE_OWNER_EMAIL}
+          AND t."isPublic" = true
+          AND t."thumbnailUrls" IS NOT NULL
+          AND array_length(t."thumbnailUrls", 1) > 0
+        ORDER BY random()
+        LIMIT ${LANDING_TEMPLATE_COUNT}
+      `;
+
+      return rows
+        .map((row) => ({
+          id: row.id,
+          format: row.format ?? "16:9",
+          // Drop the synthetic typography + palette showcase slides
+          // (template-prefix showcase-*.webp); keep the real deck
+          // slides (cover + rest) in their stored order.
+          slides: (row.thumbnails ?? []).filter(
+            (url) => url && !url.includes("/showcase-"),
+          ),
+        }))
+        .filter((tpl) => tpl.slides.length > 0);
+    } catch (err) {
+      // DB hiccup → render no grid (the section just collapses).
+      console.error("[landing/templates] query failed", err);
+      return [];
+    }
+  },
+  ["landing-templates"],
+  { revalidate: 60, tags: ["landing-templates"] },
+);

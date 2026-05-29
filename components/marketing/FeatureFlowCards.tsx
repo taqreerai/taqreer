@@ -3,14 +3,15 @@
 // ─── Landing feature-flow cards ───────────────────────────────────
 //
 // The four animated flow cards (Create / Enhance / Mimic / Datasheet)
-// in a 2 × 2 grid, plus a wide fifth "templates" card. Each card:
+// in a 2 × 2 grid. Each card:
 //   • glass-card chrome, content on the LEFT, visual on the RIGHT
 //     (DOM order locked LTR so the layout holds under the page's RTL
 //     flow; the text block re-anchors RTL).
-//   • the four flow cards play their SVG animation on hover.
-//   • the templates card shows a live 2-column marquee of REAL recent
-//     project thumbnails (same curator-gated source as the auth
-//     pages), content on the left.
+//   • plays its SVG animation on hover.
+//
+// The templates surface is now a separate, title-less hover-scrub grid
+// (components/marketing/LandingTemplatesGrid.tsx) rendered by the page,
+// not a card here.
 //
 // The flow animations live in components/marketing/feature-animations/
 // and are shared verbatim across these cards.
@@ -28,39 +29,27 @@ import MimicFlowAnimation, {
 import DatasheetFlowAnimation, {
   type DatasheetFlowAnimationHandle,
 } from "@/components/marketing/feature-animations/DatasheetFlowAnimation";
-import { TemplatesScroll } from "@/components/marketing/TemplatesScroll";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import type { MarqueeThumbnail } from "@/lib/auth/marquee-projects";
-import Link from "next/link";
 
-export function FeatureFlowCards({
-  thumbnails,
-}: {
-  thumbnails: MarqueeThumbnail[];
-}) {
+export function FeatureFlowCards() {
   // Each card gets the landing page's framer-motion fade-up-on-scroll
   // (ScrollReveal), staggered so the grid reveals in a cascade — same
   // treatment as the rest of the landing's sections.
   return (
-    <>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ScrollReveal direction="up" delay={0.05}>
-          <CreateCard />
-        </ScrollReveal>
-        <ScrollReveal direction="up" delay={0.1}>
-          <EnhanceCard />
-        </ScrollReveal>
-        <ScrollReveal direction="up" delay={0.15}>
-          <MimicCard />
-        </ScrollReveal>
-        <ScrollReveal direction="up" delay={0.2}>
-          <DatasheetCard />
-        </ScrollReveal>
-      </div>
-      <ScrollReveal direction="up" delay={0.1} className="mt-6">
-        <TemplatesCard thumbnails={thumbnails} />
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <ScrollReveal direction="up" delay={0.05}>
+        <CreateCard />
       </ScrollReveal>
-    </>
+      <ScrollReveal direction="up" delay={0.1}>
+        <EnhanceCard />
+      </ScrollReveal>
+      <ScrollReveal direction="up" delay={0.15}>
+        <MimicCard />
+      </ScrollReveal>
+      <ScrollReveal direction="up" delay={0.2}>
+        <DatasheetCard />
+      </ScrollReveal>
+    </div>
   );
 }
 
@@ -169,37 +158,3 @@ function DatasheetCard() {
   );
 }
 
-// ─── Templates card (wide; content LEFT, thumbnail marquee RIGHT) ──
-
-function TemplatesCard({ thumbnails }: { thumbnails: MarqueeThumbnail[] }) {
-  return (
-    <div className="templates-host glass-card overflow-hidden rounded-2xl p-6">
-      {/* Same LTR-locked layout: content LEFT, thumbnails RIGHT. No
-          icon above the title (user direction 2026-05-28). */}
-      <div dir="ltr" className="flex flex-col items-stretch gap-8 md:flex-row">
-        <div
-          dir="rtl"
-          className="flex flex-1 flex-col justify-center md:py-4"
-        >
-          <h3 className="mb-3 text-xl font-medium leading-snug text-white">
-            قوالب جاهزة تدعم RTL
-          </h3>
-          <p className="mb-6 text-sm leading-relaxed text-muted">
-            ابدأ من قوالب مصممة للعروض العربية والإنجليزية، مع دعم كامل
-            لاتجاه النص من اليمين إلى اليسار، وتنسيق مناسب للعناوين،
-            الفقرات، الجداول، والشرائح ثنائية اللغة.
-          </p>
-          <Link
-            href="/signup"
-            className="btn-gradient inline-block w-fit px-6 py-2 text-xs"
-          >
-            ابدأ مجانًا
-          </Link>
-        </div>
-        <div className="w-full md:w-1/2">
-          <TemplatesScroll thumbnails={thumbnails} />
-        </div>
-      </div>
-    </div>
-  );
-}
