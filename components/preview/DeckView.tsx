@@ -426,17 +426,6 @@ export function DeckView({
   // first slide closes in the stream — typically 30–60 s into a
   // generation. Reset to [] when status leaves "generating".
   const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
-  // Parallel boolean array (indexed identical to streamingPreview) flagging
-  // tiles whose slide is still showing Claude's FIRST-pass DRAFT (vs the
-  // polished re-emit). Server only emits this field on enhance/mimic/data
-  // flows; for /create it stays empty and no draft chips render. Kept in
-  // strict zip-alignment with streamingPreview via the same monotonic
-  // guard below — when we accept a new streamingPreview snapshot we also
-  // accept the matching draft array; when we preserve the prior snapshot
-  // we preserve the prior draft array too.
-  const [streamingPreviewDraft, setStreamingPreviewDraft] = useState<boolean[]>(
-    [],
-  );
   // Stale-poll guards for the streaming preview. The pre-fix monotonic
   // guard was length-only (`validated.length >= prev.length`), which
   // worked for retry-induced shrinkage but couldn't reject the case
@@ -1491,10 +1480,6 @@ export function DeckView({
           slideCount: number;
           progress: Progress | null;
           streamingPreview?: unknown[] | null;
-          // Parallel boolean array — see comment on the matching server
-          // field. Null/missing for /create runs; present and zip-aligned
-          // with streamingPreview on /enhance|mimic|data.
-          streamingPreviewDraft?: unknown[] | null;
           // Monotonic manifest-version token. See refs above for how
           // this drives the version-aware stale-poll guard. Null
           // /missing on older in-flight runs (treated as version 0
@@ -1521,19 +1506,6 @@ export function DeckView({
           for (const candidate of data.streamingPreview) {
             const parsed = SlideSchema.safeParse(candidate);
             if (parsed.success) validated.push(parsed.data);
-          }
-          // Coerce the parallel draft array to clean booleans (defensive
-          // even though the server already validated). Pad to the validated
-          // length with `false` so the two arrays stay strictly zip-aligned
-          // even if the server briefly emitted one before the other (race
-          // window during writeProgress snapshot — `.slice()` is per-array
-          // and a poll in between could see mismatched lengths).
-          const draftFlags: boolean[] = [];
-          const rawDraft = Array.isArray(data.streamingPreviewDraft)
-            ? data.streamingPreviewDraft
-            : [];
-          for (let i = 0; i < validated.length; i += 1) {
-            draftFlags.push(rawDraft[i] === true);
           }
           // ─── Stale-poll guard (2026-05-25, version-aware) ──────────
           // Three layered conditions decide whether to accept this
@@ -1577,7 +1549,6 @@ export function DeckView({
               if (validated.length >= highWatermarkRef.current) {
                 lastManifestVersionRef.current = incomingVersion;
                 highWatermarkRef.current = validated.length;
-                setStreamingPreviewDraft(draftFlags);
                 return validated;
               }
               // Polished pass still ramping up — hold the prior view.
@@ -1588,7 +1559,6 @@ export function DeckView({
               if (validated.length > highWatermarkRef.current) {
                 highWatermarkRef.current = validated.length;
               }
-              setStreamingPreviewDraft(draftFlags);
               return validated;
             }
             return prev;
@@ -2427,11 +2397,6 @@ export function DeckView({
             index: idx,
             slide: previewSlide,
             commentCount: 0,
-            // Flag drives the small "مسودة" chip in SlideNavSidebar. True
-            // only when the server tagged this slide as belonging to
-            // Claude's first manifest pass (drafting). Undefined / false
-            // → no chip. Field is absent on /create runs by design.
-            draft: streamingPreviewDraft[idx] === true,
           };
         }
         const isAutoTail =
@@ -2607,7 +2572,12 @@ export function DeckView({
                               ? "جارٍ تحليل البيانات..."
                               : initialSourceKind === "mimic"
                                 ? "جارٍ قراءة المصدر وأسلوب التصميم..."
-                                : "جارٍ استخراج النص والهوية البصرية..."
+                                : initialSourceKind === "enhance"
+                                  ? "جارٍ استخراج النص والهوية البصرية..."
+                                  : // scratch / null = /create — nothing to
+                                    // extract; Claude is composing the deck
+                                    // from the idea text.
+                                    "جارٍ كتابة المحتوى وتصميم الشرائح..."
                             : "بدء التصميم..."}
                   </span>
                 </div>

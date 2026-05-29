@@ -156,18 +156,16 @@ on a tracked manifest → resets locks + signals caller to clear preview).
 
 File cap: **100 MB**. State machine: `idle → extracting → ready → submitting`.
 
-**Quality preset menu — 4 configs** (final 2026-05-25 — locked):
-- **Sonnet 4.6 · fast** (`sonnet-fast`) — Sonnet 4.6, thinking disabled. Auto-upgrades to `opus-fast` on this flow (source-document JSON saturates Sonnet without thinking).
-- **Opus 4.7 · fast** (`opus-fast`) — Opus 4.7, thinking disabled.
-- **Opus 4.7 · medium** (`opus-balanced`, **default**) — Opus 4.7, adaptive + `effort:medium`. Measured ~$2.58 per 9-slide deck.
-- **Opus 4.7 · high** (`opus-max`) — Opus 4.7, adaptive + `effort:high`. The "deep" tier; produces the draft → polish two-pass behavior that the draft chip surfaces. Measured ~$3.03 per 9-slide deck.
+**Quality preset menu — 3 configs** (2026-05-29 — Opus 4.8, supersedes the 4-preset / Opus 4.7 matrix):
+- **Sonnet 4.6 · سريع** (`sonnet-fast`) — Sonnet 4.6, thinking disabled. Auto-upgrades to `opus-fast` on source-document flows (JSON saturates Sonnet without thinking).
+- **Opus 4.8 · سريع** (`opus-fast`) — Opus 4.8, thinking disabled.
+- **Opus 4.8 · تفكير** (`opus-balanced`, **default**) — Opus 4.8, adaptive + `effort:low`. ~$0.68 / 3.4 min per 5-slide deck (measured). Green thinking chip.
 
-Labels mirror Anthropic's documented effort-tier names so the menu reads as a direct knob over the API config. `effort:max` and `effort:xhigh` were tested and dropped (max stalls on Files API enhance flows; xhigh shows marginal benefit at 1.17× cost). See `context/pricing.md` for the matrix + measured data, `lib/anthropic/quality-params.ts` for the case statements.
+Labels are intent-based Arabic (سريع = no thinking, تفكير = light thinking) rather than raw effort-tier names. **`opus-max` (effort:high) removed entirely 2026-05-29** — on Opus 4.8 it over-thought this structured-deck task (16 min / $1.69 for 5 slides) with no quality gain over `low`; legacy `opus-max` rows now fall to the `low` default. (Earlier `effort:max`/`xhigh` were already dropped on 4.7 — max stalls on Files API enhance, xhigh marginal at 1.17× cost.) See `context/pricing.md` for the migration data, `lib/anthropic/quality-params.ts` for the case statements.
 
 **Streaming-side features (enhance/mimic/data flows)**:
-- **Draft chip** — slides emitted during Claude's first manifest pass (the "draft") show a glass-pill `مسودة` chip in the thumbnail corner. Server tracks `manifestVersion` + parallel `streamingPreviewDraft: boolean[]`; on `didReset()` the parser increments version + clears both arrays in lockstep. Client renders the chip via `NavItem.draft` in `SlideNavSidebar`. Gated to `effectiveQuality === "opus-max"` AND `source.kind ∈ {enhance, mimic, data}` (medium/disabled runs are single-pass; the chip would never clear otherwise).
 - **Language detection** — `lib/extract/language-pptx.ts` samples first 3 slides' `<a:t>` text-run XML, counts Arabic vs Latin chars, returns `"ar" | "en" | null`. Threaded into the brief so the preview SlideNavSidebar opens in the source language from the first paint instead of defaulting to Arabic.
-- **`max_tokens: 64000`** — per Anthropic's published guidance for Opus 4.7 max/xhigh effort ("set a large max output token budget ... starting at 64k tokens"). Cross-refs the docs URL in code comment.
+- **`max_tokens: 64000`** — set per Anthropic's published guidance for higher-effort Opus runs ("set a large max output token budget ... starting at 64k tokens"). Harmless headroom at the current `effort:low` default (real runs use a fraction). Cross-refs the docs URL in code comment.
 - **`onFailure` hook on deck-generate** — fires once after Inngest exhausts retries; marks Project/Version/Job rows as `failed` so the existing "حاول مرة أخرى" retry button in DeckView surfaces. Pre-fix, failed enhance runs left rows stuck in `queued`/`generating` indefinitely.
 
 **Visual handling rule (logos)** — single non-negotiable: "anything that LOOKS like a logo, brand mark, monogram, or stylized identifier — do NOT attempt to draw it in SVG" (regardless of whether Claude "recognizes" it). Two fallbacks: brand name readable → styled text, otherwise → placeholder div with short label. The previous wordmark/iconographic classification step is gone (it let Claude mis-categorize and proceed to redraw).
@@ -308,7 +306,7 @@ Actual installed dependencies. See `package.json` for exact versions.
 | Database | PostgreSQL 16 (Docker compose for local), Prisma 7.8 |
 | Auth + Storage | Supabase (`@supabase/ssr` 0.10, `supabase-js` 2.105). Buckets: `source-files`, `brand-assets`, `slide-previews` (public) |
 | Queue | Inngest 4.3 (local: `npx inngest-cli@latest dev`) |
-| AI | Anthropic SDK 0.95 (Claude Opus 4.7, streaming, adaptive thinking, prompt caching, self-healing Zod retry) |
+| AI | Anthropic SDK 0.95 (Claude Opus 4.8, streaming, adaptive thinking, prompt caching, self-healing Zod retry) |
 | Export | `dom-to-pptx` 1.1.8 (patched), PptxGenJS 4 (under the hood), JSZip, **Puppeteer 24** (thumbnails + planned PNG/PDF export), **sharp** (image resize), **jsdom** (server-side sanitiser) |
 | Validation + Sanitization | Zod 4, DOMPurify 3.4 (browser) + JSDOM-backed mirror (server) |
 | Email | Resend — wired in `lib/email/send-share-invite.ts` for share invitation emails (Phase 15) |
@@ -359,7 +357,7 @@ API Layer (app/api/*)
  |
 Inngest functions (inngest/functions/*)
  |
- |-- deck-generate.ts              Claude Opus 4.7 → SlideManifest with HTML strings
+ |-- deck-generate.ts              Claude Opus 4.8 → SlideManifest with HTML strings
  |                                  (streaming, adaptive thinking, prompt caching,
  |                                   self-healing Zod retry)
  |-- deck-regenerate-partial.ts    Per-slide regen with comments, parallel Claude calls
@@ -579,7 +577,7 @@ The schema lives in [`lib/schema/slide.ts`](../lib/schema/slide.ts). Each slide 
 
 1. **Brief assembly** — `POST /api/projects` persists Project + v1 PresentationVersion (status `queued`), fires `deck.generate.requested`.
 2. **Inngest `deck-generate`** — `buildUserMessage` emits a per-request "Generation rules" block (tone, design-style hints, verbatim mode, logo placement). System prompt is `cache_control: ephemeral`; per-request mutations would kill the cache.
-3. **Claude Opus 4.7 stream** — Adaptive thinking, prompt caching, anthropic-beta context-1m. Subscribes to `stream.on("text")`, counts `"slideId":` occurrences = current slide, throttles DB writes (~800 ms) into `slideJson.progress`.
+3. **Claude Opus 4.8 stream** — Adaptive thinking, prompt caching, anthropic-beta context-1m. Subscribes to `stream.on("text")`, counts `"slideId":` occurrences = current slide, throttles DB writes (~800 ms) into `slideJson.progress`.
 4. **Parse + Zod validate** — Strip markdown fences, parse JSON, validate `SlideManifestSchema`. On failure: append error to prompt and retry (max 3 attempts inside the Inngest step).
 5. **Persist + promote title + filter cols** — Update v1 row to `completed`. Promote `manifest.title` to `Project.title`. **Freeze `slideCount` + `dominantColor` on first generation** (conditional spread, only writes if currently null). `seedSlideVersionsForInitialGeneration` seeds v1 of every slide into `SlideState` + `SlideVersion`.
 
@@ -857,7 +855,7 @@ permanently here as the audit trail.
 |---|---|---|
 | 1 | **Foundation** — Next 16 Turbopack, Tailwind 4, Supabase, Postgres via Docker, Prisma 7.8, dashboard, project creation | ✅ |
 | 2 | **Slide Manifest Engine** — v2 schema, SlideRenderer at canvas dimensions, manifest persisted to `PresentationVersion.slideJson` | ✅ |
-| 3 | **AI Deck Generation** — Anthropic SDK, Opus 4.7 all-tiers, streaming + adaptive thinking + prompt caching + 1M context beta, self-healing Zod retry | ✅ |
+| 3 | **AI Deck Generation** — Anthropic SDK, Opus 4.8 (+ Sonnet 4.6 fast tier), streaming + adaptive thinking + prompt caching + 1M context beta, self-healing Zod retry | ✅ |
 | 4 | **Preview Window** — SlideRenderer, toolbar, generating placeholders, cascade-in, slide-nav sidebar, hero comment overlay | ✅ |
 | 5 | **PPTX Export** — patched `dom-to-pptx` + 4-pass BiDi post-processor; ~99 % Arabic parity | ✅ |
 | 6 | **Comments + Partial Regen** — comment authoring, draft → applied lifecycle, partial regen Inngest flow, per-slide pill, 5-version capped history | ✅ |
@@ -896,9 +894,9 @@ permanently here as the audit trail.
 - **Auth + dashboard.** Supabase email + Google OAuth → real DB-backed dashboard (RecentProjects, MyTemplates, PlanUsage, QuickActions); navigation-back refresh wired so `/enhance → /dashboard` shows fresh project list without manual reload.
 - **Three landing flows — UNIFIED (`/create`, `/enhance`, `/mimic`).** Phase 17.D shipped the /create single-page rebuild + design-system unification 2026-05-26. All three flows now share one CardHeader pattern, one SegmentedToggle, one InlineStepper, one SVG-only logo upload, one set of font-slot props (compact + alignStart + hideSample), one `min-h-[387px]` card baseline, and one animation spring (stiffness 500, damping 35). See §02 "Shared design system" for the full primitive ledger. **Files**: `app/{create,enhance,mimic}/page.tsx`, `components/create/controls.tsx`, `components/create/OutputCards.tsx`, `components/brand/{CompactUploadZone,FontUploadSlot,GoogleFontSlot}.tsx`.
 - **Create flow (Flow 1) — Phase 17.D shipped 2026-05-26.** Single-page 4-card layout replacing the previous 3-step wizard + entire `/create-from-template` route tree. Template seeds hydrate the single page via `lib/create/seed-from-template.ts`. File-upload content path wired through `/api/extract` → polling → `source.kind === "scratch"` with `anthropicFileId` (extends `SourceScratchSchema` with optional file_id; scratch branch in `deck-generate.ts` attaches the document block + "raw material for a fresh deck" directive). Generate gated on extraction completing.
-- **Enhance flow (Flow 2) — Phase 17.B shipped 2026-05-25.** Single-shot page (`/enhance`) with 2 cards (source-only + الهوية البصرية with logo under fonts), Anthropic Files API document-block pipeline, language detection from PPTX, 4-preset menu (sonnet-fast / opus-fast / opus-balanced default / opus-max), draft chip on opus-max two-pass runs, `onFailure` hook surfaces retry button, `max_tokens: 64000`. ~$18.60 of Opus testing went into landing the final shape. Card chrome unified to /create pattern in Phase 17.D.
+- **Enhance flow (Flow 2) — Phase 17.B shipped 2026-05-25.** Single-shot page (`/enhance`) with 2 cards (source-only + الهوية البصرية with logo under fonts), Anthropic Files API document-block pipeline, language detection from PPTX, `onFailure` hook surfaces retry button, `max_tokens: 64000`. Card chrome unified to /create pattern in Phase 17.D. _(Superseded 2026-05-29: preset menu collapsed 4 → 3 + migrated to Opus 4.8, and the opus-max draft chip was removed — see the preset menu section above.)_
 - **Mimic flow (Flow 3) — Phase 17.C shipped 2026-05-26 (new flow).** Single-shot 3-card page (content + branding-conditional + what-to-mimic with animated mesh halo) with shared `/api/extract` pipeline for BOTH design reference + content file. Content card accepts text OR file. Branding card mounts only when "مُحاكاة الهوية البصرية" toggle is OFF (AnimatePresence width spring with overflow-toggle so popovers escape the card edge after settling). Sentinel-safe user-content escape in `deck-generate.ts` mimic branch.
-- **Claude pipeline.** All-Opus tier (Opus 4.7 adaptive thinking on opus-balanced/opus-max presets — `effort: medium`/`high`; Opus 4.7 disabled-thinking on `opus-fast`; Sonnet 4.6 disabled-thinking on `sonnet-fast` only, with auto-upgrade to opus-fast on source-document flows) + prompt caching + self-healing Zod retry. Streams text deltas; throttled progress writes; partial-regen `redesign` mode prompt diversifies output when no comments are pinned. **Dropped from menu after measured testing**: `effort:max` (stalls on Files API enhance), `effort:xhigh` (marginal benefit at 1.17× cost).
+- **Claude pipeline.** Opus 4.8 adaptive thinking at `effort:low` on `opus-balanced` (default); Opus 4.8 disabled-thinking on `opus-fast`; Sonnet 4.6 disabled-thinking on `sonnet-fast` only, with auto-upgrade to opus-fast on source-document flows. + prompt caching + self-healing Zod retry. Streams text deltas; throttled progress writes; partial-regen `redesign` mode prompt diversifies output when no comments are pinned. **Dropped after measured testing**: `effort:high` (opus-max — over-thinks on 4.8, 16 min/$1.69 for 5 slides), and earlier on 4.7 `effort:max` (stalls on Files API enhance) / `effort:xhigh` (marginal benefit at 1.17× cost).
 - **Preview window.** Cascade-in, slide-nav, comment authoring with marker preview popup, per-slide pill (regen / history / lock), Save Project, thumbnail pipeline. Hero comment overlay + CommentsPanel both consume live broadcasts.
 - **Partial regen + apply-comments.** Comment-driven slide regen with parallel Claude calls; deck stays visible during regen; atomic version promotion; apply-poller fetches manifest + slideStates + history in one round-trip so the History popover updates live.
 - **PPTX / PDF / PNG / HTML export.** ~99 % Arabic preview ↔ PPT parity. PNG/PDF go through Puppeteer with the same renderer; PDF Range params honoured. "Made with Taqreer" badge on PNG output for view-only sharers.

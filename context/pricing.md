@@ -8,34 +8,53 @@ Source: [claude.com/docs/en/about-claude/pricing](https://platform.claude.com/do
 
 | Model | Input / MTok | Output / MTok | Cache hit (read) | 5m cache write | 1h cache write |
 |-------|--------------|---------------|------------------|----------------|----------------|
-| Claude Opus 4.7 | **$5** | **$25** | $0.50 (0.1×) | $6.25 (1.25×) | $10 (2×) |
+| Claude Opus 4.8 | **$5** | **$25** | $0.50 (0.1×) | $6.25 (1.25×) | $10 (2×) |
 | Claude Sonnet 4.6 | $3 | $15 | $0.30 (0.1×) | $3.75 (1.25×) | $6 (2×) |
 | Claude Haiku 4.5 | $1 | $5 | $0.10 (0.1×) | $1.25 (1.25×) | $2 (2×) |
 
 **Important pricing notes:**
 
-- **Opus 4.7 is ~3× cheaper than Opus 4.1** ($5/$25 vs $15/$75). Earlier drafts of this doc used 4.1 pricing — all Opus cost numbers below are NOW corrected against 4.7.
-- **Opus 4.7 uses a new tokenizer** that may use up to **35% more tokens** for the same text. Our measured token counts on Opus 4.7 vs older models aren't directly comparable.
+- **Opus 4.8 (launched 2026-05-29) is priced identically to 4.7** ($5/$25, same 1M context / 128k output / adaptive thinking). We migrated 4.7 → 4.8 on 2026-05-29 — the only API changes are the model id and **recalibrated effort budgets** (see the 4.8 migration note below). All "Opus 4.7" numbers below are historical; current runs are 4.8.
+- **Opus 4.7 was ~3× cheaper than Opus 4.1** ($5/$25 vs $15/$75); 4.8 carries the same $5/$25.
+- **Opus 4.7/4.8 use a new tokenizer** that may use up to **35% more tokens** for the same text. Our measured token counts on Opus 4.7/4.8 vs older models aren't directly comparable.
 - **Thinking tokens are billed at the regular output rate** when `thinking: { type: "adaptive" }` is on. Cache writes default to 5-minute TTL (1.25× input); we don't use 1-hour writes.
 - **1M context window** is included at standard pricing for Opus 4.7 + Sonnet 4.6 — no surprise pricing if we ever go big.
 - We use the **first-party Claude API**, not Bedrock/Vertex AI (which carry regional markups).
 
 ---
 
-## Current preset config (locked, 2026-05-25 — 4 presets, final)
+## Current preset config (2026-05-29 — 3 presets, Opus 4.8)
 
-Source of truth: `lib/anthropic/quality-params.ts` + `lib/types/quality.ts`. **4 presets, labels mirror Anthropic's documented effort-tier names verbatim:**
+Source of truth: `lib/anthropic/quality-params.ts` + `lib/types/quality.ts`. **3 presets, intent-based Arabic labels** (سريع = no thinking, تفكير = light thinking; green thinking chip on تفكير). Supersedes the 2026-05-25 4-preset / Opus 4.7 matrix.
 
-| Preset key | Display label | Model | Thinking | Effort | Measured $ / 9-slide |
+| Preset key | Display label | Model | Thinking | Effort | Measured $ (4.8) |
 |-----------|---------------|--------------------|----------|--------|------------------------|
-| `sonnet-fast` | Sonnet 4.6 · fast | claude-sonnet-4-6 | disabled | — | $0.36 (≤ enhance auto-upgrades) |
-| `opus-fast` | Opus 4.7 · fast | claude-opus-4-7 | disabled | — | ~$0.65 |
-| `opus-balanced` (default) | Opus 4.7 · medium | claude-opus-4-7 | adaptive | medium | **$2.58** (measured) |
-| `opus-max` | Opus 4.7 · high | claude-opus-4-7 | adaptive | high | **$3.03** (measured) |
+| `sonnet-fast` | Sonnet 4.6 · سريع | claude-sonnet-4-6 | disabled | — | (no 4.8 Sonnet sample yet) |
+| `opus-fast` | Opus 4.8 · سريع | claude-opus-4-8 | disabled | — | ~$0.95 (6–9 slide, mixed) |
+| `opus-balanced` (default) | Opus 4.8 · تفكير | claude-opus-4-8 | adaptive | **low** | **$0.68** (5-slide, measured) |
+
+`opus-max` (Opus · effort:high) **removed entirely** 2026-05-29 — see the 4.8 migration note below.
 
 **Auto-upgrade:** `sonnet-fast` requests on source-document flows (`enhance` / `mimic` / `data`) silently upgrade to `opus-fast` at the API-call layer. `Job.quality` keeps the user's pick for analytics; the actual run gets Opus structure tracking. See `deck-generate.ts` for the upgrade logic.
 
-### Dropped this revision (effort tier deep-dive)
+### Opus 4.8 migration + measured data (2026-05-29)
+
+Bumped `OPUS` `claude-opus-4-7` → `claude-opus-4-8`. **No API-shape change** (4.8 keeps adaptive thinking + `output_config.effort`; pricing identical at $5/$25). The migration guide confirms no breaking changes 4.7→4.8 — but **4.8 recalibrates the token budget behind each effort tier** (`medium` = more thinking, `high` = less, `xhigh` = much more), so 4.7-measured numbers don't carry over.
+
+Measured on 4.8 (same project; cost = `console.anthropic.com` daily-CSV deltas, wallclock = Inngest run durations):
+
+| Run | Preset | Effort | Slides | Wallclock | Output tok | Cost |
+|-----|--------|--------|--------|-----------|-----------|------|
+| enhance | opus-fast | none | 9 | 4.8 min | — | pair ≈ **$0.95/run** ($1.89 / 2) |
+| create | opus-fast | none | 6 | 4.6 min | — | pair ≈ **$0.95/run** |
+| create | opus-balanced | **medium** | 5 | **16.3 min** | ~60 K | **$1.69** |
+| create | opus-balanced | **low** | 5 | **3.4 min** | ~23.6 K | **$0.68** |
+
+**Key finding:** on 4.8, `effort:medium` over-thinks this structured-output deck task — a 5-slide deck burned 16 min / $1.69 / ~60k output (≈ half of it thinking) with no quality gain (4.7 data already showed low/med/high indistinguishable here). So **`opus-balanced` dropped medium → `low`** (same deck: 3.4 min / $0.68 / ~23.6k → 4.8× faster, 2.5× cheaper), and **`opus-max` (effort:high) was removed** (slower + pricier, no benefit). Live matrix is now two no-thinking "سريع" tiers (Sonnet / Opus) + one light-thinking "تفكير" tier (Opus, effort:low).
+
+**ETA constants still stale** (`secsPerSlide` / `baseOverheadSecs` in `quality.ts`): real 4.8 runs show time is mostly *fixed overhead* — `opus-fast` 274s@6 / 288s@9 vs the pill's 150s/210s estimate (~1.8× under). Re-baseline pending.
+
+### Dropped this revision (effort tier deep-dive — 2026-05-25, Opus 4.7, historical)
 
 - **`opus-extreme` (effort:max)** — 3 independent /enhance runs all stalled with zero `thinking_delta` events emitted for 5-20 minutes. Anthropic-side issue specific to `effort:max` + Files API document blocks. Cancelled runs still burned ~$5-7 of input + internal subagent thinking tokens. Confirmed against docs: max-effort spawns internal subagents whose thinking doesn't surface on the outer stream, and the docs explicitly warn "`max` ... on some structured-output or less intelligence-sensitive tasks ... can lead to overthinking." Our editorial-deck task IS structured output → max is wrong tool.
 - **`opus-xhigh` (effort:xhigh)** — measured side-by-side on the same 9-slide source PDF:

@@ -6,7 +6,11 @@
 > the measured Claude-API cost data + proposed point values; this doc is
 > about the *billing/credit system architecture*, not the point math.
 >
-> Last updated: 2026-05-27 (planning session — Phase 1+ has not begun).
+> Last updated: 2026-05-29 (Opus 4.8 migration + 3-preset collapse — see note below; Phase 1+ has not begun).
+
+---
+
+> **2026-05-29 — model + preset change (affects the point math, NOT the billing architecture below):** migrated Opus 4.7 → **4.8** and collapsed the menu **4 → 3 presets** — `sonnet-fast` / `opus-fast` / `opus-balanced` (the last now Opus 4.8 + `effort:low`); `opus-max` (effort:high) removed entirely. The "Spend granularity" decision below still holds (`base + slides × perSlide` per preset; every Claude call debits the ledger), but the **per-preset point values must be re-derived** from the new 4.8 cost data in `pricing.md` — notably `opus-balanced` dropped from ~$2.58 (4.7 · medium) to **$0.68** (4.8 · low) for a 5-slide deck, and there is no longer a high-effort tier to price. Pricing is otherwise unchanged ($5/$25, same as 4.7).
 
 ---
 
