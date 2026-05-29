@@ -594,7 +594,10 @@ function CommentEditor({
   scale,
   canvasW,
   canvasH,
-  direction,
+  // Received for API parity with the marker-preview popup but unused
+  // here — the editor popover is always app-chrome RTL regardless of
+  // the slide's reading direction.
+  direction: _direction,
   onContentChange,
   onSave,
   onCancel,

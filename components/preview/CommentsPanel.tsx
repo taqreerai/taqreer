@@ -46,7 +46,6 @@ export function CommentsPanel({
   mainSidebarWidth: number;
 }) {
   const slideComments = comments.filter((c) => c.slideId === slideId);
-  const totalDrafts = comments.length;
   return (
     <aside
       dir="rtl"

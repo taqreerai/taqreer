@@ -338,7 +338,6 @@ export function DeckView({
   // popover open; reset to false by HistoryPopover's
   // onExitComplete after the fade-out finishes.
   const [popoverEngaged, setPopoverEngaged] = useState(false);
-  const [historyBusy, setHistoryBusy] = useState(false);
   // Splice helper used by both Undo and Restore. Updates the live
   // manifest (so the renderer immediately shows the older slide
   // content) AND the per-slide pill state (currentVersionNumber).
@@ -779,7 +778,8 @@ export function DeckView({
       localHandle = openProjectChannel(projectId, currentUserId);
       localHandle.onPresenceSync((state) => {
         if (!cancelled) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape; the channel is what owns the state, this just mirrors it into React
+          // Subscribe to external source: the channel owns this state,
+          // we just mirror it into React.
           setPresence(state);
         }
       });
@@ -812,7 +812,8 @@ export function DeckView({
             const data = (await res.json()) as { comments?: CommentRow[] };
             const incoming = data.comments?.[0];
             if (!incoming || cancelled) return;
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape; the channel is the source of truth, this just mirrors fresh rows in
+            // Subscribe to external source: the channel is the source of
+            // truth, we just mirror fresh rows in.
             setComments((prev) =>
               prev.some((c) => c.id === incoming.id)
                 ? prev
@@ -831,7 +832,7 @@ export function DeckView({
         ) {
           return;
         }
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "subscribe to external source" shape
+        // Subscribe to external source (channel is the source of truth).
         setComments((prev) => prev.filter((c) => c.id !== payload.commentId));
       });
 
@@ -3209,7 +3210,7 @@ export function DeckView({
             ? (slideStates[historySlideKey]?.currentVersionNumber ?? null)
             : null
         }
-        busy={historyBusy}
+        busy={false}
         onClose={() => {
           setHistoryAnchor(null);
           setHistorySlideKey(null);

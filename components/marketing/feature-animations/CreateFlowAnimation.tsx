@@ -348,6 +348,8 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
     useImperativeHandle(ref, () => ({ startAnimation: start, stopAnimation: stop }));
 
     useEffect(() => {
+      // Initialize the animation to its starting frame on mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       reset();
     }, [reset]);
 

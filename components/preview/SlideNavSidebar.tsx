@@ -134,7 +134,6 @@ export function SlideNavSidebar({
     let inner: number | null = null;
     const outer = requestAnimationFrame(() => {
       inner = requestAnimationFrame(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEnableRightTransition(true);
       });
     });

@@ -61,10 +61,6 @@ const TOAST_AUTO_DISMISS_MS = 15_000;
 // popover. Tuned so the popover floats clear of the header chrome.
 const BELL_ANCHOR_GAP_PX = 25;
 
-// Width (px) of the bell popover + every stacked toast. Used in
-// both the inline style and the on-resize positioning math.
-const POPOVER_WIDTH_PX = 320;
-
 export function BellDropdown() {
   const router = useRouter();
   const items = useNotifications();
@@ -161,6 +157,9 @@ export function BellDropdown() {
   // Prune heights for toasts that no longer exist (post-dismiss).
   // Keeps the Map from growing forever across the session.
   useEffect(() => {
+    // Guarded resync — returns `prev` when nothing changed, so no
+    // cascading render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setToastHeights((prev) => {
       if (prev.size === 0) return prev;
       const ids = new Set(toasts.map((t) => t.id));
@@ -330,7 +329,6 @@ export function BellDropdown() {
     });
     const combined = [...queued, ...carriedToasts];
     const toEvict = combined.length > 3 ? combined.slice(3) : [];
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setToasts(combined);
     // Set per-toast timers, tracked by id in timersRef. NO cleanup that
     // bulk-cancels timers — each timer is owned by its toast and is
