@@ -13,6 +13,7 @@
 // `onMouseLeave`. Icon size 34 px, stroke 1.5 (slightly lighter than
 // the sidebar's 2 so the larger glyph doesn't read as too heavy).
 
+import Link from "next/link";
 import { useRef } from "react";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
@@ -71,7 +72,7 @@ export function QuickActions() {
 function QACard({ card }: { card: QuickActionCard }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
   return (
-    <a
+    <Link
       href={card.path}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
@@ -90,6 +91,6 @@ function QACard({ card }: { card: QuickActionCard }) {
         <h3 className="text-[13px] font-semibold text-white leading-snug mb-0.5">{card.title}</h3>
         <p className="text-[11px] text-muted leading-relaxed">{card.desc}</p>
       </div>
-    </a>
+    </Link>
   );
 }

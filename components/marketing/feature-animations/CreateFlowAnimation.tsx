@@ -111,6 +111,18 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
       finished: Promise<void>;
     } | null>(null);
     const runIdRef = useRef(0);
+    // In-flight tween controls (motion-value drag tweens + any
+    // un-awaited delayed selector reveals). `reset()` stops these
+    // before re-parking elements — otherwise a tween started in
+    // `start()` keeps running after hover-out and overwrites the
+    // reset, jumping the scene forward. Both `animate()` (selectors)
+    // and `animateValue()` (motion values) return a `.stop()`-able
+    // control, so a structural `{ stop }` type covers both.
+    const pendingRef = useRef<Array<{ stop: () => void }>>([]);
+    const track = useCallback(<T extends { stop: () => void }>(c: T): T => {
+      pendingRef.current.push(c);
+      return c;
+    }, []);
 
     // File's translate + scale are SINGLE SOURCE OF TRUTH motion
     // values. The drag-cursor lives INSIDE the file's motion.g at
@@ -126,6 +138,11 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
 
     const reset = useCallback(() => {
       typingControlsRef.current?.stop();
+      // Stop any in-flight tweens before re-parking — otherwise a
+      // still-running drag/reveal tween overwrites the `.set()` calls
+      // and selector resets below.
+      pendingRef.current.forEach((c) => c.stop());
+      pendingRef.current = [];
       setTypedCount(0);
       // File transform — set motion values directly (no selector
       // animate, since the file element binds these via style).
@@ -182,18 +199,24 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
       if (runIdRef.current !== myRun) return;
 
       const DRAG_DURATION = 1.2;
-      const dragXAnim = animateValue(fileX, FILE_END_X, {
-        duration: DRAG_DURATION,
-        ease: HUMAN_EASE,
-      });
-      animateValue(fileY, FILE_END_Y, {
-        duration: DRAG_DURATION,
-        ease: HUMAN_EASE,
-      });
-      animateValue(fileScale, FILE_DRAG_SCALE, {
-        duration: DRAG_DURATION,
-        ease: HUMAN_EASE,
-      });
+      const dragXAnim = track(
+        animateValue(fileX, FILE_END_X, {
+          duration: DRAG_DURATION,
+          ease: HUMAN_EASE,
+        }),
+      );
+      track(
+        animateValue(fileY, FILE_END_Y, {
+          duration: DRAG_DURATION,
+          ease: HUMAN_EASE,
+        }),
+      );
+      track(
+        animateValue(fileScale, FILE_DRAG_SCALE, {
+          duration: DRAG_DURATION,
+          ease: HUMAN_EASE,
+        }),
+      );
       await dragXAnim.finished;
       if (runIdRef.current !== myRun) return;
 
@@ -296,23 +319,33 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
       if (runIdRef.current !== myRun) return;
 
       // ── PHASE 5: fade loader, reveal 3 distinct slides ─────
-      animate(".loader-fill", { opacity: 0 }, { duration: 0.35 });
-      animate(
-        ".slide-text",
-        { opacity: 1, y: 0, scale: 1 },
-        { duration: 0.5, ease: "easeOut" },
+      // These reveals carry `delay` and aren't awaited (start() returns
+      // right after), so a hover-out landing in the delay window would
+      // otherwise let them fire and re-show slides after reset() —
+      // track them so reset() can cancel.
+      track(animate(".loader-fill", { opacity: 0 }, { duration: 0.35 }));
+      track(
+        animate(
+          ".slide-text",
+          { opacity: 1, y: 0, scale: 1 },
+          { duration: 0.5, ease: "easeOut" },
+        ),
       );
-      animate(
-        ".slide-chart",
-        { opacity: 1, y: 0, scale: 1 },
-        { duration: 0.5, delay: 0.12, ease: "easeOut" },
+      track(
+        animate(
+          ".slide-chart",
+          { opacity: 1, y: 0, scale: 1 },
+          { duration: 0.5, delay: 0.12, ease: "easeOut" },
+        ),
       );
-      animate(
-        ".slide-image",
-        { opacity: 1, y: 0, scale: 1 },
-        { duration: 0.5, delay: 0.24, ease: "easeOut" },
+      track(
+        animate(
+          ".slide-image",
+          { opacity: 1, y: 0, scale: 1 },
+          { duration: 0.5, delay: 0.24, ease: "easeOut" },
+        ),
       );
-    }, [animate, reset]);
+    }, [animate, reset, track]);
 
     const stop = useCallback(() => {
       runIdRef.current += 1;
@@ -476,6 +509,10 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
               sits on top of it). ──────────────────────────────── */}
         <motion.g
           className="gen-button"
+          // Hidden on first paint — reset() (in a mount effect) hides
+          // these via `animate()` only AFTER the first render, so an
+          // `initial` matching reset()'s parked state prevents a flash.
+          initial={{ y: 70, opacity: 0 }}
           style={{ transformOrigin: "100px 140px" }}
         >
           <motion.g
@@ -498,6 +535,8 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
               r="32"
               stroke="var(--tq-violet)"
               strokeOpacity="0.9"
+              // Hidden on first paint (see gen-button note above).
+              initial={{ scale: 0.4, opacity: 0 }}
               style={{ transformOrigin: "100px 140px" }}
             />
             {/* White label per user direction 2026-05-28 (was

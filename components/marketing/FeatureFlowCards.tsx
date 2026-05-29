@@ -88,18 +88,20 @@ function FlowShell({
       {/* `dir="ltr"` locks DOM order so text lands LEFT, animation
           RIGHT regardless of the page's RTL flow; the text block
           re-anchors RTL for natural Arabic reading. */}
-      <div dir="ltr" className="flex items-stretch gap-5">
+      <div dir="ltr" className="flex items-stretch gap-3 sm:gap-5">
         <div
           dir="rtl"
-          className="flex min-w-[160px] flex-1 flex-col justify-center"
+          className="flex min-w-0 flex-1 flex-col justify-center sm:min-w-[160px]"
         >
           <h3 className="mb-2 text-xl font-medium leading-snug text-white">
             {title}
           </h3>
           <p className="text-sm leading-relaxed text-muted">{description}</p>
         </div>
+        {/* Slot shrinks on narrow phones so the fixed-width split can't
+            overflow (250 + 160 text floor + gap > a ~360px viewport). */}
         <div
-          className="flex aspect-square w-[250px] min-w-0 items-center justify-center text-white/80"
+          className="flex aspect-square w-[180px] min-w-0 shrink-0 items-center justify-center text-white/80 sm:w-[250px]"
           aria-hidden
         >
           {children}

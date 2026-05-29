@@ -88,19 +88,21 @@ const QUICK_ACTIONS: Array<{
 const SIDEBAR_ITEMS: Array<{
   id: View | "projects" | "templates" | "brand-kits" | "favorites" | "settings";
   icon: string;
+  // Accessible name for the icon-only nav dot (no visible text label).
+  label: string;
   group: "home" | "actions" | "library";
   comingSoon?: boolean;
 }> = [
-  { id: "dashboard", icon: "home", group: "home" },
-  { id: "create", icon: "add_circle", group: "actions" },
-  { id: "enhance", icon: "auto_fix_high", group: "actions" },
-  { id: "mimic", icon: "content_copy", group: "actions" },
-  { id: "datasheet", icon: "dataset", group: "actions", comingSoon: true },
-  { id: "projects", icon: "folder_copy", group: "library" },
-  { id: "templates", icon: "grid_view", group: "library" },
-  { id: "brand-kits", icon: "id_card", group: "library" },
-  { id: "favorites", icon: "star", group: "library" },
-  { id: "settings", icon: "settings", group: "library" },
+  { id: "dashboard", icon: "home", label: "الرئيسية", group: "home" },
+  { id: "create", icon: "add_circle", label: "إنشاء عرض جديد", group: "actions" },
+  { id: "enhance", icon: "auto_fix_high", label: "تحسين عرض موجود", group: "actions" },
+  { id: "mimic", icon: "content_copy", label: "محاكاة أسلوب عرض", group: "actions" },
+  { id: "datasheet", icon: "dataset", label: "إنشاء من بيانات", group: "actions", comingSoon: true },
+  { id: "projects", icon: "folder_copy", label: "المشاريع", group: "library" },
+  { id: "templates", icon: "grid_view", label: "القوالب", group: "library" },
+  { id: "brand-kits", icon: "id_card", label: "الهويات البصرية", group: "library" },
+  { id: "favorites", icon: "star", label: "المفضلة", group: "library" },
+  { id: "settings", icon: "settings", label: "الإعدادات", group: "library" },
 ];
 
 // Six placeholder titles per widget — 3 cols × 2 rows mirrors the real
@@ -371,6 +373,7 @@ function SidebarDot({
       onClick={onClick}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
+      aria-label={item.label}
       aria-current={active ? "page" : undefined}
       className={`my-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 ${
         active ? "nav-active" : "nav-item"

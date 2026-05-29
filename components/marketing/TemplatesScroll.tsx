@@ -3,14 +3,16 @@ import type { MarqueeThumbnail } from "@/lib/auth/marquee-projects";
 
 // Fallback gradients — shown only when no real thumbnails are
 // available (empty curator account / DB error) so the card never
-// renders blank.
+// renders blank. Built from brand tokens (`--tq-bg` + `--tq-violet-rgb`)
+// rather than hardcoded hex, varying angle + violet weight for visual
+// variety.
 const FALLBACK_GRADIENTS = [
-  "linear-gradient(135deg, #1a0533 0%, #4c1d95 100%)",
-  "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
-  "linear-gradient(135deg, #0d1117 0%, #2d1b69 100%)",
-  "linear-gradient(135deg, #1a0a2e 0%, #3b0764 100%)",
-  "linear-gradient(135deg, #0a0a1a 0%, #1e1b4b 100%)",
-  "linear-gradient(135deg, #160a2e 0%, #4a1d96 100%)",
+  "linear-gradient(135deg, var(--tq-bg) 0%, rgba(var(--tq-violet-rgb), 0.55) 100%)",
+  "linear-gradient(160deg, var(--tq-bg) 0%, rgba(var(--tq-violet-rgb), 0.32) 100%)",
+  "linear-gradient(135deg, rgba(var(--tq-violet-rgb), 0.16) 0%, rgba(var(--tq-violet-rgb), 0.5) 100%)",
+  "linear-gradient(120deg, var(--tq-bg) 0%, rgba(var(--tq-violet-rgb), 0.45) 100%)",
+  "linear-gradient(135deg, var(--tq-bg) 0%, rgba(var(--tq-violet-rgb), 0.28) 100%)",
+  "linear-gradient(150deg, rgba(var(--tq-violet-rgb), 0.12) 0%, rgba(var(--tq-violet-rgb), 0.5) 100%)",
 ];
 
 // Two vertical columns, opposite scroll directions, each tripled for
@@ -27,7 +29,10 @@ export function TemplatesScroll({
   const hasReal = tiles.length > 0;
 
   const col1 = hasReal ? tiles.filter((_, i) => i % 2 === 0) : [];
-  const col2 = hasReal ? tiles.filter((_, i) => i % 2 === 1) : [];
+  const odd = hasReal ? tiles.filter((_, i) => i % 2 === 1) : [];
+  // Tiny set (e.g. a single thumbnail) leaves the odd column empty →
+  // blank second column. Mirror col1 so both columns stay populated.
+  const col2 = odd.length > 0 ? odd : col1;
 
   return (
     <div

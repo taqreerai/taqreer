@@ -1460,6 +1460,18 @@ body {
   filter: brightness(1) saturate(1);
 }
 
+/* Hero "social-proof" pill (e.g. "تم إنشاء N عرض حتى الآن"). Brand
+   violet on a 12%-alpha violet bg read low-contrast against the dark
+   page, so the text is the brand violet mixed 30/70 with white in
+   oklab (perceptually uniform) — a bright lavender that still reads
+   as the brand colour. Folded out of an inline `style` in Hero.tsx
+   so the surface stays token-driven, no hardcoded color. */
+.hero-stat-pill {
+  background: rgba(var(--tq-violet-rgb), 0.12);
+  color: color-mix(in oklab, var(--tq-violet) 30%, white);
+  border: 1px solid rgba(var(--tq-violet-rgb), 0.3);
+}
+
 .group:hover .nav-icon {
   color: #ffffff !important;
 }

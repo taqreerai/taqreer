@@ -76,22 +76,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             className="mb-8 flex w-full justify-center gap-3"
           >
             {formattedCount && (
-              <span
-                className="flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium"
-                style={{
-                  background: "rgba(var(--tq-violet-rgb), 0.12)",
-                  // Brand-violet text on a 12 %-alpha violet bg read
-                  // as low-contrast against the dark page. Mix the
-                  // brand violet with white in oklab (perceptually
-                  // uniform) so the text lifts to a bright lavender
-                  // that still reads as the brand colour, not a
-                  // generic light tint. 30 % violet / 70 % white
-                  // approximates `#E0D2FF` — high contrast on the
-                  // dim violet pill.
-                  color: "color-mix(in oklab, var(--tq-violet) 30%, white)",
-                  border: "1px solid rgba(var(--tq-violet-rgb), 0.30)",
-                }}
-              >
+              <span className="hero-stat-pill flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium">
                 <span
                   className="h-1.5 w-1.5 rounded-full"
                   style={{ background: "var(--tq-violet)" }}
@@ -264,9 +249,10 @@ export function Hero({ projectCount }: { projectCount?: number }) {
 // Safari window, not a stripped-down minimal mock.
 
 function BrowserChromeBar({ path }: { path: string }) {
-  // Reusable "glass icon button" — the right side of the bar uses
-  // five of these, and the nav arrows reuse the visual recipe. Pure
-  // tokens, no hardcoded color.
+  // Reusable "glass icon" recipe. These chrome controls are purely
+  // decorative (no handlers) so they render as `aria-hidden` spans,
+  // not focusable buttons — they're a browser mockup, not real
+  // affordances. Pure tokens, no hardcoded color.
   const iconBtnCls =
     "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--tq-text-muted)] transition-colors hover:bg-white/5 hover:text-white";
 
@@ -289,24 +275,24 @@ function BrowserChromeBar({ path }: { path: string }) {
 
       {/* Sidebar toggle — Safari's leftmost chrome button after the
           traffic lights. */}
-      <button type="button" aria-label="Sidebar" className={iconBtnCls}>
+      <span aria-hidden className={iconBtnCls}>
         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
           dock_to_right
         </span>
-      </button>
+      </span>
 
       {/* Back / forward nav arrows — paired glass affordance. */}
       <div className="flex items-center gap-0.5">
-        <button type="button" aria-label="Back" className={iconBtnCls}>
+        <span aria-hidden className={iconBtnCls}>
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
             chevron_left
           </span>
-        </button>
-        <button type="button" aria-label="Forward" className={iconBtnCls}>
+        </span>
+        <span aria-hidden className={iconBtnCls}>
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
             chevron_right
           </span>
-        </button>
+        </span>
       </div>
 
       {/* URL pill — shield + lock + domain + refresh. Centered via
@@ -342,26 +328,26 @@ function BrowserChromeBar({ path }: { path: string }) {
 
       {/* Right cluster — download, share, new tab, all tabs. */}
       <div className="flex shrink-0 items-center gap-0.5">
-        <button type="button" aria-label="Downloads" className={iconBtnCls}>
+        <span aria-hidden className={iconBtnCls}>
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
             download
           </span>
-        </button>
-        <button type="button" aria-label="Share" className={iconBtnCls}>
+        </span>
+        <span aria-hidden className={iconBtnCls}>
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
             ios_share
           </span>
-        </button>
-        <button type="button" aria-label="New tab" className={iconBtnCls}>
+        </span>
+        <span aria-hidden className={iconBtnCls}>
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
             add
           </span>
-        </button>
-        <button type="button" aria-label="All tabs" className={iconBtnCls}>
+        </span>
+        <span aria-hidden className={iconBtnCls}>
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
             grid_view
           </span>
-        </button>
+        </span>
       </div>
     </div>
   );

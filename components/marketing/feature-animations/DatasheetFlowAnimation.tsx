@@ -77,8 +77,20 @@ const DatasheetFlowAnimation = forwardRef<DatasheetFlowAnimationHandle>(
   function DatasheetFlowAnimation(_, ref) {
     const [scope, animate] = useAnimate();
     const runIdRef = useRef(0);
+    // Delayed table→chart crossfades + the scan sweep are scheduled
+    // with `delay` and not awaited; track their playback controls so
+    // reset() can stop them — otherwise a hover-out in a delay window
+    // lets them fire after reset() and morph the row anyway.
+    const pendingRef = useRef<Array<{ stop: () => void }>>([]);
+    const track = useCallback(<T extends { stop: () => void }>(c: T): T => {
+      pendingRef.current.push(c);
+      return c;
+    }, []);
 
     const reset = useCallback(() => {
+      // Cancel any queued/in-flight tweens before re-parking.
+      pendingRef.current.forEach((c) => c.stop());
+      pendingRef.current = [];
       SLIDES.forEach((_s, i) => {
         animate(`.table-${i}`, { opacity: 1 }, { duration: 0 });
         animate(`.chart-${i}`, { opacity: 0 }, { duration: 0 });
@@ -96,11 +108,13 @@ const DatasheetFlowAnimation = forwardRef<DatasheetFlowAnimationHandle>(
       reset();
 
       // ── PHASE 1: scan fades in + sweeps left→right ──────────
-      animate(".scan-line", { opacity: 1 }, { duration: 0.15 });
-      animate(
-        ".scan-line",
-        { x: SCAN_END_X },
-        { duration: SCAN_DURATION, ease: "linear" },
+      track(animate(".scan-line", { opacity: 1 }, { duration: 0.15 }));
+      track(
+        animate(
+          ".scan-line",
+          { x: SCAN_END_X },
+          { duration: SCAN_DURATION, ease: "linear" },
+        ),
       );
 
       // ── PHASE 2: each slide morphs table → chart as line passes ─
@@ -108,15 +122,19 @@ const DatasheetFlowAnimation = forwardRef<DatasheetFlowAnimationHandle>(
         const frac =
           (s.cx - SCAN_START_X) / (SCAN_END_X - SCAN_START_X);
         const delay = frac * SCAN_DURATION;
-        animate(
-          `.table-${i}`,
-          { opacity: 0 },
-          { duration: 0.45, delay, ease: "easeOut" },
+        track(
+          animate(
+            `.table-${i}`,
+            { opacity: 0 },
+            { duration: 0.45, delay, ease: "easeOut" },
+          ),
         );
-        animate(
-          `.chart-${i}`,
-          { opacity: 1 },
-          { duration: 0.45, delay, ease: "easeOut" },
+        track(
+          animate(
+            `.chart-${i}`,
+            { opacity: 1 },
+            { duration: 0.45, delay, ease: "easeOut" },
+          ),
         );
       });
 
@@ -126,8 +144,8 @@ const DatasheetFlowAnimation = forwardRef<DatasheetFlowAnimationHandle>(
       if (runIdRef.current !== myRun) return;
 
       // ── PHASE 3: scan fades out at the right edge ───────────
-      animate(".scan-line", { opacity: 0 }, { duration: 0.3 });
-    }, [animate, reset]);
+      track(animate(".scan-line", { opacity: 0 }, { duration: 0.3 }));
+    }, [animate, reset, track]);
 
     const stop = useCallback(() => {
       runIdRef.current += 1;

@@ -84,8 +84,20 @@ const EnhanceFlowAnimation = forwardRef<EnhanceFlowAnimationHandle>(
   function EnhanceFlowAnimation(_, ref) {
     const [scope, animate] = useAnimate();
     const runIdRef = useRef(0);
+    // Delayed re-skin crossfades + the scan sweep are scheduled with
+    // `delay` and not awaited, so their playback controls are tracked
+    // here and stopped in reset() — otherwise a hover-out landing in
+    // a delay window lets them fire after reset() and re-skin the row.
+    const pendingRef = useRef<Array<{ stop: () => void }>>([]);
+    const track = useCallback(<T extends { stop: () => void }>(c: T): T => {
+      pendingRef.current.push(c);
+      return c;
+    }, []);
 
     const reset = useCallback(() => {
+      // Cancel any queued/in-flight tweens before re-parking.
+      pendingRef.current.forEach((c) => c.stop());
+      pendingRef.current = [];
       // Rest state = the plain row, fully present. Branded layers
       // hidden, scan parked off the left edge + invisible.
       SLIDES.forEach((_s, i) => {
@@ -112,11 +124,13 @@ const EnhanceFlowAnimation = forwardRef<EnhanceFlowAnimationHandle>(
       // slide before its computed delay (the ease-out tail), so the
       // re-skin lagged behind the line. Linear keeps line + crossfade
       // locked together.
-      animate(".scan-line", { opacity: 1 }, { duration: 0.15 });
-      animate(
-        ".scan-line",
-        { x: SCAN_END_X },
-        { duration: SCAN_DURATION, ease: "linear" },
+      track(animate(".scan-line", { opacity: 1 }, { duration: 0.15 }));
+      track(
+        animate(
+          ".scan-line",
+          { x: SCAN_END_X },
+          { duration: SCAN_DURATION, ease: "linear" },
+        ),
       );
 
       // ── PHASE 2: each slide re-skins as the line crosses it ─
@@ -126,15 +140,19 @@ const EnhanceFlowAnimation = forwardRef<EnhanceFlowAnimationHandle>(
         const frac =
           (s.cx - SCAN_START_X) / (SCAN_END_X - SCAN_START_X);
         const delay = frac * SCAN_DURATION;
-        animate(
-          `.plain-${i}`,
-          { opacity: 0 },
-          { duration: 0.45, delay, ease: "easeOut" },
+        track(
+          animate(
+            `.plain-${i}`,
+            { opacity: 0 },
+            { duration: 0.45, delay, ease: "easeOut" },
+          ),
         );
-        animate(
-          `.branded-${i}`,
-          { opacity: 1 },
-          { duration: 0.45, delay, ease: "easeOut" },
+        track(
+          animate(
+            `.branded-${i}`,
+            { opacity: 1 },
+            { duration: 0.45, delay, ease: "easeOut" },
+          ),
         );
       });
 
@@ -144,8 +162,8 @@ const EnhanceFlowAnimation = forwardRef<EnhanceFlowAnimationHandle>(
       if (runIdRef.current !== myRun) return;
 
       // ── PHASE 3: scan fades out at the right edge ───────────
-      animate(".scan-line", { opacity: 0 }, { duration: 0.3 });
-    }, [animate, reset]);
+      track(animate(".scan-line", { opacity: 0 }, { duration: 0.3 }));
+    }, [animate, reset, track]);
 
     const stop = useCallback(() => {
       runIdRef.current += 1;
