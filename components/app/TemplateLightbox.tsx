@@ -42,14 +42,14 @@ type Props = {
   format: SlideFormat;
   title: string;
   onClose: () => void;
-  // Phase D: handler for "Use this template" footer CTA. When provided
-  // the button is enabled and clicking fires it (the caller seeds the
-  // create flow + navigates). When omitted (older callers) the button
-  // stays disabled as a visible placeholder.
+  // Handler for the "Use this template" footer CTA. When provided the
+  // button is enabled and clicking fires it (the caller navigates to
+  // the forked Mimic flow, /use-template/[id]). When omitted (older
+  // callers) the button stays disabled as a visible placeholder.
   onUseTemplate?: () => void;
-  // Soft-disable the CTA while the parent's seedFromTemplate request
-  // is in flight. The button stays visible (with reduced opacity) so
-  // the user gets feedback that their click registered.
+  // Soft-disable the CTA once the parent has begun navigating to the
+  // use-template flow. The button stays visible (with reduced opacity)
+  // so the user gets feedback that their click registered.
   useBusy?: boolean;
 };
 

@@ -25,7 +25,6 @@ import {
 } from "@/components/app/TemplateTile";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
-import { seedFromTemplate } from "@/lib/create/seed-from-template";
 import type { SlideFormat } from "@/lib/schema/slide";
 
 export type MyTemplatesTemplate = TemplateTileData & {
@@ -53,19 +52,13 @@ export function MyTemplates({
   // useBusy state — same UX contract, different surface.
   const [useBusy, setUseBusy] = useState(false);
 
-  const handleUseTemplate = async () => {
+  const handleUseTemplate = () => {
     if (!preview || useBusy) return;
     setUseBusy(true);
-    try {
-      await seedFromTemplate(preview.id);
-      // Full navigation (not router.push) so /create's mount effect
-      // sees the fresh sessionStorage on first render. Phase 17.D
-      // unified the template-seeded flow into the regular /create.
-      window.location.assign("/create");
-    } catch (err) {
-      console.warn("[MyTemplates] seedFromTemplate failed", err);
-      setUseBusy(false);
-    }
+    // Navigate to the forked Mimic flow ("استخدام كقالب") — it mints
+    // the Anthropic design reference + pre-fills branding, then renders
+    // MimicFlow in template mode.
+    window.location.assign(`/use-template/${preview.id}`);
   };
 
   // Auto-refresh on freshly-saved templates so the user's just-saved

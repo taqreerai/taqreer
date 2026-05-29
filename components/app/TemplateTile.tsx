@@ -20,7 +20,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
-import { seedFromTemplate } from "@/lib/create/seed-from-template";
 
 export type TemplateTileBrand = {
   background: string;
@@ -84,23 +83,13 @@ export function TemplateTile({
   // sessionStorage write against the next page's hydrate).
   const [useBusy, setUseBusy] = useState(false);
 
-  const handleUseAsTemplate = async () => {
+  const handleUseAsTemplate = () => {
     if (useBusy) return;
     setUseBusy(true);
-    try {
-      await seedFromTemplate(id);
-      // Hard navigation rather than router.push so /create's mount
-      // effect reads the fresh templateSeed sessionStorage on first
-      // render. Phase 17.D collapsed /create-from-template into the
-      // unified single-page /create — the seed marker is enough to
-      // pre-fill the branding card + surface the "من قالب" pill.
-      window.location.assign("/create");
-    } catch (err) {
-      // No toast infra yet — surface to console + release the gate so
-      // the user can retry. Matches the rest of TemplateTile's error UX.
-      console.warn("[TemplateTile] seedFromTemplate failed", err);
-      setUseBusy(false);
-    }
+    // Navigate to the forked Mimic flow ("استخدام كقالب") — it mints
+    // the Anthropic design reference + pre-fills branding, then renders
+    // MimicFlow in template mode.
+    window.location.assign(`/use-template/${id}`);
   };
 
   const { brand, title, isMine, id } = template;

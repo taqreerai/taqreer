@@ -28,7 +28,6 @@ import {
   bucketize,
 } from "@/lib/project/derive-color-tags";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
-import { seedFromTemplate } from "@/lib/create/seed-from-template";
 import type { SlideFormat } from "@/lib/schema/slide";
 import type { TemplateForBrowse } from "./types";
 
@@ -67,21 +66,14 @@ export function TemplatesPageClient({
   // failure (releases the gate so the user can retry).
   const [useBusy, setUseBusy] = useState(false);
 
-  const handleUseTemplate = async () => {
+  const handleUseTemplate = () => {
     if (!preview || useBusy) return;
     setUseBusy(true);
-    try {
-      await seedFromTemplate(preview.id);
-      // Hard navigation so /create's mount effect reads the fresh
-      // templateSeed marker on first render. Phase 17.D collapsed the
-      // separate /create-from-template tree into the unified single-
-      // page /create — the templateSeed marker is enough signal to
-      // pre-fill the branding card + render the "من قالب" pill.
-      window.location.assign("/create");
-    } catch (err) {
-      console.warn("[TemplatesPageClient] seedFromTemplate failed", err);
-      setUseBusy(false);
-    }
+    // Navigate to the forked Mimic flow ("استخدام كقالب"). That page
+    // mints the Anthropic design reference + pre-fills branding, then
+    // renders MimicFlow in template mode. Hard navigation so the page
+    // mounts cleanly (useBusy stays set — this view unmounts).
+    window.location.assign(`/use-template/${preview.id}`);
   };
 
   // Bucketed swatches across every visible template. Each palette

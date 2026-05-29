@@ -55,9 +55,9 @@ export type ProjectActionsMenuActions = {
   // conflicted with /enhance and /mimic flows where "use the
   // project's brand to seed a new deck" doesn't have a clear
   // shape. Templates from the /templates page still work via
-  // TemplateTile.handleUseAsTemplate → seedFromTemplate() →
-  // /create-from-template/content. Surface the working path
-  // through Save copy as template → /templates → Use this template.
+  // TemplateTile.handleUseAsTemplate → /use-template/[id] (the forked
+  // Mimic flow). Surface the working path through Save copy as template
+  // → /templates → Use this template.
   onSaveAsTemplate?: () => void;
   onSendToTrash?: () => void;
 };

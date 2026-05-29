@@ -30,10 +30,9 @@
 // pattern the legacy CardShell used) so the cards read as a
 // labelled cluster, not a wall of inputs.
 //
-// Template seeding: when the user arrives via "Use this template",
-// lib/create/seed-from-template.ts writes a `taqreer:create:template
-// Seed` blob to sessionStorage. We read it on mount and pre-fill
-// the branding card (palette + fonts).
+// Templates no longer seed /create — "Use this template" routes to the
+// forked Mimic flow (/use-template/[id]). /create only hydrates from a
+// brand kit (sessionStorage or the user's default).
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -70,7 +69,6 @@ import {
 } from "@/lib/brand/fonts";
 import { uploadAsset } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
-import { readTemplateSeed } from "@/lib/create/seed-from-template";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
@@ -220,57 +218,13 @@ export default function CreatePage() {
   const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
 
-  // ─── Template seed (when arriving from "Use this template") ────
-  const [templateSeedTitle, setTemplateSeedTitle] = useState<string | null>(
-    null,
-  );
-  const [templateSeedId, setTemplateSeedId] = useState<string | null>(null);
-  useEffect(() => {
-    const seed = readTemplateSeed();
-    if (!seed) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "hydrate component state from a one-shot session-storage marker on mount" shape; only fires once per page load
-    setTemplateSeedId(seed.id);
-     
-    setTemplateSeedTitle(seed.title);
-     
-    setColors(seed.brand.palette.length > 0 ? seed.brand.palette : DEFAULT_PALETTE);
-     
-    setSlideSize(seed.brand.format);
-     
-    setLanguage(seed.brand.language === "en" ? "en" : "ar");
-    if (seed.brand.fontHeading?.name) {
-       
-      setHeadingFontSlot({
-        mode: "google",
-        googleFamily: seed.brand.fontHeading.name,
-        uploadFile: null,
-        uploadName: null,
-        uploadStorageUrl: null,
-        uploadFamily: "",
-      });
-    }
-    if (seed.brand.fontBody?.name) {
-       
-      setBodyFontSlot({
-        mode: "google",
-        googleFamily: seed.brand.fontBody.name,
-        uploadFile: null,
-        uploadName: null,
-        uploadStorageUrl: null,
-        uploadFamily: "",
-      });
-    }
-  }, []);
-
-  // ─── Brand-kit hydration (on first mount, skip if template seed) ──
+  // ─── Brand-kit hydration (on first mount) ──────────────────────
   // Read sessionStorage first (the brand-kits "use" flow writes
   // here). If nothing's there, fall back to the user's default
-  // brand kit. Skip entirely when arriving from a template — the
-  // template's brand wins by user intent. Single-shot per mount;
-  // we clear the sessionStorage key after applying so refresh
-  // doesn't keep re-hydrating an old kit's logo.
+  // brand kit. Single-shot per mount; we clear the sessionStorage key
+  // after applying so refresh doesn't keep re-hydrating an old kit's
+  // logo.
   useEffect(() => {
-    if (readTemplateSeed()) return;
     let aborted = false;
     (async () => {
       let hydrated = readBrandFromSession();
@@ -610,7 +564,6 @@ export default function CreatePage() {
             slideCountMode === "custom" ? slideCountValue : null,
           quality,
           ...(source ? { source } : {}),
-          ...(templateSeedId ? { templateId: templateSeedId } : {}),
         }),
       });
 
@@ -622,11 +575,6 @@ export default function CreatePage() {
       }
 
       const data = (await response.json()) as { projectId: string };
-      try {
-        window.sessionStorage.removeItem("taqreer:create:templateSeed");
-      } catch {
-        /* best-effort */
-      }
       router.push(`/preview/${data.projectId}`);
     } catch (caughtError) {
       console.error("[create] generate failed:", caughtError);
@@ -653,17 +601,6 @@ export default function CreatePage() {
             اكتب محتواك أو ارفع ملفاً، اختر هويتك البصرية، وسنبني عرضاً يحاكي
             ذوقك.
           </p>
-          {templateSeedTitle ? (
-            <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-[var(--tq-bg-glass)] px-3 py-1 text-xs text-white/70">
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 14 }}
-              >
-                style
-              </span>
-              من قالب: {templateSeedTitle}
-            </p>
-          ) : null}
         </header>
 
         {/* Responsive grid — explicit breakpoints (instead of
