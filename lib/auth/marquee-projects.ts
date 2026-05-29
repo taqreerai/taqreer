@@ -130,6 +130,8 @@ export const MARQUEE_COLUMN_COUNT = COLUMN_COUNT;
 
 export type LandingTemplate = {
   id: string;
+  // Shown in the lightbox header when a tile is opened.
+  title: string;
   // "16:9" | "9:16" — drives the tile's object-fit crop.
   format: string;
   // Per-slide WebP URLs in deck order (cover first), showcase slides
@@ -149,9 +151,10 @@ export const getLandingTemplates = unstable_cache(
   async (): Promise<LandingTemplate[]> => {
     try {
       const rows = await prisma.$queryRaw<
-        { id: string; format: string | null; thumbnails: string[] }[]
+        { id: string; title: string; format: string | null; thumbnails: string[] }[]
       >`
         SELECT t.id,
+               t.title,
                (t.brand->>'format') AS format,
                t."thumbnailUrls" AS thumbnails
         FROM "Template" t
@@ -167,6 +170,7 @@ export const getLandingTemplates = unstable_cache(
       return rows
         .map((row) => ({
           id: row.id,
+          title: row.title,
           format: row.format ?? "16:9",
           // Drop the synthetic typography + palette showcase slides
           // (template-prefix showcase-*.webp); keep the real deck

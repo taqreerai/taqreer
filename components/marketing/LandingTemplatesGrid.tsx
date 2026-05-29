@@ -1,15 +1,20 @@
 "use client";
 
-// Landing-page templates grid — 2 rows × 4 columns of public template
-// covers. No titles, just the thumbnails. Each tile scrubs through its
-// template's slides on mouse-move, mirroring the dashboard's Recent
-// Projects tiles (components/app/ProjectThumbnail.tsx). Click routes a
-// logged-out visitor to /signup and a signed-in user straight into the
-// "use template" flow (/use-template/[id]).
+// Landing-page templates grid — full-wrapper-width 2 × 4 grid of public
+// template covers. No titles, just the thumbnails. Each tile scrubs
+// through its template's slides on mouse-move, mirroring the dashboard's
+// Recent Projects tiles (components/app/ProjectThumbnail.tsx).
+//
+// Clicking a tile opens the SAME TemplateLightbox modal as the dashboard
+// "قوالبي" widget. Its "use" CTA routes a logged-out visitor to /signup
+// and a signed-in user into the use-template flow (/use-template/[id]).
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { TemplateLightbox } from "@/components/app/TemplateLightbox";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 import type { LandingTemplate } from "@/lib/auth/marquee-projects";
+import type { SlideFormat } from "@/lib/schema/slide";
 
 // Mirror ProjectThumbnail's scrub-activation threshold so the landing
 // tiles feel identical to the dashboard ones: bare hover doesn't scrub
@@ -23,27 +28,71 @@ export function LandingTemplatesGrid({
   templates: LandingTemplate[];
   isAuthed: boolean;
 }) {
+  // Lightbox target. null = closed.
+  const [preview, setPreview] = useState<LandingTemplate | null>(null);
+  // "Use template" busy gate — blocks double-clicks while the seed
+  // request is in flight (logged-in path only). Mirrors MyTemplates.
+  const [useBusy, setUseBusy] = useState(false);
+  const router = useRouter();
+
+  const handleUseTemplate = async () => {
+    if (!preview || useBusy) return;
+    // Logged-out → straight to the signup funnel (no seed work).
+    if (!isAuthed) {
+      router.push("/signup");
+      return;
+    }
+    // Logged-in → mint the Mimic reference behind the CTA's busy
+    // spinner, then hard-navigate to the (now-cached) use flow.
+    setUseBusy(true);
+    try {
+      await prepareTemplateUse("template", preview.id);
+      window.location.assign(`/use-template/${preview.id}`);
+    } catch (err) {
+      console.warn("[LandingTemplatesGrid] use prep failed", err);
+      setUseBusy(false);
+    }
+  };
+
   // No public templates → render nothing (the section collapses rather
-  // than leaving an empty band).
+  // than leaving an empty band + a dead nav anchor target).
   if (templates.length === 0) return null;
 
+  const previewFormat: SlideFormat =
+    preview?.format === "9:16" ? "9:16" : "16:9";
+
   return (
-    <div className="mx-auto grid max-w-5xl grid-cols-2 gap-4 md:grid-cols-4">
-      {templates.map((tpl) => (
-        <LandingTemplateTile key={tpl.id} template={tpl} isAuthed={isAuthed} />
-      ))}
-    </div>
+    <>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {templates.map((tpl) => (
+          <LandingTemplateTile
+            key={tpl.id}
+            template={tpl}
+            onOpen={() => setPreview(tpl)}
+          />
+        ))}
+      </div>
+
+      <TemplateLightbox
+        open={!!preview}
+        slides={preview?.slides ?? []}
+        format={previewFormat}
+        title={preview?.title ?? ""}
+        onClose={() => setPreview(null)}
+        onUseTemplate={preview ? handleUseTemplate : undefined}
+        useBusy={useBusy}
+      />
+    </>
   );
 }
 
 function LandingTemplateTile({
   template,
-  isAuthed,
+  onOpen,
 }: {
   template: LandingTemplate;
-  isAuthed: boolean;
+  onOpen: () => void;
 }) {
-  const router = useRouter();
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const entryXRef = useRef<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -84,23 +133,16 @@ function LandingTemplateTile({
     entryXRef.current = null;
   };
 
-  const handleClick = () => {
-    // Logged-in → straight into the use-template flow; logged-out →
-    // the signup funnel (the page's CTA target). UseTemplateClient
-    // mints the Mimic reference on arrival, so no pre-priming here.
-    router.push(isAuthed ? `/use-template/${template.id}` : "/signup");
-  };
-
   return (
     <div className="tq-thumbnail relative aspect-video w-full overflow-hidden rounded-[14px]">
       <button
         ref={rootRef}
         type="button"
-        onClick={handleClick}
+        onClick={onOpen}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        aria-label="استخدم هذا القالب"
-        className="absolute inset-0 block cursor-pointer"
+        aria-label="معاينة القالب"
+        className="absolute inset-0 block cursor-zoom-in"
       >
         {src ? (
           <img

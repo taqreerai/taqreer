@@ -23,7 +23,10 @@ import { Hero } from "@/components/marketing/Hero";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
-import { getLandingTemplates } from "@/lib/auth/marquee-projects";
+import {
+  getMarqueeColumns,
+  getLandingTemplates,
+} from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 
 // Platform-wide "decks created" counter shown in the Hero status chip.
@@ -122,9 +125,15 @@ export default async function LandingPage() {
   const supabase = await createClient();
   // `getUser()` round-trips to Supabase for a verified check;
   // `getSession()` reads the cookie only and can be spoofed.
-  const [{ data: { user } }, projectCount, landingTemplates] = await Promise.all([
+  const [
+    { data: { user } },
+    projectCount,
+    marqueeColumns,
+    landingTemplates,
+  ] = await Promise.all([
     supabase.auth.getUser(),
     getProjectCount(),
+    getMarqueeColumns(),
     getLandingTemplates(),
   ]);
 
@@ -217,15 +226,18 @@ export default async function LandingPage() {
             </div>
           </ScrollReveal>
 
-          {/* Four animated flow cards (2 × 2), sharing the same glass
-              chrome (content LEFT, visual RIGHT). */}
+          {/* Four animated flow cards (2 × 2) + the wide templates
+              card, all sharing the same glass chrome (content LEFT,
+              visual RIGHT). The templates card's marquee is fed the
+              real curator-gated recent-template thumbnails. */}
           <ScrollReveal direction="up" delay={0.1}>
-            <FeatureFlowCards />
+            <FeatureFlowCards thumbnails={marqueeColumns.flat()} />
           </ScrollReveal>
 
-          {/* Templates — title-less 2 × 4 grid of public template
-              covers, each scrubbing its slides on hover like the
-              dashboard's Recent Projects (user direction 2026-05-29).
+          {/* Templates grid — full-wrapper-width 2 × 4 of public
+              template covers, no heading, each scrubbing its slides on
+              hover like the dashboard's Recent Projects; a click opens
+              the shared TemplateLightbox (user direction 2026-05-29).
               `id="templates"` is the nav "القوالب" anchor; scroll-mt
               clears the fixed h-20 nav bar. */}
           <ScrollReveal direction="up" delay={0.15} className="mt-6">
