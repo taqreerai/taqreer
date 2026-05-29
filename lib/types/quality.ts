@@ -36,10 +36,11 @@
 //   broken-slow on multi-slide JSON (sonnet-low test sat in thinking
 //   10+ min on a 9-slide enhance with no text emitted).
 // • Opus effort tiers low / high / xhigh — collapsed into `balanced`
-//   (effort:medium). Cost data showed no meaningful differentiation
-//   between low/medium/high on our task. xhigh and max were
-//   indistinguishable in early tests; kept `max` as the headline
-//   "go deep" option.
+//   (effort:low as of 2026-05-29). Cost data showed no meaningful
+//   differentiation between low/medium/high on our task; the deep
+//   `opus-max` (effort:high) option was removed entirely 2026-05-29
+//   (over-thinks on Opus 4.8 — 16 min/$1.69 for 5 slides — no quality
+//   gain over `low`).
 //
 // ─── Legacy compatibility ─────────────────────────────────────────
 // All previous Quality keys are accepted at the runtime layer and

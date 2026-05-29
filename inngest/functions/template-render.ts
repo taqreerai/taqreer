@@ -214,6 +214,12 @@ export const templateRender = inngest.createFunction(
         throw new Error(`Upload failed for ${pdfPath}: ${pdfUpErr.message}`);
       }
       uploadedPaths.push(pdfPath);
+      // NOTE (access-control follow-up): this is a public-bucket URL, so a
+      // premium/private template's full deck PDF is fetchable by anyone who
+      // knows the path. Mitigated today by the path's non-public owner-UUID
+      // segment + the URL never being returned to clients (the use route
+      // downloads it server-side). Proper fix = a private bucket + signed
+      // URLs / server-proxied download, paired with the premium-launch work.
       const pdfUrl = admin.storage.from(BUCKET).getPublicUrl(pdfPath).data
         .publicUrl;
 

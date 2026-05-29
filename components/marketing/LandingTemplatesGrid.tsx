@@ -65,7 +65,13 @@ export function LandingTemplatesGrid({
       window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
       // 402 = premium template, user isn't on Pro → route to pricing.
-      if (redirectToPricingIfGated(err)) return;
+      // On the landing, /#pricing is a same-document hash nav (no
+      // unmount), so release the busy gate + close the lightbox.
+      if (redirectToPricingIfGated(err)) {
+        setUseBusy(false);
+        setPreview(null);
+        return;
+      }
       console.warn("[LandingTemplatesGrid] use prep failed", err);
       setUseBusy(false);
     }

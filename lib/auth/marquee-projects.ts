@@ -76,7 +76,7 @@ export const getMarqueeColumns = unstable_cache(
           thumbnail,
           format
         FROM (
-          SELECT t.id, (t.brand->>'format') AS format,
+          SELECT t.id, CASE WHEN (t.brand->>'format') = '9:16' THEN '9:16' ELSE '16:9' END AS format,
                  unnest(t."thumbnailUrls") AS thumbnail,
                  generate_subscripts(t."thumbnailUrls", 1) AS slide_index
           FROM "Template" t
@@ -156,15 +156,16 @@ export const getLandingTemplates = unstable_cache(
       const rows = await prisma.$queryRaw<
         {
           id: string;
+          // Already normalized to "16:9" | "9:16" by the SQL CASE.
           title: string;
-          format: string | null;
+          format: string;
           isPremium: boolean;
           thumbnails: string[];
         }[]
       >`
         SELECT t.id,
                t.title,
-               (t.brand->>'format') AS format,
+               CASE WHEN (t.brand->>'format') = '9:16' THEN '9:16' ELSE '16:9' END AS format,
                t."isPremium" AS "isPremium",
                t."thumbnailUrls" AS thumbnails
         FROM "Template" t
@@ -181,7 +182,7 @@ export const getLandingTemplates = unstable_cache(
         .map((row) => ({
           id: row.id,
           title: row.title,
-          format: row.format ?? "16:9",
+          format: row.format,
           isPremium: row.isPremium,
           // Drop the synthetic typography + palette showcase slides
           // (template-prefix showcase-*.webp); keep the real deck

@@ -51,9 +51,10 @@ const CACHE_PREFIX = "taqreer:mimic:templateUse:";
 export type TemplateSource = "template" | "project";
 
 function buildUseRoute(source: TemplateSource, id: string): string {
+  const encoded = encodeURIComponent(id);
   return source === "template"
-    ? `/api/templates/${id}/use`
-    : `/api/projects/${id}/use-as-template`;
+    ? `/api/templates/${encoded}/use`
+    : `/api/projects/${encoded}/use-as-template`;
 }
 
 // HTTP error carrying the status so callers can branch (401 → sign in,

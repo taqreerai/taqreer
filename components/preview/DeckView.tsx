@@ -640,6 +640,11 @@ export function DeckView({
     }
     versionNumbersRef.current = nextVersions;
     if (newlyBumped.length === 0) return;
+    // Clear peer-regen overlays for slides whose version just bumped
+    // (their regen finished) — a guarded resync of external state that
+    // only fires when something actually bumped, so the cascading-render
+    // concern is moot here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPeerRegenInProgress((prev) => {
       if (prev.size === 0) return prev;
       let dirty = false;
@@ -1565,15 +1570,34 @@ export function DeckView({
             return prev;
           });
         }
-        if (data.streamingTheme) {
-          const parsed = ThemeSchema.safeParse(data.streamingTheme);
-          if (parsed.success) setStreamingTheme(parsed.data);
-        }
-        if (data.streamingDirection === "rtl" || data.streamingDirection === "ltr") {
-          setStreamingDirection(data.streamingDirection);
-        }
-        if (data.streamingLanguage === "ar" || data.streamingLanguage === "en") {
-          setStreamingLanguage(data.streamingLanguage);
+        // Theme / direction / language ride the same manifest version as
+        // the preview slides, so gate them behind the same staleness check
+        // — otherwise a slower OLDER-version poll could repaint the freshly
+        // accepted slides with a stale theme/direction until the next poll.
+        // (The setStreamingPreview updater above runs async, so this ref
+        // still holds the pre-poll accepted version when we read it here.)
+        const metaVersion =
+          typeof data.streamingManifestVersion === "number" &&
+          Number.isFinite(data.streamingManifestVersion)
+            ? data.streamingManifestVersion
+            : 0;
+        if (metaVersion >= lastManifestVersionRef.current) {
+          if (data.streamingTheme) {
+            const parsed = ThemeSchema.safeParse(data.streamingTheme);
+            if (parsed.success) setStreamingTheme(parsed.data);
+          }
+          if (
+            data.streamingDirection === "rtl" ||
+            data.streamingDirection === "ltr"
+          ) {
+            setStreamingDirection(data.streamingDirection);
+          }
+          if (
+            data.streamingLanguage === "ar" ||
+            data.streamingLanguage === "en"
+          ) {
+            setStreamingLanguage(data.streamingLanguage);
+          }
         }
         if (data.status === "failed") {
           setPolledFailure(true);

@@ -33,14 +33,21 @@ export default function UseTemplateClient({
   const router = useRouter();
   const [seed, setSeed] = useState<MimicTemplateSeed | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Guard the one-shot resolve against React StrictMode double-mount
-  // (which would otherwise mint the Anthropic file_id twice).
-  const startedRef = useRef(false);
+  // Guard the resolve against React StrictMode double-mount (which would
+  // otherwise mint the Anthropic file_id twice), keyed by source+id so an
+  // in-place change of either — navigating between two template pages
+  // without a full remount — re-resolves instead of holding stale data.
+  const startedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+    const key = `${source}:${id}`;
+    if (startedKeyRef.current === key) return;
+    startedKeyRef.current = key;
     (async () => {
+      // Reset for the new target (inside the async so it isn't a
+      // synchronous setState in the effect body).
+      setSeed(null);
+      setError(null);
       try {
         let use = readCachedUse(source, id);
         if (!use) {
