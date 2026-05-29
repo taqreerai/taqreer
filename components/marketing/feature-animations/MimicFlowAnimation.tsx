@@ -49,6 +49,7 @@ import {
   useAnimate,
   useMotionValue,
 } from "framer-motion";
+import { useTrackedTweens } from "@/hooks/useTrackedTweens";
 
 // Shared with CreateFlowAnimation — slow→fast→slow ease-in-out.
 const HUMAN_EASE = [0.65, 0, 0.35, 1] as const;
@@ -117,6 +118,11 @@ const MimicFlowAnimation = forwardRef<MimicFlowAnimationHandle>(
   function MimicFlowAnimation(_, ref) {
     const [scope, animate] = useAnimate();
     const runIdRef = useRef(0);
+    // In-flight tween controls (motion-value drag tweens + un-awaited
+    // delayed crossfades) are tracked so reset() can cancel them
+    // before re-parking — otherwise a hover-out mid-delay lets a tween
+    // fire after reset() and jump the scene forward.
+    const { track, cancelAll } = useTrackedTweens();
 
     // File translate motion values — single source of truth for the
     // drag. Cursor is nested inside the file's motion group so it's
@@ -125,6 +131,8 @@ const MimicFlowAnimation = forwardRef<MimicFlowAnimationHandle>(
     const fileY = useMotionValue(FILE_START_Y);
 
     const reset = useCallback(() => {
+      // Cancel any queued/in-flight tweens before re-parking.
+      cancelAll();
       fileX.set(FILE_START_X);
       fileY.set(FILE_START_Y);
       // Left reference file stays at full opacity throughout — user
@@ -149,7 +157,7 @@ const MimicFlowAnimation = forwardRef<MimicFlowAnimationHandle>(
       );
       animate(".mimic-button", { y: 70, opacity: 0 }, { duration: 0 });
       animate(".btn-ripple", { scale: 0.4, opacity: 0 }, { duration: 0 });
-    }, [animate, fileX, fileY]);
+    }, [animate, fileX, fileY, cancelAll]);
 
     const start = useCallback(async () => {
       runIdRef.current += 1;
@@ -157,38 +165,46 @@ const MimicFlowAnimation = forwardRef<MimicFlowAnimationHandle>(
       reset();
 
       // ── PHASE 1: file fades in at its start position ────────
-      animate(".drag-file", { opacity: 1 }, { duration: 0.2 });
+      track(animate(".drag-file", { opacity: 1 }, { duration: 0.2 }));
       await new Promise((r) => setTimeout(r, 200));
       if (runIdRef.current !== myRun) return;
 
       // ── PHASE 2: drag file → drop zone (cursor locked inside) ─
       const DRAG_DURATION = 1.2;
-      const dragXAnim = animateValue(fileX, FILE_END_X, {
-        duration: DRAG_DURATION,
-        ease: HUMAN_EASE,
-      });
-      animateValue(fileY, FILE_END_Y, {
-        duration: DRAG_DURATION,
-        ease: HUMAN_EASE,
-      });
+      const dragXAnim = track(
+        animateValue(fileX, FILE_END_X, {
+          duration: DRAG_DURATION,
+          ease: HUMAN_EASE,
+        }),
+      );
+      track(
+        animateValue(fileY, FILE_END_Y, {
+          duration: DRAG_DURATION,
+          ease: HUMAN_EASE,
+        }),
+      );
       await dragXAnim.finished;
       if (runIdRef.current !== myRun) return;
 
       // ── PHASE 3: drop — nested cursor fades, violet outline ──
-      animate(".drag-cursor", { opacity: 0 }, { duration: 0.2 });
-      animate(
-        ".drop-zone-active",
-        { opacity: 1 },
-        { duration: 0.25, ease: "easeOut" },
+      track(animate(".drag-cursor", { opacity: 0 }, { duration: 0.2 }));
+      track(
+        animate(
+          ".drop-zone-active",
+          { opacity: 1 },
+          { duration: 0.25, ease: "easeOut" },
+        ),
       );
       await new Promise((r) => setTimeout(r, 320));
       if (runIdRef.current !== myRun) return;
 
       // ── PHASE 4: Mimic button slides up ─────────────────────
-      await animate(
-        ".mimic-button",
-        { y: 0, opacity: 1 },
-        { duration: 0.55, ease: HUMAN_EASE },
+      await track(
+        animate(
+          ".mimic-button",
+          { y: 0, opacity: 1 },
+          { duration: 0.55, ease: HUMAN_EASE },
+        ),
       );
       if (runIdRef.current !== myRun) return;
       await new Promise((r) => setTimeout(r, 180));
@@ -200,21 +216,27 @@ const MimicFlowAnimation = forwardRef<MimicFlowAnimationHandle>(
         { x: CURSOR_REENTER_X, y: CURSOR_REENTER_Y, opacity: 0 },
         { duration: 0 },
       );
-      await animate(
-        ".click-cursor",
-        { y: CURSOR_CLICK_Y, opacity: 1 },
-        { duration: 0.6, ease: HUMAN_EASE },
+      await track(
+        animate(
+          ".click-cursor",
+          { y: CURSOR_CLICK_Y, opacity: 1 },
+          { duration: 0.6, ease: HUMAN_EASE },
+        ),
       );
       if (runIdRef.current !== myRun) return;
-      animate(
-        ".btn-pill",
-        { scale: [1, 0.94, 1] },
-        { duration: 0.35, ease: HUMAN_EASE },
+      track(
+        animate(
+          ".btn-pill",
+          { scale: [1, 0.94, 1] },
+          { duration: 0.35, ease: HUMAN_EASE },
+        ),
       );
-      animate(
-        ".btn-ripple",
-        { scale: [0.4, 1.5], opacity: [0.7, 0] },
-        { duration: 0.55, ease: HUMAN_EASE },
+      track(
+        animate(
+          ".btn-ripple",
+          { scale: [0.4, 1.5], opacity: [0.7, 0] },
+          { duration: 0.55, ease: HUMAN_EASE },
+        ),
       );
       await new Promise((r) => setTimeout(r, 280));
       if (runIdRef.current !== myRun) return;
@@ -223,10 +245,12 @@ const MimicFlowAnimation = forwardRef<MimicFlowAnimationHandle>(
       // Cursor + button fade in place (no upward translation) per
       // user direction 2026-05-28: "when the mouse clicks the
       // button, fade it aways instead of moving it up".
-      animate(
-        ".click-cursor, .mimic-button",
-        { opacity: 0 },
-        { duration: 0.4, ease: "easeIn" },
+      track(
+        animate(
+          ".click-cursor, .mimic-button",
+          { opacity: 0 },
+          { duration: 0.4, ease: "easeIn" },
+        ),
       );
 
       // Mimicking process slowed 50% per user direction 2026-05-28
@@ -235,34 +259,44 @@ const MimicFlowAnimation = forwardRef<MimicFlowAnimationHandle>(
       // all stretched 1.5× so the transform reads slower as one
       // coherent beat.
       const SCAN_DURATION = 1.2; // was 0.8
-      animate(
-        ".scan-line",
-        { opacity: [0, 1, 1, 0] },
-        { duration: SCAN_DURATION, times: [0, 0.1, 0.85, 1] },
+      track(
+        animate(
+          ".scan-line",
+          { opacity: [0, 1, 1, 0] },
+          { duration: SCAN_DURATION, times: [0, 0.1, 0.85, 1] },
+        ),
       );
-      animate(
-        ".scan-line",
-        { x: SCAN_END_X },
-        { duration: SCAN_DURATION, ease: "easeInOut" },
-      );
-
-      animate(
-        ".file-content-plain",
-        { opacity: 0 },
-        { duration: 0.825, ease: "easeOut", delay: 0.27 },
-      );
-      animate(
-        ".file-content-enhanced",
-        { opacity: 1 },
-        { duration: 0.825, ease: "easeOut", delay: 0.27 },
+      track(
+        animate(
+          ".scan-line",
+          { x: SCAN_END_X },
+          { duration: SCAN_DURATION, ease: "easeInOut" },
+        ),
       );
 
-      animate(
-        ".mimic-arrow",
-        { opacity: 0.9 },
-        { duration: 0.75, delay: 0.45 },
+      track(
+        animate(
+          ".file-content-plain",
+          { opacity: 0 },
+          { duration: 0.825, ease: "easeOut", delay: 0.27 },
+        ),
       );
-    }, [animate, reset, fileX, fileY]);
+      track(
+        animate(
+          ".file-content-enhanced",
+          { opacity: 1 },
+          { duration: 0.825, ease: "easeOut", delay: 0.27 },
+        ),
+      );
+
+      track(
+        animate(
+          ".mimic-arrow",
+          { opacity: 0.9 },
+          { duration: 0.75, delay: 0.45 },
+        ),
+      );
+    }, [animate, reset, fileX, fileY, track]);
 
     const stop = useCallback(() => {
       runIdRef.current += 1;
