@@ -794,11 +794,28 @@ Will render as a `.glass-popover` anchored under the 3-dots button:
 
 ## 13. Templates
 
-> **Status: spec, partially wired.** Templates page is a shell at `/templates`. Save-as-template wires the Inngest event but no UI flow yet. Apply-template flow at `/templates/[id]/content` not built.
+> **Status: shipped.** Templates carry a real deck PDF + real-slide thumbnails. Created from a project (save-as-template), browsed on `/templates` (own + community) and the public landing `#templates` section, and used via a forked Mimic flow at `/use-template/[id]`.
 
-Templates store a v2 SlideManifest as `jsonData` + thumbnail URLs. Browse with category/industry/language/direction/plan filters. Pick a template → upload content → Claude maps content into the template's design system. Save current project as a template fires `template.save.requested` via `POST /api/projects/[id]/save-as-template`.
+A `Template` stores a `BrandSnapshot` (`brand` JSON), the source deck's `thumbnailUrls` (cover + 2 showcase slides [typography, palette] + rest, capped at `MAX_TEMPLATE_SLIDES` = 10), a rendered deck `pdfUrl`, plus `isPublic` and `isPremium`.
+
+- **Save as template** — `POST /api/projects/[id]/save-as-template` copies the project's thumbnails + fires `template.render` (Inngest), which renders the typography/palette showcase slides and the deck PDF.
+- **Use a template** — `POST /api/templates/[id]/use` re-mints a fresh Anthropic Files `file_id` from the stored PDF (ids expire), returns the brand + design reference, and the forked Mimic flow (`components/mimic/MimicFlow.tsx` template mode) generates with the **same `source.kind: "mimic"` prompt** as `/mimic`.
+- **Use a project directly** — `POST /api/projects/[id]/use-as-template` renders the project deck on the fly + mints a reference without persisting a Template.
+
+**Surfaces** (all sourced from the curator account's public templates — `MARQUEE_OWNER_EMAIL` — with the synthetic showcase slides excluded): dashboard "قوالبي" widget + `/templates` page (`TemplateTile` → `TemplateLightbox`), the public landing `#templates` section (`LandingTemplatesGrid` hover-scrub grid + `TemplatesCard` marquee), and the auth-page marquee.
+
+**Premium (T4):** `isPremium` templates require the `pro` plan — enforced server-side in the use route (402; owner exempt; fails closed via `lib/plan.ts` `isProPlan`). The UI shows a "مميز" badge and routes blocked users to pricing. See §15.
 
 **Recommended categories:** Business Proposal · Investor Report · Pitch Deck · Company Profile · Training Deck · Financial Report · Strategy Deck · Marketing Plan · Event Proposal · Arabic RTL · Government Style · Minimal Corporate.
+
+### Pending / later
+- **Premium marking UI** — `isPremium` is **DB-only** today; the free/premium toggle lands on the **admin console** when that's built.
+- **Premium eligibility** — currently `pro`-only (`isProPlan`); widen to include `plus` if desired (single helper in `lib/plan.ts`).
+- **Checkout / subscription wiring** — `User.plan` is set in the DB only; no Stripe/upgrade flow yet, so nobody is `pro` in practice until that's wired (premium templates are then un-usable except by owners — expected).
+- **Standalone public templates gallery** — the landing `#templates` section covers discovery for now; graduate to a dedicated indexable gallery page (SEO: "قوالب عروض عربية") once the public library grows. `TemplateTile`/`TemplateLightbox` port directly. (`/templates` is taken by the in-app library, so a public gallery needs a new URL.)
+- **Orphaned template storage sweep** — clearing templates left showcase/PDF files in Supabase storage; a cleanup pass (or storage cleanup in the delete route) is pending.
+- **Mimic branding default** — standalone `/mimic` no longer auto-lifts the reference deck's palette/fonts (branding card is always-on now). Revisit if "auto-lift when the card is untouched" is wanted back.
+- **`planLimits` constant** — still duplicated in `dashboard/page.tsx` + `/api/usage/plan`; fold into `lib/plan.ts` if either is touched again.
 
 ---
 
