@@ -393,9 +393,21 @@ model Template {
   slideCount      Int       @default(3)
   brand           Json      @default("{}")
   sourceProjectId String?
+  // Real-deck artifacts (v2 rework): the source project's deck rendered
+  // to a multi-page PDF (the "layout") plus its real per-slide
+  // thumbnails. `pdfUrl` is the public Supabase URL of the stored deck
+  // PDF; it is re-uploaded to the Anthropic Files API at use-time
+  // (file_ids expire) to become the Mimic flow's design reference. Null
+  // until the render job completes.
+  pdfUrl          String?
   thumbnailUrls   String[]
   useCount        Int       @default(0)
   isPublic        Boolean   @default(false)
+  // Premium templates are gated to a paid plan (e.g. "pro"). Set only by
+  // the platform/curator account; regular users' templates stay free.
+  // Enforcement is wired with the subscription model — until then the
+  // flag is display-only.
+  isPremium       Boolean   @default(false)
   publishedAt     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
