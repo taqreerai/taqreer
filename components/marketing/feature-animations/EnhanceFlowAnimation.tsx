@@ -30,6 +30,7 @@ import {
   useRef,
 } from "react";
 import { motion, useAnimate } from "framer-motion";
+import { useTrackedTweens } from "@/hooks/useTrackedTweens";
 
 // Slide geometry — bigger now that there are only two. Local centre
 // (29, 36).
@@ -86,18 +87,13 @@ const EnhanceFlowAnimation = forwardRef<EnhanceFlowAnimationHandle>(
     const runIdRef = useRef(0);
     // Delayed re-skin crossfades + the scan sweep are scheduled with
     // `delay` and not awaited, so their playback controls are tracked
-    // here and stopped in reset() — otherwise a hover-out landing in
-    // a delay window lets them fire after reset() and re-skin the row.
-    const pendingRef = useRef<Array<{ stop: () => void }>>([]);
-    const track = useCallback(<T extends { stop: () => void }>(c: T): T => {
-      pendingRef.current.push(c);
-      return c;
-    }, []);
+    // and cancelled in reset() — otherwise a hover-out landing in a
+    // delay window lets them fire after reset() and re-skin the row.
+    const { track, cancelAll } = useTrackedTweens();
 
     const reset = useCallback(() => {
       // Cancel any queued/in-flight tweens before re-parking.
-      pendingRef.current.forEach((c) => c.stop());
-      pendingRef.current = [];
+      cancelAll();
       // Rest state = the plain row, fully present. Branded layers
       // hidden, scan parked off the left edge + invisible.
       SLIDES.forEach((_s, i) => {
@@ -109,7 +105,7 @@ const EnhanceFlowAnimation = forwardRef<EnhanceFlowAnimationHandle>(
         { x: SCAN_START_X, opacity: 0 },
         { duration: 0 },
       );
-    }, [animate]);
+    }, [animate, cancelAll]);
 
     const start = useCallback(async () => {
       runIdRef.current += 1;

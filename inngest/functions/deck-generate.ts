@@ -1745,11 +1745,10 @@ export const deckGenerate = inngest.createFunction(
           // end of stream uses lastIndexOf("}") so the saved canonical
           // manifest is the polished one regardless.
           //
-          // We also bump `manifestVersion` so the NEXT batch of pushes lands
-          // with `draft=false` — when DeckView's monotonic guard finally
-          // swaps the old drafts out for the new full-length polished list,
-          // every chip clears in one frame (the user reads it as "ah, those
-          // are the final versions now").
+          // We also bump `manifestVersion` so the post-reset snapshot carries
+          // a higher version than the dropped draft — DeckView's monotonic
+          // guard then accepts the polished list and rejects any late,
+          // out-of-order poll that still carries the stale draft.
           if (sliceParser.didReset()) {
             streamingPreview.length = 0;
             streamingTheme = null;

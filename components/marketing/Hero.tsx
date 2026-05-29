@@ -254,7 +254,7 @@ function BrowserChromeBar({ path }: { path: string }) {
   // not focusable buttons — they're a browser mockup, not real
   // affordances. Pure tokens, no hardcoded color.
   const iconBtnCls =
-    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--tq-text-muted)] transition-colors hover:bg-white/5 hover:text-white";
+    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--tq-text-muted)]";
 
   return (
     <div

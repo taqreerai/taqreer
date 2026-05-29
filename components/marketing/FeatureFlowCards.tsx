@@ -12,8 +12,8 @@
 //     project thumbnails (same curator-gated source as the auth
 //     pages), content on the left.
 //
-// Lifted from the /labs/feature-cards sandbox; the animation
-// components are shared verbatim.
+// The flow animations live in components/marketing/feature-animations/
+// and are shared verbatim across these cards.
 
 import { useRef } from "react";
 import CreateFlowAnimation, {

@@ -436,10 +436,10 @@ export function DeckView({
   // `streamingManifestVersion` we've accepted; incoming snapshots with
   // a lower version are rejected outright. `highWatermarkRef` retains
   // the length of the highest version accepted so far, so when a NEW
-  // version arrives (parser reset → second manifest pass) we keep
-  // showing the previous full-length list until the new version
-  // catches up to that watermark — preserves the deliberate UX where
-  // draft slides stay visible until the polished pass replaces them.
+  // version arrives (parser reset → second manifest pass, or a retry
+  // restart) we keep showing the previous full-length list until the
+  // new version catches up to that watermark — so the live preview
+  // never visibly shrinks mid-stream.
   const lastManifestVersionRef = useRef(0);
   const highWatermarkRef = useRef(0);
   // Theme captured from the same stream once Claude closes the
@@ -1518,11 +1518,12 @@ export function DeckView({
           //       `streamingPreview.length`.
           //   (b) `incomingVersion > lastAccepted` → only accept once
           //       the new version's length catches up to the
-          //       high-watermark of the previous version. Preserves
-          //       the deliberate UX where draft slides stay visible
-          //       until the polished pass replaces them (server
-          //       clears its array on `didReset` + bumps version;
-          //       the brief empty window shouldn't blank the screen).
+          //       high-watermark of the previous version. Keeps the
+          //       previous full-length list on screen while a fresh
+          //       manifest (server clears its array on `didReset` +
+          //       bumps version, or a retry restart) is still
+          //       streaming — the brief empty window shouldn't blank
+          //       the screen.
           //   (c) Same version → fall back to length-only monotonic
           //       (catches retry-induced shrinkage within a manifest
           //       attempt). Always update the high-watermark when
@@ -1544,7 +1545,7 @@ export function DeckView({
             }
             // (b) Newer version — gate on catching up to the prior
             // version's high-watermark to avoid blanking the preview
-            // during the draft→polished transition.
+            // while the fresh manifest is still streaming.
             if (incomingVersion > lastVersion) {
               if (validated.length >= highWatermarkRef.current) {
                 lastManifestVersionRef.current = incomingVersion;

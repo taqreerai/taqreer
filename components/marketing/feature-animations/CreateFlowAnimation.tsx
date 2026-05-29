@@ -42,6 +42,7 @@ import {
   useMotionValue,
   useTransform,
 } from "framer-motion";
+import { useTrackedTweens } from "@/hooks/useTrackedTweens";
 
 const TYPED_TEXT = "اكتب فكرتك";
 
@@ -111,18 +112,11 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
       finished: Promise<void>;
     } | null>(null);
     const runIdRef = useRef(0);
-    // In-flight tween controls (motion-value drag tweens + any
-    // un-awaited delayed selector reveals). `reset()` stops these
-    // before re-parking elements — otherwise a tween started in
-    // `start()` keeps running after hover-out and overwrites the
-    // reset, jumping the scene forward. Both `animate()` (selectors)
-    // and `animateValue()` (motion values) return a `.stop()`-able
-    // control, so a structural `{ stop }` type covers both.
-    const pendingRef = useRef<Array<{ stop: () => void }>>([]);
-    const track = useCallback(<T extends { stop: () => void }>(c: T): T => {
-      pendingRef.current.push(c);
-      return c;
-    }, []);
+    // In-flight tween controls (motion-value drag tweens + un-awaited
+    // delayed selector reveals) are tracked so reset() can cancel them
+    // before re-parking — otherwise a still-running tween overwrites
+    // the reset and jumps the scene forward.
+    const { track, cancelAll } = useTrackedTweens();
 
     // File's translate + scale are SINGLE SOURCE OF TRUTH motion
     // values. The drag-cursor lives INSIDE the file's motion.g at
@@ -141,8 +135,7 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
       // Stop any in-flight tweens before re-parking — otherwise a
       // still-running drag/reveal tween overwrites the `.set()` calls
       // and selector resets below.
-      pendingRef.current.forEach((c) => c.stop());
-      pendingRef.current = [];
+      cancelAll();
       setTypedCount(0);
       // File transform — set motion values directly (no selector
       // animate, since the file element binds these via style).
@@ -173,7 +166,7 @@ const CreateFlowAnimation = forwardRef<CreateFlowAnimationHandle>(
         { opacity: 0, y: 18, scale: 0.9 },
         { duration: 0 },
       );
-    }, [animate, fileX, fileY, fileScale]);
+    }, [animate, fileX, fileY, fileScale, cancelAll]);
 
     const start = useCallback(async () => {
       runIdRef.current += 1;

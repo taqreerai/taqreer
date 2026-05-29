@@ -27,6 +27,7 @@ import {
   useRef,
 } from "react";
 import { motion, useAnimate } from "framer-motion";
+import { useTrackedTweens } from "@/hooks/useTrackedTweens";
 
 // Slide geometry — identical to the Enhance flow. Local centre
 // (29, 36).
@@ -78,19 +79,14 @@ const DatasheetFlowAnimation = forwardRef<DatasheetFlowAnimationHandle>(
     const [scope, animate] = useAnimate();
     const runIdRef = useRef(0);
     // Delayed table→chart crossfades + the scan sweep are scheduled
-    // with `delay` and not awaited; track their playback controls so
-    // reset() can stop them — otherwise a hover-out in a delay window
-    // lets them fire after reset() and morph the row anyway.
-    const pendingRef = useRef<Array<{ stop: () => void }>>([]);
-    const track = useCallback(<T extends { stop: () => void }>(c: T): T => {
-      pendingRef.current.push(c);
-      return c;
-    }, []);
+    // with `delay` and not awaited; their playback controls are tracked
+    // and cancelled in reset() — otherwise a hover-out in a delay
+    // window lets them fire after reset() and morph the row anyway.
+    const { track, cancelAll } = useTrackedTweens();
 
     const reset = useCallback(() => {
       // Cancel any queued/in-flight tweens before re-parking.
-      pendingRef.current.forEach((c) => c.stop());
-      pendingRef.current = [];
+      cancelAll();
       SLIDES.forEach((_s, i) => {
         animate(`.table-${i}`, { opacity: 1 }, { duration: 0 });
         animate(`.chart-${i}`, { opacity: 0 }, { duration: 0 });
@@ -100,7 +96,7 @@ const DatasheetFlowAnimation = forwardRef<DatasheetFlowAnimationHandle>(
         { x: SCAN_START_X, opacity: 0 },
         { duration: 0 },
       );
-    }, [animate]);
+    }, [animate, cancelAll]);
 
     const start = useCallback(async () => {
       runIdRef.current += 1;
