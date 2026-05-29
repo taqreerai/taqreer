@@ -22,6 +22,7 @@ import { prisma } from "@/lib/prisma";
 import { Hero } from "@/components/marketing/Hero";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
+import { TemplatesCard } from "@/components/marketing/TemplatesCard";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import {
   getMarqueeColumns,
@@ -226,12 +227,11 @@ export default async function LandingPage() {
             </div>
           </ScrollReveal>
 
-          {/* Four animated flow cards (2 × 2) + the wide templates
-              card, all sharing the same glass chrome (content LEFT,
-              visual RIGHT). The templates card's marquee is fed the
-              real curator-gated recent-template thumbnails. */}
+          {/* Four animated flow cards (2 × 2), sharing the same glass
+              chrome (content LEFT, visual RIGHT). The templates card +
+              grid now live in their own #templates section below. */}
           <ScrollReveal direction="up" delay={0.1}>
-            <FeatureFlowCards thumbnails={marqueeColumns.flat()} />
+            <FeatureFlowCards />
           </ScrollReveal>
         </div>
       </section>
@@ -248,16 +248,27 @@ export default async function LandingPage() {
           <ScrollReveal direction="up">
             <div className="mb-16 text-center">
               <h2 className="mb-8 text-3xl font-medium md:text-4xl">
-                ابدأ من قالب
+                ابدأ من قالب، <br /> ما تراه هو ما تحصل عليه.
               </h2>
               <p className="mb-8 text-lg text-muted">
                 استكشف قوالبنا الجاهزة المناسبة لمشروعك دون الاعتماد على
-                توجيه التصميم من الذكاء الاصطناعي — ما تراه هو ما تحصل عليه.
+                <br />
+                توجيه التصميم من الذكاء الاصطناعي.
               </p>
             </div>
           </ScrollReveal>
 
+          {/* Wide "قوالب جاهزة" card (moved here from the features
+              band) — content + a live marquee of curator-public
+              template thumbnails. */}
           <ScrollReveal direction="up" delay={0.1}>
+            <TemplatesCard thumbnails={marqueeColumns.flat()} />
+          </ScrollReveal>
+
+          {/* Full-wrapper-width 2 × 4 grid of public template covers —
+              title-less tiles that scrub their slides on hover; a click
+              opens the shared TemplateLightbox. */}
+          <ScrollReveal direction="up" delay={0.15} className="mt-6">
             <LandingTemplatesGrid
               templates={landingTemplates}
               isAuthed={!!user}
