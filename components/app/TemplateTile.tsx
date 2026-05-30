@@ -22,7 +22,9 @@ import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
+import { ScrubCounter } from "@/components/app/ScrubCounter";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
+import { useSlideScrub } from "@/lib/hooks/useSlideScrub";
 
 export type TemplateTileBrand = {
   background: string;
@@ -52,10 +54,6 @@ export type TemplateTileData = {
   // don't carry it compile; the use-gate itself is enforced server-side.
   isPremium?: boolean;
 };
-
-// Pixels of cursor travel before scrubbing kicks in (vs. a resting
-// hover). Mirrors ProjectThumbnail so both libraries scrub identically.
-const SCRUB_ACTIVATION_PX = 6;
 
 export function TemplateTile({
   template,
@@ -117,52 +115,11 @@ export function TemplateTile({
   const secondary = brand.palette[1] ?? brand.text;
   const accent = brand.palette[2] ?? primary;
 
-  // ── Hover-scrub through the showcase slides (same as ProjectThumbnail).
-  // Cursor X maps linearly to a slide index (RTL: rightmost = slide 1);
-  // leaving the tile snaps back to the cover. The first mousemove just
-  // records the entry X, so a bare resting hover doesn't trigger scrub.
-  const tileRef = useRef<HTMLDivElement | null>(null);
-  const entryXRef = useRef<number | null>(null);
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // Hover-scrub through the showcase slides — shared with ProjectThumbnail.
   const slides = thumbnailUrls ?? [];
-  const isMultiSlide = slides.length > 1;
-  const displayIndex = hoverIndex ?? 0;
-  const cover = slides[displayIndex] ?? null;
-
-  // Eager-preload the showcase PNGs on mount so the first scrub is
-  // instant (3 small images per tile).
-  useEffect(() => {
-    for (const url of slides) {
-      if (!url) continue;
-      const img = new Image();
-      img.src = url;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thumbnailUrls]);
-
-  const handleScrubMove = (e: { clientX: number }) => {
-    if (!isMultiSlide) return;
-    const rect = tileRef.current?.getBoundingClientRect();
-    if (!rect || rect.width <= 0) return;
-    if (entryXRef.current == null) {
-      entryXRef.current = e.clientX;
-      return;
-    }
-    if (Math.abs(e.clientX - entryXRef.current) < SCRUB_ACTIVATION_PX) return;
-    const relX = e.clientX - rect.left;
-    const idx = Math.min(
-      slides.length - 1,
-      Math.max(
-        0,
-        Math.floor(((rect.width - relX) / rect.width) * slides.length),
-      ),
-    );
-    setHoverIndex(idx);
-  };
-  const handleScrubLeave = () => {
-    setHoverIndex(null);
-    entryXRef.current = null;
-  };
+  const tileRef = useRef<HTMLDivElement | null>(null);
+  const scrub = useSlideScrub(slides, tileRef);
+  const cover = slides[scrub.displayIndex] ?? null;
 
   const handleToggleVisibility = async () => {
     const nextPublic = !isPublicLocal;
@@ -218,8 +175,8 @@ export function TemplateTile({
   const tileBody = (
     <div
       ref={tileRef}
-      onMouseMove={handleScrubMove}
-      onMouseLeave={handleScrubLeave}
+      onMouseMove={scrub.handleMouseMove}
+      onMouseLeave={scrub.handleMouseLeave}
       className="relative aspect-video w-full overflow-hidden rounded-[14px] transition-transform group-hover:scale-[1.01]"
       style={{
         background: brand.background,
@@ -289,14 +246,9 @@ export function TemplateTile({
         </>
       )}
       {/* Scrub counter — bottom-end (left in RTL), only while scrubbing a
-          multi-slide showcase. Mirrors ProjectThumbnail. */}
-      {isMultiSlide && hoverIndex !== null ? (
-        <span
-          dir="ltr"
-          className="pointer-events-none absolute bottom-2 end-2 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white"
-        >
-          {hoverIndex + 1} / {slides.length}
-        </span>
+          multi-slide showcase. */}
+      {scrub.isMultiSlide && scrub.hoverIndex !== null ? (
+        <ScrubCounter index={scrub.hoverIndex} total={slides.length} />
       ) : null}
 
       {/* Premium marker — top-start corner. */}
