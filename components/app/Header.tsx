@@ -57,7 +57,16 @@ export function Header({ isCollapsed, onToggleSidebar }: Props) {
             </span>
           </button>
 
-          <button type="button" aria-label="تبديل السمة" className={HEADER_ICON_BTN}>
+          {/* Placeholder controls — theme + language toggles aren't wired
+              yet. aria-disabled + tabIndex=-1 keep AT/keyboard users from
+              landing on dead controls; "(قريباً)" marks them as upcoming. */}
+          <button
+            type="button"
+            aria-label="تبديل السمة (قريباً)"
+            aria-disabled="true"
+            tabIndex={-1}
+            className={HEADER_ICON_BTN}
+          >
             <span className="material-symbols-outlined" style={{ fontSize: 22 }} aria-hidden>
               light_mode
             </span>
@@ -65,7 +74,9 @@ export function Header({ isCollapsed, onToggleSidebar }: Props) {
 
           <button
             type="button"
-            aria-label="تبديل اللغة (عربي / إنجليزي)"
+            aria-label="تبديل اللغة (عربي / إنجليزي) (قريباً)"
+            aria-disabled="true"
+            tabIndex={-1}
             className={`${HEADER_ICON_BTN} text-[13px] font-semibold`}
           >
             <span aria-hidden>ع</span>

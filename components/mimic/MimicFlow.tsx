@@ -372,12 +372,15 @@ export default function MimicFlow({
     setDesignExtracted(null);
     setDesignStage("idle");
     setError("");
+    // Clear the input element so re-selecting the SAME file re-fires change.
+    if (designInputRef.current) designInputRef.current.value = "";
   };
   const removeContentFile = () => {
     setContentFile(null);
     setContentExtracted(null);
     setContentStage("idle");
     setError("");
+    if (contentInputRef.current) contentInputRef.current.value = "";
   };
 
   // ─── Shared poller ─────────────────────────────────────────────
@@ -778,9 +781,13 @@ export default function MimicFlow({
                 out of the assistive-tech tab order when locked. */}
             <div
               className={`flex flex-col gap-3 transition-opacity duration-200 ${
-                contentText.length > 0 ? "pointer-events-none opacity-40" : ""
+                contentText.length > 0 ? "opacity-40" : ""
               }`}
-              aria-hidden={contentText.length > 0}
+              // `inert` (not just aria-hidden) when the textarea is in use:
+              // removes the dropzone's focusable controls from the tab order
+              // AND blocks pointer events AND hides it from AT — aria-hidden
+              // alone left the inner button keyboard-focusable.
+              inert={contentText.length > 0}
             >
               <div className="flex items-center gap-2 text-[11px] text-white/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
@@ -931,6 +938,10 @@ export default function MimicFlow({
                             ...s,
                             uploadFile: null,
                             uploadName: null,
+                            // Clear hydrated-kit fields too, else
+                            // resolveFontSlot still sees the font present.
+                            uploadStorageUrl: null,
+                            uploadFamily: "",
                           }))
                         }
                       />
@@ -993,6 +1004,10 @@ export default function MimicFlow({
                             ...s,
                             uploadFile: null,
                             uploadName: null,
+                            // Clear hydrated-kit fields too, else
+                            // resolveFontSlot still sees the font present.
+                            uploadStorageUrl: null,
+                            uploadFamily: "",
                           }))
                         }
                       />

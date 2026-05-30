@@ -332,8 +332,11 @@ function buildClaudeBrand(
           name: rawBrand.logo.name,
           storageUrl: rawBrand.logo.storageUrl,
           // Signed HTTPS URL — fallback when svgMarkup is missing
-          // (caller renders an <img> instead of inline SVG).
-          url: logoSignedUrl ?? rawBrand.logo.storageUrl,
+          // (caller renders an <img> instead of inline SVG). NULL when
+          // signing fails: never fall back to the raw `storageUrl`, which
+          // is a private object key, not a fetchable URL — emitting it as
+          // `url` would both leak the path and hand Claude a dead src.
+          url: logoSignedUrl ?? null,
           // Inline SVG markup. When present, Claude inlines this
           // directly per slide and sets `fill="#hex"` on the <svg>
           // root for per-slide contrast. When null (fetch failed

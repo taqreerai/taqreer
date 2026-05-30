@@ -420,6 +420,8 @@ export default function EnhanceContentPage() {
     setPrepPercent(0);
     setPrepStage(null);
     setError("");
+    // Clear the input element so re-selecting the SAME file re-fires change.
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // ─── Polling helper ──────────────────────────────────────────
@@ -1066,6 +1068,10 @@ export default function EnhanceContentPage() {
                       ...s,
                       uploadFile: null,
                       uploadName: null,
+                      // Also clear the hydrated-kit fields, else
+                      // resolveFontSlot still sees the font as present.
+                      uploadStorageUrl: null,
+                      uploadFamily: "",
                     }))
                   }
                 />
@@ -1122,6 +1128,10 @@ export default function EnhanceContentPage() {
                       ...s,
                       uploadFile: null,
                       uploadName: null,
+                      // Also clear the hydrated-kit fields, else
+                      // resolveFontSlot still sees the font as present.
+                      uploadStorageUrl: null,
+                      uploadFamily: "",
                     }))
                   }
                 />

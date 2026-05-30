@@ -60,7 +60,9 @@ export default function UseTemplateClient({
           const next =
             typeof window !== "undefined"
               ? window.location.pathname
-              : `/use-template/${id}`;
+              : source === "project"
+                ? `/use-template/project/${id}`
+                : `/use-template/${id}`;
           router.push(`/signup?next=${encodeURIComponent(next)}`);
           return;
         }

@@ -33,7 +33,7 @@ async function setupBuckets() {
         const { error: createError } =
           await supabase.storage.createBucket(bucket.name, {
             public: bucket.public,
-            fileSizeLimit: 52428800, // 5GB
+            fileSizeLimit: 52428800, // 50 MB
           });
 
         if (createError) {

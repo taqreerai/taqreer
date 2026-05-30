@@ -22,6 +22,9 @@ const VIEW_H = 44;
 const PAD_Y = 4;
 
 function buildPaths(data: number[]): { line: string; area: string } {
+  // Empty series → no paths. Guards against Math.max(...[]) === -Infinity
+  // (and Math.min(...[]) === Infinity) producing a garbage `d` attribute.
+  if (data.length === 0) return { line: "", area: "" };
   const max = Math.max(...data);
   const min = Math.min(...data);
   const span = max - min || 1;
