@@ -11,6 +11,12 @@ type Props = {
   onToggleSidebar?: () => void;
 };
 
+// Icon-only header button — NO background, no border, just the icon
+// with a hover colour lift. Shared by the sidebar toggle + the theme /
+// language switches so they line up as one clean icon cluster.
+const HEADER_ICON_BTN =
+  "flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white";
+
 export function Header({ isCollapsed, onToggleSidebar }: Props) {
   // Owns the global "Start a new project" picker so the four
   // landing flows are reachable from any page, not just the
@@ -24,36 +30,53 @@ export function Header({ isCollapsed, onToggleSidebar }: Props) {
       }`}
     >
       <div className="relative w-full flex items-center justify-between">
-        {/* Right: Sidebar toggle — same glass-button recipe as the
-            bell (h-11 w-11 rounded-full + backdrop-blur + low-alpha
-            border). Replaced the previous "مرحباً" greeting so the
-            collapse control lives in one place instead of being
-            duplicated inside the sidebar itself. The Sidebar
-            component no longer renders its own burger row. */}
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          aria-label={isCollapsed ? "فتح القائمة الجانبية" : "إغلاق القائمة الجانبية"}
-          aria-expanded={!isCollapsed}
-          className="backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/60 transition-colors hover:border-white/60 hover:text-white"
-        >
-          {/* Animated burger ↔ cross — restores the original
-              sidebar-burger recipe (icon swap `menu` ↔ `close` with
-              a 90° rotate during the 300 ms transition). Was lost
-              briefly when the toggle moved to the header and the
-              rotate transform got dropped alongside the wrong icon
-              pair (`menu_open` instead of `close`). */}
-          <span
-            className="material-symbols-outlined transition-transform duration-300 ease-in-out"
-            style={{
-              fontSize: 22,
-              transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
-            }}
-            aria-hidden
+        {/* Right group: sidebar toggle + static theme / language
+            switches. All ICON-ONLY now (no glass circle) — the toggle
+            shed its `rounded-full` border + backdrop to match the bell.
+            The theme + AR/EN switches are visual placeholders for now;
+            they'll be wired with the points/subscription work. */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            aria-label={isCollapsed ? "فتح القائمة الجانبية" : "إغلاق القائمة الجانبية"}
+            aria-expanded={!isCollapsed}
+            className={HEADER_ICON_BTN}
           >
-            {isCollapsed ? "menu" : "close"}
-          </span>
-        </button>
+            {/* Animated burger ↔ cross — `menu` ↔ `close` with a 90°
+                rotate across the 300 ms collapse transition. */}
+            <span
+              className="material-symbols-outlined transition-transform duration-300 ease-in-out"
+              style={{
+                fontSize: 22,
+                transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
+              }}
+              aria-hidden
+            >
+              {isCollapsed ? "menu" : "close"}
+            </span>
+          </button>
+
+          <button type="button" aria-label="تبديل السمة" className={HEADER_ICON_BTN}>
+            <span className="material-symbols-outlined" style={{ fontSize: 22 }} aria-hidden>
+              light_mode
+            </span>
+          </button>
+
+          <button
+            type="button"
+            aria-label="تبديل اللغة (عربي / إنجليزي)"
+            className={`${HEADER_ICON_BTN} text-[13px] font-semibold`}
+          >
+            <span aria-hidden>ع</span>
+            <span className="mx-0.5 text-white/25" aria-hidden>
+              /
+            </span>
+            <span className="text-white/35" aria-hidden>
+              EN
+            </span>
+          </button>
+        </div>
 
         {/* Center: HeaderSearch — absolutely centered in the header so it
             stays visually centered no matter how wide the side groups get

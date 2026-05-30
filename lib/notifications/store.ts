@@ -43,6 +43,13 @@ export type NotificationKind =
 export type Notification = {
   id: string;
   kind: NotificationKind;
+  // Server notification type (e.g. "comment.created", "deck.generate.finished").
+  // Drives per-type icon + colour in the UI. Undefined for client-only
+  // toasts pushed via `push()` (errors/warnings) — those fall back to `kind`.
+  type?: string;
+  // Generation flow (scratch | enhance | mimic | data) for
+  // `deck.generate.finished` rows — drives the per-flow icon.
+  flow?: string;
   title: string;
   desc?: string;
   // If set, the item is clickable in the UI and navigates here on click
@@ -370,6 +377,22 @@ class NotificationStore {
     this.snapshot = [...this.items];
     this.persist();
     this.emit();
+    // Persist the dismissal server-side so a re-hydrate doesn't bring the
+    // row back. Client-only toasts (errors/warnings) use `n_` ids and were
+    // never persisted — skip the call for those. Fire-and-forget: the
+    // optimistic local removal is the visible state.
+    if (
+      !id.startsWith("n_") &&
+      this.prismaUserId &&
+      typeof window !== "undefined"
+    ) {
+      fetch(`/api/notifications/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      }).catch(() => {
+        /* network blip — local removal stays */
+      });
+    }
   }
 
   clearAll(): void {

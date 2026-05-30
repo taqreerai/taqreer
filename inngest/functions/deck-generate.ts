@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
+import { sourceKindToFlow } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
   SlideSchema,
@@ -2232,6 +2233,11 @@ export const deckGenerate = inngest.createFunction(
         data: {
           status: "completed",
           title: manifest.title,
+          // Persist the FLOW so dashboard surfaces can show which path
+          // produced the deck. Set once at completion (covers all four
+          // flows; the creation route only ever distinguishes
+          // create/enhance). `sourceKindToFlow` is the single mapper.
+          type: sourceKindToFlow(sourceKind),
         },
       });
 
@@ -2376,7 +2382,9 @@ export const deckGenerate = inngest.createFunction(
         type: "deck.generate.finished",
         projectId,
         actorPrismaUserId,
-        payload: { versionId },
+        // `kind` carries the canonical flow (create | enhance | mimic |
+        // datasheet) — drives the flow-specific notification title + icon.
+        payload: { versionId, kind: sourceKindToFlow(sourceKind) },
         recipientUserIds: [actorPrismaUserId],
         allowSelfEcho: true,
       }).catch((err) => {

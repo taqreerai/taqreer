@@ -77,6 +77,9 @@ export type NotificationPayloadMap = {
   };
   "deck.generate.finished": {
     versionId: string;
+    // Generation source kind (scratch | enhance | mimic | data) — drives
+    // the flow-specific notification title.
+    kind?: string;
   };
   "deck.generate.failed": {
     reason?: string;
