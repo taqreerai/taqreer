@@ -474,7 +474,12 @@ export default function CreatePage() {
 
       const content = hasFile
         ? {
-            type: "source" as const,
+            // "file" (NOT "source") matches the server's content union
+            // ("file" | "text"); buildProjectTitle keys off it to derive
+            // the project title from the filename. The uploaded document
+            // itself reaches Claude via `source.anthropicFileId` below,
+            // independent of this field.
+            type: "file" as const,
             fileName: contentFile!.name,
             fileSize: contentFile!.size,
           }
