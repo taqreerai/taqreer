@@ -76,7 +76,7 @@ export function RecentGenerationWidget({
       ) : (
         <>
           <div
-            className={`${GENERATION_COLS} border-b border-white/[0.06] pb-2.5 text-xs text-muted`}
+            className={`${GENERATION_COLS} -mx-5 px-5 pb-2.5 text-xs text-muted sm:-mx-6 sm:px-6 border-b border-white/[0.06]`}
           >
             <span>المشروع</span>
             <span className="text-right">التاريخ</span>

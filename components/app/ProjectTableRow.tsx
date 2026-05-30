@@ -89,7 +89,10 @@ export function ProjectTableRow({
     // navigate. Keeping nav on a sibling overlay link avoids that — and a
     // real <a> keeps native link affordances (middle-click / cmd-click).
     <div
-      className={`relative ${GENERATION_COLS} py-3.5 transition-colors hover:bg-white/[0.02] ${
+      // `-mx-5/-mx-6 px-5/px-6` bleeds the row (hover bg + divider) out to
+      // the card's full inner width — cancels the card's `p-5 sm:p-6` and
+      // re-adds it so the grid content stays put.
+      className={`relative ${GENERATION_COLS} -mx-5 px-5 py-3.5 transition-colors hover:bg-white/[0.02] sm:-mx-6 sm:px-6 ${
         actions.useTplBusy ? "pointer-events-none opacity-60" : ""
       }`}
     >

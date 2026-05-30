@@ -1597,14 +1597,14 @@ body {
 
 /* Bottom-anchored brand-violet glow. Recipe uses `--tq-violet-rgb`
    to stay in lock-step with the landing's `.glow-effect` color
-   token. The element is full-width and positioned at `top: 90%`
-   so its top edge sits 90 % down the viewport — only the upper
+   token. The element is full-width and positioned at `top: 145%`
+   so its top edge sits well below the viewport — only the upper
    sliver of the ellipse reads, giving the page a soft violet
-   wash rising from the bottom edge (user direction 2026-05-28). */
+   wash rising from the bottom edge (user direction 2026-05-30). */
 .dashboard-bg::before {
   content: "";
   position: fixed;
-  top: 90%;
+  top: 145%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 100%;
@@ -1613,8 +1613,8 @@ body {
   pointer-events: none;
   background: radial-gradient(
     ellipse at bottom,
-    rgba(var(--tq-violet-rgb), 0.12) 0%,
-    rgba(0, 0, 0, 0) 100%
+    rgba(var(--tq-violet-rgb), 0.4) 60%,
+    #0000 97%
   );
   filter: blur(80px);
 }

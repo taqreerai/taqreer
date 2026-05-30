@@ -105,7 +105,7 @@ export function RecentActivityWidget() {
                   <Link
                     href={n.href}
                     onClick={() => notificationStore.markRead(n.id)}
-                    className="flex items-start gap-3 rounded-xl px-2 py-3 no-underline transition-colors hover:bg-white/[0.03]"
+                    className="flex items-start gap-3 -mx-5 px-5 py-3 no-underline transition-colors hover:bg-white/[0.03] sm:-mx-6 sm:px-6"
                   >
                     {row}
                   </Link>
@@ -113,7 +113,7 @@ export function RecentActivityWidget() {
                   <button
                     type="button"
                     onClick={() => handleClick(n)}
-                    className="flex w-full items-start gap-3 rounded-xl px-2 py-3 text-right transition-colors hover:bg-white/[0.03]"
+                    className="flex items-start gap-3 -mx-5 px-5 py-3 text-right transition-colors hover:bg-white/[0.03] sm:-mx-6 sm:px-6"
                   >
                     {row}
                   </button>
