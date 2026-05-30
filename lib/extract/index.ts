@@ -36,6 +36,7 @@ import { pptxToPdf } from "./pptx-to-pdf";
 import { extractFontsFromPptx } from "./fonts-pptx";
 import { extractColorsFromPptx } from "./colors-pptx";
 import { detectPptxLanguage } from "./language-pptx";
+import { extractTextPerSlide } from "./text-pptx";
 
 // ─── Public types ─────────────────────────────────────────────────
 
@@ -87,6 +88,13 @@ export type ExtractionResult = {
    * and switching mid-stream when Claude emits the manifest.
    */
   language: "ar" | "en" | null;
+  /**
+   * Verbatim text per slide in PRESENTATION order (PPTX only — empty
+   * for PDFs until the PDF text-layer path lands). Index `i` maps to
+   * rendered page `i + 1`. Fed to Claude per slide so the redesign
+   * reproduces content word-for-word.
+   */
+  textPerSlide: string[];
 };
 
 // ─── Public API ────────────────────────────────────────────────────
@@ -125,15 +133,19 @@ export async function extract(
   let fonts: string[] = [];
   let themeColors: string[] | null = null;
   let language: "ar" | "en" | null = null;
+  let textPerSlide: string[] = [];
   if (isPptx) {
-    const [fontsResult, colorsResult, langResult] = await Promise.allSettled([
-      extractFontsFromPptx(buffer),
-      extractColorsFromPptx(buffer),
-      detectPptxLanguage(buffer),
-    ]);
+    const [fontsResult, colorsResult, langResult, textResult] =
+      await Promise.allSettled([
+        extractFontsFromPptx(buffer),
+        extractColorsFromPptx(buffer),
+        detectPptxLanguage(buffer),
+        extractTextPerSlide(buffer),
+      ]);
     if (fontsResult.status === "fulfilled") fonts = fontsResult.value;
     if (colorsResult.status === "fulfilled") themeColors = colorsResult.value;
     if (langResult.status === "fulfilled") language = langResult.value;
+    if (textResult.status === "fulfilled") textPerSlide = textResult.value;
   }
 
   // Step 3: read PDF metadata for slide count + format.
@@ -172,5 +184,6 @@ export async function extract(
     fonts,
     colors: themeColors ?? [],
     language,
+    textPerSlide,
   };
 }

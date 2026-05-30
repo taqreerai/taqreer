@@ -2436,12 +2436,19 @@ export function DeckView({
             commentCount: 0,
           };
         }
-        const isAutoTail =
-          initialSlideCountAuto && idx === streamingPreview.length;
+        // The slot Claude is writing NEXT (one past the last closed
+        // slide) always shows the paragraph-write animation — in BOTH
+        // auto AND custom (e.g. /enhance) modes. Previously this was
+        // auto-only, so a fixed-count nav showed a dead pulse on the
+        // next slide instead of the "writing this one" affordance: the
+        // `cardStatus` "current" lands on `idx+1===currentSlide`, but
+        // that tile already has its preview slide so it renders as a
+        // real thumbnail — leaving the genuinely-next slot inert.
+        const isNextSlot = idx === streamingPreview.length;
         return {
           kind: "placeholder",
           index: idx,
-          state: isAutoTail ? "current" : cardStatus(idx),
+          state: isNextSlot ? "current" : cardStatus(idx),
         };
       },
     );

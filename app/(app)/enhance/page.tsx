@@ -42,6 +42,7 @@ import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import {
   CardHeader,
   SegmentedToggle,
+  InlinePaletteSwatch,
 } from "@/components/create/controls";
 import {
   emptyFontSlot,
@@ -87,13 +88,28 @@ type ExtractCompletedResponse = {
     // the brief so the preview SlideNavSidebar opens in the right
     // direction from the first paint instead of flipping mid-stream.
     language: "ar" | "en" | null;
+    // Phase 18 — verbatim per-slide text + the source's Supabase
+    // staging location, so deck-generate can rasterize per-slide PNGs
+    // at generation time (transient).
+    textPerSlide: string[];
+    sourcePath: string;
+    sourceMime: string;
   };
   fileName?: string;
   flowKind?: string;
 };
 
 type ExtractStatusResponse =
-  | { status: "queued" | "processing"; fileName?: string }
+  | {
+      status: "queued" | "processing";
+      // Real phase milestone written by extract-source to the job's
+      // outputJson._progress (convert 20 → analyze 80 → finish 92).
+      // null until the first milestone lands. Drives the upload bar's
+      // extraction segment so it never fake-creeps.
+      progress?: number | null;
+      progressStage?: string | null;
+      fileName?: string;
+    }
   | { status: "failed"; error: string; fileName?: string }
   | ExtractCompletedResponse;
 
@@ -109,6 +125,78 @@ function readableFileName(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+// Prep-bar phases. "uploading" is client-side (real byte progress from
+// the XHR); the rest are the server milestones extract-source emits.
+type PrepStage = "uploading" | "converting" | "analyzing" | "finishing";
+
+// Arabic caption for the current prep phase. Latin numerals only — the
+// percentage is appended by the caller.
+function prepStageLabel(stage: PrepStage | null): string {
+  switch (stage) {
+    case "uploading":
+      return "جارٍ رفع الملف";
+    case "converting":
+      return "جارٍ تحويل الملف";
+    case "analyzing":
+      return "جارٍ استخراج المحتوى";
+    case "finishing":
+      return "جارٍ الإنهاء";
+    default:
+      return "جارٍ التحضير";
+  }
+}
+
+// POST the file to /api/extract with REAL upload-byte progress. `fetch`
+// can't report request-body upload progress, so we drop to XHR for this
+// one call (the rest of the flow stays on fetch). `onProgress` gets a
+// 0..1 fraction of bytes sent. Honors the same AbortSignal the polling
+// loop uses so a file-swap / unmount aborts the in-flight upload.
+function uploadExtract(
+  formData: FormData,
+  signal: AbortSignal,
+  onProgress: (fraction: number) => void,
+): Promise<{ jobId: string }> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/extract");
+    xhr.responseType = "json";
+
+    const onAbort = () => xhr.abort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) {
+        onProgress(Math.min(1, e.loaded / e.total));
+      }
+    };
+    xhr.onload = () => {
+      cleanup();
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const body = xhr.response as { jobId?: string } | null;
+        if (body?.jobId) resolve({ jobId: body.jobId });
+        else reject(new Error("No jobId returned from /api/extract"));
+      } else {
+        const body = xhr.response as { error?: string } | null;
+        reject(new Error(body?.error ?? `Upload failed (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => {
+      cleanup();
+      reject(new Error("Upload failed (network error)"));
+    };
+    xhr.onabort = () => {
+      cleanup();
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    xhr.send(formData);
+  });
 }
 
 // State machine — drives the Generate button label + disabled state.
@@ -168,6 +256,11 @@ function resolveFontSlot(
   };
 }
 
+// Editable brand palette bounds — mirror /create's values so the
+// swatch UX is identical across flows.
+const MIN_PALETTE = 2;
+const MAX_PALETTE = 6;
+
 export default function EnhanceContentPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -182,6 +275,14 @@ export default function EnhanceContentPage() {
   const [error, setError] = useState("");
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
 
+  // Accurate prep progress for the dropzone. The bar maps real signals
+  // onto a single 0→100 scale: upload bytes = 0→35%, extraction
+  // milestones = 35→95%, completion = 100%. No interpolation/fake-creep
+  // — when LibreOffice is converting (a black box) the bar honestly
+  // holds at its last milestone until the next real signal arrives.
+  const [prepPercent, setPrepPercent] = useState(0);
+  const [prepStage, setPrepStage] = useState<PrepStage | null>(null);
+
   // Brand picks — optional. Empty = Claude reads the brand identity
   // from the PDF visually. Filled = user's pick wins on the brief.
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -195,7 +296,20 @@ export default function EnhanceContentPage() {
   // brand-kit colors would silently get replaced by whatever the
   // extraction guessed. `handleGenerate` prefers this when assembling
   // `mergedBrand.colors` (CR #41 finding, 2026-05-28).
-  const [loadedColors, setLoadedColors] = useState<string[]>([]);
+  // Editable brand palette — the single source of truth for the new
+  // palette picker AND the submit. Seeded from the brand kit on
+  // hydration (kit wins, CR #41) and from the extraction's colours only
+  // if still empty. Starts empty so the extraction's suggestion can
+  // fill it on a fresh run with no kit.
+  const [colors, setColors] = useState<string[]>([]);
+  const updateColor = (index: number, next: string) =>
+    setColors((c) => c.map((v, i) => (i === index ? next : v)));
+  const addColor = () =>
+    setColors((c) => (c.length >= MAX_PALETTE ? c : [...c, "#FFFFFF"]));
+  const removeColor = (index: number) =>
+    setColors((c) =>
+      c.length <= MIN_PALETTE ? c : c.filter((_, i) => i !== index),
+    );
   const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
     emptyFontSlot(),
   );
@@ -239,7 +353,7 @@ export default function EnhanceContentPage() {
       // extraction's seeded colors (written by `seedFromExtraction`
       // after the PDF parses) don't clobber the user's deliberate
       // brand-kit pick.
-      if (hydrated.colors.length > 0) setLoadedColors(hydrated.colors);
+      if (hydrated.colors.length > 0) setColors(hydrated.colors);
       // If the default-kit fetch was the source, ALSO write its
       // colors to sessionStorage so the existing submit path
       // (which reads colors from sessionStorage) sees them.
@@ -292,6 +406,8 @@ export default function EnhanceContentPage() {
     setFile(next);
     setExtracted(null);
     setStage("extracting");
+    setPrepPercent(0);
+    setPrepStage("uploading");
     setError("");
     return next;
   };
@@ -301,6 +417,8 @@ export default function EnhanceContentPage() {
     setFile(null);
     setExtracted(null);
     setStage("idle");
+    setPrepPercent(0);
+    setPrepStage(null);
     setError("");
   };
 
@@ -317,6 +435,7 @@ export default function EnhanceContentPage() {
   const pollExtraction = async (
     jobId: string,
     signal: AbortSignal,
+    onProgress?: (percent: number, stage: PrepStage | null) => void,
   ): Promise<ExtractCompletedResponse["result"]> => {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
@@ -334,6 +453,16 @@ export default function EnhanceContentPage() {
       if (body.status === "completed") return body.result;
       if (body.status === "failed") {
         throw new Error(body.error ?? "Extraction failed");
+      }
+      // queued/processing — surface the real milestone if one's landed.
+      if (onProgress && typeof body.progress === "number" && body.progress >= 0) {
+        const stage: PrepStage | null =
+          body.progressStage === "converting" ||
+          body.progressStage === "analyzing" ||
+          body.progressStage === "finishing"
+            ? body.progressStage
+            : null;
+        onProgress(body.progress, stage);
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
@@ -361,24 +490,45 @@ export default function EnhanceContentPage() {
         formData.append("kind", "enhance");
         formData.append("format", "16:9");
 
-        const startRes = await fetch("/api/extract", {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        });
-        if (!startRes.ok) {
-          const data = (await startRes.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(data?.error ?? `Upload failed (${startRes.status})`);
-        }
-        const { jobId } = (await startRes.json()) as { jobId: string };
-        if (!jobId) throw new Error("No jobId returned from /api/extract");
+        // Phase 1 — upload (real bytes → 0..35% of the prep bar).
+        const { jobId } = await uploadExtract(
+          formData,
+          controller.signal,
+          (fraction) => {
+            if (isCurrent) {
+              setPrepPercent(Math.min(35, Math.round(fraction * 35)));
+              setPrepStage("uploading");
+            }
+          },
+        );
 
-        const result = await pollExtraction(jobId, controller.signal);
+        // Bytes are in; the server hasn't emitted a milestone yet. Drop
+        // to the neutral "preparing" label (null) so we don't keep
+        // claiming "uploading" during the queue→first-milestone gap.
+        if (isCurrent) setPrepStage(null);
+
+        // Phase 2 — extraction (job milestones → 35..95% of the bar).
+        const result = await pollExtraction(
+          jobId,
+          controller.signal,
+          (extractionPercent, stage) => {
+            if (isCurrent) {
+              setPrepPercent(35 + Math.round((extractionPercent / 100) * 60));
+              if (stage) setPrepStage(stage);
+            }
+          },
+        );
         if (!isCurrent) return;
+        // Phase 3 — done → snap to 100%.
+        setPrepPercent(100);
+        setPrepStage(null);
         setExtracted(result);
         setStage("ready");
+
+        // Seed the editable palette from the extraction's colours — but
+        // only if the brand kit hasn't already provided some (kit wins,
+        // CR #41). The user can then tweak them in the picker.
+        setColors((prev) => (prev.length > 0 ? prev : result.colors));
 
         // Seed sessionStorage with extraction's brand pre-fill (colors,
         // fonts hint, format). Logo + user-picked fonts come from local
@@ -389,6 +539,9 @@ export default function EnhanceContentPage() {
             kind: "enhance",
             anthropicFileId: result.anthropicFileId,
             fonts: result.fonts,
+            textPerSlide: result.textPerSlide,
+            sourcePath: result.sourcePath,
+            sourceMime: result.sourceMime,
           },
           brand: {
             colors: result.colors,
@@ -523,15 +676,12 @@ export default function EnhanceContentPage() {
       const resolvedLogoStorageUrl =
         logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
 
-      // Brand-kit colors win over the extraction-seeded sessionStorage
-      // colors. `seedFromExtraction` runs after hydration completes
-      // and overwrites the sessionStorage entry, so without this
-      // preference order an explicit brand-kit pick would silently be
-      // replaced by Claude's extracted palette guess (CR #41 finding,
-      // 2026-05-28).
+      // The editable `colors` state is the source of truth — seeded from
+      // the brand kit (kit wins, CR #41) then the extraction, and tweakable
+      // in the palette picker. Falls back to the sessionStorage-seeded
+      // colours only if the user somehow cleared the palette entirely.
       const mergedBrand = {
-        colors:
-          loadedColors.length > 0 ? loadedColors : seededBrand.colors ?? [],
+        colors: colors.length > 0 ? colors : seededBrand.colors ?? [],
         paletteMode: seededBrand.paletteMode ?? "manual",
         paletteScreenshotUrl: seededBrand.paletteScreenshotUrl ?? null,
         fonts: {
@@ -603,10 +753,12 @@ export default function EnhanceContentPage() {
 
   const generateDisabled = stage === "idle";
   const generateLoading = stage === "extracting" || stage === "submitting";
-  const generateLabel =
-    stage === "extracting" ? "جارٍ التحليل..." : "إنشاء";
+  const generateLabel = "إنشاء";
+  // While preparing files, the button shows the live prep percentage
+  // (instead of a static "analyzing…" string) so the CTA itself is the
+  // progress readout. During the final POST it falls back to a label.
   const generateLoadingLabel =
-    stage === "extracting" ? "جارٍ التحليل..." : "جارٍ الإنشاء...";
+    stage === "extracting" ? `${prepPercent}%` : "جارٍ الإنشاء...";
 
   // Heading / body font-mode toggles. Switching modes preserves the
   // OTHER mode's state (the user might toggle back) — only flips
@@ -737,13 +889,27 @@ export default function EnhanceContentPage() {
                       <p className="mt-0.5 text-xs text-white/60">
                         {formatFileSize(file.size)}
                         {stage === "extracting"
-                          ? " · جارٍ التحليل..."
+                          ? ` · ${prepStageLabel(prepStage)} ${prepPercent}%`
                           : stage === "ready"
                             ? " · جاهز للإنشاء"
                             : stage === "submitting"
                               ? " · جارٍ الإنشاء..."
                               : ""}
                       </p>
+                      {stage === "extracting" ? (
+                        <div
+                          className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10"
+                          role="progressbar"
+                          aria-valuenow={prepPercent}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        >
+                          <div
+                            className="h-full rounded-full bg-white/70 transition-[width] duration-300 ease-out"
+                            style={{ width: `${prepPercent}%` }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     // No file — drop prompt.
@@ -792,23 +958,82 @@ export default function EnhanceContentPage() {
               </div>
             </div>
 
+            {/* Logo — sits UNDER the file dropzone so the upload + the
+                brand logo live in one card. Same compact LogoUploadSlot
+                the other flows use. */}
+            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
+              <span className="block text-xs font-semibold text-white/70">
+                الشعار
+              </span>
+              <LogoUploadSlot
+                file={logoFile}
+                previewUrl={loadedLogo?.displayUrl ?? null}
+                onSelect={(f) => {
+                  setLogoFile(f);
+                  setLoadedLogo(null);
+                }}
+                onRemove={() => {
+                  setLogoFile(null);
+                  setLoadedLogo(null);
+                }}
+                compact
+              />
+            </div>
           </div>
 
-          {/* ─── Fonts card (optional) ────────────────────────
+          {/* ─── Fonts + colours card ─────────────────────────
               Same padding + gap rhythm as the source card so the
               two cards visually balance (items-stretch on the row
               already equalizes heights, but matching internal rhythm
               prevents the inner content from feeling differently
               spaced). */}
           <div className="glass-card flex min-h-[387px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
-            <CardHeader icon="palette" title="الهوية البصرية" />
+            <CardHeader icon="palette" title="الخطوط والألوان" />
 
-            {/* Heading font — same recipe as /create + /mimic:
+            {/* Palette row — byte-for-byte the /create cluster: label
+                on the visual right, swatches + add tile on the visual
+                left. Uses the shared InlinePaletteSwatch + the same
+                add/remove/update handlers. */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-white/70">
+                الألوان
+              </span>
+              <div className="flex items-center gap-1.5">
+                {colors.map((color, index) => (
+                  <InlinePaletteSwatch
+                    key={index}
+                    value={color}
+                    index={index}
+                    removable={colors.length > MIN_PALETTE}
+                    onChange={(next) => updateColor(index, next)}
+                    onRemove={() => removeColor(index)}
+                  />
+                ))}
+                {colors.length < MAX_PALETTE ? (
+                  <button
+                    type="button"
+                    onClick={addColor}
+                    aria-label="إضافة لون"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 14 }}
+                    >
+                      add
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Heading font — separator sets it apart from the palette
+                cluster above; same recipe as /create + /mimic:
                 inline label-row with SegmentedToggle on the visual
                 left, compact font slot below with sample text hidden
                 (alignStart pins remaining preview to the RTL edge
                 when the slot opts back in). */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-white/70">
                   خط العناوين
@@ -828,7 +1053,6 @@ export default function EnhanceContentPage() {
                   sampleText={HEADING_SAMPLE_AR}
                   sampleSizeClass="text-base"
                   alignStart
-                  compact
                   hideSample
                   onSelect={(f) =>
                     setHeadingFontSlot((s) => ({
@@ -855,7 +1079,6 @@ export default function EnhanceContentPage() {
                   }
                   sampleSizeClass="text-base"
                   alignStart
-                  compact
                   hideSample
                   onSelect={(family) =>
                     setHeadingFontSlot((s) => ({ ...s, googleFamily: family }))
@@ -886,7 +1109,6 @@ export default function EnhanceContentPage() {
                   sampleText={BODY_SAMPLE_AR}
                   sampleSizeClass="text-sm"
                   alignStart
-                  compact
                   hideSample
                   onSelect={(f) =>
                     setBodyFontSlot((s) => ({
@@ -913,37 +1135,12 @@ export default function EnhanceContentPage() {
                   }
                   sampleSizeClass="text-sm"
                   alignStart
-                  compact
                   hideSample
                   onSelect={(family) =>
                     setBodyFontSlot((s) => ({ ...s, googleFamily: family }))
                   }
                 />
               )}
-            </div>
-
-            {/* Logo sub-section — same compact CompactUploadZone +
-                hideFilename + absolute × overlay pattern /create's
-                logo card uses. Sits under the fonts inside the
-                "الهوية البصرية" card so all brand picks (fonts +
-                logo) live together. */}
-            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
-                الشعار
-              </span>
-              <LogoUploadSlot
-                file={logoFile}
-                previewUrl={loadedLogo?.displayUrl ?? null}
-                onSelect={(f) => {
-                  setLogoFile(f);
-                  setLoadedLogo(null);
-                }}
-                onRemove={() => {
-                  setLogoFile(null);
-                  setLoadedLogo(null);
-                }}
-                compact
-              />
             </div>
           </div>
         </div>

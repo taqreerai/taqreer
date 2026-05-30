@@ -435,6 +435,24 @@ export async function POST(request: Request) {
   const contentLanguage = resolveLanguage(payload.language);
   const contentDirection = directionForLanguage(contentLanguage);
   const validatedSource = resolveSource(payload.source);
+  // AUTHORIZE the enhance source path — same threat as the logo path
+  // above. `source.sourcePath` round-trips through the client, and at
+  // generation time deck-generate downloads it with SERVICE-ROLE creds
+  // (bypasses RLS) to rasterize the slides. Without an ownership check a
+  // user could swap in another tenant's object key and have the deck
+  // exfiltrate that file. `isOwnedBrandAssetPath` is the generic
+  // owner-prefix guard (verifies the `${userId}/` namespace + rejects
+  // `..`); `source-files` keys share that `${supabaseUserId}/extract/...`
+  // convention, so it applies directly.
+  if (
+    validatedSource?.kind === "enhance" &&
+    !isOwnedBrandAssetPath(validatedSource.sourcePath, user.id)
+  ) {
+    return NextResponse.json(
+      { error: "source.sourcePath is not owned by the current user" },
+      { status: 403 },
+    );
+  }
   const quality = resolveQuality(payload.quality);
 
   const brief = {
