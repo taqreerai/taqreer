@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..016b8e5 100644
+index 36b1ff9..c73216d 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -198,7 +198,64 @@ index 36b1ff9..016b8e5 100644
  
          // Calculate standard vector for rectangle center (50, 50)
          const scale = 50; // Distance from center to edge (approx)
-@@ -2251,7 +2380,20 @@ function prepareRenderItem(
+@@ -1323,19 +1452,38 @@ async function getProcessedImage(
+   targetH,
+   radius,
+   objectFit = 'fill',
+-  objectPosition = '50% 50%'
++  objectPosition = '50% 50%',
++  encode = null
+ ) {
++  const fmt = encode && encode.format === 'jpeg' ? 'jpeg' : 'png';
++  const quality =
++    encode && typeof encode.quality === 'number' ? encode.quality : 0.82;
++  const maxScale =
++    encode && typeof encode.maxScale === 'number' ? encode.maxScale : 2;
+   return new Promise((resolve) => {
+     const img = new Image();
+     img.crossOrigin = 'Anonymous';
+ 
+     img.onload = () => {
+       const canvas = document.createElement('canvas');
+-      const scale = 2; // Double resolution
+-      canvas.width = targetW * scale;
+-      canvas.height = targetH * scale;
++      // Resolution multiplier. Default 2× for crisp lossless assets. Photo
++      // callers (encode.noUpscale) cap this so we never rasterize a generated
++      // photo above its own source resolution — drawing a 1536px source onto
++      // a 3840px canvas just bloats the file with no added detail.
++      let scale = maxScale;
++      if (encode && encode.noUpscale) {
++        const coverScale = Math.max(targetW / img.width, targetH / img.height);
++        if (isFinite(coverScale) && coverScale > 0) {
++          scale = Math.min(scale, 1 / coverScale);
++        }
++        if (!isFinite(scale) || scale <= 0) scale = maxScale;
++      }
++      canvas.width = Math.max(1, Math.round(targetW * scale));
++      canvas.height = Math.max(1, Math.round(targetH * scale));
+       const ctx = canvas.getContext('2d');
+-      ctx.scale(scale, scale);
++      // Map the targetW×targetH coordinate space exactly onto the (possibly
++      // rounded) canvas, so the mask + draw fill it edge-to-edge.
++      ctx.scale(canvas.width / targetW, canvas.height / targetH);
+ 
+       // Normalize radius
+       let r = { tl: 0, tr: 0, br: 0, bl: 0 };
+@@ -1426,7 +1574,11 @@ async function getProcessedImage(
+ 
+       ctx.drawImage(img, renderX, renderY, renderW, renderH);
+ 
+-      resolve(canvas.toDataURL('image/png'));
++      resolve(
++        fmt === 'jpeg'
++          ? canvas.toDataURL('image/jpeg', quality)
++          : canvas.toDataURL('image/png')
++      );
+     };
+ 
+     img.onerror = () => resolve(null);
+@@ -2251,7 +2403,20 @@ function prepareRenderItem(
        type: 'image',
        zIndex,
        domOrder,
@@ -220,7 +277,42 @@ index 36b1ff9..016b8e5 100644
      };
  
      const job = async () => {
-@@ -2489,9 +2631,13 @@ function prepareRenderItem(
+@@ -2296,6 +2461,24 @@ function prepareRenderItem(
+     const objectFit = style.objectFit || 'fill'; // default CSS behavior is fill
+     const objectPosition = style.objectPosition || '50% 50%';
+ 
++    // Generated photographs (data-genimage) dominate deck size: a full-bleed
++    // box otherwise becomes a 2× lossless PNG (e.g. 3840×2160 ≈ multiple MB).
++    // Encode those as JPEG and never rasterize above the source resolution.
++    // JPEG has no alpha, so a rounded box (whose corners are masked out) stays
++    // PNG to keep clean edges. Logos never reach here — they're inlined as
++    // <svg> before dom-to-pptx runs.
++    const isGenPhoto = node.hasAttribute('data-genimage');
++    const photoHasRadius =
++      radii.tl > 0.5 || radii.tr > 0.5 || radii.br > 0.5 || radii.bl > 0.5;
++    const encode = isGenPhoto
++      ? {
++          format: photoHasRadius ? 'png' : 'jpeg',
++          quality: 0.82,
++          maxScale: 1,
++          noUpscale: true,
++        }
++      : null;
++
+     const item = {
+       type: 'image',
+       zIndex,
+@@ -2310,7 +2493,8 @@ function prepareRenderItem(
+         heightPx,
+         radii,
+         objectFit,
+-        objectPosition
++        objectPosition,
++        encode
+       );
+       if (processed) item.options.data = processed;
+       else item.skip = true;
+@@ -2489,9 +2673,13 @@ function prepareRenderItem(
      });
  
      if (textParts.length > 0) {
@@ -237,7 +329,7 @@ index 36b1ff9..016b8e5 100644
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
        if (style.verticalAlign === 'bottom') valign = 'bottom';
-@@ -2578,6 +2724,14 @@ function prepareRenderItem(
+@@ -2578,6 +2766,14 @@ function prepareRenderItem(
              w: w + padIn * 2,
              h: h + padIn * 2,
              rotate: rotation,
@@ -252,7 +344,7 @@ index 36b1ff9..016b8e5 100644
            },
          });
        }
-@@ -2586,6 +2740,32 @@ function prepareRenderItem(
+@@ -2586,6 +2782,32 @@ function prepareRenderItem(
      if (textPayload) {
        textPayload.text[0].options.fontSize =
          Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
@@ -285,7 +377,7 @@ index 36b1ff9..016b8e5 100644
        items.push({
          type: 'text',
          zIndex: zIndex + 1,
-@@ -2598,9 +2778,8 @@ function prepareRenderItem(
+@@ -2598,9 +2820,8 @@ function prepareRenderItem(
            h,
            align: textPayload.align,
            valign: textPayload.valign,
@@ -296,7 +388,7 @@ index 36b1ff9..016b8e5 100644
            wrap: true,
            autoFit: true,
            vert: writingModeVert,
-@@ -2700,14 +2879,37 @@ function prepareRenderItem(
+@@ -2700,14 +2921,37 @@ function prepareRenderItem(
        if (textPayload) {
          textPayload.text[0].options.fontSize =
            Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
