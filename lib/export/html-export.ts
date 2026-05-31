@@ -242,6 +242,14 @@ function stripInlineBackgrounds(root: HTMLElement): void {
   );
   for (const el of inlines) {
     const cs = window.getComputedStyle(el);
+    // Only neutralise GENUINE inline highlights — a background applied to
+    // words that FLOW within a line of text (display:inline). A span that's
+    // been promoted to a box (display:block / inline-block / flex / grid — a
+    // standalone styled PILL like slide-5's feature tags, or a flex item,
+    // which CSS blockifies to display:block) keeps its fill, padding and
+    // radius. The original highlight bug this guards against is an inline
+    // <span> inside a heading, which stays display:inline.
+    if (cs.display !== "inline") continue;
     const bg = cs.backgroundColor;
     if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") continue;
     // Drop background + padding + border-radius. Padding/border-radius
