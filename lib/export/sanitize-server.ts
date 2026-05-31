@@ -24,6 +24,7 @@ import { JSDOM } from "jsdom";
 import DOMPurifyFactory from "dompurify";
 import type { Config } from "dompurify";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
+import { applyScrimFixes } from "@/lib/export/scrim";
 
 const DOMPURIFY_CONFIG: Config = {
   ADD_TAGS: ["style", "link"],
@@ -92,13 +93,16 @@ export function sanitizeSlideHtmlServer(html: string): string {
   try {
     const { window, purify } = buildEnv();
     const clean = purify.sanitize(html, DOMPURIFY_CONFIG);
-    return rewriteRtlImagePanelSide(
+    return rewriteImageScrim(
       window,
-      rewriteRtlMarginAutoEnd(
+      rewriteRtlImagePanelSide(
         window,
-        rewriteRtlRowFlexOrder(
+        rewriteRtlMarginAutoEnd(
           window,
-          rewriteRtlFlexEndToFlexStart(window, clean),
+          rewriteRtlRowFlexOrder(
+            window,
+            rewriteRtlFlexEndToFlexStart(window, clean),
+          ),
         ),
       ),
     );
@@ -303,6 +307,26 @@ function rewriteRtlImagePanelSide(window: JSDOMWindow, html: string): string {
       el.style.setProperty("flex-direction", "row-reverse");
       changed = true;
     }
+    return changed ? wrapper!.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Server mirror of `rewriteImageScrim` in lib/export/sanitize.ts — re-orients
+// + softens full-bleed image scrims via the shared lib/export/scrim.ts core.
+// Applies to BOTH directions (dark end → text side), so no rtl-only gate.
+function rewriteImageScrim(window: JSDOMWindow, html: string): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot) return html;
+    const dir = slideRoot.getAttribute("dir") === "ltr" ? "ltr" : "rtl";
+    const changed = applyScrimFixes(slideRoot, dir);
     return changed ? wrapper!.innerHTML : html;
   } catch {
     return html;

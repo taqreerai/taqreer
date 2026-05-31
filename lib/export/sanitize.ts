@@ -29,6 +29,7 @@
 import DOMPurifyFactory from "dompurify";
 import type { Config } from "dompurify";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
+import { applyScrimFixes } from "@/lib/export/scrim";
 
 export type DOMPurifyAPI = {
   sanitize: (source: string, config?: Config) => string;
@@ -130,9 +131,11 @@ export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
     const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
-    return rewriteRtlImagePanelSide(
-      rewriteRtlMarginAutoEnd(
-        rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean)),
+    return rewriteImageScrim(
+      rewriteRtlImagePanelSide(
+        rewriteRtlMarginAutoEnd(
+          rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean)),
+        ),
       ),
     );
   } catch (err) {
@@ -462,6 +465,28 @@ function rewriteRtlImagePanelSide(html: string): string {
       el.style.setProperty("flex-direction", "row-reverse");
       changed = true;
     }
+    return changed ? wrapper!.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// FIX-3: re-orient + soften full-bleed image scrims. Unlike the flex
+// rewriters this applies to BOTH directions (the dark end goes on the text
+// side — rtl→right, ltr→left), so there's no rtl-only gate. Core logic is
+// shared with the server twin in lib/export/scrim.ts.
+function rewriteImageScrim(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot) return html;
+    const dir = slideRoot.getAttribute("dir") === "ltr" ? "ltr" : "rtl";
+    const changed = applyScrimFixes(slideRoot, dir);
     return changed ? wrapper!.innerHTML : html;
   } catch {
     return html;
