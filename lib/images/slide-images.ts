@@ -30,6 +30,13 @@ export interface GenImageMarker {
   aspect: GenImageAspect;
 }
 
+// Accept only safe genids. The genid flows into a Supabase storage path
+// (`${projectId}/gen/${genid}.png`), so a value containing `/` or `..`
+// (Claude is influenceable via the brief) could write outside the
+// project's prefix in the shared bucket. Bound it to a filename-safe
+// charset + length; anything else is skipped (the box stays a gradient).
+const SAFE_GENID = /^[A-Za-z0-9._-]{1,64}$/;
+
 const ROLES: ReadonlySet<string> = new Set<GenImageRole>([
   "hero",
   "bg",
@@ -112,7 +119,7 @@ export function scanGenImages(html: string): GenImageMarker[] {
     const promptRaw = readAttr(tag, "data-genimage");
     if (promptRaw == null) continue; // not a gen-box
     const genid = readAttr(tag, "data-genid");
-    if (!genid || seen.has(genid)) continue;
+    if (!genid || seen.has(genid) || !SAFE_GENID.test(genid)) continue;
     const prompt = decodeEntities(promptRaw).trim();
     if (!prompt) continue;
     const roleRaw = readAttr(tag, "data-genrole");

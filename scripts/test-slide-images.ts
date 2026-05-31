@@ -37,6 +37,12 @@ const sc = scanGenImages(c);
 ok("only the valid box (g3) survives", sc.length === 1 && sc[0].genid === "g3");
 ok("defaults role=hero aspect=landscape", sc[0].role === "hero" && sc[0].aspect === "landscape");
 
+// 3b) Unsafe genids (path-traversal / slashes / over-length) are rejected
+//     so they can't escape the storage-path prefix; safe ones pass.
+const unsafe = `<img data-genimage="p" data-genid="../../evil"/><img data-genimage="p" data-genid="a/b"/><img data-genimage="p" data-genid="ok_id-1.png"/>`;
+const su = scanGenImages(unsafe);
+ok("only the safe genid survives", su.length === 1 && su[0].genid === "ok_id-1.png");
+
 // 4) Inject src when absent.
 const inj1 = injectImgSrc(a, "img-1", "https://cdn.example.com/p/gen/img-1.png");
 ok("inject adds src", /<img src="https:\/\/cdn\.example\.com\/p\/gen\/img-1\.png"/.test(inj1));
