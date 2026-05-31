@@ -20,6 +20,7 @@ import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 import { repairJson } from "@/lib/extract/json-repair";
+import { expandWeightAxis } from "@/lib/brand/fonts";
 import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
 import {
   uploadFileToAnthropic,
@@ -145,7 +146,7 @@ Match the icon to the concept and use Lucide's actual path data — don't invent
 
 TYPOGRAPHY
 - Fonts: when the brief sources fonts, use those (copy their URLs verbatim per FONT SOURCING). When none are provided, default to Cairo for Arabic and Poppins (Roboto fallback) for Latin.
-- ONLY two font weights across the deck: \`400\` and \`700\` (Arabic fonts ink-bomb to unreadable blobs at 800+ in export). For emphasis, scale size or change colour.
+- Use the font's full weight range for hierarchy: \`400\` body, \`500\`–\`600\` sub-heads, \`700\`+ display. The exporter embeds every weight you use, so each renders identically in PowerPoint. Keep Arabic BODY text at \`700\` or below — the heaviest weights (\`800\`–\`900\`) ink up at small sizes, so reserve them for large display type. You may also use lighter weights (\`300\`) for large, airy headings.
 
 COLOUR CONTRAST — non-negotiable
 For each text / icon / shape, name the surface it sits on, pick a contrasting colour. WCAG AA (4.5:1 body) / AAA (7:1 hero headlines). Forbidden:
@@ -182,7 +183,7 @@ Slide count: decide it FIRST and write it as the top-level \`slideCount\` field 
 
 FONT SOURCING
 - When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
-- If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@400;700&display=swap\`.`;
+- If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
 
 // Max generated images per deck (context/images.md) — aesthetic guardrail
 // (more reads as stock-photo soup) + cost ceiling. Server re-enforces (Phase 2).
@@ -2187,6 +2188,21 @@ export const deckGenerate = inngest.createFunction(
     }
 
     const { manifest, usage } = validatedResult;
+
+    // Request every weight of each theme font so any weight Claude used both
+    // renders in the preview and embeds in the export (Google's css2 silently
+    // drops weights the family doesn't ship, so the full ladder is safe).
+    // Normalize at this single source — the persisted manifest — and every
+    // downstream consumer (renderer, export embed, showcase, html-doc)
+    // inherits the full set with no per-call rewrite. See lib/brand/fonts.ts.
+    if (manifest.theme?.fontHeading?.url) {
+      manifest.theme.fontHeading.url = expandWeightAxis(
+        manifest.theme.fontHeading.url,
+      );
+    }
+    if (manifest.theme?.fontBody?.url) {
+      manifest.theme.fontBody.url = expandWeightAxis(manifest.theme.fontBody.url);
+    }
 
     await step.run("save-to-database", async () => {
       // Stamp the format the user picked onto the manifest so every

@@ -39,13 +39,35 @@ export const GOOGLE_FONTS: { family: string; arabic: boolean }[] = [
   { family: "DM Sans", arabic: false },
 ];
 
+// The full static weight ladder we request for EVERY family. Google's css2
+// endpoint silently drops weights a family doesn't carry (Almarai → 300/400/
+// 700/800, Amiri → 400/700) and only 400s when ZERO requested weights are
+// valid — which never happens for a real font — so one ladder is safe for all
+// families with no per-font catalog. The embed parser reads the ACTUAL weight
+// off each returned @font-face, so the deck embeds exactly the weights the
+// font ships. Tops out at 900 to match WEIGHT_SUFFIX (Cairo's 1000 snaps to
+// "Cairo Black" / 900 anyway).
+export const FULL_WEIGHT_LADDER = "100;200;300;400;500;600;700;800;900";
+
 // Canonical Google Fonts CSS URL for a family. The deck renderer +
-// dom-to-pptx exporter both fetch this URL to bring the font into
-// scope. Wght@400;700 matches the SYSTEM_PROMPT typography rule
-// ("ONLY two font weights across the deck: 400 and 700").
+// dom-to-pptx exporter both fetch this URL to bring the font into scope.
+// Requests the full weight ladder so any weight Claude reaches for renders
+// (preview) and embeds (export); the browser still only downloads the woff2
+// for weights actually used on the page.
 export function googleFontUrl(family: string): string {
   const encoded = family.replace(/ /g, "+");
-  return `https://fonts.googleapis.com/css2?family=${encoded}:wght@400;700&display=swap`;
+  return `https://fonts.googleapis.com/css2?family=${encoded}:wght@${FULL_WEIGHT_LADDER}&display=swap`;
+}
+
+// Rewrite a Google css2 URL's simple `:wght@…` axis to the full ladder, so a
+// URL that requested only 400;700 (an older brand kit, or Claude's emitted
+// URL) still brings in every weight. No-op for non-css2 URLs and for tuple
+// `:ital,wght@…` axes (we never emit those). Applied at the manifest source
+// so every downstream consumer — preview <link>, export embed, showcase,
+// html-doc — inherits the full set with no per-call change.
+export function expandWeightAxis<T extends string | null | undefined>(url: T): T {
+  if (!url || !url.includes("fonts.googleapis.com/css2")) return url;
+  return url.replace(/:wght@[0-9;]+/i, `:wght@${FULL_WEIGHT_LADDER}`) as T;
 }
 
 // True for families flagged `arabic: false` in the catalog above.

@@ -15,8 +15,9 @@ import { createHash } from "node:crypto";
 // Byte-identity snapshot of the base SYSTEM_PROMPT. Re-baseline this hash
 // (run the test, copy the printed value) ONLY when you intentionally edit the
 // shared prompt core — it guards against accidental drift between the base and
-// images variants. Last re-baselined for the top-level `slideCount` field.
-const BASE_SHA256 = "e0b9d387ca6bdabae371e3eadfd111d9e28d659c1b65485484a559b0a1cc229b";
+// images variants. Last re-baselined for the full-weight-ladder typography
+// rule + font-URL example (named-weight font embed).
+const BASE_SHA256 = "4b9cfa4da02c718007c8815a9bfb626d4dc8958f34e76795e8c5485d94e49a4d";
 
 async function main(): Promise<boolean> {
   const { SYSTEM_PROMPT, SYSTEM_PROMPT_IMAGES, isImagesMode } = await import(

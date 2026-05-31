@@ -4,8 +4,8 @@ import { convertFontTargets, type FontTarget } from "@/lib/export/embed-fonts";
 
 // Server-side font CONVERSION for the PPTX export. The client sends only:
 //   - `fonts`: JSON array `[{name, url}, ...]` of Google Fonts CSS endpoints
-// The server fetches each CSS, extracts woff2/TTF URLs for weights 400 + 700,
-// decompresses to TTF via wawoff2, re-encodes to EOT via fonteditor-core, and
+// The server fetches each CSS, extracts the woff2/TTF URL for every weight the
+// CSS serves, decompresses to TTF via wawoff2, re-encodes to EOT via fonteditor-core, and
 // returns the EOT bytes base64-encoded as `{ fonts: [{name, files:[{weight,
 // eotBase64}]}] }`. The CLIENT splices them into the pptx zip locally
 // (embed-fonts-client.ts) — so the deck never crosses the network.

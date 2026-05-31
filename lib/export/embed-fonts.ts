@@ -12,7 +12,8 @@
 //
 // Flow (per font URL):
 //   1. Fetch the Google Fonts CSS endpoint; parse out the woff2 (or TTF)
-//      URLs for weights 400 + 700.
+//      URL for EVERY weight the CSS serves (the deck URL requests the full
+//      ladder; Google returns only the weights the family ships).
 //   2. Fetch each, decompress woff2 → TTF with `wawoff2`, then convert
 //      TTF → EOT with `fonteditor-core` (the format PPT reads natively).
 //   3. Return the EOT bytes base64-encoded; the client splices them in.
@@ -24,39 +25,37 @@
 // Turbopack can't satisfy in the browser bundle; running server-side also
 // avoids client CORS gymnastics for the Google Fonts CSS endpoint.
 
-import type {
-  FontTarget,
-  WeightKey,
-  ConvertedFont,
-} from "./embed-fonts-client";
+import type { FontTarget, ConvertedFont } from "./embed-fonts-client";
 
 // Re-export the shared transport types so the API route + callers have one
 // import site.
 export type { FontTarget, EmbedFontStats } from "./embed-fonts-client";
 
-type FontFile = { weight: WeightKey; fontBytes: Uint8Array };
+// One converted weight: the numeric CSS font-weight + the EOT bytes. The
+// weight is carried as a number all the way to the client, which maps it to a
+// named typeface ("Cairo SemiBold") via `weightedTypeface`.
+type FontFile = { weight: number; fontBytes: Uint8Array };
 
 // ─── Step 1: Parse Google Fonts CSS for woff2 URLs per weight ────────
 
 type FontSourceFormat = "woff2" | "truetype" | "opentype";
 type FontSource = { url: string; format: FontSourceFormat };
 
-function extractFontSourcesByWeight(
-  css: string,
-): Record<WeightKey, FontSource | null> {
-  const result: Record<WeightKey, FontSource | null> = {
-    regular: null,
-    bold: null,
-  };
+type WeightedSource = { weight: number; src: FontSource };
+
+export function extractFontSourcesByWeight(css: string): WeightedSource[] {
+  const out: WeightedSource[] = [];
+  const seen = new Set<number>();
   const blocks = css.split("@font-face");
   for (const block of blocks.slice(1)) {
-    const weightMatch = /font-weight:\s*(\d+)/.exec(block);
+    // Read the ACTUAL weight off each @font-face — no hardcoded 400/700, so
+    // every weight the deck requested (SemiBold, Black, …) is embedded. A
+    // variable-range request emits `font-weight: 200 900`; we only support
+    // explicit static weights (the prompt requests them), so a single number.
+    const weightMatch = /font-weight:\s*(\d+)\s*;/.exec(block);
     if (!weightMatch) continue;
     const weight = Number(weightMatch[1]);
-    let key: WeightKey | null = null;
-    if (weight === 400) key = "regular";
-    else if (weight === 700) key = "bold";
-    if (!key || result[key]) continue;
+    if (!Number.isFinite(weight) || weight <= 0 || seen.has(weight)) continue;
     // Google Fonts serves woff2 to modern UAs, truetype to older ones
     // (curl, Node fetch). The route runs server-side, so accept both and
     // skip the wawoff2 decompress when we already have raw TTF.
@@ -65,13 +64,17 @@ function extractFontSourcesByWeight(
         block,
       );
     if (urlMatch) {
-      result[key] = {
-        url: urlMatch[1].replace(/['"]/g, ""),
-        format: urlMatch[2] as FontSourceFormat,
-      };
+      seen.add(weight);
+      out.push({
+        weight,
+        src: {
+          url: urlMatch[1].replace(/['"]/g, ""),
+          format: urlMatch[2] as FontSourceFormat,
+        },
+      });
     }
   }
-  return result;
+  return out;
 }
 
 // ─── Step 2: Fetch the font binary, return EOT bytes ready for .fntdata ──
@@ -139,20 +142,14 @@ async function fetchFontFiles(cssUrl: string): Promise<FontFile[]> {
     return [];
   }
   const sources = extractFontSourcesByWeight(css);
-  const files: FontFile[] = [];
-  // Run the two weights in parallel — independent fetches.
+  // Run every weight in parallel — independent fetches.
   const results = await Promise.all(
-    (Object.keys(sources) as WeightKey[]).map(async (weight) => {
-      const src = sources[weight];
-      if (!src) return null;
+    sources.map(async ({ weight, src }) => {
       const eot = await fetchFontAsEot(src);
       return eot ? { weight, fontBytes: eot } : null;
     }),
   );
-  for (const r of results) {
-    if (r) files.push(r);
-  }
-  return files;
+  return results.filter((r): r is FontFile => r !== null);
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..7448bd2 100644
+index 36b1ff9..2125315 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -22,8 +22,53 @@ index 36b1ff9..7448bd2 100644
  
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
-@@ -690,6 +698,12 @@ function getTextStyle(style, scale) {
-     bold: parseInt(style.fontWeight) >= 600,
+@@ -642,6 +650,35 @@ function getSoftEdges(filterStr, scale) {
+   return null;
+ }
+ 
++// Patched (taqreer): map a CSS font-weight to PowerPoint's NAMED typeface for
++// that weight ("Cairo SemiBold", "Cairo Black", …) — exactly how PowerPoint
++// itself stores weights (confirmed against its own .pptx output). We NEVER set
++// the bold flag (b="1"): a bold-flagged run re-resolves to the heaviest member
++// of the font's RIBBI group when edited in PowerPoint (the "bold → ExtraBlack
++// after editing" bug). The named typeface carries the weight; the matching
++// embedded EOT lives in the <p:regular> slot. This map MUST stay identical to
++// `WEIGHT_SUFFIX` in lib/export/embed-fonts-client.ts so a run and its embedded
++// entry resolve to the same typeface string.
++const TAQREER_WEIGHT_SUFFIX = {
++  100: 'Thin',
++  200: 'ExtraLight',
++  300: 'Light',
++  400: '',
++  500: 'Medium',
++  600: 'SemiBold',
++  700: 'Bold',
++  800: 'ExtraBold',
++  900: 'Black',
++};
++function taqreerWeightedTypeface(fontFamily, fontWeight) {
++  const base = (fontFamily || '').split(',')[0].replace(/['"]/g, '').trim();
++  const raw = parseInt(fontWeight, 10);
++  const n = Number.isFinite(raw) ? raw : 400;
++  const snapped = Math.min(900, Math.max(100, Math.round(n / 100) * 100));
++  const suffix = TAQREER_WEIGHT_SUFFIX[snapped] ?? '';
++  return suffix ? `${base} ${suffix}` : base;
++}
++
+ function getTextStyle(style, scale) {
+   let colorObj = parseColor(style.color);
+ 
+@@ -685,11 +722,19 @@ function getTextStyle(style, scale) {
+ 
+   return {
+     color: colorObj.hex || '000000',
+-    fontFace: style.fontFamily.split(',')[0].replace(/['"]/g, ''),
++    // Weight is encoded in the typeface NAME ("Cairo SemiBold"), never the
++    // bold flag — see taqreerWeightedTypeface above.
++    fontFace: taqreerWeightedTypeface(style.fontFamily, style.fontWeight),
+     fontSize: Number((fontSizePx * 0.75 * scale).toFixed(1)),
+-    bold: parseInt(style.fontWeight) >= 600,
++    bold: false,
      italic: style.fontStyle === 'italic',
      underline: style.textDecoration.includes('underline'),
 +    // Patched (taqreer): map CSS `text-decoration: line-through` to PPTX
@@ -35,7 +80,7 @@ index 36b1ff9..7448bd2 100644
      // Only add if we have a valid value
      ...(lineSpacing && { lineSpacing }),
      ...(paraSpaceBefore > 0 && { paraSpaceBefore }),
-@@ -709,6 +723,72 @@ function getTextStyle(style, scale) {
+@@ -709,6 +754,72 @@ function getTextStyle(style, scale) {
   * Determines if a given DOM node is primarily a text container.
   * Updated to correctly reject Icon elements so they are rendered as images.
   */
@@ -108,7 +153,7 @@ index 36b1ff9..7448bd2 100644
  function isTextContainer(node) {
    const hasText = node.textContent.trim().length > 0;
    if (!hasText) return false;
-@@ -756,17 +836,50 @@ function isTextContainer(node) {
+@@ -756,17 +867,50 @@ function isTextContainer(node) {
      const hasVisibleBg = bgColor.hex && bgColor.opacity > 0;
      const hasBorder =
        parseFloat(style.borderWidth) > 0 && parseColor(style.borderColor).opacity > 0;
@@ -161,7 +206,7 @@ index 36b1ff9..7448bd2 100644
  }
  
  function getRotation(transformStr) {
-@@ -962,11 +1075,20 @@ function generateGradientSVG(w, h, bgString, radius, border) {
+@@ -962,11 +1106,20 @@ function generateGradientSVG(w, h, bgString, radius, border) {
            y2 = '100%';
            break;
          case 'left':
@@ -182,7 +227,7 @@ index 36b1ff9..7448bd2 100644
            break;
          case 'top right':
            x1 = '0%';
-@@ -999,7 +1121,14 @@ function generateGradientSVG(w, h, bgString, radius, border) {
+@@ -999,7 +1152,14 @@ function generateGradientSVG(w, h, bgString, radius, border) {
        // Formula: Map angle to perimeter coordinates.
        if (!isNaN(val)) {
          const deg = firstPart.includes('rad') ? val * (180 / Math.PI) : val;
@@ -198,7 +243,7 @@ index 36b1ff9..7448bd2 100644
  
          // Calculate standard vector for rectangle center (50, 50)
          const scale = 50; // Distance from center to edge (approx)
-@@ -1323,19 +1452,38 @@ async function getProcessedImage(
+@@ -1323,19 +1483,38 @@ async function getProcessedImage(
    targetH,
    radius,
    objectFit = 'fill',
@@ -242,7 +287,7 @@ index 36b1ff9..7448bd2 100644
  
        // Normalize radius
        let r = { tl: 0, tr: 0, br: 0, bl: 0 };
-@@ -1426,7 +1574,11 @@ async function getProcessedImage(
+@@ -1426,7 +1605,11 @@ async function getProcessedImage(
  
        ctx.drawImage(img, renderX, renderY, renderW, renderH);
  
@@ -255,7 +300,7 @@ index 36b1ff9..7448bd2 100644
      };
  
      img.onerror = () => resolve(null);
-@@ -2251,7 +2403,20 @@ function prepareRenderItem(
+@@ -2251,7 +2434,20 @@ function prepareRenderItem(
        type: 'image',
        zIndex,
        domOrder,
@@ -277,7 +322,7 @@ index 36b1ff9..7448bd2 100644
      };
  
      const job = async () => {
-@@ -2296,6 +2461,24 @@ function prepareRenderItem(
+@@ -2296,6 +2492,24 @@ function prepareRenderItem(
      const objectFit = style.objectFit || 'fill'; // default CSS behavior is fill
      const objectPosition = style.objectPosition || '50% 50%';
  
@@ -302,7 +347,7 @@ index 36b1ff9..7448bd2 100644
      const item = {
        type: 'image',
        zIndex,
-@@ -2310,7 +2493,8 @@ function prepareRenderItem(
+@@ -2310,7 +2524,8 @@ function prepareRenderItem(
          heightPx,
          radii,
          objectFit,
@@ -312,7 +357,7 @@ index 36b1ff9..7448bd2 100644
        );
        if (processed) item.options.data = processed;
        else item.skip = true;
-@@ -2484,19 +2668,44 @@ function prepareRenderItem(
+@@ -2484,19 +2699,44 @@ function prepareRenderItem(
            delete textOpts.highlight;
          }
  
@@ -360,7 +405,7 @@ index 36b1ff9..7448bd2 100644
  
        let padding = getPadding(style, config.scale);
  
-@@ -2578,6 +2787,14 @@ function prepareRenderItem(
+@@ -2578,6 +2818,14 @@ function prepareRenderItem(
              w: w + padIn * 2,
              h: h + padIn * 2,
              rotate: rotation,
@@ -375,7 +420,7 @@ index 36b1ff9..7448bd2 100644
            },
          });
        }
-@@ -2586,6 +2803,32 @@ function prepareRenderItem(
+@@ -2586,6 +2834,32 @@ function prepareRenderItem(
      if (textPayload) {
        textPayload.text[0].options.fontSize =
          Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
@@ -408,7 +453,7 @@ index 36b1ff9..7448bd2 100644
        items.push({
          type: 'text',
          zIndex: zIndex + 1,
-@@ -2598,9 +2841,8 @@ function prepareRenderItem(
+@@ -2598,9 +2872,8 @@ function prepareRenderItem(
            h,
            align: textPayload.align,
            valign: textPayload.valign,
@@ -419,7 +464,7 @@ index 36b1ff9..7448bd2 100644
            wrap: true,
            autoFit: true,
            vert: writingModeVert,
-@@ -2700,14 +2942,37 @@ function prepareRenderItem(
+@@ -2700,14 +2973,37 @@ function prepareRenderItem(
        if (textPayload) {
          textPayload.text[0].options.fontSize =
            Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;

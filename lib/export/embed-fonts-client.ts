@@ -31,12 +31,46 @@ const FONT_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font";
 
 export type FontTarget = { name: string; url: string };
-export type WeightKey = "regular" | "bold";
-/** One converted weight, EOT bytes base64-encoded for JSON transport. */
-export type ConvertedFontFile = { weight: WeightKey; eotBase64: string };
+/** One converted weight, EOT bytes base64-encoded for JSON transport. The
+ * weight is the numeric CSS font-weight (100–900) of that @font-face. */
+export type ConvertedFontFile = { weight: number; eotBase64: string };
 /** A font family with its converted weight files, ready to splice. */
 export type ConvertedFont = { name: string; files: ConvertedFontFile[] };
 export type EmbedFontStats = { attempted: number; embedded: number; failed: number };
+
+// CSS numeric weight → the typeface-NAME suffix PowerPoint uses for that
+// static instance (confirmed against PowerPoint's own .pptx output: it stores
+// each weight as e.g. `typeface="Cairo SemiBold"`, never "Cairo" + a numeric
+// weight). 400 = the base family name (no suffix). This MUST stay byte-for-
+// byte identical to the copy in the dom-to-pptx patch (getTextStyle) so a run
+// and its embedded entry resolve to the same typeface string.
+const WEIGHT_SUFFIX: Record<number, string> = {
+  100: "Thin",
+  200: "ExtraLight",
+  300: "Light",
+  400: "",
+  500: "Medium",
+  600: "SemiBold",
+  700: "Bold",
+  800: "ExtraBold",
+  900: "Black",
+};
+
+/** Snap an arbitrary CSS weight to the nearest standard 100-step (clamped to
+ *  100–900). "bold"/"normal" arrive pre-resolved to 700/400 from the DOM. */
+export function normalizeWeight(weight: number | string): number {
+  const n =
+    typeof weight === "number" ? weight : parseInt(String(weight), 10) || 400;
+  return Math.min(900, Math.max(100, Math.round(n / 100) * 100));
+}
+
+/** Named typeface for a (base family, weight) pair — e.g. ("Cairo", 600) →
+ *  "Cairo SemiBold"; ("Cairo", 400) → "Cairo". The single source of truth the
+ *  splicer uses; dom-to-pptx mirrors this exact mapping for the runs. */
+export function weightedTypeface(base: string, weight: number | string): string {
+  const suffix = WEIGHT_SUFFIX[normalizeWeight(weight)] ?? "";
+  return suffix ? `${base} ${suffix}` : base;
+}
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -113,27 +147,24 @@ function findOrCreateEmbeddedFontLst(
   return lst;
 }
 
+// Each weight is embedded as its OWN named typeface ("Cairo SemiBold", …) with
+// the EOT in the <p:regular> slot — NEVER the <p:bold> slot. PowerPoint models
+// multi-weight families exactly this way, and a bold slot would re-introduce
+// the `b="1"` escalation-on-edit bug (a bold-flagged run resolves to the
+// heaviest member of the RIBBI group). One regular slot per weight = stable.
 function appendEmbeddedFontEntry(
   lst: Element,
   typeface: string,
-  regularRid: string | null,
-  boldRid: string | null,
+  regularRid: string,
 ): void {
   const doc = lst.ownerDocument!;
   const entry = doc.createElementNS(NS_P, "p:embeddedFont");
   const fontEl = doc.createElementNS(NS_P, "p:font");
   fontEl.setAttribute("typeface", typeface);
   entry.appendChild(fontEl);
-  if (regularRid) {
-    const reg = doc.createElementNS(NS_P, "p:regular");
-    reg.setAttributeNS(NS_R, "r:id", regularRid);
-    entry.appendChild(reg);
-  }
-  if (boldRid) {
-    const b = doc.createElementNS(NS_P, "p:bold");
-    b.setAttributeNS(NS_R, "r:id", boldRid);
-    entry.appendChild(b);
-  }
+  const reg = doc.createElementNS(NS_P, "p:regular");
+  reg.setAttributeNS(NS_R, "r:id", regularRid);
+  entry.appendChild(reg);
   lst.appendChild(entry);
 }
 
@@ -214,25 +245,26 @@ export async function embedConvertedFontsInPptx(
 
   let fileCounter = 1;
   let embeddedCount = 0;
+  // Each (family, weight) becomes its OWN named <p:embeddedFont> typeface,
+  // matching the run typefaces dom-to-pptx emits ("Cairo SemiBold", …). Dedup
+  // by typeface so heading + body sharing a weight (e.g. both "Cairo" at 400)
+  // don't emit two entries for the same name.
+  const seenTypefaces = new Set<string>();
   for (const set of usable) {
-    let regularRid: string | null = null;
-    let boldRid: string | null = null;
     for (const file of set.files) {
+      const typeface = weightedTypeface(set.name, file.weight);
+      if (seenTypefaces.has(typeface)) continue;
+      seenTypefaces.add(typeface);
       const fileName = `font${fileCounter}.fntdata`;
       fileCounter += 1;
       zip.file(`ppt/fonts/${fileName}`, base64ToBytes(file.eotBase64));
       const rid = nextAvailableRid(relsDoc);
       appendRelationship(relsDoc, rid, `fonts/${fileName}`);
-      if (file.weight === "regular") regularRid = rid;
-      else if (file.weight === "bold") boldRid = rid;
+      appendEmbeddedFontEntry(lst, typeface, rid);
+      embeddedCount += 1;
     }
-    appendEmbeddedFontEntry(lst, set.name, regularRid, boldRid);
-    embeddedCount += 1;
   }
-  if (stats) {
-    stats.embedded += embeddedCount;
-    stats.failed += convertedFonts.length - embeddedCount;
-  }
+  if (stats) stats.embedded += embeddedCount;
 
   zip.file("ppt/presentation.xml", serializer.serializeToString(presentationDoc));
   zip.file(
