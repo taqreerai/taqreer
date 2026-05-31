@@ -674,6 +674,50 @@ function injectBiDiMarkers(
     // extension would push the left edge (RTL) or right edge (LTR) over
     // neighbouring cards and cause visible overlap. See PASS3_MAX_CX.
     if (oldCx > PASS3_MAX_CX) continue;
+
+    // FULL-WIDTH-PILL guard: a STYLED BOX (own fill or border) whose text
+    // doesn't come close to filling it has ample slack and needs neither the
+    // widen nor the force-centre below — slide-3's full-width problem rows,
+    // already right-aligned by PASS 2; leave them. A SHRINK-TO-FIT pill (text
+    // fills it — small "Branding"/"Content" chips, filled OR outline) still
+    // gets both, or the text wraps in PowerPoint. The discriminator is SLACK,
+    // not fill: estimate text width from char-count × font size (deliberately
+    // OVER-estimating the glyph advance so shrink-to-fit pills never clear the
+    // bar) and bail only when the box interior is much wider than the text.
+    let isStyledBox = false;
+    for (let j = 0; j < spPr.children.length; j++) {
+      const c = spPr.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "solidFill" || c.localName === "gradFill") {
+        isStyledBox = true;
+        break;
+      }
+      if (c.localName === "ln" && (c.getAttribute("w") ?? "0") !== "0") {
+        isStyledBox = true;
+        break;
+      }
+    }
+    if (isStyledBox) {
+      const firstRPr = txBody.getElementsByTagNameNS(NS_A, "rPr")[0];
+      const sz = firstRPr
+        ? parseInt(firstRPr.getAttribute("sz") ?? "1800", 10)
+        : 1800;
+      const fontEmu = (sz / 100) * 12700; // hundredths-of-pt → EMU
+      // ~0.62 em average advance — an OVER-estimate (real Arabic/Latin run
+      // ~0.55), so a shrink-to-fit pill (interior ≈ real text width) stays
+      // BELOW the 1.6× bar and is never skipped; only a genuinely roomy box
+      // (text << interior, e.g. a full-width row) clears it.
+      const estTextWidthEmu = totalChars * 0.62 * fontEmu;
+      const bodyPr = txBody.getElementsByTagNameNS(NS_A, "bodyPr")[0];
+      const lIns = bodyPr
+        ? parseInt(bodyPr.getAttribute("lIns") ?? "91440", 10)
+        : 91440;
+      const rIns = bodyPr
+        ? parseInt(bodyPr.getAttribute("rIns") ?? "91440", 10)
+        : 91440;
+      const interior = oldCx - lIns - rIns;
+      if (interior > estTextWidthEmu * 1.6) continue;
+    }
     const oldX = off ? parseInt(off.getAttribute("x") ?? "0", 10) : 0;
     const oldY = off ? parseInt(off.getAttribute("y") ?? "0", 10) : 0;
     const oldCy = parseInt(ext.getAttribute("cy") ?? "0", 10);
