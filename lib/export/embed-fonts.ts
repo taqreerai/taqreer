@@ -79,9 +79,16 @@ export function extractFontSourcesByWeight(css: string): WeightedSource[] {
 
 // ─── Step 2: Fetch the font binary, return EOT bytes ready for .fntdata ──
 
+// Cap each Google Fonts network hop. This module is best-effort (any failure
+// falls through to the unembedded blob), so a stalled upstream must not hang
+// the whole export — a timeout aborts the fetch and is treated as a miss.
+const FONT_FETCH_TIMEOUT_MS = 10_000;
+
 async function fetchFontAsEot(src: FontSource): Promise<Uint8Array | null> {
   try {
-    const res = await fetch(src.url);
+    const res = await fetch(src.url, {
+      signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const rawBytes = new Uint8Array(await res.arrayBuffer());
 
@@ -135,7 +142,9 @@ async function fetchFontAsEot(src: FontSource): Promise<Uint8Array | null> {
 async function fetchFontFiles(cssUrl: string): Promise<FontFile[]> {
   let css: string;
   try {
-    const res = await fetch(cssUrl);
+    const res = await fetch(cssUrl, {
+      signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return [];
     css = await res.text();
   } catch {

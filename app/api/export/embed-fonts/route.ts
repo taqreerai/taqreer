@@ -29,12 +29,16 @@ const MAX_FONTS = 4;
 function parseTargets(raw: unknown): FontTarget[] {
   if (!Array.isArray(raw)) return [];
   const out: FontTarget[] = [];
+  // Dedupe by URL, not by family name: the URL is the resource we fetch +
+  // convert. Heading + body can share a name yet request different css2 URLs
+  // (e.g. different weight axes); keying on `name` would silently drop the
+  // second and leave those runs unembedded. (Identical URLs still collapse.)
   const seen = new Set<string>();
   for (const entry of raw as Array<{ name?: unknown; url?: unknown }>) {
     if (typeof entry?.name !== "string" || typeof entry?.url !== "string") {
       continue;
     }
-    if (seen.has(entry.name)) continue;
+    if (seen.has(entry.url)) continue;
     // Only honour Google Fonts CSS endpoints — the URL parser is tuned for
     // the Google `css2` response shape, and pinning the host keeps us from
     // being used as an open fetch proxy.
@@ -45,7 +49,7 @@ function parseTargets(raw: unknown): FontTarget[] {
     } catch {
       continue;
     }
-    seen.add(entry.name);
+    seen.add(entry.url);
     out.push({ name: entry.name, url: entry.url });
     if (out.length >= MAX_FONTS) break;
   }
