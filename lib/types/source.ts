@@ -68,19 +68,26 @@ export const SourceEnhanceSchema = z.object({
   // deck-generate's enhance directive — system fonts pass through
   // as font-family stacks verbatim, custom fonts get resolved to
   // their closest Google Font match.
-  fonts: z.array(z.string()),
+  // Defaults to `[]` so a pre-overhaul enhance payload (which predates font
+  // extraction) still parses instead of being rejected outright.
+  fonts: z.array(z.string()).default([]),
   // VERBATIM text per slide, in presentation order (index i ↔ rendered
   // page i+1). Extracted from the PPTX XML (exact, no OCR) by
   // lib/extract/text-pptx.ts. Empty array for PDF uploads until the
   // PDF text-layer path lands. Handed to Claude per slide so it
   // reproduces content word-for-word while redesigning the visual.
-  textPerSlide: z.array(z.string()),
+  // Defaults to `[]` (back-compat — deck-generate already treats this as
+  // possibly-empty and falls back to image-only enhance).
+  textPerSlide: z.array(z.string()).default([]),
   // Supabase staging location of the ORIGINAL upload (object key in the
   // source-files bucket) + its MIME. deck-generate re-fetches it at
   // generation time to rasterize the per-slide PNGs (transient — the
   // images are flushed after the run; nothing persists between runs).
-  sourcePath: z.string().min(1),
-  sourceMime: z.string().min(1),
+  // OPTIONAL for back-compat: pre-overhaul payloads lack these; the
+  // generation step throws a clear "missing sourcePath/sourceMime" error
+  // rather than the schema silently rejecting the whole stored source.
+  sourcePath: z.string().min(1).optional(),
+  sourceMime: z.string().min(1).optional(),
 });
 
 // Mimic content can come from EITHER an uploaded file ("ugly" file

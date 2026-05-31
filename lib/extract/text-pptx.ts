@@ -78,8 +78,14 @@ async function resolveSlideOrder(zip: JSZip): Promise<string[]> {
       .filter((t): t is string => Boolean(t))
       .map(normalizeSlidePath);
 
-    if (paths.length > 0) return paths;
-    throw new Error("no slides resolved from sldIdLst");
+    // Only trust presentation order when EVERY slide relation resolved.
+    // `filter(Boolean)` would otherwise silently drop one unresolved rId and
+    // return a shortened list — shifting every following textPerSlide[i] out
+    // of sync with the rasterized slide images, the exact desync this helper
+    // exists to prevent. On a partial resolution, fall back to numeric
+    // filename order (the catch below), which keeps all slides in order.
+    if (rIds.length > 0 && paths.length === rIds.length) return paths;
+    throw new Error("incomplete slide order from sldIdLst");
   } catch {
     return Object.keys(zip.files).filter((n) => SLIDE_RE.test(n)).sort(
       byNumericSuffix,

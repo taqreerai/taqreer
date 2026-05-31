@@ -43,21 +43,33 @@ function getClient() {
 async function uploadSlideImages(pngs: Buffer[]): Promise<string[]> {
   const CONCURRENCY = 5;
   const ids = new Array<string>(pngs.length);
+  // Track every id as it lands so a mid-batch failure can flush them. If one
+  // worker rejects, Promise.all aborts while siblings may already have created
+  // files; those ids never reach Job.outputJson, so onFailure can't see them
+  // and they'd leak on the Files API. We clean up here before rethrowing.
+  const uploaded: string[] = [];
   let next = 0;
   const worker = async () => {
     for (;;) {
       const i = next++;
       if (i >= pngs.length) return;
-      ids[i] = await uploadFileToAnthropic({
+      const id = await uploadFileToAnthropic({
         bytes: pngs[i],
         fileName: `slide-${i + 1}.png`,
         contentType: "image/png",
       });
+      ids[i] = id;
+      uploaded.push(id);
     }
   };
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, pngs.length) }, worker),
-  );
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, pngs.length) }, worker),
+    );
+  } catch (err) {
+    await flushSlideImages(uploaded);
+    throw err;
+  }
   return ids;
 }
 
@@ -1682,6 +1694,22 @@ export const deckGenerate = inngest.createFunction(
         }
         return { fileIds };
       });
+      // Guard the index pairing: buildEnhanceMessages aligns textPerSlide[i]
+      // with fileIds[i] by position. An EMPTY textPerSlide is allowed (image-
+      // only enhance — each slide just gets no authoritative text), but a
+      // NON-empty list whose length disagrees with the rasterized image count
+      // means extraction and rasterization saw different slide sets, so every
+      // pairing past the first drop is wrong. Fail fast (flushing the transient
+      // uploads first) rather than ship a deck with mis-attributed text.
+      if (
+        textPerSlide.length > 0 &&
+        textPerSlide.length !== prep.fileIds.length
+      ) {
+        await flushSlideImages(prep.fileIds);
+        throw new Error(
+          `enhance prep mismatch: ${prep.fileIds.length} slide images vs ${textPerSlide.length} text blocks`,
+        );
+      }
       enhanceImages = { fileIds: prep.fileIds, textPerSlide };
     }
 
@@ -1722,6 +1750,12 @@ export const deckGenerate = inngest.createFunction(
       // tile with no sense of how many slides are coming. Survives
       // continuations (set on the first call, reused after).
       let declaredTotal: number | null = null;
+      // Offset into the response buffer where the CURRENT manifest begins. In
+      // the draft→final re-emit pattern (a known /enhance behaviour), Claude
+      // closes one manifest and streams a polished one in the same response;
+      // on that reset we advance this so the head scans (theme / slideCount /
+      // title-language-direction) read the LATEST manifest, not the draft's.
+      let manifestHeadOffset = 0;
       const streamDirection = resolveBriefDirection(data.brief);
       const streamLanguage = resolveBriefLanguage(data.brief);
 
@@ -1887,6 +1921,12 @@ export const deckGenerate = inngest.createFunction(
             callSlides.length = 0;
             streamingPreview.length = 0;
             streamingPreview.push(...priorSlides);
+            // Drop the draft's captured head/theme so they re-capture from the
+            // new manifest — otherwise salvage ships the latest slides under
+            // the draft's theme (wrong colours/fonts) and slide count.
+            streamingTheme = null;
+            declaredTotal = null;
+            manifestHeadOffset = buffer.length;
           }
           for (const raw of justClosed) {
             try {
@@ -1917,8 +1957,11 @@ export const deckGenerate = inngest.createFunction(
           // streams in the head (before `"slides"`), so scan only the head to
           // avoid matching a stray occurrence inside slide HTML.
           if (declaredTotal === null) {
-            const slidesIdx = buffer.indexOf('"slides"');
-            const head = slidesIdx >= 0 ? buffer.slice(0, slidesIdx) : buffer;
+            // Scan only the CURRENT manifest (post-reset offset) so a draft's
+            // slideCount can't shadow the final one's.
+            const current = buffer.slice(manifestHeadOffset);
+            const slidesIdx = current.indexOf('"slides"');
+            const head = slidesIdx >= 0 ? current.slice(0, slidesIdx) : current;
             const m = head.match(/"slideCount"\s*:\s*(\d+)/);
             if (m) {
               const n = parseInt(m[1], 10);
@@ -1993,7 +2036,15 @@ export const deckGenerate = inngest.createFunction(
       // response text. The head always streams BEFORE the slides, so it
       // survives a tail truncation. Theme comes from `streamingTheme`.
       const parseHead = (text: string) => {
-        const json = extractJson(text);
+        // Read the LATEST manifest only. On a draft→final re-emit the response
+        // text holds both; slicing from manifestHeadOffset drops the draft so
+        // title/language/direction come from the final manifest (matching the
+        // re-captured streamingTheme + the reset callSlides).
+        const latest =
+          manifestHeadOffset > 0 && manifestHeadOffset <= text.length
+            ? text.slice(manifestHeadOffset)
+            : text;
+        const json = extractJson(latest);
         const slidesIdx = json.indexOf('"slides"');
         const headStr = slidesIdx >= 0 ? json.slice(0, slidesIdx) : json;
         const rawTitle = headStr.match(

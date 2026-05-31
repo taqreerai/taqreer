@@ -22,6 +22,15 @@ const TINY_PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 async function main() {
+  // Opt-in guard: this script makes a REAL gpt-image-2 call (~$0.04) and
+  // writes a public object using whatever creds are in .env.local. Require an
+  // explicit flag so a stray local/CI run can't spend credits by accident.
+  if (process.env.RUN_LIVE_IMAGE_TEST !== "1") {
+    console.log(
+      "[test] skipped — set RUN_LIVE_IMAGE_TEST=1 to make a real (billed) gpt-image-2 call.",
+    );
+    return;
+  }
   console.log("[test] storage path check (1×1 png, no API cost)…");
   const tinyUrl = await storeGeneratedImage({
     projectId: "phase0-test",

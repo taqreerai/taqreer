@@ -8,8 +8,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const buckets = [
-  { name: "source-files", public: false },
+// `fileSizeLimit` (bytes) overrides the 50 MB default per bucket. source-files
+// must match the app's 100 MB upload cap (app/api/extract MAX_FILE_SIZE_BYTES)
+// or fresh setups reject valid uploads at the storage layer.
+const DEFAULT_FILE_SIZE_LIMIT = 52428800; // 50 MB
+const buckets: { name: string; public: boolean; fileSizeLimit?: number }[] = [
+  { name: "source-files", public: false, fileSizeLimit: 104857600 }, // 100 MB
   { name: "brand-assets", public: false },
   { name: "generated-presentations", public: false },
   // public: dashboards/projects pages render <img> tiles for every
@@ -37,7 +41,7 @@ async function setupBuckets() {
         const { error: createError } =
           await supabase.storage.createBucket(bucket.name, {
             public: bucket.public,
-            fileSizeLimit: 52428800, // 50 MB
+            fileSizeLimit: bucket.fileSizeLimit ?? DEFAULT_FILE_SIZE_LIMIT,
           });
 
         if (createError) {

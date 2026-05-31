@@ -172,11 +172,27 @@ export const deckImagesGenerate = inngest.createFunction(
 
       const worker = async () => {
         // `cursor++` is atomic between awaits (single-threaded JS), so
-        // workers never pull the same box.
+        // workers in THIS run never pull the same box. The DB claim below
+        // guards the cross-run case (Inngest replay / a concurrent retry).
         while (cursor < todo.length) {
           const b = todo[cursor++];
+          // Atomic claim (compare-and-set): flip to "generating" ONLY from a
+          // not-yet-claimed status. A concurrent replay/retry that already
+          // claimed this box matches 0 rows here and skips, so generateImage()
+          // — the billed provider call — runs at most once per box. A box left
+          // stuck "generating" by a hard crash is the accepted trade (it just
+          // ends imageless, same as a "failed" box); caught errors set
+          // "failed" below, which is re-claimable on the next attempt.
+          const claim = await prisma.generatedImage.updateMany({
+            where: {
+              presentationVersionId: versionId,
+              genid: b.genid,
+              status: { notIn: ["ready", "generating"] },
+            },
+            data: { status: "generating" },
+          });
+          if (claim.count === 0) continue;
           try {
-            await setStatus(b.genid, { status: "generating" });
             const { b64, size } = await generateImage({
               prompt: b.prompt,
               aspect: b.aspect,
