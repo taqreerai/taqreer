@@ -223,6 +223,26 @@
   /* 4. Borders */
   --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
   --tq-border-danger: rgba(239, 68, 68, 0.22);
+
+  /* 4b. Status feedback — operational / degraded / down. One canonical
+     triad (success-green / warning-amber / danger-red) for the server
+     status chip + banner and the dashboard status pills, so those stop
+     hardcoding emerald/amber/red Tailwind utilities. `*-dot` is the solid
+     indicator, `*-text` the label, `*-bg` / `*-border` the low-alpha
+     surface tints. Values are the previous literals (Tailwind 400 dot,
+     300 text, 500 @12%/@30% tints). */
+  --tq-status-ok-dot:      #34d399;
+  --tq-status-ok-text:     #6ee7b7;
+  --tq-status-ok-bg:       rgba(16, 185, 129, 0.12);
+  --tq-status-ok-border:   rgba(16, 185, 129, 0.30);
+  --tq-status-warn-dot:    #fbbf24;
+  --tq-status-warn-text:   #fcd34d;
+  --tq-status-warn-bg:     rgba(245, 158, 11, 0.12);
+  --tq-status-warn-border: rgba(245, 158, 11, 0.30);
+  --tq-status-down-dot:    #f87171;
+  --tq-status-down-text:   #fca5a5;
+  --tq-status-down-bg:     rgba(239, 68, 68, 0.12);
+  --tq-status-down-border: rgba(239, 68, 68, 0.30);
   /* Glass surface fill — matches `.glass-card` / `.qa-card` /
      `.glass-popover` bg recipe (white at `--glass-opacity` alpha).
      Lets consumers reference the same fill via a single token

@@ -37,10 +37,23 @@ export const GENERATION_COLS =
 const STATIC_POINTS = [120, 85, 140, 95, 110, 75];
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-  completed: { label: "مكتمل", cls: "bg-emerald-500/12 text-emerald-300" },
-  generating: { label: "قيد الإنشاء", cls: "bg-amber-500/12 text-amber-300" },
-  queued: { label: "قيد الانتظار", cls: "bg-amber-500/12 text-amber-300" },
-  failed: { label: "فشل", cls: "bg-red-500/12 text-red-300" },
+  completed: {
+    label: "مكتمل",
+    cls: "bg-[var(--tq-status-ok-bg)] text-[var(--tq-status-ok-text)]",
+  },
+  generating: {
+    label: "قيد الإنشاء",
+    cls: "bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]",
+  },
+  queued: {
+    label: "قيد الانتظار",
+    cls: "bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]",
+  },
+  failed: {
+    label: "فشل",
+    cls: "bg-[var(--tq-status-down-bg)] text-[var(--tq-status-down-text)]",
+  },
+  // Neutral (not a status-palette colour) — left as white/opacity.
   cancelled: { label: "أُلغي", cls: "bg-white/10 text-white/50" },
 };
 const FALLBACK_STATUS = { label: "—", cls: "bg-white/10 text-white/50" };

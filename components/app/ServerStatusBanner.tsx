@@ -10,11 +10,11 @@ import { useServerStatus } from "@/lib/hooks/useServerStatus";
 const COPY = {
   degraded: {
     text: "خدمة الإنشاء تشهد بطئاً مؤقتاً — قد يستغرق إنشاء العرض وقتاً أطول من المعتاد.",
-    cls: "border-amber-500/30 bg-amber-500/10 text-amber-200",
+    cls: "border-[var(--tq-status-warn-border)] bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]",
   },
   down: {
     text: "خدمة الإنشاء تواجه انقطاعاً حالياً — قد يفشل الإنشاء. يمكنك المحاولة لاحقاً.",
-    cls: "border-red-500/30 bg-red-500/10 text-red-200",
+    cls: "border-[var(--tq-status-down-border)] bg-[var(--tq-status-down-bg)] text-[var(--tq-status-down-text)]",
   },
 } as const;
 

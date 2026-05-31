@@ -12,9 +12,9 @@ const META: Record<
   Exclude<ServerStatusLevel, "unknown">,
   { label: string; dot: string }
 > = {
-  operational: { label: "كل الأنظمة تعمل", dot: "bg-emerald-400" },
-  degraded: { label: "أداء منخفض حالياً", dot: "bg-amber-400" },
-  down: { label: "انقطاع في الخدمة", dot: "bg-red-400" },
+  operational: { label: "كل الأنظمة تعمل", dot: "bg-[var(--tq-status-ok-dot)]" },
+  degraded: { label: "أداء منخفض حالياً", dot: "bg-[var(--tq-status-warn-dot)]" },
+  down: { label: "انقطاع في الخدمة", dot: "bg-[var(--tq-status-down-dot)]" },
 };
 
 export function ServerStatusChip() {
