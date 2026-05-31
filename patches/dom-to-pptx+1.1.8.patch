@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..be4bdcc 100644
+index 36b1ff9..7448bd2 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -312,7 +312,7 @@ index 36b1ff9..be4bdcc 100644
        );
        if (processed) item.options.data = processed;
        else item.skip = true;
-@@ -2484,14 +2668,32 @@ function prepareRenderItem(
+@@ -2484,19 +2668,44 @@ function prepareRenderItem(
            delete textOpts.highlight;
          }
  
@@ -348,7 +348,19 @@ index 36b1ff9..be4bdcc 100644
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
        if (style.verticalAlign === 'bottom') valign = 'bottom';
-@@ -2578,6 +2780,14 @@ function prepareRenderItem(
+       if (style.alignItems === 'center') valign = 'middle';
+       if (style.justifyContent === 'center' && style.display.includes('flex')) align = 'center';
++      // Patched (taqreer): a STYLED box (own fill or border) carrying text is
++      // a pill / badge / chip — center its text vertically. Browsers center it
++      // via equal top/bottom padding, but the box can be stretched taller
++      // (flex align stretch), which leaves a top-anchored run sitting high.
++      // anchor=ctr keeps it centred regardless of box height. Slide-5's
++      // <span> pills (display:block, no align-items) hit exactly this.
++      if (valign === 'top' && (bgColorObj.hex || hasBorder)) valign = 'middle';
+ 
+       let padding = getPadding(style, config.scale);
+ 
+@@ -2578,6 +2787,14 @@ function prepareRenderItem(
              w: w + padIn * 2,
              h: h + padIn * 2,
              rotate: rotation,
@@ -363,7 +375,7 @@ index 36b1ff9..be4bdcc 100644
            },
          });
        }
-@@ -2586,6 +2796,32 @@ function prepareRenderItem(
+@@ -2586,6 +2803,32 @@ function prepareRenderItem(
      if (textPayload) {
        textPayload.text[0].options.fontSize =
          Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
@@ -396,7 +408,7 @@ index 36b1ff9..be4bdcc 100644
        items.push({
          type: 'text',
          zIndex: zIndex + 1,
-@@ -2598,9 +2834,8 @@ function prepareRenderItem(
+@@ -2598,9 +2841,8 @@ function prepareRenderItem(
            h,
            align: textPayload.align,
            valign: textPayload.valign,
@@ -407,7 +419,7 @@ index 36b1ff9..be4bdcc 100644
            wrap: true,
            autoFit: true,
            vert: writingModeVert,
-@@ -2700,14 +2935,37 @@ function prepareRenderItem(
+@@ -2700,14 +2942,37 @@ function prepareRenderItem(
        if (textPayload) {
          textPayload.text[0].options.fontSize =
            Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;

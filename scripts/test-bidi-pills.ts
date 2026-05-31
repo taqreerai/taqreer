@@ -31,11 +31,27 @@ function pill(id: number, x: number, y: number, cx: number, text: string) {
   );
 }
 
+// A 2-paragraph text block (heading + muted sub-line). `styled` adds a fill so
+// it reads as a badge. Models the slide-2 feature blocks (non-styled).
+function block(id: number, x: number, cx: number, heading: string, sub: string, styled: boolean) {
+  const fill = styled ? `<a:solidFill><a:srgbClr val="0B1A07"/></a:solidFill>` : "";
+  return (
+    `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="B${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="${x}" y="700000"/><a:ext cx="${cx}" cy="423862"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}<a:ln/></p:spPr>` +
+    `<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:spAutoFit/></a:bodyPr><a:lstStyle/>` +
+    `<a:p><a:pPr algn="r" indent="0" marL="0" rtl="1"><a:buNone/></a:pPr><a:r><a:rPr lang="ar-SA" sz="1280" b="1"><a:solidFill><a:srgbClr val="0BF446"/></a:solidFill><a:latin typeface="Cairo"/></a:rPr><a:t>${heading}</a:t></a:r></a:p>` +
+    `<a:p><a:pPr algn="r" indent="0" marL="0" rtl="1"><a:spcBef><a:spcPts val="300"/></a:spcBef><a:buNone/></a:pPr><a:r><a:rPr lang="ar-SA" sz="750"><a:solidFill><a:srgbClr val="D3E3CA"/></a:solidFill><a:latin typeface="Cairo"/></a:rPr><a:t>${sub}</a:t></a:r></a:p>` +
+    `</p:txBody></p:sp>`
+  );
+}
+
 // 5 stacked pills: same x=4762500, same cx=4000500. Pills 1-4 short text,
 // pill 5 long+tight (the slide-3 case). Plus a STANDALONE tight pill with a
 // unique x+cx as the control (should still be widened).
 const STACK_X = 4762500;
 const STACK_CX = 4000500;
+const BLOCK_CX = 901256;
 const slide =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
   `<p:sld ${NS}><p:cSld><p:spTree>` +
@@ -47,6 +63,10 @@ const slide =
   pill(6, STACK_X, 3829496, STACK_CX, "غياب نظام موحد لإدارة العملاء والحجوزات.") +
   // Control: standalone tight pill, unique x+cx → must widen.
   pill(7, 381000, 700000, 1200000, "إدارة المحتوى") +
+  // #1: a NON-styled heading + sub-line block → must widen (heading wraps in
+  // PPT otherwise). A STYLED 2-paragraph badge → must NOT widen.
+  block(8, 2000000, BLOCK_CX, "الرد الفوري", "على مدار الساعة", false) +
+  block(9, 200000, BLOCK_CX, "الحجز التلقائي", "دون تدخل بشري", true) +
   `</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 
 const out = injectBiDiMarkers(slide, makeStats(), undefined, 9144000);
@@ -87,6 +107,11 @@ for (const id of ["2", "3", "4", "5", "6"]) {
 }
 const ctrl = read("7");
 ck(`control standalone pill: widened (${ctrl.cx} > 1200000)`, ctrl.cx > 1200000);
+
+const nonStyled = read("8");
+ck(`#1 non-styled heading+sub-line block: WIDENED (${nonStyled.cx} > ${BLOCK_CX})`, nonStyled.cx > BLOCK_CX);
+const styledBadge = read("9");
+ck(`#1 styled 2-line badge: NOT widened (${styledBadge.cx} == ${BLOCK_CX})`, styledBadge.cx === BLOCK_CX);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

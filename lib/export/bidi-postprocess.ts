@@ -665,22 +665,43 @@ export function injectBiDiMarkers(
     }
     if (!spPr || !txBody) continue;
 
-    // Single-line guard. PowerPoint represents line breaks two ways:
+    // Own fill or non-zero border → a STYLED box (pill / badge / card).
+    // Consumed by the paragraph guard just below AND the slack guard further
+    // down (reused there as `isStyledBox`). Computed once.
+    let styledBox = false;
+    for (let j = 0; j < spPr.children.length; j++) {
+      const c = spPr.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "solidFill" || c.localName === "gradFill") {
+        styledBox = true;
+        break;
+      }
+      if (c.localName === "ln" && (c.getAttribute("w") ?? "0") !== "0") {
+        styledBox = true;
+        break;
+      }
+    }
+
+    // Paragraph guard. PowerPoint represents line breaks two ways:
     //   (a) <a:br/> inside one <a:p>  — soft break, single paragraph
-    //   (b) multiple non-empty <a:p>  — separate paragraphs (most common
-    //       for two-line badges / stacked labels). Without checking (b),
-    //       a two-line badge sails through the (a) check and gets widened
-    //       on the assumption it's single-line — visibly off-margin.
+    //   (b) multiple non-empty <a:p>  — separate paragraphs.
+    // A <br/> (a) is skipped entirely. For (b): 3+ paragraphs are never
+    // widened, and a 2-paragraph STYLED box (a two-line badge) is skipped too
+    // — widening it would push its fill/border off-margin. But a 2-paragraph
+    // NON-styled block (a heading + its muted sub-line, slide-2) DOES get the
+    // widen, so the heading line doesn't wrap under PowerPoint's wider Cairo
+    // rendering. The MAX_SINGLE_LINE_CHARS cap below still excludes body prose.
     if (txBody.getElementsByTagNameNS(NS_A, "br").length > 0) continue;
     const pNodes = txBody.getElementsByTagNameNS(NS_A, "p");
     let nonEmptyParagraphs = 0;
     for (let j = 0; j < pNodes.length; j++) {
       if ((pNodes[j].textContent ?? "").trim().length > 0) {
         nonEmptyParagraphs++;
-        if (nonEmptyParagraphs > 1) break;
+        if (nonEmptyParagraphs > 2) break;
       }
     }
-    if (nonEmptyParagraphs > 1) continue;
+    if (nonEmptyParagraphs > 2) continue;
+    if (nonEmptyParagraphs > 1 && styledBox) continue;
     const tNodes = txBody.getElementsByTagNameNS(NS_A, "t");
     let totalChars = 0;
     let shapeText = "";
@@ -732,19 +753,7 @@ export function injectBiDiMarkers(
     // not fill: estimate text width from char-count × font size (deliberately
     // OVER-estimating the glyph advance so shrink-to-fit pills never clear the
     // bar) and bail only when the box interior is much wider than the text.
-    let isStyledBox = false;
-    for (let j = 0; j < spPr.children.length; j++) {
-      const c = spPr.children[j];
-      if (c.namespaceURI !== NS_A) continue;
-      if (c.localName === "solidFill" || c.localName === "gradFill") {
-        isStyledBox = true;
-        break;
-      }
-      if (c.localName === "ln" && (c.getAttribute("w") ?? "0") !== "0") {
-        isStyledBox = true;
-        break;
-      }
-    }
+    const isStyledBox = styledBox; // computed once near the paragraph guard
     if (isStyledBox) {
       // UNIFORM-STACK guard: this pill sits in a same-x, same-width column of
       // styled pills (slide-3's problem rows). Keep every member at the
