@@ -247,6 +247,44 @@ function injectBiDiMarkers(
     return null;
   }
 
+  // The enclosing <p:sp> (shape) of a paragraph, and whether that shape
+  // carries its OWN fill (solidFill / gradFill directly under <p:spPr>) — i.e.
+  // it's a styled BOX with text written inside it (a pill / chip), not a plain
+  // transparent text frame. dom-to-pptx routes a styled box that has an
+  // ASYMMETRIC border (e.g. slide-3's `border-right:5px` green accent) through
+  // a composite path that writes the text into the shape and CENTRES it, even
+  // though the RTL default is right. Plain text frames (no fill) are emitted
+  // as separate right-aligned paragraphs and must be left alone.
+  function nearestShape(p: Element): Element | null {
+    let node: Node | null = p.parentNode;
+    while (node) {
+      if (node.nodeType === 1 && (node as Element).localName === "sp") {
+        return node as Element;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
+  function shapeHasOwnFill(sp: Element): boolean {
+    for (let i = 0; i < sp.childNodes.length; i++) {
+      const c = sp.childNodes[i];
+      if (c.nodeType !== 1 || (c as Element).localName !== "spPr") continue;
+      const spPr = c as Element;
+      for (let j = 0; j < spPr.childNodes.length; j++) {
+        const f = spPr.childNodes[j];
+        if (
+          f.nodeType === 1 &&
+          ((f as Element).localName === "solidFill" ||
+            (f as Element).localName === "gradFill")
+        ) {
+          return true;
+        }
+      }
+      return false; // found the spPr; no fill child
+    }
+    return false;
+  }
+
 
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
@@ -327,6 +365,19 @@ function injectBiDiMarkers(
     if (pPr.getAttribute("algn") === null) {
       pPr.setAttribute("algn", "r");
       touched = true;
+    }
+    // dom-to-pptx composite-border artifact: a styled FILLED shape that has an
+    // asymmetric border (e.g. slide-3's white problem-pills with a green
+    // `border-right`) has its text written INTO the shape and CENTRED, even
+    // though RTL text defaults to right. Plain text frames have no fill and
+    // are emitted as separate right-aligned paragraphs (untouched). So: an RTL
+    // paragraph centred inside a filled shape is the artifact — force right.
+    if (pPr.getAttribute("algn") === "ctr") {
+      const sp = nearestShape(p);
+      if (sp && shapeHasOwnFill(sp)) {
+        pPr.setAttribute("algn", "r");
+        touched = true;
+      }
     }
     if (touched) modified++;
 
