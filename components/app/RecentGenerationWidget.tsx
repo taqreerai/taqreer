@@ -10,6 +10,7 @@
 // refresh (a row trashed via its 3-dots menu disappears instantly while
 // the SSR query backfills the next project). RTL: `dir="rtl"`.
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -64,9 +65,9 @@ export function RecentGenerationWidget({
           <h2 className="tq-widget-title">أحدث المشاريع</h2>
           <p className="mt-1 text-xs text-muted">آخر المشاريع التي أنشأتها</p>
         </div>
-        <a className="tq-widget-link no-underline" href="/projects">
+        <Link className="tq-widget-link no-underline" href="/projects">
           عرض الكل
-        </a>
+        </Link>
       </header>
 
       {visible.length === 0 ? (

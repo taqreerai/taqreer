@@ -92,7 +92,7 @@ export function RecentActivityWidget() {
                     </span>
                   </span>
                   {n.desc ? (
-                    <span className="mt-0.5 block truncate text-xs leading-relaxed text-muted">
+                    <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-muted">
                       {truncateWords(n.desc, DESC_MAX_WORDS)}
                     </span>
                   ) : null}

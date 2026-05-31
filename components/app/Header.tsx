@@ -95,7 +95,11 @@ export function Header({ isCollapsed, onToggleSidebar }: Props) {
             pointer-events-none on the wrapper + auto on the field keeps
             the empty side-padding from intercepting clicks meant for the
             actions behind it on narrow widths. */}
-        <div className="pointer-events-none absolute left-1/2 top-1/2 w-full max-w-xl -translate-x-1/2 -translate-y-1/2 px-4">
+        {/* Width scales with viewport so the centered field can't grow into
+            the action clusters on narrow desktops (where a fixed max-w-xl
+            would overlap the bell / new-project group + the status chip and
+            steal their clicks). */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 w-full max-w-xs -translate-x-1/2 -translate-y-1/2 px-4 md:max-w-md lg:max-w-xl">
           <div className="pointer-events-auto">
             <HeaderSearch />
           </div>

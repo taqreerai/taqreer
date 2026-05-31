@@ -35,7 +35,7 @@ ok("aspect=portrait", sb[0]?.aspect === "portrait");
 const c = `<img data-genimage="x" data-genid="g3"/><img data-genimage="" data-genid="g4"/><img data-genimage="no id"/><img src="/logo.svg"/>`;
 const sc = scanGenImages(c);
 ok("only the valid box (g3) survives", sc.length === 1 && sc[0].genid === "g3");
-ok("defaults role=hero aspect=landscape", sc[0].role === "hero" && sc[0].aspect === "landscape");
+ok("defaults role=hero aspect=landscape", sc[0]?.role === "hero" && sc[0]?.aspect === "landscape");
 
 // 3b) Unsafe genids (path-traversal / slashes / over-length) are rejected
 //     so they can't escape the storage-path prefix; safe ones pass.
@@ -62,7 +62,12 @@ ok("unknown genid no-ops", injectImgSrc(a, "nope", "https://z") === a);
 const e = `<img data-genimage="p1" data-genid="x1"/><img data-genimage="p2" data-genid="x2"/>`;
 ok("scan 2 boxes", scanGenImages(e).length === 2);
 const inj3 = injectImgSrc(e, "x2", "https://u/2.png");
-ok("inject only x2", inj3.includes('data-genid="x2"') && /data-genid="x2"[^>]*src|src[^>]*data-genid="x2"/.test(inj3) && !/<img src="[^"]*"[^>]*data-genid="x1"/.test(inj3));
+// Extract each <img> tag by its genid and assert on its contents — order-
+// independent, so a reversed attribute order (genid before src) can't let a
+// stray src on x1 slip past.
+const x1Tag = inj3.match(/<img[^>]*\bdata-genid="x1"[^>]*>/)?.[0] ?? "";
+const x2Tag = inj3.match(/<img[^>]*\bdata-genid="x2"[^>]*>/)?.[0] ?? "";
+ok("inject only x2", x2Tag.includes('src="https://u/2.png"') && !x1Tag.includes("src="));
 
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

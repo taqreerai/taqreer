@@ -50,7 +50,11 @@ export function useServerStatus(): ServerStatus | null {
     let active = true;
     load().then((v) => active && setStatus(v));
     const id = window.setInterval(() => {
-      load(true).then((v) => active && setStatus(v));
+      // Cached load: POLL_MS (120s) > TTL_MS (60s), so the cache is always
+      // stale by poll time and this still refetches — but multiple mounted
+      // consumers now share one inflight request instead of each forcing a
+      // network hit, honouring the shared-cache design.
+      load().then((v) => active && setStatus(v));
     }, POLL_MS);
     return () => {
       active = false;

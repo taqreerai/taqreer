@@ -781,13 +781,16 @@ export default function MimicFlow({
                 out of the assistive-tech tab order when locked. */}
             <div
               className={`flex flex-col gap-3 transition-opacity duration-200 ${
-                contentText.length > 0 ? "opacity-40" : ""
+                contentTextReady ? "opacity-40" : ""
               }`}
               // `inert` (not just aria-hidden) when the textarea is in use:
               // removes the dropzone's focusable controls from the tab order
               // AND blocks pointer events AND hides it from AT — aria-hidden
-              // alone left the inner button keyboard-focusable.
-              inert={contentText.length > 0}
+              // alone left the inner button keyboard-focusable. Gate on the
+              // SAME trimmed predicate generation uses (contentTextReady), so
+              // whitespace-only input doesn't lock a dropzone that submit
+              // still treats as empty.
+              inert={contentTextReady}
             >
               <div className="flex items-center gap-2 text-[11px] text-white/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />

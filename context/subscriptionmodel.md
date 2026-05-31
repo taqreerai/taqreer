@@ -86,7 +86,7 @@ months** from purchase, and **survive the monthly reset** (the reset only clears
 **Every Claude API call debits the ledger.** Viewing/editing/exporting do not.
 
 ### Formula
-```
+```text
 credits = base[preset] + (slides × perSlide[preset])
 ```
 

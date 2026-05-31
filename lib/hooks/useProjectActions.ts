@@ -12,7 +12,7 @@
 // returned here, and renders `<ProjectActionsDialogs actions={actions} />`
 // for the menu + dialogs.
 
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 
 // Mirror the server-side cap in /api/projects/[id] PATCH so the input
@@ -63,6 +63,10 @@ export function useProjectActions(
   const [renameMode, setRenameMode] = useState(false);
   const [renameDraft, setRenameDraft] = useState(initialTitle);
   const [renameSaving, setRenameSaving] = useState(false);
+  // Synchronous single-flight latch: `renameSaving` state is async, so a
+  // near-simultaneous onBlur + Enter can both clear the guard and fire two
+  // PATCHes. A ref flips immediately, so the second call returns at once.
+  const renameInFlight = useRef(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [trashBusy, setTrashBusy] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -132,11 +136,13 @@ export function useProjectActions(
     setRenameDraft(titleState);
   };
   const commitRename = async () => {
+    if (renameInFlight.current) return;
     const trimmed = renameDraft.trim().slice(0, MAX_TITLE_LENGTH);
     if (trimmed.length === 0 || trimmed === titleState) {
       cancelRename();
       return;
     }
+    renameInFlight.current = true;
     setRenameSaving(true);
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
@@ -153,6 +159,7 @@ export function useProjectActions(
       // Keep rename mode + draft so the user can retry.
       console.error("rename failed", err);
     } finally {
+      renameInFlight.current = false;
       setRenameSaving(false);
     }
   };

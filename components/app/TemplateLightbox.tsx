@@ -293,7 +293,7 @@ export function TemplateLightbox({
                       const active = i === index;
                       return (
                         <button
-                          key={src}
+                          key={`${i}-${src}`}
                           ref={active ? activeThumbRef : null}
                           type="button"
                           onClick={() => setIndex(i)}
