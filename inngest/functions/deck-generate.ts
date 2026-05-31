@@ -78,7 +78,7 @@ async function flushSlideImages(fileIds: string[]): Promise<number> {
 // the message builders, and flushed after the run.
 type EnhanceImages = { fileIds: string[]; textPerSlide: string[] };
 
-const SYSTEM_PROMPT = `You are an elite editorial-grade presentation designer. Convert raw text into a bespoke HTML/CSS deck. Every slide is a unique canvas — never reuse a layout in a row. Designer, not templater.
+export const SYSTEM_PROMPT = `You are an elite editorial-grade presentation designer. Convert raw text into a bespoke HTML/CSS deck. Every slide is a unique canvas — never reuse a layout in a row. Designer, not templater.
 
 CANVAS
 - Dimensions from brief (16:9 → 1920×1080, 9:16 → 1080×1920). Slide root sets \`width:<W>px; height:<H>px;\`.
@@ -182,6 +182,95 @@ Slide count: match brief's \`slideCount\` if provided; otherwise adapt (sparse i
 FONT SOURCING
 - When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
 - If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@400;700&display=swap\`.`;
+
+// Max generated images per deck (context/images.md) — aesthetic guardrail
+// (more reads as stock-photo soup) + cost ceiling. Server re-enforces (Phase 2).
+const MAX_GENERATED_IMAGES = 12;
+
+// Replace [startMarker … end of endMarker] in the base prompt. Throws if
+// either marker is missing, so a future reword of SYSTEM_PROMPT fails LOUDLY
+// at module load instead of silently leaving the SVG section in the images
+// prompt (the test imports this module, so it surfaces immediately).
+function swapSection(
+  source: string,
+  startMarker: string,
+  endMarker: string,
+  replacement: string,
+): string {
+  const start = source.indexOf(startMarker);
+  if (start === -1) throw new Error(`prompt section start not found: ${startMarker}`);
+  const endAt = source.indexOf(endMarker, start);
+  if (endAt === -1) throw new Error(`prompt section end not found: ${endMarker}`);
+  return source.slice(0, start) + replacement + source.slice(endAt + endMarker.length);
+}
+
+// ─── IMAGES-DECK direction (context/images.md) ───────────────────────
+// The THREE sections that change when brief.imagesMode is on. Everything
+// else (BiDi, chrome, icons, typography, contrast, OUTPUT schema, fonts) is
+// shared with SYSTEM_PROMPT BY DERIVATION below — it cannot drift.
+const IMG_DESIGN_PHILOSOPHY = `DESIGN PHILOSOPHY
+- This is a PHOTOGRAPHY-LED deck: generated images carry the atmosphere and emotion; type + layout frame them. Premium editorial / brand-campaign feel, not an icon-decorated slideshow.
+- Let negative space follow the hierarchy — sparse slides breathe, dense slides earn tighter spacing. Never pad to a whitespace quota, and never shrink text just to manufacture emptiness.
+- Asymmetric composition. Vary every slide. Chrome stays locked.
+- Text length is a design variable — short → MASSIVE structural type over imagery; long → multi-column editorial beside a supporting image.
+- Dominant colour + 1–2 accents pulled from the imagery's mood. Vary themes across the deck.`;
+
+const IMG_LAYOUT_MENU = `CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE
+Pick the layout from the content's shape and let imagery drive impact. FORCE VARIETY: never repeat a layout in a row. Reach for:
+- **Full-bleed photographic hero** — a generated image fills the slide; headline + supporting line laid OVER it with a scrim (see GRAPHICS) for legibility.
+- **Image / text split** — 50/50 or 60/40; a generated image one side, editorial type the other.
+- **Giant typography over imagery** — one word or phrase at hero scale atop a generated photo.
+- **Magazine spread** — large display headline + narrow text columns, a supporting image anchoring one edge.
+- **Sparse poster** — one stat or fact at monumental scale; a generated image as atmosphere or a tight accent.
+- **Timeline / stark comparison** — structural layouts; add a supporting image only where it elevates.
+- **Pure data** — bar / donut / structural blocks in CSS + inline SVG, no chart libraries, NO photo (a photo can't show numbers).
+
+Cards are ONE option, not the default — only for genuine parallel sets (3–6 equal-weight categories); give each a concept-matched generated image or a Lucide icon, never generic placeholder shapes. Never output <ul>/<li>.`;
+
+const IMG_GRAPHICS = `GRAPHICS — generated photography for scenes, inline SVG for everything else
+- PHOTOGRAPHIC / illustrative content — people, places, products, textures, atmospheric heroes, full-bleed backgrounds — is a GENERATED IMAGE, never hand-drawn as SVG. Reserve a box with NO src and the system fills it:
+    <img data-genimage="<prompt>" data-genrole="hero|bg|accent" data-genaspect="landscape|portrait|square" data-genid="<unique-id>" alt="" style="width:…;height:…;object-fit:cover;display:block;background:<subtle brand-tinted placeholder gradient>;"/>
+  • data-genimage — WRITE THE PROMPT FROM THIS SLIDE'S OWN CONTENT. The image must depict what this specific slide is about — its real topic, place, product, people, process, or concept — grounded in the deck's actual subject and brand. Be concrete and literal to the text, never generic or decorative: a slide about a Riyadh logistics firm → "a fleet of delivery vans pulling out of a modern Riyadh distribution hub at dawn", NOT an abstract texture or an unrelated stock scene. Keep the imagery coherent across the deck — one consistent world, lighting, and mood. Describe SUBJECT / SCENE / MOOD only; NEVER request text, words, letters, numbers, captions, logos, signage, charts, diagrams, or UI inside the image (forbidden + stripped server-side) — all wording stays as real HTML over the box.
+  • data-genrole — "hero" (feature image anchoring the slide), "bg" (full-bleed behind content), or "accent" (smaller supporting image).
+  • data-genaspect — the closest of landscape / portrait / square to the box's shape (a full-bleed box matches the deck's own orientation). object-fit:cover crops a minor mismatch cleanly.
+  • data-genid — unique within this deck, e.g. "img-cover", "img-3a".
+  • style — size + position it like any element AND give it a subtle brand-tinted placeholder gradient so it reads as intentional while the image generates.
+- DISTRIBUTION: the COVER MUST use a generated image (full-bleed "bg" OR one half of a split "hero"). Use images where they ELEVATE the content; deliberate whitespace is still good design. Aim for ~one image per 2–3 slides. NEVER exceed ${MAX_GENERATED_IMAGES} generated images across the whole deck. Stats / pure-data / chart slides stay CSS + inline SVG.
+- SCRIM (hard rule): wherever text sits ON TOP of an image box, place a scrim between them — a brand-colour <linearGradient> or a solid overlay <div> with \`opacity\` (NOT rgba / backdrop-filter) — so the text stays legible whatever the photo turns out to be.
+- STILL inline SVG (brand-token fills, NO icon fonts): the brand logo, icons, ALL data visualization, and decorative accents/separators. Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.`;
+
+// Images-deck system prompt = the base prompt with ONLY the three direction
+// sections swapped. All shared invariants are reused verbatim (derivation).
+export const SYSTEM_PROMPT_IMAGES = swapSection(
+  swapSection(
+    swapSection(
+      SYSTEM_PROMPT,
+      "DESIGN PHILOSOPHY",
+      "Vary themes across the deck.",
+      IMG_DESIGN_PHILOSOPHY,
+    ),
+    "CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE",
+    "Never output <ul>/<li>.",
+    IMG_LAYOUT_MENU,
+  ),
+  "GRAPHICS — inline SVG only",
+  "USER RULES has specifics.",
+  IMG_GRAPHICS,
+);
+
+// Images deck = create/scratch flows ONLY (enhance/mimic/data have their own
+// visual handling and never get the override even if the flag leaks on).
+export function isImagesMode(event: DeckGenerateEvent): boolean {
+  const sourceKind = (event.brief as { source?: { kind?: string } } | null)
+    ?.source?.kind;
+  return (
+    (event.brief as { imagesMode?: boolean } | null)?.imagesMode === true &&
+    (event.type ?? "create") === "create" &&
+    sourceKind !== "enhance" &&
+    sourceKind !== "mimic" &&
+    sourceKind !== "data"
+  );
+}
 
 type EnhanceData = {
   level?: "light" | "medium" | "radical";
@@ -1742,7 +1831,10 @@ export const deckGenerate = inngest.createFunction(
             system: [
               {
                 type: "text",
-                text: SYSTEM_PROMPT,
+                // Images deck (context/images.md) swaps the 3 direction
+                // sections; shared invariants are identical, so each mode's
+                // system prompt is a stable, independently-cached prefix.
+                text: isImagesMode(data) ? SYSTEM_PROMPT_IMAGES : SYSTEM_PROMPT,
                 cache_control: { type: "ephemeral" },
               },
             ],

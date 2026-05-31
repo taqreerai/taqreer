@@ -182,6 +182,10 @@ type CreateProjectPayload = {
     } | null;
   };
   saveBrandKit?: boolean;
+  // context/images.md — opt-in "images deck" (the /create toggle lands in
+  // Phase 3; until then it's settable via the payload for testing). Only
+  // honoured for create flows in deck-generate's buildUserMessage gate.
+  imagesMode?: boolean;
   slideCount?: number | null;
   quality?: Quality | null;
   // User-picked on /create/content (2026-05-20). Drives Project.language
@@ -466,6 +470,11 @@ export async function POST(request: Request) {
     brand: claudeBrand,
     rules: payload.rules ?? null,
     slideCount: resolvedSlideCount,
+    // context/images.md — when on (create flow), deck-generate swaps the
+    // SVG-only graphics directive for the images-deck override + reserves
+    // generated-image boxes. OMITTED when off, so a normal deck's brief
+    // (and the prompt built from it) stays byte-for-byte unchanged.
+    ...(payload.imagesMode === true ? { imagesMode: true } : {}),
     // Only include `source` when a valid SourceMeta was provided.
     // deck-generate's readSource() also treats `kind: "scratch"`
     // as null, so a future explicit-scratch payload remains a
