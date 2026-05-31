@@ -2366,11 +2366,11 @@ export function DeckView({
               // `.btn-pill` lives unlayered in globals.css (see comment
               // at globals.css:1096 — "unlayered specificity beating
               // @layer utilities") so its own padding + font-size win
-              // against plain `px-5 py-2 text-sm` utilities. The `!`
-              // prefix lifts the utilities to !important so the link
-              // renders at the same dimensions as the gradient button
-              // beside it.
-              className="btn-pill no-underline !px-5 !py-2 !text-sm"
+              // against plain `px-5 py-2 text-sm` utilities. The trailing
+              // `!` (Tailwind v4 important syntax) lifts the utilities to
+              // !important so the link renders at the same dimensions as
+              // the gradient button beside it.
+              className="btn-pill no-underline px-5! py-2! text-sm!"
             >
               العودة للرئيسية
             </Link>

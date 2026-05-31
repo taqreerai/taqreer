@@ -78,7 +78,9 @@ const FONT_MODE_OPTIONS = [
 type ExtractCompletedResponse = {
   status: "completed";
   result: {
-    anthropicFileId: string;
+    // Optional: extract-source intentionally omits this for the enhance flow
+    // (it feeds per-slide PNGs at generation time, not a PDF document block).
+    anthropicFileId?: string;
     fonts: string[];
     colors: string[];
     pageCount: number;
@@ -539,7 +541,9 @@ export default function EnhanceContentPage() {
         seedFromExtraction({
           source: {
             kind: "enhance",
-            anthropicFileId: result.anthropicFileId,
+            ...(result.anthropicFileId
+              ? { anthropicFileId: result.anthropicFileId }
+              : {}),
             fonts: result.fonts,
             textPerSlide: result.textPerSlide,
             sourcePath: result.sourcePath,
