@@ -238,10 +238,49 @@ model PresentationVersion {
   slideJson      Json
   status         String       @default("completed")
   createdAt      DateTime     @default(now())
-  presentation   Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
-  comments       Comment[]
+  presentation    Presentation     @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  comments        Comment[]
+  generatedImages GeneratedImage[]
 
   @@unique([presentationId, versionNumber])
+}
+
+// AI-generated raster images (gpt-image-2) that fill reserved
+// `data-genimage` boxes in an images-mode deck (context/images.md).
+// One row per box: the box's prompt + role + aspect (so Phase 4
+// regenerate can amend the prompt), plus the fill status and the
+// permanent public storage URL once ready. The `genid` matches the
+// `data-genid` attribute on the box's <img> in the slide HTML — the
+// reconcile step injects `storageUrl` as that img's `src`.
+//
+// Keyed to the VERSION (not the Presentation) because a full-deck
+// regen creates a new PresentationVersion with a fresh set of boxes;
+// the cascade drops a version's images with it.
+model GeneratedImage {
+  id                    String              @id @default(cuid())
+  presentationVersionId String
+  // Stable per-slide key (== SlideState.slideKey == slide.slideId).
+  slideKey              String
+  // Matches data-genid on the <img> in slide HTML; unique per version.
+  genid                 String
+  // The textless prompt Claude authored — amendable on regenerate.
+  prompt                String
+  // hero | bg | accent
+  role                  String
+  // landscape | portrait | square (box aspect → gpt-image-2 size)
+  aspect                String
+  // The size actually requested, e.g. "1536x1024". Empty until generated.
+  size                  String              @default("")
+  // pending | generating | ready | failed
+  status                String              @default("pending")
+  // Permanent public URL once ready; null while pending / on failure.
+  storageUrl            String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  version               PresentationVersion @relation(fields: [presentationVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([presentationVersionId, genid])
+  @@index([presentationVersionId, status])
 }
 
 // Per-slide metadata that survives across slide-content versions

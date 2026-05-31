@@ -1,4 +1,5 @@
 export { deckGenerate } from "./functions/deck-generate";
+export { deckImagesGenerate } from "./functions/deck-images-generate";
 export { deckRegeneratePartial } from "./functions/deck-regenerate-partial";
 export { brandAnalyze } from "./functions/brand-analyze";
 export { templateRender } from "./functions/template-render";

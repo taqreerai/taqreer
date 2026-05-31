@@ -2417,6 +2417,27 @@ export const deckGenerate = inngest.createFunction(
       }
     });
 
+    // Images-mode (context/images.md): the deck is now saved with reserved
+    // placeholder boxes; kick off the async gpt-image-2 fill. Fire-and-
+    // forget — a dispatch failure must never fail a successful generation
+    // (the boxes just stay branded gradients), and the fill runs in its own
+    // retried function (deck-images-generate). Off-mode decks never reach
+    // this branch, so they remain byte-identical to before.
+    if (isImagesMode(data)) {
+      await inngest
+        .send({
+          name: "deck.images.requested",
+          data: { projectId, versionId },
+        })
+        .catch((err) => {
+          logger.warn("deck_images_dispatch_failed", {
+            projectId,
+            versionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+
     // Flush the transient enhance slide images now that the deck is
     // saved — they've served their purpose. Best-effort deletes (a
     // failure just leaves a free, unreferenced file a sweep can reap);
