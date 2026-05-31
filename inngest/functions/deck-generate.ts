@@ -146,7 +146,7 @@ Match the icon to the concept and use Lucide's actual path data — don't invent
 
 TYPOGRAPHY
 - Fonts: when the brief sources fonts, use those (copy their URLs verbatim per FONT SOURCING). When none are provided, default to Cairo for Arabic and Poppins (Roboto fallback) for Latin.
-- Use the font's full weight range for hierarchy: \`400\` body, \`500\`–\`600\` sub-heads, \`700\`+ display. The exporter embeds every weight you use, so each renders identically in PowerPoint. Keep Arabic BODY text at \`700\` or below — the heaviest weights (\`800\`–\`900\`) ink up at small sizes, so reserve them for large display type. You may also use lighter weights (\`300\`) for large, airy headings.
+- Weights are yours to choose — no two-weight limit. Use whatever weights from the font's full range best serve each slide's hierarchy. The exporter embeds every weight you use, so each renders identically in PowerPoint. Sole judgment call: very heavy weights (\`800\`–\`900\`) thicken Arabic glyphs at small sizes, so prefer them for large display type over body copy.
 
 COLOUR CONTRAST — non-negotiable
 For each text / icon / shape, name the surface it sits on, pick a contrasting colour. WCAG AA (4.5:1 body) / AAA (7:1 hero headlines). Forbidden:
