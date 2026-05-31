@@ -12,6 +12,11 @@ import {
   type BiDiPostprocessStats,
 } from "@/lib/export/bidi-postprocess";
 import { extractGradientIntents } from "@/lib/export/gradient-text";
+import {
+  embedConvertedFontsInPptx,
+  type ConvertedFont,
+  type EmbedFontStats,
+} from "@/lib/export/embed-fonts-client";
 
 const STRONG_RTL =
   /[֐-׿؀-ۿݐ-ݿࢠ-ࣿיִ-﻿]/;
@@ -587,39 +592,48 @@ export async function exportManifestAsPptx(
     }
 
     const stats = makeStats();
-    // Embed the theme fonts (Google Fonts heading + body, weights 400 + 700)
-    // server-side via the API route — wawoff2's WASM bridge has a Node-only
-    // `fs` dep that Turbopack can't bundle for the browser, so the embed
-    // step lives on the server. Best-effort: if the route fails or returns
-    // an error, we fall through with the unembedded blob (legacy behaviour,
-    // PPT will resolve fonts via the system registry — the very bug this
-    // is meant to fix, but at least the export still works).
+    // Embed the theme fonts (Google Fonts heading + body, weights 400 + 700).
+    // CONVERSION (woff2 → EOT) runs server-side because wawoff2's WASM bridge
+    // needs Node's `fs`; the SPLICE runs HERE in the browser. We send only the
+    // font URLs (a few hundred bytes) and get back the EOT bytes (~0.5 MB), so
+    // the deck never crosses the network — an images-mode deck (15–40 MB) used
+    // to blow past the route's body cap and ship with NO embedded fonts, which
+    // is what made PowerPoint substitute the heaviest Cairo on edit.
+    // Best-effort: any failure falls through with the unembedded blob.
     let fontEmbeddedBlob: Blob = rawBlob;
     try {
-      const fd = new FormData();
-      fd.append("pptx", rawBlob, fileName);
-      fd.append(
-        "fonts",
-        JSON.stringify(
-          [manifest.theme.fontHeading, manifest.theme.fontBody]
-            .filter((f) => f?.url && f.name)
-            .map((f) => ({ name: f.name, url: f.url })),
-        ),
-      );
-      const res = await fetch("/api/export/embed-fonts", {
-        method: "POST",
-        body: fd,
-      });
-      if (res.ok) {
-        fontEmbeddedBlob = await res.blob();
-        if (process.env.NODE_ENV !== "production") {
-          const embedded = res.headers.get("x-embed-stats") ?? "?";
-          console.log(`[html-export] font-embed: ${embedded}`);
+      const fontTargets = [manifest.theme.fontHeading, manifest.theme.fontBody]
+        .filter((f) => f?.url && f.name)
+        .map((f) => ({ name: f.name, url: f.url }));
+      if (fontTargets.length > 0) {
+        const res = await fetch("/api/export/embed-fonts", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fonts: fontTargets }),
+        });
+        if (res.ok) {
+          const payload = (await res.json()) as { fonts?: ConvertedFont[] };
+          const embedStats: EmbedFontStats = {
+            attempted: 0,
+            embedded: 0,
+            failed: 0,
+          };
+          fontEmbeddedBlob = await embedConvertedFontsInPptx(
+            rawBlob,
+            payload.fonts ?? [],
+            JSZip,
+            embedStats,
+          );
+          if (process.env.NODE_ENV !== "production") {
+            console.log(
+              `[html-export] font-embed: attempted=${embedStats.attempted} embedded=${embedStats.embedded} failed=${embedStats.failed}`,
+            );
+          }
+        } else if (typeof console !== "undefined") {
+          console.warn(
+            `[html-export] font-embed: server returned ${res.status}, continuing without embed`,
+          );
         }
-      } else if (typeof console !== "undefined") {
-        console.warn(
-          `[html-export] font-embed: server returned ${res.status}, continuing without embed`,
-        );
       }
     } catch (err) {
       if (typeof console !== "undefined") {
