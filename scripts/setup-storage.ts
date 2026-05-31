@@ -18,6 +18,10 @@ const buckets = [
   // from the saved version pointer, so public is the simpler tradeoff.
   { name: "slide-previews", public: true },
   { name: "template-assets", public: true },
+  // gpt-image-2 generated deck images (context/images.md). Public so the
+  // <img src> baked into saved slide HTML never expires (exports + decks
+  // older than a year keep resolving).
+  { name: "generated-images", public: true },
 ];
 
 async function setupBuckets() {
