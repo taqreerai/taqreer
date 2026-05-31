@@ -280,6 +280,9 @@ export default function CreatePage() {
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
   const [pagination, setPagination] = useState<boolean>(true);
+  // context/images.md — opt-in "images deck". On → deck-generate uses the
+  // photography-led system prompt + reserves generated-image boxes.
+  const [imagesMode, setImagesMode] = useState<boolean>(false);
   const [persistentText, setPersistentText] = useState<string>("");
   const [persistentPosition, setPersistentPosition] =
     useState<CornerPosition>("bottom-center");
@@ -569,6 +572,7 @@ export default function CreatePage() {
           slideCount:
             slideCountMode === "custom" ? slideCountValue : null,
           quality,
+          imagesMode,
           ...(source ? { source } : {}),
         }),
       });
@@ -695,6 +699,26 @@ export default function CreatePage() {
                 onOpen={() => contentInputRef.current?.click()}
                 onDrop={(f) => setContentFromInput(f)}
                 onRemove={removeContentFile}
+              />
+            </div>
+
+            {/* AI images toggle (context/images.md) — on = photography-led
+                deck; deck-generate swaps to the images system prompt and
+                reserves generated-image boxes. Off = today's SVG deck. */}
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-3">
+              <div className="min-w-0">
+                <span className="block text-xs font-semibold text-white/70">
+                  صور بالذكاء الاصطناعي
+                </span>
+                <span className="block text-[11px] text-white/40">
+                  أنشئ صورًا فوتوغرافية مولّدة للعرض
+                </span>
+              </div>
+              <Toggle
+                ariaLabel="صور بالذكاء الاصطناعي"
+                value={imagesMode}
+                onChange={setImagesMode}
+                disabled={submitting}
               />
             </div>
           </div>
