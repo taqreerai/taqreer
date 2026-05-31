@@ -2399,20 +2399,28 @@ export function DeckView({
     const percent = progressPercent(progress);
     // Slot count switches on the user's slide-count mode:
     //   • custom (user picked N) → fixed-N tiles. Today's behavior.
-    //   • auto                   → exactly `streamingPreview.length + 1`
-    //                              tiles: one per slide Claude has
-    //                              closed, plus one trailing "still
-    //                              working" placeholder that uses the
-    //                              paragraph-write icon (same as a
-    //                              state:"current" placeholder). The
-    //                              tail disappears when status flips
-    //                              to "completed" and the manifest
-    //                              branch below takes over.
+    //   • auto                   → reserve a slot per slide Claude COMMITTED
+    //                              to up front (`progress.estimatedTotal`,
+    //                              which the server fills from the manifest's
+    //                              top-level `slideCount` as soon as it
+    //                              streams). So the user sees the full total
+    //                              immediately — closed slides render as
+    //                              thumbnails, the rest pulse as pending, and
+    //                              the slot Claude is writing shows the
+    //                              paragraph-write icon. Before the count
+    //                              arrives (early thinking) it's just the
+    //                              streamed slides + a trailing tail. If Claude
+    //                              overshoots its own number, the +1 keeps the
+    //                              row growing. The tail/extra slots disappear
+    //                              when status flips to "completed" and the
+    //                              manifest branch below takes over.
     // The `Math.max(..., 1)` guarantees at least one tile so an empty
     // sidebar doesn't flash on initial paint before Claude's first
     // slide closes — the user sees the writing icon immediately.
+    const autoTotalHint =
+      progress && progress.estimatedTotal > 0 ? progress.estimatedTotal : 0;
     const slotCount = initialSlideCountAuto
-      ? Math.max(streamingPreview.length + 1, 1)
+      ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
       : placeholders.length;
     const total = slotCount;
     // Mix real streamed slides (kind:"slide") into the head of the

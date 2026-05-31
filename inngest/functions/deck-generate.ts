@@ -166,6 +166,7 @@ OUTPUT — JSON only in the text channel
   "title": "<3–8 word title in the deck's language>",
   "language": "ar" | "en",
   "direction": "rtl" | "ltr",
+  "slideCount": <integer — the EXACT number of slides you will produce; decide it here, before the theme, then emit exactly this many>,
   "theme": {
     "palette": ["#hex", ...],
     "fontHeading": { "name": "...", "url": "https://fonts.googleapis.com/..." },
@@ -177,7 +178,7 @@ OUTPUT — JSON only in the text channel
     { "slideId": "<unique>", "role": "cover" | "section" | "content" | "stats" | "quote" | "image" | "closing", "html": "<div dir='rtl' style='...'>...</div>" }
   ]
 }
-Slide count: match brief's \`slideCount\` if provided; otherwise adapt (sparse intro 5, deep doc 20+). Every \`slideId\` unique.
+Slide count: decide it FIRST and write it as the top-level \`slideCount\` field (before \`theme\`) — match brief's \`slideCount\` if provided, otherwise adapt (sparse intro 5, deep doc 20+) — then produce EXACTLY that many slide objects. The live-preview reserves one slot per slide from this number, so the user sees the full total immediately; a mismatch leaves empty or missing tiles. Every \`slideId\` unique.
 
 FONT SOURCING
 - When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
@@ -1713,6 +1714,13 @@ export const deckGenerate = inngest.createFunction(
       // the slides). Reused for every continuation + the final assembly,
       // so the whole deck shares one locked theme.
       let streamingTheme: unknown = null;
+      // Total slide count Claude commits to in the manifest head (top-level
+      // `slideCount`, emitted before the slides). Captured ONCE from the
+      // stream so the live nav can reserve a slot per planned slide instead of
+      // guessing — critical in AUTO mode, where the user otherwise sees a lone
+      // tile with no sense of how many slides are coming. Survives
+      // continuations (set on the first call, reused after).
+      let declaredTotal: number | null = null;
       const streamDirection = resolveBriefDirection(data.brief);
       const streamLanguage = resolveBriefLanguage(data.brief);
 
@@ -1855,7 +1863,7 @@ export const deckGenerate = inngest.createFunction(
             void writeProgress(
               "thinking",
               priorSlides.length + callSlides.length,
-              estimatedTotal,
+              declaredTotal ?? estimatedTotal,
               {
                 thinkingTokens: Math.round(snapshot.length / 4),
                 thinkingBudget,
@@ -1904,13 +1912,25 @@ export const deckGenerate = inngest.createFunction(
               }
             }
           }
+          // Capture the declared total once. It's a top-level scalar that
+          // streams in the head (before `"slides"`), so scan only the head to
+          // avoid matching a stray occurrence inside slide HTML.
+          if (declaredTotal === null) {
+            const slidesIdx = buffer.indexOf('"slides"');
+            const head = slidesIdx >= 0 ? buffer.slice(0, slidesIdx) : buffer;
+            const m = head.match(/"slideCount"\s*:\s*(\d+)/);
+            if (m) {
+              const n = parseInt(m[1], 10);
+              if (Number.isFinite(n) && n > 0 && n <= 100) declaredTotal = n;
+            }
+          }
           const now = Date.now();
           if (justClosed.length > 0 && now - lastWriteAt > 800) {
             lastWriteAt = now;
             void writeProgress(
               "designing",
               priorSlides.length + callSlides.length,
-              estimatedTotal,
+              declaredTotal ?? estimatedTotal,
             );
           }
           if (

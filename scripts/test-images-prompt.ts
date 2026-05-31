@@ -12,8 +12,11 @@ import { WebSocket as UndiciWebSocket } from "undici";
 (globalThis as unknown as { WebSocket?: unknown }).WebSocket ??= UndiciWebSocket;
 import { createHash } from "node:crypto";
 
-// Snapshot captured from the prompt BEFORE the shared-core refactor.
-const BASE_SHA256 = "ef4e59269e4c97b22c5b00cdaf387ad5d0364673036b3c2232d36418be92be2c";
+// Byte-identity snapshot of the base SYSTEM_PROMPT. Re-baseline this hash
+// (run the test, copy the printed value) ONLY when you intentionally edit the
+// shared prompt core — it guards against accidental drift between the base and
+// images variants. Last re-baselined for the top-level `slideCount` field.
+const BASE_SHA256 = "e0b9d387ca6bdabae371e3eadfd111d9e28d659c1b65485484a559b0a1cc229b";
 
 async function main(): Promise<boolean> {
   const { SYSTEM_PROMPT, SYSTEM_PROMPT_IMAGES, isImagesMode } = await import(
