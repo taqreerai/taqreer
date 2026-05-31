@@ -169,7 +169,9 @@ function buildGradFillXml(spec: {
   );
 }
 
-function injectBiDiMarkers(
+// Exported for unit tests (scripts/test-bidi-pills.ts). Per-slide string
+// transform; the public entry point is `fixBiDiInPptxBlob`.
+export function injectBiDiMarkers(
   xml: string,
   stats: BiDiPostprocessStats,
   gradientIntents?: GradientIntents,
@@ -605,6 +607,52 @@ function injectBiDiMarkers(
     return best;
   }
 
+  // Width-uniformity map for PASS 3: how many STYLED boxes (own fill/border)
+  // share each exact `${x}:${cx}` — i.e. sit in a same-x, same-width vertical
+  // stack. A pill that belongs to such a stack (slide-3's problem rows) must
+  // keep its authored width: widening only the one whose text happens to be
+  // tight shoves it wider than its siblings and breaks the column alignment.
+  // Keyed on x AND cx, so a HORIZONTAL row of equal-width chips (same width,
+  // different x) is NOT matched and still gets the per-pill widen below.
+  const styledStackFreq = new Map<string, number>();
+  for (let i = 0; i < spShapes.length; i++) {
+    const sp = spShapes[i];
+    let spPrEl: Element | null = null;
+    for (let j = 0; j < sp.children.length; j++) {
+      const c = sp.children[j];
+      if (c.namespaceURI === NS_P && c.localName === "spPr") {
+        spPrEl = c;
+        break;
+      }
+    }
+    if (!spPrEl) continue;
+    let styled = false;
+    let xfrmEl: Element | null = null;
+    for (let j = 0; j < spPrEl.children.length; j++) {
+      const c = spPrEl.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "xfrm") xfrmEl = c;
+      else if (c.localName === "solidFill" || c.localName === "gradFill")
+        styled = true;
+      else if (c.localName === "ln" && (c.getAttribute("w") ?? "0") !== "0")
+        styled = true;
+    }
+    if (!styled || !xfrmEl) continue;
+    let sx = 0;
+    let scx = 0;
+    for (let j = 0; j < xfrmEl.children.length; j++) {
+      const c = xfrmEl.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "off") sx = parseInt(c.getAttribute("x") ?? "0", 10);
+      else if (c.localName === "ext")
+        scx = parseInt(c.getAttribute("cx") ?? "0", 10);
+    }
+    if (scx > 0) {
+      const k = `${sx}:${scx}`;
+      styledStackFreq.set(k, (styledStackFreq.get(k) ?? 0) + 1);
+    }
+  }
+
   for (let i = 0; i < spShapes.length; i++) {
     const sp = spShapes[i];
 
@@ -698,6 +746,14 @@ function injectBiDiMarkers(
       }
     }
     if (isStyledBox) {
+      // UNIFORM-STACK guard: this pill sits in a same-x, same-width column of
+      // styled pills (slide-3's problem rows). Keep every member at the
+      // authored width — widening just this one (because its text is tight)
+      // would make it wider than its siblings and break the alignment.
+      const oldXForStack = off
+        ? parseInt(off.getAttribute("x") ?? "0", 10)
+        : 0;
+      if ((styledStackFreq.get(`${oldXForStack}:${oldCx}`) ?? 0) >= 2) continue;
       const firstRPr = txBody.getElementsByTagNameNS(NS_A, "rPr")[0];
       const sz = firstRPr
         ? parseInt(firstRPr.getAttribute("sz") ?? "1800", 10)
