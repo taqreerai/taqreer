@@ -15,6 +15,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { ProjectActionsDialogs } from "@/components/app/ProjectActionsDialogs";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import {
   MAX_TITLE_LENGTH,
   useProjectActions,
@@ -118,6 +119,14 @@ export function ProjectTableRow({
               alt=""
               className="h-full w-full object-cover"
             />
+          ) : item.status === "generating" || item.status === "queued" ? (
+            // Mid-generation (no thumbnail yet) → the animated paragraph-
+            // write icon (same one the slide-nav placeholders use), so the
+            // row reads as actively-working instead of showing a static
+            // "slideshow" glyph that looks like a play button.
+            <span className="absolute inset-0 flex items-center justify-center text-amber-300/80">
+              <ParagraphWriteIcon size={18} rtl mode="loop" />
+            </span>
           ) : (
             <span className="absolute inset-0 flex items-center justify-center text-muted/40">
               <span className="material-symbols-outlined text-[18px]">
