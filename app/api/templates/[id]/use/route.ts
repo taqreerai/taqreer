@@ -23,7 +23,7 @@
 // Side effect: atomically increments `useCount`.
 //
 // Response:
-//   200 { title, brand, designAnthropicFileId, format, language, isPremium, useCount }
+//   200 { brand, designAnthropicFileId, format, language, isPremium, useCount }
 //   401 unauthorised
 //   402 premium template + user isn't on the Pro plan
 //   403 template is private + user isn't the owner
@@ -62,7 +62,6 @@ export async function POST(
     where: { id: templateId },
     select: {
       id: true,
-      title: true,
       brand: true,
       pdfUrl: true,
       isPublic: true,
@@ -139,7 +138,7 @@ export async function POST(
     const bytes = Buffer.from(await pdfRes.arrayBuffer());
     designAnthropicFileId = await uploadFileToAnthropic({
       bytes,
-      fileName: `${template.title || "template"}.pdf`,
+      fileName: `template-${templateId}.pdf`,
       contentType: "application/pdf",
     });
   } catch (err) {
@@ -162,7 +161,6 @@ export async function POST(
   });
 
   return NextResponse.json({
-    title: template.title,
     brand,
     designAnthropicFileId,
     format: brand.format,

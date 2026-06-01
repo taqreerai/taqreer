@@ -112,7 +112,6 @@ export default async function DashboardPage() {
       // true at the call site — not selected from the DB.
       select: {
         id: true,
-        title: true,
         brand: true,
         thumbnailUrls: true,
         isPublic: true,
@@ -158,7 +157,6 @@ export default async function DashboardPage() {
       (brand.fontHeading as { name?: unknown; url?: unknown } | undefined) ?? {};
     return {
       id: t.id,
-      title: t.title,
       // Dashboard widget only shows the user's OWN templates (the
       // query filters by ownerId), so isMine is always true. The
       // 3-dots menu on each tile uses this to decide whether to

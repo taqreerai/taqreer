@@ -48,7 +48,6 @@ type Props = {
   open: boolean;
   slides: string[];
   format: SlideFormat;
-  title: string;
   onClose: () => void;
   // Handler for the "Use this template" footer CTA. When provided the
   // button is enabled and clicking fires it (the caller navigates to
@@ -68,7 +67,6 @@ export function TemplateLightbox({
   open,
   slides,
   format,
-  title,
   onClose,
   onUseTemplate,
   useBusy,
@@ -208,7 +206,7 @@ export function TemplateLightbox({
                     id="tpl-lbx-title"
                     className="truncate text-base font-semibold text-white"
                   >
-                    {title}
+                    معاينة القالب
                   </h2>
                   {isPremium ? <PremiumBadge className="shrink-0" /> : null}
                 </div>
@@ -251,7 +249,7 @@ export function TemplateLightbox({
                     <img
                       key={currentSrc}
                       src={currentSrc}
-                      alt={`${title} — ${index + 1} / ${total}`}
+                      alt={`شريحة ${index + 1} من ${total}`}
                       className="h-full w-full object-contain"
                       style={{
                         // Fade between slides on index change. Tiny

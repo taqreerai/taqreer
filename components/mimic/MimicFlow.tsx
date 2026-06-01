@@ -1095,7 +1095,7 @@ export default function MimicFlow({
                       </span>
                     </span>
                     <p className="truncate px-2 text-sm font-semibold text-white">
-                      {templateSeed!.title}
+                      {templateSeed!.title ?? "قالب جاهز"}
                     </p>
                     <p className="text-xs text-white/60">قالب مختار · PDF</p>
                   </div>

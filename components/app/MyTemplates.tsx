@@ -129,7 +129,6 @@ export function MyTemplates({
         open={!!preview}
         slides={preview?.thumbnailUrls ?? []}
         format={previewFormat}
-        title={preview?.title ?? ""}
         isPremium={preview?.isPremium ?? false}
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}

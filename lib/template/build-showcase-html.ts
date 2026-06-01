@@ -1,15 +1,13 @@
-// Build the 3-slide brand-showcase HTML document for a Template.
+// Build the 2-slide brand-showcase HTML document for a Template.
 //
 // Output mirrors the structure of `buildHtmlDocumentServer`: a single
-// HTML doc with 3 `<div class="hx-slide" data-slide-id="...">` blocks,
+// HTML doc with `<div class="hx-slide" data-slide-id="...">` blocks,
 // each sized at the brand's canvas dimensions. That lets the showcase
 // render pipeline (template-showcase-render Inngest function) reuse
 // the same Puppeteer per-slide screenshot loop as thumbnail-render —
 // no second render path to maintain.
 //
-// The three slides, in order:
-//   showcase-01-cover      — Big template title + accent bars. Defines
-//                            the brand's "first impression" feel.
+// The two slides, in order:
 //   showcase-02-typography — Heading font name set in the heading font
 //                            (very large), body font name set in the
 //                            body font, with a PANGRAM beneath each
@@ -21,10 +19,12 @@
 //                            code in auto-contrast text.
 //
 // (Was 4 slides until 2026-05-22 — an abstract layout sample was
-// retired because its geometric blocks competed with the cover's
-// composition without adding distinct information about the brand.)
+// retired. The cover slide — a big title + accent bars — was retired
+// 2026-06-01 when templates became untitled; the tile's cover is the
+// source project's own first slide, so the showcase cover was never
+// screenshotted anyway. The IDs keep their 02/03 numbering.)
 //
-// All three slides:
+// Both slides:
 //   • Render at the brand's exact canvas size (no resize, so the PNGs
 //     are screenshot-accurate at 1920×1080 or 1080×1920).
 //   • Honour the brand's direction (rtl/ltr) on the root element so
@@ -45,7 +45,6 @@ import { dimensionsForFormat } from "@/lib/schema/slide";
 // [data-slide-id="..."] to clip each slide. Don't change these without
 // updating the render function in lockstep.
 export const SHOWCASE_SLIDE_IDS = [
-  "showcase-01-cover",
   "showcase-02-typography",
   "showcase-03-palette",
 ] as const;
@@ -53,10 +52,7 @@ export const SHOWCASE_SLIDE_IDS = [
 // If a caller needs the union, re-derive as
 // `(typeof SHOWCASE_SLIDE_IDS)[number]` at the use site.
 
-export function buildShowcaseHtml(
-  brand: BrandSnapshot,
-  templateTitle: string,
-): string {
+export function buildShowcaseHtml(brand: BrandSnapshot): string {
   const { width: canvasW, height: canvasH } = dimensionsForFormat(brand.format);
   const isRtl = brand.direction === "rtl";
 
@@ -82,7 +78,7 @@ export function buildShowcaseHtml(
 <html dir="${brand.direction}" lang="${brand.language}">
 <head>
 <meta charset="UTF-8">
-<title>${escapeText(templateTitle)}</title>
+<title>${isRtl ? "معاينة القالب" : "Template preview"}</title>
 ${fontLinks}
 <style>
   :root {
@@ -111,12 +107,10 @@ ${paletteVars}
     overflow: hidden;
     box-sizing: border-box;
   }
-  ${showcaseStyles(isRtl)}
+  ${showcaseStyles()}
 </style>
 </head>
 <body>
-${renderCoverSlide(templateTitle, isRtl)}
-
 ${renderTypographySlide(brand, isRtl)}
 
 ${renderPaletteSlide(brand, isRtl)}
@@ -125,17 +119,6 @@ ${renderPaletteSlide(brand, isRtl)}
 }
 
 // ─── Per-slide renderers ──────────────────────────────────────────────
-
-function renderCoverSlide(title: string, isRtl: boolean): string {
-  return `<div class="hx-slide showcase-cover" dir="${isRtl ? "rtl" : "ltr"}" data-slide-id="showcase-01-cover">
-  <div class="showcase-cover__accent showcase-cover__accent--1"></div>
-  <div class="showcase-cover__accent showcase-cover__accent--2"></div>
-  <div class="showcase-cover__inner">
-    <div class="showcase-cover__eyebrow">${isRtl ? "قالب" : "TEMPLATE"}</div>
-    <h1 class="showcase-cover__title">${escapeText(title)}</h1>
-  </div>
-</div>`;
-}
 
 function renderTypographySlide(brand: BrandSnapshot, isRtl: boolean): string {
   // PANGRAMS — every glyph at least once so the user judges typographic
@@ -232,65 +215,12 @@ function contrastingTextColor(hex: string): string {
 
 // ─── Shared CSS ───────────────────────────────────────────────────────
 
-function showcaseStyles(isRtl: boolean): string {
+function showcaseStyles(): string {
   // `start`/`end` margins so RTL/LTR mirror without separate stylesheets.
   // Padding values target a 1920×1080 canvas; on 1080×1920 portrait
   // they still look proportional because we use ems + viewport-relative
   // units only where they don't fight the fixed canvas size.
-  const inset = isRtl ? "right" : "left";
-  const insetOpposite = isRtl ? "left" : "right";
   return `
-  /* Cover */
-  .showcase-cover {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 80px;
-  }
-  .showcase-cover__accent {
-    position: absolute;
-    border-radius: 9999px;
-    filter: blur(6px);
-    opacity: 0.85;
-  }
-  .showcase-cover__accent--1 {
-    width: 320px;
-    height: 320px;
-    background: var(--primary);
-    top: -120px;
-    ${inset}: -120px;
-    opacity: 0.55;
-  }
-  .showcase-cover__accent--2 {
-    width: 220px;
-    height: 220px;
-    background: var(--accent);
-    bottom: -80px;
-    ${insetOpposite}: -80px;
-    opacity: 0.45;
-  }
-  .showcase-cover__inner {
-    text-align: center;
-    position: relative;
-    z-index: 1;
-  }
-  .showcase-cover__eyebrow {
-    font-family: var(--font-body);
-    font-size: 24px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    opacity: 0.55;
-    margin-bottom: 32px;
-  }
-  .showcase-cover__title {
-    font-family: var(--font-heading);
-    font-size: 140px;
-    line-height: 1.05;
-    margin: 0;
-    font-weight: 700;
-    color: var(--brand-text);
-  }
-
   /* Typography — sizes bumped 2026-05-22 so the type samples read at
      real-presentation scale. Heading font NAME is the marquee (still
      huge), the SAMPLE pangram beneath jumped from 48px → 80px so the

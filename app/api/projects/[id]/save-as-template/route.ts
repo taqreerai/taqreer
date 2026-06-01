@@ -13,20 +13,14 @@
 // template (but a template saved before its first completed manifest
 // has nothing to render — guarded below).
 //
+// Templates are intentionally UNTITLED — the community feed shows the
+// preview thumbnail only, with no project-derived name that could leak
+// private context ("Q4 Pitch — Client X") into the public browser.
+//
 // Request body:
 //   {
 //     isPublic: boolean   optional, defaults to false
 //   }
-//
-// `title` is intentionally NOT a client-supplied field — the user does
-// NOT name templates by hand. The server uses `Project.templateName`
-// (the Claude-Haiku-generated 2-3 word evocative name set at deck-
-// generate time, e.g. "نجم الليل البعيد") as the canonical template
-// title. This keeps the public templates feed free of project-specific
-// names that could leak private context ("Q4 Pitch — Client X") into
-// the community browser. Falls back to `Project.title` for legacy
-// projects with null `templateName` (defensive — all production rows
-// have been backfilled).
 //
 // Response:
 //   201 { ok: true, templateId }
@@ -36,7 +30,7 @@
 //   422 manifest present but brand-snapshot derivation failed
 //
 // Side effects:
-//   1. INSERT INTO Template (owner, title, brand, sourceProjectId,
+//   1. INSERT INTO Template (owner, brand, sourceProjectId,
 //      isPublic, publishedAt, language, direction, slideCount,
 //      thumbnailUrls=[], pdfUrl=null).
 //   2. fire `template.render` Inngest event. The function renders the
@@ -102,10 +96,6 @@ export async function POST(
     where: { id: ctx.project.id },
     select: {
       id: true,
-      title: true,
-      // templateName is the canonical title source. See route header
-      // for why the user can't override it from the client.
-      templateName: true,
       language: true,
       format: true,
       // The project's own rendered slide thumbnails — the template
@@ -148,13 +138,6 @@ export async function POST(
     );
   }
 
-  // Server-derived title: prefer templateName (Haiku-generated), fall
-  // back to the project's own title for legacy projects pre-backfill.
-  // The fallback should be unreachable in production (all rows have
-  // been backfilled) but keeps the route robust if a brand-new project
-  // somehow lands here before its templateName Haiku call completes.
-  const title = project.templateName ?? project.title;
-
   // Slide count of the source deck, capped at MAX_TEMPLATE_SLIDES — a
   // template only captures the first few slides (the render job renders
   // the same capped slice to PDF + thumbnails). Best-effort parse;
@@ -168,7 +151,6 @@ export async function POST(
   const template = await prisma.template.create({
     data: {
       ownerId: ctx.project.user.id,
-      title,
       language: brand.language,
       direction: brand.direction,
       slideCount,

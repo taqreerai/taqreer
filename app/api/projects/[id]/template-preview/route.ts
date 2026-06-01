@@ -9,12 +9,9 @@
 // (heading + body font samples + palette swatches) from the response.
 //
 // Response shape mirrors what the modal needs:
-//   { defaultTitle, brand: BrandSnapshot }
+//   { brand: BrandSnapshot }
 //
-// `defaultTitle` is Project.templateName (the Claude-Haiku-generated
-// 2-3 word evocative name set at deck-generate time). Falls back to
-// Project.title if templateName is null (legacy projects pre-backfill,
-// though all production rows have been backfilled — defensive).
+// Templates are untitled, so there is no title field in the response.
 //
 // Auth: owner-only via resolveProjectContext.
 
@@ -27,7 +24,7 @@ import {
 } from "@/lib/template/derive-brand";
 
 type TemplatePreviewResponse =
-  | { defaultTitle: string; brand: BrandSnapshot }
+  | { brand: BrandSnapshot }
   | { error: string };
 
 export async function GET(
@@ -44,8 +41,6 @@ export async function GET(
     where: { id: ctx.project.id },
     select: {
       id: true,
-      title: true,
-      templateName: true,
       language: true,
       format: true,
       presentation: {
@@ -78,8 +73,5 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({
-    defaultTitle: project.templateName ?? project.title,
-    brand,
-  });
+  return NextResponse.json({ brand });
 }

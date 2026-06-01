@@ -302,9 +302,8 @@ export function PreviewActionBar({
   // Legacy `saveTpl` state + `showSaveForm` popover + `templateTitle`
   // input were removed 2026-05-22. The canonical "Save as template"
   // flow lives in SaveAsTemplateDialog, opened from a project tile's
-  // 3-dots menu. The server route now derives the title from
-  // `Project.templateName` and ignores any client-supplied title, so
-  // the inline form's POST was silently no-op'ing on the title field.
+  // 3-dots menu. Templates are untitled, so there was never any
+  // client-supplied title for that inline form to send.
 
   const handleRegenerate = async () => {
     if (regen.status === "running") return;

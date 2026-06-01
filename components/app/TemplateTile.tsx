@@ -3,13 +3,16 @@
 // Shared tile renderer for a Template, used by both the dashboard's
 // "قوالبي" widget and the /templates browse page.
 //
-// The tile body is an ABSTRACT layout-grid rendered in the brand's
-// colour palette. Caption row beneath shows title + format ratio.
+// The tile is the showcase thumbnail only — templates are UNTITLED
+// (the public feed shows the preview image, no project-derived name).
+// When real slide images exist the tile shows the source project's
+// cover slide; otherwise it falls back to a brand-palette mock.
 //
-// When `template.isMine` is true, a 3-dots actions button appears in
-// the caption row. The tile OWNS the menu open/closed state, the
-// delete-confirm dialog, and the API calls for visibility toggle +
-// delete. After a successful mutation we call router.refresh() so the
+// When `template.isMine` is true, a 3-dots actions button overlays the
+// thumbnail's top-end corner (opposite the premium badge) and reveals
+// on hover. The tile OWNS the menu open/closed state, the delete-
+// confirm dialog, and the API calls for visibility toggle + delete.
+// After a successful mutation we call router.refresh() so the
 // SSR-rendered list (dashboard widget or /templates) re-fetches and
 // reflects the new state. Community tiles (isMine: false) render no
 // 3-dots button at all — those actions don't apply to someone else's
@@ -35,7 +38,6 @@ export type TemplateTileBrand = {
 
 export type TemplateTileData = {
   id: string;
-  title: string;
   brand: TemplateTileBrand;
   // The template's real slide images (the source project's own
   // thumbnails). When present, the tile renders the cover slide; it
@@ -110,7 +112,7 @@ export function TemplateTile({
     }
   };
 
-  const { brand, title, isMine, id, thumbnailUrls, isPremium } = template;
+  const { brand, isMine, id, thumbnailUrls, isPremium } = template;
   const primary = brand.palette[0] ?? brand.text;
   const secondary = brand.palette[1] ?? brand.text;
   const accent = brand.palette[2] ?? primary;
@@ -274,96 +276,58 @@ export function TemplateTile({
     <button
       type="button"
       onClick={onClick}
-      className="group w-full text-start"
-      aria-label={title}
+      className="block w-full text-start"
+      aria-label="قالب"
     >
       {tileBody}
     </button>
   ) : (
-    <Link
-      href={href ?? "/templates"}
-      className="group"
-      aria-label={title}
-    >
+    <Link href={href ?? "/templates"} className="block" aria-label="قالب">
       {tileBody}
     </Link>
   );
 
+  // `group relative` so the thumbnail (a descendant) drives the
+  // group-hover scale + the absolutely-positioned 3-dots overlay's
+  // hover reveal, and the overlay positions against the thumbnail's
+  // top-end corner. The overlay is a SIBLING of the clickable surface
+  // (not a child) so we don't nest a <button> inside a <button>/<a>.
   return (
-    <div className="flex flex-col gap-3">
+    <div className="group relative">
       {clickableTile}
 
-      {/* Caption row — title on the start side (RTL: visual-right),
-          3-dots flush with the thumbnail's visual-LEFT edge. Format
-          ratio subhead was removed 2026-05-22: templates work on
-          both 16:9 and 9:16 so showing the source-deck ratio under
-          each title was misleading. Mirrors ProjectThumbnail's
-          caption row signature so the two libraries read as the
-          same family.
-          NO horizontal padding so the 3-dots button's bounding box
-          starts exactly at the thumbnail's left edge — the icon
-          itself sits at justify-start INSIDE the button so the
-          visible glyph hugs that edge too (a centered 28-px button
-          would leave the icon visually inset from the thumbnail
-          edge by ~5 px). */}
-      <div dir="rtl" className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold leading-tight text-white">
-            {title}
-          </p>
-        </div>
-
-        {isMine ? (
-          <button
-            ref={triggerRef}
-            type="button"
-            // `data-template-menu-trigger` lets TemplateActionsMenu's
-            // outside-click handler tell THIS tile's trigger apart
-            // from another tile's trigger when the user clicks across
-            // tiles to swap menus.
-            data-template-menu-trigger={id}
-            aria-label="خيارات القالب"
-            onClick={(e) => {
-              e.stopPropagation();
-              // Toggle — click again to close.
-              if (menuRect) {
-                closeMenu();
-              } else if (triggerRef.current) {
-                setMenuRect(triggerRef.current.getBoundingClientRect());
-              }
-            }}
-            // Alignment math for the 3-dots glyph flush with the
-            // thumbnail's visual-LEFT edge (RTL):
-            //
-            //   • The button is 28 × 28 (h-7 w-7) for a comfortable
-            //     click target; the material-symbols `more_vert` glyph
-            //     is rendered at 18 px font-size. Inside an 18 × 18
-            //     glyph box the visible 3 dots are ~4 px wide centered
-            //     → ~7 px transparent padding on each side.
-            //
-            //   • `justify-center` puts the glyph at button x=5..23.
-            //     Visible dots at x=12..16 → 12 px inset from the
-            //     button's LEFT edge.
-            //
-            //   • `marginInlineEnd: -12 px` (= `-me-3`) in RTL pulls
-            //     the button's bounding box 12 px LEFT (margin-end is
-            //     the LEFT side in RTL). Net effect: visible dots'
-            //     left edge sits exactly at the thumbnail's left edge.
-            //
-            //   • Click area extends slightly past the row's left
-            //     boundary; harmless — the bounding box still catches
-            //     mouse events.
-            //
-            // Color-only hover (no bg) — matches ProjectThumbnail's
-            // 3-dots convention. The muted→white transition is the
-            // affordance signal; a bg tint reads as a chunky chip
-            // (user feedback 2026-05-23).
-            className="-mt-0.5 -me-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[color:var(--tq-text-muted)] transition-colors hover:text-white"
-          >
-            <span className="material-symbols-outlined text-[18px]">more_vert</span>
-          </button>
-        ) : null}
-      </div>
+      {isMine ? (
+        <button
+          ref={triggerRef}
+          type="button"
+          // `data-template-menu-trigger` lets TemplateActionsMenu's
+          // outside-click handler tell THIS tile's trigger apart
+          // from another tile's trigger when the user clicks across
+          // tiles to swap menus.
+          data-template-menu-trigger={id}
+          aria-label="خيارات القالب"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Toggle — click again to close.
+            if (menuRect) {
+              closeMenu();
+            } else if (triggerRef.current) {
+              setMenuRect(triggerRef.current.getBoundingClientRect());
+            }
+          }}
+          // Top-end corner (opposite the premium badge at top-2 start-2),
+          // revealed on tile hover / keyboard focus. Dark scrim circle so
+          // the glyph stays legible over any cover image — mirrors the
+          // useBusy overlay's bg-black scrim convention in this file. Stays
+          // visible while its menu is open so the trigger doesn't vanish
+          // out from under the open popover.
+          className={`absolute top-2 end-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-opacity hover:bg-black/65 focus-visible:opacity-100 group-hover:opacity-100 ${
+            menuRect ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">more_vert</span>
+        </button>
+      ) : null}
 
       {isMine ? (
         <>
@@ -379,7 +343,6 @@ export function TemplateTile({
           />
           <TemplateDeleteConfirmDialog
             open={deleteOpen}
-            templateTitle={title}
             busy={deleteBusy}
             onCancel={() => {
               if (!deleteBusy) setDeleteOpen(false);

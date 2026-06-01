@@ -61,7 +61,6 @@ export const templateRender = inngest.createFunction(
         where: { id: templateId },
         select: {
           id: true,
-          title: true,
           brand: true,
           sourceProjectId: true,
           owner: { select: { supabaseUserId: true } },
@@ -114,7 +113,6 @@ export const templateRender = inngest.createFunction(
       }
       return {
         supabaseUserId,
-        title: tpl.title,
         brand: brandParsed.data,
         // The project's own slide images (cover first). Composed with
         // the showcase slides below.
@@ -152,7 +150,7 @@ export const templateRender = inngest.createFunction(
           height: canvasH + 1,
           deviceScaleFactor: 1,
         });
-        await page.setContent(buildShowcaseHtml(ctx.brand, ctx.title), {
+        await page.setContent(buildShowcaseHtml(ctx.brand), {
           waitUntil: ["domcontentloaded", "networkidle0"],
           timeout: NETWORK_IDLE_TIMEOUT_MS,
         });

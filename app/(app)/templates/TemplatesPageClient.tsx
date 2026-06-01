@@ -54,7 +54,6 @@ export function TemplatesPageClient({
   // and the dashboard widget — same lifecycle, same timing.
   useRefreshWhileThumbnailsPending(templates);
 
-  const [search, setSearch] = useState("");
   const [format, setFormat] = useState<FormatFilter>(null);
   const [language, setLanguage] = useState<LanguageFilter>(null);
   // Default: own. Most-common landing intent is "see my own work".
@@ -62,7 +61,7 @@ export function TemplatesPageClient({
   const [colorHex, setColorHex] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   // Lightbox target. null = closed. Drives both TemplateLightbox
-  // `open` and the slides/title/format props.
+  // `open` and the slides/format props.
   const [preview, setPreview] = useState<TemplateForBrowse | null>(null);
   // "Use this template" busy gate — blocks double-clicks while the
   // seed request is in flight. Cleared either by a successful
@@ -107,7 +106,6 @@ export function TemplatesPageClient({
   }, [templates]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return templates.filter((t) => {
       if (owner === "own" && !t.isMine) return false;
       if (owner === "community" && t.isMine) return false;
@@ -120,20 +118,15 @@ export function TemplatesPageClient({
       ) {
         return false;
       }
-      if (q && !t.title.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [templates, search, format, language, owner, colorHex]);
+  }, [templates, format, language, owner, colorHex]);
 
   // Filter change → page 0. Driven by per-handler resets instead of
   // a useEffect because `setState` inside an effect trips the
   // `react-hooks/set-state-in-effect` rule (CR finding #2) — a CI
   // hard fail. The page-clamp at line 108 still guards against
   // shrinking filtered counts (e.g. after delete).
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setPage(0);
-  };
   const handleFormatChange = (value: FormatFilter) => {
     setFormat(value);
     setPage(0);
@@ -160,14 +153,12 @@ export function TemplatesPageClient({
   );
 
   const filtersActive =
-    search.trim().length > 0 ||
     format !== null ||
     language !== null ||
     owner !== "own" ||
     colorHex !== null;
 
   const resetFilters = () => {
-    setSearch("");
     setFormat(null);
     setLanguage(null);
     setOwner("own");
@@ -184,13 +175,12 @@ export function TemplatesPageClient({
         <header className="mb-8">
           <h1 className="tq-h1">القوالب</h1>
           <p className="tq-subhead">
-            قوالبك الخاصة وقوالب المجتمع. ابحث، صفّ، أو اختر لوناً من شريط الألوان أدناه.
+            قوالبك الخاصة وقوالب المجتمع. صفّ حسب المقاس أو اللغة، أو اختر لوناً
+            من شريط الألوان أدناه.
           </p>
         </header>
 
         <TemplatesFilterBar
-          search={search}
-          onSearchChange={handleSearchChange}
           format={format}
           onFormatChange={handleFormatChange}
           language={language}
@@ -258,7 +248,6 @@ export function TemplatesPageClient({
         open={!!preview}
         slides={preview?.thumbnailUrls ?? []}
         format={previewFormat}
-        title={preview?.title ?? ""}
         isPremium={preview?.isPremium ?? false}
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}

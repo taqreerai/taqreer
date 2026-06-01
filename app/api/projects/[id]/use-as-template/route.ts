@@ -47,7 +47,6 @@ export async function POST(
     select: {
       id: true,
       title: true,
-      templateName: true,
       language: true,
       format: true,
       presentation: {
@@ -94,7 +93,10 @@ export async function POST(
     slides: parsedManifest.data.slides.slice(0, MAX_TEMPLATE_SLIDES),
   };
 
-  const title = project.templateName ?? project.title;
+  // The source project is the owner's own (route is owner-only) and
+  // nothing is persisted here, so the project's own title is fine for
+  // the PDF filename + the Mimic seed — no template-title leakage risk.
+  const title = project.title;
 
   let designAnthropicFileId: string;
   try {

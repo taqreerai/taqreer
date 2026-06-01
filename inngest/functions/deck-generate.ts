@@ -15,7 +15,6 @@ import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
-import { generateTemplateName } from "@/lib/template/generate-name";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
@@ -2612,31 +2611,6 @@ export const deckGenerate = inngest.createFunction(
         data: { colorTags: colorTagsFromBrief },
       });
 
-      // Template-style name freeze — 2-3 word evocative descriptor
-      // of the brand identity (palette + fonts), language-matched.
-      // Used as the default title when "Save copy as template" fires;
-      // we generate it HERE (not at save time) so the save UX is
-      // instant + the name lives with the project regardless of
-      // whether it's ever templated. Best-effort: a Haiku failure
-      // returns null and the column stays empty; the backfill
-      // script can retry, and the save-as-template flow falls
-      // back to a deterministic placeholder.
-      const themeColors = manifest.theme.palette ?? [];
-      const headingFontName = manifest.theme.fontHeading?.name ?? "Default";
-      const bodyFontName = manifest.theme.fontBody?.name ?? "Default";
-      const lang = resolveBriefLanguage(data.brief);
-      const generatedName = await generateTemplateName({
-        palette: themeColors,
-        fontHeading: headingFontName,
-        fontBody: bodyFontName,
-        language: lang,
-      });
-      if (generatedName) {
-        await prisma.project.updateMany({
-          where: { id: projectId, templateName: null },
-          data: { templateName: generatedName },
-        });
-      }
       await prisma.presentation
         .update({
           where: { projectId },

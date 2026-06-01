@@ -130,8 +130,6 @@ export const MARQUEE_COLUMN_COUNT = COLUMN_COUNT;
 
 export type LandingTemplate = {
   id: string;
-  // Shown in the lightbox header when a tile is opened.
-  title: string;
   // "16:9" | "9:16" — drives the tile's object-fit crop.
   format: string;
   // Premium templates show the "مميز" badge + gate their use behind the
@@ -157,14 +155,12 @@ export const getLandingTemplates = unstable_cache(
         {
           id: string;
           // Already normalized to "16:9" | "9:16" by the SQL CASE.
-          title: string;
           format: string;
           isPremium: boolean;
           thumbnails: string[];
         }[]
       >`
         SELECT t.id,
-               t.title,
                CASE WHEN (t.brand->>'format') = '9:16' THEN '9:16' ELSE '16:9' END AS format,
                t."isPremium" AS "isPremium",
                t."thumbnailUrls" AS thumbnails
@@ -181,7 +177,6 @@ export const getLandingTemplates = unstable_cache(
       return rows
         .map((row) => ({
           id: row.id,
-          title: row.title,
           format: row.format,
           isPremium: row.isPremium,
           // Drop the synthetic typography + palette showcase slides

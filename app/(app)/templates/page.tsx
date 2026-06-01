@@ -42,7 +42,6 @@ export default async function TemplatesPage() {
 
   const selectShape = {
     id: true,
-    title: true,
     brand: true,
     thumbnailUrls: true,
     language: true,
@@ -91,7 +90,6 @@ export default async function TemplatesPage() {
 function narrow(
   row: {
     id: string;
-    title: string;
     brand: unknown;
     thumbnailUrls: string[];
     language: string;
@@ -103,7 +101,6 @@ function narrow(
   const brand = (row.brand ?? {}) as Record<string, unknown>;
   return {
     id: row.id,
-    title: row.title,
     thumbnailUrls: row.thumbnailUrls,
     language: row.language,
     isMine,

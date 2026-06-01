@@ -20,13 +20,11 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export function TemplateDeleteConfirmDialog({
   open,
-  templateTitle,
   busy,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
-  templateTitle: string;
   busy?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -94,9 +92,8 @@ export function TemplateDeleteConfirmDialog({
                 id="template-delete-body"
                 className="mb-8 text-sm text-muted"
               >
-                {templateTitle
-                  ? `سيتم حذف "${templateTitle}" بشكل نهائي مع شرائحه. لا يمكن التراجع عن هذا الإجراء.`
-                  : "سيتم حذف هذا القالب بشكل نهائي مع شرائحه. لا يمكن التراجع عن هذا الإجراء."}
+                سيتم حذف هذا القالب بشكل نهائي مع شرائحه. لا يمكن التراجع عن هذا
+                الإجراء.
               </p>
               <div className="flex gap-3">
                 <button

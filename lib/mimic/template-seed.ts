@@ -22,7 +22,9 @@ const SLIDE_FORMAT = z.union([z.literal("16:9"), z.literal("9:16")]);
 // the client (API + client run in different bundles) so both validate
 // against one definition.
 export const MimicTemplateUseSchema = z.object({
-  title: z.string().min(1),
+  // Optional: saved templates are untitled (only the project-source
+  // "use" route still returns the owner's own project title).
+  title: z.string().min(1).optional(),
   brand: BrandSnapshotSchema,
   designAnthropicFileId: z.string().min(1),
   format: SLIDE_FORMAT,
@@ -37,7 +39,9 @@ export type MimicTemplateUse = z.infer<typeof MimicTemplateUseSchema>;
 // CREATE_BRAND_KEY.
 export type MimicTemplateSeed = {
   id: string;
-  title: string;
+  // Absent for saved templates (untitled); present only when the seed
+  // came from a project the owner used directly.
+  title?: string;
   designAnthropicFileId: string;
   format: "16:9" | "9:16";
 };

@@ -108,7 +108,6 @@ export function LandingTemplatesGrid({
         open={!!preview}
         slides={preview?.slides ?? []}
         format={previewFormat}
-        title={preview?.title ?? ""}
         isPremium={preview?.isPremium ?? false}
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}

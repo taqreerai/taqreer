@@ -1,18 +1,17 @@
 "use client";
 
-// Filter bar for /templates. Mirrors ProjectsFilterBar exactly — same
-// single-row layout (search → chips → swatches), same pill style,
-// same self-toggling chip semantics — with one swap: the project
-// page's "favorited" chip is replaced by an owner chip (خاصة /
-// المجتمع / الكل) because templates have no isFavorite axis but DO
-// have an own-vs-community partition the user wants to slice on.
+// Filter bar for /templates. Mirrors ProjectsFilterBar's chip style and
+// self-toggling chip semantics — with one swap: the project page's
+// "favorited" chip is replaced by an owner chip (خاصة / المجتمع /
+// الكل) because templates have no isFavorite axis but DO have an
+// own-vs-community partition the user wants to slice on. There is no
+// search input: templates are untitled, so there's no text to match —
+// filtering is by format / language / owner / palette colour only.
 //
 // Kept as a sibling file (not a generalised ProjectsFilterBar) because
 // the chip cluster's specific options are page-domain knowledge.
 // Refactoring to a generic <FilterBar chips={...}> is a v2 move once
 // we have a third filter-bar consumer to triangulate the API against.
-
-import { useId } from "react";
 
 export type FormatFilter = "16:9" | "9:16" | null;
 export type LanguageFilter = "ar" | "en" | null;
@@ -22,8 +21,6 @@ export type LanguageFilter = "ar" | "en" | null;
 export type OwnerFilter = "own" | "community" | "all";
 
 type Props = {
-  search: string;
-  onSearchChange: (next: string) => void;
   format: FormatFilter;
   onFormatChange: (next: FormatFilter) => void;
   language: LanguageFilter;
@@ -49,8 +46,6 @@ function pillClass(isActive: boolean): string {
 }
 
 export function TemplatesFilterBar({
-  search,
-  onSearchChange,
   format,
   onFormatChange,
   language,
@@ -63,8 +58,6 @@ export function TemplatesFilterBar({
   ownCount,
   communityCount,
 }: Props) {
-  const searchId = useId();
-
   const ownerOptions: ReadonlyArray<{
     value: OwnerFilter;
     label: string;
@@ -81,26 +74,6 @@ export function TemplatesFilterBar({
       className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3"
       dir="rtl"
     >
-      <div className="relative max-w-xs min-w-[200px] flex-1">
-        <span
-          aria-hidden
-          className="material-symbols-outlined pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[18px] text-muted"
-        >
-          search
-        </span>
-        <label htmlFor={searchId} className="sr-only">
-          بحث في عناوين القوالب
-        </label>
-        <input
-          id={searchId}
-          type="search"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="ابحث باسم القالب…"
-          className="input-search w-full rounded-full px-4 py-2 pe-10 text-sm"
-        />
-      </div>
-
       <div className="flex flex-wrap items-center gap-2">
         {(
           [
