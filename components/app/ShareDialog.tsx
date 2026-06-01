@@ -551,7 +551,7 @@ export function ShareDialog({
               aria-modal="true"
               aria-labelledby="share-title"
               onClick={(e) => e.stopPropagation()}
-              className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto flex w-[min(100vw-24px,640px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl"
+              className="glass-modal backdrop-blur-glass-boost pointer-events-auto flex w-[min(100vw-24px,640px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
               <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">

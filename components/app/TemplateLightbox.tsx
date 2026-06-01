@@ -199,7 +199,7 @@ export function TemplateLightbox({
               aria-labelledby="tpl-lbx-title"
               onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: stageWidth + STAGE_CHROME_PX }}
-              className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto flex max-h-[90vh] flex-col overflow-hidden rounded-2xl"
+              className="glass-modal backdrop-blur-glass-boost pointer-events-auto flex max-h-[90vh] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
               <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">

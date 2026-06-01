@@ -59,7 +59,7 @@ export default async function AuthLayout({
           // gives a heavy frosted-glass read against the marquee —
           // preset "normal" (8 px) → 56 px effective blur. Still
           // tracks the user's Settings glass preset.
-          className="glass-modal backdrop-blur-glass-boost w-full max-w-md rounded-3xl p-8 shadow-2xl"
+          className="auth-modal glass-modal backdrop-blur-glass-boost w-full max-w-md rounded-3xl p-8 shadow-2xl"
         >
           <Link
             href="/"
