@@ -119,14 +119,13 @@ export function BrandFontPicker({
               setDragging(false);
               if (!atCap) addFiles(event.dataTransfer.files);
             }}
-            className={`flex items-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 transition-colors ${
+            className={`flex h-11 items-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 transition-colors ${
               atCap ? "cursor-not-allowed" : "cursor-pointer"
             } ${hasPills ? "justify-start" : "justify-center"} ${
               dragging
                 ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
                 : "border-white/15 hover:border-white/30"
             }`}
-            style={{ height: 44 }}
           >
             <button
               type="button"

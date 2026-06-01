@@ -64,10 +64,18 @@ export function isCffFont(bytes: Uint8Array): boolean {
   return false;
 }
 
-// Escape a string for a fontforge `.pe` double-quoted literal (backslash first,
-// then the closing quote). Used for the temp paths AND the rename strings.
+// Escape a string for a fontforge `.pe` double-quoted literal. First DROP
+// control chars (a stray newline in a font-family name — reachable via the
+// embed route's `name` — would terminate the `.pe` statement mid-string and
+// abort the whole conversion; it can't reach command position since quotes are
+// escaped, but stripping it keeps the conversion robust). Then escape the
+// backslash (first) and the closing quote.
 function ffStr(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  let cleaned = "";
+  for (const ch of s) {
+    if (ch.charCodeAt(0) >= 0x20) cleaned += ch;
+  }
+  return cleaned.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 // Convert CFF/OpenType-PS bytes to a TrueType (`glyf`) font via fontforge.

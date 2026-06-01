@@ -2323,7 +2323,7 @@ export function DeckView({
             .flatMap((f) =>
               f.faces.map(
                 (face) =>
-                  `@font-face{font-family:"${cssFontFamilyName(f.name)}";font-weight:${face.weight};src:url("${face.src}");font-display:swap;}`,
+                  `@font-face{font-family:"${cssFontFamilyName(f.name)}";font-weight:${face.weight};src:url("${cssFontFamilyName(face.src)}");font-display:swap;}`,
               ),
             )
             .join("")}
