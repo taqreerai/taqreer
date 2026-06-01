@@ -46,7 +46,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
     cls: "bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]",
   },
   queued: {
-    label: "قيد الانتظار",
+    label: "جارٍ التوليد",
     cls: "bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]",
   },
   failed: {
