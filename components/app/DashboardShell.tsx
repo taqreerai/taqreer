@@ -143,17 +143,24 @@ export function DashboardShell({
       window.removeEventListener("taqreer:share-revoked", onRevoked);
   }, [pathname, router]);
 
-  // The dashboard runs EDGE-TO-EDGE (no max-w cap) so the stat cards +
-  // widgets + points graph can spread across wide monitors — but with
-  // the same symmetric padding the capped pages use (NOT the preview
-  // route's left-heavy `pl-[120px]`, which reserves room for the slide
-  // nav). Every other app page stays capped at 1280px.
-  const isDashboard = pathname === "/dashboard";
+  // Width policy (user direction 2026-06-01): every dashboard page runs
+  // EDGE-TO-EDGE — same symmetric padding as the home dashboard — so the
+  // card grids / tables spread across wide monitors. The ONLY exceptions
+  // are the deck-creation flows (create / enhance / mimic / datasheet)
+  // and the template "use" surface, whose centered 3-card layouts are
+  // designed around 1280px and stay capped. (Preview / project routes
+  // keep their own left-heavy canvas chrome via `isFullWidthRoute`.)
+  const isFlowRoute =
+    pathname.startsWith("/create") ||
+    pathname.startsWith("/enhance") ||
+    pathname.startsWith("/mimic") ||
+    pathname.startsWith("/datasheet") ||
+    pathname.startsWith("/use-template");
   const contentClasses = isFullWidthRoute
     ? "pt-[120px] pb-[40px] pl-[120px] pr-[40px]"
-    : isDashboard
-      ? "pt-28 px-8 pb-8 space-y-16"
-      : "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16";
+    : isFlowRoute
+      ? "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16"
+      : "pt-28 px-8 pb-8 space-y-16";
 
   return (
     <div className="dashboard-bg min-h-screen relative opacity-100">
