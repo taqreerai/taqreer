@@ -16,6 +16,12 @@
 // lookup is attribute-name-keyed, and tag boundaries are found with a
 // quote-aware scan (a prompt value may legitimately contain a `>`).
 
+// Hard ceiling on generated images per deck — an aesthetic + cost guard
+// mirrored by SYSTEM_PROMPT_IMAGES. Shared by the warm-during-stream
+// dispatcher (deck-generate), the warm fill, and the end reconcile so the
+// cap can't drift between them.
+export const MAX_GENERATED_IMAGES = 12;
+
 export type GenImageRole = "hero" | "bg" | "accent";
 export type GenImageAspect = "landscape" | "portrait" | "square";
 

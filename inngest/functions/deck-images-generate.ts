@@ -28,15 +28,16 @@ import { SlideManifestSchema } from "@/lib/schema/slide";
 import {
   scanGenImages,
   injectImgSrc,
+  MAX_GENERATED_IMAGES,
   type GenImageAspect,
 } from "@/lib/images/slide-images";
 import { generateImage } from "@/lib/images/gpt-image";
-import { storeGeneratedImage } from "@/lib/images/store";
+import {
+  storeGeneratedImage,
+  generatedImageExists,
+  publicGeneratedImageUrl,
+} from "@/lib/images/store";
 
-// Hard ceiling on images filled per deck — mirrors the cap baked into
-// SYSTEM_PROMPT_IMAGES (deck-generate). The scan can't exceed what Claude
-// emitted, but this is the belt-and-suspenders cost guard.
-const MAX_GENERATED_IMAGES = 12;
 // Parallel gpt-image-2 calls in flight per deck. 4 keeps wall-clock low
 // (~3 batches for a full 12) without hammering the OpenAI image rate
 // limit; each call is ~10–30s.
@@ -157,6 +158,7 @@ export const deckImagesGenerate = inngest.createFunction(
       const todo = boxes.filter((b) => !done.has(b.genid));
 
       let generated = 0;
+      let adopted = 0;
       let failed = 0;
       let cursor = 0;
       const setStatus = (genid: string, data: Prisma.GeneratedImageUpdateInput) =>
@@ -193,6 +195,18 @@ export const deckImagesGenerate = inngest.createFunction(
           });
           if (claim.count === 0) continue;
           try {
+            // We own the box now. If the warm-during-stream pass already
+            // stored its image (deterministic path), ADOPT it — mark ready
+            // with that URL instead of re-billing gpt-image-2. Covers boxes
+            // warmed before this run AND ones whose warm landed late.
+            if (await generatedImageExists(projectId, b.genid)) {
+              await setStatus(b.genid, {
+                status: "ready",
+                storageUrl: publicGeneratedImageUrl(projectId, b.genid),
+              });
+              adopted += 1;
+              continue;
+            }
             const { b64, size } = await generateImage({
               prompt: b.prompt,
               aspect: b.aspect,
@@ -225,7 +239,7 @@ export const deckImagesGenerate = inngest.createFunction(
           worker(),
         ),
       );
-      return { generated, failed, skipped: done.size };
+      return { generated, adopted, failed, skipped: done.size };
     });
 
     // ─── Step 3: reconcile slideJson + SlideVersion v1, re-thumbnail ─

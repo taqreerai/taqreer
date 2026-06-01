@@ -3,6 +3,7 @@ import { inngest } from "@/inngest/client";
 import {
   deckGenerate,
   deckImagesGenerate,
+  deckImageWarm,
   deckRegeneratePartial,
   brandAnalyze,
   templateRender,
@@ -15,6 +16,7 @@ export const { GET, POST, PUT } = serve({
   functions: [
     deckGenerate,
     deckImagesGenerate,
+    deckImageWarm,
     deckRegeneratePartial,
     brandAnalyze,
     templateRender,

@@ -23,6 +23,11 @@ import { expandWeightAxis } from "@/lib/brand/fonts";
 import { signBrandAssetUrl } from "@/lib/storage/sign";
 import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
 import {
+  scanGenImages,
+  MAX_GENERATED_IMAGES,
+  type GenImageMarker,
+} from "@/lib/images/slide-images";
+import {
   uploadFileToAnthropic,
   deleteFileFromAnthropic,
 } from "@/lib/anthropic/files";
@@ -198,9 +203,10 @@ FONT SOURCING
 - When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those families — assign them to \`theme.fontHeading.name\` and \`theme.fontBody.name\` (a single family may serve both). Use the family \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts; the uploaded families are the only allowed typefaces. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship will render at its nearest available face.
 - If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
 
-// Max generated images per deck (context/images.md) — aesthetic guardrail
-// (more reads as stock-photo soup) + cost ceiling. Server re-enforces (Phase 2).
-const MAX_GENERATED_IMAGES = 12;
+// MAX_GENERATED_IMAGES (the per-deck cap baked into the prompt text below
+// AND enforced by the warm dispatch + reconcile) is imported from
+// lib/images/slide-images so the number can't drift between the prompt and
+// the server enforcement.
 
 // Replace [startMarker … end of endMarker] in the base prompt. Throws if
 // either marker is missing, so a future reword of SYSTEM_PROMPT fails LOUDLY
@@ -1888,6 +1894,11 @@ export const deckGenerate = inngest.createFunction(
       // the slides). Reused for every continuation + the final assembly,
       // so the whole deck shares one locked theme.
       let streamingTheme: unknown = null;
+      // Images mode (context/images.md): data-genids already dispatched to
+      // the per-slide warm fill. Deduped + capped here so a re-advance, a
+      // continuation, or a manifest reset can never re-dispatch / over-bill
+      // the same box. Persists across the reset on purpose.
+      const warmedGenids = new Set<string>();
       // Total slide count Claude commits to in the manifest head (top-level
       // `slideCount`, emitted before the slides). Captured ONCE from the
       // stream so the live nav can reserve a slot per planned slide instead of
@@ -2087,6 +2098,42 @@ export const deckGenerate = inngest.createFunction(
               if (parsed.success) {
                 callSlides.push(parsed.data);
                 streamingPreview.push(parsed.data);
+                // Images mode: the MOMENT a slide with reserved image boxes
+                // closes, kick off the async gpt-image-2 warm fill so
+                // generation overlaps the rest of the stream and the live
+                // preview swaps each image in as it lands (deck.image.warm →
+                // deck-image-warm → slide.image.ready broadcast). Fire-and-
+                // forget — never blocks or fails the stream. Deduped + capped
+                // via warmedGenids so a re-advance can't re-bill a box.
+                if (isImagesMode(data)) {
+                  const boxes: GenImageMarker[] = [];
+                  for (const m of scanGenImages(parsed.data.html)) {
+                    if (
+                      warmedGenids.has(m.genid) ||
+                      warmedGenids.size >= MAX_GENERATED_IMAGES
+                    ) {
+                      continue;
+                    }
+                    warmedGenids.add(m.genid);
+                    boxes.push(m);
+                  }
+                  if (boxes.length > 0) {
+                    const slideKey = parsed.data.slideId;
+                    void inngest
+                      .send({
+                        name: "deck.image.warm",
+                        data: { projectId, slideKey, boxes },
+                      })
+                      .catch((err) => {
+                        logger.warn("deck_image_warm_dispatch_failed", {
+                          projectId,
+                          slideKey,
+                          error:
+                            err instanceof Error ? err.message : String(err),
+                        });
+                      });
+                  }
+                }
               }
             } catch {
               // Mid-stream partial — the per-call assembly re-checks.

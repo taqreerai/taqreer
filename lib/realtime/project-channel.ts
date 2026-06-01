@@ -74,7 +74,12 @@ export type ProjectBroadcastEvent =
   // applies to every slide in the deck — clients flip their entire
   // slideStates map's `lockedAt` to a fresh timestamp (when
   // `allLocked: true`) or null (when false).
-  | "slides.locks.bulk-changed";
+  | "slides.locks.bulk-changed"
+  // Images-mode (context/images.md): a reserved image box was filled by
+  // gpt-image-2. Fired per image by deck-image-warm DURING generation
+  // (and by regenerate later), so the client swaps the box's placeholder
+  // → the real image live, while the deck is still streaming.
+  | "slide.image.ready";
 
 const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "comment.created",
@@ -85,6 +90,7 @@ const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "deck.regen.finished",
   "slide.lock.changed",
   "slides.locks.bulk-changed",
+  "slide.image.ready",
 ];
 
 // Wire payload shapes. Server-broadcast helper enforces the same shapes.
@@ -130,6 +136,15 @@ export type ProjectBroadcastPayloadMap = {
     // so the value matches what's persisted server-side.
     lockedAt: string | null;
     actorPrismaUserId: string | null;
+  };
+  "slide.image.ready": {
+    // The slide whose box was filled (== slide.slideId / SlideState key).
+    slideKey: string;
+    // data-genid of the filled box — the client finds the matching
+    // <img data-genid> and sets its src.
+    genid: string;
+    // Permanent public URL of the generated image.
+    url: string;
   };
 };
 
@@ -223,6 +238,7 @@ export function openProjectChannel(
     "deck.regen.finished": [],
     "slide.lock.changed": [],
     "slides.locks.bulk-changed": [],
+    "slide.image.ready": [],
   };
   const presenceSubscribers: Array<(state: ViewerPresence) => void> = [];
 
