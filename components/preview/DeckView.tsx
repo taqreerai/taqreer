@@ -22,6 +22,10 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import {
+  GenImageProvider,
+  type GenImageFills,
+} from "@/components/slides/gen-image-context";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { SlidePill } from "@/components/preview/SlidePill";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
@@ -562,6 +566,12 @@ export function DeckView({
   const [peerRegenInProgress, setPeerRegenInProgress] = useState<
     ReadonlySet<string>
   >(() => new Set());
+  // Images mode (context/images.md): genid → public URL for boxes filled
+  // live by gpt-image-2 (warm-during-stream + regenerate). Fed to
+  // SlideRenderer via GenImageProvider so each box swaps its shimmer
+  // placeholder → the image in place, no refresh. See the
+  // `slide.image.ready` broadcast handler.
+  const [filledImages, setFilledImages] = useState<GenImageFills>({});
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
   // throttles backgrounded / out-of-focus WebSockets and occasionally
   // drops broadcast frames entirely — symptom: the spinner overlay
@@ -940,6 +950,19 @@ export function DeckView({
           return;
         }
         void fetchAndSwapState();
+      });
+      // Images mode (context/images.md): a reserved image box was filled
+      // by gpt-image-2 — during the stream by deck-image-warm, or later by
+      // regenerate. Record genid → url so SlideRenderer (via the
+      // GenImageProvider below) swaps the box's shimmer placeholder → the
+      // real image in place, live, while the deck is still generating.
+      localHandle.on("slide.image.ready", (payload) => {
+        if (cancelled) return;
+        setFilledImages((prev) =>
+          prev[payload.genid] === payload.url
+            ? prev
+            : { ...prev, [payload.genid]: payload.url },
+        );
       });
       // Peer started a FULL deck regen. Mark every slide in the current
       // manifest as in-flight so the dim+spinner overlay covers the
@@ -2559,6 +2582,7 @@ export function DeckView({
     // either). Hero centers in the remaining width.
     const genHeroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
     return (
+      <GenImageProvider value={filledImages}>
       <section
         // `dir={streamingDirection}` (was hardcoded "rtl") so an EN
         // deck's generating layout flows LTR — the previous hardcoded
@@ -2741,6 +2765,7 @@ export function DeckView({
           busy={cancelBusy}
         />
       </section>
+      </GenImageProvider>
     );
   }
 
@@ -2811,6 +2836,7 @@ export function DeckView({
     return true;
   })();
   return (
+    <GenImageProvider value={filledImages}>
     <section
       dir={manifest!.direction}
       className="relative"
@@ -3383,5 +3409,6 @@ export function DeckView({
         }}
       />
     </section>
+    </GenImageProvider>
   );
 }

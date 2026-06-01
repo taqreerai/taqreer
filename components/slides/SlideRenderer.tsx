@@ -22,6 +22,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { SlideType, ThemeType } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
+import { injectImgSrc } from "@/lib/images/slide-images";
+import { useGenImageFills } from "@/components/slides/gen-image-context";
 
 export function SlideRenderer({
   slide,
@@ -60,11 +62,43 @@ export function SlideRenderer({
   // we want here, not "cascading" runaway state.
   const [sanitized, setSanitized] = useState<string>("");
 
+  // Live generated-image fills (context/images.md). Empty outside a
+  // provider — so exports / standalone thumbnails are untouched and just
+  // render the saved HTML (which already carries reconciled src).
+  const fills = useGenImageFills();
+
+  // Signature of THIS slide's relevant fills only. A string primitive, so
+  // its VALUE is stable when this slide's boxes haven't changed — that's
+  // what stops an unrelated `slide.image.ready` for another slide from
+  // re-sanitising every mounted SlideRenderer (hero + N nav thumbnails).
+  const fillSig = useMemo(() => {
+    if (!slide.html.includes("data-genid")) return "";
+    return Object.entries(fills)
+      .filter(([genid]) => slide.html.includes(`data-genid="${genid}"`))
+      .map(([genid, url]) => `${genid}=${url}`)
+      .sort()
+      .join("\n");
+  }, [slide.html, fills]);
+
+  // Inject each filled box's src BEFORE sanitising. Memoised on the
+  // signature so it only re-runs when one of THIS slide's images lands.
+  const htmlWithImages = useMemo(() => {
+    if (!fillSig) return slide.html;
+    let out = slide.html;
+    for (const pair of fillSig.split("\n")) {
+      const eq = pair.indexOf("=");
+      out = injectImgSrc(out, pair.slice(0, eq), pair.slice(eq + 1));
+    }
+    return out;
+    // `slide.html` is implied by `fillSig` (it's derived from it), but
+    // listed for clarity / the exhaustive-deps rule.
+  }, [slide.html, fillSig]);
+
   useEffect(() => {
     // sanitizeSlideHtml() is fail-closed: empty string on any failure.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSanitized(sanitizeSlideHtml(slide.html));
-  }, [slide.html]);
+    setSanitized(sanitizeSlideHtml(htmlWithImages));
+  }, [htmlWithImages]);
 
   // NO inset buffer (was attempted 2026-05-23 then reverted same
   // day). The buffer-ring approach assumed the slide's own root bg

@@ -1874,6 +1874,35 @@ body {
   background: var(--tq-bg);
 }
 
+/* ─── Generated-image placeholder (context/images.md) ───────────────
+   A reserved image box is `<img data-genimage data-genid …>` with NO
+   src until gpt-image-2 fills it. While it's empty, show a branded
+   shimmer in the box (its width/height come from Claude's inline
+   style) so the slide reads as "image loading here" rather than a
+   blank gap. The moment the fill lands, SlideRenderer injects the src
+   and the real image replaces this. Raw rgba sweep alphas are fine in
+   globals.css (the "no hardcode" rule targets TSX). */
+@keyframes tq-genimg-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+img[data-genimage]:not([src]) {
+  background-color: var(--tq-bg-dim);
+  background-image: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.04) 30%,
+    rgba(255, 255, 255, 0.11) 50%,
+    rgba(255, 255, 255, 0.04) 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: tq-genimg-shimmer 1.4s ease-in-out infinite;
+}
+
 /* ─── Widget header link ─── */
 .tq-widget-link {
   font-size: 0.75rem;
