@@ -43,6 +43,7 @@ import LibraryIcon from "./library-icon";
 import PaintIcon from "./paint-icon";
 import StarIcon from "./star-icon";
 import GearIcon from "./gear-icon";
+import CameraIcon from "./camera-icon";
 
 // Material Symbol name → itshover animated component. Adding a new
 // icon? Drop the new component into `components/icons/` and add the
@@ -61,6 +62,7 @@ const ICON_REGISTRY: Record<
   home: HomeIcon,
   folder_copy: Stack3Icon, // مشاريعي — stacked items
   grid_view: LibraryIcon, // القوالب — library
+  photo_library: CameraIcon, // مكتبة الصور — camera (lens zoom on hover)
   id_card: PaintIcon, // هوية الشركة — paint roller for branding
   star: StarIcon,
   settings: GearIcon,

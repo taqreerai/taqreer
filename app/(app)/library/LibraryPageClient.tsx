@@ -1,0 +1,184 @@
+"use client";
+
+// /library client — the user's generated images, in the same grid +
+// pagination shape as /projects (aspect-video tiles, 15 per page,
+// lg:grid-cols-5).
+//
+// Controls (one row): search-by-project on the start side, a date/name
+// sort toggle pushed to the end (visual left in RTL). Both are
+// in-memory (instant, no URL roundtrip). Clicking a tile opens the
+// expand modal (LibraryImageModal) with a download CTA.
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Pagination } from "@/components/app/Pagination";
+import { SegmentedToggle } from "@/components/create/controls";
+import { LibraryImageCard } from "@/components/app/LibraryImageCard";
+import { LibraryImageModal } from "@/components/app/LibraryImageModal";
+
+export type { LibraryImage } from "@/components/app/LibraryImageCard";
+import type { LibraryImage } from "@/components/app/LibraryImageCard";
+
+// Match /projects: 15 per page (3 full rows at lg:grid-cols-5).
+const PAGE_SIZE = 15;
+
+type SortKey = "date" | "name";
+
+const SORT_OPTIONS: ReadonlyArray<{ value: SortKey; label: string }> = [
+  { value: "date", label: "الأحدث" },
+  { value: "name", label: "الاسم" },
+];
+
+export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortKey>("date");
+  const [page, setPage] = useState(0);
+  // Expand-modal target: index into `visible`. null = closed. (Index,
+  // not the image, so the modal's prev/next can walk the whole list.)
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = q
+      ? images.filter((img) => img.projectTitle.toLowerCase().includes(q))
+      : images.slice();
+    list.sort((a, b) =>
+      sort === "name"
+        ? a.projectTitle.localeCompare(b.projectTitle, "ar") ||
+          b.createdAt.localeCompare(a.createdAt)
+        : b.createdAt.localeCompare(a.createdAt),
+    );
+    return list;
+  }, [images, search, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const activePage = Math.max(0, Math.min(page, pageCount - 1));
+  const paginated = useMemo(
+    () => visible.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE),
+    [visible, activePage],
+  );
+
+  // Control change → page 0 (per-handler reset, not a useEffect — the
+  // `react-hooks/set-state-in-effect` rule is a CI hard-fail; same
+  // pattern as /projects + /templates).
+  const handleSearch = (value: string) => {
+    setSearch(value);
+    setPage(0);
+  };
+  const handleSort = (value: SortKey) => {
+    setSort(value);
+    setPage(0);
+  };
+
+  return (
+    <div className="page-container">
+      <header className="mb-8">
+        <h1 className="tq-h1">مكتبة الصور</h1>
+        <p className="tq-subhead">
+          كل الصور التي وُلّدت بالذكاء الاصطناعي داخل عروضك — حمّل أيّ صورة من
+          جديد.
+        </p>
+      </header>
+
+      {images.length === 0 ? (
+        <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+          <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
+            photo_library
+          </span>
+          <h3 className="mb-2 text-base font-semibold text-white">
+            لا توجد صور بعد
+          </h3>
+          <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
+            ستظهر هنا الصور التي يولّدها الذكاء الاصطناعي داخل عروضك، ويمكنك
+            تحميل أيّ منها.
+          </p>
+          <Link
+            className="btn-gradient inline-block px-4 py-1.5 text-xs no-underline"
+            href="/create"
+          >
+            إنشاء عرض
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div
+            className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3"
+            dir="rtl"
+          >
+            <div className="relative max-w-xs min-w-[200px] flex-1">
+              <span
+                aria-hidden
+                className="material-symbols-outlined pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[18px] text-muted"
+              >
+                search
+              </span>
+              <label htmlFor="lib-search" className="sr-only">
+                بحث باسم المشروع
+              </label>
+              <input
+                id="lib-search"
+                type="search"
+                value={search}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="ابحث باسم المشروع…"
+                className="input-search w-full rounded-full px-4 py-2 pe-10 text-sm"
+              />
+            </div>
+
+            {/* Sort pushed to the visual-left (end) side, same row. */}
+            <div className="ms-auto flex items-center gap-2">
+              <span className="text-xs text-muted">ترتيب حسب</span>
+              <SegmentedToggle
+                options={SORT_OPTIONS}
+                value={sort}
+                onChange={handleSort}
+                ariaLabel="ترتيب الصور"
+                size="comfortable"
+              />
+            </div>
+          </div>
+
+          {visible.length === 0 ? (
+            <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+              <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
+                search_off
+              </span>
+              <h3 className="mb-2 text-base font-semibold text-white">
+                لا نتائج
+              </h3>
+              <p className="max-w-[320px] text-sm leading-7 text-muted">
+                لا توجد صور لمشروع يطابق بحثك.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-x-10 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                {paginated.map((img) => (
+                  <LibraryImageCard
+                    key={img.id}
+                    image={img}
+                    onOpen={(img) =>
+                      setOpenIndex(visible.findIndex((i) => i.id === img.id))
+                    }
+                  />
+                ))}
+              </div>
+              <Pagination
+                page={activePage}
+                pageCount={pageCount}
+                onChange={setPage}
+              />
+            </>
+          )}
+        </>
+      )}
+
+      <LibraryImageModal
+        open={openIndex !== null}
+        images={visible}
+        initialIndex={openIndex ?? 0}
+        onClose={() => setOpenIndex(null)}
+      />
+    </div>
+  );
+}

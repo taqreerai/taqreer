@@ -188,6 +188,7 @@ export function Sidebar({
     // "Create" group on 2026-05-22 — see actionButtons docstring.
     { path: '/projects', icon: 'folder_copy', label: 'مشاريعي' },
     { path: '/templates', icon: 'grid_view', label: 'القوالب' },
+    { path: '/library', icon: 'photo_library', label: 'مكتبة الصور' },
     { path: '/brand-kits', icon: 'id_card', label: 'هوية الشركة' },
     { path: '/favorites', icon: 'star', label: 'المفضلة' },
     { path: '/settings', icon: 'settings', label: 'الإعدادات' },
