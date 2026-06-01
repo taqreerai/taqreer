@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { BrandKitTile, type BrandKitTileData } from "@/components/app/BrandKitTile";
 import { BrandKitActionsMenu } from "@/components/app/BrandKitActionsMenu";
 import { BrandKitDeleteConfirmDialog } from "@/components/app/BrandKitDeleteConfirmDialog";
+import { BrandKitRenameDialog } from "@/components/app/BrandKitRenameDialog";
 import { UseBrandKitDialog } from "@/components/app/UseBrandKitDialog";
 import { Pagination } from "@/components/app/Pagination";
 import {
@@ -56,15 +57,27 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
     ReadonlyMap<string, boolean>
   >(() => new Map());
 
+  // Optimistic override of `name` per kit — set on a successful rename
+  // so the tile reflects the new name immediately while
+  // `router.refresh()` reconciles the SSR snapshot.
+  const [nameOverride, setNameOverride] = useState<
+    ReadonlyMap<string, string>
+  >(() => new Map());
+
   // Render with overrides applied so the star chip + the menu's
-  // toggle-label reflect the optimistic state.
+  // toggle-label + the tile name reflect the optimistic state.
   const visibleKits = kits
     .filter((k) => !removedIds.has(k.id))
-    .map((k) =>
-      defaultOverride.has(k.id)
-        ? { ...k, isDefault: defaultOverride.get(k.id) ?? k.isDefault }
-        : k,
-    );
+    .map((k) => {
+      let kit = k;
+      if (defaultOverride.has(k.id)) {
+        kit = { ...kit, isDefault: defaultOverride.get(k.id) ?? kit.isDefault };
+      }
+      if (nameOverride.has(k.id)) {
+        kit = { ...kit, name: nameOverride.get(k.id) ?? kit.name };
+      }
+      return kit;
+    });
 
   // Pagination — zero-indexed page. We clamp at READ time (via
   // `safePage`) rather than fire setPage inside an effect, which
@@ -92,6 +105,10 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
   // Delete dialog state.
   const [deleteKit, setDeleteKit] = useState<BrandKitTileData | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Rename dialog state.
+  const [renameKit, setRenameKit] = useState<BrandKitTileData | null>(null);
+  const [renaming, setRenaming] = useState(false);
 
   // Use-flow dialog state.
   const [useKit, setUseKit] = useState<BrandKitTileData | null>(null);
@@ -168,6 +185,43 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
       window.alert(
         err instanceof Error ? err.message : "تعذر تعيين الهوية الافتراضية",
       );
+    }
+  };
+
+  const handleRename = async (newName: string) => {
+    if (!renameKit) return;
+    const id = renameKit.id;
+    setRenaming(true);
+    try {
+      const res = await fetch(`/api/brand-kits/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName }),
+      });
+      if (!res.ok) {
+        throw new Error(await readApiError(res, "تعذر إعادة التسمية"));
+      }
+      // Optimistic: reflect the server-normalised name (trimmed +
+      // capped at 120) immediately; router.refresh() reconciles the
+      // SSR snapshot after.
+      const body = (await res.json().catch(() => null)) as {
+        name?: string;
+      } | null;
+      const savedName = body?.name ?? newName;
+      setNameOverride((prev) => {
+        const next = new Map(prev);
+        next.set(id, savedName);
+        return next;
+      });
+      setRenameKit(null);
+      router.refresh();
+    } catch (err) {
+      console.error("[brand-kits] rename failed", err);
+      window.alert(
+        err instanceof Error ? err.message : "تعذر إعادة تسمية هوية الشركة",
+      );
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -257,6 +311,9 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
         onUse={() => {
           if (menuKit) setUseKit(menuKit);
         }}
+        onRename={() => {
+          if (menuKit) setRenameKit(menuKit);
+        }}
         onSetDefault={() => {
           if (menuKit) void handleSetDefault(menuKit);
         }}
@@ -283,6 +340,16 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
           if (!deleting) setDeleteKit(null);
         }}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <BrandKitRenameDialog
+        open={renameKit !== null}
+        currentName={renameKit?.name ?? ""}
+        busy={renaming}
+        onCancel={() => {
+          if (!renaming) setRenameKit(null);
+        }}
+        onSave={handleRename}
       />
     </>
   );

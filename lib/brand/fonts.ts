@@ -129,3 +129,58 @@ export function emptyFontSlot(): FontSlotState {
     googleFamily: null,
   };
 }
+
+// ─── Redesigned single brand-font model (flow-card redesign) ──────────
+//
+// Replaces the old heading + body two-slot model. The brand now carries
+// ONE font choice in one of two modes:
+//   • google → ONE family; Claude varies weights across the deck (the
+//     named-weight embed supports this) and uses it for both headings +
+//     body, so there's no second selector.
+//   • upload → up to MAX_UPLOADED_FONTS family files dropped at once;
+//     Claude decides the pairings. (Real render/embed of uploaded fonts
+//     is a separate follow-up; for now the families reach Claude as
+//     names + are stored.)
+
+export const MAX_UPLOADED_FONTS = 5;
+
+// One uploaded font family. `file` is the freshly-picked File (client
+// only); `storageUrl` is set when hydrated from a saved brand kit (the
+// bytes already live in storage). `name` is the display name derived
+// from the filename (sans extension).
+export type UploadedFontFamily = {
+  name: string;
+  file: File | null;
+  storageUrl: string | null;
+};
+
+export type BrandFontMode = "google" | "upload";
+
+export type BrandFontState = {
+  mode: BrandFontMode;
+  // Google mode — one family name (null = none picked → Claude defaults).
+  googleFamily: string | null;
+  // Upload mode — ≤ MAX_UPLOADED_FONTS families.
+  uploaded: UploadedFontFamily[];
+};
+
+export function emptyBrandFont(): BrandFontState {
+  return { mode: "google", googleFamily: null, uploaded: [] };
+}
+
+// Derive a clean display name from a font filename: strip the extension
+// and any trailing weight/style words so "MyBrand-Bold.woff2" reads as
+// "MyBrand". Best-effort — the actual family name comes from the file's
+// name table at embed time (the follow-up phase).
+export function fontFamilyNameFromFile(fileName: string): string {
+  const base = fileName.replace(/\.(woff2?|ttf|otf)$/i, "");
+  // Drop a trailing "-Bold" / "_Italic" / " Regular" style suffix.
+  const cleaned = base
+    .replace(
+      /[-_ ]+(thin|extralight|light|regular|medium|semibold|bold|extrabold|black|italic|oblique)$/i,
+      "",
+    )
+    .replace(/[-_]+/g, " ")
+    .trim();
+  return cleaned || base;
+}
