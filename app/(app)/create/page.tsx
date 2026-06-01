@@ -684,12 +684,17 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* Dropzone — always rendered, dimmed when text typed */}
+            {/* Dropzone — always rendered, dimmed when text typed.
+                `inert` (not pointer-events-none/aria-hidden) when text is
+                present: it also pulls the inner button out of the tab
+                order so keyboard / AT users can't open the picker while
+                the text path is active — `aria-hidden` alone left it
+                focusable. Mirrors /mimic's content dropzone fix. */}
             <div
               className={`flex flex-col gap-2.5 transition-opacity duration-200 ${
-                hasText ? "pointer-events-none opacity-40" : ""
+                hasText ? "opacity-40" : ""
               }`}
-              aria-hidden={hasText}
+              inert={hasText}
             >
               <div className="flex items-center gap-2 text-[11px] text-white/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />

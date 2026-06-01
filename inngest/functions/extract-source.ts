@@ -122,6 +122,20 @@ function parseExtractRequestedEvent(data: unknown): ExtractRequestedEvent {
       "extract-source: malformed event payload (missing jobId / userId / path / fileName / mime)",
     );
   }
+  // Pin the storage key to the event's OWN user namespace before any
+  // service-role download below — the admin client bypasses RLS, so a
+  // forged/malformed event must not be able to point it at another
+  // user's object. The upload route always writes to
+  // `${supabaseUserId}/extract/<jobId>/...`; reject anything that
+  // escapes that prefix or carries path traversal.
+  if (
+    ev.fileBucketPath.includes("..") ||
+    !ev.fileBucketPath.startsWith(`${ev.supabaseUserId}/`)
+  ) {
+    throw new NonRetriableError(
+      "extract-source: fileBucketPath escapes the event's user namespace",
+    );
+  }
   return ev as ExtractRequestedEvent;
 }
 
