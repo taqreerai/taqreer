@@ -26,6 +26,8 @@
 // avoids client CORS gymnastics for the Google Fonts CSS endpoint.
 
 import type { FontTarget, ConvertedFont } from "./embed-fonts-client";
+import { weightedTypeface } from "./embed-fonts-client";
+import { isCffFont, convertOtfToTtf } from "./otf-to-ttf";
 
 // Re-export the shared transport types so the API route + callers have one
 // import site.
@@ -84,32 +86,41 @@ export function extractFontSourcesByWeight(css: string): WeightedSource[] {
 // the whole export — a timeout aborts the fetch and is treated as a miss.
 const FONT_FETCH_TIMEOUT_MS = 10_000;
 
-async function fetchFontAsEot(src: FontSource): Promise<Uint8Array | null> {
+// Fetch a font binary and return its raw sfnt bytes (woff2 → TTF/OTF via the
+// wawoff2 Brotli decompress; TTF/OTF pass through). No EOT, no CFF conversion —
+// callers decide what to do next (Google path EOT-wraps; the uploaded path
+// renames per weight first). Returns null on any failure (best-effort).
+async function fetchRawFontBytes(
+  src: FontSource,
+): Promise<Uint8Array | null> {
   try {
     const res = await fetch(src.url, {
       signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const rawBytes = new Uint8Array(await res.arrayBuffer());
+    if (src.format !== "woff2") return rawBytes;
+    const wawoff2 = await import("wawoff2");
+    const decompress = wawoff2.decompress ?? wawoff2.default?.decompress;
+    if (typeof decompress !== "function") return null;
+    const ttf = await decompress(rawBytes);
+    return ttf instanceof Uint8Array ? ttf : new Uint8Array(ttf);
+  } catch (err) {
+    console.warn(`[embed-fonts] font fetch failed for ${src.url}:`, err);
+    return null;
+  }
+}
 
-    // woff2 needs a Brotli decompress before TTF; TTF/OTF skip that hop.
-    let ttfBytes: Uint8Array<ArrayBufferLike> = rawBytes;
-    if (src.format === "woff2") {
-      const wawoff2 = await import("wawoff2");
-      const decompress = wawoff2.decompress ?? wawoff2.default?.decompress;
-      if (typeof decompress !== "function") return null;
-      const ttf = await decompress(rawBytes);
-      ttfBytes = ttf instanceof Uint8Array ? ttf : new Uint8Array(ttf);
-    }
-
-    // Convert TTF → EOT. PowerPoint expects EOT inside .fntdata; raw TTF
-    // lands in the zip but PPT silently won't recognise it as embedded.
-    //
-    // We call `ttf2eot` directly rather than `Font.create().write({type})`:
-    // the high-level API models only the 10 "core" tables and DROPS layout
-    // tables (GSUB/GPOS/GDEF/…) on re-serialise, killing Arabic shaping.
-    // ttf2eot writes the original TTF buffer verbatim at the tail, so every
-    // table survives.
+// Wrap glyf/CFF TTF bytes as EOT, the format PowerPoint reads from `.fntdata`.
+//
+// We call `ttf2eot` directly rather than `Font.create().write({type})`: the
+// high-level API models only the 10 "core" tables and DROPS layout tables
+// (GSUB/GPOS/GDEF/…) on re-serialise, killing Arabic shaping. ttf2eot writes
+// the original buffer verbatim at the tail, so every table survives.
+async function ttfBytesToEot(
+  ttfBytes: Uint8Array,
+): Promise<Uint8Array | null> {
+  try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fonteditor: any = await import("fonteditor-core");
     const ttf2eot = fonteditor.ttf2eot ?? fonteditor.default?.ttf2eot;
@@ -132,9 +143,21 @@ async function fetchFontAsEot(src: FontSource): Promise<Uint8Array | null> {
     }
     return null;
   } catch (err) {
-    console.warn(`[embed-fonts] font fetch/convert failed for ${src.url}:`, err);
+    console.warn("[embed-fonts] ttf2eot failed:", err);
     return null;
   }
+}
+
+// Google-path: fetch → (convert CFF→glyf if needed) → EOT. No rename (Google's
+// per-weight files already name themselves to match the run typefaces).
+async function fetchFontAsEot(src: FontSource): Promise<Uint8Array | null> {
+  let ttfBytes = await fetchRawFontBytes(src);
+  if (!ttfBytes) return null;
+  if (isCffFont(ttfBytes)) {
+    const converted = await convertOtfToTtf(ttfBytes);
+    if (converted) ttfBytes = converted;
+  }
+  return ttfBytesToEot(ttfBytes);
 }
 
 // ─── Build the per-font EOT set ─────────────────────────────────────
@@ -165,6 +188,80 @@ function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
 }
 
+// Map an uploaded font file's extension to the converter format. Returns null
+// for unsupported types (.woff — old WOFF1 compression we don't decode), which
+// the caller treats as a miss (best-effort: that family ships un-embedded).
+function formatFromUrl(url: string): FontSourceFormat | null {
+  const path = url.split("?")[0].toLowerCase();
+  if (path.endsWith(".woff2")) return "woff2";
+  if (path.endsWith(".otf")) return "opentype";
+  if (path.endsWith(".ttf")) return "truetype";
+  return null;
+}
+
+// Every standard CSS weight — the named-typeface set PowerPoint resolves runs
+// against ("Family", "Family SemiBold", "Family Bold", …). dom-to-pptx names
+// each run by its weight, and Claude varies weights across the deck, so EVERY
+// standard weight must map to an embedded entry or the run falls back to a
+// system font (it shows the family name in PPT but renders a substitute).
+const ALL_STANDARD_WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900];
+
+// Pick the uploaded weight closest to `target` (ties → the heavier one, which
+// reads as more deliberate for mid-range asks like 600). `available` is the
+// non-empty set of weights the user actually uploaded.
+function nearestWeight(target: number, available: number[]): number {
+  return available.reduce((best, w) =>
+    Math.abs(w - target) < Math.abs(best - target) ||
+    (Math.abs(w - target) === Math.abs(best - target) && w > best)
+      ? w
+      : best,
+  );
+}
+
+// Build the EOT set for an uploaded family. For EACH standard weight we take
+// the nearest uploaded face and produce a glyf TTF whose INTERNAL name table =
+// `weightedTypeface(familyName, weight)` (e.g. "DIN NEXT™ ARABIC SemiBold") —
+// the EXACT name the run carries. This is what makes PowerPoint bind the embed:
+// it matches the run's typeface to the font's internal name, NOT the OOXML
+// `typeface=` attribute, so a commercial face named per-weight ("…BOLD",
+// subfamily Regular) would otherwise never bind. fontforge does the CFF→glyf
+// conversion + the rename in one pass (Arabic GSUB/GPOS preserved). Each named
+// weight is a distinct file (distinct name → distinct bytes), so the client
+// splice no longer dedups them — that's intended; every weight typeface needs
+// its own correctly-named payload.
+async function fetchUploadedFontFiles(
+  faces: { weight: number; src: string }[],
+  familyName: string,
+): Promise<FontFile[]> {
+  // Fetch + decompress the raw source bytes once per uploaded weight.
+  const rawByWeight = new Map<number, Uint8Array>();
+  await Promise.all(
+    faces.map(async ({ weight, src }) => {
+      if (rawByWeight.has(weight)) return;
+      const format = formatFromUrl(src);
+      if (!format) return;
+      const raw = await fetchRawFontBytes({ url: src, format });
+      if (raw) rawByWeight.set(weight, raw);
+    }),
+  );
+  const uploaded = [...rawByWeight.keys()];
+  if (uploaded.length === 0) return [];
+
+  const results = await Promise.all(
+    ALL_STANDARD_WEIGHTS.map(async (weight) => {
+      const raw = rawByWeight.get(nearestWeight(weight, uploaded));
+      if (!raw) return null;
+      // Convert (CFF→glyf if needed) AND rename the internal name to the run's
+      // typeface so PowerPoint resolves it. fontforge handles .ttf input too.
+      const ttf = await convertOtfToTtf(raw, weightedTypeface(familyName, weight));
+      if (!ttf) return null;
+      const eot = await ttfBytesToEot(ttf);
+      return eot ? { weight, fontBytes: eot } : null;
+    }),
+  );
+  return results.filter((r): r is FontFile => r !== null);
+}
+
 /**
  * Convert each font target's Google Fonts CSS into base64 EOT weight files.
  * The result is small (~0.5 MB of font bytes) and JSON-serialisable, so the
@@ -176,7 +273,10 @@ export async function convertFontTargets(
 ): Promise<ConvertedFont[]> {
   return Promise.all(
     targets.map(async (t) => {
-      const files = await fetchFontFiles(t.url);
+      const files =
+        "faces" in t
+          ? await fetchUploadedFontFiles(t.faces, t.name)
+          : await fetchFontFiles(t.url);
       return {
         name: t.name,
         files: files.map((f) => ({

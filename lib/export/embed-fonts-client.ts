@@ -30,7 +30,16 @@ const NS_PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships
 const FONT_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font";
 
-export type FontTarget = { name: string; url: string };
+// A font to convert + embed. Two shapes:
+//   • Google CSS endpoint (`url`) → server fetches the css2 response and
+//     extracts one woff2 per weight (the multi-weight path).
+//   • Uploaded brand font (`faces`) → one signed URL per uploaded WEIGHT file
+//     (TTF/OTF/WOFF2) in the private brand-assets bucket. The server converts
+//     each and registers all 9 standard weight typefaces against the nearest
+//     uploaded face, so every weighted run resolves to a real uploaded file.
+export type FontTarget =
+  | { name: string; url: string }
+  | { name: string; faces: { weight: number; src: string }[] };
 /** One converted weight, EOT bytes base64-encoded for JSON transport. The
  * weight is the numeric CSS font-weight (100–900) of that @font-face. */
 export type ConvertedFontFile = { weight: number; eotBase64: string };
@@ -250,14 +259,24 @@ export async function embedConvertedFontsInPptx(
   // by typeface so heading + body sharing a weight (e.g. both "Cairo" at 400)
   // don't emit two entries for the same name.
   const seenTypefaces = new Set<string>();
+  // Store one .fntdata per DISTINCT byte payload. An uploaded single-face font
+  // is registered under all 9 weight names but is the SAME bytes — without this
+  // the deck would carry 9 identical copies of the file. Google weights have
+  // distinct bytes, so they each still get their own file. Each typeface keeps
+  // its OWN relationship (rid) pointing at the shared target.
+  const fileNameByBytes = new Map<string, string>();
   for (const set of usable) {
     for (const file of set.files) {
       const typeface = weightedTypeface(set.name, file.weight);
       if (seenTypefaces.has(typeface)) continue;
       seenTypefaces.add(typeface);
-      const fileName = `font${fileCounter}.fntdata`;
-      fileCounter += 1;
-      zip.file(`ppt/fonts/${fileName}`, base64ToBytes(file.eotBase64));
+      let fileName = fileNameByBytes.get(file.eotBase64);
+      if (!fileName) {
+        fileName = `font${fileCounter}.fntdata`;
+        fileCounter += 1;
+        zip.file(`ppt/fonts/${fileName}`, base64ToBytes(file.eotBase64));
+        fileNameByBytes.set(file.eotBase64, fileName);
+      }
       const rid = nextAvailableRid(relsDoc);
       appendRelationship(relsDoc, rid, `fonts/${fileName}`);
       appendEmbeddedFontEntry(lst, typeface, rid);

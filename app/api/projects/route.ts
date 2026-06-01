@@ -266,6 +266,35 @@ function readBriefFont(slot: BriefFontSlot): {
   };
 }
 
+// One uploaded font FAMILY in the brief: a display name + its weight faces.
+// A user who drops "Brand-Light/Regular/Bold.otf" sends ONE family with three
+// faces. `weight` is the CSS numeric weight (100–900) the picker parsed off
+// each filename; `storageUrl` is the per-weight uploaded-file path. The names
+// reach Claude (paired into heading/body); the storageUrls stay server-side
+// (sanitised out of the prompt; signed post-manifest by injectUploadedFontSources).
+type IncomingUploadedFamily = {
+  name?: string | null;
+  faces?: Array<{ weight?: unknown; storageUrl?: unknown } | null> | null;
+} | null;
+type UploadedFontFamilyBrief = {
+  name: string;
+  faces: Array<{ weight: number; storageUrl: string }>;
+};
+
+// Caps mirror the picker's MAX_UPLOADED_FONTS / MAX_FACES_PER_FAMILY. Kept as
+// local literals so this server route doesn't pull the client font module.
+const MAX_UPLOADED_FAMILIES = 5;
+const MAX_FACES_PER_FAMILY = 9;
+
+// Coerce an incoming face weight to a standard CSS weight (100–900). Anything
+// out of range / non-numeric falls back to 400 — the run still renders, just
+// at regular.
+function clampFontWeight(raw: unknown): number {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n) || n < 100 || n > 900) return 400;
+  return n;
+}
+
 // Allowlist + size-clamp the brand-kit logo shape. Mirrors the
 // `safeLogo` filter in `/api/brand-kits` POST — without this the
 // `saveBrandKit` branch would persist `payload.brand.logo` verbatim,
@@ -317,6 +346,7 @@ function buildClaudeBrand(
   rawBrand: CreateProjectPayload["brand"],
   headingFont: ReturnType<typeof readBriefFont>,
   bodyFont: ReturnType<typeof readBriefFont>,
+  uploadedFonts: UploadedFontFamilyBrief[],
   logoSignedUrl: string | null,
   logoSvgMarkup: string | null,
 ): CreateProjectPayload["brand"] {
@@ -330,6 +360,11 @@ function buildClaudeBrand(
       // without `url` here Claude was guessing.
       heading: headingFont,
       body: bodyFont,
+      // The full uploaded-family list (name + weight faces) — present only
+      // when the user uploaded fonts. deck-generate's FONT SOURCING rule
+      // tells Claude to pair these into heading/body by name; the
+      // injectUploadedFontSources step signs each face post-manifest.
+      ...(uploadedFonts.length > 0 ? { uploaded: uploadedFonts } : {}),
     },
     logo: rawBrand.logo
       ? {
@@ -394,10 +429,53 @@ export async function POST(request: Request) {
   // universal default available on every OS, supports both Arabic and
   // Latin scripts.
   const incomingFonts = payload.brand?.fonts as
-    | { heading?: BriefFontSlot; body?: BriefFontSlot }
+    | {
+        heading?: BriefFontSlot;
+        body?: BriefFontSlot;
+        uploaded?: IncomingUploadedFamily[];
+      }
     | undefined;
   const headingFont = readBriefFont(incomingFonts?.heading);
   const bodyFont = readBriefFont(incomingFonts?.body);
+  // Uploaded brand fonts (the "Claude pairs" path): forward EVERY family with
+  // ALL its weight faces (capped) so deck-generate can attach each weight file
+  // to whichever role Claude assigns. Names go to Claude; storageUrls stay
+  // server-side (sanitised out of the prompt; signed post-manifest).
+  const uploadedFonts: UploadedFontFamilyBrief[] = (
+    Array.isArray(incomingFonts?.uploaded) ? incomingFonts.uploaded : []
+  )
+    .slice(0, MAX_UPLOADED_FAMILIES)
+    .map((fam) => ({
+      name: fam?.name?.trim() || "Custom",
+      faces: (Array.isArray(fam?.faces) ? fam.faces : [])
+        .slice(0, MAX_FACES_PER_FAMILY)
+        .map((f) => ({
+          weight: clampFontWeight(f?.weight),
+          storageUrl: typeof f?.storageUrl === "string" ? f.storageUrl : null,
+        }))
+        .filter(
+          (f): f is { weight: number; storageUrl: string } => !!f.storageUrl,
+        ),
+    }))
+    .filter((fam) => fam.faces.length > 0);
+
+  // AUTHORIZE every font storageUrl (heading / body / every uploaded face)
+  // before it reaches the brief. At generation time deck-generate SIGNS these
+  // with service-role creds (injectUploadedFontSources) to @font-face + embed
+  // them — an unowned path would mint a signed URL for another tenant's
+  // object. Same threat the logo path is guarded against below.
+  for (const fontPath of [
+    headingFont.storageUrl,
+    bodyFont.storageUrl,
+    ...uploadedFonts.flatMap((fam) => fam.faces.map((f) => f.storageUrl)),
+  ]) {
+    if (fontPath && !isOwnedBrandAssetPath(fontPath, user.id)) {
+      return NextResponse.json(
+        { error: "Font storageUrl is not owned by the current user" },
+        { status: 403 },
+      );
+    }
+  }
   const logoPath = payload.brand?.logo?.storageUrl ?? null;
     // AUTHORIZE the logo path before we touch Supabase. The helpers below
     // both run with service-role credentials (signed URL → embedded in
@@ -425,6 +503,7 @@ export async function POST(request: Request) {
     payload.brand,
     headingFont,
     bodyFont,
+    uploadedFonts,
     logoSignedUrl,
     logoSvgMarkup,
   );

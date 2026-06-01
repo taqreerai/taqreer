@@ -58,7 +58,11 @@ import {
   HEADING_SAMPLE_LATIN,
   type BrandFontState,
 } from "@/lib/brand/fonts";
-import { uploadAsset } from "@/lib/brand/upload";
+import {
+  uploadAsset,
+  resolveUploadedFontFamilies,
+  type UploadedFontFieldBrief,
+} from "@/lib/brand/upload";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import { readSource, clearSource } from "@/lib/types/source";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
@@ -311,8 +315,9 @@ export default function EnhanceContentPage() {
         uploaded: [
           {
             name: heading.uploadName ?? heading.uploadFamily ?? "Custom",
-            file: null,
-            storageUrl: heading.uploadStorageUrl,
+            faces: [
+              { weight: 400, file: null, storageUrl: heading.uploadStorageUrl },
+            ],
           },
         ],
       });
@@ -648,9 +653,12 @@ export default function EnhanceContentPage() {
 
       // Resolve the single brand font → ONE field reused for heading +
       // body (one family, Claude varies weights / pairs uploads). Upload
-      // mode uploads every picked family; the deck uses the first family
-      // that resolved a storageUrl. Mirrors /create.
+      // mode now carries every picked family with ALL its weight faces;
+      // heading/body default to the first family's name. Mirrors /create.
       let fontField: ResolvedFontField = null;
+      // Every resolved uploaded family (name + weight faces) — forwarded so
+      // Claude pairs them to heading/body; deck-generate signs each face file.
+      const uploadedFontFields: UploadedFontFieldBrief[] = [];
       if (brandFont.mode === "google" && brandFont.googleFamily) {
         fontField = {
           name: brandFont.googleFamily,
@@ -659,24 +667,14 @@ export default function EnhanceContentPage() {
           family: brandFont.googleFamily,
         };
       } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
-        const storageUrls = await Promise.all(
-          brandFont.uploaded.map(async (u) =>
-            u.file
-              ? (await uploadAsset("brand-assets", "fonts", u.file))
-                  ?.storageUrl ??
-                u.storageUrl ??
-                null
-              : u.storageUrl ?? null,
-          ),
-        );
-        const firstIdx = storageUrls.findIndex((s) => !!s);
-        if (firstIdx >= 0) {
-          const fam = brandFont.uploaded[firstIdx].name;
+        const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
+        uploadedFontFields.push(...resolved);
+        if (uploadedFontFields.length > 0) {
           fontField = {
-            name: fam,
+            name: uploadedFontFields[0].name,
             url: null,
-            storageUrl: storageUrls[firstIdx] as string,
-            family: fam,
+            storageUrl: null,
+            family: uploadedFontFields[0].name,
           };
         }
       }
@@ -729,6 +727,9 @@ export default function EnhanceContentPage() {
         fonts: {
           heading: fontField,
           body: fontField,
+          ...(uploadedFontFields.length > 0
+            ? { uploaded: uploadedFontFields }
+            : {}),
         },
         logo: resolvedLogoStorageUrl
           ? {

@@ -21,6 +21,7 @@ import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 import { repairJson } from "@/lib/extract/json-repair";
 import { expandWeightAxis } from "@/lib/brand/fonts";
+import { signBrandAssetUrl } from "@/lib/storage/sign";
 import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
 import {
   uploadFileToAnthropic,
@@ -195,6 +196,7 @@ Slide count: decide it FIRST and write it as the top-level \`slideCount\` field 
 
 FONT SOURCING
 - When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
+- When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those families — assign them to \`theme.fontHeading.name\` and \`theme.fontBody.name\` (a single family may serve both). Use the family \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts; the uploaded families are the only allowed typefaces. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship will render at its nearest available face.
 - If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
 
 // Max generated images per deck (context/images.md) — aesthetic guardrail
@@ -223,7 +225,7 @@ function swapSection(
 // else (BiDi, chrome, icons, typography, contrast, OUTPUT schema, fonts) is
 // shared with SYSTEM_PROMPT BY DERIVATION below — it cannot drift.
 const IMG_DESIGN_PHILOSOPHY = `DESIGN PHILOSOPHY
-- This is a PHOTOGRAPHY-LED deck: generated images carry the atmosphere and emotion; type + layout frame them. Premium editorial / brand-campaign feel, not an icon-decorated slideshow.
+- This is an IMAGE-LED deck: generated images (lifestyle photography OR abstract/graphic renders — see IMAGE STYLE) carry the atmosphere and emotion; type + layout frame them. Premium editorial / brand-campaign feel, not an icon-decorated slideshow.
 - Let negative space follow the hierarchy — sparse slides breathe, dense slides earn tighter spacing. Never pad to a whitespace quota, and never shrink text just to manufacture emptiness.
 - Asymmetric composition. Vary every slide. Chrome stays locked.
 - Text length is a design variable — short → MASSIVE structural type over imagery; long → multi-column editorial beside a supporting image.
@@ -231,9 +233,9 @@ const IMG_DESIGN_PHILOSOPHY = `DESIGN PHILOSOPHY
 
 const IMG_LAYOUT_MENU = `CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE
 Pick the layout from the content's shape and let imagery drive impact. FORCE VARIETY: never repeat a layout in a row. Reach for:
-- **Full-bleed photographic hero** — a generated image fills the slide; headline + supporting line laid OVER it with a scrim (see GRAPHICS) for legibility.
+- **Full-bleed image hero** — a generated image fills the slide; headline + supporting line laid OVER it with a scrim (see GRAPHICS) for legibility.
 - **Image / text split** — 50/50 or 60/40; a generated image one side, editorial type the other.
-- **Giant typography over imagery** — one word or phrase at hero scale atop a generated photo.
+- **Giant typography over imagery** — one word or phrase at hero scale atop a generated image.
 - **Magazine spread** — large display headline + narrow text columns, a supporting image anchoring one edge.
 - **Sparse poster** — one stat or fact at monumental scale; a generated image as atmosphere or a tight accent.
 - **Timeline / stark comparison** — structural layouts; add a supporting image only where it elevates.
@@ -241,7 +243,11 @@ Pick the layout from the content's shape and let imagery drive impact. FORCE VAR
 
 Cards are ONE option, not the default — only for genuine parallel sets (3–6 equal-weight categories); give each a concept-matched generated image or a Lucide icon, never generic placeholder shapes. Never output <ul>/<li>.`;
 
-const IMG_GRAPHICS = `GRAPHICS — generated photography for scenes, inline SVG for everything else
+const IMG_GRAPHICS = `GRAPHICS — generated imagery for scenes, inline SVG for everything else
+- IMAGE STYLE — DECIDE ONCE, UP FRONT, from the deck's subject, then commit EVERY generated image in the deck to that ONE style. NEVER mix the two within a deck:
+  • LIFESTYLE PHOTOGRAPHY — authentic real-world photographic scenes (people, places, products, environments, candid moments, textures). Pick this for human / consumer / brand / travel / hospitality / real-estate / physical-product / on-the-ground service stories where real photography carries the emotion.
+  • ABSTRACT / GRAPHIC — conceptual non-photographic renders: abstract 3D forms, material + light studies, gradient/glass/metal surfaces, geometric or generative art. Pick this for tech / SaaS / fintech / data / platform / B2B / deep-tech / abstract-idea decks, where a literal photo would read as generic stock.
+  Whichever you choose, hold it across ALL slides — one consistent medium, lighting, palette and treatment. A deck that puts a lifestyle photo on one slide and an abstract 3D render on the next looks incoherent; that mix is forbidden.
 - PHOTOGRAPHIC / illustrative content — people, places, products, textures, atmospheric heroes, full-bleed backgrounds — is a GENERATED IMAGE, never hand-drawn as SVG. Reserve a box with NO src and the system fills it:
     <img data-genimage="<prompt>" data-genrole="hero|bg|accent" data-genaspect="landscape|portrait|square" data-genid="<unique-id>" alt="" style="width:…;height:…;object-fit:cover;display:block;background:<subtle brand-tinted placeholder gradient>;"/>
   • data-genimage — WRITE THE PROMPT FROM THIS SLIDE'S OWN CONTENT. The image must depict what this specific slide is about — its real topic, place, product, people, process, or concept — grounded in the deck's actual subject and brand. Be concrete and literal to the text, never generic or decorative: a slide about a Riyadh logistics firm → "a fleet of delivery vans pulling out of a modern Riyadh distribution hub at dawn", NOT an abstract texture or an unrelated stock scene. Keep the imagery coherent across the deck — one consistent world, lighting, and mood. Describe SUBJECT / SCENE / MOOD only; NEVER request text, words, letters, numbers, captions, logos, signage, charts, diagrams, or UI inside the image (forbidden + stripped server-side) — all wording stays as real HTML over the box.
@@ -249,7 +255,13 @@ const IMG_GRAPHICS = `GRAPHICS — generated photography for scenes, inline SVG 
   • data-genaspect — the closest of landscape / portrait / square to the box's shape (a full-bleed box matches the deck's own orientation). object-fit:cover crops a minor mismatch cleanly.
   • data-genid — unique within this deck, e.g. "img-cover", "img-3a".
   • style — size + position it like any element AND give it a subtle brand-tinted placeholder gradient so it reads as intentional while the image generates.
-- DISTRIBUTION: the COVER MUST use a generated image (full-bleed "bg" OR one half of a split "hero"). Use images where they ELEVATE the content; deliberate whitespace is still good design. Aim for ~one image per 2–3 slides. NEVER exceed ${MAX_GENERATED_IMAGES} generated images across the whole deck. Stats / pure-data / chart slides stay CSS + inline SVG.
+- THE COVER — make it a SIGNATURE, and vary it deck to deck. It MUST carry a generated image, but do NOT reach for the same "full-bleed background photo + title on the right" every time — that one repeated treatment is the templated look we're killing. Choose the cover TREATMENT from the deck's subject + mood; reach for a DIFFERENT one each deck:
+    • Split hero — the image as a bold panel on ONE side (consider a shaped / rounded crop or an inset framed photo), a solid brand-colour field carrying the title on the other.
+    • Editorial full-bleed — the photo fills the slide, but place the title somewhere DELIBERATE other than the usual right corner: a bottom band, a lower-third, centered, or an upper edge — scrim only under the text.
+    • Type-dominant — a GIANT title owns the slide and the image is a tighter anchor (a side column, a corner block, an inset strip).
+    • Framed / matted — the photo sits as a CONTAINED block (generous margins, a border, rounded or asymmetric corners) on a brand-colour canvas, the title beside or above it.
+  Pick the title's side AND the image's shape from the composition — never the same corner by reflex. The full-bleed-bg-with-scrim cover is ONE option, earned when the photo itself is the whole story, not the default.
+- DISTRIBUTION: use images where they ELEVATE the content; deliberate whitespace is still good design. Aim for ~one image per 2–3 slides. NEVER exceed ${MAX_GENERATED_IMAGES} generated images across the whole deck. Stats / pure-data / chart slides stay CSS + inline SVG.
 - SCRIM (hard rule): a scrim exists for ONE reason — to keep text legible over a photo. Add it ONLY to an image box that has text laid ON TOP of it (a full-bleed background or hero with a headline / body over it). An image with NO text over it — a standalone hero, an accent, a side-panel or any purely decorative photo — gets NO scrim at all; darkening a clean photo for no reason just muddies it. WHEN text does sit on an image box, place a scrim between them — a brand-colour <linearGradient> or a solid overlay <div> with \`opacity\` (NOT rgba / backdrop-filter) — so the text stays legible whatever the photo turns out to be. The scrim's DARK / opaque end MUST sit on the SAME side as the text and fade toward the rest of the image: RTL text on the right → darkest on the RIGHT (e.g. \`linear-gradient(90deg, transparent, <dark>)\`); LTR text on the left → darkest on the LEFT; text band across the bottom → darkest at the BOTTOM. A scrim that darkens the EMPTY side leaves the text sitting on the bright photo — unreadable. Keep the scrim a SINGLE layer — never stack two overlays over one image.
 - STILL inline SVG (brand-token fills, NO icon fonts): the brand logo, icons, ALL data visualization, and decorative accents/separators. Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.`;
 
@@ -764,6 +776,140 @@ function resolveFormat(event: DeckGenerateEvent): SlideFormat {
   return candidate === "9:16" ? "9:16" : "16:9";
 }
 
+// Deep-strip uploaded-font `storageUrl`s from the brief before it's dumped
+// into the Claude user message. Those are private bucket paths Claude must
+// never echo — it only ever picks font NAMES; deck-generate re-attaches the
+// file server-side (injectUploadedFontSources) after the manifest. Logo
+// storageUrl is left to the logo block, which emits a signed URL Claude
+// legitimately uses. Returns a cloned brief with the font storageUrls gone;
+// everything else passes through.
+function sanitizeBriefFonts(brief: unknown): unknown {
+  if (!brief || typeof brief !== "object") return brief;
+  const b = brief as { brand?: { fonts?: Record<string, unknown> } | null };
+  const fonts = b.brand?.fonts;
+  if (!fonts || typeof fonts !== "object") return brief;
+  const stripSlot = (slot: unknown) => {
+    if (!slot || typeof slot !== "object") return slot;
+    const { storageUrl: _drop, ...rest } = slot as Record<string, unknown>;
+    void _drop;
+    return rest;
+  };
+  // An uploaded family is `{ name, faces:[{weight, storageUrl}] }`. Strip the
+  // per-face storageUrl but KEEP weight so Claude can see which weights the
+  // family ships (it still only ever picks the NAME; the weights are FYI).
+  const stripFamily = (fam: unknown) => {
+    if (!fam || typeof fam !== "object") return fam;
+    const f = fam as { name?: unknown; faces?: unknown };
+    const faces = Array.isArray(f.faces)
+      ? f.faces.map((face) => {
+          if (!face || typeof face !== "object") return face;
+          const { storageUrl: _drop, ...rest } = face as Record<string, unknown>;
+          void _drop;
+          return rest;
+        })
+      : f.faces;
+    return { ...(fam as Record<string, unknown>), faces };
+  };
+  const nextFonts: Record<string, unknown> = { ...fonts };
+  if (fonts.heading) nextFonts.heading = stripSlot(fonts.heading);
+  if (fonts.body) nextFonts.body = stripSlot(fonts.body);
+  if (Array.isArray(fonts.uploaded)) {
+    nextFonts.uploaded = (fonts.uploaded as unknown[]).map(stripFamily);
+  }
+  return { ...b, brand: { ...b.brand, fonts: nextFonts } };
+}
+
+// One theme font slot, as it appears on both the final manifest theme and the
+// raw mid-stream theme JSON. Loose shape so the same applier serves both.
+type ThemeFontSlotLike = {
+  name?: string | null;
+  url?: string | null;
+  fontFaces?: Array<{ weight: number; src: string }>;
+};
+
+// Build a name(lowercased) → SIGNED weight-faces map from the brief's uploaded
+// fonts. Each face carries a `storageUrl` (ownership already validated in
+// /api/projects); we sign each ONCE here. Returns an empty map when no fonts
+// were uploaded. This is the expensive (network) half — call it ONCE per run
+// and reuse the map for both the streaming preview and the final manifest.
+async function buildSignedUploadedFontFaces(
+  brief: unknown,
+): Promise<Map<string, Array<{ weight: number; src: string }>>> {
+  const out = new Map<string, Array<{ weight: number; src: string }>>();
+  const fonts = (
+    brief as {
+      brand?: {
+        fonts?: {
+          uploaded?: Array<{
+            name?: string;
+            faces?: Array<{ weight?: number; storageUrl?: string | null }> | null;
+          }> | null;
+        } | null;
+      } | null;
+    } | null
+  )?.brand?.fonts;
+  if (!fonts) return out;
+
+  // Sign once per storageUrl (heading + body often share a family + weights).
+  const signedCache = new Map<string, string | null>();
+  const signOnce = async (storageUrl: string): Promise<string | null> => {
+    if (!signedCache.has(storageUrl)) {
+      signedCache.set(storageUrl, await signBrandAssetUrl(storageUrl));
+    }
+    return signedCache.get(storageUrl) ?? null;
+  };
+
+  for (const fam of fonts.uploaded ?? []) {
+    if (!fam?.name) continue;
+    const faces = (fam.faces ?? []).filter(
+      (f): f is { weight: number; storageUrl: string } =>
+        typeof f?.storageUrl === "string" && !!f.storageUrl,
+    );
+    const signed: Array<{ weight: number; src: string }> = [];
+    for (const face of faces) {
+      const src = await signOnce(face.storageUrl);
+      if (src)
+        signed.push({
+          weight: typeof face.weight === "number" ? face.weight : 400,
+          src,
+        });
+    }
+    if (signed.length > 0) out.set(fam.name.trim().toLowerCase(), signed);
+  }
+  return out;
+}
+
+// Attach the signed faces to a theme's heading/body slots by NAME match (the
+// cheap, synchronous half). A Google font already carries a `url` — leave it
+// alone. Mutates the theme in place; safe to call on the raw mid-stream theme
+// object AND the final manifest theme. No-op when the map is empty.
+function applyUploadedFontFaces(
+  theme: unknown,
+  signedByName: Map<string, Array<{ weight: number; src: string }>>,
+): void {
+  if (signedByName.size === 0 || !theme || typeof theme !== "object") return;
+  const t = theme as { fontHeading?: ThemeFontSlotLike; fontBody?: ThemeFontSlotLike };
+  for (const slot of [t.fontHeading, t.fontBody]) {
+    if (!slot || !slot.name || slot.url) continue;
+    const faces = signedByName.get(slot.name.trim().toLowerCase());
+    if (faces) slot.fontFaces = faces;
+  }
+}
+
+// After the manifest is built, match each theme font NAME back to the user's
+// uploaded font FILES and attach the SIGNED per-weight faces so the renderer
+// emits one `@font-face` per weight and the export embeds each file at its real
+// weight. Best-effort: a font that didn't sign just isn't attached (the deck
+// falls back to the system font). Thin wrapper over the build+apply split so
+// the final-manifest call site stays unchanged.
+async function injectUploadedFontSources(
+  manifest: SlideManifest,
+  brief: unknown,
+): Promise<void> {
+  const signed = await buildSignedUploadedFontFaces(brief);
+  applyUploadedFontFaces(manifest.theme, signed);
+}
+
 function buildUserMessage(event: DeckGenerateEvent) {
   const format = resolveFormat(event);
   const { width, height } = SLIDE_DIMENSIONS[format];
@@ -835,7 +981,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
           ]),
     ``,
     `Brief:`,
-    JSON.stringify(event.brief, null, 2),
+    JSON.stringify(sanitizeBriefFonts(event.brief), null, 2),
   ];
   if (event.type === "enhance" && event.enhance) {
     lines.push(``, `Enhancement settings:`, JSON.stringify(event.enhance, null, 2));
@@ -1758,6 +1904,13 @@ export const deckGenerate = inngest.createFunction(
       let manifestHeadOffset = 0;
       const streamDirection = resolveBriefDirection(data.brief);
       const streamLanguage = resolveBriefLanguage(data.brief);
+      // Sign the uploaded brand-font faces ONCE up front so the LIVE preview can
+      // @font-face them while the deck is still streaming — without this, an
+      // uploaded font (which carries no Google `url`) only appears after the
+      // final post-stream inject, so mid-generation slides render in a fallback
+      // font. Empty map (and a no-op apply) when no fonts were uploaded. Reused
+      // for the final manifest inject below, so we sign only once per run.
+      const signedUploadedFaces = await buildSignedUploadedFontFaces(data.brief);
 
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
@@ -1948,6 +2101,10 @@ export const deckGenerate = inngest.createFunction(
             if (themeRaw) {
               try {
                 streamingTheme = JSON.parse(themeRaw);
+                // Attach the pre-signed uploaded-font faces to the live theme so
+                // DeckView @font-faces them mid-generation (Google fonts carry a
+                // `url` and are skipped). No-op when nothing was uploaded.
+                applyUploadedFontFaces(streamingTheme, signedUploadedFaces);
               } catch {
                 // Wait for the next advance.
               }
@@ -2254,6 +2411,13 @@ export const deckGenerate = inngest.createFunction(
     if (manifest.theme?.fontBody?.url) {
       manifest.theme.fontBody.url = expandWeightAxis(manifest.theme.fontBody.url);
     }
+
+    // Uploaded brand fonts: Claude emitted only the NAME (no url) per the
+    // FONT SOURCING rule. Match the name back to the uploaded file's per-weight
+    // storageUrls in the brief, sign each, and stash them on
+    // theme.font*.fontFaces so the renderer @font-faces each weight and the
+    // export embeds the bytes. No-op for Google fonts (they carry a url).
+    await injectUploadedFontSources(manifest, data.brief);
 
     await step.run("save-to-database", async () => {
       // Stamp the format the user picked onto the manifest so every

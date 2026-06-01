@@ -143,15 +143,25 @@ export function emptyFontSlot(): FontSlotState {
 //     names + are stored.)
 
 export const MAX_UPLOADED_FONTS = 5;
+// Cap weight FILES per family — covers the 9 standard CSS weights.
+export const MAX_FACES_PER_FAMILY = 9;
 
-// One uploaded font family. `file` is the freshly-picked File (client
-// only); `storageUrl` is set when hydrated from a saved brand kit (the
-// bytes already live in storage). `name` is the display name derived
-// from the filename (sans extension).
-export type UploadedFontFamily = {
-  name: string;
+// One weight FILE of a family. A user who uploads "Brand-Light.otf",
+// "Brand-Regular.otf", "Brand-Bold.otf" gets ONE family with three faces
+// (300/400/700). `file` is the freshly-picked File (client only);
+// `storageUrl` is set once uploaded / when hydrated from a saved kit.
+export type UploadedFontFace = {
+  weight: number;
   file: File | null;
   storageUrl: string | null;
+};
+
+// One uploaded font FAMILY = a display name + its weight faces. `name` is
+// the family name derived from the filename (weight word stripped), so all
+// weight files of one family group under it.
+export type UploadedFontFamily = {
+  name: string;
+  faces: UploadedFontFace[];
 };
 
 export type BrandFontMode = "google" | "upload";
@@ -183,4 +193,71 @@ export function fontFamilyNameFromFile(fileName: string): string {
     .replace(/[-_]+/g, " ")
     .trim();
   return cleaned || base;
+}
+
+// Weight word → CSS numeric weight. Longest/most-specific words must win at
+// match time (e.g. "extrabold" over "bold"), handled by the regex below.
+const FONT_WEIGHT_WORDS: Record<string, number> = {
+  thin: 100,
+  hairline: 100,
+  extralight: 200,
+  ultralight: 200,
+  light: 300,
+  regular: 400,
+  normal: 400,
+  book: 400,
+  medium: 500,
+  semibold: 600,
+  demibold: 600,
+  bold: 700,
+  extrabold: 800,
+  ultrabold: 800,
+  black: 900,
+  heavy: 900,
+};
+
+// Parse the numeric weight from a font filename ("Helvetica Neue Sky Bold"
+// → 700, "…Light" → 300, "…SemiBold" → 600). Uses the LAST weight word so a
+// family whose NAME contains a weight word ("Light Sans Bold") still reads
+// the trailing one. Defaults to 400 (regular) when no word is present.
+export function weightFromFontFileName(fileName: string): number {
+  const base = fileName.replace(/\.(woff2?|ttf|otf)$/i, "").toLowerCase();
+  // Order longest-first inside the group so "extrabold" doesn't match as
+  // "bold". `\b` after keeps "regular" from swallowing "regularize" etc.
+  const matches = base.match(
+    /(?:^|[-_ ])(extralight|ultralight|extrabold|ultrabold|semibold|demibold|hairline|regular|medium|normal|black|heavy|light|thin|bold|book)\b/g,
+  );
+  if (matches && matches.length > 0) {
+    const last = matches[matches.length - 1].replace(/[-_ ]/g, "");
+    return FONT_WEIGHT_WORDS[last] ?? 400;
+  }
+  return 400;
+}
+
+// Insert a freshly-picked font File into a families list: group by family
+// name (weight word stripped) and de-dupe by weight WITHIN a family. Caps
+// families at MAX_UPLOADED_FONTS and faces at MAX_FACES_PER_FAMILY. Returns
+// a new array (or the original unchanged when a cap/dup blocks the add).
+export function addUploadedFontFile(
+  families: UploadedFontFamily[],
+  file: File,
+): UploadedFontFamily[] {
+  const name = fontFamilyNameFromFile(file.name);
+  const weight = weightFromFontFileName(file.name);
+  const next = families.map((f) => ({ ...f, faces: [...f.faces] }));
+  let fam = next.find((f) => f.name.toLowerCase() === name.toLowerCase());
+  if (!fam) {
+    if (next.length >= MAX_UPLOADED_FONTS) return families;
+    fam = { name, faces: [] };
+    next.push(fam);
+  }
+  if (
+    fam.faces.length >= MAX_FACES_PER_FAMILY ||
+    fam.faces.some((face) => face.weight === weight)
+  ) {
+    return families;
+  }
+  fam.faces.push({ weight, file, storageUrl: null });
+  fam.faces.sort((a, b) => a.weight - b.weight);
+  return next;
 }

@@ -20,9 +20,8 @@ import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import {
   FONT_ACCEPT_EXTS,
   MAX_UPLOADED_FONTS,
-  fontFamilyNameFromFile,
+  addUploadedFontFile,
   type BrandFontState,
-  type UploadedFontFamily,
 } from "@/lib/brand/fonts";
 
 const MODE_OPTIONS = [
@@ -46,24 +45,20 @@ export function BrandFontPicker({
   const [dragging, setDragging] = useState(false);
 
   const atCap = value.uploaded.length >= MAX_UPLOADED_FONTS;
+  const hasPills = value.uploaded.length > 0;
 
   const addFiles = (files: FileList | File[] | null | undefined) => {
     if (!files) return;
-    const incoming = Array.from(files);
-    const next: UploadedFontFamily[] = [...value.uploaded];
-    for (const file of incoming) {
-      if (next.length >= MAX_UPLOADED_FONTS) break;
+    // Group every dropped file by family (weight word stripped) and by
+    // weight within a family, so dropping "Brand-Light/Regular/Bold.otf"
+    // yields ONE family with three weight faces — not three families.
+    let next = value.uploaded;
+    for (const file of Array.from(files)) {
       const name = file.name.toLowerCase();
       if (!FONT_ACCEPT_EXTS.some((ext) => name.endsWith(ext))) continue;
-      const display = fontFamilyNameFromFile(file.name);
-      // Dedupe by display name so dropping a whole weight set of the
-      // same family doesn't fill the 5 slots with one family.
-      if (next.some((u) => u.name.toLowerCase() === display.toLowerCase())) {
-        continue;
-      }
-      next.push({ name: display, file, storageUrl: null });
+      next = addUploadedFontFile(next, file);
     }
-    onChange({ ...value, uploaded: next });
+    if (next !== value.uploaded) onChange({ ...value, uploaded: next });
   };
 
   const removeAt = (index: number) =>
@@ -105,8 +100,14 @@ export function BrandFontPicker({
               event.currentTarget.value = "";
             }}
           />
-          <button
-            type="button"
+          {/* Drop zone — when families are picked, their chips live INSIDE
+              here on one horizontally-scrollable row. The leading icon is a
+              real upload button (the AT-/keyboard-accessible trigger), so you
+              can keep adding families even when chips fill the row; clicking
+              empty space in the zone also uploads. The container is a plain
+              div (not a button) so the chips can carry their own remove
+              buttons without nesting interactive controls. */}
+          <div
             onClick={() => !atCap && inputRef.current?.click()}
             onDragOver={(event) => {
               event.preventDefault();
@@ -118,61 +119,87 @@ export function BrandFontPicker({
               setDragging(false);
               if (!atCap) addFiles(event.dataTransfer.files);
             }}
-            disabled={atCap}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`flex items-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 transition-colors ${
+              atCap ? "cursor-not-allowed" : "cursor-pointer"
+            } ${hasPills ? "justify-start" : "justify-center"} ${
               dragging
                 ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
                 : "border-white/15 hover:border-white/30"
             }`}
             style={{ height: 44 }}
           >
-            <span
-              className="material-symbols-outlined text-white/70"
-              style={{ fontSize: 18 }}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!atCap) inputRef.current?.click();
+              }}
+              disabled={atCap}
+              aria-label="رفع عائلات خطوط"
+              className="flex shrink-0 items-center justify-center text-white/70 transition-colors hover:text-white disabled:cursor-not-allowed disabled:text-white/30"
             >
-              font_download
-            </span>
-            <span className="text-xs font-semibold text-white">
-              {atCap ? `الحد الأقصى ${MAX_UPLOADED_FONTS} خطوط` : "رفع عائلات خطوط"}
-            </span>
-            {atCap ? null : (
-              <span className="text-[10px] text-white/40">
-                — حتى {MAX_UPLOADED_FONTS} · WOFF / TTF / OTF
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 18 }}
+              >
+                {hasPills ? "add" : "font_download"}
               </span>
-            )}
-          </button>
+            </button>
 
-          {value.uploaded.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {value.uploaded.map((u, index) => (
-                <span
-                  key={`${u.name}-${index}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-white bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
-                >
+            {hasPills ? (
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto hide-scrollbar">
+                {value.uploaded.map((u, index) => (
                   <span
-                    className="material-symbols-outlined text-white/60"
-                    style={{ fontSize: 13 }}
-                  >
-                    font_download
-                  </span>
-                  <span className="max-w-[120px] truncate">{u.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAt(index)}
-                    aria-label={`إزالة ${u.name}`}
-                    className="flex h-4 w-4 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+                    key={`${u.name}-${index}`}
+                    onClick={(event) => event.stopPropagation()}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-white bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
                   >
                     <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 12 }}
+                      className="material-symbols-outlined text-white/60"
+                      style={{ fontSize: 13 }}
                     >
-                      close
+                      font_download
                     </span>
-                  </button>
+                    <span className="max-w-[120px] truncate">{u.name}</span>
+                    {u.faces.length > 1 ? (
+                      <span className="text-[10px] text-white/40">
+                        {u.faces.length} أوزان
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeAt(index);
+                      }}
+                      aria-label={`إزالة ${u.name}`}
+                      className="flex h-4 w-4 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: 12 }}
+                      >
+                        close
+                      </span>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <>
+                <span className="text-xs font-semibold text-white">
+                  {atCap
+                    ? `الحد الأقصى ${MAX_UPLOADED_FONTS} خطوط`
+                    : "رفع عائلات خطوط"}
                 </span>
-              ))}
-            </div>
-          ) : null}
+                {atCap ? null : (
+                  <span className="text-[10px] text-white/40">
+                    — حتى {MAX_UPLOADED_FONTS} · WOFF / TTF / OTF
+                  </span>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

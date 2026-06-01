@@ -17,7 +17,11 @@ import { createHash } from "node:crypto";
 // shared prompt core — it guards against accidental drift between the base and
 // images variants. Last re-baselined for the weights-are-Claude's-choice
 // typography rule (no two-weight limit; named-weight font embed).
-const BASE_SHA256 = "487d6516cc826cfb5ae43af222c5e5219b952062bbde15506048a5e64d930e54";
+// Re-baselined 2026-06-01: added the uploaded-brand-font rule to FONT SOURCING
+// (Claude pairs uploaded families to fontHeading/fontBody, emits name only).
+// Re-baselined 2026-06-01: strengthened that rule for multi-weight uploads —
+// ONLY uploaded families (no Google/system fallback) + per-weight faces.
+const BASE_SHA256 = "9d1516352d3ff97fcc2601d251f1e3b0957fd7ab6f83e0492825b38f48048b2b";
 
 async function main(): Promise<boolean> {
   const { SYSTEM_PROMPT, SYSTEM_PROMPT_IMAGES, isImagesMode } = await import(

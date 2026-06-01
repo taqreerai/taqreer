@@ -3,12 +3,19 @@ import { createClient } from "@/lib/supabase/server";
 import { convertFontTargets, type FontTarget } from "@/lib/export/embed-fonts";
 
 // Server-side font CONVERSION for the PPTX export. The client sends only:
-//   - `fonts`: JSON array `[{name, url}, ...]` of Google Fonts CSS endpoints
-// The server fetches each CSS, extracts the woff2/TTF URL for every weight the
-// CSS serves, decompresses to TTF via wawoff2, re-encodes to EOT via fonteditor-core, and
-// returns the EOT bytes base64-encoded as `{ fonts: [{name, files:[{weight,
-// eotBase64}]}] }`. The CLIENT splices them into the pptx zip locally
-// (embed-fonts-client.ts) — so the deck never crosses the network.
+//   - `fonts`: JSON array of either Google CSS endpoints `{name, url}` OR
+//     uploaded brand fonts `{name, faces:[{weight, src}]}` (one signed
+//     single-file URL per uploaded weight).
+// For a Google URL the server fetches the css2 response, extracts the
+// woff2/TTF URL for every weight it serves, and converts each. For an
+// uploaded family it fetches each weight file and registers all 9 standard
+// weight typefaces against the nearest uploaded face. Both are decompressed
+// (woff2 → TTF via wawoff2) and
+// re-encoded to EOT via fonteditor-core, returned base64 as
+// `{ fonts: [{name, files:[{weight, eotBase64}]}] }`. The CLIENT splices them
+// into the pptx zip locally (embed-fonts-client.ts) — deck never crosses the
+// network. Each target host is pinned (fonts.googleapis.com / Supabase
+// storage) so the route can't be used as an open fetch proxy.
 //
 // This replaced an earlier design that uploaded the whole .pptx here to
 // splice server-side; an images-mode deck (raster PNGs) exceeds Next's 10 MB
@@ -26,22 +33,76 @@ export const maxDuration = 60;
 
 const MAX_FONTS = 4;
 
+// Supabase Storage host (e.g. `<ref>.supabase.co`) — the only non-Google host
+// we'll fetch from. Pinning it keeps this route from being an open fetch proxy
+// while still allowing signed URLs for the user's OWN uploaded brand fonts
+// (deck-generate signs those; the bucket is private + ownership-validated).
+const SUPABASE_HOST = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname || null;
+  } catch {
+    return null;
+  }
+})();
+
+// Cap weight faces per uploaded family — the 9 standard CSS weights.
+const MAX_FACES_PER_FAMILY = 9;
+
+// Host-pin a single signed font-file URL to Supabase storage. Returns the URL
+// when valid, else null — keeps this route from being an open fetch proxy
+// while still allowing the user's OWN uploaded brand fonts.
+function validSupabaseFontUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || !SUPABASE_HOST) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return null;
+    if (u.hostname !== SUPABASE_HOST) return null;
+  } catch {
+    return null;
+  }
+  return raw;
+}
+
 function parseTargets(raw: unknown): FontTarget[] {
   if (!Array.isArray(raw)) return [];
   const out: FontTarget[] = [];
-  // Dedupe by URL, not by family name: the URL is the resource we fetch +
-  // convert. Heading + body can share a name yet request different css2 URLs
-  // (e.g. different weight axes); keying on `name` would silently drop the
-  // second and leave those runs unembedded. (Identical URLs still collapse.)
+  // Dedupe by the resource URL we fetch (Google css2 URL OR signed font-file
+  // URL), not by family name: heading + body can share a name yet point at
+  // different resources; keying on `name` would silently drop the second.
   const seen = new Set<string>();
-  for (const entry of raw as Array<{ name?: unknown; url?: unknown }>) {
-    if (typeof entry?.name !== "string" || typeof entry?.url !== "string") {
+  for (const entry of raw as Array<{
+    name?: unknown;
+    url?: unknown;
+    faces?: unknown;
+  }>) {
+    if (typeof entry?.name !== "string") continue;
+
+    // Uploaded brand font: one signed Supabase-storage URL per weight face.
+    // Validate + host-pin EVERY face; drop the family if none survive.
+    if (Array.isArray(entry.faces)) {
+      const faces: { weight: number; src: string }[] = [];
+      for (const face of entry.faces as Array<{
+        weight?: unknown;
+        src?: unknown;
+      }>) {
+        const src = validSupabaseFontUrl(face?.src);
+        if (!src || seen.has(src)) continue;
+        const weight = Math.round(Number(face?.weight));
+        if (!Number.isFinite(weight) || weight < 1 || weight > 1000) continue;
+        seen.add(src);
+        faces.push({ weight, src });
+        if (faces.length >= MAX_FACES_PER_FAMILY) break;
+      }
+      if (faces.length === 0) continue;
+      out.push({ name: entry.name, faces });
+      if (out.length >= MAX_FONTS) break;
       continue;
     }
+
+    // Google Fonts CSS endpoint — the URL parser is tuned for the css2
+    // response shape, and pinning the host keeps us from being an open proxy.
+    if (typeof entry.url !== "string") continue;
     if (seen.has(entry.url)) continue;
-    // Only honour Google Fonts CSS endpoints — the URL parser is tuned for
-    // the Google `css2` response shape, and pinning the host keeps us from
-    // being used as an open fetch proxy.
     try {
       const u = new URL(entry.url);
       if (u.protocol !== "https:") continue;

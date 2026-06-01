@@ -610,9 +610,19 @@ export async function exportManifestAsPptx(
     // Best-effort: any failure falls through with the unembedded blob.
     let fontEmbeddedBlob: Blob = rawBlob;
     try {
+      // Google fonts carry a CSS `url`; uploaded brand fonts carry signed
+      // `fontFaces` (one font file per uploaded weight). Embed both — the
+      // server route host-pins each (fonts.googleapis.com / Supabase storage).
       const fontTargets = [manifest.theme.fontHeading, manifest.theme.fontBody]
-        .filter((f) => f?.url && f.name)
-        .map((f) => ({ name: f.name, url: f.url }));
+        .filter(
+          (f) =>
+            f && f.name && (f.url || (f.fontFaces && f.fontFaces.length > 0)),
+        )
+        .map((f) =>
+          f.url
+            ? { name: f.name, url: f.url }
+            : { name: f.name, faces: f.fontFaces as { weight: number; src: string }[] },
+        );
       if (fontTargets.length > 0) {
         const res = await fetch("/api/export/embed-fonts", {
           method: "POST",

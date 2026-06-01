@@ -37,6 +37,7 @@ import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
 import { createClient } from "@/lib/supabase/client";
+import { cssFontFamilyName } from "@/lib/export/theme-css-vars";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { notificationStore } from "@/lib/notifications/store";
 import {
@@ -2260,16 +2261,76 @@ export function DeckView({
   );
 
   const fontLinks = useMemo(() => {
-    if (!manifest) return [] as string[];
+    // Fall back to the mid-stream theme so Google webfonts load DURING
+    // generation too — `manifest` stays null until the full deck parses, but
+    // `streamingTheme` (ThemeSchema-validated, same host allowlist) carries the
+    // fonts from the first streamed bytes.
+    const theme = manifest?.theme ?? streamingTheme;
+    if (!theme) return [] as string[];
     // Schema validates the host allowlist (lib/schema/slide.ts —
     // ALLOWED_FONT_HOSTS), so any URL we see here has already passed that
     // check. Just dedupe and emit; matches html-document.ts's behaviour for
     // preview ↔ exported-HTML parity.
-    return [manifest.theme.fontHeading.url, manifest.theme.fontBody.url].filter(
+    return [theme.fontHeading.url, theme.fontBody.url].filter(
       (url, idx, all): url is string =>
         typeof url === "string" && all.indexOf(url) === idx,
     );
-  }, [manifest]);
+  }, [manifest, streamingTheme]);
+
+  // Uploaded brand fonts: theme.font*.fontFaces is a list of signed font-file
+  // URLs, ONE per uploaded weight (deck-generate attached them by matching the
+  // family name back to the uploaded storageUrls). Emit a direct @font-face per
+  // WEIGHT so the slides — which reference the family by NAME and vary
+  // font-weight — render each weighted run in the matching uploaded file.
+  // Dedupe by family so heading + body sharing one upload emit once. Carry the
+  // RAW family name (just trimmed); it's CSS-escaped at emit time via the SAME
+  // cssFontFamilyName() the --font-* vars use, so the @font-face family and the
+  // slides' `font-family: var(--font-heading)` resolve to the identical name
+  // (e.g. "DIN NEXT™ ARABIC" — no char dropped, so they match).
+  const fontFaces = useMemo(() => {
+    // Fall back to the mid-stream theme so an UPLOADED font @font-faces DURING
+    // generation — deck-generate pre-signs the faces and attaches them to the
+    // streaming theme, so they're present from the first streamed bytes (not
+    // just after the post-stream inject).
+    const theme = manifest?.theme ?? streamingTheme;
+    if (!theme)
+      return [] as { name: string; faces: { weight: number; src: string }[] }[];
+    const out: { name: string; faces: { weight: number; src: string }[] }[] = [];
+    const seen = new Set<string>();
+    for (const f of [theme.fontHeading, theme.fontBody]) {
+      const name = f?.name?.trim();
+      if (f?.fontFaces && f.fontFaces.length > 0 && name && !seen.has(name)) {
+        seen.add(name);
+        out.push({ name, faces: f.fontFaces });
+      }
+    }
+    return out;
+  }, [manifest, streamingTheme]);
+
+  // Google <link>s + uploaded-font @font-face <style>, rendered in BOTH the
+  // generating AND completed branches below. Sourced from the memos above
+  // (which fall back to streamingTheme), so the fonts load DURING streaming —
+  // not only when the final manifest lands. Keeping one fragment means the two
+  // branches can't drift.
+  const fontAssets = (
+    <>
+      {fontLinks.map((url) => (
+        <link key={url} rel="stylesheet" href={url} />
+      ))}
+      {fontFaces.length > 0 ? (
+        <style>
+          {fontFaces
+            .flatMap((f) =>
+              f.faces.map(
+                (face) =>
+                  `@font-face{font-family:"${cssFontFamilyName(f.name)}";font-weight:${face.weight};src:url("${face.src}");font-display:swap;}`,
+              ),
+            )
+            .join("")}
+        </style>
+      ) : null}
+    </>
+  );
 
   // ─── Failed ────────────────────────────────────────────────────────────────
   if (status === "failed") {
@@ -2510,6 +2571,10 @@ export function DeckView({
         className="relative"
         style={{ marginRight: SLIDE_NAV_WIDTH }}
       >
+        {/* Load the brand fonts DURING streaming — the streaming hero +
+            nav thumbnails reference them by name, and without these tags the
+            font only swapped in when the completed branch took over. */}
+        {fontAssets}
         <SlideNavSidebar
           items={navItems}
           currentIndex={previewHeroIdx >= 0 ? previewHeroIdx : null}
@@ -2751,9 +2816,7 @@ export function DeckView({
       className="relative"
       style={{ marginRight: SLIDE_NAV_WIDTH }}
     >
-      {fontLinks.map((url) => (
-        <link key={url} rel="stylesheet" href={url} />
-      ))}
+      {fontAssets}
 
       {/* Right-edge slot: SlideNavSidebar swaps for CommentsPanel
           while in comment mode. Same fixed position (against the

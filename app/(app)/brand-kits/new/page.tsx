@@ -34,7 +34,11 @@ import {
   HEADING_SAMPLE_AR,
   type BrandFontState,
 } from "@/lib/brand/fonts";
-import { uploadAsset } from "@/lib/brand/upload";
+import {
+  uploadAsset,
+  resolveUploadedFontFamilies,
+  type UploadedFontFieldBrief,
+} from "@/lib/brand/upload";
 
 // Same palette bounds /create uses — 2 to 6 swatches.
 const MIN_PALETTE = 2;
@@ -98,9 +102,10 @@ export default function NewBrandKitPage() {
 
       // Resolve the single brand font → ONE field reused for heading +
       // body (one family, Claude varies weights / pairs uploads). Upload
-      // mode uploads every picked family; the kit keeps the first family
-      // that resolved a storageUrl. Mirrors /create.
+      // mode now carries every picked family with ALL its weight faces;
+      // the kit keeps the first family + its faces. Mirrors /create.
       let fontField: ResolvedFontField = null;
+      const uploadedFontFields: UploadedFontFieldBrief[] = [];
       if (brandFont.mode === "google" && brandFont.googleFamily) {
         fontField = {
           name: brandFont.googleFamily,
@@ -109,24 +114,18 @@ export default function NewBrandKitPage() {
           family: brandFont.googleFamily,
         };
       } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
-        const storageUrls = await Promise.all(
-          brandFont.uploaded.map(async (u) =>
-            u.file
-              ? (await uploadAsset("brand-assets", "fonts", u.file))
-                  ?.storageUrl ??
-                u.storageUrl ??
-                null
-              : u.storageUrl ?? null,
-          ),
-        );
-        const firstIdx = storageUrls.findIndex((s) => !!s);
-        if (firstIdx >= 0) {
-          const fam = brandFont.uploaded[firstIdx].name;
+        const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
+        uploadedFontFields.push(...resolved);
+        if (uploadedFontFields.length > 0) {
+          const first = uploadedFontFields[0];
           fontField = {
-            name: fam,
+            name: first.name,
             url: null,
-            storageUrl: storageUrls[firstIdx] as string,
-            family: fam,
+            // Keep the first weight's URL as the slot's representative file so
+            // a re-hydrated kit still resolves a face; the full per-weight set
+            // rides in `fonts.uploaded`.
+            storageUrl: first.faces[0]?.storageUrl ?? null,
+            family: first.name,
           };
         }
       }
@@ -137,6 +136,10 @@ export default function NewBrandKitPage() {
         body: JSON.stringify({
           name: name.trim() || undefined,
           colors,
+          // A saved kit stores ONE representative font file per slot (the
+          // first weight). Multi-weight upload is a per-generation feature
+          // (create/enhance/mimic/datasheet forward the full `fonts.uploaded`
+          // face set); the kit hydrates back as a single 400 face.
           fonts: { heading: fontField, body: fontField },
           logo: logoUploaded
             ? {
