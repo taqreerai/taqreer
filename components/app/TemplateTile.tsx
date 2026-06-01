@@ -270,6 +270,14 @@ export function TemplateTile({
     </div>
   );
 
+  // Accessible name for the tile. Templates are untitled, so we describe
+  // them by the attributes we DO have (ratio + premium) rather than a
+  // bare "قالب" repeated across every tile in the grid — that gives
+  // screen-reader users at least some way to tell tiles apart. (A fully
+  // unique name would need the tile's grid position, which isn't threaded
+  // down here.)
+  const tileLabel = `قالب ${brand.format}${isPremium ? " · مميز" : ""}`;
+
   // The clickable surface around the 16:9 tile body. Anchor or button
   // depending on whether the caller wants navigation or a callback.
   const clickableTile = onClick ? (
@@ -277,12 +285,12 @@ export function TemplateTile({
       type="button"
       onClick={onClick}
       className="block w-full text-start"
-      aria-label="قالب"
+      aria-label={tileLabel}
     >
       {tileBody}
     </button>
   ) : (
-    <Link href={href ?? "/templates"} className="block" aria-label="قالب">
+    <Link href={href ?? "/templates"} className="block" aria-label={tileLabel}>
       {tileBody}
     </Link>
   );
@@ -316,12 +324,12 @@ export function TemplateTile({
             }
           }}
           // Top-end corner (opposite the premium badge at top-2 start-2),
-          // revealed on tile hover / keyboard focus. Dark scrim circle so
-          // the glyph stays legible over any cover image — mirrors the
-          // useBusy overlay's bg-black scrim convention in this file. Stays
+          // revealed on tile hover / keyboard focus. `--tq-bg-dim` is the
+          // shared dark-scrim token (rgba(12,12,12,.55)) so the glyph stays
+          // legible over any cover image without hardcoding a colour. Stays
           // visible while its menu is open so the trigger doesn't vanish
           // out from under the open popover.
-          className={`absolute top-2 end-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-opacity hover:bg-black/65 focus-visible:opacity-100 group-hover:opacity-100 ${
+          className={`absolute top-2 end-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tq-bg-dim)] text-white transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${
             menuRect ? "opacity-100" : "opacity-0"
           }`}
         >
