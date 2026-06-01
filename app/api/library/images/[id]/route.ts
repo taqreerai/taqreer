@@ -101,16 +101,23 @@ export async function GET(
     return NextResponse.json({ error: "Image not found" }, { status: 404 });
   }
 
+  // Bound the timeout to connection + headers only, NOT the body
+  // stream: we return `upstream.body` to the client below, and an
+  // `AbortSignal.timeout` covering the whole fetch can abort the body
+  // mid-stream (undici), truncating a large image. Clear the timer
+  // once `fetch` resolves so it can't fire while streaming.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let upstream: Response;
   try {
-    upstream = await fetch(upstreamUrl, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    upstream = await fetch(upstreamUrl, { signal: controller.signal });
   } catch {
     return NextResponse.json(
       { error: "Could not fetch image" },
       { status: 502 },
     );
+  } finally {
+    clearTimeout(timeout);
   }
   if (!upstream.ok || !upstream.body) {
     return NextResponse.json(
