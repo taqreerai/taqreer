@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
+import { sourceKindToFlow } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
   SlideSchema,
@@ -19,6 +20,13 @@ import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 import { repairJson } from "@/lib/extract/json-repair";
+import { expandWeightAxis } from "@/lib/brand/fonts";
+import { signBrandAssetUrl } from "@/lib/storage/sign";
+import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
+import {
+  uploadFileToAnthropic,
+  deleteFileFromAnthropic,
+} from "@/lib/anthropic/files";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -28,7 +36,63 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
-const SYSTEM_PROMPT = `You are an elite editorial-grade presentation designer. Convert raw text into a bespoke HTML/CSS deck. Every slide is a unique canvas — never reuse a layout in a row. Designer, not templater.
+// Upload per-slide PNG buffers to the Anthropic Files API with bounded
+// concurrency, preserving order (result[i] is the file_id for pngs[i]).
+// The Files API beta is rate-limited (~100 req/min); 5-wide keeps a
+// 60-slide deck well under that while still finishing in a few seconds.
+// Used only by the enhance generation-time rasterization path.
+async function uploadSlideImages(pngs: Buffer[]): Promise<string[]> {
+  const CONCURRENCY = 5;
+  const ids = new Array<string>(pngs.length);
+  // Track every id as it lands so a mid-batch failure can flush them. If one
+  // worker rejects, Promise.all aborts while siblings may already have created
+  // files; those ids never reach Job.outputJson, so onFailure can't see them
+  // and they'd leak on the Files API. We clean up here before rethrowing.
+  const uploaded: string[] = [];
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= pngs.length) return;
+      const id = await uploadFileToAnthropic({
+        bytes: pngs[i],
+        fileName: `slide-${i + 1}.png`,
+        contentType: "image/png",
+      });
+      ids[i] = id;
+      uploaded.push(id);
+    }
+  };
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, pngs.length) }, worker),
+    );
+  } catch (err) {
+    await flushSlideImages(uploaded);
+    throw err;
+  }
+  return ids;
+}
+
+// Best-effort flush of the transient enhance slide images from the
+// Files API. `deleteFileFromAnthropic` swallows per-id errors and
+// returns false, so this never throws; it returns the count that failed
+// for optional logging. Shared by all three flush sites — post-save,
+// cancel, and onFailure.
+async function flushSlideImages(fileIds: string[]): Promise<number> {
+  const results = await Promise.all(
+    fileIds.map((id) => deleteFileFromAnthropic(id)),
+  );
+  return results.filter((ok) => !ok).length;
+}
+
+// In-memory shape of the enhance generation-time prep result: the
+// transient Files-API image ids (one per source slide) + each slide's
+// verbatim text. Built by the rasterize-and-upload step, threaded into
+// the message builders, and flushed after the run.
+type EnhanceImages = { fileIds: string[]; textPerSlide: string[] };
+
+export const SYSTEM_PROMPT = `You are an elite editorial-grade presentation designer. Convert raw text into a bespoke HTML/CSS deck. Every slide is a unique canvas — never reuse a layout in a row. Designer, not templater.
 
 CANVAS
 - Dimensions from brief (16:9 → 1920×1080, 9:16 → 1080×1920). Slide root sets \`width:<W>px; height:<H>px;\`.
@@ -44,7 +108,7 @@ LANGUAGE & DIRECTION
 ${COMPOSITION_RULES}
 
 DESIGN PHILOSOPHY
-- 30–40 % of every slide is whitespace.
+- Let negative space follow the hierarchy — sparse slides breathe, dense slides earn tighter spacing. Never pad to a whitespace quota, and never shrink text just to manufacture emptiness.
 - Asymmetric composition. Vary every slide. Chrome stays locked.
 - Text length is a design variable — short → MASSIVE structural type; long → multi-column editorial.
 - Dominant colour + 1–2 accents. Vary themes across the deck.
@@ -85,20 +149,17 @@ Break in export — DO NOT USE:
 GRAPHICS — inline SVG only
 - All decoration, atmosphere, icons, illustrations, logos: inline <svg> with brand-token fills. NO icon fonts (Material font, FontAwesome).
 - Alpha via SVG <radialGradient>/<linearGradient> \`stop-opacity\` (CSS rgba doesn't round-trip).
-- Every graphic must mean something. If you can't name what it represents in one phrase, cut it. Sizes: icons 16–32 px, illustrations 300–500 px. Soft ceiling ~16 SVG elements per illustration.
-- No floating abstract shapes "filling space" — every shape anchors a corner, frames the headline, or separates sections.
+- Every graphic must mean something. If you can't name what it represents in one phrase, cut it. Size each graphic to its role. Keep illustrations simple enough to export cleanly — a graphic that needs dozens of paths will break in export and balloon the output; simplify it instead.
+- No floating abstract shapes "filling space" — every shape anchors a corner or separates sections. Decoration stays on the OPPOSITE half from the text (per COMPOSITION DIRECTION) — never behind the headline.
 - Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.
 
 ICONS — Lucide stroke icons, concept-matched
-Envelope: \`<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">…paths…</svg>\`
-Match icon to concept: users (audience), shield (security), zap (speed), trending-up (growth), target (goals), lightbulb (idea), check-circle (achievement), arrow-up-right (forward), star (premium), chart-bar (data), coins (money), rocket (launch). Use Lucide's actual path data — don't invent or paraphrase. If you need a glyph not in standard Lucide, draw a Lucide-style stroke icon at 24×24, stroke-width 2, linecap round.
+Envelope: \`<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">…paths…</svg>\` — the 24×24 viewBox is Lucide's path coordinate space, NOT a size constraint; render size is \`SIZE\`, your call.
+Match the icon to the concept and use Lucide's actual path data — don't invent or paraphrase. If you need a glyph not in standard Lucide, draw a Lucide-style stroke icon (stroke-width 2, linecap round) in the same 24×24 viewBox.
 
 TYPOGRAPHY
-- Headers/display: editorial serifs (Playfair Display, Georgia, IBM Plex Serif). Structural elements, not decoration.
-- Body: when no brief font sourced, use \`"Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif\`. Avoid \`system-ui\` / \`-apple-system\` as LEAD fallback (Apple-only).
-- Arabic: Google Arabic font (Cairo, Tajawal, Almarai, IBM Plex Sans Arabic, Reem Kufi, Vazirmatn). Fallback: \`"Segoe UI", Tahoma, Arial, sans-serif\`.
-- Avoid Inter / Roboto / default web sans as primary.
-- ONLY two font weights across the deck: \`400\` and \`700\` (Arabic fonts ink-bomb at 800+ in export). For emphasis, scale size or change colour.
+- Fonts: when the brief sources fonts, use those (copy their URLs verbatim per FONT SOURCING). When none are provided, default to Cairo for Arabic and Poppins (Roboto fallback) for Latin.
+- Weights are yours to choose — no two-weight limit. Use whatever weights from the font's full range best serve each slide's hierarchy. The exporter embeds every weight you use, so each renders identically in PowerPoint. Sole judgment call: very heavy weights (\`800\`–\`900\`) thicken Arabic glyphs at small sizes, so prefer them for large display type over body copy.
 
 COLOUR CONTRAST — non-negotiable
 For each text / icon / shape, name the surface it sits on, pick a contrasting colour. WCAG AA (4.5:1 body) / AAA (7:1 hero headlines). Forbidden:
@@ -119,6 +180,7 @@ OUTPUT — JSON only in the text channel
   "title": "<3–8 word title in the deck's language>",
   "language": "ar" | "en",
   "direction": "rtl" | "ltr",
+  "slideCount": <integer — the EXACT number of slides you will produce; decide it here, before the theme, then emit exactly this many>,
   "theme": {
     "palette": ["#hex", ...],
     "fontHeading": { "name": "...", "url": "https://fonts.googleapis.com/..." },
@@ -130,11 +192,111 @@ OUTPUT — JSON only in the text channel
     { "slideId": "<unique>", "role": "cover" | "section" | "content" | "stats" | "quote" | "image" | "closing", "html": "<div dir='rtl' style='...'>...</div>" }
   ]
 }
-Slide count: match brief's \`slideCount\` if provided; otherwise adapt (sparse intro 5, deep doc 20+). Every \`slideId\` unique.
+Slide count: decide it FIRST and write it as the top-level \`slideCount\` field (before \`theme\`) — match brief's \`slideCount\` if provided, otherwise adapt (sparse intro 5, deep doc 20+) — then produce EXACTLY that many slide objects. The live-preview reserves one slot per slide from this number, so the user sees the full total immediately; a mismatch leaves empty or missing tiles. Every \`slideId\` unique.
 
 FONT SOURCING
 - When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
-- If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@400;700&display=swap\`.`;
+- When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those families — assign them to \`theme.fontHeading.name\` and \`theme.fontBody.name\` (a single family may serve both). Use the family \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts; the uploaded families are the only allowed typefaces. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship will render at its nearest available face.
+- If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
+
+// Max generated images per deck (context/images.md) — aesthetic guardrail
+// (more reads as stock-photo soup) + cost ceiling. Server re-enforces (Phase 2).
+const MAX_GENERATED_IMAGES = 12;
+
+// Replace [startMarker … end of endMarker] in the base prompt. Throws if
+// either marker is missing, so a future reword of SYSTEM_PROMPT fails LOUDLY
+// at module load instead of silently leaving the SVG section in the images
+// prompt (the test imports this module, so it surfaces immediately).
+function swapSection(
+  source: string,
+  startMarker: string,
+  endMarker: string,
+  replacement: string,
+): string {
+  const start = source.indexOf(startMarker);
+  if (start === -1) throw new Error(`prompt section start not found: ${startMarker}`);
+  const endAt = source.indexOf(endMarker, start);
+  if (endAt === -1) throw new Error(`prompt section end not found: ${endMarker}`);
+  return source.slice(0, start) + replacement + source.slice(endAt + endMarker.length);
+}
+
+// ─── IMAGES-DECK direction (context/images.md) ───────────────────────
+// The THREE sections that change when brief.imagesMode is on. Everything
+// else (BiDi, chrome, icons, typography, contrast, OUTPUT schema, fonts) is
+// shared with SYSTEM_PROMPT BY DERIVATION below — it cannot drift.
+const IMG_DESIGN_PHILOSOPHY = `DESIGN PHILOSOPHY
+- This is an IMAGE-LED deck: generated images (lifestyle photography OR abstract/graphic renders — see IMAGE STYLE) carry the atmosphere and emotion; type + layout frame them. Premium editorial / brand-campaign feel, not an icon-decorated slideshow.
+- Let negative space follow the hierarchy — sparse slides breathe, dense slides earn tighter spacing. Never pad to a whitespace quota, and never shrink text just to manufacture emptiness.
+- Asymmetric composition. Vary every slide. Chrome stays locked.
+- Text length is a design variable — short → MASSIVE structural type over imagery; long → multi-column editorial beside a supporting image.
+- Dominant colour + 1–2 accents pulled from the imagery's mood. Vary themes across the deck.`;
+
+const IMG_LAYOUT_MENU = `CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE
+Pick the layout from the content's shape and let imagery drive impact. FORCE VARIETY: never repeat a layout in a row. Reach for:
+- **Full-bleed image hero** — a generated image fills the slide; headline + supporting line laid OVER it with a scrim (see GRAPHICS) for legibility.
+- **Image / text split** — 50/50 or 60/40; a generated image one side, editorial type the other.
+- **Giant typography over imagery** — one word or phrase at hero scale atop a generated image.
+- **Magazine spread** — large display headline + narrow text columns, a supporting image anchoring one edge.
+- **Sparse poster** — one stat or fact at monumental scale; a generated image as atmosphere or a tight accent.
+- **Timeline / stark comparison** — structural layouts; add a supporting image only where it elevates.
+- **Pure data** — bar / donut / structural blocks in CSS + inline SVG, no chart libraries, NO photo (a photo can't show numbers).
+
+Cards are ONE option, not the default — only for genuine parallel sets (3–6 equal-weight categories); give each a concept-matched generated image or a Lucide icon, never generic placeholder shapes. Never output <ul>/<li>.`;
+
+const IMG_GRAPHICS = `GRAPHICS — generated imagery for scenes, inline SVG for everything else
+- IMAGE STYLE — DECIDE ONCE, UP FRONT, from the deck's subject, then commit EVERY generated image in the deck to that ONE style. NEVER mix the two within a deck:
+  • LIFESTYLE PHOTOGRAPHY — authentic real-world photographic scenes (people, places, products, environments, candid moments, textures). Pick this for human / consumer / brand / travel / hospitality / real-estate / physical-product / on-the-ground service stories where real photography carries the emotion.
+  • ABSTRACT / GRAPHIC — conceptual non-photographic renders: abstract 3D forms, material + light studies, gradient/glass/metal surfaces, geometric or generative art. Pick this for tech / SaaS / fintech / data / platform / B2B / deep-tech / abstract-idea decks, where a literal photo would read as generic stock.
+  Whichever you choose, hold it across ALL slides — one consistent medium, lighting, palette and treatment. A deck that puts a lifestyle photo on one slide and an abstract 3D render on the next looks incoherent; that mix is forbidden.
+- PHOTOGRAPHIC / illustrative content — people, places, products, textures, atmospheric heroes, full-bleed backgrounds — is a GENERATED IMAGE, never hand-drawn as SVG. Reserve a box with NO src and the system fills it:
+    <img data-genimage="<prompt>" data-genrole="hero|bg|accent" data-genaspect="landscape|portrait|square" data-genid="<unique-id>" alt="" style="width:…;height:…;object-fit:cover;display:block;background:<subtle brand-tinted placeholder gradient>;"/>
+  • data-genimage — WRITE THE PROMPT FROM THIS SLIDE'S OWN CONTENT. The image must depict what this specific slide is about — its real topic, place, product, people, process, or concept — grounded in the deck's actual subject and brand. Be concrete and literal to the text, never generic or decorative: a slide about a Riyadh logistics firm → "a fleet of delivery vans pulling out of a modern Riyadh distribution hub at dawn", NOT an abstract texture or an unrelated stock scene. Keep the imagery coherent across the deck — one consistent world, lighting, and mood. Describe SUBJECT / SCENE / MOOD only; NEVER request text, words, letters, numbers, captions, logos, signage, charts, diagrams, or UI inside the image (forbidden + stripped server-side) — all wording stays as real HTML over the box.
+  • data-genrole — "hero" (feature image anchoring the slide), "bg" (full-bleed behind content), or "accent" (smaller supporting image).
+  • data-genaspect — the closest of landscape / portrait / square to the box's shape (a full-bleed box matches the deck's own orientation). object-fit:cover crops a minor mismatch cleanly.
+  • data-genid — unique within this deck, e.g. "img-cover", "img-3a".
+  • style — size + position it like any element AND give it a subtle brand-tinted placeholder gradient so it reads as intentional while the image generates.
+- THE COVER — make it a SIGNATURE, and vary it deck to deck. It MUST carry a generated image, but do NOT reach for the same "full-bleed background photo + title on the right" every time — that one repeated treatment is the templated look we're killing. Choose the cover TREATMENT from the deck's subject + mood; reach for a DIFFERENT one each deck:
+    • Split hero — the image as a bold panel on ONE side (consider a shaped / rounded crop or an inset framed photo), a solid brand-colour field carrying the title on the other.
+    • Editorial full-bleed — the photo fills the slide, but place the title somewhere DELIBERATE other than the usual right corner: a bottom band, a lower-third, centered, or an upper edge — scrim only under the text.
+    • Type-dominant — a GIANT title owns the slide and the image is a tighter anchor (a side column, a corner block, an inset strip).
+    • Framed / matted — the photo sits as a CONTAINED block (generous margins, a border, rounded or asymmetric corners) on a brand-colour canvas, the title beside or above it.
+  Pick the title's side AND the image's shape from the composition — never the same corner by reflex. The full-bleed-bg-with-scrim cover is ONE option, earned when the photo itself is the whole story, not the default.
+- DISTRIBUTION: use images where they ELEVATE the content; deliberate whitespace is still good design. Aim for ~one image per 2–3 slides. NEVER exceed ${MAX_GENERATED_IMAGES} generated images across the whole deck. Stats / pure-data / chart slides stay CSS + inline SVG.
+- SCRIM (hard rule): a scrim exists for ONE reason — to keep text legible over a photo. Add it ONLY to an image box that has text laid ON TOP of it (a full-bleed background or hero with a headline / body over it). An image with NO text over it — a standalone hero, an accent, a side-panel or any purely decorative photo — gets NO scrim at all; darkening a clean photo for no reason just muddies it. WHEN text does sit on an image box, place a scrim between them — a brand-colour <linearGradient> or a solid overlay <div> with \`opacity\` (NOT rgba / backdrop-filter) — so the text stays legible whatever the photo turns out to be. The scrim's DARK / opaque end MUST sit on the SAME side as the text and fade toward the rest of the image: RTL text on the right → darkest on the RIGHT (e.g. \`linear-gradient(90deg, transparent, <dark>)\`); LTR text on the left → darkest on the LEFT; text band across the bottom → darkest at the BOTTOM. A scrim that darkens the EMPTY side leaves the text sitting on the bright photo — unreadable. Keep the scrim a SINGLE layer — never stack two overlays over one image.
+- STILL inline SVG (brand-token fills, NO icon fonts): the brand logo, icons, ALL data visualization, and decorative accents/separators. Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.`;
+
+// Images-deck system prompt = the base prompt with ONLY the three direction
+// sections swapped. All shared invariants are reused verbatim (derivation).
+export const SYSTEM_PROMPT_IMAGES = swapSection(
+  swapSection(
+    swapSection(
+      SYSTEM_PROMPT,
+      "DESIGN PHILOSOPHY",
+      "Vary themes across the deck.",
+      IMG_DESIGN_PHILOSOPHY,
+    ),
+    "CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE",
+    "Never output <ul>/<li>.",
+    IMG_LAYOUT_MENU,
+  ),
+  "GRAPHICS — inline SVG only",
+  "USER RULES has specifics.",
+  IMG_GRAPHICS,
+);
+
+// Images deck = create/scratch flows ONLY (enhance/mimic/data have their own
+// visual handling and never get the override even if the flag leaks on).
+export function isImagesMode(event: DeckGenerateEvent): boolean {
+  const sourceKind = (event.brief as { source?: { kind?: string } } | null)
+    ?.source?.kind;
+  return (
+    (event.brief as { imagesMode?: boolean } | null)?.imagesMode === true &&
+    (event.type ?? "create") === "create" &&
+    sourceKind !== "enhance" &&
+    sourceKind !== "mimic" &&
+    sourceKind !== "data"
+  );
+}
 
 type EnhanceData = {
   level?: "light" | "medium" | "radical";
@@ -589,17 +751,21 @@ function resolveEffectiveQuality(data: DeckGenerateEvent): {
 } {
   const source = readSource(data);
   const sourceKind = source?.kind ?? "scratch";
-  const isLongOutputFlow =
-    sourceKind === "enhance" ||
-    sourceKind === "mimic" ||
-    sourceKind === "data";
-  const effective =
-    data.quality === "sonnet-fast" && isLongOutputFlow
-      ? "opus-fast"
-      : data.quality;
+  // Auto-upgrade DISABLED (2026-05-30). History: thinking-off presets
+  // (sonnet-fast, opus-fast) emit malformed / draft-then-final JSON on
+  // 30+-slide decks, which used to FAIL the run — so we force-upgraded
+  // them to `opus-balanced` (thinking on). The call-claude step now
+  // SALVAGES a malformed / truncated response from the streamed,
+  // per-slide-validated slides instead of failing, so a thinking-off miss
+  // degrades gracefully rather than dying. That removes the reason for the
+  // forced upgrade — and thinking-off is both faster AND streams slides
+  // linearly (no thinking front-load → the live preview renders smoothly
+  // instead of bursting at the end). So honor the user's picked preset
+  // verbatim. Re-introduce the upgrade here if thinking-off proves worse
+  // in practice.
   return {
-    effective,
-    autoUpgraded: effective !== data.quality,
+    effective: data.quality,
+    autoUpgraded: false,
     sourceKind,
   };
 }
@@ -608,6 +774,140 @@ function resolveFormat(event: DeckGenerateEvent): SlideFormat {
   const candidate = (event.brief as { brand?: { slideSize?: unknown } } | null)?.brand
     ?.slideSize;
   return candidate === "9:16" ? "9:16" : "16:9";
+}
+
+// Deep-strip uploaded-font `storageUrl`s from the brief before it's dumped
+// into the Claude user message. Those are private bucket paths Claude must
+// never echo — it only ever picks font NAMES; deck-generate re-attaches the
+// file server-side (injectUploadedFontSources) after the manifest. Logo
+// storageUrl is left to the logo block, which emits a signed URL Claude
+// legitimately uses. Returns a cloned brief with the font storageUrls gone;
+// everything else passes through.
+function sanitizeBriefFonts(brief: unknown): unknown {
+  if (!brief || typeof brief !== "object") return brief;
+  const b = brief as { brand?: { fonts?: Record<string, unknown> } | null };
+  const fonts = b.brand?.fonts;
+  if (!fonts || typeof fonts !== "object") return brief;
+  const stripSlot = (slot: unknown) => {
+    if (!slot || typeof slot !== "object") return slot;
+    const { storageUrl: _drop, ...rest } = slot as Record<string, unknown>;
+    void _drop;
+    return rest;
+  };
+  // An uploaded family is `{ name, faces:[{weight, storageUrl}] }`. Strip the
+  // per-face storageUrl but KEEP weight so Claude can see which weights the
+  // family ships (it still only ever picks the NAME; the weights are FYI).
+  const stripFamily = (fam: unknown) => {
+    if (!fam || typeof fam !== "object") return fam;
+    const f = fam as { name?: unknown; faces?: unknown };
+    const faces = Array.isArray(f.faces)
+      ? f.faces.map((face) => {
+          if (!face || typeof face !== "object") return face;
+          const { storageUrl: _drop, ...rest } = face as Record<string, unknown>;
+          void _drop;
+          return rest;
+        })
+      : f.faces;
+    return { ...(fam as Record<string, unknown>), faces };
+  };
+  const nextFonts: Record<string, unknown> = { ...fonts };
+  if (fonts.heading) nextFonts.heading = stripSlot(fonts.heading);
+  if (fonts.body) nextFonts.body = stripSlot(fonts.body);
+  if (Array.isArray(fonts.uploaded)) {
+    nextFonts.uploaded = (fonts.uploaded as unknown[]).map(stripFamily);
+  }
+  return { ...b, brand: { ...b.brand, fonts: nextFonts } };
+}
+
+// One theme font slot, as it appears on both the final manifest theme and the
+// raw mid-stream theme JSON. Loose shape so the same applier serves both.
+type ThemeFontSlotLike = {
+  name?: string | null;
+  url?: string | null;
+  fontFaces?: Array<{ weight: number; src: string }>;
+};
+
+// Build a name(lowercased) → SIGNED weight-faces map from the brief's uploaded
+// fonts. Each face carries a `storageUrl` (ownership already validated in
+// /api/projects); we sign each ONCE here. Returns an empty map when no fonts
+// were uploaded. This is the expensive (network) half — call it ONCE per run
+// and reuse the map for both the streaming preview and the final manifest.
+async function buildSignedUploadedFontFaces(
+  brief: unknown,
+): Promise<Map<string, Array<{ weight: number; src: string }>>> {
+  const out = new Map<string, Array<{ weight: number; src: string }>>();
+  const fonts = (
+    brief as {
+      brand?: {
+        fonts?: {
+          uploaded?: Array<{
+            name?: string;
+            faces?: Array<{ weight?: number; storageUrl?: string | null }> | null;
+          }> | null;
+        } | null;
+      } | null;
+    } | null
+  )?.brand?.fonts;
+  if (!fonts) return out;
+
+  // Sign once per storageUrl (heading + body often share a family + weights).
+  const signedCache = new Map<string, string | null>();
+  const signOnce = async (storageUrl: string): Promise<string | null> => {
+    if (!signedCache.has(storageUrl)) {
+      signedCache.set(storageUrl, await signBrandAssetUrl(storageUrl));
+    }
+    return signedCache.get(storageUrl) ?? null;
+  };
+
+  for (const fam of fonts.uploaded ?? []) {
+    if (!fam?.name) continue;
+    const faces = (fam.faces ?? []).filter(
+      (f): f is { weight: number; storageUrl: string } =>
+        typeof f?.storageUrl === "string" && !!f.storageUrl,
+    );
+    const signed: Array<{ weight: number; src: string }> = [];
+    for (const face of faces) {
+      const src = await signOnce(face.storageUrl);
+      if (src)
+        signed.push({
+          weight: typeof face.weight === "number" ? face.weight : 400,
+          src,
+        });
+    }
+    if (signed.length > 0) out.set(fam.name.trim().toLowerCase(), signed);
+  }
+  return out;
+}
+
+// Attach the signed faces to a theme's heading/body slots by NAME match (the
+// cheap, synchronous half). A Google font already carries a `url` — leave it
+// alone. Mutates the theme in place; safe to call on the raw mid-stream theme
+// object AND the final manifest theme. No-op when the map is empty.
+function applyUploadedFontFaces(
+  theme: unknown,
+  signedByName: Map<string, Array<{ weight: number; src: string }>>,
+): void {
+  if (signedByName.size === 0 || !theme || typeof theme !== "object") return;
+  const t = theme as { fontHeading?: ThemeFontSlotLike; fontBody?: ThemeFontSlotLike };
+  for (const slot of [t.fontHeading, t.fontBody]) {
+    if (!slot || !slot.name || slot.url) continue;
+    const faces = signedByName.get(slot.name.trim().toLowerCase());
+    if (faces) slot.fontFaces = faces;
+  }
+}
+
+// After the manifest is built, match each theme font NAME back to the user's
+// uploaded font FILES and attach the SIGNED per-weight faces so the renderer
+// emits one `@font-face` per weight and the export embeds each file at its real
+// weight. Best-effort: a font that didn't sign just isn't attached (the deck
+// falls back to the system font). Thin wrapper over the build+apply split so
+// the final-manifest call site stays unchanged.
+async function injectUploadedFontSources(
+  manifest: SlideManifest,
+  brief: unknown,
+): Promise<void> {
+  const signed = await buildSignedUploadedFontFaces(brief);
+  applyUploadedFontFaces(manifest.theme, signed);
 }
 
 function buildUserMessage(event: DeckGenerateEvent) {
@@ -666,7 +966,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     (event.brief as { source?: { kind?: string } } | null)?.source?.kind ===
       "mimic"
       ? [
-          `LANGUAGE: Match the attached source PDF EXACTLY. Detect the language of each slide from the PDF (Arabic, English, mixed — whatever you see). Produce visible slide strings in that language, word-for-word. Do NOT translate, transliterate, paraphrase, or change script. The OUTPUT JSON \`language\` + \`direction\` fields must reflect what dominates the PDF.`,
+          `LANGUAGE: Match the attached source EXACTLY. Detect the language of each slide from the attached source (Arabic, English, mixed — whatever you see). Produce visible slide strings in that language, word-for-word. Do NOT translate, transliterate, paraphrase, or change script. The OUTPUT JSON \`language\` + \`direction\` fields must reflect what dominates the source.`,
         ]
       : briefLang === "en"
         ? [
@@ -681,7 +981,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
           ]),
     ``,
     `Brief:`,
-    JSON.stringify(event.brief, null, 2),
+    JSON.stringify(sanitizeBriefFonts(event.brief), null, 2),
   ];
   if (event.type === "enhance" && event.enhance) {
     lines.push(``, `Enhancement settings:`, JSON.stringify(event.enhance, null, 2));
@@ -863,6 +1163,13 @@ type SourceBrief = {
   anthropicFileId?: string;
   uglyAnthropicFileId?: string;
   designAnthropicFileId?: string;
+  // Enhance overhaul (Phase 18): the source is rasterized to per-slide
+  // PNGs at GENERATION time (not extract time). These three carry what
+  // that needs: where to re-fetch the original upload, its MIME, and the
+  // verbatim per-slide text to pair with each rendered image.
+  sourcePath?: string;
+  sourceMime?: string;
+  textPerSlide?: string[];
   // Mimic flow alternative to uglyAnthropicFileId — the user typed
   // their content into the content card on /mimic instead of (or in
   // addition to) uploading a file. SourceMimicSchema enforces
@@ -910,7 +1217,8 @@ function readSource(event: DeckGenerateEvent): SourceBrief | null {
 
 function buildSourceContentBlocks(
   event: DeckGenerateEvent,
-): Anthropic.Messages.DocumentBlockParam[] | null {
+  enhanceImages?: EnhanceImages | null,
+): Anthropic.Messages.ContentBlockParam[] | null {
   const source = readSource(event);
   if (!source) return null;
 
@@ -948,8 +1256,31 @@ function buildSourceContentBlocks(
   }
 
   if (source.kind === "enhance") {
-    if (!source.anthropicFileId) return null;
-    return [toDocBlock(source.anthropicFileId)];
+    // Per-slide images (transient Files-API uploads) interleaved with
+    // each slide's exact text — built from the generation-time prep
+    // step, NOT the source blob. Image i is immediately followed by a
+    // text block carrying slide i's verbatim words, so Claude anchors
+    // each redesign to its own source slide + content. The legacy
+    // single PDF document block (source.anthropicFileId) is dropped.
+    if (!enhanceImages || enhanceImages.fileIds.length === 0) return null;
+    const { fileIds, textPerSlide } = enhanceImages;
+    const blocks: Anthropic.Messages.ContentBlockParam[] = [];
+    fileIds.forEach((fileId, i) => {
+      blocks.push({
+        type: "image",
+        source: { type: "file", file_id: fileId },
+      } as unknown as Anthropic.Messages.ContentBlockParam);
+      const text = (textPerSlide[i] ?? "").trim();
+      blocks.push({
+        type: "text",
+        text:
+          `── SLIDE ${i + 1} / ${fileIds.length} — exact text (verbatim, authoritative) ──\n` +
+          (text.length > 0
+            ? text
+            : "(no extractable text on this slide — reproduce only what the image clearly shows)"),
+      });
+    });
+    return blocks;
   }
 
   if (source.kind === "mimic") {
@@ -988,7 +1319,10 @@ function buildSourceContentBlocks(
  * Returns "" (empty) when no source applies, so the caller can
  * safely concat unconditionally.
  */
-function buildSourceTextDirective(event: DeckGenerateEvent): string {
+function buildSourceTextDirective(
+  event: DeckGenerateEvent,
+  enhanceImages?: EnhanceImages | null,
+): string {
   const source = readSource(event);
   if (!source) return "";
 
@@ -1014,28 +1348,37 @@ function buildSourceTextDirective(event: DeckGenerateEvent): string {
     );
   } else if (source.kind === "enhance") {
     const fonts = source.fonts ?? [];
+    const slideCount = enhanceImages?.fileIds.length ?? 0;
+    const { colors } = readBriefBrandColors(event.brief);
     lines.push(
-      `SOURCE — Enhance flow`,
-      `A PDF of the user's existing deck is attached BEFORE this text as a document block. Each page in that PDF is one slide of the original deck (1-indexed by page order).`,
+      `SOURCE — Enhance flow (per-slide redesign)`,
+      `${slideCount} slide images are attached BEFORE this text, IN ORDER. Each image is the rendered ORIGINAL of one slide and is IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words. The image shows you the visual to improve; the paired text block is the authoritative content.`,
       ``,
-      `STRICT VERBATIM CONTENT (non-negotiable):`,
-      `  • Every word of text on every slide must match the PDF EXACTLY, in the SAME language as it appears there. Do NOT translate, paraphrase, summarize, expand, abbreviate, transliterate, or "improve" the wording. Numbers, names, dates, quotes — verbatim.`,
-      `  • If the PDF is in English, the generated deck is in English. If Arabic, Arabic. If mixed, preserve the mix exactly as the original.`,
-      `  • Slide count and ordering must match the PDF page-for-page. Do not merge, split, drop, or add slides.`,
+      `YOUR JOB — redesign each slide to editorial quality:`,
+      `  • Produce EXACTLY ${slideCount} slides — one per source slide, in the SAME order. Do not merge, split, drop, add, or reorder.`,
+      `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm. The DESIGN rises to editorial quality; the words do not change.`,
       ``,
-      `ENHANCE THE DESIGN, NOT THE CONTENT:`,
-      `  Re-execute the deck's typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality. Preserve the brand identity (palette, fonts when provided, logo, key visual motifs). The content is locked; only the design changes.`,
+      `CONTENT IS LOCKED — verbatim (non-negotiable):`,
+      `  • For each slide use ITS paired exact-text block as the words, copied verbatim. Do NOT re-type words off the image — the text block is authoritative and avoids OCR drift; the image is for LAYOUT + VISUAL identity only.`,
+      `  • Do NOT translate, paraphrase, summarize, expand, abbreviate, transliterate, or "improve" the wording. Numbers, names, dates, quotes — verbatim, in the slide's own language (Arabic stays Arabic, English stays English, mixed stays mixed).`,
+      ``,
+      `THEME = the user's brand kit (authoritative — do NOT invent a theme):`,
+      colors.length > 0
+        ? `  • Brand palette (from the Brief's \`brand.colors\`): ${colors.slice(0, 6).join(", ")}. Build every slide on this palette plus a restrained set of accents drawn from it.`
+        : `  • No brand palette was provided. Derive ONE restrained palette from the dominant colours across the source slide images and apply it CONSISTENTLY to every slide (chrome-locked) — do not let each slide drift to its own colours.`,
+      `  • Use the brand fonts from the Brief (resolved below) as the type system. Keep ONE coherent theme across all ${slideCount} slides — shared chrome, type scale, and spacing.`,
+      ``,
+      `CHROME + TYPE SYSTEM — LOCK IT ACROSS EVERY SLIDE (the #1 tell of a real redesign vs ${slideCount} loose slides):`,
+      `  • Decide the chrome + type scale ONCE and reuse it VERBATIM on every slide. Pagination / page number, any footer or website / brand mark, and the logo sit in the EXACT same corner, at the same size, weight, and colour, on every slide they appear — same coordinates, no nudging, no restyling, no relocating per slide. Treat them as one fixed chrome block copied onto each slide.`,
+      `  • ONE headline system for the whole deck: a given role's heading (section title, content headline, stat caption) uses the SAME size, weight, colour, and placement on every slide of that role. Do NOT reinvent the headline treatment slide to slide — flipping through should feel like one designer on one grid, not ${slideCount} different takes on the same brand.`,
+      `  • Content margins are fixed (use the canvas inset stated below) — every slide's body starts at the same edges so nothing jumps frame to frame.`,
       ``,
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
-      `  • LOGOS / BRAND MARKS — never recreate (non-negotiable):`,
-      `    - If anything in the source LOOKS like a logo, brand mark, monogram, or stylized identifier — do NOT attempt to draw it in SVG. Claude approximations of brand marks always look off AND bloat the output with paths that produce mediocre results. This rule applies regardless of whether you "recognize" the logo or not.`,
-      `    - Two options for what to put in its place:`,
-      `       (a) If the brand name is READABLE as text (any letters / wordmark / company name spelled out) → render as styled text in the deck, matching the font weight and color you can read from the page.`,
-      `       (b) Otherwise → emit a styled placeholder <div> with a short text label (use the brand name if you can read it from elsewhere on the page, otherwise just "Logo"). The user will swap it in after generation.`,
-      `  • PHOTOS / photographic content: emit a styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor", "Photo: product hero shot"). Use the deck's palette for the placeholder background; the user replaces it post-generation. If a photo is purely decorative filler, drop it.`,
-      `  • COMPLEX CHARTS or DIAGRAMS (multi-bar charts, complex flowcharts, org charts, custom illustrations): emit a styled placeholder block with the chart's title and any axis labels you can read. The user replaces it with the actual chart after generation. Do not attempt to reconstruct the data graphically.`,
-      `  • SIMPLE ICONS (utility glyphs — arrows, checkmarks, stars, basic shapes, Lucide-style strokes): inline <svg> in your usual clean style. Fast to draw, looks better than a placeholder.`,
-      `  • DECORATIVE shapes from the original that don't carry meaning: skip them. The redesign is the priority.`,
+      `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
+      `  • PHOTOS / photographic content → styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor"). Use the palette for its background; drop purely-decorative filler.`,
+      `  • COMPLEX CHARTS / DIAGRAMS (multi-series charts, org/flow charts, custom illustrations) → styled placeholder block with the title + any axis labels you can read. Do not reconstruct the data graphically.`,
+      `  • SIMPLE ICONS (arrows, checkmarks, stars, Lucide-style strokes) → inline <svg> in your usual clean style.`,
+      `  • DECORATIVE shapes that carry no meaning → skip them. The redesign is the priority.`,
     );
     if (fonts.length > 0) {
       // Classify each name into "system" (OS-bundled — use verbatim
@@ -1265,6 +1608,32 @@ export const deckGenerate = inngest.createFunction(
       };
       const { prisma } = await import("@/lib/prisma");
       const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Flush the transient enhance slide images FIRST — before the
+      // job-status write below overwrites outputJson._sourceFileIds. The
+      // enhance prep step stashed the uploaded Files-API ids there;
+      // delete them so a failed run doesn't orphan the per-slide PNGs.
+      // Best-effort: a missing/already-deleted id is fine.
+      if (original.jobId) {
+        try {
+          const row = await prisma.job.findUnique({
+            where: { id: original.jobId },
+            select: { outputJson: true },
+          });
+          const ids = (
+            row?.outputJson as { _sourceFileIds?: string[] } | null
+          )?._sourceFileIds;
+          if (Array.isArray(ids) && ids.length > 0) {
+            await flushSlideImages(ids);
+          }
+        } catch (err) {
+          console.error(
+            "deck-generate onFailure: enhance image flush failed",
+            err,
+          );
+        }
+      }
+
       // Three near-identical "mark X failed" writes were boilerplate-
       // triplicated before this pass. `safeUpdate` wraps each in a
       // per-row catch + log so one row's blip doesn't skip the
@@ -1365,29 +1734,26 @@ export const deckGenerate = inngest.createFunction(
     // (older queued jobs predating this field, or any unrecognised
     // legacy key).
     //
-    // ─── Auto-upgrade sonnet-fast on source-document flows ─────────
-    // Sonnet 4.6 with thinking disabled (the `sonnet-fast` preset)
-    // can't reliably emit the 30+ KB structured output that PDF
-    // document-block flows require — observed on 2026-05-25, a
-    // 9-slide enhance run failed `JSON.parse` 3 times at position
-    // ~31417 and burned ~30k output tokens per attempt with no
-    // recoverable result.
+    // ─── Auto-upgrade thinking-OFF presets on source-document flows ──
+    // History: thinking-disabled models can't reliably emit the big
+    // structured manifest that PDF document-block flows require.
+    //   • 2026-05-25: sonnet-fast (Sonnet, no thinking) failed
+    //     `JSON.parse` 3× on a 9-slide enhance. Mitigation bumped it to
+    //     `opus-fast` (Opus, still no thinking) — Opus tracks structure
+    //     better, so it shipped as "good enough."
+    //   • 2026-05-30: opus-fast ALSO breaks at scale — a 31-page enhance
+    //     generated ~44k tokens (a full deck) at 128k max_tokens with NO
+    //     truncation, but the response was malformed/draft-then-final, so
+    //     the parse failed and only 7 slides were recoverable. Root cause:
+    //     thinking OFF. The system prompt asks Claude to draft + refine in
+    //     the THINKING channel and commit one clean manifest; with no
+    //     thinking budget it drafts in the text channel (two manifests) or
+    //     rushes the JSON.
     //
-    // Original mitigation targeted `sonnet-low` (Sonnet + adaptive
-    // thinking low). Reversed same day after the test run sat in
-    // thinking phase for 10+ min with only 521 thinking tokens
-    // emitted — Sonnet adaptive on multi-slide JSON dribbles tokens
-    // at glacial pace. The Sonnet thinking variants were dropped
-    // from the menu entirely (see `lib/types/quality.ts`).
-    //
-    // New target: `opus-fast` (Opus 4.7 + thinking disabled).
-    // Trade-off: ~1.8× cost jump from sonnet-fast ($0.36 → ~$0.65 on
-    // Opus 4.7's $5/$25 pricing — verified against Anthropic's
-    // published rates 2026-05-25), no thinking phase (= fast wall-
-    // clock), and Opus's stronger base structure tracking handles
-    // long structured output where Sonnet-no-thinking fails.
-    // Untested on enhance as of 2026-05-25 but theoretically the
-    // best balance of speed + reliability; first runs will validate.
+    // New target: `opus-balanced` (Opus 4.8 + adaptive thinking,
+    // effort:low) for ALL thinking-off presets (sonnet-fast, opus-fast)
+    // on long-output flows. effort:low keeps the thinking tax small while
+    // giving Claude the scratch space to emit clean long JSON.
     //
     // The user's preset choice is preserved on Job.quality for
     // analytics; only the actual API call is upgraded. Log line
@@ -1403,7 +1769,7 @@ export const deckGenerate = inngest.createFunction(
         to: effectiveQuality,
         sourceKind,
         reason:
-          "sonnet-no-thinking unreliable on long source-document output",
+          "thinking-off presets emit malformed/partial JSON on long decks; forced thinking-on opus-balanced",
       });
     }
 
@@ -1434,72 +1800,117 @@ export const deckGenerate = inngest.createFunction(
     // ISO format for clean JSON round-trip through Prisma's Json column.
     const genStartedAt = new Date().toISOString();
 
+    // ── Enhance prep (generation-time, transient) ──────────────────
+    // The enhance flow rasterizes the ORIGINAL upload to one PNG per
+    // slide HERE (not at extract time), uploads them to the Anthropic
+    // Files API, and feeds Claude {image + exact text} per slide. The
+    // images are TRANSIENT — flushed after the deck saves AND in
+    // onFailure. Memoized by step.run so a function retry reuses the
+    // SAME file_ids (no re-upload, no orphan). Other source kinds keep
+    // their extract-time document blocks and skip this entirely.
+    let enhanceImages: EnhanceImages | null = null;
+    const enhanceSource = sourceKind === "enhance" ? readSource(data) : null;
+    if (enhanceSource && enhanceSource.kind === "enhance") {
+      const { sourcePath, sourceMime } = enhanceSource;
+      const textPerSlide = enhanceSource.textPerSlide ?? [];
+      if (!sourcePath || !sourceMime) {
+        throw new Error(
+          "enhance source is missing sourcePath/sourceMime — cannot rasterize",
+        );
+      }
+      const prep = await step.run("rasterize-and-upload-source", async () => {
+        const pngs = await sourceToSlideImages(sourcePath, sourceMime);
+        const fileIds = await uploadSlideImages(pngs);
+        // Stash the ids on the Job row so onFailure can flush them even
+        // though Inngest's failure hook can't see step return values.
+        // The success path overwrites Job.outputJson with the manifest
+        // AFTER the post-save flush runs, so this stash only matters in
+        // the failure window where an orphan could occur.
+        if (jobId) {
+          await prisma.job
+            .update({
+              where: { id: jobId },
+              data: {
+                outputJson: {
+                  _sourceFileIds: fileIds,
+                } as Prisma.InputJsonValue,
+              },
+            })
+            .catch(() => undefined);
+        }
+        return { fileIds };
+      });
+      // Guard the index pairing: buildEnhanceMessages aligns textPerSlide[i]
+      // with fileIds[i] by position. An EMPTY textPerSlide is allowed (image-
+      // only enhance — each slide just gets no authoritative text), but a
+      // NON-empty list whose length disagrees with the rasterized image count
+      // means extraction and rasterization saw different slide sets, so every
+      // pairing past the first drop is wrong. Fail fast (flushing the transient
+      // uploads first) rather than ship a deck with mis-attributed text.
+      if (
+        textPerSlide.length > 0 &&
+        textPerSlide.length !== prep.fileIds.length
+      ) {
+        await flushSlideImages(prep.fileIds);
+        throw new Error(
+          `enhance prep mismatch: ${prep.fileIds.length} slide images vs ${textPerSlide.length} text blocks`,
+        );
+      }
+      enhanceImages = { fileIds: prep.fileIds, textPerSlide };
+    }
+
     const validated = await step.run("call-claude-and-validate", async () => {
       const client = getClient();
       // Build the user-text portion. When the brief carries a
       // source.kind from an upload-driven flow (enhance / mimic /
-      // data), the directive describing what the prepended images
-      // mean lives at the TOP of the user text so it gets read
-      // before Claude reaches the long brief JSON dump below.
-      const sourceDirective = buildSourceTextDirective(data);
+      // data), the directive describing what the prepended document
+      // means lives at the TOP of the user text.
+      const sourceDirective = buildSourceTextDirective(data, enhanceImages);
       const baseUserMessage = sourceDirective
         ? `${sourceDirective}\n${buildUserMessage(data)}`
         : buildUserMessage(data);
-      // Prepended document blocks (Enhance + Mimic flows). Null for
-      // scratch / data — content stays a plain string in that case.
-      // Phase 17.B-7: these are PDF `document` blocks now, not
-      // image blocks — Claude renders the PDF internally.
-      const sourceDocumentBlocks = buildSourceContentBlocks(data);
-      let lastError = "";
+      // Prepended document blocks (Enhance + Mimic + /create-upload).
+      // Null for scratch-text / data — content stays a plain string.
+      const sourceDocumentBlocks = buildSourceContentBlocks(data, enhanceImages);
+      const hasDocBlocks = Boolean(
+        sourceDocumentBlocks && sourceDocumentBlocks.length > 0,
+      );
 
-      // Progress shown to the user must never go backward. The self-healing
-      // retry restarts Claude from slide 1, so we track the high-watermark
-      // across all attempts and write that to the DB instead of the raw
-      // per-attempt counter.
-      let maxSlideSeen = 0;
-
-      // Persists a transient progress payload to the version's slideJson.
-      // Best-effort — failed writes don't block generation. The client polls
-      // /api/projects/[id]/status to surface these into <DeckView>.
-      //
-      // `extra` carries stage-specific metrics that DeckView surfaces in the
-      // caption while we wait (e.g. `thinkingTokens` for the live "Claude
-      // is thinking…" counter). Falls through to `progress` unmodified, so
-      // any unknown field just rides along without schema churn.
-      // Slides we've parsed out of the live stream so far (preview-only).
-      // Persisted into `slideJson.streamingPreview` on every writeProgress
-      // so DeckView's existing poll picks them up incrementally. The
-      // canonical `slideJson.slides` array stays empty during streaming —
-      // the FINAL deck still goes through the full extractJson + Zod +
-      // DOMPurify pass at end-of-stream, so this preview path can never
-      // become the authoritative manifest.
+      // Live-preview slides surfaced to DeckView, ACCUMULATED across the
+      // initial call + any continuation calls. The canonical `slides`
+      // array stays empty during streaming; the final manifest is
+      // assembled below.
       const streamingPreview: SlideType[] = [];
-      // Monotonic manifest-version token (surfaced below as
-      // `streamingManifestVersion`): bumped on parser didReset() and on
-      // every retry restart, so the client rejects stale, out-of-order
-      // poll snapshots. Strictly non-decreasing across this versionId's
-      // lifetime.
-      //
-      // The old draft→polish "مسودة" chip (streamingPreviewDraft) was
-      // removed 2026-05-29: it only ever fired on opus-max's two-pass
-      // higher-effort output, and that tier is gone. Every current
-      // preset is single-pass (no thinking, or low effort).
+      // Monotonic manifest-version token — bumped on every streaming call
+      // (initial + continuations) so DeckView's stale-poll guard rejects
+      // out-of-order snapshots. Strictly non-decreasing.
       let manifestVersion = 1;
-      // Latest theme JSON pulled out of the stream — captured once by
-      // the parser as Claude closes the `theme` object. DeckView needs
-      // it to wire palette / font CSS vars on the live preview slides;
-      // without it the colours fall through to browser defaults.
-      // Stored as `unknown` (no Zod validation here) — DeckView
-      // type-narrows defensively at render time.
+      // Theme captured mid-stream from the FIRST call (it streams before
+      // the slides). Reused for every continuation + the final assembly,
+      // so the whole deck shares one locked theme.
       let streamingTheme: unknown = null;
-      // Direction + language carried through the brief — surface them
-      // on the live-preview path so DeckView's SlideRenderer + nav
-      // manifest aren't hardcoded to "rtl"/"ar". The 2026-05-20
-      // language picker resolves to "ar" or "en" only; the briefly-
-      // lived "bi" bucket was retired same day (legacy "bi" payloads
-      // collapse to "ar" upstream in /api/projects).
+      // Total slide count Claude commits to in the manifest head (top-level
+      // `slideCount`, emitted before the slides). Captured ONCE from the
+      // stream so the live nav can reserve a slot per planned slide instead of
+      // guessing — critical in AUTO mode, where the user otherwise sees a lone
+      // tile with no sense of how many slides are coming. Survives
+      // continuations (set on the first call, reused after).
+      let declaredTotal: number | null = null;
+      // Offset into the response buffer where the CURRENT manifest begins. In
+      // the draft→final re-emit pattern (a known /enhance behaviour), Claude
+      // closes one manifest and streams a polished one in the same response;
+      // on that reset we advance this so the head scans (theme / slideCount /
+      // title-language-direction) read the LATEST manifest, not the draft's.
+      let manifestHeadOffset = 0;
       const streamDirection = resolveBriefDirection(data.brief);
       const streamLanguage = resolveBriefLanguage(data.brief);
+      // Sign the uploaded brand-font faces ONCE up front so the LIVE preview can
+      // @font-face them while the deck is still streaming — without this, an
+      // uploaded font (which carries no Google `url`) only appears after the
+      // final post-stream inject, so mid-generation slides render in a fallback
+      // font. Empty map (and a no-op apply) when no fonts were uploaded. Reused
+      // for the final manifest inject below, so we sign only once per run.
+      const signedUploadedFaces = await buildSignedUploadedFontFaces(data.brief);
 
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
@@ -1521,25 +1932,9 @@ export const deckGenerate = inngest.createFunction(
                   ...(extra ?? {}),
                 },
                 slides: [],
-                // Snapshot of the live-preview slides so far. Replaced
-                // by the canonical `slides` array on the final save.
                 streamingPreview: streamingPreview.slice(),
-                // Monotonic manifest-version token. Always emitted (even
-                // when draft badges are off — non-enhance flows still
-                // benefit from the client-side stale-poll guard built on
-                // it). Strictly non-decreasing across the lifetime of
-                // this `versionId`: bumped on parser `didReset()` AND on
-                // every retry-attempt restart in the loop above. Clients
-                // reject incoming snapshots whose version is lower than
-                // the last accepted one — closes the "two polls in
-                // flight, older one returns last, overwrites" race that
-                // length-only monotonicity couldn't catch.
                 streamingManifestVersion: manifestVersion,
-                // Theme captured mid-stream (always streams before slides
-                // in the manifest order). Null until the theme `}` closes.
                 streamingTheme,
-                // Direction + language echoed from the brief so DeckView's
-                // preview SlideRenderer doesn't have to assume RTL/Arabic.
                 streamingDirection: streamDirection,
                 streamingLanguage: streamLanguage,
               } as never,
@@ -1547,20 +1942,15 @@ export const deckGenerate = inngest.createFunction(
           })
           .catch(() => undefined);
 
-      // UI counter cap ("التفكير: X / Yk رمز") for adaptive thinking.
-      // See `THINKING_BUDGET_BY_EFFORT` at the top of the file for the
-      // per-tier ceilings + calibration notes.
+      // UI counter cap for adaptive thinking. See THINKING_BUDGET_BY_EFFORT.
       const thinkingBudget =
         callParams.thinking.type === "adaptive"
-          ? (THINKING_BUDGET_BY_EFFORT[
-              callParams.outputConfig?.effort ?? ""
-            ] ?? 0)
+          ? (THINKING_BUDGET_BY_EFFORT[callParams.outputConfig?.effort ?? ""] ??
+            0)
           : 0;
 
-      // Token-usage telemetry — accumulates across retry attempts so
-      // the persisted Job row reflects the real Anthropic cost of the
-      // full job (including any rejected attempts). Pre-billing pass:
-      // observability only, no gating.
+      // Token-usage telemetry — accumulates across the initial call + every
+      // continuation + any outer retry. Observability only.
       const usage = {
         attempts: 0,
         inputTokens: 0,
@@ -1568,233 +1958,189 @@ export const deckGenerate = inngest.createFunction(
         cacheReadTokens: 0,
         cacheCreationTokens: 0,
       };
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
-        // Reset preview state at the start of each retry. Without this,
-        // a failed validation on attempt N leaves attempt N's partial
-        // slides in `streamingPreview`, and attempt N+1's parser appends
-        // its own slides onto the leftover — DeckView sees duplicates
-        // / stale frames and the post-success snapshot to slideJson can
-        // include slides that never made it into the canonical manifest.
-        streamingPreview.length = 0;
-        // INCREMENT (not reset to 1) so `manifestVersion` is strictly
-        // monotonic across the lifetime of this `versionId`. Pre-fix
-        // we reset to 1 on each retry attempt, which let an old poll
-        // arrive AFTER the retry started — same version number on
-        // both, same length potentially, no signal to reject the
-        // stale state. With monotonic increments, the client's
-        // version-aware guard can always tell stale from fresh.
+
+      // Compose message content. The doc blocks + baseUserMessage form a
+      // STABLE prefix marked with a cache breakpoint, so continuation calls
+      // (which re-send the same prefix) read it from cache instead of
+      // re-billing the PDF. `tail` (the continuation directive) varies and
+      // sits AFTER the breakpoint.
+      const buildContent = (
+        stableText: string,
+        tail?: string,
+      ): string | Anthropic.Messages.ContentBlockParam[] => {
+        if (!hasDocBlocks) {
+          return tail ? `${stableText}\n${tail}` : stableText;
+        }
+        const blocks: Anthropic.Messages.ContentBlockParam[] = [
+          ...(sourceDocumentBlocks as Anthropic.Messages.ContentBlockParam[]),
+          {
+            type: "text" as const,
+            text: stableText,
+            cache_control: { type: "ephemeral" as const },
+          },
+        ];
+        if (tail) blocks.push({ type: "text" as const, text: tail });
+        return blocks;
+      };
+
+      // One streaming Anthropic call. Parses slides incrementally (live
+      // preview + salvage), captures the theme, polls for cancel (aborts to
+      // stop output-token billing), accumulates usage, and — critically —
+      // returns `stopReason` so a `max_tokens` truncation is actionable
+      // instead of silently looping. `priorSlides` are the slides already
+      // collected from earlier calls (shown in the preview beneath this
+      // call's fresh slides).
+      type StreamCallResult =
+        | { cancelled: true }
+        | {
+            cancelled?: false;
+            text: string;
+            stopReason: string | null;
+            slides: SlideType[];
+          };
+      const runStream = async (
+        content: string | Anthropic.Messages.ContentBlockParam[],
+        label: string,
+        priorSlides: SlideType[],
+      ): Promise<StreamCallResult> => {
         manifestVersion += 1;
-        streamingTheme = null;
+        // Reset the live preview to the already-collected slides, then grow
+        // it as this call streams — so the preview never visibly shrinks
+        // between calls (no flicker).
+        streamingPreview.length = 0;
+        streamingPreview.push(...priorSlides);
 
-        const userMessage =
-          attempt === 1
-            ? baseUserMessage
-            : `${baseUserMessage}\n\nThe previous attempt was rejected:\n${lastError}\n\nReturn corrected JSON now. JSON only, no prose, no fences.`;
-
-        // Compose the message content. When source images are
-        // present (Enhance + Mimic flows), prepend them so Claude
-        // sees the visual context BEFORE the text directive that
-        // tells him what they mean. Otherwise stays a plain string
-        // — preserves the existing scratch / data path.
-        const messageContent: string | Anthropic.Messages.ContentBlockParam[] =
-          sourceDocumentBlocks && sourceDocumentBlocks.length > 0
-            ? [
-                ...sourceDocumentBlocks,
-                { type: "text" as const, text: userMessage },
-              ]
-            : userMessage;
-
-        await writeProgress("thinking", maxSlideSeen, estimatedTotal, {
-          thinkingTokens: 0,
-          thinkingBudget,
-        });
-
-        // ─── Mid-stream cancel state ─────────────────────────────────
-        // `cancelObserved` flips to true the first time the in-stream
-        // poll sees `Job.cancelRequestedAt` non-null (set by the
-        // POST /api/projects/[id]/cancel route). When it flips, we
-        // abort the Anthropic stream so output-token billing stops
-        // immediately. After `stream.finalMessage()` throws (which
-        // it will on abort), the outer logic checks this flag and
-        // exits the retry loop cleanly (no retry on a user cancel).
-        // Inngest's `cancelOn` declaration on the function takes care
-        // of tearing the function envelope down at the next step
-        // boundary; this flag handles the WITHIN-step abort that
-        // cancelOn alone can't reach.
         let cancelObserved = false;
         let lastCancelCheckAt = 0;
-        // Poll DB at most once per 2s — enough to keep cancellation
-        // latency under a slide-close cycle (Claude emits a slide
-        // every 5-15s) while not hammering Prisma in the hot stream
-        // loop. The check runs inside `stream.on("text", ...)` below
-        // so it piggybacks on the existing token-delta callback.
+        let lastThinkingWriteAt = 0;
+        let lastWriteAt = 0;
+        let buffer = "";
+        const parser = new StreamingSlideParser();
+        const callSlides: SlideType[] = [];
         const CANCEL_POLL_INTERVAL_MS = 2_000;
 
-        // Anthropic call params are resolved up-top from the user's
-        // quality preset (paramsForQuality). The single stream call
-        // shape stays the same regardless of tier — only the model /
-        // thinking fields shift.
         const stream = client.messages.stream(
           {
             model: callParams.model,
-            // Anthropic's published guidance for Opus 4.7 max / xhigh
-            // effort: "set a large max output token budget so the model
-            // has room to think and act across its subagents and tool
-            // calls. We recommend starting at 64k tokens" (see
-            // /docs/en/build-with-claude/prompt-engineering/
-            // claude-prompting-best-practices). The recommendation
-            // applies cleanly to the lower tiers too — we never come
-            // close to hitting 64k on real runs, so the bump just
-            // gives the model headroom on the high-effort tiers
-            // without changing behavior anywhere else.
-            max_tokens: 64000,
+            max_tokens: 128000,
             thinking: callParams.thinking,
             system: [
               {
                 type: "text",
-                text: SYSTEM_PROMPT,
+                // Images deck (context/images.md) swaps the 3 direction
+                // sections; shared invariants are identical, so each mode's
+                // system prompt is a stable, independently-cached prefix.
+                text: isImagesMode(data) ? SYSTEM_PROMPT_IMAGES : SYSTEM_PROMPT,
                 cache_control: { type: "ephemeral" },
               },
             ],
-            // output_config.effort is the API-supported way to modulate
-            // adaptive thinking on the 4.x models — see paramsForQuality.
             ...(callParams.outputConfig
               ? { output_config: callParams.outputConfig }
               : {}),
-            messages: [{ role: "user", content: messageContent }],
+            messages: [{ role: "user", content }],
           },
-          // Phase 17.B-7: pass the Files API beta header whenever
-          // we attach a `document` block referencing an Anthropic
-          // file_id. Harmless to pass on every call (the header is
-          // a no-op when no file_id is referenced), but we gate on
-          // sourceDocumentBlocks for documentation clarity.
-          sourceDocumentBlocks
-            ? {
-                headers: {
-                  "anthropic-beta": "files-api-2025-04-14",
-                },
-              }
+          hasDocBlocks
+            ? { headers: { "anthropic-beta": "files-api-2025-04-14" } }
             : undefined,
         );
 
-        // Live thinking-phase telemetry. Before this listener existed, the
-        // pipeline was silent during thinking — DeckView could only show
-        // "stage:thinking, slide 0" with no incremental signal, and on
-        // long thinking phases (12k+ token budget) the user couldn't tell
-        // if the run was making progress or stuck. We surface a rough
-        // token estimate from the cumulative thinking snapshot (~4 chars
-        // per token is a common approximation) and write at most once per
-        // second so we don't hammer Prisma.
-        let thinkingChars = 0;
-        let lastThinkingWriteAt = 0;
         stream.on("thinking", (_delta, snapshot) => {
-          thinkingChars = snapshot.length;
           const now = Date.now();
           if (now - lastThinkingWriteAt > 1000) {
             lastThinkingWriteAt = now;
-            void writeProgress("thinking", maxSlideSeen, estimatedTotal, {
-              thinkingTokens: Math.round(thinkingChars / 4),
-              thinkingBudget,
-            });
+            void writeProgress(
+              "thinking",
+              priorSlides.length + callSlides.length,
+              declaredTotal ?? estimatedTotal,
+              {
+                thinkingTokens: Math.round(snapshot.length / 4),
+                thinkingBudget,
+              },
+            );
           }
         });
 
-        // Watch the streamed text — count `"slideId":` occurrences to know
-        // which slide Claude is currently emitting. Throttle DB writes so we
-        // don't hammer Prisma on every token. `maxSlideSeen` is the
-        // non-monotonic ratchet that prevents retry-induced regressions.
-        //
-        // The StreamingSlideParser yields each slide's raw JSON as Claude
-        // closes the `}` for it. We JSON.parse + SlideSchema.safeParse each
-        // one; failures silently skip (the full-manifest validation pass
-        // catches real errors at end-of-stream). Successes append to
-        // `streamingPreview` which writeProgress snapshots on the next tick.
-        let buffer = "";
-        let lastPushedSlide = -1;
-        let lastWriteAt = 0;
-        const sliceParser = new StreamingSlideParser();
         stream.on("text", (delta) => {
           buffer += delta;
-          const matches = buffer.match(/"slideId"\s*:/g);
-          const seen = matches ? matches.length : 0;
-          if (seen > maxSlideSeen) maxSlideSeen = seen;
-
-          // Drain any slide objects that just closed in the buffer.
-          const justClosed = sliceParser.advance(buffer);
+          const justClosed = parser.advance(buffer);
+          // A complete manifest just closed and Claude is re-emitting a
+          // polished one in the SAME response (a known /enhance pattern:
+          // it drafts a deck, then re-does it). Drop the draft so BOTH the
+          // salvage buffer (callSlides) and the live preview reflect ONLY
+          // the latest manifest — otherwise draft + re-emit pile up with
+          // duplicate slides (bloated salvage + a preview that overshoots
+          // the real slide count).
+          if (parser.didReset()) {
+            callSlides.length = 0;
+            streamingPreview.length = 0;
+            streamingPreview.push(...priorSlides);
+            // Drop the draft's captured head/theme so they re-capture from the
+            // new manifest — otherwise salvage ships the latest slides under
+            // the draft's theme (wrong colours/fonts) and slide count.
+            streamingTheme = null;
+            declaredTotal = null;
+            manifestHeadOffset = buffer.length;
+          }
           for (const raw of justClosed) {
             try {
               const candidate = JSON.parse(raw);
               const parsed = SlideSchema.safeParse(candidate);
               if (parsed.success) {
+                callSlides.push(parsed.data);
                 streamingPreview.push(parsed.data);
               }
             } catch {
-              // Malformed mid-stream JSON (rare — Claude usually closes
-              // each object cleanly). The full-manifest pass at
-              // end-of-stream re-validates the whole thing and triggers
-              // the existing self-healing retry if needed.
+              // Mid-stream partial — the per-call assembly re-checks.
             }
           }
-          // Draft-then-final detection (/enhance flow observation 2026-05-25).
-          // If the parser saw a top-level `}` close a tracked manifest, Claude
-          // is about to stream a SECOND manifest. Drop the just-emitted draft
-          // slides + theme so the next live-preview snapshot reflects ONLY
-          // slides from the polished manifest, not the half-baked draft. The
-          // monotonic guard in DeckView keeps the high-watermark visible
-          // during the brief empty window — no UI tear. extractJson() at the
-          // end of stream uses lastIndexOf("}") so the saved canonical
-          // manifest is the polished one regardless.
-          //
-          // We also bump `manifestVersion` so the post-reset snapshot carries
-          // a higher version than the dropped draft — DeckView's monotonic
-          // guard then accepts the polished list and rejects any late,
-          // out-of-order poll that still carries the stale draft.
-          if (sliceParser.didReset()) {
-            streamingPreview.length = 0;
-            streamingTheme = null;
-            manifestVersion += 1;
-          }
-
-          // Capture the theme once it appears. Theme is parser-cached
-          // so the JSON.parse here only runs while we're between "theme
-          // closed" and "theme committed to local var".
+          // Capture the theme once (first call only — it streams before
+          // slides). Held in the closure so it survives the parser's
+          // end-of-object reset and is reused by continuations.
           if (streamingTheme === null) {
-            const themeRaw = sliceParser.getThemeJson();
+            const themeRaw = parser.getThemeJson();
             if (themeRaw) {
               try {
                 streamingTheme = JSON.parse(themeRaw);
+                // Attach the pre-signed uploaded-font faces to the live theme so
+                // DeckView @font-faces them mid-generation (Google fonts carry a
+                // `url` and are skipped). No-op when nothing was uploaded.
+                applyUploadedFontFaces(streamingTheme, signedUploadedFaces);
               } catch {
-                // Malformed partial — wait for the next advance, parser
-                // will keep the same byte range stable.
+                // Wait for the next advance.
               }
             }
           }
-
-          const now = Date.now();
-          if (
-            (maxSlideSeen !== lastPushedSlide || justClosed.length > 0) &&
-            now - lastWriteAt > 800
-          ) {
-            lastPushedSlide = maxSlideSeen;
-            lastWriteAt = now;
-            void writeProgress("designing", maxSlideSeen, estimatedTotal);
+          // Capture the declared total once. It's a top-level scalar that
+          // streams in the head (before `"slides"`), so scan only the head to
+          // avoid matching a stray occurrence inside slide HTML.
+          if (declaredTotal === null) {
+            // Scan only the CURRENT manifest (post-reset offset) so a draft's
+            // slideCount can't shadow the final one's.
+            const current = buffer.slice(manifestHeadOffset);
+            const slidesIdx = current.indexOf('"slides"');
+            const head = slidesIdx >= 0 ? current.slice(0, slidesIdx) : current;
+            const m = head.match(/"slideCount"\s*:\s*(\d+)/);
+            if (m) {
+              const n = parseInt(m[1], 10);
+              if (Number.isFinite(n) && n > 0 && n <= 100) declaredTotal = n;
+            }
           }
-
-          // ─── Mid-stream cancel poll ──────────────────────────────
-          // Piggybacks on the existing throttled-text callback so we
-          // don't add a separate setInterval. Once `cancelObserved`
-          // is true we stop polling (don't need to re-confirm) and
-          // skip straight to the abort — repeated abort() calls are
-          // safe but pointless. The poll itself is a one-row Prisma
-          // read (~5 ms warm); throttled at 2 s, the cost is
-          // negligible against the streaming workload.
+          const now = Date.now();
+          if (justClosed.length > 0 && now - lastWriteAt > 800) {
+            lastWriteAt = now;
+            void writeProgress(
+              "designing",
+              priorSlides.length + callSlides.length,
+              declaredTotal ?? estimatedTotal,
+            );
+          }
           if (
             jobId &&
             !cancelObserved &&
             now - lastCancelCheckAt > CANCEL_POLL_INTERVAL_MS
           ) {
             lastCancelCheckAt = now;
-            const pollJobId = jobId; // narrow for the async closure
+            const pollJobId = jobId;
             void (async () => {
               try {
                 const row = await prisma.job.findUnique({
@@ -1803,17 +2149,9 @@ export const deckGenerate = inngest.createFunction(
                 });
                 if (row?.cancelRequestedAt && !cancelObserved) {
                   cancelObserved = true;
-                  // Calling controller.abort() rejects the in-flight
-                  // request and causes stream.finalMessage() below to
-                  // throw with an AbortError. The outer catch then
-                  // checks cancelObserved and exits the retry loop.
                   stream.controller.abort();
                 }
               } catch (err) {
-                // Best-effort: if the DB blips, the next poll catches
-                // the cancel. Don't log noisy errors here — the row
-                // can also be transiently unreachable during DB
-                // restarts.
                 void err;
               }
             })();
@@ -1824,101 +2162,193 @@ export const deckGenerate = inngest.createFunction(
         try {
           message = await stream.finalMessage();
         } catch (err) {
-          // User-cancel path: stream.controller.abort() above triggers
-          // an AbortError. The route already marked Project / Version
-          // / Job as cancelled in its transaction, so just exit the
-          // retry loop cleanly — no further work, no retry.
           if (cancelObserved) {
-            logger.info("deck_generate_cancelled_by_user", {
-              jobId,
-              attempt,
-              slidesSeen: maxSlideSeen,
-            });
-            return { cancelled: true } as const;
+            logger.info("deck_generate_cancelled_by_user", { jobId, label });
+            return { cancelled: true };
           }
-          // Non-cancel error — let it bubble to the existing retry /
-          // onFailure machinery.
           throw err;
         }
         usage.attempts += 1;
         usage.inputTokens += message.usage.input_tokens ?? 0;
         usage.outputTokens += message.usage.output_tokens ?? 0;
         usage.cacheReadTokens += message.usage.cache_read_input_tokens ?? 0;
-        usage.cacheCreationTokens += message.usage.cache_creation_input_tokens ?? 0;
+        usage.cacheCreationTokens +=
+          message.usage.cache_creation_input_tokens ?? 0;
+        const stopReason = message.stop_reason ?? null;
         logger.info("claude_usage", {
-          attempt,
+          label,
           input: message.usage.input_tokens,
           output: message.usage.output_tokens,
           cache_read: message.usage.cache_read_input_tokens,
           cache_write: message.usage.cache_creation_input_tokens,
+          stop_reason: stopReason,
         });
-
-        await writeProgress("validating", maxSlideSeen, estimatedTotal);
-
         const textBlock = message.content.find((b) => b.type === "text");
-        if (!textBlock || textBlock.type !== "text") {
-          lastError = "No text block in Claude response";
-          continue;
-        }
+        const text =
+          textBlock && textBlock.type === "text" ? textBlock.text : "";
+        return { text, stopReason, slides: callSlides };
+      };
 
-        const jsonStr = extractJson(textBlock.text);
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(jsonStr);
-        } catch (firstError) {
-          // First attempt with raw output failed. Try the repair pass
-          // before bouncing the attempt — Claude (especially Sonnet
-          // with thinking disabled) occasionally drops a comma or
-          // appends a trailing one in dense 30+ KB outputs. The
-          // repair is string-aware so it won't damage HTML payloads.
-          // See lib/extract/json-repair.ts for what's covered.
-          const repaired = repairJson(jsonStr);
+      // Pull the manifest HEAD (title / language / direction) out of the
+      // response text. The head always streams BEFORE the slides, so it
+      // survives a tail truncation. Theme comes from `streamingTheme`.
+      const parseHead = (text: string) => {
+        // Read the LATEST manifest only. On a draft→final re-emit the response
+        // text holds both; slicing from manifestHeadOffset drops the draft so
+        // title/language/direction come from the final manifest (matching the
+        // re-captured streamingTheme + the reset callSlides).
+        const latest =
+          manifestHeadOffset > 0 && manifestHeadOffset <= text.length
+            ? text.slice(manifestHeadOffset)
+            : text;
+        const json = extractJson(latest);
+        const slidesIdx = json.indexOf('"slides"');
+        const headStr = slidesIdx >= 0 ? json.slice(0, slidesIdx) : json;
+        const rawTitle = headStr.match(
+          /"title"\s*:\s*"((?:[^"\\]|\\.)*)"/,
+        )?.[1];
+        let title: string | undefined;
+        if (rawTitle !== undefined) {
           try {
-            parsed = JSON.parse(repaired);
-            logger.info("json_parse_recovered_via_repair", {
-              attempt,
-              originalErr:
-                firstError instanceof Error
-                  ? firstError.message
-                  : String(firstError),
-              size: jsonStr.length,
-              repairedDeltaChars: repaired.length - jsonStr.length,
-            });
-          } catch (secondError) {
-            // Both raw + repaired failed. Log diagnostic info so the
-            // next time this fails on a similar input we can pattern-
-            // match — without storing the full 30 KB blob.
-            lastError = `JSON.parse failed: ${secondError instanceof Error ? secondError.message : String(secondError)}`;
-            logger.warn("json_parse_failed_both_raw_and_repair", {
-              attempt,
-              rawErr:
-                firstError instanceof Error
-                  ? firstError.message
-                  : String(firstError),
-              repairErr:
-                secondError instanceof Error
-                  ? secondError.message
-                  : String(secondError),
-              size: jsonStr.length,
-              // Head + tail of the JSON to spot the failure region
-              // without persisting the whole payload.
-              jsonHead: jsonStr.slice(0, 300),
-              jsonTail: jsonStr.slice(-300),
-            });
-            continue;
+            title = JSON.parse(`"${rawTitle}"`) as string;
+          } catch {
+            title = rawTitle;
           }
         }
+        const language = headStr.match(/"language"\s*:\s*"(ar|en)"/)?.[1] as
+          | "ar"
+          | "en"
+          | undefined;
+        const direction = headStr.match(/"direction"\s*:\s*"(rtl|ltr)"/)?.[1] as
+          | "rtl"
+          | "ltr"
+          | undefined;
+        return { title, language, direction };
+      };
 
-        const result = SlideManifestSchema.safeParse(parsed);
-        if (result.success) {
-          await writeProgress("saving", result.data.slides.length, result.data.slides.length);
-          return { manifest: result.data, usage };
+      // Assemble + validate a manifest from the streamed (per-slide-
+      // validated) slides + the captured head/theme. Returns null when an
+      // essential piece is missing (theme never streamed, no slides, etc.)
+      // so the caller can decide whether that's a hard failure. This is the
+      // SALVAGE path: a parse miss or a tail truncation degrades to "ship
+      // the slides we already have" instead of throwing.
+      const assemble = (
+        head: {
+          title?: string;
+          language?: "ar" | "en";
+          direction?: "rtl" | "ltr";
+        },
+        slides: SlideType[],
+      ): SlideManifest | null => {
+        if (
+          !head.title ||
+          !head.language ||
+          !head.direction ||
+          streamingTheme == null ||
+          slides.length === 0
+        ) {
+          return null;
         }
+        const candidate = {
+          version: "2.0" as const,
+          presentationId: data.presentationId,
+          title: head.title,
+          language: head.language,
+          direction: head.direction,
+          theme: streamingTheme,
+          slides,
+        };
+        const result = SlideManifestSchema.safeParse(candidate);
+        if (!result.success) {
+          logger.warn("deck_generate_salvage_schema_failed", {
+            slideCount: slides.length,
+            issues: JSON.stringify(result.error.issues).slice(0, 1500),
+          });
+          return null;
+        }
+        return result.data;
+      };
 
-        lastError = JSON.stringify(result.error.issues).slice(0, 1200);
+      // ONE streaming call. The lighter package (per-slide images + exact
+      // text + brand kit) makes the happy-path whole-buffer parse the norm.
+      // On a parse miss OR a tail truncation we DEGRADE GRACEFULLY: assemble
+      // from the slides the streaming parser already validated (the parser's
+      // reset signal, handled above, leaves only the LATEST manifest) + the
+      // captured head + theme.
+      //
+      // Critically we do NOT throw on a recoverable miss. A throw makes
+      // Inngest retry THIS step, which restarts the whole Claude call from
+      // slide 1 — the user-visible "looping / SlideNav resets to 0" failure
+      // (observed 2026-05-30). We only throw when there is genuinely nothing
+      // to ship. No multi-call continuation — one call, then salvage.
+      streamingPreview.length = 0;
+      streamingTheme = null;
+
+      await writeProgress("thinking", 0, estimatedTotal, {
+        thinkingTokens: 0,
+        thinkingBudget,
+      });
+
+      const call = await runStream(buildContent(baseUserMessage), "gen", []);
+      if (call.cancelled) return { cancelled: true } as const;
+
+      // Happy path: a complete response → robust whole-buffer parse.
+      if (call.stopReason !== "max_tokens") {
+        const jsonStr = extractJson(call.text);
+        let parsedWhole: unknown = null;
+        try {
+          parsedWhole = JSON.parse(jsonStr);
+        } catch {
+          try {
+            parsedWhole = JSON.parse(repairJson(jsonStr));
+          } catch {
+            parsedWhole = null;
+          }
+        }
+        if (parsedWhole) {
+          const whole = SlideManifestSchema.safeParse(parsedWhole);
+          if (whole.success) {
+            await writeProgress(
+              "saving",
+              whole.data.slides.length,
+              whole.data.slides.length,
+            );
+            return { manifest: whole.data, usage };
+          }
+          logger.warn("deck_generate_whole_parse_schema_failed", {
+            issues: JSON.stringify(whole.error.issues).slice(0, 1500),
+          });
+        }
+        // Completed but unparseable / invalid as a whole (e.g. a
+        // draft→re-emit that concatenated two manifests) → fall through
+        // to salvage instead of throwing.
       }
 
-      throw new Error(`Validation failed after 3 attempts: ${lastError}`);
+      // Salvage: build from the streamed, per-slide-validated slides +
+      // captured head/theme. Turns a truncation or a parse miss into "ship
+      // the slides we got" — no throw, so Inngest never retries the step,
+      // so no restart loop.
+      const salvaged = assemble(parseHead(call.text), call.slides);
+      if (salvaged) {
+        logger.info("deck_generate_salvaged", {
+          stopReason: call.stopReason,
+          slides: salvaged.slides.length,
+        });
+        await writeProgress(
+          "saving",
+          salvaged.slides.length,
+          salvaged.slides.length,
+        );
+        return { manifest: salvaged, usage };
+      }
+
+      // Nothing usable — no slides closed, or the theme never streamed.
+      // Genuinely empty; throw so the run fails cleanly rather than
+      // shipping an empty deck. (Rare — the common failure modes are
+      // covered by salvage above.)
+      throw new Error(
+        `Generation produced no usable manifest (stop=${call.stopReason}, slides=${call.slides.length}, theme=${streamingTheme != null}).`,
+      );
     });
     // Cancellation short-circuit: the streaming step returned the
     // `{ cancelled: true }` marker, meaning the user clicked Cancel
@@ -1950,10 +2380,44 @@ export const deckGenerate = inngest.createFunction(
         };
     const validatedResult = validated as ValidatedStreamResult;
     if (validatedResult.cancelled) {
+      // A cancelled run still uploaded the transient enhance images in
+      // the prep step, and this clean-cancel return fires neither the
+      // post-save flush nor onFailure — so flush here. Best-effort: if
+      // the cancel arrived via Inngest's `cancelOn` hard-kill this step
+      // may not run, leaving the orphans for a periodic sweep.
+      if (enhanceImages && enhanceImages.fileIds.length > 0) {
+        const idsToFlush = enhanceImages.fileIds;
+        await step.run("flush-enhance-images-cancelled", () =>
+          flushSlideImages(idsToFlush),
+        );
+      }
       logger.info("deck_generate_exit_cancelled", { jobId, projectId });
       return { status: "cancelled" } as const;
     }
+
     const { manifest, usage } = validatedResult;
+
+    // Request every weight of each theme font so any weight Claude used both
+    // renders in the preview and embeds in the export (Google's css2 silently
+    // drops weights the family doesn't ship, so the full ladder is safe).
+    // Normalize at this single source — the persisted manifest — and every
+    // downstream consumer (renderer, export embed, showcase, html-doc)
+    // inherits the full set with no per-call rewrite. See lib/brand/fonts.ts.
+    if (manifest.theme?.fontHeading?.url) {
+      manifest.theme.fontHeading.url = expandWeightAxis(
+        manifest.theme.fontHeading.url,
+      );
+    }
+    if (manifest.theme?.fontBody?.url) {
+      manifest.theme.fontBody.url = expandWeightAxis(manifest.theme.fontBody.url);
+    }
+
+    // Uploaded brand fonts: Claude emitted only the NAME (no url) per the
+    // FONT SOURCING rule. Match the name back to the uploaded file's per-weight
+    // storageUrls in the brief, sign each, and stash them on
+    // theme.font*.fontFaces so the renderer @font-faces each weight and the
+    // export embeds the bytes. No-op for Google fonts (they carry a url).
+    await injectUploadedFontSources(manifest, data.brief);
 
     await step.run("save-to-database", async () => {
       // Stamp the format the user picked onto the manifest so every
@@ -2112,6 +2576,11 @@ export const deckGenerate = inngest.createFunction(
         data: {
           status: "completed",
           title: manifest.title,
+          // Persist the FLOW so dashboard surfaces can show which path
+          // produced the deck. Set once at completion (covers all four
+          // flows; the creation route only ever distinguishes
+          // create/enhance). `sourceKindToFlow` is the single mapper.
+          type: sourceKindToFlow(sourceKind),
         },
       });
 
@@ -2199,6 +2668,46 @@ export const deckGenerate = inngest.createFunction(
       }
     });
 
+    // Images-mode (context/images.md): the deck is now saved with reserved
+    // placeholder boxes; kick off the async gpt-image-2 fill. Fire-and-
+    // forget — a dispatch failure must never fail a successful generation
+    // (the boxes just stay branded gradients), and the fill runs in its own
+    // retried function (deck-images-generate). Off-mode decks never reach
+    // this branch, so they remain byte-identical to before.
+    if (isImagesMode(data)) {
+      await inngest
+        .send({
+          name: "deck.images.requested",
+          data: { projectId, versionId },
+        })
+        .catch((err) => {
+          logger.warn("deck_images_dispatch_failed", {
+            projectId,
+            versionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+
+    // Flush the transient enhance slide images now that the deck is
+    // saved — they've served their purpose. Best-effort deletes (a
+    // failure just leaves a free, unreferenced file a sweep can reap);
+    // never fails the run. The onFailure hook covers the failure path
+    // via the Job-row stash, so between the two every uploaded PNG is
+    // accounted for.
+    if (enhanceImages && enhanceImages.fileIds.length > 0) {
+      const idsToFlush = enhanceImages.fileIds;
+      await step.run("flush-enhance-images", async () => {
+        const failed = await flushSlideImages(idsToFlush);
+        if (failed > 0) {
+          logger.warn("enhance_flush_partial", {
+            total: idsToFlush.length,
+            failed,
+          });
+        }
+      });
+    }
+
     // Phase 16.D — fire `deck.regen.finished` WITHOUT awaiting (same
     // reason as the started broadcast above). The Inngest function
     // returns, the broadcast finishes asynchronously, and observers
@@ -2237,7 +2746,9 @@ export const deckGenerate = inngest.createFunction(
         type: "deck.generate.finished",
         projectId,
         actorPrismaUserId,
-        payload: { versionId },
+        // `kind` carries the canonical flow (create | enhance | mimic |
+        // datasheet) — drives the flow-specific notification title + icon.
+        payload: { versionId, kind: sourceKindToFlow(sourceKind) },
         recipientUserIds: [actorPrismaUserId],
         allowSelfEcho: true,
       }).catch((err) => {

@@ -3,14 +3,17 @@
 // Centralized so every flow that uploads files goes through the same
 // beta-header + SDK-shape contract. Used by:
 //
-//   • Inngest extract-source.ts — uploads source PDF for /enhance
+//   • Inngest extract-source.ts — uploads source PDF for /create + /mimic
+//   • Inngest deck-generate.ts  — uploads per-slide PNGs for /enhance
+//     (generation-time rasterization) + flushes them after the run
 //
-// `deleteFileFromAnthropic` + `ANTHROPIC_FILES_API_BETA` were removed
-// 2026-05-25 in the dead-code audit pass — neither had any importer.
-// Anthropic doesn't charge for file storage and we never set up a
-// cleanup pass, so delete-on-completion stayed theoretical. The beta
-// header is referenced internally via the local `FILES_API_BETA`
-// constant.
+// `deleteFileFromAnthropic` was re-added 2026-05-30 for the enhance
+// overhaul: the per-slide PNGs we upload at generation time are
+// TRANSIENT and must be flushed (deck-generate deletes them after the
+// deck saves AND in onFailure) so they don't accumulate. Anthropic
+// doesn't charge for file storage, but unflushed images would orphan
+// on every enhance run. The beta header is referenced internally via
+// the local `FILES_API_BETA` constant.
 //
 // ─── Why a beta header ───────────────────────────────────────────
 // Per the official docs (verified 2026-05-25), the Files API is
@@ -68,5 +71,26 @@ export async function uploadFileToAnthropic({
     );
   }
   return file.id;
+}
+
+/**
+ * Delete an uploaded file from Anthropic's Files API. Best-effort by
+ * contract — callers (deck-generate's flush + onFailure) swallow
+ * failures: a delete that doesn't land just leaves a free, unreferenced
+ * file that a future sweep can reap; it must never fail the run or the
+ * failure-cleanup path. Returns true on success, false on any error.
+ *
+ * Deletes are free and the API tolerates a missing/already-deleted id
+ * (404) — we treat that as success-enough (the file is gone either way),
+ * but still report false so the caller can log the anomaly if it wants.
+ */
+export async function deleteFileFromAnthropic(fileId: string): Promise<boolean> {
+  try {
+    const client = getClient();
+    await client.beta.files.delete(fileId, { betas: [FILES_API_BETA] });
+    return true;
+  } catch {
+    return false;
+  }
 }
 

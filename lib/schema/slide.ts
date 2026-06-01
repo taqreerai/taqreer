@@ -59,6 +59,29 @@ const FontDefinition = z.object({
       }
     )
     .optional(),
+  // Uploaded brand font WEIGHT FACES: one signed URL per weight file
+  // (TTF/OTF/WOFF) in the private brand-assets bucket. A user who uploads
+  // Light/Regular/Bold of one family gets three faces (300/400/700) here.
+  // Distinct from `url` (a Google CSS *stylesheet* link) — the renderer
+  // turns EACH face into a `@font-face { font-weight: W; src: url(...) }`
+  // and the export embeds each file at its real weight, so PowerPoint
+  // renders every weighted run from the matching uploaded file (no
+  // synthetic bolding). Claude NEVER emits this; it's injected server-side
+  // in deck-generate AFTER the manifest is built (so no host allowlist
+  // here — we sign it ourselves). Optional + HTTPS only.
+  fontFaces: z
+    .array(
+      z.object({
+        weight: z.number().int().min(1).max(1000),
+        src: z
+          .string()
+          .url()
+          .refine((u) => u.startsWith("https://"), {
+            message: "fontFace src must be HTTPS",
+          }),
+      }),
+    )
+    .optional(),
 });
 
 export const ThemeSchema = z.object({

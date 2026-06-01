@@ -143,9 +143,17 @@ export function DashboardShell({
       window.removeEventListener("taqreer:share-revoked", onRevoked);
   }, [pathname, router]);
 
+  // The dashboard runs EDGE-TO-EDGE (no max-w cap) so the stat cards +
+  // widgets + points graph can spread across wide monitors — but with
+  // the same symmetric padding the capped pages use (NOT the preview
+  // route's left-heavy `pl-[120px]`, which reserves room for the slide
+  // nav). Every other app page stays capped at 1280px.
+  const isDashboard = pathname === "/dashboard";
   const contentClasses = isFullWidthRoute
     ? "pt-[120px] pb-[40px] pl-[120px] pr-[40px]"
-    : "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16";
+    : isDashboard
+      ? "pt-28 px-8 pb-8 space-y-16"
+      : "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16";
 
   return (
     <div className="dashboard-bg min-h-screen relative opacity-100">

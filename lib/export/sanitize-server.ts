@@ -24,6 +24,7 @@ import { JSDOM } from "jsdom";
 import DOMPurifyFactory from "dompurify";
 import type { Config } from "dompurify";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
+import { applyScrimFixes } from "@/lib/export/scrim";
 
 const DOMPURIFY_CONFIG: Config = {
   ADD_TAGS: ["style", "link"],
@@ -92,9 +93,18 @@ export function sanitizeSlideHtmlServer(html: string): string {
   try {
     const { window, purify } = buildEnv();
     const clean = purify.sanitize(html, DOMPURIFY_CONFIG);
-    return rewriteRtlRowFlexOrder(
+    return rewriteImageScrim(
       window,
-      rewriteRtlFlexEndToFlexStart(window, clean),
+      rewriteRtlImagePanelSide(
+        window,
+        rewriteRtlMarginAutoEnd(
+          window,
+          rewriteRtlRowFlexOrder(
+            window,
+            rewriteRtlFlexEndToFlexStart(window, clean),
+          ),
+        ),
+      ),
     );
   } catch (err) {
     console.error("[sanitize-server] sanitizeSlideHtmlServer failed:", err);
@@ -209,6 +219,115 @@ function rewriteRtlRowFlexOrder(
       changed = true;
     });
     return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Server mirror of `rewriteRtlMarginAutoEnd` in lib/export/sanitize.ts —
+// see that file's docblock for the bug. `margin-right:auto` physically
+// pushes a block LEFT; in RTL Claude means it as start-anchoring (visual
+// RIGHT), whose physical property is `margin-left:auto`. Swap them.
+function rewriteRtlMarginAutoEnd(window: JSDOMWindow, html: string): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    const slideRoot = root.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    const els = slideRoot.querySelectorAll<HTMLElement>("[style]");
+    let changed = false;
+    els.forEach((el) => {
+      const closestDir = el.closest("[dir]");
+      if (closestDir && closestDir.getAttribute("dir") !== "rtl") return;
+      if (el.style.getPropertyValue("margin-right").trim().toLowerCase() !== "auto")
+        return;
+      if (el.style.getPropertyValue("margin-left").trim().toLowerCase() === "auto")
+        return; // centered — leave it
+      if (el.style.getPropertyValue("text-align").trim().toLowerCase() === "left")
+        return; // deliberate left block
+      el.style.setProperty("margin-left", "auto");
+      el.style.setProperty("margin-right", "0");
+      changed = true;
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Server mirror of `rewriteRtlImagePanelSide` in lib/export/sanitize.ts —
+// see that file's docblock for the bug. RTL row-flex with a single in-flow
+// image panel + an absolute content layer on the right → reverse so the
+// image packs left. Scoped to data-genimage panels.
+function rewriteRtlImagePanelSide(window: JSDOMWindow, html: string): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    const lower = (el: Element, p: string) =>
+      (el as HTMLElement).style.getPropertyValue(p).trim().toLowerCase();
+    const candidates = [
+      slideRoot,
+      ...Array.from(slideRoot.querySelectorAll<HTMLElement>("[style]")),
+    ];
+    let changed = false;
+    for (const el of candidates) {
+      const closestDir = el.closest("[dir]");
+      if (closestDir && closestDir.getAttribute("dir") !== "rtl") continue;
+      if (lower(el, "display") !== "flex") continue;
+      const fd = lower(el, "flex-direction");
+      if (fd !== "" && fd !== "row") continue;
+      const kids = Array.from(el.children) as HTMLElement[];
+      const inFlow = kids.filter((c) => {
+        const p = lower(c, "position");
+        return p !== "absolute" && p !== "fixed";
+      });
+      if (inFlow.length !== 1) continue;
+      const panel = inFlow[0];
+      if (!panel.style.getPropertyValue("width").trim()) continue;
+      if (!panel.querySelector("[data-genimage]")) continue;
+      const content = kids.find(
+        (c) =>
+          lower(c, "position") === "absolute" &&
+          c.style.getPropertyValue("top").trim() !== "" &&
+          c.style.getPropertyValue("bottom").trim() !== "",
+      );
+      if (!content) continue;
+      const left = parseFloat(content.style.getPropertyValue("left")) || 0;
+      const right = parseFloat(content.style.getPropertyValue("right")) || 0;
+      if (left <= right) continue;
+      el.style.setProperty("flex-direction", "row-reverse");
+      changed = true;
+    }
+    return changed ? wrapper!.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Server mirror of `rewriteImageScrim` in lib/export/sanitize.ts — re-orients
+// + softens full-bleed image scrims via the shared lib/export/scrim.ts core.
+// Applies to BOTH directions (dark end → text side), so no rtl-only gate.
+function rewriteImageScrim(window: JSDOMWindow, html: string): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot) return html;
+    const dir = slideRoot.getAttribute("dir") === "ltr" ? "ltr" : "rtl";
+    const changed = applyScrimFixes(slideRoot, dir);
+    return changed ? wrapper!.innerHTML : html;
   } catch {
     return html;
   }

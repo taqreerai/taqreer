@@ -44,7 +44,11 @@ export const CORNER_POSITIONS: ReadonlyArray<CornerPosition> = CORNER_OPTIONS.ma
 // and /mimic carry the same chrome — no fork, byte-identical rendering.
 export function CardHeader({ icon, title }: { icon: string; title: string }) {
   return (
-    <header className="flex items-center gap-2 border-b border-white/[0.08] pb-2">
+    // pb-4 matches the card's p-4 TOP padding, so the title ends up the same
+    // distance from the card's top edge as it is from the separator — i.e.
+    // visually centred in the header region. (This balance holds regardless of
+    // the row height, since the top padding above and pb-4 below are equal.)
+    <header className="flex items-center gap-2 border-b border-white/[0.08] pb-4">
       <span
         className="material-symbols-outlined text-white"
         style={{ fontSize: 18 }}
@@ -242,10 +246,10 @@ export function PositionDropdown({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDown);
+    document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
@@ -592,10 +596,10 @@ export function ExclusionDropdown({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDown);
+    document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);

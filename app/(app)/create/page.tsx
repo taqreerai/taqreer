@@ -34,13 +34,19 @@
 // forked Mimic flow (/use-template/[id]). /create only hydrates from a
 // brand kit (sessionStorage or the user's default).
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ServerStatusBanner } from "@/components/app/ServerStatusBanner";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
-import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
-import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
+import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
+import { LogoRow } from "@/components/brand/LogoRow";
+import { PersistentRow } from "@/components/brand/PersistentRow";
+import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
+import {
+  BrandKitDropdown,
+  type BrandKitOption,
+} from "@/components/brand/BrandKitDropdown";
 import {
   InlineStepper,
   SlideSizeFields,
@@ -49,29 +55,30 @@ import {
 } from "@/components/create/OutputCards";
 import {
   CardHeader,
-  ExclusionDropdown,
   InlinePaletteSwatch,
-  PositionDropdown,
   SegmentedToggle,
   Toggle,
+  CORNER_POSITIONS,
   type CornerPosition,
   type LanguageCode,
 } from "@/components/create/controls";
 import {
-  emptyFontSlot,
+  emptyBrandFont,
   googleFontUrl,
-  isLatinOnlyGoogleFont,
   HEADING_SAMPLE_AR,
   HEADING_SAMPLE_LATIN,
-  BODY_SAMPLE_AR,
-  BODY_SAMPLE_LATIN,
-  type FontSlotState,
+  type BrandFontState,
 } from "@/lib/brand/fonts";
-import { uploadAsset } from "@/lib/brand/upload";
+import {
+  uploadAsset,
+  resolveUploadedFontFamilies,
+  type UploadedFontFieldBrief,
+} from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
+  mapKitToHydrated,
   CREATE_BRAND_KEY,
   type HydratedBrand,
 } from "@/lib/create/hydrate-brand-from-session";
@@ -102,10 +109,6 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // keep their fixed-width 360 px cards (fewer of them per row).
 const CARD_MIN_H_CLASS = "min-h-[387px]";
 
-const FONT_MODE_OPTIONS = [
-  { value: "upload" as const, label: "ملف" },
-  { value: "google" as const, label: "Google" },
-];
 const SLIDE_COUNT_OPTIONS = [
   { value: "auto" as const, label: "تلقائي" },
   { value: "custom" as const, label: "مخصص" },
@@ -116,6 +119,13 @@ const LANGUAGE_OPTIONS: { value: LanguageCode; label: string }[] = [
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────
+// Trim a brand-kit title to its first few words for the compact dropdown
+// menu — full titles can be long; a few words read cleanly in the pill list.
+function fewWords(s: string, max = 3): string {
+  const parts = s.trim().split(/\s+/).filter(Boolean);
+  return parts.length <= max ? s.trim() : `${parts.slice(0, max).join(" ")}…`;
+}
+
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ك.ب`;
   return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
@@ -130,47 +140,16 @@ function readableFileName(raw: string): string {
   }
 }
 
+// One resolved font field as the /api/projects payload expects it. The
+// redesigned single-font model produces ONE field used for BOTH heading +
+// body (one family, Claude varies weights / pairs uploads). Built inline in
+// handleGenerate from the BrandFontState.
 type ResolvedFontField = {
   name: string;
   url: string | null;
   storageUrl: string | null;
   family: string;
 } | null;
-
-function resolveFontSlot(
-  slot: FontSlotState,
-  uploadedStorageUrl: string | null,
-): ResolvedFontField {
-  if (slot.mode === "google") {
-    if (!slot.googleFamily) return null;
-    return {
-      name: slot.googleFamily,
-      url: googleFontUrl(slot.googleFamily),
-      storageUrl: null,
-      family: slot.googleFamily,
-    };
-  }
-  // Upload mode resolves with either a fresh upload's storageUrl
-  // OR a hydrated slot's `uploadStorageUrl` (from a brand kit) —
-  // both point at the same bucket, so the brief can re-sign
-  // identically. Without this fallback a hydrated kit's font
-  // slot would silently drop on submit.
-  const storageUrl = uploadedStorageUrl ?? slot.uploadStorageUrl ?? null;
-  if (!storageUrl) return null;
-  const inferredName =
-    slot.uploadName ?? slot.uploadFile?.name ?? slot.uploadFamily ?? "Custom font";
-  const inferredFamily =
-    slot.uploadFamily ||
-    slot.uploadFile?.name.replace(/\.[^.]+$/, "") ||
-    slot.uploadName?.replace(/\.[^.]+$/, "") ||
-    "Custom";
-  return {
-    name: inferredName,
-    url: null,
-    storageUrl,
-    family: inferredFamily,
-  };
-}
 
 export default function CreatePage() {
   const router = useRouter();
@@ -197,12 +176,14 @@ export default function CreatePage() {
 
   // ─── Branding state ────────────────────────────────────────────
   const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
-  const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
-    emptyFontSlot(),
-  );
-  const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>(
-    emptyFontSlot(),
-  );
+  // Single brand-font model: ONE Google family (Claude varies weights) OR
+  // up to 5 uploaded families (Claude pairs). Replaces the old heading +
+  // body two-slot UI.
+  const [brandFont, setBrandFont] = useState<BrandFontState>(emptyBrandFont());
+  // Saved brand kits for the in-card dropdown (last 5). `options` drives the
+  // menu; `raw` is kept to map → HydratedBrand on select.
+  const [kitOptions, setKitOptions] = useState<BrandKitOption[]>([]);
+  const kitRawRef = useRef<Map<string, unknown>>(new Map());
   const [logoFile, setLogoFile] = useState<File | null>(null);
   // Pre-loaded logo from a brand kit (or default kit). When set,
   // the LogoUploadSlot shows the remote SVG via `previewUrl`; the
@@ -211,59 +192,59 @@ export default function CreatePage() {
   // logo's onRemove → onSelect cycle.
   const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
   const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
-  // Logo cover / closing excludes — same toggles the legacy /create
-  // had on the logo card. Server reads brand.logo.exclude to skip
-  // the mark on cover/closing slides.
-  const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(false);
-  const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
 
+  // Apply a resolved brand (sessionStorage, default kit, or a picked saved
+  // kit) to the card state. Maps the heading font slot → the single
+  // brandFont model (Google family OR one uploaded family); colours + logo
+  // apply directly. Logo cover/closing excludes are intentionally dropped —
+  // Claude now decides per slide. Shared by mount hydration + the in-card
+  // brand-kit dropdown.
+  const applyBrand = useCallback((h: HydratedBrand) => {
+    if (h.colors.length > 0) setColors(h.colors);
+    const heading = h.headingFontSlot;
+    if (heading.googleFamily) {
+      setBrandFont({
+        mode: "google",
+        googleFamily: heading.googleFamily,
+        uploaded: [],
+      });
+    } else if (heading.uploadStorageUrl) {
+      // A saved kit stores ONE url per slot — hydrate it as a single 400
+      // face. Fresh multi-weight uploads (300/400/700 of one family) come in
+      // via the picker, not here.
+      setBrandFont({
+        mode: "upload",
+        googleFamily: null,
+        uploaded: [
+          {
+            name: heading.uploadName ?? heading.uploadFamily ?? "Custom",
+            faces: [
+              { weight: 400, file: null, storageUrl: heading.uploadStorageUrl },
+            ],
+          },
+        ],
+      });
+    }
+    if (h.logo) {
+      setLogoFile(null);
+      setLoadedLogo(h.logo);
+      const pos = h.logo.position as CornerPosition;
+      if (CORNER_POSITIONS.includes(pos)) setLogoPosition(pos);
+    }
+  }, []);
+
   // ─── Brand-kit hydration (on first mount) ──────────────────────
-  // Read sessionStorage first (the brand-kits "use" flow writes
-  // here). If nothing's there, fall back to the user's default
-  // brand kit. Single-shot per mount; we clear the sessionStorage key
-  // after applying so refresh doesn't keep re-hydrating an old kit's
-  // logo.
+  // Read sessionStorage first (the brand-kits "use" flow writes here). If
+  // nothing's there, fall back to the user's default brand kit. Single-shot;
+  // clear the sessionStorage key after applying so refresh doesn't re-hydrate.
   useEffect(() => {
     let aborted = false;
     (async () => {
       let hydrated = readBrandFromSession();
       if (!hydrated) hydrated = await fetchDefaultBrandKit();
       if (aborted || !hydrated) return;
-      if (hydrated.colors.length > 0) setColors(hydrated.colors);
-      if (
-        hydrated.headingFontSlot.googleFamily ||
-        hydrated.headingFontSlot.uploadStorageUrl
-      ) {
-        setHeadingFontSlot(hydrated.headingFontSlot);
-      }
-      if (
-        hydrated.bodyFontSlot.googleFamily ||
-        hydrated.bodyFontSlot.uploadStorageUrl
-      ) {
-        setBodyFontSlot(hydrated.bodyFontSlot);
-      }
-      if (hydrated.logo) {
-        setLoadedLogo(hydrated.logo);
-        // Restore position + exclude flags from the saved kit so
-        // the user sees the kit's exact configuration, not the
-        // page's defaults.
-        const pos = hydrated.logo.position as CornerPosition;
-        if (
-          pos === "top-left" ||
-          pos === "top-center" ||
-          pos === "top-right" ||
-          pos === "bottom-left" ||
-          pos === "bottom-center" ||
-          pos === "bottom-right"
-        ) {
-          setLogoPosition(pos);
-        }
-        setLogoExcludeCover(hydrated.logo.exclude.includes("cover"));
-        setLogoExcludeClosing(hydrated.logo.exclude.includes("closing"));
-      }
-      // Burn the sessionStorage key — single-shot. The default-kit
-      // path doesn't write it, so the clear is a no-op there.
+      applyBrand(hydrated);
       try {
         window.sessionStorage.removeItem(CREATE_BRAND_KEY);
       } catch {
@@ -273,22 +254,47 @@ export default function CreatePage() {
     return () => {
       aborted = true;
     };
+  }, [applyBrand]);
+
+  // Fetch the user's saved kits (last 5) for the in-card brand dropdown.
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/brand-kits", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          kits?: Array<{ id: string; name: string }>;
+        };
+        if (aborted || !Array.isArray(data.kits)) return;
+        const last5 = data.kits.slice(0, 5);
+        kitRawRef.current = new Map(last5.map((k) => [k.id, k]));
+        setKitOptions(last5.map((k) => ({ id: k.id, name: fewWords(k.name) })));
+      } catch {
+        /* best-effort — dropdown just stays empty */
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
   }, []);
+
+  // Apply a picked saved kit (overwrites colours / font / logo).
+  const handlePickKit = (id: string) => {
+    const raw = kitRawRef.current.get(id);
+    if (raw) applyBrand(mapKitToHydrated(raw as Parameters<typeof mapKitToHydrated>[0]));
+  };
 
   // ─── Output / rules state ──────────────────────────────────────
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
   const [pagination, setPagination] = useState<boolean>(true);
+  // context/images.md — opt-in "images deck". On → deck-generate uses the
+  // photography-led system prompt + reserves generated-image boxes.
+  const [imagesMode, setImagesMode] = useState<boolean>(false);
   const [persistentText, setPersistentText] = useState<string>("");
   const [persistentPosition, setPersistentPosition] =
     useState<CornerPosition>("bottom-center");
-  // Cover / closing excludes for the persistent overlay — restored
-  // 2026-05-25 per user direction (the legacy /create flow had
-  // these; Phase 17.D scaffold dropped them by mistake).
-  const [persistentExcludeCover, setPersistentExcludeCover] =
-    useState<boolean>(false);
-  const [persistentExcludeClosing, setPersistentExcludeClosing] =
-    useState<boolean>(false);
 
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -457,23 +463,20 @@ export default function CreatePage() {
     setError("");
     setSubmitting(true);
     try {
-      const [logoUploaded, headingUploaded, bodyUploaded] = await Promise.all([
-        uploadAsset("brand-assets", "logos", logoFile),
-        uploadAsset(
-          "brand-assets",
-          "fonts",
-          headingFontSlot.mode === "upload" ? headingFontSlot.uploadFile : null,
-        ),
-        uploadAsset(
-          "brand-assets",
-          "fonts",
-          bodyFontSlot.mode === "upload" ? bodyFontSlot.uploadFile : null,
-        ),
-      ]);
+      const logoUploaded = await uploadAsset(
+        "brand-assets",
+        "logos",
+        logoFile,
+      );
 
       const content = hasFile
         ? {
-            type: "source" as const,
+            // "file" (NOT "source") matches the server's content union
+            // ("file" | "text"); buildProjectTitle keys off it to derive
+            // the project title from the filename. The uploaded document
+            // itself reaches Claude via `source.anthropicFileId` below,
+            // independent of this field.
+            type: "file" as const,
             fileName: contentFile!.name,
             fileSize: contentFile!.size,
           }
@@ -482,38 +485,59 @@ export default function CreatePage() {
             text: contentText.trim(),
           };
 
-      const headingFont = resolveFontSlot(
-        headingFontSlot,
-        headingUploaded?.storageUrl ?? null,
-      );
-      const bodyFont = resolveFontSlot(
-        bodyFontSlot,
-        bodyUploaded?.storageUrl ?? null,
-      );
+      // Resolve the single brand font → ONE field reused for heading + body
+      // (one family, Claude varies weights / pairs uploads). Upload mode now
+      // carries EVERY picked family with ALL its weight faces; the deck
+      // defaults heading/body to the first family's name and Claude pairs.
+      let fontField: ResolvedFontField = null;
+      // Every resolved uploaded family (name + weight faces) — forwarded so
+      // Claude pairs them to heading/body; deck-generate signs each face file.
+      const uploadedFontFields: UploadedFontFieldBrief[] = [];
+      if (brandFont.mode === "google" && brandFont.googleFamily) {
+        fontField = {
+          name: brandFont.googleFamily,
+          url: googleFontUrl(brandFont.googleFamily),
+          storageUrl: null,
+          family: brandFont.googleFamily,
+        };
+      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
+        const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
+        uploadedFontFields.push(...resolved);
+        if (uploadedFontFields.length > 0) {
+          fontField = {
+            name: uploadedFontFields[0].name,
+            url: null,
+            storageUrl: null,
+            family: uploadedFontFields[0].name,
+          };
+        }
+      }
 
-      const logoExclude = [
-        logoExcludeCover ? "cover" : null,
-        logoExcludeClosing ? "closing" : null,
-      ].filter((v): v is "cover" | "closing" => v !== null);
-
-      // Resolve the logo's storageUrl in priority order: a freshly
-      // uploaded file wins (just-completed upload). If none, fall
-      // back to a hydrated kit's storageUrl. Either way the
-      // server re-signs the path itself, so no client trust is
-      // assumed.
+      // Resolve the logo's storageUrl: a freshly uploaded file wins, else a
+      // hydrated kit's storageUrl. The server re-signs the path itself.
       const resolvedLogoStorageUrl =
         logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
+
+      // Logo + persistent cover/closing excludes are gone — Claude decides
+      // logo presence per slide; the persistent footer is on every slide.
+      const noExclude: ("cover" | "closing")[] = [];
 
       const brand = {
         colors,
         paletteMode: "manual" as const,
         paletteScreenshotUrl: null,
-        fonts: { heading: headingFont, body: bodyFont },
+        fonts: {
+          heading: fontField,
+          body: fontField,
+          ...(uploadedFontFields.length > 0
+            ? { uploaded: uploadedFontFields }
+            : {}),
+        },
         logo: resolvedLogoStorageUrl
           ? {
               storageUrl: resolvedLogoStorageUrl,
               position: logoPosition,
-              exclude: logoExclude,
+              exclude: noExclude,
             }
           : null,
         slideSize,
@@ -523,11 +547,6 @@ export default function CreatePage() {
         },
       };
 
-      const persistentExclude = [
-        persistentExcludeCover ? "cover" : null,
-        persistentExcludeClosing ? "closing" : null,
-      ].filter((v): v is "cover" | "closing" => v !== null);
-
       const rules = {
         designStyle: null,
         fixTypos: false,
@@ -536,7 +555,7 @@ export default function CreatePage() {
           ? {
               text: persistentText.trim(),
               position: persistentPosition,
-              exclude: persistentExclude,
+              exclude: noExclude,
             }
           : null,
       };
@@ -563,6 +582,7 @@ export default function CreatePage() {
           slideCount:
             slideCountMode === "custom" ? slideCountValue : null,
           quality,
+          imagesMode,
           ...(source ? { source } : {}),
         }),
       });
@@ -587,14 +607,10 @@ export default function CreatePage() {
     }
   };
 
-  const setHeadingMode = (mode: "upload" | "google") =>
-    setHeadingFontSlot((s) => ({ ...s, mode }));
-  const setBodyMode = (mode: "upload" | "google") =>
-    setBodyFontSlot((s) => ({ ...s, mode }));
-
   return (
     <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+        <ServerStatusBanner />
         <header className="text-center">
           <h1 className="tq-h1">أنشئ عرضاً جديداً</h1>
           <p className="tq-subhead mt-2">
@@ -615,12 +631,12 @@ export default function CreatePage() {
               • < 760  viewport → single column stack
             `-mx-4 w-[calc(100%+2rem)]` still reclaims the parent's
             px-4 padding for the cards row only. */}
-        <div className="grid -mx-4 w-[calc(100%+2rem)] grid-cols-1 gap-4 min-[760px]:grid-cols-2 min-[1280px]:grid-cols-4">
+        <div className="flex flex-wrap justify-center gap-4">
           {/* ═══════════════════════════════════════════════════════
               CONTENT CARD (DOM 1st, visual right)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="subject" title="المحتوى" />
 
@@ -690,15 +706,63 @@ export default function CreatePage() {
                 onRemove={removeContentFile}
               />
             </div>
+
+            {/* Persistent footer element — input + position pill on one
+                row (moved here from output settings; no cover/closing
+                exclude — it's on every slide by definition). */}
+            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+              <PersistentRow
+                text={persistentText}
+                position={persistentPosition}
+                language={language}
+                onText={setPersistentText}
+                onPosition={setPersistentPosition}
+              />
+            </div>
           </div>
 
           {/* ═══════════════════════════════════════════════════════
-              FONTS + COLORS CARD (DOM 2nd)
+              BRANDING CARD (DOM 2nd) — palette + one font + logo
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="palette" title="الخطوط والألوان" />
+            {/* Mirrors CardHeader exactly (icon + title + pb-4 hairline) so
+                the separator and title sit at the same heights as the other
+                cards. z-30 lifts the whole header — and the saved-kit menu
+                that drops out of it — above the later palette/font/logo rows,
+                which would otherwise paint on top of the open menu. */}
+            <header className="relative z-30 border-b border-white/[0.08] pb-4">
+              {/* The title row is the positioning context for the saved-kit
+                  pill, so the pill centres on the TITLE (top-1/2 of this row),
+                  not the full header — keeping it level with the title while
+                  pb-4 holds the separator below. The pill is absolute so it
+                  never grows the row or shifts the separator off the others. */}
+              <div className="relative flex items-center gap-2">
+                <span
+                  className="material-symbols-outlined text-white"
+                  style={{ fontSize: 18 }}
+                >
+                  palette
+                </span>
+                <h3 className="text-sm font-semibold text-white">
+                  الهوية البصرية
+                </h3>
+                {kitOptions.length > 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute end-0 top-1/2 -translate-y-1/2"
+                  >
+                    <BrandKitDropdown
+                      kits={kitOptions}
+                      onSelect={handlePickKit}
+                    />
+                  </motion.div>
+                ) : null}
+              </div>
+            </header>
 
             {/* Palette row — label on the visual right, swatches +
                 add tile on the visual left as a single horizontal
@@ -736,120 +800,37 @@ export default function CreatePage() {
               </div>
             </div>
 
-            {/* Heading font — label + mode toggle row, slot below.
-                `border-t pt-3` separates the fonts cluster from the
-                palette cluster above for visual breathing room. */}
-            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-white/70">
-                  خط العناوين
-                </span>
-                <SegmentedToggle
-                  options={FONT_MODE_OPTIONS}
-                  value={headingFontSlot.mode}
-                  onChange={setHeadingMode}
-                  ariaLabel="مصدر خط العناوين"
-                />
-              </div>
-              {headingFontSlot.mode === "upload" ? (
-                <FontUploadSlot
-                  label="ارفع خط العناوين"
-                  file={headingFontSlot.uploadFile}
-                  family=""
-                  sampleText={HEADING_SAMPLE_AR}
-                  sampleSizeClass="text-base"
-                  alignStart
-                  compact
-                  hideSample
-                  onSelect={(f) =>
-                    setHeadingFontSlot((s) => ({
-                      ...s,
-                      uploadFile: f,
-                      uploadName: f.name,
-                    }))
-                  }
-                  onRemove={() =>
-                    setHeadingFontSlot((s) => ({
-                      ...s,
-                      uploadFile: null,
-                      uploadName: null,
-                    }))
-                  }
-                />
-              ) : (
-                <GoogleFontSlot
-                  selected={headingFontSlot.googleFamily}
-                  sampleText={
-                    isLatinOnlyGoogleFont(headingFontSlot.googleFamily)
-                      ? HEADING_SAMPLE_LATIN
-                      : HEADING_SAMPLE_AR
-                  }
-                  sampleSizeClass="text-base"
-                  alignStart
-                  compact
-                  hideSample
-                  onSelect={(family) =>
-                    setHeadingFontSlot((s) => ({ ...s, googleFamily: family }))
-                  }
-                />
-              )}
+            {/* Single brand font — one Google family (Claude varies
+                weights) OR up to 5 uploaded families (Claude pairs). */}
+            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+              <BrandFontPicker
+                value={brandFont}
+                onChange={setBrandFont}
+                sampleText={
+                  language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR
+                }
+              />
             </div>
 
-            {/* Body font */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-white/70">
-                  خط النص
-                </span>
-                <SegmentedToggle
-                  options={FONT_MODE_OPTIONS}
-                  value={bodyFontSlot.mode}
-                  onChange={setBodyMode}
-                  ariaLabel="مصدر خط النص"
-                />
-              </div>
-              {bodyFontSlot.mode === "upload" ? (
-                <FontUploadSlot
-                  label="ارفع خط النص"
-                  file={bodyFontSlot.uploadFile}
-                  family=""
-                  sampleText={BODY_SAMPLE_AR}
-                  sampleSizeClass="text-sm"
-                  alignStart
-                  compact
-                  hideSample
-                  onSelect={(f) =>
-                    setBodyFontSlot((s) => ({
-                      ...s,
-                      uploadFile: f,
-                      uploadName: f.name,
-                    }))
-                  }
-                  onRemove={() =>
-                    setBodyFontSlot((s) => ({
-                      ...s,
-                      uploadFile: null,
-                      uploadName: null,
-                    }))
-                  }
-                />
-              ) : (
-                <GoogleFontSlot
-                  selected={bodyFontSlot.googleFamily}
-                  sampleText={
-                    isLatinOnlyGoogleFont(bodyFontSlot.googleFamily)
-                      ? BODY_SAMPLE_LATIN
-                      : BODY_SAMPLE_AR
-                  }
-                  sampleSizeClass="text-sm"
-                  alignStart
-                  compact
-                  hideSample
-                  onSelect={(family) =>
-                    setBodyFontSlot((s) => ({ ...s, googleFamily: family }))
-                  }
-                />
-              )}
+            {/* Logo — compact zone + position pill on one row. */}
+            <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
+              <span className="block text-xs font-semibold text-white/70">
+                الشعار
+              </span>
+              <LogoRow
+                file={logoFile}
+                previewUrl={loadedLogo?.displayUrl ?? null}
+                position={logoPosition}
+                onSelect={(f) => {
+                  setLogoFile(f);
+                  setLoadedLogo(null);
+                }}
+                onRemove={() => {
+                  setLogoFile(null);
+                  setLoadedLogo(null);
+                }}
+                onPosition={setLogoPosition}
+              />
             </div>
 
             {/* Save brand kit — present on BOTH branding cards
@@ -868,67 +849,10 @@ export default function CreatePage() {
           </div>
 
           {/* ═══════════════════════════════════════════════════════
-              LOGO CARD (DOM 3rd)
+              EXPORT SETTINGS CARD (DOM 3rd, visual left)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
-          >
-            <CardHeader icon="image" title="الشعار" />
-
-            <LogoUploadSlot
-              file={logoFile}
-              previewUrl={loadedLogo?.displayUrl ?? null}
-              onSelect={(f) => {
-                setLogoFile(f);
-                setLoadedLogo(null);
-              }}
-              onRemove={() => {
-                setLogoFile(null);
-                setLoadedLogo(null);
-              }}
-            />
-
-            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
-                موضع الشعار
-              </span>
-              <div className="flex items-center gap-1.5">
-                <ExclusionDropdown
-                  excludeCover={logoExcludeCover}
-                  excludeClosing={logoExcludeClosing}
-                  onCoverChange={setLogoExcludeCover}
-                  onClosingChange={setLogoExcludeClosing}
-                  disabled={!logoFile && !loadedLogo}
-                />
-                <PositionDropdown
-                  value={logoPosition}
-                  onChange={setLogoPosition}
-                  disabled={!logoFile && !loadedLogo}
-                />
-              </div>
-            </div>
-
-            {/* Save brand kit — duplicated from the fonts+colors
-                card, same backing state so flipping either updates
-                both. Matches the user direction to expose this
-                toggle on both branding cards. */}
-            <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
-              <span className="text-xs font-semibold text-white/70">
-                حفظ كهوية افتراضية
-              </span>
-              <Toggle
-                ariaLabel="حفظ كهوية افتراضية"
-                value={saveBrandKit}
-                onChange={setSaveBrandKit}
-              />
-            </div>
-          </div>
-
-          {/* ═══════════════════════════════════════════════════════
-              EXPORT SETTINGS CARD (DOM 4th, visual left)
-              ═══════════════════════════════════════════════════════ */}
-          <div
-            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title="إعدادات الإخراج" />
 
@@ -1021,34 +945,14 @@ export default function CreatePage() {
               />
             </div>
 
-            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
-                عنصر ثابت على كل شريحة
-              </span>
-              <input
-                type="text"
-                value={persistentText}
-                onChange={(event) => setPersistentText(event.target.value)}
-                placeholder="مثل: التاريخ، الموقع الإلكتروني"
-                dir={language === "en" ? "ltr" : "rtl"}
-                className="input-dark w-full text-xs"
-                style={{ height: 30, padding: "0 12px" }}
-                aria-label="نص ثابت"
+            {/* AI images — prominent panel (moved here from the content
+                card, made unmissable). context/images.md. */}
+            <div className="mt-auto border-t border-[var(--tq-border-glass)] pt-3">
+              <AIImagesPanel
+                value={imagesMode}
+                onChange={setImagesMode}
+                disabled={submitting}
               />
-              <div className="flex items-center gap-1.5">
-                <ExclusionDropdown
-                  excludeCover={persistentExcludeCover}
-                  excludeClosing={persistentExcludeClosing}
-                  onCoverChange={setPersistentExcludeCover}
-                  onClosingChange={setPersistentExcludeClosing}
-                  disabled={!persistentText.trim()}
-                />
-                <PositionDropdown
-                  value={persistentPosition}
-                  onChange={setPersistentPosition}
-                  disabled={!persistentText.trim()}
-                />
-              </div>
             </div>
           </div>
         </div>

@@ -22,7 +22,9 @@ import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
+import { ScrubCounter } from "@/components/app/ScrubCounter";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
+import { useSlideScrub } from "@/lib/hooks/useSlideScrub";
 
 export type TemplateTileBrand = {
   background: string;
@@ -109,10 +111,15 @@ export function TemplateTile({
   };
 
   const { brand, title, isMine, id, thumbnailUrls, isPremium } = template;
-  const cover = thumbnailUrls?.[0] ?? null;
   const primary = brand.palette[0] ?? brand.text;
   const secondary = brand.palette[1] ?? brand.text;
   const accent = brand.palette[2] ?? primary;
+
+  // Hover-scrub through the showcase slides — shared with ProjectThumbnail.
+  const slides = thumbnailUrls ?? [];
+  const tileRef = useRef<HTMLDivElement | null>(null);
+  const scrub = useSlideScrub(slides, tileRef);
+  const cover = slides[scrub.displayIndex] ?? null;
 
   const handleToggleVisibility = async () => {
     const nextPublic = !isPublicLocal;
@@ -167,6 +174,9 @@ export function TemplateTile({
 
   const tileBody = (
     <div
+      ref={tileRef}
+      onMouseMove={scrub.handleMouseMove}
+      onMouseLeave={scrub.handleMouseLeave}
       className="relative aspect-video w-full overflow-hidden rounded-[14px] transition-transform group-hover:scale-[1.01]"
       style={{
         background: brand.background,
@@ -177,6 +187,7 @@ export function TemplateTile({
       {cover ? (
         // Real cover slide (the source project's own image). Native
         // <img> — Supabase storage URLs aren't in next remotePatterns.
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={cover}
           alt=""
@@ -234,6 +245,12 @@ export function TemplateTile({
           </div>
         </>
       )}
+      {/* Scrub counter — bottom-end (left in RTL), only while scrubbing a
+          multi-slide showcase. */}
+      {scrub.isMultiSlide && scrub.hoverIndex !== null ? (
+        <ScrubCounter index={scrub.hoverIndex} total={slides.length} />
+      ) : null}
+
       {/* Premium marker — top-start corner. */}
       {isPremium ? (
         <PremiumBadge className="pointer-events-none absolute top-2 start-2 z-10" />

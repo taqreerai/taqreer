@@ -169,7 +169,9 @@ function buildGradFillXml(spec: {
   );
 }
 
-function injectBiDiMarkers(
+// Exported for unit tests (scripts/test-bidi-pills.ts). Per-slide string
+// transform; the public entry point is `fixBiDiInPptxBlob`.
+export function injectBiDiMarkers(
   xml: string,
   stats: BiDiPostprocessStats,
   gradientIntents?: GradientIntents,
@@ -245,6 +247,44 @@ function injectBiDiMarkers(
       node = node.parentNode;
     }
     return null;
+  }
+
+  // The enclosing <p:sp> (shape) of a paragraph, and whether that shape
+  // carries its OWN fill (solidFill / gradFill directly under <p:spPr>) — i.e.
+  // it's a styled BOX with text written inside it (a pill / chip), not a plain
+  // transparent text frame. dom-to-pptx routes a styled box that has an
+  // ASYMMETRIC border (e.g. slide-3's `border-right:5px` green accent) through
+  // a composite path that writes the text into the shape and CENTRES it, even
+  // though the RTL default is right. Plain text frames (no fill) are emitted
+  // as separate right-aligned paragraphs and must be left alone.
+  function nearestShape(p: Element): Element | null {
+    let node: Node | null = p.parentNode;
+    while (node) {
+      if (node.nodeType === 1 && (node as Element).localName === "sp") {
+        return node as Element;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
+  function shapeHasOwnFill(sp: Element): boolean {
+    for (let i = 0; i < sp.childNodes.length; i++) {
+      const c = sp.childNodes[i];
+      if (c.nodeType !== 1 || (c as Element).localName !== "spPr") continue;
+      const spPr = c as Element;
+      for (let j = 0; j < spPr.childNodes.length; j++) {
+        const f = spPr.childNodes[j];
+        if (
+          f.nodeType === 1 &&
+          ((f as Element).localName === "solidFill" ||
+            (f as Element).localName === "gradFill")
+        ) {
+          return true;
+        }
+      }
+      return false; // found the spPr; no fill child
+    }
+    return false;
   }
 
 
@@ -327,6 +367,19 @@ function injectBiDiMarkers(
     if (pPr.getAttribute("algn") === null) {
       pPr.setAttribute("algn", "r");
       touched = true;
+    }
+    // dom-to-pptx composite-border artifact: a styled FILLED shape that has an
+    // asymmetric border (e.g. slide-3's white problem-pills with a green
+    // `border-right`) has its text written INTO the shape and CENTRED, even
+    // though RTL text defaults to right. Plain text frames have no fill and
+    // are emitted as separate right-aligned paragraphs (untouched). So: an RTL
+    // paragraph centred inside a filled shape is the artifact — force right.
+    if (pPr.getAttribute("algn") === "ctr") {
+      const sp = nearestShape(p);
+      if (sp && shapeHasOwnFill(sp)) {
+        pPr.setAttribute("algn", "r");
+        touched = true;
+      }
     }
     if (touched) modified++;
 
@@ -554,6 +607,52 @@ function injectBiDiMarkers(
     return best;
   }
 
+  // Width-uniformity map for PASS 3: how many STYLED boxes (own fill/border)
+  // share each exact `${x}:${cx}` — i.e. sit in a same-x, same-width vertical
+  // stack. A pill that belongs to such a stack (slide-3's problem rows) must
+  // keep its authored width: widening only the one whose text happens to be
+  // tight shoves it wider than its siblings and breaks the column alignment.
+  // Keyed on x AND cx, so a HORIZONTAL row of equal-width chips (same width,
+  // different x) is NOT matched and still gets the per-pill widen below.
+  const styledStackFreq = new Map<string, number>();
+  for (let i = 0; i < spShapes.length; i++) {
+    const sp = spShapes[i];
+    let spPrEl: Element | null = null;
+    for (let j = 0; j < sp.children.length; j++) {
+      const c = sp.children[j];
+      if (c.namespaceURI === NS_P && c.localName === "spPr") {
+        spPrEl = c;
+        break;
+      }
+    }
+    if (!spPrEl) continue;
+    let styled = false;
+    let xfrmEl: Element | null = null;
+    for (let j = 0; j < spPrEl.children.length; j++) {
+      const c = spPrEl.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "xfrm") xfrmEl = c;
+      else if (c.localName === "solidFill" || c.localName === "gradFill")
+        styled = true;
+      else if (c.localName === "ln" && (c.getAttribute("w") ?? "0") !== "0")
+        styled = true;
+    }
+    if (!styled || !xfrmEl) continue;
+    let sx = 0;
+    let scx = 0;
+    for (let j = 0; j < xfrmEl.children.length; j++) {
+      const c = xfrmEl.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "off") sx = parseInt(c.getAttribute("x") ?? "0", 10);
+      else if (c.localName === "ext")
+        scx = parseInt(c.getAttribute("cx") ?? "0", 10);
+    }
+    if (scx > 0) {
+      const k = `${sx}:${scx}`;
+      styledStackFreq.set(k, (styledStackFreq.get(k) ?? 0) + 1);
+    }
+  }
+
   for (let i = 0; i < spShapes.length; i++) {
     const sp = spShapes[i];
 
@@ -566,22 +665,43 @@ function injectBiDiMarkers(
     }
     if (!spPr || !txBody) continue;
 
-    // Single-line guard. PowerPoint represents line breaks two ways:
+    // Own fill or non-zero border → a STYLED box (pill / badge / card).
+    // Consumed by the paragraph guard just below AND the slack guard further
+    // down (reused there as `isStyledBox`). Computed once.
+    let styledBox = false;
+    for (let j = 0; j < spPr.children.length; j++) {
+      const c = spPr.children[j];
+      if (c.namespaceURI !== NS_A) continue;
+      if (c.localName === "solidFill" || c.localName === "gradFill") {
+        styledBox = true;
+        break;
+      }
+      if (c.localName === "ln" && (c.getAttribute("w") ?? "0") !== "0") {
+        styledBox = true;
+        break;
+      }
+    }
+
+    // Paragraph guard. PowerPoint represents line breaks two ways:
     //   (a) <a:br/> inside one <a:p>  — soft break, single paragraph
-    //   (b) multiple non-empty <a:p>  — separate paragraphs (most common
-    //       for two-line badges / stacked labels). Without checking (b),
-    //       a two-line badge sails through the (a) check and gets widened
-    //       on the assumption it's single-line — visibly off-margin.
+    //   (b) multiple non-empty <a:p>  — separate paragraphs.
+    // A <br/> (a) is skipped entirely. For (b): 3+ paragraphs are never
+    // widened, and a 2-paragraph STYLED box (a two-line badge) is skipped too
+    // — widening it would push its fill/border off-margin. But a 2-paragraph
+    // NON-styled block (a heading + its muted sub-line, slide-2) DOES get the
+    // widen, so the heading line doesn't wrap under PowerPoint's wider Cairo
+    // rendering. The MAX_SINGLE_LINE_CHARS cap below still excludes body prose.
     if (txBody.getElementsByTagNameNS(NS_A, "br").length > 0) continue;
     const pNodes = txBody.getElementsByTagNameNS(NS_A, "p");
     let nonEmptyParagraphs = 0;
     for (let j = 0; j < pNodes.length; j++) {
       if ((pNodes[j].textContent ?? "").trim().length > 0) {
         nonEmptyParagraphs++;
-        if (nonEmptyParagraphs > 1) break;
+        if (nonEmptyParagraphs > 2) break;
       }
     }
-    if (nonEmptyParagraphs > 1) continue;
+    if (nonEmptyParagraphs > 2) continue;
+    if (nonEmptyParagraphs > 1 && styledBox) continue;
     const tNodes = txBody.getElementsByTagNameNS(NS_A, "t");
     let totalChars = 0;
     let shapeText = "";
@@ -623,6 +743,46 @@ function injectBiDiMarkers(
     // extension would push the left edge (RTL) or right edge (LTR) over
     // neighbouring cards and cause visible overlap. See PASS3_MAX_CX.
     if (oldCx > PASS3_MAX_CX) continue;
+
+    // FULL-WIDTH-PILL guard: a STYLED BOX (own fill or border) whose text
+    // doesn't come close to filling it has ample slack and needs neither the
+    // widen nor the force-centre below — slide-3's full-width problem rows,
+    // already right-aligned by PASS 2; leave them. A SHRINK-TO-FIT pill (text
+    // fills it — small "Branding"/"Content" chips, filled OR outline) still
+    // gets both, or the text wraps in PowerPoint. The discriminator is SLACK,
+    // not fill: estimate text width from char-count × font size (deliberately
+    // OVER-estimating the glyph advance so shrink-to-fit pills never clear the
+    // bar) and bail only when the box interior is much wider than the text.
+    const isStyledBox = styledBox; // computed once near the paragraph guard
+    if (isStyledBox) {
+      // UNIFORM-STACK guard: this pill sits in a same-x, same-width column of
+      // styled pills (slide-3's problem rows). Keep every member at the
+      // authored width — widening just this one (because its text is tight)
+      // would make it wider than its siblings and break the alignment.
+      const oldXForStack = off
+        ? parseInt(off.getAttribute("x") ?? "0", 10)
+        : 0;
+      if ((styledStackFreq.get(`${oldXForStack}:${oldCx}`) ?? 0) >= 2) continue;
+      const firstRPr = txBody.getElementsByTagNameNS(NS_A, "rPr")[0];
+      const sz = firstRPr
+        ? parseInt(firstRPr.getAttribute("sz") ?? "1800", 10)
+        : 1800;
+      const fontEmu = (sz / 100) * 12700; // hundredths-of-pt → EMU
+      // ~0.62 em average advance — an OVER-estimate (real Arabic/Latin run
+      // ~0.55), so a shrink-to-fit pill (interior ≈ real text width) stays
+      // BELOW the 1.6× bar and is never skipped; only a genuinely roomy box
+      // (text << interior, e.g. a full-width row) clears it.
+      const estTextWidthEmu = totalChars * 0.62 * fontEmu;
+      const bodyPr = txBody.getElementsByTagNameNS(NS_A, "bodyPr")[0];
+      const lIns = bodyPr
+        ? parseInt(bodyPr.getAttribute("lIns") ?? "91440", 10)
+        : 91440;
+      const rIns = bodyPr
+        ? parseInt(bodyPr.getAttribute("rIns") ?? "91440", 10)
+        : 91440;
+      const interior = oldCx - lIns - rIns;
+      if (interior > estTextWidthEmu * 1.6) continue;
+    }
     const oldX = off ? parseInt(off.getAttribute("x") ?? "0", 10) : 0;
     const oldY = off ? parseInt(off.getAttribute("y") ?? "0", 10) : 0;
     const oldCy = parseInt(ext.getAttribute("cy") ?? "0", 10);

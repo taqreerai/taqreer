@@ -197,6 +197,9 @@ export async function POST(request: Request) {
           fileBucketPath: bucketPath,
           fileName: file.name,
           mime: resolvedMime,
+          // Lets extract-source skip the Anthropic PDF upload for
+          // enhance (it rasterizes per-slide PNGs at generation time).
+          flowKind: rawKind,
         },
       });
     } catch (err) {

@@ -79,7 +79,7 @@ export function GoogleFontSlot({
   const showPlaceholder = !inputValue;
 
   return (
-    <div ref={wrapperRef} className="relative space-y-3">
+    <div ref={wrapperRef} className="relative">
       <div className="relative">
         <input
           ref={inputRef}
@@ -115,10 +115,10 @@ export function GoogleFontSlot({
             }
           }}
           aria-label={open ? "إغلاق القائمة" : "فتح القائمة"}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 transition-colors hover:text-white"
+          className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center justify-center text-white/60 transition-colors hover:text-white"
         >
           <span
-            className={`material-symbols-outlined block transition-transform ${
+            className={`material-symbols-outlined block leading-none transition-transform ${
               open ? "rotate-180" : ""
             }`}
             style={{ fontSize: 18 }}
@@ -204,7 +204,7 @@ export function GoogleFontSlot({
       {hideSample ? null : (
         <p
           dir={alignStart ? "rtl" : "auto"}
-          className={`${sampleSizeClass} ${alignStart ? "text-right" : "text-start"} text-white`}
+          className={`mt-3 ${sampleSizeClass} ${alignStart ? "text-right" : "text-start"} text-white`}
           style={
             selected
               ? { fontFamily: `"${selected}", system-ui, sans-serif` }

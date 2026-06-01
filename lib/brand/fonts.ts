@@ -39,13 +39,35 @@ export const GOOGLE_FONTS: { family: string; arabic: boolean }[] = [
   { family: "DM Sans", arabic: false },
 ];
 
+// The full static weight ladder we request for EVERY family. Google's css2
+// endpoint silently drops weights a family doesn't carry (Almarai → 300/400/
+// 700/800, Amiri → 400/700) and only 400s when ZERO requested weights are
+// valid — which never happens for a real font — so one ladder is safe for all
+// families with no per-font catalog. The embed parser reads the ACTUAL weight
+// off each returned @font-face, so the deck embeds exactly the weights the
+// font ships. Tops out at 900 to match WEIGHT_SUFFIX (Cairo's 1000 snaps to
+// "Cairo Black" / 900 anyway).
+export const FULL_WEIGHT_LADDER = "100;200;300;400;500;600;700;800;900";
+
 // Canonical Google Fonts CSS URL for a family. The deck renderer +
-// dom-to-pptx exporter both fetch this URL to bring the font into
-// scope. Wght@400;700 matches the SYSTEM_PROMPT typography rule
-// ("ONLY two font weights across the deck: 400 and 700").
+// dom-to-pptx exporter both fetch this URL to bring the font into scope.
+// Requests the full weight ladder so any weight Claude reaches for renders
+// (preview) and embeds (export); the browser still only downloads the woff2
+// for weights actually used on the page.
 export function googleFontUrl(family: string): string {
   const encoded = family.replace(/ /g, "+");
-  return `https://fonts.googleapis.com/css2?family=${encoded}:wght@400;700&display=swap`;
+  return `https://fonts.googleapis.com/css2?family=${encoded}:wght@${FULL_WEIGHT_LADDER}&display=swap`;
+}
+
+// Rewrite a Google css2 URL's simple `:wght@…` axis to the full ladder, so a
+// URL that requested only 400;700 (an older brand kit, or Claude's emitted
+// URL) still brings in every weight. No-op for non-css2 URLs and for tuple
+// `:ital,wght@…` axes (we never emit those). Applied at the manifest source
+// so every downstream consumer — preview <link>, export embed, showcase,
+// html-doc — inherits the full set with no per-call change.
+export function expandWeightAxis<T extends string | null | undefined>(url: T): T {
+  if (!url || !url.includes("fonts.googleapis.com/css2")) return url;
+  return url.replace(/:wght@[0-9;]+/i, `:wght@${FULL_WEIGHT_LADDER}`) as T;
 }
 
 // True for families flagged `arabic: false` in the catalog above.
@@ -106,4 +128,136 @@ export function emptyFontSlot(): FontSlotState {
     uploadFamily: "",
     googleFamily: null,
   };
+}
+
+// ─── Redesigned single brand-font model (flow-card redesign) ──────────
+//
+// Replaces the old heading + body two-slot model. The brand now carries
+// ONE font choice in one of two modes:
+//   • google → ONE family; Claude varies weights across the deck (the
+//     named-weight embed supports this) and uses it for both headings +
+//     body, so there's no second selector.
+//   • upload → up to MAX_UPLOADED_FONTS family files dropped at once;
+//     Claude decides the pairings. (Real render/embed of uploaded fonts
+//     is a separate follow-up; for now the families reach Claude as
+//     names + are stored.)
+
+export const MAX_UPLOADED_FONTS = 5;
+// Cap weight FILES per family — covers the 9 standard CSS weights.
+export const MAX_FACES_PER_FAMILY = 9;
+
+// One weight FILE of a family. A user who uploads "Brand-Light.otf",
+// "Brand-Regular.otf", "Brand-Bold.otf" gets ONE family with three faces
+// (300/400/700). `file` is the freshly-picked File (client only);
+// `storageUrl` is set once uploaded / when hydrated from a saved kit.
+export type UploadedFontFace = {
+  weight: number;
+  file: File | null;
+  storageUrl: string | null;
+};
+
+// One uploaded font FAMILY = a display name + its weight faces. `name` is
+// the family name derived from the filename (weight word stripped), so all
+// weight files of one family group under it.
+export type UploadedFontFamily = {
+  name: string;
+  faces: UploadedFontFace[];
+};
+
+export type BrandFontMode = "google" | "upload";
+
+export type BrandFontState = {
+  mode: BrandFontMode;
+  // Google mode — one family name (null = none picked → Claude defaults).
+  googleFamily: string | null;
+  // Upload mode — ≤ MAX_UPLOADED_FONTS families.
+  uploaded: UploadedFontFamily[];
+};
+
+export function emptyBrandFont(): BrandFontState {
+  return { mode: "google", googleFamily: null, uploaded: [] };
+}
+
+// Derive a clean display name from a font filename: strip the extension
+// and any trailing weight/style words so "MyBrand-Bold.woff2" reads as
+// "MyBrand". Best-effort — the actual family name comes from the file's
+// name table at embed time (the follow-up phase).
+export function fontFamilyNameFromFile(fileName: string): string {
+  const base = fileName.replace(/\.(woff2?|ttf|otf)$/i, "");
+  // Drop a trailing "-Bold" / "_Italic" / " Regular" style suffix.
+  const cleaned = base
+    .replace(
+      /[-_ ]+(thin|extralight|light|regular|medium|semibold|bold|extrabold|black|italic|oblique)$/i,
+      "",
+    )
+    .replace(/[-_]+/g, " ")
+    .trim();
+  return cleaned || base;
+}
+
+// Weight word → CSS numeric weight. Longest/most-specific words must win at
+// match time (e.g. "extrabold" over "bold"), handled by the regex below.
+const FONT_WEIGHT_WORDS: Record<string, number> = {
+  thin: 100,
+  hairline: 100,
+  extralight: 200,
+  ultralight: 200,
+  light: 300,
+  regular: 400,
+  normal: 400,
+  book: 400,
+  medium: 500,
+  semibold: 600,
+  demibold: 600,
+  bold: 700,
+  extrabold: 800,
+  ultrabold: 800,
+  black: 900,
+  heavy: 900,
+};
+
+// Parse the numeric weight from a font filename ("Helvetica Neue Sky Bold"
+// → 700, "…Light" → 300, "…SemiBold" → 600). Uses the LAST weight word so a
+// family whose NAME contains a weight word ("Light Sans Bold") still reads
+// the trailing one. Defaults to 400 (regular) when no word is present.
+export function weightFromFontFileName(fileName: string): number {
+  const base = fileName.replace(/\.(woff2?|ttf|otf)$/i, "").toLowerCase();
+  // Order longest-first inside the group so "extrabold" doesn't match as
+  // "bold". `\b` after keeps "regular" from swallowing "regularize" etc.
+  const matches = base.match(
+    /(?:^|[-_ ])(extralight|ultralight|extrabold|ultrabold|semibold|demibold|hairline|regular|medium|normal|black|heavy|light|thin|bold|book)\b/g,
+  );
+  if (matches && matches.length > 0) {
+    const last = matches[matches.length - 1].replace(/[-_ ]/g, "");
+    return FONT_WEIGHT_WORDS[last] ?? 400;
+  }
+  return 400;
+}
+
+// Insert a freshly-picked font File into a families list: group by family
+// name (weight word stripped) and de-dupe by weight WITHIN a family. Caps
+// families at MAX_UPLOADED_FONTS and faces at MAX_FACES_PER_FAMILY. Returns
+// a new array (or the original unchanged when a cap/dup blocks the add).
+export function addUploadedFontFile(
+  families: UploadedFontFamily[],
+  file: File,
+): UploadedFontFamily[] {
+  const name = fontFamilyNameFromFile(file.name);
+  const weight = weightFromFontFileName(file.name);
+  const next = families.map((f) => ({ ...f, faces: [...f.faces] }));
+  let fam = next.find((f) => f.name.toLowerCase() === name.toLowerCase());
+  if (!fam) {
+    if (next.length >= MAX_UPLOADED_FONTS) return families;
+    fam = { name, faces: [] };
+    next.push(fam);
+  }
+  if (
+    fam.faces.length >= MAX_FACES_PER_FAMILY ||
+    fam.faces.some((face) => face.weight === weight)
+  ) {
+    return families;
+  }
+  fam.faces.push({ weight, file, storageUrl: null });
+  fam.faces.sort((a, b) => a.weight - b.weight);
+  return next;
 }

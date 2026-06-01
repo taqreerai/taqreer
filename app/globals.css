@@ -223,12 +223,45 @@
   /* 4. Borders */
   --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
   --tq-border-danger: rgba(239, 68, 68, 0.22);
+
+  /* 4b. Status feedback — operational / degraded / down. One canonical
+     triad (success-green / warning-amber / danger-red) for the server
+     status chip + banner and the dashboard status pills, so those stop
+     hardcoding emerald/amber/red Tailwind utilities. `*-dot` is the solid
+     indicator, `*-text` the label, `*-bg` / `*-border` the low-alpha
+     surface tints. Values are the previous literals (Tailwind 400 dot,
+     300 text, 500 @12%/@30% tints). */
+  --tq-status-ok-dot:      #34d399;
+  --tq-status-ok-text:     #6ee7b7;
+  --tq-status-ok-bg:       rgba(16, 185, 129, 0.12);
+  --tq-status-ok-border:   rgba(16, 185, 129, 0.30);
+  --tq-status-warn-dot:    #fbbf24;
+  --tq-status-warn-text:   #fcd34d;
+  --tq-status-warn-bg:     rgba(245, 158, 11, 0.12);
+  --tq-status-warn-border: rgba(245, 158, 11, 0.30);
+  --tq-status-down-dot:    #f87171;
+  --tq-status-down-text:   #fca5a5;
+  --tq-status-down-bg:     rgba(239, 68, 68, 0.12);
+  --tq-status-down-border: rgba(239, 68, 68, 0.30);
   /* Glass surface fill — matches `.glass-card` / `.qa-card` /
      `.glass-popover` bg recipe (white at `--glass-opacity` alpha).
      Lets consumers reference the same fill via a single token
      instead of re-typing the rgba inline. Added 2026-05-23 when
      SlideNavSidebar called this out as a hardcoded CSS smell. */
   --tq-bg-glass: rgba(255, 255, 255, var(--glass-opacity));
+  /* Dark dim fill for in-slide popovers (comment editor, marker preview,
+     bell popup). UNLIKE `--tq-bg-glass` (faint white, for the dark
+     dashboard chrome) this is a neutral DARK tint, because these surfaces
+     float over SLIDES that can be any colour incl. white — a white fill
+     would be invisible there. Equal RGB channels (no hue) so it reads
+     neutral on the v17 gray-black background. Tuned 2026-05-24; see
+     `.in-slide-popover`. */
+  --tq-bg-popover-dim: rgba(12, 12, 12, 0.45);
+  /* Full-screen dim behind modal panels (`.modal-dim`). oklab mix keeps the
+     darken perceptually-uniform over the brand aurora. 45% (2026-05-24) so
+     the dashboard light-leaks still read through the dim, while bright
+     slides behind a modal get darkened enough to keep the panel legible. */
+  --tq-modal-dim: color-mix(in oklab, var(--color-black) 45%, transparent);
   /* Neutral focus / "active border". Sits between the resting
      muted border (~white/0.09) and a too-bright white/0.4; user-
      locked at #ffffff42 (≈ white/0.26) on 2026-05-21 after both
@@ -1597,14 +1630,14 @@ body {
 
 /* Bottom-anchored brand-violet glow. Recipe uses `--tq-violet-rgb`
    to stay in lock-step with the landing's `.glow-effect` color
-   token. The element is full-width and positioned at `top: 90%`
-   so its top edge sits 90 % down the viewport — only the upper
+   token. The element is full-width and positioned at `top: 145%`
+   so its top edge sits well below the viewport — only the upper
    sliver of the ellipse reads, giving the page a soft violet
-   wash rising from the bottom edge (user direction 2026-05-28). */
+   wash rising from the bottom edge (user direction 2026-05-30). */
 .dashboard-bg::before {
   content: "";
   position: fixed;
-  top: 90%;
+  top: 145%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 100%;
@@ -1613,8 +1646,8 @@ body {
   pointer-events: none;
   background: radial-gradient(
     ellipse at bottom,
-    rgba(var(--tq-violet-rgb), 0.12) 0%,
-    rgba(0, 0, 0, 0) 100%
+    rgba(var(--tq-violet-rgb), 0.4) 60%,
+    #0000 97%
   );
   filter: blur(80px);
 }
@@ -1641,35 +1674,38 @@ body {
    step. Cards (`.glass-card` family) stay at 1× for a subtler effect.
    The dark base fill differs per role so visual hierarchy comes from
    tint, not blur. */
-/* All three elevated-surface classes (`.glass-dropdown`, `.glass-modal`,
-   `.glass-popover`) are now BACKGROUND-FREE — the only visible chrome
-   comes from the border ring + the backdrop-filter blur that
-   consumers apply via Tailwind utilities (`backdrop-blur-glass
-   backdrop-saturate-[var(--glass-saturation)]`). The previous dark
-   tints (e.g. `rgba(10, 10, 20, calc(0.4 + var(--glass-opacity) * 4))`
-   on `.glass-popover`) read as a heavy charcoal wash on top of the
-   page; the new pure-glass look — blurred page visible through the
-   panel with only a hairline ring — matches modern OS dropdown/
-   modal aesthetics (macOS Tahoe, iOS 26).
+/* `.glass-dropdown`, `.glass-modal`, and `.glass-popover` all carry the
+   same faint white fill at the user's `--glass-opacity` (via the
+   documented `--tq-bg-glass` token) layered over the backdrop blur — a
+   touch of separation from the page while staying clearly glass. (They
+   were background-free until 2026-05-31; the pure-blur look read too
+   thin over busy pages, so the popover's subtle fill was promoted to
+   all three.) The earlier heavy dark tints (e.g. `rgba(10, 10, 20,
+   calc(0.4 + var(--glass-opacity) * 4))`) read as a charcoal wash and
+   are NOT what this is — `--tq-bg-glass` is white @ ~4%, not a dark
+   overlay.
 
-   `.glass-modal` and `.glass-popover` rely on Tailwind v4's
-   compositional `backdrop-filter` (raw `backdrop-filter:` in the
-   CSS class loses to it); consumers MUST add `backdrop-blur-glass
-   backdrop-saturate-[var(--glass-saturation)]` to the className.
-   The `--backdrop-blur-glass` theme token (top of file) keeps the
-   blur preset-linked. */
+   These rely on Tailwind v4's compositional `backdrop-filter` (raw
+   `backdrop-filter:` in the CSS class loses to it); consumers MUST add
+   `backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)]` to
+   the className. The `--backdrop-blur-glass` theme token (top of file)
+   keeps the blur preset-linked. */
 .glass-dropdown {
-  background: transparent;
+  background: var(--tq-bg-glass);
   border: 1px solid var(--tq-border-glass);
 }
 
 .glass-modal {
-  background: transparent;
+  background: var(--tq-bg-glass);
   border: 1px solid var(--tq-border-glass);
 }
 
 .glass-popover {
-  background: transparent;
+  /* Faint white fill at the user's glass opacity (the documented
+     `--tq-bg-glass` = rgba(255,255,255, var(--glass-opacity))) layered
+     over the backdrop blur — popovers get a subtle lift for separation
+     while dropdowns/modals stay pure glass. */
+  background: var(--tq-bg-glass);
   border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
 }
 
@@ -1732,20 +1768,26 @@ body {
    "never hardcode in TSX" rule is preserved by NOT inlining these
    in the popover's React style prop. */
 .in-slide-popover {
-  /* Neutralized 2026-05-24: was rgba(14, 14, 24, 0.45) — the B=24
-     vs R=14/G=14 channels gave the popover a faint blue cast that
-     read against the v17 neutral gray-black dashboard gradient.
-     Pure-gray equal-channels (12, 12, 12) keeps the same darkness
-     value but removes the hue, so the bell popup + slide popovers
-     read as neutral glass on the new background. */
-  background-color: rgba(12, 12, 12, 0.45);
+  /* Dark neutral dim via the `--tq-bg-popover-dim` token (= rgba(12,12,12,
+     0.45)). Stays DARK, not `--tq-bg-glass`, because this floats over
+     slides that can be white — a faint-white fill would vanish there.
+     Equal RGB channels (no hue) keep it neutral on the gray-black
+     dashboard (neutralized 2026-05-24 from a faintly-blue 14,14,24).
+     Token, not the old literal — the Safari caveat in the header above
+     only applies to INLINE `style={{…}}` usage, not a class rule (cf.
+     `.glass-popover`, which also uses a `--tq-bg-glass` var under the
+     backdrop-filter without issue). */
+  background-color: var(--tq-bg-popover-dim);
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* ─── Modal dim overlay ───────────────────────────────────────────
-   Shared base class for the full-screen darkening layer behind every
+   Shared base class for the full-screen darkening layer BEHIND every
    modal panel (lightbox, save-as-template, share, notifications,
-   project lightbox).
+   project lightbox). Sitting behind the panel (not as a spread around
+   it) means the panel's backdrop-blur samples the dimmed page, so the
+   panel stays legible over any background incl. a bright/white slide.
+   Canonical tint in `--tq-modal-dim`.
 
    Single canonical tint (user-locked 2026-05-24 v1 — iterating):
      color-mix(in oklab, var(--color-black) 45%, transparent)
@@ -1765,7 +1807,14 @@ body {
    filters here would compound darkening with the panel's blur and
    wash out the brand visuals it's supposed to sample. */
 .modal-dim {
-  background-color: color-mix(in oklab, var(--color-black) 45%, transparent);
+  /* Full-screen dim BEHIND the panel. Because it sits behind, the panel's
+     own backdrop-blur samples the DIMMED page — which keeps the panel
+     legible over ANY background, including a bright/white slide on the
+     canvas (a pure-glass panel samples white there and goes white-on-white
+     invisible — the reason this is behind-the-panel, not a box-shadow
+     spread around it; reverted 2026-05-31). Also the click-outside catcher
+     + fade target. Tint in `--tq-modal-dim`. */
+  background-color: var(--tq-modal-dim);
 }
 
 /* ─── Card Danger Variant ─── */

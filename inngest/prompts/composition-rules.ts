@@ -12,8 +12,6 @@
 export const COMPOSITION_RULES = `COMPOSITION DIRECTION — design natively, NO mirror pipeline downstream
 Every coordinate renders as written. Background graphics (gradients, decorative shapes, ring sets, atmospheric blobs, illustrations, recognizable objects) anchor on the OPPOSITE half of the canvas from the text content, so they complement instead of overlap. In RTL slides the text sits on the RIGHT (reading start), so all decoration anchors on the LEFT half (focal center-x < 960 on a 1920 canvas). LTR slides invert — text on LEFT, decoration on RIGHT.
 
-Recognizable objects (controllers, phones, characters, hands, marks) keep their natural orientation. NEVER use \`transform: scaleX(-1)\` to face them — pose is in the source path data, not a CSS transform.
-
 SLIDE MARGINS — two-layer + reserved chrome footer
 Use the EXACT same side inset for content as for chrome corners (logo / pagination / persistent text). On a 1920-wide canvas that's 80 px; on a 1080-wide vertical canvas that's 50 px. Top inset matches the same number. BOTTOM is fixed at 140 px (chrome footer zone). Body MUST NOT extend below \`bottom:140px\`. Cover (\`role:"cover"\`) / closing (\`role:"closing"\`) may break chrome for hero composition.
 

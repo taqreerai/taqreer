@@ -248,3 +248,37 @@ export async function fetchDefaultBrandKit(): Promise<HydratedBrand | null> {
     logo,
   };
 }
+
+// Map a `GET /api/brand-kits` list entry → HydratedBrand, reusing the
+// same colour/font/logo readers as the default-kit fetch. Used by the
+// in-card brand-kit dropdown (flow-card redesign) to apply a saved kit
+// without leaving the page. The list entry signs the logo into
+// `assetUrls.logo.displayUrl` and keeps the raw path in `storageUrl`.
+export function mapKitToHydrated(kit: {
+  colors?: unknown;
+  fonts?: { heading?: unknown; body?: unknown } | null;
+  assetUrls?: {
+    logo?: { storageUrl?: unknown; displayUrl?: unknown; name?: unknown } | null;
+  } | null;
+  logo?: { position?: unknown; exclude?: unknown } | null;
+}): HydratedBrand {
+  const logoAsset = kit.assetUrls?.logo;
+  const logo =
+    logoAsset && typeof logoAsset.storageUrl === "string" && logoAsset.storageUrl
+      ? buildLogo({
+          storageUrl: logoAsset.storageUrl,
+          displayUrl:
+            typeof logoAsset.displayUrl === "string" ? logoAsset.displayUrl : null,
+          name: typeof logoAsset.name === "string" ? logoAsset.name : null,
+          position:
+            typeof kit.logo?.position === "string" ? kit.logo.position : null,
+          exclude: kit.logo?.exclude,
+        })
+      : null;
+  return {
+    colors: readColors(kit.colors),
+    headingFontSlot: readFontSlot(kit.fonts?.heading),
+    bodyFontSlot: readFontSlot(kit.fonts?.body),
+    logo,
+  };
+}
