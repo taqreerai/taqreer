@@ -53,22 +53,6 @@ const OFFICE_2013_DEFAULT_ACCENTS = [
   "70AD47",
 ];
 
-// The classic Office 2007–2010 "Office" theme accents — the
-// blue/red/green/purple/teal/orange set that every pre-2013 deck (and
-// many LibreOffice / legacy exports) still ships with. It's the stock
-// theme, NOT a brand choice, so treat it as a non-customized default
-// and return null — otherwise the /enhance palette pre-fills generic
-// Office stock instead of letting Claude derive the real palette from
-// the slide visuals. (Observed 2026-05-30 on real test decks.)
-const OFFICE_2007_DEFAULT_ACCENTS = [
-  "4F81BD",
-  "C0504D",
-  "9BBB59",
-  "8064A2",
-  "4BACC6",
-  "F79646",
-];
-
 // ─── Public API ────────────────────────────────────────────────────
 
 /**
@@ -101,7 +85,6 @@ export async function extractColorsFromPptx(
   const upperAccents = accents.map((c) => c.toUpperCase());
   if (matchesDefault(upperAccents, OFFICE_DEFAULT_ACCENTS)) return null;
   if (matchesDefault(upperAccents, OFFICE_2013_DEFAULT_ACCENTS)) return null;
-  if (matchesDefault(upperAccents, OFFICE_2007_DEFAULT_ACCENTS)) return null;
 
   return upperAccents.map((c) => `#${c}`);
 }

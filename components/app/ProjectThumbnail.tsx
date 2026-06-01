@@ -47,19 +47,24 @@
 //   Favorite is local-only; nothing else on the dashboard reacts
 //   to it. The /favorites page will fetch fresh.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SlideFormat } from "@/lib/schema/slide";
-import { ProjectActionsDialogs } from "@/components/app/ProjectActionsDialogs";
+import { ProjectActionsMenu } from "@/components/app/ProjectActionsMenu";
+import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";
+import { SaveAsTemplateDialog } from "@/components/app/SaveAsTemplateDialog";
+import { ShareDialog } from "@/components/app/ShareDialog";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
-import {
-  MAX_TITLE_LENGTH,
-  useProjectActions,
-} from "@/lib/hooks/useProjectActions";
-import { useSlideScrub } from "@/lib/hooks/useSlideScrub";
-import { ScrubCounter } from "@/components/app/ScrubCounter";
+import { prepareTemplateUse } from "@/lib/mimic/template-seed";
+
+// Pixels of cursor travel required to consider the user actually
+// scrubbing (not just hovering at rest). ~2 trackpad ticks.
+const SCRUB_ACTIVATION_PX = 6;
+// Mirror the server-side cap in /api/projects/[id] PATCH so the
+// input can't write past what the route would silently truncate.
+const MAX_TITLE_LENGTH = 200;
 
 type Props = {
   // Stable per-project — drives API calls + clipboard URL.
@@ -120,6 +125,8 @@ export function ProjectThumbnail({
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const entryXRef = useRef<number | null>(null);
   // Thumbnail-hover flag — flips title + 3-dots between muted /
   // white. Tracked in JS (not CSS group/peer) because the title
   // and dots live in a footer that's a sibling-of-sibling of the
@@ -129,24 +136,119 @@ export function ProjectThumbnail({
   const [thumbHovered, setThumbHovered] = useState(false);
 
   // ── Step 9f state ──────────────────────────────────────────────
-  // Shared project actions — menu / rename / favorite / delete / share /
-  // use-as-template state + handlers + the four portalled dialogs live in
-  // useProjectActions + <ProjectActionsDialogs>. Only this tile's LAYOUT
-  // (thumbnail + footer) is local; the scrub/hover state above stays here.
-  const actions = useProjectActions(projectId, {
-    initialFavorite: isFavorite,
-    initialTitle: title,
-    menuBtnRef,
-    renameInputRef,
-    onDeleted,
-    onRenamed,
-    onFavoriteChange,
-  });
+  // Menu open + the DOMRect the menu anchors to. Null rect ↔ closed.
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
 
-  // Hover-scrub through the slide thumbnails — shared with TemplateTile.
-  const scrub = useSlideScrub(slides, rootRef);
-  const src = slides[scrub.displayIndex] ?? null;
+  // Optimistic favorite — server response replaces this once the
+  // PATCH lands. We don't revert on failure because the UX cost
+  // of "star flicker" outweighs the rare network error case; an
+  // error logs to console for traceability and the next reload
+  // shows truth.
+  const [favoriteState, setFavoriteState] = useState(isFavorite);
+  // Local title — starts from the prop, mutated on rename for
+  // optimistic UI. The prop is the SSR value and won't change
+  // post-mount unless the parent re-fetches.
+  const [titleState, setTitleState] = useState(title);
+  const [renameMode, setRenameMode] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(title);
+  const [renameSaving, setRenameSaving] = useState(false);
+
+  // Trash confirmation dialog open + in-flight flag for the DELETE.
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [trashBusy, setTrashBusy] = useState(false);
+  // Save-as-template modal — opens when the user picks "حفظ نسخة كقالب"
+  // from the actions menu. The modal handles its own preview fetch +
+  // save POST; we just track open/closed here.
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  // "Use as a template" busy gate — while true the thumbnail dims +
+  // shows the paragraph-write loader (no full-screen route loader). It
+  // stays set after a successful navigate (the tile unmounts); cleared
+  // only on error so the user can retry.
+  const [useTplBusy, setUseTplBusy] = useState(false);
+
+  const handleUseAsTemplate = async () => {
+    if (useTplBusy) return;
+    setUseTplBusy(true);
+    try {
+      // Render the project's PDF + mint the Anthropic reference here, on
+      // the dimmed tile, then navigate to the (now-cached) Mimic flow.
+      await prepareTemplateUse("project", projectId);
+      window.location.assign(`/use-template/project/${projectId}`);
+    } catch (err) {
+      console.warn("[ProjectThumbnail] use-as-template prep failed", err);
+      setUseTplBusy(false);
+    }
+  };
+  // Share modal — opens when the user picks "مشاركة" from the actions
+  // menu. ShareDialog handles its own fetch + mutations against
+  // /api/projects/[id]/share; we just track open/closed here.
+  const [shareOpen, setShareOpen] = useState(false);
+
+  // Eagerly preload the FIRST FEW slide thumbnails on mount so the
+  // initial hover-scrub feels instant. Bounded to the first
+  // `EAGER_PRELOAD_LIMIT` (a 6-tile dashboard × 8 slides each ==
+  // 48 simultaneous image fetches on first paint without the cap;
+  // the cap drops that to 18 — caught by CR 2026-05-21). Slides
+  // beyond the cap will fetch on first hover (single ~80 KB
+  // request; cheap, and the brief blank-flash is acceptable for a
+  // less-likely interaction). Cached for the page's lifetime once
+  // fetched.
+  const EAGER_PRELOAD_LIMIT = 3;
+  useEffect(() => {
+    for (const url of slides.slice(0, EAGER_PRELOAD_LIMIT)) {
+      if (!url) continue;
+      const img = new Image();
+      img.src = url;
+    }
+  }, [slides]);
+
+  // Focus + select the input when entering rename mode. useEffect
+  // (not a callback ref) because the input only exists conditionally;
+  // when renameMode flips on, we wait for the next paint then focus.
+  useEffect(() => {
+    if (renameMode) {
+      // Defer focus to the next microtask so the input has actually
+      // mounted by the time we call .focus().
+      const id = window.requestAnimationFrame(() => {
+        const el = renameInputRef.current;
+        if (el) {
+          el.focus();
+          el.select();
+        }
+      });
+      return () => window.cancelAnimationFrame(id);
+    }
+  }, [renameMode]);
+
+  const displayIndex = hoverIndex ?? 0;
+  const src = slides[displayIndex] ?? null;
   const hasSlides = slides.length > 0;
+  const isMultiSlide = slides.length > 1;
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!isMultiSlide) return;
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    if (entryXRef.current == null) {
+      entryXRef.current = e.clientX;
+      return;
+    }
+    if (Math.abs(e.clientX - entryXRef.current) < SCRUB_ACTIVATION_PX) {
+      return;
+    }
+    const relX = e.clientX - rect.left;
+    // RTL mapping: rightmost pixel = slide 1, leftmost = slide N.
+    const idx = Math.min(
+      slides.length - 1,
+      Math.max(0, Math.floor(((rect.width - relX) / rect.width) * slides.length)),
+    );
+    setHoverIndex(idx);
+  };
+
+  const handleMouseLeave = () => {
+    setHoverIndex(null);
+    entryXRef.current = null;
+  };
 
   const imgObjectClass =
     format === "9:16" ? "object-cover object-top" : "object-cover";
@@ -157,6 +259,112 @@ export function ProjectThumbnail({
   });
 
   // ── Menu actions ───────────────────────────────────────────────
+  const openMenu = () => {
+    setMenuRect(menuBtnRef.current?.getBoundingClientRect() ?? null);
+  };
+  const closeMenu = () => setMenuRect(null);
+
+  const handleToggleFavorite = async () => {
+    const previous = favoriteState;
+    const next = !previous;
+    setFavoriteState(next);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/favorite`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isFavorite: next }),
+      });
+      if (!res.ok) throw new Error(`favorite: ${res.status}`);
+      const data = (await res.json()) as { isFavorite: boolean };
+      setFavoriteState(data.isFavorite);
+      onFavoriteChange?.(projectId, data.isFavorite);
+    } catch (err) {
+      // Revert the optimistic flip on failure. The dashboard has no
+      // toast / retry chrome for this action, so without a revert
+      // the tile silently keeps the wrong star until reload —
+      // which is exactly the "user thinks it worked, server says
+      // it didn't" desync we don't want. Flipping back makes the
+      // failure visible (icon doesn't change → next click retries).
+      setFavoriteState(previous);
+      console.error("favorite toggle failed", err);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    // Canonical working-session URL post route-split. /preview/<id>
+    // still works (it just SSR-redirects to /project/<id> for any
+    // completed deck) but /project is the URL we share / bookmark
+    // so the recipient lands on the right route without a
+    // redirect hop.
+    const url = `${window.location.origin}/project/${projectId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (err) {
+      console.error("copy link failed", err);
+    }
+  };
+
+  const handleShare = () => {
+    setShareOpen(true);
+  };
+
+  // Rename ↔ submit flow. Enter / blur commits, Escape cancels.
+  // Empty title is rejected client-side AND server-side (the
+  // PATCH route returns 400 on empty after trim).
+  const enterRenameMode = () => {
+    setRenameDraft(titleState);
+    setRenameMode(true);
+  };
+  const cancelRename = () => {
+    setRenameMode(false);
+    setRenameDraft(titleState);
+  };
+  const commitRename = async () => {
+    const trimmed = renameDraft.trim().slice(0, MAX_TITLE_LENGTH);
+    if (trimmed.length === 0 || trimmed === titleState) {
+      // Nothing to save — bail out without an API call.
+      cancelRename();
+      return;
+    }
+    setRenameSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: trimmed }),
+      });
+      if (!res.ok) throw new Error(`rename: ${res.status}`);
+      const data = (await res.json()) as { title: string };
+      setTitleState(data.title);
+      onRenamed?.(projectId, data.title);
+      setRenameMode(false);
+    } catch (err) {
+      console.error("rename failed", err);
+      // Keep rename mode open + draft intact so the user can retry.
+      // Real prod would surface a toast here; deferred until we
+      // have a global toast system.
+    } finally {
+      setRenameSaving(false);
+    }
+  };
+
+  const handleConfirmTrash = async () => {
+    setTrashBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`delete: ${res.status}`);
+      setTrashOpen(false);
+      onDeleted?.(projectId);
+    } catch (err) {
+      console.error("delete failed", err);
+      // Leave dialog open so the user can retry / cancel.
+    } finally {
+      setTrashBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {/* Thumbnail — clean, no hover dim, no overlay chrome.
@@ -185,12 +393,12 @@ export function ProjectThumbnail({
           onClick={() =>
             onOpen ? onOpen() : router.push(`/project/${projectId}`)
           }
-          onMouseMove={scrub.handleMouseMove}
-          onMouseLeave={scrub.handleMouseLeave}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
           aria-label={
             hasSlides
-              ? `افتح ${actions.titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
-              : `افتح ${actions.titleState}`
+              ? `افتح ${titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
+              : `افتح ${titleState}`
           }
           className={`absolute inset-0 block ${
             onOpen ? "cursor-zoom-in" : "cursor-pointer"
@@ -236,7 +444,7 @@ export function ProjectThumbnail({
             shared paragraph-write animation while the project's PDF +
             Mimic reference are prepared (instead of a full-screen route
             loader). Covers the click surface so it can't be re-fired. */}
-        {actions.useTplBusy ? (
+        {useTplBusy ? (
           <div
             role="status"
             aria-label="جارٍ تجهيز القالب"
@@ -249,8 +457,13 @@ export function ProjectThumbnail({
         {/* Scrub counter — bottom-end (left in RTL). Only while
             scrubbing a multi-slide deck. Outside the click surface
             but inside the rounded thumbnail container. */}
-        {scrub.isMultiSlide && scrub.hoverIndex !== null ? (
-          <ScrubCounter index={scrub.hoverIndex} total={slides.length} />
+        {isMultiSlide && hoverIndex !== null ? (
+          <span
+            dir="ltr"
+            className="pointer-events-none absolute bottom-2 end-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white"
+          >
+            {hoverIndex + 1} / {slides.length}
+          </span>
         ) : null}
 
         {/* Favorited indicator — top-start corner. Diagonal-opposite
@@ -259,7 +472,7 @@ export function ProjectThumbnail({
             any slide content (light or dark). Inline FILL=1 because
             the global material-symbols-outlined rule sets FILL=0;
             without this the glyph would render as an outline. */}
-        {actions.favoriteState ? (
+        {favoriteState ? (
           <span
             aria-label="مشروع مفضّل"
             className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-white"
@@ -286,23 +499,23 @@ export function ProjectThumbnail({
               is on the className — Tailwind v4's @layer cascade
               gives unlayered rules higher priority. Inline-style
               sidesteps the entire layer fight. */}
-          {actions.renameMode ? (
+          {renameMode ? (
             <input
               ref={renameInputRef}
               type="text"
-              value={actions.renameDraft}
-              onChange={(e) => actions.setRenameDraft(e.target.value)}
-              onBlur={actions.commitRename}
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  actions.commitRename();
+                  commitRename();
                 } else if (e.key === "Escape") {
                   e.preventDefault();
-                  actions.cancelRename();
+                  cancelRename();
                 }
               }}
-              disabled={actions.renameSaving}
+              disabled={renameSaving}
               maxLength={MAX_TITLE_LENGTH}
               aria-label="اسم المشروع"
               className="w-full truncate rounded-md border border-white/15 bg-white/[0.04] px-1.5 py-0.5 text-xs font-semibold leading-tight text-white outline-none transition-colors focus:border-white/40 disabled:opacity-60"
@@ -315,9 +528,9 @@ export function ProjectThumbnail({
                   ? "var(--tq-text-primary)"
                   : "var(--tq-text-muted)",
               }}
-              title={actions.titleState}
+              title={titleState}
             >
-              {actions.titleState}
+              {titleState}
             </p>
           )}
           <p className="mt-0.5 text-[10px] text-muted">{relativeDate}</p>
@@ -327,7 +540,7 @@ export function ProjectThumbnail({
           type="button"
           aria-label="خيارات المشروع"
           aria-haspopup="menu"
-          aria-expanded={actions.menuRect !== null}
+          aria-expanded={menuRect !== null}
           // The value (not just the attribute presence) carries the
           // projectId so the menu's outside-click handler can tell
           // "this same tile's trigger" apart from "some OTHER tile's
@@ -337,7 +550,12 @@ export function ProjectThumbnail({
           onClick={(e) => {
             e.stopPropagation();
             // Toggle: closed → open at current rect, open → close.
-            actions.toggleMenu();
+            // Pattern mirrors the History pill's toggle handler.
+            if (menuRect != null) {
+              closeMenu();
+            } else {
+              openMenu();
+            }
           }}
           // Color-only hover (no background tint). The previous
           // `.btn-icon` class added `background: rgba(55,11,244,.18)`
@@ -366,7 +584,7 @@ export function ProjectThumbnail({
             // indicator next to it. Hover behaviour: idle muted →
             // white on hover (via the className above).
             color:
-              thumbHovered || actions.favoriteState
+              thumbHovered || favoriteState
                 ? "var(--tq-text-primary)"
                 : "var(--tq-text-muted)",
           }}
@@ -375,9 +593,50 @@ export function ProjectThumbnail({
         </button>
       </div>
 
-      {/* Shared actions menu + the save-as-template / trash / share
-          dialogs (portalled), driven by the useProjectActions instance. */}
-      <ProjectActionsDialogs actions={actions} />
+      <ProjectActionsMenu
+        open={menuRect !== null}
+        triggerRect={menuRect}
+        projectId={projectId}
+        isFavorite={favoriteState}
+        onClose={closeMenu}
+        onShare={handleShare}
+        onRename={enterRenameMode}
+        onToggleFavorite={handleToggleFavorite}
+        onCopyLink={handleCopyLink}
+        onUseAsTemplate={handleUseAsTemplate}
+        onSaveAsTemplate={() => setSaveTemplateOpen(true)}
+        onSendToTrash={() => setTrashOpen(true)}
+      />
+
+      <SaveAsTemplateDialog
+        open={saveTemplateOpen}
+        projectId={projectId}
+        onCancel={() => setSaveTemplateOpen(false)}
+        onSaved={() => {
+          // Modal closes immediately; the brand-showcase render runs
+          // in the background and the new template appears in
+          // /templates once thumbnails settle. No tile-level state
+          // changes here — the template is a separate entity.
+          setSaveTemplateOpen(false);
+        }}
+      />
+
+      <TrashConfirmDialog
+        open={trashOpen}
+        projectTitle={titleState}
+        busy={trashBusy}
+        onCancel={() => {
+          if (!trashBusy) setTrashOpen(false);
+        }}
+        onConfirm={handleConfirmTrash}
+      />
+
+      <ShareDialog
+        open={shareOpen}
+        projectId={projectId}
+        projectTitle={titleState}
+        onClose={() => setShareOpen(false)}
+      />
     </div>
   );
 }

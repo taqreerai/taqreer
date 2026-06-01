@@ -8,12 +8,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// `fileSizeLimit` (bytes) overrides the 50 MB default per bucket. source-files
-// must match the app's 100 MB upload cap (app/api/extract MAX_FILE_SIZE_BYTES)
-// or fresh setups reject valid uploads at the storage layer.
-const DEFAULT_FILE_SIZE_LIMIT = 52428800; // 50 MB
-const buckets: { name: string; public: boolean; fileSizeLimit?: number }[] = [
-  { name: "source-files", public: false, fileSizeLimit: 104857600 }, // 100 MB
+const buckets = [
+  { name: "source-files", public: false },
   { name: "brand-assets", public: false },
   { name: "generated-presentations", public: false },
   // public: dashboards/projects pages render <img> tiles for every
@@ -22,10 +18,6 @@ const buckets: { name: string; public: boolean; fileSizeLimit?: number }[] = [
   // from the saved version pointer, so public is the simpler tradeoff.
   { name: "slide-previews", public: true },
   { name: "template-assets", public: true },
-  // gpt-image-2 generated deck images (context/images.md). Public so the
-  // <img src> baked into saved slide HTML never expires (exports + decks
-  // older than a year keep resolving).
-  { name: "generated-images", public: true },
 ];
 
 async function setupBuckets() {
@@ -41,7 +33,7 @@ async function setupBuckets() {
         const { error: createError } =
           await supabase.storage.createBucket(bucket.name, {
             public: bucket.public,
-            fileSizeLimit: bucket.fileSizeLimit ?? DEFAULT_FILE_SIZE_LIMIT,
+            fileSizeLimit: 52428800, // 5GB
           });
 
         if (createError) {

@@ -25,7 +25,7 @@
 // Both consumers just toggle `open` + pass the template data; the
 // component owns the index state + scroll lock + keyboard wiring.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
@@ -36,13 +36,6 @@ import type { SlideFormat } from "@/lib/schema/slide";
 // keeps the stage close to native res (no upscaling) while leaving
 // room for the modal chrome on a typical laptop viewport.
 const TEMPLATE_STAGE_PX = 450;
-
-// Width of the body-row chrome around the stage: two w-10 arrows (80) +
-// two gap-3 gaps (24) + px-5 padding (40) = 144, plus ~4px slack for the
-// panel border. The panel's max-width is pinned to stageWidth + this so a
-// long thumbnail strip (10+ thumbs) scrolls horizontally INSIDE the modal
-// instead of dictating the modal's width.
-const STAGE_CHROME_PX = 148;
 
 type Props = {
   open: boolean;
@@ -77,9 +70,6 @@ export function TemplateLightbox({
   const [index, setIndex] = useState(0);
   const total = slides.length;
   const isPortrait = format === "9:16";
-  // Points at the currently-active thumbnail so the strip can scroll it
-  // into view as the user navigates (see effect below).
-  const activeThumbRef = useRef<HTMLButtonElement | null>(null);
 
   // Stage box. In 16:9 the WIDTH is fixed at TEMPLATE_STAGE_PX and
   // height derives from the aspect. In 9:16 the HEIGHT is fixed and
@@ -128,20 +118,6 @@ export function TemplateLightbox({
       document.body.style.overflow = prevOverflow;
     };
   }, [open, onClose, goPrev, goNext, total]);
-
-  // Keep the active thumbnail in view as the index changes — scrolls the
-  // strip so the current thumb (and the off-screen ones near the edges)
-  // come into view instead of staying clipped. `nearest` only moves the
-  // strip the minimum needed, so it doesn't jump when the thumb's already
-  // visible.
-  useEffect(() => {
-    if (!open) return;
-    activeThumbRef.current?.scrollIntoView({
-      inline: "nearest",
-      block: "nearest",
-      behavior: "smooth",
-    });
-  }, [index, open]);
 
   if (typeof document === "undefined") return null;
 
@@ -198,7 +174,6 @@ export function TemplateLightbox({
               aria-modal="true"
               aria-labelledby="tpl-lbx-title"
               onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: stageWidth + STAGE_CHROME_PX }}
               className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto flex max-h-[90vh] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
@@ -283,37 +258,30 @@ export function TemplateLightbox({
                   shouldn't be possible today but the guard costs
                   nothing). */}
               {isMulti ? (
-                // Outer scroll container is bounded by the panel's
-                // max-width; the inner `w-max mx-auto` centers the thumbs
-                // when they fit and lets them overflow-scroll (without
-                // clipping the first thumb, which `justify-center` would).
-                <div className="overflow-x-auto border-t border-white/[0.08] px-5 py-3 [scrollbar-width:thin]">
-                  <div className="mx-auto flex w-max items-center gap-2">
-                    {slides.map((src, i) => {
-                      const active = i === index;
-                      return (
-                        <button
-                          key={`${i}-${src}`}
-                          ref={active ? activeThumbRef : null}
-                          type="button"
-                          onClick={() => setIndex(i)}
-                          aria-label={`الشريحة ${i + 1}`}
-                          aria-current={active}
-                          className={`h-10 w-16 shrink-0 overflow-hidden rounded-md transition-opacity ${
-                            active
-                              ? "opacity-100 ring-2 ring-white/60"
-                              : "opacity-50 hover:opacity-80"
-                          }`}
-                        >
-                          <img
-                            src={src}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="flex items-center justify-center gap-2 border-t border-white/[0.08] px-5 py-3">
+                  {slides.map((src, i) => {
+                    const active = i === index;
+                    return (
+                      <button
+                        key={src}
+                        type="button"
+                        onClick={() => setIndex(i)}
+                        aria-label={`الشريحة ${i + 1}`}
+                        aria-current={active}
+                        className={`h-10 w-16 overflow-hidden rounded-md transition-opacity ${
+                          active
+                            ? "opacity-100 ring-2 ring-white/60"
+                            : "opacity-50 hover:opacity-80"
+                        }`}
+                      >
+                        <img
+                          src={src}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    );
+                  })}
                 </div>
               ) : null}
 

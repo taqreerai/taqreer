@@ -182,10 +182,6 @@ type CreateProjectPayload = {
     } | null;
   };
   saveBrandKit?: boolean;
-  // context/images.md — opt-in "images deck" (the /create toggle lands in
-  // Phase 3; until then it's settable via the payload for testing). Only
-  // honoured for create flows in deck-generate's buildUserMessage gate.
-  imagesMode?: boolean;
   slideCount?: number | null;
   quality?: Quality | null;
   // User-picked on /create/content (2026-05-20). Drives Project.language
@@ -266,35 +262,6 @@ function readBriefFont(slot: BriefFontSlot): {
   };
 }
 
-// One uploaded font FAMILY in the brief: a display name + its weight faces.
-// A user who drops "Brand-Light/Regular/Bold.otf" sends ONE family with three
-// faces. `weight` is the CSS numeric weight (100–900) the picker parsed off
-// each filename; `storageUrl` is the per-weight uploaded-file path. The names
-// reach Claude (paired into heading/body); the storageUrls stay server-side
-// (sanitised out of the prompt; signed post-manifest by injectUploadedFontSources).
-type IncomingUploadedFamily = {
-  name?: string | null;
-  faces?: Array<{ weight?: unknown; storageUrl?: unknown } | null> | null;
-} | null;
-type UploadedFontFamilyBrief = {
-  name: string;
-  faces: Array<{ weight: number; storageUrl: string }>;
-};
-
-// Caps mirror the picker's MAX_UPLOADED_FONTS / MAX_FACES_PER_FAMILY. Kept as
-// local literals so this server route doesn't pull the client font module.
-const MAX_UPLOADED_FAMILIES = 5;
-const MAX_FACES_PER_FAMILY = 9;
-
-// Coerce an incoming face weight to a standard CSS weight (100–900). Anything
-// out of range / non-numeric falls back to 400 — the run still renders, just
-// at regular.
-function clampFontWeight(raw: unknown): number {
-  const n = Math.round(Number(raw));
-  if (!Number.isFinite(n) || n < 100 || n > 900) return 400;
-  return n;
-}
-
 // Allowlist + size-clamp the brand-kit logo shape. Mirrors the
 // `safeLogo` filter in `/api/brand-kits` POST — without this the
 // `saveBrandKit` branch would persist `payload.brand.logo` verbatim,
@@ -346,7 +313,6 @@ function buildClaudeBrand(
   rawBrand: CreateProjectPayload["brand"],
   headingFont: ReturnType<typeof readBriefFont>,
   bodyFont: ReturnType<typeof readBriefFont>,
-  uploadedFonts: UploadedFontFamilyBrief[],
   logoSignedUrl: string | null,
   logoSvgMarkup: string | null,
 ): CreateProjectPayload["brand"] {
@@ -360,22 +326,14 @@ function buildClaudeBrand(
       // without `url` here Claude was guessing.
       heading: headingFont,
       body: bodyFont,
-      // The full uploaded-family list (name + weight faces) — present only
-      // when the user uploaded fonts. deck-generate's FONT SOURCING rule
-      // tells Claude to pair these into heading/body by name; the
-      // injectUploadedFontSources step signs each face post-manifest.
-      ...(uploadedFonts.length > 0 ? { uploaded: uploadedFonts } : {}),
     },
     logo: rawBrand.logo
       ? {
           name: rawBrand.logo.name,
           storageUrl: rawBrand.logo.storageUrl,
           // Signed HTTPS URL — fallback when svgMarkup is missing
-          // (caller renders an <img> instead of inline SVG). NULL when
-          // signing fails: never fall back to the raw `storageUrl`, which
-          // is a private object key, not a fetchable URL — emitting it as
-          // `url` would both leak the path and hand Claude a dead src.
-          url: logoSignedUrl ?? null,
+          // (caller renders an <img> instead of inline SVG).
+          url: logoSignedUrl ?? rawBrand.logo.storageUrl,
           // Inline SVG markup. When present, Claude inlines this
           // directly per slide and sets `fill="#hex"` on the <svg>
           // root for per-slide contrast. When null (fetch failed
@@ -429,53 +387,10 @@ export async function POST(request: Request) {
   // universal default available on every OS, supports both Arabic and
   // Latin scripts.
   const incomingFonts = payload.brand?.fonts as
-    | {
-        heading?: BriefFontSlot;
-        body?: BriefFontSlot;
-        uploaded?: IncomingUploadedFamily[];
-      }
+    | { heading?: BriefFontSlot; body?: BriefFontSlot }
     | undefined;
   const headingFont = readBriefFont(incomingFonts?.heading);
   const bodyFont = readBriefFont(incomingFonts?.body);
-  // Uploaded brand fonts (the "Claude pairs" path): forward EVERY family with
-  // ALL its weight faces (capped) so deck-generate can attach each weight file
-  // to whichever role Claude assigns. Names go to Claude; storageUrls stay
-  // server-side (sanitised out of the prompt; signed post-manifest).
-  const uploadedFonts: UploadedFontFamilyBrief[] = (
-    Array.isArray(incomingFonts?.uploaded) ? incomingFonts.uploaded : []
-  )
-    .slice(0, MAX_UPLOADED_FAMILIES)
-    .map((fam) => ({
-      name: fam?.name?.trim() || "Custom",
-      faces: (Array.isArray(fam?.faces) ? fam.faces : [])
-        .slice(0, MAX_FACES_PER_FAMILY)
-        .map((f) => ({
-          weight: clampFontWeight(f?.weight),
-          storageUrl: typeof f?.storageUrl === "string" ? f.storageUrl : null,
-        }))
-        .filter(
-          (f): f is { weight: number; storageUrl: string } => !!f.storageUrl,
-        ),
-    }))
-    .filter((fam) => fam.faces.length > 0);
-
-  // AUTHORIZE every font storageUrl (heading / body / every uploaded face)
-  // before it reaches the brief. At generation time deck-generate SIGNS these
-  // with service-role creds (injectUploadedFontSources) to @font-face + embed
-  // them — an unowned path would mint a signed URL for another tenant's
-  // object. Same threat the logo path is guarded against below.
-  for (const fontPath of [
-    headingFont.storageUrl,
-    bodyFont.storageUrl,
-    ...uploadedFonts.flatMap((fam) => fam.faces.map((f) => f.storageUrl)),
-  ]) {
-    if (fontPath && !isOwnedBrandAssetPath(fontPath, user.id)) {
-      return NextResponse.json(
-        { error: "Font storageUrl is not owned by the current user" },
-        { status: 403 },
-      );
-    }
-  }
   const logoPath = payload.brand?.logo?.storageUrl ?? null;
     // AUTHORIZE the logo path before we touch Supabase. The helpers below
     // both run with service-role credentials (signed URL → embedded in
@@ -503,7 +418,6 @@ export async function POST(request: Request) {
     payload.brand,
     headingFont,
     bodyFont,
-    uploadedFonts,
     logoSignedUrl,
     logoSvgMarkup,
   );
@@ -521,24 +435,6 @@ export async function POST(request: Request) {
   const contentLanguage = resolveLanguage(payload.language);
   const contentDirection = directionForLanguage(contentLanguage);
   const validatedSource = resolveSource(payload.source);
-  // AUTHORIZE the enhance source path — same threat as the logo path
-  // above. `source.sourcePath` round-trips through the client, and at
-  // generation time deck-generate downloads it with SERVICE-ROLE creds
-  // (bypasses RLS) to rasterize the slides. Without an ownership check a
-  // user could swap in another tenant's object key and have the deck
-  // exfiltrate that file. `isOwnedBrandAssetPath` is the generic
-  // owner-prefix guard (verifies the `${userId}/` namespace + rejects
-  // `..`); `source-files` keys share that `${supabaseUserId}/extract/...`
-  // convention, so it applies directly.
-  if (
-    validatedSource?.kind === "enhance" &&
-    !isOwnedBrandAssetPath(validatedSource.sourcePath, user.id)
-  ) {
-    return NextResponse.json(
-      { error: "source.sourcePath is not owned by the current user" },
-      { status: 403 },
-    );
-  }
   const quality = resolveQuality(payload.quality);
 
   const brief = {
@@ -549,11 +445,6 @@ export async function POST(request: Request) {
     brand: claudeBrand,
     rules: payload.rules ?? null,
     slideCount: resolvedSlideCount,
-    // context/images.md — when on (create flow), deck-generate swaps the
-    // SVG-only graphics directive for the images-deck override + reserves
-    // generated-image boxes. OMITTED when off, so a normal deck's brief
-    // (and the prompt built from it) stays byte-for-byte unchanged.
-    ...(payload.imagesMode === true ? { imagesMode: true } : {}),
     // Only include `source` when a valid SourceMeta was provided.
     // deck-generate's readSource() also treats `kind: "scratch"`
     // as null, so a future explicit-scratch payload remains a

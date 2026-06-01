@@ -57,37 +57,16 @@ export const SourceScratchSchema = z.object({
 
 export const SourceEnhanceSchema = z.object({
   kind: z.literal("enhance"),
-  // Legacy (document-block path): Anthropic Files API file_id for the
-  // source PDF. OPTIONAL now — the enhance overhaul (Phase 18) feeds
-  // Claude per-slide PNGs rendered at GENERATION time instead of a PDF
-  // document block, so this is no longer produced. Kept optional for
-  // backward-compat with in-flight sessions.
-  anthropicFileId: z.string().min(1).optional(),
+  // Anthropic Files API file_id for the source PDF. Used as a
+  // `document` block in the Claude message. PPTX inputs have
+  // already been LibreOffice-converted to PDF before upload.
+  anthropicFileId: z.string().min(1),
   // Typeface family names from the source's theme XML (PPTX only;
   // empty for PDF). Classified into system-vs-custom in
   // deck-generate's enhance directive — system fonts pass through
   // as font-family stacks verbatim, custom fonts get resolved to
   // their closest Google Font match.
-  // Defaults to `[]` so a pre-overhaul enhance payload (which predates font
-  // extraction) still parses instead of being rejected outright.
-  fonts: z.array(z.string()).default([]),
-  // VERBATIM text per slide, in presentation order (index i ↔ rendered
-  // page i+1). Extracted from the PPTX XML (exact, no OCR) by
-  // lib/extract/text-pptx.ts. Empty array for PDF uploads until the
-  // PDF text-layer path lands. Handed to Claude per slide so it
-  // reproduces content word-for-word while redesigning the visual.
-  // Defaults to `[]` (back-compat — deck-generate already treats this as
-  // possibly-empty and falls back to image-only enhance).
-  textPerSlide: z.array(z.string()).default([]),
-  // Supabase staging location of the ORIGINAL upload (object key in the
-  // source-files bucket) + its MIME. deck-generate re-fetches it at
-  // generation time to rasterize the per-slide PNGs (transient — the
-  // images are flushed after the run; nothing persists between runs).
-  // OPTIONAL for back-compat: pre-overhaul payloads lack these; the
-  // generation step throws a clear "missing sourcePath/sourceMime" error
-  // rather than the schema silently rejecting the whole stored source.
-  sourcePath: z.string().min(1).optional(),
-  sourceMime: z.string().min(1).optional(),
+  fonts: z.array(z.string()),
 });
 
 // Mimic content can come from EITHER an uploaded file ("ugly" file

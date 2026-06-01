@@ -107,23 +107,16 @@ export async function seedFromBrandKit(kitId: string): Promise<void> {
       }
     : null;
 
-  try {
-    sessionStorage.setItem(
-      CREATE_BRAND_KEY,
-      JSON.stringify({
-        ...existingBrand,
-        colors,
-        paletteMode: "manual",
-        fonts,
-        logo: nextLogo,
-      }),
-    );
-  } catch (err) {
-    // Quota exceeded / disabled storage (private mode). Non-fatal — the
-    // brand seed just won't pre-fill; the user can re-enter it. Don't
-    // throw and break the flow.
-    console.error("[seed-from-brand-kit] sessionStorage write failed:", err);
-  }
+  sessionStorage.setItem(
+    CREATE_BRAND_KEY,
+    JSON.stringify({
+      ...existingBrand,
+      colors,
+      paletteMode: "manual",
+      fonts,
+      logo: nextLogo,
+    }),
+  );
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("taqreer:create:state-changed"));

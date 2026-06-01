@@ -41,7 +41,7 @@
 import type { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { extract } from "@/lib/extract";
 import { uploadFileToAnthropic } from "@/lib/anthropic/files";
 
@@ -56,23 +56,13 @@ type ExtractRequestedEvent = {
   fileBucketPath: string; // path inside source-files bucket
   fileName: string;
   mime: string;
-  // Which upload flow triggered this ("enhance" | "mimic" | undefined
-  // for /create). Enhance no longer needs the extract-time PDF upload
-  // to Anthropic — it rasterizes per-slide PNGs at GENERATION time —
-  // so the upload is skipped for enhance to avoid orphaning a PDF on
-  // every run. Optional for backward-compat with in-flight events.
-  flowKind?: string;
 };
 
 // What we persist to Job.outputJson on completion. Mirrors the
 // SourceMeta blob shape so /api/extract/[jobId] can return it
 // directly to the client without reshaping.
 type ExtractCompletedOutput = {
-  // Anthropic Files API id for the source PDF (document-block flows:
-  // /create file-upload + /mimic). UNDEFINED for enhance — that flow
-  // rasterizes per-slide PNGs at generation time and never uses a PDF
-  // document block, so the extract-time upload is skipped.
-  anthropicFileId?: string;
+  anthropicFileId: string;
   fonts: string[];
   colors: string[];
   /** PDF page count → drives slide count in the generated deck. */
@@ -87,19 +77,6 @@ type ExtractCompletedOutput = {
    * right direction from the first paint.
    */
   language: "ar" | "en" | null;
-  /**
-   * Verbatim text per slide in presentation order (PPTX; empty for
-   * PDF inputs). Index `i` ↔ rendered page `i + 1`. Handed to Claude
-   * per slide so the redesign reproduces content word-for-word.
-   */
-  textPerSlide: string[];
-  /**
-   * Supabase staging object key + MIME of the ORIGINAL upload.
-   * deck-generate re-fetches it to rasterize the per-slide PNGs at
-   * generation time (transient — flushed after the run).
-   */
-  sourcePath: string;
-  sourceMime: string;
 };
 
 // Narrow `event.data` to `ExtractRequestedEvent`. Throws
@@ -123,6 +100,18 @@ function parseExtractRequestedEvent(data: unknown): ExtractRequestedEvent {
     );
   }
   return ev as ExtractRequestedEvent;
+}
+
+// Build a Supabase admin client with the service-role key — used
+// because Inngest doesn't carry the original uploader's auth
+// context. Reused across functions; hoisting it here gives one call
+// site that's grep-able when env names change.
+function getSupabaseAdmin() {
+  return createSupabaseAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
 }
 
 // Rename a non-PDF source file to its `.pdf` form for the upload to
@@ -152,37 +141,12 @@ async function updateJobStatus(
 // upload the PDF to Anthropic Files. Returns the `ExtractCompletedOutput`
 // blob persisted to `Job.outputJson`. Lifted out of the `step.run`
 // closure so the orchestration body stays scannable.
-// Best-effort progress write the /enhance upload UI polls for. Stored
-// on Job.outputJson under `_progress` during processing; the final
-// result overwrites it on completion. `percent` is the EXTRACTION-phase
-// progress (0–100) which the client maps onto the tail of its bar. The
-// LibreOffice convert has no sub-progress, so the bar honestly holds at
-// the "converting" checkpoint (with a label) until it finishes —
-// real milestones, never a faked smooth creep.
-async function writeExtractProgress(
-  jobId: string,
-  percent: number,
-  stage: "converting" | "analyzing" | "finishing",
-): Promise<void> {
-  const { prisma } = await import("@/lib/prisma");
-  await prisma.job
-    .update({
-      where: { id: jobId },
-      data: {
-        outputJson: { _progress: { percent, stage } } as Prisma.InputJsonValue,
-      },
-    })
-    .catch(() => undefined);
-}
-
 async function runExtractionPipeline(args: {
-  jobId: string;
   fileBucketPath: string;
   fileName: string;
   mime: string;
-  flowKind?: string;
 }): Promise<ExtractCompletedOutput> {
-  const { jobId, fileBucketPath, fileName, mime, flowKind } = args;
+  const { fileBucketPath, fileName, mime } = args;
   const admin = getSupabaseAdmin();
   const { data: download, error: dlError } = await admin.storage
     .from(SOURCE_FILES_BUCKET)
@@ -193,7 +157,6 @@ async function runExtractionPipeline(args: {
     );
   }
   const sourceBuffer = Buffer.from(await download.arrayBuffer());
-  await writeExtractProgress(jobId, 20, "converting");
 
   // Run the extraction pipeline. Returns:
   //   • pdfBytes  — PDF the user uploaded OR LibreOffice-converted
@@ -205,23 +168,16 @@ async function runExtractionPipeline(args: {
   // Embedded image extraction was removed (2026-05-25); Claude
   // reads visuals from the PDF document block directly.
   const ext = await extract({ buffer: sourceBuffer, mime });
-  await writeExtractProgress(jobId, 80, "analyzing");
 
-  await writeExtractProgress(jobId, 92, "finishing");
-  // Upload the PDF to Anthropic Files (referenced via a `document`
-  // block in deck-generate) for /create + /mimic. SKIPPED for enhance:
-  // that flow rasterizes per-slide PNGs at GENERATION time and never
-  // uses a PDF document block, so an extract-time upload would orphan a
-  // PDF on Anthropic every run. Filename keeps the original (minus any
-  // .pptx → .pdf swap so the dashboard label matches).
-  const anthropicFileId =
-    flowKind === "enhance"
-      ? undefined
-      : await uploadFileToAnthropic({
-          bytes: ext.pdfBytes,
-          fileName: toPdfFileName(fileName),
-          contentType: "application/pdf",
-        });
+  // Upload the PDF to Anthropic Files. Returns a file_id we
+  // reference in deck-generate's message via a `document` block.
+  // Filename keeps the original (minus any .pptx → .pdf swap so the
+  // dashboard label matches).
+  const anthropicFileId = await uploadFileToAnthropic({
+    bytes: ext.pdfBytes,
+    fileName: toPdfFileName(fileName),
+    contentType: "application/pdf",
+  });
 
   return {
     anthropicFileId,
@@ -230,10 +186,6 @@ async function runExtractionPipeline(args: {
     pageCount: ext.pageCount,
     format: ext.format,
     language: ext.language,
-    textPerSlide: ext.textPerSlide,
-    // Re-fetch keys for generation-time rasterization (transient).
-    sourcePath: fileBucketPath,
-    sourceMime: mime,
   };
 }
 
@@ -276,7 +228,7 @@ export const extractSource = inngest.createFunction(
   },
   async ({ event, step, logger }) => {
     const data = parseExtractRequestedEvent(event.data);
-    const { jobId, fileBucketPath, fileName, mime, flowKind } = data;
+    const { jobId, fileBucketPath, fileName, mime } = data;
 
     // ─── Step 1: mark job processing ─────────────────────────────────
     await step.run("mark-processing", () =>
@@ -295,7 +247,7 @@ export const extractSource = inngest.createFunction(
     // Errors bubble up to the `onFailure` hook above for the
     // mark-failed bookkeeping.
     const result = await step.run("extract-and-upload", () =>
-      runExtractionPipeline({ jobId, fileBucketPath, fileName, mime, flowKind }),
+      runExtractionPipeline({ fileBucketPath, fileName, mime }),
     );
     logger.info("extract-source pipeline complete", {
       jobId,

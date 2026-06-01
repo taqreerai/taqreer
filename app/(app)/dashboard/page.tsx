@@ -1,9 +1,5 @@
 import { QuickActions } from "@/components/app/QuickActions";
-import { RecentActivityWidget } from "@/components/app/RecentActivityWidget";
-import {
-  RecentGenerationWidget,
-  type GenerationItem,
-} from "@/components/app/RecentGenerationWidget";
+import { RecentProjects } from "@/components/app/RecentProjects";
 import { MyTemplates } from "@/components/app/MyTemplates";
 import { PlanUsage } from "@/components/app/PlanUsage";
 import { prisma } from "@/lib/prisma";
@@ -15,6 +11,8 @@ import { normalizePlan } from "@/lib/plan";
 // Fresh SSR every navigation. Without this Next.js may serve a
 // cached render from before the Inngest thumbnail-render job
 // completed → placeholder tiles even after thumbnails are ready.
+// The RecentProjects client component also schedules a
+// `router.refresh()` if any tile has empty thumbnails.
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
@@ -66,15 +64,15 @@ export default async function DashboardPage() {
       where: { userId: dbUser.id, status: { not: "cancelled" } },
       orderBy: { updatedAt: "desc" },
       take: 6,
-      // Pinned columns only — keeps the SSR payload small. Feeds the
-      // "أحدث المشاريع" table rows: thumbnail, title, flow (`type`),
-      // date, status, and `isFavorite` for the 3-dots star toggle.
+      // Pinned columns only — keeps the SSR payload small and makes
+      // the RecentProjects `Project` type the canonical contract.
+      // `thumbnailUrls` + `format` are required by the new tile
+      // (hover scrub + aspect-ratio crop). `isFavorite` feeds the
+      // 3-dots menu's star icon + label (step 9f).
       select: {
         id: true,
         title: true,
-        // Generation flow (create | enhance | mimic | datasheet) — shown
-        // under the project title in the "أحدث المشاريع" table.
-        type: true,
+        format: true,
         thumbnailUrls: true,
         createdAt: true,
         isFavorite: true,
@@ -89,6 +87,7 @@ export default async function DashboardPage() {
         // preset generation and saw a placeholder instead of "still
         // working" feedback).
         status: true,
+        presentation: { select: { savedVersionId: true } },
       },
     }),
     // Explicit select — only the fields MyTemplates actually renders.
@@ -101,8 +100,7 @@ export default async function DashboardPage() {
     prisma.template.findMany({
       where: { ownerId: dbUser.id },
       orderBy: { createdAt: "desc" },
-      // "ابدأ من قالب" shows up to 10 (5 per row × 2 rows).
-      take: 10,
+      take: 6,
       // `thumbnailUrls` is required because the dashboard tile click
       // now opens TemplateLightbox IN PLACE (no navigation), and the
       // lightbox needs the 4 showcase PNGs to render its stage.
@@ -131,20 +129,29 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  // "أحدث المشاريع" table rows — status + points-aware view of the
-  // projects query (no extra DB round-trip). `points` is omitted for now
-  // (no usage tracking yet); the row supplies a static placeholder until
-  // the points/subscription model lands. `isFavorite` feeds the row's
-  // 3-dots actions menu (star toggle).
-  const recentGenerations: GenerationItem[] = projects.map((p) => ({
-    id: p.id,
-    title: p.title,
-    thumbnailUrl: p.thumbnailUrls[0] ?? null,
-    createdAt: p.createdAt.toISOString(),
-    status: p.status,
-    type: p.type,
-    isFavorite: p.isFavorite,
-  }));
+  // Flatten the presentation relation into a single boolean. See
+  // /projects/page.tsx for the pending/legacy rationale.
+  //
+  // Two cases produce a pending tile:
+  //   1. Initial deck-generate run is still in flight — `status` is
+  //      "queued" or "generating" (deck-generate writes "completed"
+  //      on success / "failed" on terminal error).
+  //   2. Deck is saved but the thumbnail-render Inngest job hasn't
+  //      finished yet — `savedVersionId` is non-null but
+  //      `thumbnailUrls` is empty.
+  // Both surface the same spinner glyph in the tile; the
+  // useRefreshWhileThumbnailsPending hook on the client polls
+  // `router.refresh()` to swap to the rendered PNGs when ready.
+  const projectsWithPending = projects.map(
+    ({ presentation, status, ...rest }) => ({
+      ...rest,
+      thumbnailsPending:
+        status === "queued" ||
+        status === "generating" ||
+        ((presentation?.savedVersionId ?? null) !== null &&
+          rest.thumbnailUrls.length === 0),
+    }),
+  );
 
   // Narrow Template.brand (Prisma's JsonValue) to the shape MyTemplates
   // expects, with safe fallbacks per field. We deliberately do NOT
@@ -199,19 +206,10 @@ export default async function DashboardPage() {
     // design token ever moves.
     <div className="page-container space-y-16 pt-8 pb-12">
       <QuickActions />
-      {/* RTL widget pair: the wide "أحدث المشاريع" table (2 cols) beside
-          the narrower "النشاطات الأخيرة" feed (1 col). Points-usage graphs
-          live inside the QuickActions cards (bottom sparkline). */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <RecentGenerationWidget generations={recentGenerations} />
-        </div>
-        <div className="lg:col-span-1">
-          <RecentActivityWidget />
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
+        <RecentProjects projects={projectsWithPending} />
+        <MyTemplates templates={templateTiles} />
       </div>
-      {/* "ابدأ من قالب" — full-width templates card. */}
-      <MyTemplates templates={templateTiles} />
       <PlanUsage
         plan={plan}
         usageCount={usageCount}

@@ -28,16 +28,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { sourceKindToFlow } from "@/lib/project/flow";
-
-// Flow-specific titles for a finished generation, keyed by the canonical
-// flow (`Project.type`). Mirrors the dashboard table's FLOW_LABEL.
-const FINISHED_TITLE: Record<string, string> = {
-  create: "اكتمل انشاء العرض",
-  enhance: "اكتمل تحسين العرض",
-  mimic: "اكتملت محاكاة القالب",
-  datasheet: "اكتمل الانشاء من بيانات",
-};
 
 const MAX_LIST = 50;
 // Cap the number of ids per `?ids=` to bound the IN clause. Same
@@ -61,10 +51,6 @@ type ProjectJoin = { id: string; title: string } | null;
 
 type FormattedRow = {
   id: string;
-  // Raw notification type — drives per-type icon + colour on the client.
-  type: string;
-  // Generation flow for `deck.generate.finished` — drives the per-flow icon.
-  flow?: string;
   kind: "info" | "success" | "warning" | "error";
   title: string;
   desc?: string;
@@ -74,10 +60,7 @@ type FormattedRow = {
 };
 
 function formatActorName(actor: ActorJoin): string {
-  const full = actor?.name?.trim();
-  if (!full) return "أحد المتعاونين";
-  // First name only — "Osama El Khalfaoui" → "Osama".
-  return full.split(/\s+/)[0];
+  return actor?.name?.trim() || "أحد المتعاونين";
 }
 
 // Parse a slide's 1-based deck index from its slideKey. Convention is
@@ -143,8 +126,6 @@ function formatNotificationRow(row: {
   let title: string;
   let desc: string | undefined;
   let href: string | undefined;
-  // Set only for deck.generate.finished — the generation flow kind.
-  let flow: string | undefined;
 
   // 2026-05-26 — all notification copy unified to PASSIVE / verbal-noun
   // forms so the phrasing works for both male AND female actors. The
@@ -155,8 +136,7 @@ function formatNotificationRow(row: {
       // Title carries the actual slide NUMBER(s) — e.g.
       // "تم التعليق على الشريحة 4 من طرف X في {project}" — so the
       // recipient sees WHICH slide the actor touched.
-      title = "تعليق جديد";
-      desc = `تم التعليق على ${slideTarget} من طرف ${actor} في ${project}`;
+      title = `تم التعليق على ${slideTarget} من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     // `*.started` cases dropped 2026-05-27 — those notifications are
@@ -165,8 +145,7 @@ function formatNotificationRow(row: {
     // stale `*.started` rows still living in the DB until the cleanup
     // migration drops them.
     case "slide.regen.finished":
-      title = "اكتملت إعادة التصميم";
-      desc = `تمت إعادة تصميم ${slideTarget} من طرف ${actor} في ${project}`;
+      title = `تمت إعادة تصميم ${slideTarget} من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "deck.regen.finished": {
@@ -174,34 +153,26 @@ function formatNotificationRow(row: {
         typeof payload.count === "number" && payload.count > 1
           ? payload.count
           : 1;
-      title = "اكتملت إعادة التصميم";
-      desc =
+      title =
         count > 1
           ? `تمت إعادة تصميم العرض ${count} مرات من طرف ${actor} في ${project}`
           : `تمت إعادة تصميم العرض كاملاً من طرف ${actor} في ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
-    case "deck.generate.finished": {
+    case "deck.generate.finished":
       kind = "success";
-      // Flow-specific copy + icon. `sourceKindToFlow` normalizes the
-      // payload to the canonical flow, so this handles both new payloads
-      // (already canonical) and older raw ones (scratch | data).
-      flow = sourceKindToFlow(
-        typeof payload.kind === "string" ? payload.kind : undefined,
-      );
-      title = FINISHED_TITLE[flow] ?? "اكتمل انشاء العرض";
-      desc = `${project} جاهز للعرض، اضغط للاطّلاع عليه`;
+      title = `اكتمل توليد ${project}`;
+      desc = "اضغط لفتح المعاينة.";
       href = isProject ? `/preview/${row.projectId}` : undefined;
       break;
-    }
     case "deck.generate.failed":
       kind = "error";
-      title = "فشل توليد العرض";
+      title = `فشل توليد ${project}`;
       desc =
         typeof payload.reason === "string" && payload.reason
           ? payload.reason
-          : `تعذّر توليد ${project}، يمكنك المحاولة مجدداً`;
+          : "حاول مرة أخرى من صفحة المعاينة.";
       href = isProject ? `/preview/${row.projectId}` : undefined;
       break;
     case "share.invited": {
@@ -214,8 +185,7 @@ function formatNotificationRow(row: {
       // Phrasing is gender-neutral (تمت + من طرف) so it works
       // regardless of the actor's gender, consistent with the
       // rest of the notification copy.
-      title = "دعوة جديدة";
-      desc = `تمت دعوتك من طرف ${actor} للانضمام إلى ${project} ${roleAr}`;
+      title = `تمت دعوتك من طرف ${actor} للانضمام إلى ${project} ${roleAr}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
@@ -224,8 +194,7 @@ function formatNotificationRow(row: {
       // Mirror the share.invited shape — passive lead-in + actor +
       // project, gender-neutral. Was: "{actor} قبلت دعوتك للانضمام
       // إلى {project}" (feminine "قبلت", read wrong for male actors).
-      title = "تم قبول الدعوة";
-      desc = `تم قبول دعوتك من طرف ${actor} للانضمام إلى ${project}`;
+      title = `تم قبول دعوتك من طرف ${actor} للانضمام إلى ${project}`;
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     default:
@@ -243,8 +212,6 @@ function formatNotificationRow(row: {
 
   return {
     id: row.id,
-    type: row.type,
-    flow: flow || undefined,
     kind,
     title,
     desc,

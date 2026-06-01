@@ -6,13 +6,11 @@
 //
 //   1. استخدام هوية الشركة         — fires `onUse` (parent opens
 //                                     the flow picker dialog).
-//   2. إعادة تسمية                 — fires `onRename` (parent opens
-//                                     the rename dialog).
-//   3. تعيين كافتراضية / إلغاء   — toggle this kit's default flag
+//   2. تعيين كافتراضية / إلغاء   — toggle this kit's default flag
 //                                     so the four landing flows
 //                                     auto-hydrate from it. Label
 //                                     swaps based on `isDefault`.
-//   4. حذف هوية الشركة             — destructive. Parent opens a
+//   3. حذف هوية الشركة             — destructive. Parent opens a
 //                                     confirm dialog before firing
 //                                     DELETE.
 
@@ -21,16 +19,15 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 const MENU_WIDTH = 240;
-// Four items + divider + padding ≈ 200 px. Over-estimate is
+// Three items + divider + padding ≈ 150 px. Over-estimate is
 // harmless; the value only feeds the "would the menu crop the
 // viewport" flip-above check.
-const MENU_HEIGHT_ESTIMATE_PX = 200;
+const MENU_HEIGHT_ESTIMATE_PX = 160;
 const ANCHOR_GAP_PX = 8;
 const VIEWPORT_EDGE_INSET_PX = 12;
 
 export type BrandKitActionsMenuActions = {
   onUse?: () => void;
-  onRename?: () => void;
   onSetDefault?: () => void;
   onDelete?: () => void;
 };
@@ -42,7 +39,6 @@ export function BrandKitActionsMenu({
   isDefault,
   onClose,
   onUse,
-  onRename,
   onSetDefault,
   onDelete,
 }: {
@@ -131,12 +127,6 @@ export function BrandKitActionsMenu({
               icon="auto_awesome"
               label="استخدام هوية الشركة"
               onClick={onUse}
-              onClose={onClose}
-            />
-            <MenuItem
-              icon="edit"
-              label="إعادة تسمية"
-              onClick={onRename}
               onClose={onClose}
             />
             <MenuItem

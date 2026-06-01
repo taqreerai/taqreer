@@ -26,7 +26,7 @@
 import type { SlideManifest } from "@/lib/schema/slide";
 import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtmlServer } from "@/lib/export/sanitize-server";
-import { themeToCssVars, cssFontFamilyName } from "@/lib/export/theme-css-vars";
+import { themeToCssVars } from "@/lib/export/theme-css-vars";
 
 export type HtmlDocumentServerOptions = {
   // When true, emit `@page { size: <canvas-dims>; margin: 0 }` +
@@ -56,35 +56,6 @@ export function buildHtmlDocumentServer(
         `<link rel="stylesheet" href="${escapeAttr(url)}" crossorigin="anonymous">`,
     )
     .join("\n  ");
-
-  // Uploaded brand fonts: emit a direct @font-face per WEIGHT carrying a signed
-  // `fontFaces[].src` (deck-generate attached one per uploaded weight by
-  // matching the family name → uploaded storageUrls), so the slides — which
-  // reference the family by NAME and vary font-weight — render each weighted
-  // run in the matching uploaded file. Name sanitised to word/space/hyphen so
-  // it can't break out of the CSS; src is a URL we signed. Dedupe by family so
-  // heading + body sharing one upload emit once.
-  const fontFaceSeen = new Set<string>();
-  const fontFaceCss = [manifest.theme.fontHeading, manifest.theme.fontBody]
-    .map((f) => ({
-      // Carry the RAW family name (just trimmed); escape it at emit time with
-      // the SAME cssFontFamilyName() the --font-* vars use, so the @font-face
-      // family and `font-family: var(--font-heading)` resolve identically.
-      name: f.name?.trim() ?? "",
-      faces: f.fontFaces ?? [],
-    }))
-    .filter((f): f is { name: string; faces: { weight: number; src: string }[] } => {
-      if (!f.name || f.faces.length === 0 || fontFaceSeen.has(f.name)) return false;
-      fontFaceSeen.add(f.name);
-      return true;
-    })
-    .flatMap((f) =>
-      f.faces.map(
-        (face) =>
-          `  @font-face { font-family: "${cssFontFamilyName(f.name)}"; font-weight: ${face.weight}; src: url("${escapeCssValue(face.src)}"); font-display: swap; }`,
-      ),
-    )
-    .join("\n");
 
   const cssVarRecord = themeToCssVars(manifest.theme);
   const cssVars = Object.entries(cssVarRecord)
@@ -134,7 +105,7 @@ export function buildHtmlDocumentServer(
 <title>${escapeText(manifest.title)}</title>
 ${fontLinks}
 <style>
-${fontFaceCss ? `${fontFaceCss}\n` : ""}  :root {
+  :root {
 ${cssVars}
   }
   body {

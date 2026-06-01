@@ -29,7 +29,6 @@
 import DOMPurifyFactory from "dompurify";
 import type { Config } from "dompurify";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
-import { applyScrimFixes } from "@/lib/export/scrim";
 
 export type DOMPurifyAPI = {
   sanitize: (source: string, config?: Config) => string;
@@ -119,11 +118,8 @@ export function getClientDOMPurify(): DOMPurifyAPI {
  *   3. `rewriteRtlRowFlexOrder` — explicit `justify-content:flex-end` AND
  *      the 2-item full-width split-screen case in RTL row-flex; corrects
  *      to `flex-start` / `row-reverse` respectively
- *   4. `rewriteRtlMarginAutoEnd` — `margin-right:auto` (physically pushes a
- *      block LEFT) intended as RTL-start anchoring; corrects to
- *      `margin-left:auto` so the block lands on the visual RIGHT
  *
- * All rewriters are scoped to elements inside an RTL slide root with
+ * Both rewriters are scoped to elements inside an RTL slide root with
  * `dir="ltr"` sub-trees opted out. LTR slides pass through DOMPurify
  * only. See each rewriter's own docstring for the exact bug they catch.
  */
@@ -131,13 +127,7 @@ export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
     const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
-    return rewriteImageScrim(
-      rewriteRtlImagePanelSide(
-        rewriteRtlMarginAutoEnd(
-          rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean)),
-        ),
-      ),
-    );
+    return rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean));
   } catch (err) {
     console.error("[sanitize] sanitiseSlideHtml failed:", err);
     return "";
@@ -368,127 +358,4 @@ function rewriteRtlRowFlexOrder(html: string): string {
     el.style.setProperty("flex-direction", "row-reverse");
     return true;
   });
-}
-
-// Third RTL rewriter — the auto-margin sibling of the flex rewriters.
-//
-// Bug pattern: to anchor a NARROWER block to the RTL start (the visual
-// RIGHT), the physical property is `margin-left:auto` (the left margin
-// grows and pushes the block right). Claude routinely reaches for
-// `margin-right:auto` instead — RTL-logical thinking ("end-side auto →
-// pushes to start") — but physical margins are physical, so it pushes the
-// block to the visual LEFT. In an image-left / text-right split that lands
-// the text back ON TOP of the image (covering it) and leaves the right
-// half empty.
-//
-// Fix: swap `margin-right:auto` → `margin-left:auto` (and pin
-// margin-right:0) so the block lands on the right as intended.
-//
-// Guards (mirror the flex rewriters' "respect deliberate left intent"):
-//   • Skip when `margin-left` is ALSO auto — that's intentional centering.
-//   • Skip when `text-align: left` — Claude is deliberately composing a
-//     LEFT-anchored, left-reading block; the left push is correct there.
-function rewriteRtlMarginAutoEnd(html: string): string {
-  return withRtlStyledElements(html, (el) => {
-    if (styleLower(el, "margin-right") !== "auto") return false;
-    if (styleLower(el, "margin-left") === "auto") return false; // centered — leave it
-    if (styleLower(el, "text-align") === "left") return false; // deliberate left block
-    el.style.setProperty("margin-left", "auto");
-    el.style.setProperty("margin-right", "0");
-    return true;
-  });
-}
-
-// Fourth RTL rewriter — image/text SPLIT built as a root flex (images-mode).
-//
-// Bug pattern: Claude lays an image/text split as a `display:flex` (row)
-// container with ONE in-flow child (the fixed-width image panel) plus an
-// absolute-positioned text layer. In RTL row-flex that lone in-flow panel
-// packs to the main-start = the visual RIGHT — but the absolute text is also
-// on the right (large `left` inset), so the image lands UNDER the text and
-// the left half goes empty. Measured: image x=1160→1920, text x=840→1840,
-// 680px overlap.
-//
-// The rowFlex rewriter above misses this — it needs a 2-child, absolute,
-// full-width container; here the buggy flex is the slide ROOT
-// (position:relative) with 1 in-flow child + absolute siblings.
-//
-// Fix: when an RTL row-flex holds exactly ONE in-flow child that contains a
-// generated image (`data-genimage`) AND an absolute content layer pushed to
-// the RIGHT (its `left` inset > `right` inset), add `flex-direction:
-// row-reverse` so the image panel packs LEFT, opposite the text. Absolute
-// children are unaffected by flex-direction, so the text stays put.
-//
-// SCOPED to data-genimage panels — it can never fire on the SVG decks.
-// NOTE: querySelectorAll returns descendants only, so the slide root is
-// checked explicitly (the buggy flex is usually the root itself).
-function rewriteRtlImagePanelSide(html: string): string {
-  if (typeof window === "undefined") return html;
-  try {
-    const doc = new DOMParser().parseFromString(
-      `<!DOCTYPE html><div>${html}</div>`,
-      "text/html",
-    );
-    const wrapper = doc.body.firstElementChild;
-    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
-    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
-    const candidates = [
-      slideRoot,
-      ...Array.from(slideRoot.querySelectorAll<HTMLElement>("[style]")),
-    ];
-    let changed = false;
-    for (const el of candidates) {
-      const closestDir = el.closest("[dir]");
-      if (closestDir && closestDir.getAttribute("dir") !== "rtl") continue;
-      if (styleLower(el, "display") !== "flex") continue;
-      const fd = styleLower(el, "flex-direction");
-      if (fd !== "" && fd !== "row") continue; // skip column / row-reverse
-      const kids = Array.from(el.children) as HTMLElement[];
-      const inFlow = kids.filter((c) => {
-        const p = styleLower(c, "position");
-        return p !== "absolute" && p !== "fixed";
-      });
-      if (inFlow.length !== 1) continue;
-      const panel = inFlow[0];
-      if (!panel.style.getPropertyValue("width").trim()) continue;
-      if (!panel.querySelector("[data-genimage]")) continue; // image panels only
-      const content = kids.find(
-        (c) =>
-          styleLower(c, "position") === "absolute" &&
-          c.style.getPropertyValue("top").trim() !== "" &&
-          c.style.getPropertyValue("bottom").trim() !== "",
-      );
-      if (!content) continue;
-      const left = parseFloat(content.style.getPropertyValue("left")) || 0;
-      const right = parseFloat(content.style.getPropertyValue("right")) || 0;
-      if (left <= right) continue; // content not on the right → RTL default is fine
-      el.style.setProperty("flex-direction", "row-reverse");
-      changed = true;
-    }
-    return changed ? wrapper!.innerHTML : html;
-  } catch {
-    return html;
-  }
-}
-
-// FIX-3: re-orient + soften full-bleed image scrims. Unlike the flex
-// rewriters this applies to BOTH directions (the dark end goes on the text
-// side — rtl→right, ltr→left), so there's no rtl-only gate. Core logic is
-// shared with the server twin in lib/export/scrim.ts.
-function rewriteImageScrim(html: string): string {
-  if (typeof window === "undefined") return html;
-  try {
-    const doc = new DOMParser().parseFromString(
-      `<!DOCTYPE html><div>${html}</div>`,
-      "text/html",
-    );
-    const wrapper = doc.body.firstElementChild;
-    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
-    if (!slideRoot) return html;
-    const dir = slideRoot.getAttribute("dir") === "ltr" ? "ltr" : "rtl";
-    const changed = applyScrimFixes(slideRoot, dir);
-    return changed ? wrapper!.innerHTML : html;
-  } catch {
-    return html;
-  }
 }

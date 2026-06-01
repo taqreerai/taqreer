@@ -16,7 +16,6 @@
 import Link from "next/link";
 import { useRef } from "react";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
-import { Sparkline } from "@/components/app/Sparkline";
 import type { AnimatedIconHandle } from "@/components/icons/types";
 
 type QuickActionCard = {
@@ -25,12 +24,6 @@ type QuickActionCard = {
   desc: string;
   path: string;
   comingSoon?: boolean;
-  // Bottom-of-card points-usage sparkline (mirrors the reference
-  // dashboard's stat cards). `accent` is a Tailwind text-* class that
-  // drives the line colour via `currentColor`; `spark` is static
-  // placeholder data until the points model is wired.
-  accent: string;
-  spark: number[];
 };
 
 const cards: QuickActionCard[] = [
@@ -39,32 +32,24 @@ const cards: QuickActionCard[] = [
     title: 'إنشاء عرض جديد',
     desc: 'ابدأ من الصفر بمحتواك',
     path: '/create',
-    accent: 'text-[var(--tq-blue)]',
-    spark: [0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     icon: 'auto_fix_high',
     title: 'تحسين عرض موجود',
     desc: 'ارفع ملفك واحصل على نسخة محسّنة',
     path: '/enhance',
-    accent: 'text-[var(--tq-violet)]',
-    spark: [0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     icon: 'content_copy',
     title: 'محاكاة أسلوب عرض',
     desc: 'انسخ أسلوب عرض آخر وطبّقه',
     path: '/mimic',
-    accent: 'text-[var(--tq-lavender)]',
-    spark: [0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     icon: 'dataset',
     title: 'إنشاء من بيانات',
     desc: 'حوّل ملف Excel إلى عرض احترافي',
     path: '/datasheet',
-    accent: 'text-[var(--tq-magenta)]',
-    spark: [0, 0, 0, 0, 0, 0, 0, 0],
   },
 ];
 
@@ -91,43 +76,20 @@ function QACard({ card }: { card: QuickActionCard }) {
       href={card.path}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
-      // Switched from `.qa-card` (animated mesh-stroke hover) to the
-      // standard `.glass-card` so these match the other dashboard cards:
-      // a plain bg/border lighten on hover, no moving ring. Fixed 150px
-      // height; `overflow-hidden` + `rounded-2xl` clip the full-bleed
-      // sparkline to the rounded corners.
-      className="glass-card group relative flex min-h-[150px] flex-col gap-2 overflow-hidden rounded-2xl p-4 cursor-pointer no-underline transition-all duration-200"
+      className="qa-card relative p-4 flex flex-col gap-3 cursor-pointer no-underline group transition-all duration-200"
       dir="rtl"
     >
       {card.comingSoon && (
-        <span className="absolute top-3 left-3 z-10 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+        <span className="absolute top-3 left-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
           قريباً
         </span>
       )}
-      {/* Top row: title + desc grouped tightly on the start (visual
-          right); icon on the end (visual left). Grouping the text keeps
-          the subtitle snug under the title instead of being spaced apart
-          by the taller icon row. */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold text-white leading-snug">{card.title}</h3>
-          <p className="mt-1 text-[11px] text-muted leading-relaxed">{card.desc}</p>
-        </div>
-        <div className="shrink-0 text-muted transition-colors group-hover:text-white">
-          <AnimatedIcon ref={iconRef} name={card.icon} size={32} strokeWidth={1.5} />
-        </div>
+      <div className="text-right text-muted transition-colors group-hover:text-white">
+        <AnimatedIcon ref={iconRef} name={card.icon} size={34} strokeWidth={1.5} />
       </div>
-      {/* Points-usage sparkline — RTL (newest on the left), full-bleed to
-          the card's left/right and bottom edges (negative margins cancel
-          the p-4 padding; the card's `overflow-hidden` + 14px radius clip
-          it to the rounded corners). */}
-      <div className="-mx-4 -mb-4 mt-auto pt-2">
-        <Sparkline
-          data={card.spark}
-          id={card.path.replace(/\W/g, "")}
-          rtl
-          className={`block h-12 w-full ${card.accent}`}
-        />
+      <div>
+        <h3 className="text-[13px] font-semibold text-white leading-snug mb-0.5">{card.title}</h3>
+        <p className="text-[11px] text-muted leading-relaxed">{card.desc}</p>
       </div>
     </Link>
   );

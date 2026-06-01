@@ -95,18 +95,11 @@ export async function GET(
     });
   }
 
-  // "queued" | "processing" — extract-source writes real phase
-  // milestones to outputJson._progress during processing (convert →
-  // analyze → finish). Surface them so the /enhance upload bar shows an
-  // accurate, non-faked percentage (the LibreOffice convert is a black
-  // box, so the bar honestly holds at that checkpoint until it's done).
-  const prog = (job.outputJson ?? {}) as {
-    _progress?: { percent?: number; stage?: string };
-  };
+  // "queued" | "processing" — no progress signal yet (extract-source
+  // doesn't tick partial updates; could add slides-rendered count
+  // later if the UX needs it).
   return NextResponse.json({
     status: job.status,
-    progress: prog._progress?.percent ?? null,
-    progressStage: prog._progress?.stage ?? null,
     fileName: input.fileName,
     flowKind: input.flowKind,
   });

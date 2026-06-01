@@ -14,7 +14,11 @@
 // browse + filter experience.
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import {
+  DashboardEmptyState,
+  DashboardWidget,
+  DashboardWidgetHeader,
+} from "@/components/app/DashboardWidget";
 import {
   TemplateTile,
   type TemplateTileData,
@@ -92,23 +96,17 @@ export function MyTemplates({
     preview?.brand.format === "9:16" ? "9:16" : "16:9";
 
   return (
-    <div className="glass-card rounded-2xl p-5 sm:p-6" dir="rtl">
-      <header className="mb-5 flex items-start justify-between">
-        <div>
-          <h2 className="tq-widget-title">ابدأ من قالب</h2>
-          <p className="mt-1 text-xs text-muted">ما تراه هو ما تحصل عليه</p>
-        </div>
-        <Link href="/templates" className="tq-widget-link no-underline">
-          عرض الكل
-        </Link>
-      </header>
+    <DashboardWidget>
+      <DashboardWidgetHeader title="قوالبي" href="/templates" />
 
       {templates.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted">
-          لا توجد قوالب محفوظة — عند حفظ عرض كقالب سيظهر هنا لتبدأ منه.
-        </p>
+        <DashboardEmptyState
+          icon="dashboard_customize"
+          title="لا توجد قوالب محفوظة"
+          description="عند حفظ عرض كقالب، سيظهر هنا لتستخدمه في عروضك القادمة."
+        />
       ) : (
-        <ul className="grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <ul className="grid grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((tpl) => (
             <li key={tpl.id}>
               <TemplateTile
@@ -135,6 +133,6 @@ export function MyTemplates({
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}
       />
-    </div>
+    </DashboardWidget>
   );
 }

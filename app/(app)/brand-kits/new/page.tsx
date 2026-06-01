@@ -2,14 +2,12 @@
 
 // /brand-kits/new — standalone "create brand kit" page.
 //
-// Mirrors /create's consolidated brand card (palette + single font +
-// logo on ONE card) without the content/output cards — this is a pure
-// brand-saving form. No saved-kit dropdown or save toggle: this page
-// IS the save. On submit we:
-//   1. Upload any logo + uploaded font to the brand-assets bucket
+// Mirrors /create's two brand cards (palette+fonts on one, logo on
+// the other) but without the content/output cards — this is a pure
+// brand-saving form. On submit we:
+//   1. Upload any logo + uploaded fonts to the brand-assets bucket
 //      via `uploadAsset` (same path /create uses).
-//   2. POST the resolved brand state to /api/brand-kits (the single
-//      brand font is reused for heading + body, like /create).
+//   2. POST the resolved brand state to /api/brand-kits.
 //   3. Navigate back to /brand-kits.
 //
 // Why a dedicated route (user direction 2026-05-27): the empty
@@ -21,39 +19,49 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
-import { LogoRow } from "@/components/brand/LogoRow";
+import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
+import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
+import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import {
   CardHeader,
+  ExclusionDropdown,
   InlinePaletteSwatch,
+  PositionDropdown,
+  SegmentedToggle,
   type CornerPosition,
 } from "@/components/create/controls";
 import {
-  emptyBrandFont,
+  emptyFontSlot,
   googleFontUrl,
+  isLatinOnlyGoogleFont,
   HEADING_SAMPLE_AR,
-  type BrandFontState,
+  HEADING_SAMPLE_LATIN,
+  BODY_SAMPLE_AR,
+  BODY_SAMPLE_LATIN,
+  type FontSlotState,
 } from "@/lib/brand/fonts";
-import {
-  uploadAsset,
-  resolveUploadedFontFamilies,
-  type UploadedFontFieldBrief,
-} from "@/lib/brand/upload";
+import { uploadAsset } from "@/lib/brand/upload";
 
 // Same palette bounds /create uses — 2 to 6 swatches.
 const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
 const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 
-// Card sizing — fixed 360 px width (matches the brand card across all
-// flows) so the single centered card reads as a deliberate cluster.
-// No min-height: with one card there's nothing to shoulder-align, so
-// the card sizes to its content.
-const CARD_W_CLASS = "w-[360px]";
+const FONT_MODE_OPTIONS = [
+  { value: "upload" as const, label: "ملف" },
+  { value: "google" as const, label: "Google" },
+];
 
-// Resolved font field shape /api/brand-kits persists. The single
-// brandFont resolves to ONE field reused for heading + body (one
-// family, Claude varies weights / pairs uploads) — mirrors /create.
+// Card sizing — pinned to /mimic's recipe: fixed 360 px width per
+// card (so the row reads as a centered, deliberate cluster, not a
+// stretched grid) and 387 px min-height to keep the two cards
+// shoulder-aligned regardless of content length.
+const CARD_W_CLASS = "w-[360px]";
+const CARD_MIN_H_CLASS = "min-h-[387px]";
+
+// Mirrors /create's resolveFontSlot: turns the per-slot UI state +
+// (optionally) the uploaded font's storageUrl into the canonical
+// fonts.{heading|body} shape /api/brand-kits persists.
 type ResolvedFontField = {
   name: string;
   url: string | null;
@@ -61,17 +69,116 @@ type ResolvedFontField = {
   family: string;
 } | null;
 
+function resolveFontSlot(
+  slot: FontSlotState,
+  uploadedStorageUrl: string | null,
+): ResolvedFontField {
+  if (slot.mode === "google") {
+    if (!slot.googleFamily) return null;
+    return {
+      name: slot.googleFamily,
+      url: googleFontUrl(slot.googleFamily),
+      storageUrl: null,
+      family: slot.googleFamily,
+    };
+  }
+  if (!slot.uploadFile || !uploadedStorageUrl) return null;
+  return {
+    name: slot.uploadName ?? slot.uploadFile.name,
+    url: null,
+    storageUrl: uploadedStorageUrl,
+    family: slot.uploadFamily || slot.uploadFile.name.replace(/\.[^.]+$/, ""),
+  };
+}
+
+// FontSlotPicker — the heading and body slots render identical JSX
+// (mode toggle + upload-or-google sub-slot) against the same
+// FontSlotState shape. Extracted locally so the two call sites in
+// the card below stay declarative; nothing here is reused outside
+// this page (the four landing flows have their own resolveFontSlot
+// copies, all scheduled for consolidation).
+function FontSlotPicker({
+  label,
+  ariaLabel,
+  uploadLabel,
+  sampleAr,
+  sampleLatin,
+  sampleSizeClass,
+  slot,
+  setSlot,
+}: {
+  label: string;
+  ariaLabel: string;
+  uploadLabel: string;
+  sampleAr: string;
+  sampleLatin: string;
+  sampleSizeClass: string;
+  slot: FontSlotState;
+  setSlot: React.Dispatch<React.SetStateAction<FontSlotState>>;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-white/70">{label}</span>
+        <SegmentedToggle
+          options={FONT_MODE_OPTIONS}
+          value={slot.mode}
+          onChange={(mode) => setSlot((s) => ({ ...s, mode }))}
+          ariaLabel={ariaLabel}
+        />
+      </div>
+      {slot.mode === "upload" ? (
+        <FontUploadSlot
+          label={uploadLabel}
+          file={slot.uploadFile}
+          family=""
+          sampleText={sampleAr}
+          sampleSizeClass={sampleSizeClass}
+          alignStart
+          compact
+          hideSample
+          onSelect={(f) =>
+            setSlot((s) => ({ ...s, uploadFile: f, uploadName: f.name }))
+          }
+          onRemove={() =>
+            setSlot((s) => ({ ...s, uploadFile: null, uploadName: null }))
+          }
+        />
+      ) : (
+        <GoogleFontSlot
+          selected={slot.googleFamily}
+          sampleText={
+            isLatinOnlyGoogleFont(slot.googleFamily) ? sampleLatin : sampleAr
+          }
+          sampleSizeClass={sampleSizeClass}
+          alignStart
+          compact
+          hideSample
+          onSelect={(family) =>
+            setSlot((s) => ({ ...s, googleFamily: family }))
+          }
+        />
+      )}
+    </div>
+  );
+}
+
 export default function NewBrandKitPage() {
   const router = useRouter();
 
   // ─── Form state ────────────────────────────────────────────────
   const [name, setName] = useState<string>("");
   const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
-  // Single brand font — one Google family (Claude varies weights) OR up
-  // to 5 uploaded families (Claude pairs). Mirrors /create's picker.
-  const [brandFont, setBrandFont] = useState<BrandFontState>(emptyBrandFont());
+  const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
+    emptyFontSlot(),
+  );
+  const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>(
+    emptyFontSlot(),
+  );
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
+  const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(false);
+  const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
 
   // ─── Submit state ──────────────────────────────────────────────
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -93,42 +200,32 @@ export default function NewBrandKitPage() {
     setSubmitting(true);
     setError(null);
     try {
-      // Upload the optional logo first so the JSON body carries a
-      // bucket-relative path only (the API authorises it before
+      // Upload binary assets first so the JSON body carries
+      // bucket-relative paths only (the API authorises those before
       // persisting). Same shape /create uses on saveBrandKit.
-      const logoUploaded = logoFile
-        ? await uploadAsset("brand-assets", "logos", logoFile)
-        : null;
+      const [logoUploaded, headingUploaded, bodyUploaded] = await Promise.all([
+        logoFile ? uploadAsset("brand-assets", "logos", logoFile) : null,
+        headingFontSlot.mode === "upload" && headingFontSlot.uploadFile
+          ? uploadAsset("brand-assets", "fonts", headingFontSlot.uploadFile)
+          : null,
+        bodyFontSlot.mode === "upload" && bodyFontSlot.uploadFile
+          ? uploadAsset("brand-assets", "fonts", bodyFontSlot.uploadFile)
+          : null,
+      ]);
 
-      // Resolve the single brand font → ONE field reused for heading +
-      // body (one family, Claude varies weights / pairs uploads). Upload
-      // mode now carries every picked family with ALL its weight faces;
-      // the kit keeps the first family + its faces. Mirrors /create.
-      let fontField: ResolvedFontField = null;
-      const uploadedFontFields: UploadedFontFieldBrief[] = [];
-      if (brandFont.mode === "google" && brandFont.googleFamily) {
-        fontField = {
-          name: brandFont.googleFamily,
-          url: googleFontUrl(brandFont.googleFamily),
-          storageUrl: null,
-          family: brandFont.googleFamily,
-        };
-      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
-        const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
-        uploadedFontFields.push(...resolved);
-        if (uploadedFontFields.length > 0) {
-          const first = uploadedFontFields[0];
-          fontField = {
-            name: first.name,
-            url: null,
-            // Keep the first weight's URL as the slot's representative file so
-            // a re-hydrated kit still resolves a face; the full per-weight set
-            // rides in `fonts.uploaded`.
-            storageUrl: first.faces[0]?.storageUrl ?? null,
-            family: first.name,
-          };
-        }
-      }
+      const headingFont = resolveFontSlot(
+        headingFontSlot,
+        headingUploaded?.storageUrl ?? null,
+      );
+      const bodyFont = resolveFontSlot(
+        bodyFontSlot,
+        bodyUploaded?.storageUrl ?? null,
+      );
+
+      const logoExclude = [
+        logoExcludeCover ? "cover" : null,
+        logoExcludeClosing ? "closing" : null,
+      ].filter((v): v is "cover" | "closing" => v !== null);
 
       const response = await fetch("/api/brand-kits", {
         method: "POST",
@@ -136,19 +233,13 @@ export default function NewBrandKitPage() {
         body: JSON.stringify({
           name: name.trim() || undefined,
           colors,
-          // A saved kit stores ONE representative font file per slot (the
-          // first weight). Multi-weight upload is a per-generation feature
-          // (create/enhance/mimic/datasheet forward the full `fonts.uploaded`
-          // face set); the kit hydrates back as a single 400 face.
-          fonts: { heading: fontField, body: fontField },
+          fonts: { heading: headingFont, body: bodyFont },
           logo: logoUploaded
             ? {
                 name: logoUploaded.name,
                 storageUrl: logoUploaded.storageUrl,
                 position: logoPosition,
-                // Logo cover/closing excludes dropped — Claude decides
-                // logo presence per slide (matches /create).
-                exclude: [] as ("cover" | "closing")[],
+                exclude: logoExclude,
               }
             : null,
         }),
@@ -195,16 +286,16 @@ export default function NewBrandKitPage() {
         <header className="text-center">
           <h1 className="tq-h1">هوية جديدة</h1>
           <p className="tq-subhead mt-2">
-            احفظ شعارك وألوانك وخطوطك مرة واحدة
-            <br />
-            ثم استخدمها بضغطة زر في أي تدفق إنشاء.
+            احفظ شعارك وألوانك وخطوطك مرة واحدة ثم استخدمها بضغطة زر في أي
+            تدفق إنشاء.
           </p>
         </header>
 
-        {/* Name field — capped to the brand card's width so the form
-            reads as one tidy 360 px column. mt-6 adds breathing room
-            below the header so the input + card sit a touch lower. */}
-        <div className="mt-6 w-full max-w-[360px]">
+        {/* Name field — pinned above the cards but pinned to the
+            same 360 + 360 + gap-4 = 736 px row width so it reads as
+            the cards' shared "header" rather than a stretched
+            full-width input. */}
+        <div className="w-full max-w-[736px]">
           <label
             htmlFor="brand-kit-name"
             className="mb-1.5 block text-xs font-semibold text-white/70"
@@ -223,83 +314,118 @@ export default function NewBrandKitPage() {
           />
         </div>
 
+        <div className="flex flex-wrap items-stretch justify-center gap-4">
         {/* ═══════════════════════════════════════════════════════
-            BRAND CARD — palette + single font + logo merged into one
-            card (matches /create's الهوية البصرية). No saved-kit
-            dropdown or save toggle: this page IS the save.
+            PALETTE + FONTS CARD
             ═══════════════════════════════════════════════════════ */}
-        <div className="flex justify-center">
-          <div
-            className={`glass-card flex ${CARD_W_CLASS} flex-col gap-4 rounded-2xl p-4`}
-          >
-            <CardHeader icon="palette" title="الهوية البصرية" />
+        <div
+          className={`glass-card flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+        >
+          <CardHeader icon="palette" title="الألوان والخطوط" />
 
-            {/* Palette row — label on the visual right, swatches + add
-                tile on the visual left (matches /create). */}
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-white/70">
-                الألوان
-              </span>
-              <div className="flex items-center gap-1.5">
-                {colors.map((color, index) => (
-                  <InlinePaletteSwatch
-                    key={index}
-                    value={color}
-                    index={index}
-                    removable={colors.length > MIN_PALETTE}
-                    onChange={(next) => updateColor(index, next)}
-                    onRemove={() => removeColor(index)}
-                  />
-                ))}
-                {colors.length < MAX_PALETTE ? (
-                  <button
-                    type="button"
-                    onClick={addColor}
-                    aria-label="إضافة لون"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+          {/* Palette row — inline swatches + add button, same shape
+              as /create's branding card. */}
+          <div className="space-y-1.5">
+            <span className="block text-xs font-semibold text-white/70">
+              الألوان
+            </span>
+            <div className="flex items-center gap-1.5">
+              {colors.map((color, index) => (
+                <InlinePaletteSwatch
+                  key={index}
+                  value={color}
+                  index={index}
+                  removable={colors.length > MIN_PALETTE}
+                  onChange={(next) => updateColor(index, next)}
+                  onRemove={() => removeColor(index)}
+                />
+              ))}
+              {colors.length < MAX_PALETTE ? (
+                <button
+                  type="button"
+                  onClick={addColor}
+                  aria-label="إضافة لون"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 14 }}
                   >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                    >
-                      add
-                    </span>
-                  </button>
-                ) : null}
-              </div>
+                    add
+                  </span>
+                </button>
+              ) : null}
             </div>
+          </div>
 
-            {/* Single brand font — one Google family (Claude varies
-                weights) OR up to 5 uploaded families (Claude pairs). */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
-              <BrandFontPicker
-                value={brandFont}
-                onChange={setBrandFont}
-                sampleText={HEADING_SAMPLE_AR}
+          {/* Heading font — same toggle + slot pattern /create uses. */}
+          <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <FontSlotPicker
+              label="خط العناوين"
+              ariaLabel="مصدر خط العناوين"
+              uploadLabel="ارفع خط العناوين"
+              sampleAr={HEADING_SAMPLE_AR}
+              sampleLatin={HEADING_SAMPLE_LATIN}
+              sampleSizeClass="text-base"
+              slot={headingFontSlot}
+              setSlot={setHeadingFontSlot}
+            />
+          </div>
+
+          {/* Body font — mirrors heading shape. */}
+          <FontSlotPicker
+            label="خط النص"
+            ariaLabel="مصدر خط النص"
+            uploadLabel="ارفع خط النص"
+            sampleAr={BODY_SAMPLE_AR}
+            sampleLatin={BODY_SAMPLE_LATIN}
+            sampleSizeClass="text-sm"
+            slot={bodyFontSlot}
+            setSlot={setBodyFontSlot}
+          />
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════
+            LOGO CARD
+            ═══════════════════════════════════════════════════════ */}
+        <div
+          className={`glass-card flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+        >
+          <CardHeader icon="image" title="الشعار" />
+
+          <LogoUploadSlot
+            file={logoFile}
+            onSelect={setLogoFile}
+            onRemove={() => setLogoFile(null)}
+          />
+
+          <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
+            <span className="block text-xs font-semibold text-white/70">
+              موضع الشعار
+            </span>
+            <div className="flex items-center gap-1.5">
+              <ExclusionDropdown
+                excludeCover={logoExcludeCover}
+                excludeClosing={logoExcludeClosing}
+                onCoverChange={setLogoExcludeCover}
+                onClosingChange={setLogoExcludeClosing}
+                disabled={!logoFile}
               />
-            </div>
-
-            {/* Logo — compact zone + position pill on one row. */}
-            <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
-                الشعار
-              </span>
-              <LogoRow
-                file={logoFile}
-                position={logoPosition}
-                onSelect={setLogoFile}
-                onRemove={() => setLogoFile(null)}
-                onPosition={setLogoPosition}
+              <PositionDropdown
+                value={logoPosition}
+                onChange={setLogoPosition}
+                disabled={!logoFile}
               />
             </div>
           </div>
         </div>
+        </div>
 
-        {/* Submit row — capped to the same 360 px the name input + card
-            use so the cancel/save controls stay aligned with the rest
-            of the form. Error sits inline on the start edge; cancel +
-            save group on the end edge. */}
-        <div className="flex w-full max-w-[360px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Submit row — pinned to the same 736 px the name input +
+            cards row use so the cancel/save controls stay aligned
+            with the rest of the form. Error sits inline on the
+            start edge; cancel + save group on the end edge. */}
+        <div className="flex w-full max-w-[736px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-h-[20px] text-xs text-red-300/90">
             {error ?? null}
           </div>

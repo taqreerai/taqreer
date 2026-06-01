@@ -244,7 +244,7 @@ function renderStatsTable(stats: ColumnStats[]): string {
   lines.push("| --- | --- | --- | --- | --- | --- |");
   for (const s of stats) {
     const sample = s.distinctSample.length
-      ? s.distinctSample.map((v) => `\`${escapeCell(v)}\``).join(", ")
+      ? s.distinctSample.map((v) => `\`${v}\``).join(", ")
       : "—";
     lines.push(
       `| ${escapeCell(s.header)} | ${s.kind} | ${fmtNumOrDash(s.numericMin)} | ${fmtNumOrDash(s.numericMax)} | ${fmtNumOrDash(s.numericMean)} | ${sample} |`,
@@ -265,14 +265,9 @@ function fmtNumOrDash(n: number | null): string {
 /**
  * Open the workbook from the request buffer. XLSX.read auto-detects
  * xlsx (zip) and xls (CFB) from the magic bytes when `type: "buffer"`,
- * but CSVs need string input. `raw: false` lets SheetJS COERCE CSV
- * text into typed values (numbers / dates) — this is REQUIRED, not
- * optional: computeColumnStats keys numeric columns off
- * `typeof cell === "number"`, and the chart-accuracy goal needs real
- * numerics. Do NOT switch to `raw: true` — it keeps every cell a raw
- * string, silently turning each numeric column into text and nulling
- * out min/max/mean. Branch on mime/extension — the route's allowlist
- * already ensures one of these three formats.
+ * but CSVs need string input + `raw: false` to stop SheetJS eagerly
+ * inferring numeric types on every cell. Branch on mime/extension —
+ * the route's allowlist already ensures one of these three formats.
  */
 function readWorkbook(
   buffer: Buffer,

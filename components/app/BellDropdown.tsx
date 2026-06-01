@@ -27,7 +27,18 @@ import {
   type NotificationKind,
 } from "@/lib/notifications/store";
 import { AllNotificationsModal } from "@/components/app/AllNotificationsModal";
-import { notificationIcon } from "@/lib/notifications/visuals";
+
+// Icon glyph per notification kind. Was `{ icon, color }` until
+// 2026-05-22 — the `color` field was never consumed (notification
+// rows render the icon at the row's default text colour). Dropped
+// to keep the shape minimal.
+const KIND_VISUAL: Record<NotificationKind, { icon: string }> = {
+  error:   { icon: "error"        },
+  warning: { icon: "warning"      },
+  info:    { icon: "info"         },
+  success: { icon: "check_circle" },
+  promo:   { icon: "campaign"     },
+};
 
 const TOP_N = 5;
 
@@ -427,11 +438,12 @@ export function BellDropdown() {
         }}
         aria-label="الإشعارات"
         aria-expanded={open}
-        // Icon-only — no background, no border, no glass circle (dashboard
-        // header pass 2026-05-30). Just the bell glyph with a white/60 →
-        // white hover lift, matching the toggle + theme / language icons.
-        // `relative` is kept so the unread badge can anchor to the corner.
-        className="relative flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white"
+        // Glass icon button — NO background at any state. The hover
+        // affordance is the BORDER (white/15 → white) and the TEXT
+        // (white/60 → white) brightening. The previous `hover:bg-white/10`
+        // was removed 2026-05-22 because the user wants pure
+        // transparent buttons (border + backdrop-blur only — no fill).
+        className="backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/60 transition-colors hover:border-white/60 hover:text-white"
       >
         <span className="material-symbols-outlined text-[22px]">notifications</span>
         {unread > 0 ? (
@@ -713,9 +725,7 @@ export function NotificationRow({
   compact?: boolean;
   showTime?: boolean;
 }) {
-  // Per-type icon (comment → speech bubble, invite → envelope, …),
-  // monochrome on the bell — colour is reserved for the dashboard widget.
-  const iconGlyph = notificationIcon(n);
+  const visual = KIND_VISUAL[n.kind];
   const clickable = !!n.href || !!onClick;
   const [expanded, setExpanded] = useState(false);
   // True between the toggle click and the `max-height` transition's
@@ -829,7 +839,7 @@ export function NotificationRow({
       } ${n.read ? "opacity-50" : ""} focus-visible:bg-white/[0.06] focus-visible:outline-none`}
     >
       <span className="material-symbols-outlined flex-shrink-0 text-[22px] text-white">
-        {iconGlyph}
+        {visual.icon}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">

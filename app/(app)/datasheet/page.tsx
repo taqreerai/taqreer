@@ -2,60 +2,53 @@
 
 // Phase 17.E — /datasheet flow (spreadsheet → editorial chart deck).
 //
-// Architecture mirror: a 3-card clone of /create's single-shot layout
-// (البيانات · الهوية البصرية · إعدادات الإخراج). The brand card is a
-// 1:1 replica of /create's consolidated card (2026-06-01) so the
-// unified design system stays consistent across all flows.
-//
-// Three cards:
-//   1. البيانات (Data) — file upload (REQUIRED — no "text OR file"
-//      toggle; without data there's nothing to chart) + the persistent
-//      element (موved here from إعدادات الإخراج: the footer that rides
-//      on every slide belongs with the data input).
-//   2. الهوية البصرية (Brand) — saved-kit dropdown in the header,
-//      palette, single BrandFontPicker (one family, Claude varies
-//      weights), LogoRow, save-as-default toggle. Fonts + logo merged
-//      into one card, identical to /create.
-//   3. إعدادات الإخراج (Output) — slide size, count, pagination, and
-//      تعليمات إضافية (moved here from البيانات to take the persistent
-//      element's old spot — optional "ركّز على..." steering text).
+// Architecture mirror: this page is a near-clone of /create's single-
+// shot 4-card layout. Everything outside the FIRST card (fonts/colors,
+// logo, output settings) is bit-for-bit identical so the unified
+// design system from Phase 17.D stays consistent across all flows.
 //
 // What differs from /create:
-//   1. ACCEPTED FILE TYPES — `.xlsx`, `.xls`, `.csv` (xlsx package
+//   1. CONTENT CARD ("البيانات" — Data) swaps the upload + textarea
+//      positions and changes their semantics:
+//        • /create's textarea (primary content input, big)
+//          → /datasheet's FILE UPLOAD (primary input, big)
+//        • /create's compact dropzone below (alt to text)
+//          → /datasheet's instructions textarea below (optional
+//            "ركّز على..." steering field)
+//      The file is REQUIRED — no "either text OR file" toggle here.
+//      Without data there's nothing to chart.
+//   2. ACCEPTED FILE TYPES — `.xlsx`, `.xls`, `.csv` (xlsx package
 //      handles all three via SheetJS). Not PDF/DOCX/PPTX.
-//   2. EXTRACTION PIPELINE — POST to /api/datasheet/parse, NOT
+//   3. EXTRACTION PIPELINE — POST to /api/datasheet/parse, NOT
 //      /api/extract. The datasheet parse is synchronous (xlsx → markdown
 //      tables on the server, no Inngest, no polling). Returns the
 //      parsed Markdown payload + sheet count + total rows in one
-//      response.
-//   3. SUBMIT PAYLOAD — `source: { kind: "data", markdown, sheetCount,
+//      response. Client-side state: `dataMarkdown` instead of
+//      `contentAnthropicFileId`.
+//   4. SUBMIT PAYLOAD — `source: { kind: "data", markdown, sheetCount,
 //      totalRows, truncated, userContext }`. The deck-generate
 //      datasheet branch reads markdown directly (no Files API).
-//   4. NO TEMPLATE SEED — /datasheet doesn't support "use this
-//      template" entry yet. The brand card still works because the user
-//      sets palette/font/logo manually (or via the saved-kit dropdown).
+//   5. NO TEMPLATE SEED — /datasheet doesn't support "use this
+//      template" entry yet. The branding cards still work because
+//      the user sets palette/fonts/logo manually like /create.
 //
-// What stays identical to /create:
-//   • The flex-wrap fixed-width card row
+// What stays identical:
+//   • The 4-card grid + responsive breakpoints
 //   • CardHeader / SegmentedToggle / InlineStepper / Toggle /
-//     BrandFontPicker / LogoRow / PersistentRow / BrandKitDropdown /
-//     ColorPickerPopover — same primitives, same props
-//   • The single-font brand model (one family reused for heading+body
-//     at submit) + save-brand-kit toggle + output settings
+//     PositionDropdown / ColorPickerPopover / CompactUploadZone /
+//     FontUploadSlot / GoogleFontSlot — same primitives, same props
+//   • The branding state machinery (colors, fonts, logo, save-brand-
+//     kit toggle, output settings)
 //   • GenerateSplitButton + quality presets
+//   • All copy outside the content card
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ServerStatusBanner } from "@/components/app/ServerStatusBanner";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
-import { LogoRow } from "@/components/brand/LogoRow";
-import { PersistentRow } from "@/components/brand/PersistentRow";
-import {
-  BrandKitDropdown,
-  type BrandKitOption,
-} from "@/components/brand/BrandKitDropdown";
+import { LogoUploadSlot } from "@/components/brand/LogoUploadSlot";
+import { FontUploadSlot } from "@/components/brand/FontUploadSlot";
+import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import {
   InlineStepper,
@@ -65,29 +58,27 @@ import {
 } from "@/components/create/OutputCards";
 import {
   CardHeader,
+  PositionDropdown,
   SegmentedToggle,
   Toggle,
-  CORNER_POSITIONS,
   type CornerPosition,
   type LanguageCode,
 } from "@/components/create/controls";
 import {
-  emptyBrandFont,
+  emptyFontSlot,
   googleFontUrl,
+  isLatinOnlyGoogleFont,
   HEADING_SAMPLE_AR,
   HEADING_SAMPLE_LATIN,
-  type BrandFontState,
+  BODY_SAMPLE_AR,
+  BODY_SAMPLE_LATIN,
+  type FontSlotState,
 } from "@/lib/brand/fonts";
-import {
-  uploadAsset,
-  resolveUploadedFontFamilies,
-  type UploadedFontFieldBrief,
-} from "@/lib/brand/upload";
+import { uploadAsset } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
-  mapKitToHydrated,
   CREATE_BRAND_KEY,
   type HydratedBrand,
 } from "@/lib/create/hydrate-brand-from-session";
@@ -107,6 +98,10 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // math; comment retained here for cross-file traceability.
 const CARD_MIN_H_CLASS = "min-h-[387px]";
 
+const FONT_MODE_OPTIONS = [
+  { value: "upload" as const, label: "ملف" },
+  { value: "google" as const, label: "Google" },
+];
 const SLIDE_COUNT_OPTIONS = [
   { value: "auto" as const, label: "تلقائي" },
   { value: "custom" as const, label: "مخصص" },
@@ -138,11 +133,36 @@ type ResolvedFontField = {
   family: string;
 } | null;
 
-// Trim a brand-kit title to its first few words for the compact
-// saved-kit dropdown menu (mirrors /create's helper).
-function fewWords(s: string, max = 3): string {
-  const parts = s.trim().split(/\s+/).filter(Boolean);
-  return parts.length <= max ? s.trim() : `${parts.slice(0, max).join(" ")}…`;
+function resolveFontSlot(
+  slot: FontSlotState,
+  uploadedStorageUrl: string | null,
+): ResolvedFontField {
+  if (slot.mode === "google") {
+    if (!slot.googleFamily) return null;
+    return {
+      name: slot.googleFamily,
+      url: googleFontUrl(slot.googleFamily),
+      storageUrl: null,
+      family: slot.googleFamily,
+    };
+  }
+  // Upload mode accepts either a fresh upload's storageUrl OR a
+  // hydrated kit's `slot.uploadStorageUrl` (sessionStorage-restored).
+  const storageUrl = uploadedStorageUrl ?? slot.uploadStorageUrl ?? null;
+  if (!storageUrl) return null;
+  const inferredName =
+    slot.uploadName ?? slot.uploadFile?.name ?? slot.uploadFamily ?? "Custom font";
+  const inferredFamily =
+    slot.uploadFamily ||
+    slot.uploadFile?.name.replace(/\.[^.]+$/, "") ||
+    slot.uploadName?.replace(/\.[^.]+$/, "") ||
+    "Custom";
+  return {
+    name: inferredName,
+    url: null,
+    storageUrl,
+    family: inferredFamily,
+  };
 }
 
 // ─── Datasheet parse response shape ───────────────────────────────
@@ -176,72 +196,63 @@ export default function DatasheetPage() {
   const [slideSize, setSlideSize] = useState<SlideSize>("16:9");
   const [language, setLanguage] = useState<LanguageCode>("ar");
 
-  // ─── Branding state (consolidated brand card, identical to /create) ─
+  // ─── Branding state (identical to /create) ─────────────────────
   const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
-  // Single brand font — one Google family (Claude varies weights) OR up
-  // to 5 uploaded families (Claude pairs). Replaces the old heading +
-  // body two-slot UI; mirrors /create's BrandFontPicker model.
-  const [brandFont, setBrandFont] = useState<BrandFontState>(emptyBrandFont());
+  const [headingFontSlot, setHeadingFontSlot] = useState<FontSlotState>(
+    emptyFontSlot(),
+  );
+  const [bodyFontSlot, setBodyFontSlot] = useState<FontSlotState>(
+    emptyFontSlot(),
+  );
   const [logoFile, setLogoFile] = useState<File | null>(null);
   // Pre-loaded logo from brand kit / default kit. See /create's
   // companion state for the rationale.
   const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
   const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
+  const [logoExcludeCover, setLogoExcludeCover] = useState<boolean>(false);
+  const [logoExcludeClosing, setLogoExcludeClosing] = useState<boolean>(false);
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
-  // Saved brand kits for the in-card dropdown (last 5). `options` drives
-  // the menu; `raw` maps the picked id → HydratedBrand on select.
-  const [kitOptions, setKitOptions] = useState<BrandKitOption[]>([]);
-  const kitRawRef = useRef<Map<string, unknown>>(new Map());
-
-  // Apply a resolved brand (sessionStorage, default kit, or a picked
-  // saved kit) to the card state. Maps the heading font slot → the
-  // single brandFont model; colours + logo + position apply directly.
-  // Logo cover/closing excludes are dropped — Claude decides per slide.
-  // Shared by mount hydration + the in-card brand-kit dropdown.
-  const applyBrand = useCallback((h: HydratedBrand) => {
-    if (h.colors.length > 0) setColors(h.colors);
-    const heading = h.headingFontSlot;
-    if (heading.googleFamily) {
-      setBrandFont({
-        mode: "google",
-        googleFamily: heading.googleFamily,
-        uploaded: [],
-      });
-    } else if (heading.uploadStorageUrl) {
-      setBrandFont({
-        mode: "upload",
-        googleFamily: null,
-        uploaded: [
-          {
-            name: heading.uploadName ?? heading.uploadFamily ?? "Custom",
-            faces: [
-              { weight: 400, file: null, storageUrl: heading.uploadStorageUrl },
-            ],
-          },
-        ],
-      });
-    }
-    if (h.logo) {
-      setLogoFile(null);
-      setLoadedLogo(h.logo);
-      const pos = h.logo.position as CornerPosition;
-      if ((CORNER_POSITIONS as readonly string[]).includes(pos)) {
-        setLogoPosition(pos);
-      }
-    }
-  }, []);
 
   // ─── Brand-kit hydration on first mount ────────────────────────
   // Read taqreer:create:brand sessionStorage (the brand-kits "use"
   // flow writes here). Falls back to the user's default brand kit.
-  // Clears the key after applying so refresh doesn't keep re-hydrating.
+  // Clears the key after applying so refresh doesn't keep
+  // re-hydrating. Mirrors /create's effect exactly.
   useEffect(() => {
     let aborted = false;
     (async () => {
       let hydrated = readBrandFromSession();
       if (!hydrated) hydrated = await fetchDefaultBrandKit();
       if (aborted || !hydrated) return;
-      applyBrand(hydrated);
+      if (hydrated.colors.length > 0) setColors(hydrated.colors);
+      if (
+        hydrated.headingFontSlot.googleFamily ||
+        hydrated.headingFontSlot.uploadStorageUrl
+      ) {
+        setHeadingFontSlot(hydrated.headingFontSlot);
+      }
+      if (
+        hydrated.bodyFontSlot.googleFamily ||
+        hydrated.bodyFontSlot.uploadStorageUrl
+      ) {
+        setBodyFontSlot(hydrated.bodyFontSlot);
+      }
+      if (hydrated.logo) {
+        setLoadedLogo(hydrated.logo);
+        const pos = hydrated.logo.position as CornerPosition;
+        if (
+          pos === "top-left" ||
+          pos === "top-center" ||
+          pos === "top-right" ||
+          pos === "bottom-left" ||
+          pos === "bottom-center" ||
+          pos === "bottom-right"
+        ) {
+          setLogoPosition(pos);
+        }
+        setLogoExcludeCover(hydrated.logo.exclude.includes("cover"));
+        setLogoExcludeClosing(hydrated.logo.exclude.includes("closing"));
+      }
       try {
         window.sessionStorage.removeItem(CREATE_BRAND_KEY);
       } catch {
@@ -251,39 +262,7 @@ export default function DatasheetPage() {
     return () => {
       aborted = true;
     };
-  }, [applyBrand]);
-
-  // Fetch the user's saved kits (last 5) for the in-card brand dropdown.
-  useEffect(() => {
-    let aborted = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/brand-kits", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          kits?: Array<{ id: string; name: string }>;
-        };
-        if (aborted || !Array.isArray(data.kits)) return;
-        const last5 = data.kits.slice(0, 5);
-        kitRawRef.current = new Map(last5.map((k) => [k.id, k]));
-        setKitOptions(last5.map((k) => ({ id: k.id, name: fewWords(k.name) })));
-      } catch {
-        /* best-effort — dropdown just stays empty */
-      }
-    })();
-    return () => {
-      aborted = true;
-    };
   }, []);
-
-  // Apply a picked saved kit (overwrites colours / font / logo).
-  const handlePickKit = (id: string) => {
-    const raw = kitRawRef.current.get(id);
-    if (raw)
-      applyBrand(
-        mapKitToHydrated(raw as Parameters<typeof mapKitToHydrated>[0]),
-      );
-  };
 
   // ─── Output / rules state (identical to /create) ───────────────
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
@@ -292,6 +271,10 @@ export default function DatasheetPage() {
   const [persistentText, setPersistentText] = useState<string>("");
   const [persistentPosition, setPersistentPosition] =
     useState<CornerPosition>("bottom-center");
+  const [persistentExcludeCover, setPersistentExcludeCover] =
+    useState<boolean>(false);
+  const [persistentExcludeClosing, setPersistentExcludeClosing] =
+    useState<boolean>(false);
 
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -424,11 +407,19 @@ export default function DatasheetPage() {
     setError("");
     setSubmitting(true);
     try {
-      const logoUploaded = await uploadAsset(
-        "brand-assets",
-        "logos",
-        logoFile,
-      );
+      const [logoUploaded, headingUploaded, bodyUploaded] = await Promise.all([
+        uploadAsset("brand-assets", "logos", logoFile),
+        uploadAsset(
+          "brand-assets",
+          "fonts",
+          headingFontSlot.mode === "upload" ? headingFontSlot.uploadFile : null,
+        ),
+        uploadAsset(
+          "brand-assets",
+          "fonts",
+          bodyFontSlot.mode === "upload" ? bodyFontSlot.uploadFile : null,
+        ),
+      ]);
 
       // /datasheet doesn't send a `content` payload like /create —
       // the user's "content" IS the dataset, which travels through
@@ -441,57 +432,32 @@ export default function DatasheetPage() {
         fileSize: dataFile!.size,
       };
 
-      // Resolve the single brand font → ONE field reused for heading +
-      // body (one family, Claude varies weights / pairs uploads). Upload
-      // mode now carries every picked family with ALL its weight faces;
-      // heading/body default to the first family's name. Mirrors /create.
-      let fontField: ResolvedFontField = null;
-      // Every resolved uploaded family (name + weight faces) — forwarded so
-      // Claude pairs them to heading/body; deck-generate signs each face file.
-      const uploadedFontFields: UploadedFontFieldBrief[] = [];
-      if (brandFont.mode === "google" && brandFont.googleFamily) {
-        fontField = {
-          name: brandFont.googleFamily,
-          url: googleFontUrl(brandFont.googleFamily),
-          storageUrl: null,
-          family: brandFont.googleFamily,
-        };
-      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
-        const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
-        uploadedFontFields.push(...resolved);
-        if (uploadedFontFields.length > 0) {
-          fontField = {
-            name: uploadedFontFields[0].name,
-            url: null,
-            storageUrl: null,
-            family: uploadedFontFields[0].name,
-          };
-        }
-      }
+      const headingFont = resolveFontSlot(
+        headingFontSlot,
+        headingUploaded?.storageUrl ?? null,
+      );
+      const bodyFont = resolveFontSlot(
+        bodyFontSlot,
+        bodyUploaded?.storageUrl ?? null,
+      );
 
-      // Logo + persistent cover/closing excludes are gone — Claude
-      // decides logo presence per slide; the persistent footer is on
-      // every slide.
-      const noExclude: ("cover" | "closing")[] = [];
+      const logoExclude = [
+        logoExcludeCover ? "cover" : null,
+        logoExcludeClosing ? "closing" : null,
+      ].filter((v): v is "cover" | "closing" => v !== null);
 
       const brand = {
         colors,
         paletteMode: "manual" as const,
         paletteScreenshotUrl: null,
-        fonts: {
-          heading: fontField,
-          body: fontField,
-          ...(uploadedFontFields.length > 0
-            ? { uploaded: uploadedFontFields }
-            : {}),
-        },
+        fonts: { heading: headingFont, body: bodyFont },
         // Logo storageUrl resolves to a fresh upload first, then a
         // hydrated kit's stored path. Server re-signs either path.
         logo: (logoUploaded?.storageUrl ?? loadedLogo?.storageUrl)
           ? {
               storageUrl: (logoUploaded?.storageUrl ?? loadedLogo?.storageUrl)!,
               position: logoPosition,
-              exclude: noExclude,
+              exclude: logoExclude,
             }
           : null,
         slideSize,
@@ -501,6 +467,11 @@ export default function DatasheetPage() {
         },
       };
 
+      const persistentExclude = [
+        persistentExcludeCover ? "cover" : null,
+        persistentExcludeClosing ? "closing" : null,
+      ].filter((v): v is "cover" | "closing" => v !== null);
+
       const rules = {
         designStyle: null,
         fixTypos: false,
@@ -509,7 +480,7 @@ export default function DatasheetPage() {
           ? {
               text: persistentText.trim(),
               position: persistentPosition,
-              exclude: noExclude,
+              exclude: persistentExclude,
             }
           : null,
       };
@@ -563,10 +534,14 @@ export default function DatasheetPage() {
     }
   };
 
+  const setHeadingMode = (mode: "upload" | "google") =>
+    setHeadingFontSlot((s) => ({ ...s, mode }));
+  const setBodyMode = (mode: "upload" | "google") =>
+    setBodyFontSlot((s) => ({ ...s, mode }));
+
   return (
     <div className="page-container flex w-full justify-center" dir="rtl">
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
-        <ServerStatusBanner />
         <header className="text-center">
           <h1 className="tq-h1">حوّل بياناتك إلى عرض</h1>
           <p className="tq-subhead mt-2">
@@ -575,10 +550,8 @@ export default function DatasheetPage() {
           </p>
         </header>
 
-        {/* 3-card row — flex-wrap + fixed-width cards, same as /create.
-            (Fonts + logo merged into one الهوية البصرية card 2026-06-01,
-            collapsing the old 4-card grid to 3.) */}
-        <div className="flex flex-wrap justify-center gap-4">
+        {/* Same responsive grid as /create — see comments there. */}
+        <div className="grid -mx-4 w-[calc(100%+2rem)] grid-cols-1 gap-4 min-[760px]:grid-cols-2 min-[1280px]:grid-cols-4">
           {/* ═══════════════════════════════════════════════════════
               DATA CARD (DOM 1st, visual right)
               ═══════════════════════════════════════════════════════
@@ -589,7 +562,7 @@ export default function DatasheetPage() {
               (bottom, optional).
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="dataset" title="البيانات" />
 
@@ -632,58 +605,35 @@ export default function DatasheetPage() {
               />
             </div>
 
-            {/* Persistent element — moved here from إعدادات الإخراج
-                (2026-06-01). The footer that rides on every slide
-                belongs with the data input. PersistentRow self-labels
-                via its placeholder (matches /create). */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
-              <PersistentRow
-                text={persistentText}
-                position={persistentPosition}
-                language={language}
-                onText={setPersistentText}
-                onPosition={setPersistentPosition}
+            {/* Instructions textarea — secondary, optional. The
+                divider copy mirrors /create's "أو" hairline but
+                reads "تعليمات إضافية" because the textarea is NOT
+                an alternative to the file (file is required). */}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center gap-2 text-[11px] text-white/40">
+                <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+                <span>تعليمات إضافية</span>
+                <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+              </div>
+              <textarea
+                value={userContext}
+                onChange={(event) => setUserContext(event.target.value)}
+                placeholder="مثل: ركّز على الربع الثالث، أبرز الانخفاض في المبيعات…"
+                rows={2}
+                dir={language === "en" ? "ltr" : "rtl"}
+                disabled={submitting}
+                className="input-dark min-h-[60px] resize-none text-sm leading-5 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
 
           {/* ═══════════════════════════════════════════════════════
-              BRAND CARD (DOM 2nd) — fonts + logo merged into one
-              الهوية البصرية card, identical to /create.
+              FONTS + COLORS CARD (DOM 2nd) — identical to /create
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            {/* Inline header (not CardHeader) so the saved-kit pill can
-                overlay the title row. Mirrors /create's branding header:
-                pb-4 balances the card's p-4 top padding; z-30 lifts the
-                open menu above the later rows. */}
-            <header className="relative z-30 border-b border-white/[0.08] pb-4">
-              <div className="relative flex items-center gap-2">
-                <span
-                  className="material-symbols-outlined text-white"
-                  style={{ fontSize: 18 }}
-                >
-                  palette
-                </span>
-                <h3 className="text-sm font-semibold text-white">
-                  الهوية البصرية
-                </h3>
-                {kitOptions.length > 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute end-0 top-1/2 -translate-y-1/2"
-                  >
-                    <BrandKitDropdown
-                      kits={kitOptions}
-                      onSelect={handlePickKit}
-                    />
-                  </motion.div>
-                ) : null}
-              </div>
-            </header>
+            <CardHeader icon="palette" title="الخطوط والألوان" />
 
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-white/70">
@@ -718,38 +668,116 @@ export default function DatasheetPage() {
               </div>
             </div>
 
-            {/* Single brand font — one Google family (Claude varies
-                weights) OR up to 5 uploaded families (Claude pairs). */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
-              <BrandFontPicker
-                value={brandFont}
-                onChange={setBrandFont}
-                sampleText={
-                  language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR
-                }
-              />
+            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/70">
+                  خط العناوين
+                </span>
+                <SegmentedToggle
+                  options={FONT_MODE_OPTIONS}
+                  value={headingFontSlot.mode}
+                  onChange={setHeadingMode}
+                  ariaLabel="مصدر خط العناوين"
+                />
+              </div>
+              {headingFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط العناوين"
+                  file={headingFontSlot.uploadFile}
+                  family=""
+                  sampleText={HEADING_SAMPLE_AR}
+                  sampleSizeClass="text-base"
+                  alignStart
+                  compact
+                  hideSample
+                  onSelect={(f) =>
+                    setHeadingFontSlot((s) => ({
+                      ...s,
+                      uploadFile: f,
+                      uploadName: f.name,
+                    }))
+                  }
+                  onRemove={() =>
+                    setHeadingFontSlot((s) => ({
+                      ...s,
+                      uploadFile: null,
+                      uploadName: null,
+                    }))
+                  }
+                />
+              ) : (
+                <GoogleFontSlot
+                  selected={headingFontSlot.googleFamily}
+                  sampleText={
+                    isLatinOnlyGoogleFont(headingFontSlot.googleFamily)
+                      ? HEADING_SAMPLE_LATIN
+                      : HEADING_SAMPLE_AR
+                  }
+                  sampleSizeClass="text-base"
+                  alignStart
+                  compact
+                  hideSample
+                  onSelect={(family) =>
+                    setHeadingFontSlot((s) => ({ ...s, googleFamily: family }))
+                  }
+                />
+              )}
             </div>
 
-            {/* Logo — compact zone + position pill on one row (merged
-                from the old standalone الشعار card). */}
-            <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
-                الشعار
-              </span>
-              <LogoRow
-                file={logoFile}
-                previewUrl={loadedLogo?.displayUrl ?? null}
-                position={logoPosition}
-                onSelect={(f) => {
-                  setLogoFile(f);
-                  setLoadedLogo(null);
-                }}
-                onRemove={() => {
-                  setLogoFile(null);
-                  setLoadedLogo(null);
-                }}
-                onPosition={setLogoPosition}
-              />
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/70">
+                  خط النص
+                </span>
+                <SegmentedToggle
+                  options={FONT_MODE_OPTIONS}
+                  value={bodyFontSlot.mode}
+                  onChange={setBodyMode}
+                  ariaLabel="مصدر خط النص"
+                />
+              </div>
+              {bodyFontSlot.mode === "upload" ? (
+                <FontUploadSlot
+                  label="ارفع خط النص"
+                  file={bodyFontSlot.uploadFile}
+                  family=""
+                  sampleText={BODY_SAMPLE_AR}
+                  sampleSizeClass="text-sm"
+                  alignStart
+                  compact
+                  hideSample
+                  onSelect={(f) =>
+                    setBodyFontSlot((s) => ({
+                      ...s,
+                      uploadFile: f,
+                      uploadName: f.name,
+                    }))
+                  }
+                  onRemove={() =>
+                    setBodyFontSlot((s) => ({
+                      ...s,
+                      uploadFile: null,
+                      uploadName: null,
+                    }))
+                  }
+                />
+              ) : (
+                <GoogleFontSlot
+                  selected={bodyFontSlot.googleFamily}
+                  sampleText={
+                    isLatinOnlyGoogleFont(bodyFontSlot.googleFamily)
+                      ? BODY_SAMPLE_LATIN
+                      : BODY_SAMPLE_AR
+                  }
+                  sampleSizeClass="text-sm"
+                  alignStart
+                  compact
+                  hideSample
+                  onSelect={(family) =>
+                    setBodyFontSlot((s) => ({ ...s, googleFamily: family }))
+                  }
+                />
+              )}
             </div>
 
             <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
@@ -765,10 +793,63 @@ export default function DatasheetPage() {
           </div>
 
           {/* ═══════════════════════════════════════════════════════
-              EXPORT SETTINGS CARD (DOM 3rd) — identical to /create
+              LOGO CARD (DOM 3rd) — identical to /create
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+          >
+            <CardHeader icon="image" title="الشعار" />
+
+            <LogoUploadSlot
+              file={logoFile}
+              previewUrl={loadedLogo?.displayUrl ?? null}
+              onSelect={(f) => {
+                setLogoFile(f);
+                setLoadedLogo(null);
+              }}
+              onRemove={() => {
+                setLogoFile(null);
+                setLoadedLogo(null);
+              }}
+            />
+
+            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
+              <span className="block text-xs font-semibold text-white/70">
+                موضع الشعار
+              </span>
+              <div className="flex items-center gap-1.5">
+                <ExclusionDropdown
+                  excludeCover={logoExcludeCover}
+                  excludeClosing={logoExcludeClosing}
+                  onCoverChange={setLogoExcludeCover}
+                  onClosingChange={setLogoExcludeClosing}
+                  disabled={!logoFile && !loadedLogo}
+                />
+                <PositionDropdown
+                  value={logoPosition}
+                  onChange={setLogoPosition}
+                  disabled={!logoFile && !loadedLogo}
+                />
+              </div>
+            </div>
+
+            <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+              <span className="text-xs font-semibold text-white/70">
+                حفظ كهوية افتراضية
+              </span>
+              <Toggle
+                ariaLabel="حفظ كهوية افتراضية"
+                value={saveBrandKit}
+                onChange={setSaveBrandKit}
+              />
+            </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════
+              EXPORT SETTINGS CARD (DOM 4th) — identical to /create
+              ═══════════════════════════════════════════════════════ */}
+          <div
+            className={`glass-card flex ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title="إعدادات الإخراج" />
 
@@ -831,22 +912,34 @@ export default function DatasheetPage() {
               />
             </div>
 
-            {/* Extra instructions — moved here from البيانات (2026-06-01)
-                to take the persistent element's old spot. Optional
-                steering text, forwarded as source.userContext. */}
             <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
-                تعليمات إضافية
+                عنصر ثابت على كل شريحة
               </span>
-              <textarea
-                value={userContext}
-                onChange={(event) => setUserContext(event.target.value)}
-                placeholder="مثل: ركّز على الربع الثالث، أبرز الانخفاض في المبيعات…"
-                rows={2}
+              <input
+                type="text"
+                value={persistentText}
+                onChange={(event) => setPersistentText(event.target.value)}
+                placeholder="مثل: التاريخ، الموقع الإلكتروني"
                 dir={language === "en" ? "ltr" : "rtl"}
-                disabled={submitting}
-                className="input-dark min-h-[60px] resize-none text-sm leading-5 disabled:cursor-not-allowed disabled:opacity-50"
+                className="input-dark w-full text-xs"
+                style={{ height: 30, padding: "0 12px" }}
+                aria-label="نص ثابت"
               />
+              <div className="flex items-center gap-1.5">
+                <ExclusionDropdown
+                  excludeCover={persistentExcludeCover}
+                  excludeClosing={persistentExcludeClosing}
+                  onCoverChange={setPersistentExcludeCover}
+                  onClosingChange={setPersistentExcludeClosing}
+                  disabled={!persistentText.trim()}
+                />
+                <PositionDropdown
+                  value={persistentPosition}
+                  onChange={setPersistentPosition}
+                  disabled={!persistentText.trim()}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -871,6 +964,123 @@ export default function DatasheetPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────
+// ExclusionDropdown — identical copy of /create's helper. Fork rather
+// than extract a shared module: the two files are deliberately
+// independent so /create and /datasheet can diverge if the product
+// direction needs it. Both stay simple to read in isolation.
+// ───────────────────────────────────────────────────────────────────
+function ExclusionDropdown({
+  excludeCover,
+  excludeClosing,
+  onCoverChange,
+  onClosingChange,
+  disabled,
+}: {
+  excludeCover: boolean;
+  excludeClosing: boolean;
+  onCoverChange: (next: boolean) => void;
+  onClosingChange: (next: boolean) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const count = (excludeCover ? 1 : 0) + (excludeClosing ? 1 : 0);
+  const label = count > 0 ? `استثناء (${count})` : "استثناء";
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`backdrop-blur-glass flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+          open ? "border-white/40" : "border-white/15 hover:border-white/30"
+        }`}
+        style={{
+          background: "rgba(255, 255, 255, var(--glass-opacity))",
+        }}
+      >
+        <span
+          className={`material-symbols-outlined transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+          style={{ fontSize: 14 }}
+        >
+          expand_more
+        </span>
+        <span className="whitespace-nowrap">{label}</span>
+      </button>
+      {open ? (
+        <div
+          className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+          role="listbox"
+          aria-label="استثناء"
+        >
+          <ExclusionItem
+            label="استثناء الغلاف"
+            checked={excludeCover}
+            onChange={onCoverChange}
+          />
+          <ExclusionItem
+            label="استثناء الشريحة الأخيرة"
+            checked={excludeClosing}
+            onChange={onClosingChange}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ExclusionItem({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={checked}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-white/5"
+    >
+      <span className="whitespace-nowrap">{label}</span>
+      <span
+        className={`material-symbols-outlined transition-opacity ${
+          checked ? "opacity-100 text-white" : "opacity-0"
+        }`}
+        style={{ fontSize: 16 }}
+      >
+        check
+      </span>
+    </button>
   );
 }
 

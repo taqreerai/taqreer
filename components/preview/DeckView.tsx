@@ -12,7 +12,6 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
   SlideManifestSchema,
   SlideSchema,
@@ -37,7 +36,6 @@ import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
 import { createClient } from "@/lib/supabase/client";
-import { cssFontFamilyName } from "@/lib/export/theme-css-vars";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { notificationStore } from "@/lib/notifications/store";
 import {
@@ -482,11 +480,10 @@ export function DeckView({
   const [polledCompleted, setPolledCompleted] = useState(false);
 
   // Generation-clock state. SLOW threshold (6 min) flips an in-page
-  // caption so the user sees the run is just running long, not silently
-  // dead. The caption is status-aware (see `slowCaption` below): it only
-  // blames upstream load when the real provider status says so. The old
-  // "STUCK" bell notification was removed — it kept misfiring on
-  // legitimately slow phases.
+  // caption ("الخادم تحت ضغط عالٍ حالياً") so the user sees the run
+  // is just running long, not silently dead. The old "STUCK" bell
+  // notification was removed — it kept misfiring on legitimately
+  // slow phases.
   //
   // `nowTick` increments every 10 s so the derived `elapsedMs` stays
   // current even when the polling effect doesn't fire (Claude is
@@ -494,9 +491,6 @@ export function DeckView({
   // isn't re-evaluated on every re-render.
   const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
-  // Real upstream-provider status — lets the "slow" caption (below) tell
-  // a genuine load issue apart from a merely long-running deck.
-  const serverStatus = useServerStatus();
 
   // Slide aspect ratio. During generation `manifest` is null, so we fall
   // back to `initialFormat` (passed from the server-side preview page,
@@ -1670,7 +1664,7 @@ export function DeckView({
     return () => window.clearInterval(id);
   }, [status]);
 
-  // SLOW just nudges in-page copy (status-aware `slowCaption` below).
+  // SLOW just nudges in-page copy ("الخادم تحت ضغط عالٍ حالياً").
   // The stuck-detection bell notification was removed entirely
   // (was producing false positives even with tightened thresholds —
   // notifications persist in localStorage so any old alert kept
@@ -1683,12 +1677,6 @@ export function DeckView({
     status === "generating" &&
     !!genStartedAt &&
     elapsedMs > SLOW_WARN_MS;
-  // Truthful caption: only blame upstream load when the provider status
-  // actually reports degraded/down; otherwise it's just a long deck.
-  const slowCaption =
-    serverStatus?.level === "degraded" || serverStatus?.level === "down"
-      ? "الخادم يواجه ضغطاً حالياً — قد يطول الانتظار"
-      : "العملية تستغرق وقتاً أطول من المعتاد — لا يزال العمل جارياً";
 
   // Fetch draft comments once on completed mount. The server filters by the
   // presentation's currentVersionId, so refetching on manifest swap (after
@@ -2261,76 +2249,16 @@ export function DeckView({
   );
 
   const fontLinks = useMemo(() => {
-    // Fall back to the mid-stream theme so Google webfonts load DURING
-    // generation too — `manifest` stays null until the full deck parses, but
-    // `streamingTheme` (ThemeSchema-validated, same host allowlist) carries the
-    // fonts from the first streamed bytes.
-    const theme = manifest?.theme ?? streamingTheme;
-    if (!theme) return [] as string[];
+    if (!manifest) return [] as string[];
     // Schema validates the host allowlist (lib/schema/slide.ts —
     // ALLOWED_FONT_HOSTS), so any URL we see here has already passed that
     // check. Just dedupe and emit; matches html-document.ts's behaviour for
     // preview ↔ exported-HTML parity.
-    return [theme.fontHeading.url, theme.fontBody.url].filter(
+    return [manifest.theme.fontHeading.url, manifest.theme.fontBody.url].filter(
       (url, idx, all): url is string =>
         typeof url === "string" && all.indexOf(url) === idx,
     );
-  }, [manifest, streamingTheme]);
-
-  // Uploaded brand fonts: theme.font*.fontFaces is a list of signed font-file
-  // URLs, ONE per uploaded weight (deck-generate attached them by matching the
-  // family name back to the uploaded storageUrls). Emit a direct @font-face per
-  // WEIGHT so the slides — which reference the family by NAME and vary
-  // font-weight — render each weighted run in the matching uploaded file.
-  // Dedupe by family so heading + body sharing one upload emit once. Carry the
-  // RAW family name (just trimmed); it's CSS-escaped at emit time via the SAME
-  // cssFontFamilyName() the --font-* vars use, so the @font-face family and the
-  // slides' `font-family: var(--font-heading)` resolve to the identical name
-  // (e.g. "DIN NEXT™ ARABIC" — no char dropped, so they match).
-  const fontFaces = useMemo(() => {
-    // Fall back to the mid-stream theme so an UPLOADED font @font-faces DURING
-    // generation — deck-generate pre-signs the faces and attaches them to the
-    // streaming theme, so they're present from the first streamed bytes (not
-    // just after the post-stream inject).
-    const theme = manifest?.theme ?? streamingTheme;
-    if (!theme)
-      return [] as { name: string; faces: { weight: number; src: string }[] }[];
-    const out: { name: string; faces: { weight: number; src: string }[] }[] = [];
-    const seen = new Set<string>();
-    for (const f of [theme.fontHeading, theme.fontBody]) {
-      const name = f?.name?.trim();
-      if (f?.fontFaces && f.fontFaces.length > 0 && name && !seen.has(name)) {
-        seen.add(name);
-        out.push({ name, faces: f.fontFaces });
-      }
-    }
-    return out;
-  }, [manifest, streamingTheme]);
-
-  // Google <link>s + uploaded-font @font-face <style>, rendered in BOTH the
-  // generating AND completed branches below. Sourced from the memos above
-  // (which fall back to streamingTheme), so the fonts load DURING streaming —
-  // not only when the final manifest lands. Keeping one fragment means the two
-  // branches can't drift.
-  const fontAssets = (
-    <>
-      {fontLinks.map((url) => (
-        <link key={url} rel="stylesheet" href={url} />
-      ))}
-      {fontFaces.length > 0 ? (
-        <style>
-          {fontFaces
-            .flatMap((f) =>
-              f.faces.map(
-                (face) =>
-                  `@font-face{font-family:"${cssFontFamilyName(f.name)}";font-weight:${face.weight};src:url("${face.src}");font-display:swap;}`,
-              ),
-            )
-            .join("")}
-        </style>
-      ) : null}
-    </>
-  );
+  }, [manifest]);
 
   // ─── Failed ────────────────────────────────────────────────────────────────
   if (status === "failed") {
@@ -2427,11 +2355,11 @@ export function DeckView({
               // `.btn-pill` lives unlayered in globals.css (see comment
               // at globals.css:1096 — "unlayered specificity beating
               // @layer utilities") so its own padding + font-size win
-              // against plain `px-5 py-2 text-sm` utilities. The trailing
-              // `!` (Tailwind v4 important syntax) lifts the utilities to
-              // !important so the link renders at the same dimensions as
-              // the gradient button beside it.
-              className="btn-pill no-underline px-5! py-2! text-sm!"
+              // against plain `px-5 py-2 text-sm` utilities. The `!`
+              // prefix lifts the utilities to !important so the link
+              // renders at the same dimensions as the gradient button
+              // beside it.
+              className="btn-pill no-underline !px-5 !py-2 !text-sm"
             >
               العودة للرئيسية
             </Link>
@@ -2460,28 +2388,20 @@ export function DeckView({
     const percent = progressPercent(progress);
     // Slot count switches on the user's slide-count mode:
     //   • custom (user picked N) → fixed-N tiles. Today's behavior.
-    //   • auto                   → reserve a slot per slide Claude COMMITTED
-    //                              to up front (`progress.estimatedTotal`,
-    //                              which the server fills from the manifest's
-    //                              top-level `slideCount` as soon as it
-    //                              streams). So the user sees the full total
-    //                              immediately — closed slides render as
-    //                              thumbnails, the rest pulse as pending, and
-    //                              the slot Claude is writing shows the
-    //                              paragraph-write icon. Before the count
-    //                              arrives (early thinking) it's just the
-    //                              streamed slides + a trailing tail. If Claude
-    //                              overshoots its own number, the +1 keeps the
-    //                              row growing. The tail/extra slots disappear
-    //                              when status flips to "completed" and the
-    //                              manifest branch below takes over.
+    //   • auto                   → exactly `streamingPreview.length + 1`
+    //                              tiles: one per slide Claude has
+    //                              closed, plus one trailing "still
+    //                              working" placeholder that uses the
+    //                              paragraph-write icon (same as a
+    //                              state:"current" placeholder). The
+    //                              tail disappears when status flips
+    //                              to "completed" and the manifest
+    //                              branch below takes over.
     // The `Math.max(..., 1)` guarantees at least one tile so an empty
     // sidebar doesn't flash on initial paint before Claude's first
     // slide closes — the user sees the writing icon immediately.
-    const autoTotalHint =
-      progress && progress.estimatedTotal > 0 ? progress.estimatedTotal : 0;
     const slotCount = initialSlideCountAuto
-      ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
+      ? Math.max(streamingPreview.length + 1, 1)
       : placeholders.length;
     const total = slotCount;
     // Mix real streamed slides (kind:"slide") into the head of the
@@ -2505,19 +2425,12 @@ export function DeckView({
             commentCount: 0,
           };
         }
-        // The slot Claude is writing NEXT (one past the last closed
-        // slide) always shows the paragraph-write animation — in BOTH
-        // auto AND custom (e.g. /enhance) modes. Previously this was
-        // auto-only, so a fixed-count nav showed a dead pulse on the
-        // next slide instead of the "writing this one" affordance: the
-        // `cardStatus` "current" lands on `idx+1===currentSlide`, but
-        // that tile already has its preview slide so it renders as a
-        // real thumbnail — leaving the genuinely-next slot inert.
-        const isNextSlot = idx === streamingPreview.length;
+        const isAutoTail =
+          initialSlideCountAuto && idx === streamingPreview.length;
         return {
           kind: "placeholder",
           index: idx,
-          state: isNextSlot ? "current" : cardStatus(idx),
+          state: isAutoTail ? "current" : cardStatus(idx),
         };
       },
     );
@@ -2571,10 +2484,6 @@ export function DeckView({
         className="relative"
         style={{ marginRight: SLIDE_NAV_WIDTH }}
       >
-        {/* Load the brand fonts DURING streaming — the streaming hero +
-            nav thumbnails reference them by name, and without these tags the
-            font only swapped in when the completed branch took over. */}
-        {fontAssets}
         <SlideNavSidebar
           items={navItems}
           currentIndex={previewHeroIdx >= 0 ? previewHeroIdx : null}
@@ -2720,7 +2629,7 @@ export function DeckView({
                 </div>
                 {isSlow && (
                   <span className="text-[11px] leading-relaxed text-white/60">
-                    {slowCaption}
+                    الخادم تحت ضغط عالٍ حالياً — الانتظار طبيعي
                   </span>
                 )}
               </div>
@@ -2816,7 +2725,9 @@ export function DeckView({
       className="relative"
       style={{ marginRight: SLIDE_NAV_WIDTH }}
     >
-      {fontAssets}
+      {fontLinks.map((url) => (
+        <link key={url} rel="stylesheet" href={url} />
+      ))}
 
       {/* Right-edge slot: SlideNavSidebar swaps for CommentsPanel
           while in comment mode. Same fixed position (against the

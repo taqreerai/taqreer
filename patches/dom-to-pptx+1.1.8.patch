@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..2125315 100644
+index 36b1ff9..3656668 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -22,53 +22,8 @@ index 36b1ff9..2125315 100644
  
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
-@@ -642,6 +650,35 @@ function getSoftEdges(filterStr, scale) {
-   return null;
- }
- 
-+// Patched (taqreer): map a CSS font-weight to PowerPoint's NAMED typeface for
-+// that weight ("Cairo SemiBold", "Cairo Black", …) — exactly how PowerPoint
-+// itself stores weights (confirmed against its own .pptx output). We NEVER set
-+// the bold flag (b="1"): a bold-flagged run re-resolves to the heaviest member
-+// of the font's RIBBI group when edited in PowerPoint (the "bold → ExtraBlack
-+// after editing" bug). The named typeface carries the weight; the matching
-+// embedded EOT lives in the <p:regular> slot. This map MUST stay identical to
-+// `WEIGHT_SUFFIX` in lib/export/embed-fonts-client.ts so a run and its embedded
-+// entry resolve to the same typeface string.
-+const TAQREER_WEIGHT_SUFFIX = {
-+  100: 'Thin',
-+  200: 'ExtraLight',
-+  300: 'Light',
-+  400: '',
-+  500: 'Medium',
-+  600: 'SemiBold',
-+  700: 'Bold',
-+  800: 'ExtraBold',
-+  900: 'Black',
-+};
-+function taqreerWeightedTypeface(fontFamily, fontWeight) {
-+  const base = (fontFamily || '').split(',')[0].replace(/['"]/g, '').trim();
-+  const raw = parseInt(fontWeight, 10);
-+  const n = Number.isFinite(raw) ? raw : 400;
-+  const snapped = Math.min(900, Math.max(100, Math.round(n / 100) * 100));
-+  const suffix = TAQREER_WEIGHT_SUFFIX[snapped] ?? '';
-+  return suffix ? `${base} ${suffix}` : base;
-+}
-+
- function getTextStyle(style, scale) {
-   let colorObj = parseColor(style.color);
- 
-@@ -685,11 +722,19 @@ function getTextStyle(style, scale) {
- 
-   return {
-     color: colorObj.hex || '000000',
--    fontFace: style.fontFamily.split(',')[0].replace(/['"]/g, ''),
-+    // Weight is encoded in the typeface NAME ("Cairo SemiBold"), never the
-+    // bold flag — see taqreerWeightedTypeface above.
-+    fontFace: taqreerWeightedTypeface(style.fontFamily, style.fontWeight),
-     fontSize: Number((fontSizePx * 0.75 * scale).toFixed(1)),
--    bold: parseInt(style.fontWeight) >= 600,
-+    bold: false,
+@@ -690,6 +698,12 @@ function getTextStyle(style, scale) {
+     bold: parseInt(style.fontWeight) >= 600,
      italic: style.fontStyle === 'italic',
      underline: style.textDecoration.includes('underline'),
 +    // Patched (taqreer): map CSS `text-decoration: line-through` to PPTX
@@ -80,7 +35,7 @@ index 36b1ff9..2125315 100644
      // Only add if we have a valid value
      ...(lineSpacing && { lineSpacing }),
      ...(paraSpaceBefore > 0 && { paraSpaceBefore }),
-@@ -709,6 +754,72 @@ function getTextStyle(style, scale) {
+@@ -709,6 +723,72 @@ function getTextStyle(style, scale) {
   * Determines if a given DOM node is primarily a text container.
   * Updated to correctly reject Icon elements so they are rendered as images.
   */
@@ -153,7 +108,7 @@ index 36b1ff9..2125315 100644
  function isTextContainer(node) {
    const hasText = node.textContent.trim().length > 0;
    if (!hasText) return false;
-@@ -756,17 +867,50 @@ function isTextContainer(node) {
+@@ -756,17 +836,50 @@ function isTextContainer(node) {
      const hasVisibleBg = bgColor.hex && bgColor.opacity > 0;
      const hasBorder =
        parseFloat(style.borderWidth) > 0 && parseColor(style.borderColor).opacity > 0;
@@ -206,177 +161,7 @@ index 36b1ff9..2125315 100644
  }
  
  function getRotation(transformStr) {
-@@ -962,11 +1106,20 @@ function generateGradientSVG(w, h, bgString, radius, border) {
-           y2 = '100%';
-           break;
-         case 'left':
-+          // Patched (taqreer): pin y to the mid-line so 'to left' is a
-+          // horizontal gradient, not the (100%,0%)→(0%,100%) diagonal the
-+          // default y1/y2 (0%→100%) produced.
-           x1 = '100%';
-+          y1 = '50%';
-           x2 = '0%';
-+          y2 = '50%';
-           break;
-         case 'right':
-+          // Patched (taqreer): horizontal, not diagonal (see 'left').
-+          x1 = '0%';
-+          y1 = '50%';
-           x2 = '100%';
-+          y2 = '50%';
-           break;
-         case 'top right':
-           x1 = '0%';
-@@ -999,7 +1152,14 @@ function generateGradientSVG(w, h, bgString, radius, border) {
-       // Formula: Map angle to perimeter coordinates.
-       if (!isNaN(val)) {
-         const deg = firstPart.includes('rad') ? val * (180 / Math.PI) : val;
--        const cssRad = ((deg - 90) * Math.PI) / 180; // Correct CSS angle offset
-+        // Patched (taqreer): the `- 90` offset double-applied the CSS→SVG
-+        // rotation, so every degree gradient came out rotated 90° (a
-+        // `linear-gradient(270deg,…)` horizontal scrim exported as a vertical
-+        // top→bottom one — the "scrim came from the top/bottom" export bug).
-+        // The sin/cos→x/y mapping below already encodes CSS's 0deg=up
-+        // convention, so feed it the CSS angle directly. Verified against the
-+        // four cardinals: 0→to-top, 90→to-right, 180→to-bottom, 270→to-left.
-+        const cssRad = (deg * Math.PI) / 180;
- 
-         // Calculate standard vector for rectangle center (50, 50)
-         const scale = 50; // Distance from center to edge (approx)
-@@ -1323,19 +1483,38 @@ async function getProcessedImage(
-   targetH,
-   radius,
-   objectFit = 'fill',
--  objectPosition = '50% 50%'
-+  objectPosition = '50% 50%',
-+  encode = null
- ) {
-+  const fmt = encode && encode.format === 'jpeg' ? 'jpeg' : 'png';
-+  const quality =
-+    encode && typeof encode.quality === 'number' ? encode.quality : 0.82;
-+  const maxScale =
-+    encode && typeof encode.maxScale === 'number' ? encode.maxScale : 2;
-   return new Promise((resolve) => {
-     const img = new Image();
-     img.crossOrigin = 'Anonymous';
- 
-     img.onload = () => {
-       const canvas = document.createElement('canvas');
--      const scale = 2; // Double resolution
--      canvas.width = targetW * scale;
--      canvas.height = targetH * scale;
-+      // Resolution multiplier. Default 2× for crisp lossless assets. Photo
-+      // callers (encode.noUpscale) cap this so we never rasterize a generated
-+      // photo above its own source resolution — drawing a 1536px source onto
-+      // a 3840px canvas just bloats the file with no added detail.
-+      let scale = maxScale;
-+      if (encode && encode.noUpscale) {
-+        const coverScale = Math.max(targetW / img.width, targetH / img.height);
-+        if (isFinite(coverScale) && coverScale > 0) {
-+          scale = Math.min(scale, 1 / coverScale);
-+        }
-+        if (!isFinite(scale) || scale <= 0) scale = maxScale;
-+      }
-+      canvas.width = Math.max(1, Math.round(targetW * scale));
-+      canvas.height = Math.max(1, Math.round(targetH * scale));
-       const ctx = canvas.getContext('2d');
--      ctx.scale(scale, scale);
-+      // Map the targetW×targetH coordinate space exactly onto the (possibly
-+      // rounded) canvas, so the mask + draw fill it edge-to-edge.
-+      ctx.scale(canvas.width / targetW, canvas.height / targetH);
- 
-       // Normalize radius
-       let r = { tl: 0, tr: 0, br: 0, bl: 0 };
-@@ -1426,7 +1605,11 @@ async function getProcessedImage(
- 
-       ctx.drawImage(img, renderX, renderY, renderW, renderH);
- 
--      resolve(canvas.toDataURL('image/png'));
-+      resolve(
-+        fmt === 'jpeg'
-+          ? canvas.toDataURL('image/jpeg', quality)
-+          : canvas.toDataURL('image/png')
-+      );
-     };
- 
-     img.onerror = () => resolve(null);
-@@ -2251,7 +2434,20 @@ function prepareRenderItem(
-       type: 'image',
-       zIndex,
-       domOrder,
--      options: { data: null, x, y, w, h, rotate: rotation },
-+      options: {
-+        data: null,
-+        x,
-+        y,
-+        w,
-+        h,
-+        rotate: rotation,
-+        // Carry element opacity into the picture's transparency
-+        // (alphaModFix) so a faded full-bleed SVG scrim lets the photo
-+        // beneath show through in the exported PPTX, not just in HTML.
-+        ...(safeOpacity < 1
-+          ? { transparency: (1 - safeOpacity) * 100 }
-+          : {}),
-+      },
-     };
- 
-     const job = async () => {
-@@ -2296,6 +2492,24 @@ function prepareRenderItem(
-     const objectFit = style.objectFit || 'fill'; // default CSS behavior is fill
-     const objectPosition = style.objectPosition || '50% 50%';
- 
-+    // Generated photographs (data-genimage) dominate deck size: a full-bleed
-+    // box otherwise becomes a 2× lossless PNG (e.g. 3840×2160 ≈ multiple MB).
-+    // Encode those as JPEG and never rasterize above the source resolution.
-+    // JPEG has no alpha, so a rounded box (whose corners are masked out) stays
-+    // PNG to keep clean edges. Logos never reach here — they're inlined as
-+    // <svg> before dom-to-pptx runs.
-+    const isGenPhoto = node.hasAttribute('data-genimage');
-+    const photoHasRadius =
-+      radii.tl > 0.5 || radii.tr > 0.5 || radii.br > 0.5 || radii.bl > 0.5;
-+    const encode = isGenPhoto
-+      ? {
-+          format: photoHasRadius ? 'png' : 'jpeg',
-+          quality: 0.82,
-+          maxScale: 1,
-+          noUpscale: true,
-+        }
-+      : null;
-+
-     const item = {
-       type: 'image',
-       zIndex,
-@@ -2310,7 +2524,8 @@ function prepareRenderItem(
-         heightPx,
-         radii,
-         objectFit,
--        objectPosition
-+        objectPosition,
-+        encode
-       );
-       if (processed) item.options.data = processed;
-       else item.skip = true;
-@@ -2484,19 +2699,44 @@ function prepareRenderItem(
-           delete textOpts.highlight;
-         }
- 
-+        // Patched (taqreer): a child carrying margin-top (→ paraSpaceBefore)
-+        // is a NEW vertical block — e.g. a muted sub-line under a heading.
-+        // Force a line break BEFORE it so it lands on its own paragraph/line.
-+        // Without this the run stays in the previous paragraph and pptxgenjs
-+        // emits an (ignored) mid-paragraph <a:pPr>, collapsing heading +
-+        // sub-line onto one line. An inline label+value (no margin-top → no
-+        // paraSpaceBefore, e.g. "النتيجة: …") has no break and is left intact.
-+        if (textOpts.paraSpaceBefore && textParts.length > 0) {
-+          const prevRun = textParts[textParts.length - 1];
-+          if (prevRun.options && !prevRun.options.breakLine) {
-+            prevRun.options.breakLine = true;
-+          }
-+        }
-+
-         textParts.push({ text: textVal, options: textOpts });
-       }
+@@ -2489,9 +2602,13 @@ function prepareRenderItem(
      });
  
      if (textParts.length > 0) {
@@ -393,34 +178,7 @@ index 36b1ff9..2125315 100644
        let valign = 'top';
        if (style.verticalAlign === 'middle') valign = 'middle';
        if (style.verticalAlign === 'bottom') valign = 'bottom';
-       if (style.alignItems === 'center') valign = 'middle';
-       if (style.justifyContent === 'center' && style.display.includes('flex')) align = 'center';
-+      // Patched (taqreer): a STYLED box (own fill or border) carrying text is
-+      // a pill / badge / chip — center its text vertically. Browsers center it
-+      // via equal top/bottom padding, but the box can be stretched taller
-+      // (flex align stretch), which leaves a top-anchored run sitting high.
-+      // anchor=ctr keeps it centred regardless of box height. Slide-5's
-+      // <span> pills (display:block, no align-items) hit exactly this.
-+      if (valign === 'top' && (bgColorObj.hex || hasBorder)) valign = 'middle';
- 
-       let padding = getPadding(style, config.scale);
- 
-@@ -2578,6 +2818,14 @@ function prepareRenderItem(
-             w: w + padIn * 2,
-             h: h + padIn * 2,
-             rotate: rotation,
-+            // Carry element opacity into the rasterized gradient's
-+            // transparency (alphaModFix). The shape path already factors
-+            // safeOpacity (see finalAlpha); this does the same for a
-+            // gradient/solid background that becomes a picture — so a faded
-+            // scrim div lets the photo show through in the exported PPTX.
-+            ...(safeOpacity < 1
-+              ? { transparency: (1 - safeOpacity) * 100 }
-+              : {}),
-           },
-         });
-       }
-@@ -2586,6 +2834,32 @@ function prepareRenderItem(
+@@ -2586,6 +2703,32 @@ function prepareRenderItem(
      if (textPayload) {
        textPayload.text[0].options.fontSize =
          Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
@@ -453,7 +211,7 @@ index 36b1ff9..2125315 100644
        items.push({
          type: 'text',
          zIndex: zIndex + 1,
-@@ -2598,9 +2872,8 @@ function prepareRenderItem(
+@@ -2598,9 +2741,8 @@ function prepareRenderItem(
            h,
            align: textPayload.align,
            valign: textPayload.valign,
@@ -464,7 +222,7 @@ index 36b1ff9..2125315 100644
            wrap: true,
            autoFit: true,
            vert: writingModeVert,
-@@ -2700,14 +2973,37 @@ function prepareRenderItem(
+@@ -2700,14 +2842,37 @@ function prepareRenderItem(
        if (textPayload) {
          textPayload.text[0].options.fontSize =
            Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
