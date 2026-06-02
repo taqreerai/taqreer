@@ -95,7 +95,15 @@ export async function generatedImageExists(
   const { data, error } = await adminClient()
     .storage.from(BUCKET)
     .list(`${projectId}/gen`, { search: `${genid}.png`, limit: 1 });
-  if (error) return false;
+  // Do NOT treat a Storage lookup FAILURE as "missing" — that would make warm
+  // + reconcile fall through to a billed generateImage() on a transient blip,
+  // breaking "bill at most once" for a deterministic path. Throw so the caller
+  // retries/skips (warm → reconcile safety net; reconcile → re-claimable box).
+  if (error) {
+    throw new Error(
+      `generated-images existence check failed (${projectId}/${genid}): ${error.message}`,
+    );
+  }
   return (data ?? []).some((f) => f.name === `${genid}.png`);
 }
 

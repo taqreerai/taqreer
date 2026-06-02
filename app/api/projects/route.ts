@@ -625,7 +625,16 @@ export async function POST(request: Request) {
           name: `${title} — هوية بصرية`,
           logo: safeLogoForKit?.storageUrl ?? null,
           colors: toJson(payload.brand?.colors ?? null),
-          fonts: toJson(payload.brand?.fonts ?? null),
+          // Persist the NORMALIZED fonts (same shape buildClaudeBrand forwards),
+          // not raw `payload.brand?.fonts` — the normalized values already passed
+          // safeFontUrl + storage-path ownership + the uploaded-family caps, so a
+          // saved default kit can't retain arbitrary URLs / junk fields that
+          // generation itself would reject.
+          fonts: toJson({
+            heading: headingFont,
+            body: bodyFont,
+            ...(uploadedFonts.length > 0 ? { uploaded: uploadedFonts } : {}),
+          }),
           assetUrls: toJson({ logo: safeLogoForKit }),
           isDefault: true,
         },

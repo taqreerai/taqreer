@@ -1928,6 +1928,19 @@ img[data-genimage].tq-genimg-in {
   animation: tq-genimg-fadein 450ms ease both;
 }
 
+/* Honour reduced-motion: drop the placeholder shimmer + the fade-in (matches
+   the other prefers-reduced-motion opt-outs in this stylesheet). The box still
+   reads as "loading" via its background, just without the animated sweep. */
+@media (prefers-reduced-motion: reduce) {
+  img[data-genimage]:not([src]) {
+    animation: none;
+    background-position: 50% 0;
+  }
+  img[data-genimage].tq-genimg-in {
+    animation: none;
+  }
+}
+
 /* ─── Widget header link ─── */
 .tq-widget-link {
   font-size: 0.75rem;
