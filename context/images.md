@@ -43,7 +43,7 @@ SVG-only deck, byte-for-byte unchanged. Toggle ON = "images deck".
 
 ## 3. Architecture — "reserved box + async fill"
 
-```
+```text
 /create (toggle ON)
    │  brief.imagesMode = true
    ▼
@@ -158,14 +158,14 @@ broken state) and stays regenerable.
 
 ## 8. Phase plan (each phase independently testable)
 
-### Phase 0 — Image client + storage (no flow integration)
+### Phase 0 — Image client + storage (no flow integration) — ✅ SHIPPED
 **Build:** `lib/images/gpt-image.ts` (gpt-image-2 wrapper: textless-prompt augment,
 size mapping, returns base64) + `lib/images/store.ts` (base64 → Supabase → URL) +
 `OPENAI_API_KEY` + bucket. **Prereq: user provides `OPENAI_API_KEY`.**
 **Test (DoD):** a one-off script generates an image from a prompt and stores it;
 opening the returned URL shows the image. No app changes yet.
 
-### Phase 1 — Images-mode prompt + box contract (placeholders only, NO gen)
+### Phase 1 — Images-mode prompt + box contract (placeholders only, NO gen) — ✅ SHIPPED
 **Build:** `brief.imagesMode` flag (flip manually for now); in deck-generate, swap
 the SVG-only directive for the images-deck directive + box contract (§4). Slides emit
 well-formed `data-genimage` boxes with shimmer placeholders. No image generation runs.
@@ -174,7 +174,7 @@ present, sized, prompts in `data-genimage`, cover has one, scrim on text-over-im
 cap respected, SVG still used for logo/charts. Preview shows shimmer placeholders.
 Toggle-off deck is identical to today (diff the prompt).
 
-### Phase 2 — Async fill + realtime swap (server)
+### Phase 2 — Async fill + realtime swap (server) — ✅ SHIPPED (as-built differs — see §11)
 **Build:** Inngest scans closed slides for markers → parallel image steps (capped
 concurrency) → store → patch `src` → persist per-image record (§5) → broadcast
 `slide.image.ready` → client in-place swap. Spinner during; branded-gradient fallback
@@ -183,13 +183,13 @@ on fail/moderation.
 prompt to force a moderation fail → graceful gradient; refresh → images persist;
 export PDF + PPTX → images present.
 
-### Phase 3 — Toggle on /create content card
+### Phase 3 — Toggle on /create content card — ✅ SHIPPED
 **Build:** "AI images" toggle (reuse `Toggle` primitive) on the create content card →
 sessionStorage → POST /api/projects → `brief.imagesMode`. Off = current prompt.
 **Test (DoD):** flip the toggle in the real UI; on → images deck, off → today's deck.
 Verify both prompt modes fire from the UI, not a manual flag.
 
-### Phase 4 — /project regenerate UI
+### Phase 4 — /project regenerate UI — ⬜ NOT STARTED
 **Build:** click-to-select a generated image on the canvas (event delegation on
 `data-genimage`, like comment markers) → glass-popover showing the image + a comment
 input → "إعادة الإنشاء" → new route re-runs gpt-image with the amended prompt → store →
@@ -197,7 +197,7 @@ swap in place → update per-image record + saved manifest.
 **Test (DoD):** open a finished images-deck on /project, select an image, type a tweak,
 regenerate, watch it swap, refresh → persisted.
 
-### Phase 5 — Pricing / credits (LAST)
+### Phase 5 — Pricing / credits (LAST) — ⬜ NOT STARTED
 **Build:** per-image credit debit (generation + regenerate), tie into
 `subscriptionmodel.md`; finalize the per-deck cap + a cost/estimate affordance; gate on
 the toggle.
@@ -206,11 +206,11 @@ the toggle.
 ---
 
 ## 9. Open questions (resolve at the relevant phase)
-- [ ] Public vs signed bucket for generated images (rec: public). — Phase 0
+- [x] Public vs signed bucket for generated images. → **PUBLIC** `generated-images` bucket (decorative, embedded as `<img src>`, must survive exports + year-old decks; see `lib/images/store.ts` header).
 - [ ] `openai` SDK vs `fetch`. (rec: SDK) — Phase 0
-- [ ] Per-image record: JSON-on-version vs `GeneratedImage` table. — Phase 2
-- [ ] Concurrency cap for parallel image steps (rec: 3–5). — Phase 2
-- [ ] Hard cap on images/deck (rec: ~10–12; aesthetic + cost). — Phase 1, finalize Phase 5
+- [x] Per-image record: JSON-on-version vs `GeneratedImage` table. → **`GeneratedImage` table** (unique `presentationVersionId_genid`; the warm pass writes no row mid-stream, the end-of-deck reconcile backfills).
+- [x] Concurrency cap for parallel image steps. → **6** (`deck-image-warm` Inngest `concurrency: { limit: 6 }`).
+- [x] Hard cap on images/deck. → **12** (`MAX_GENERATED_IMAGES` in `lib/images/slide-images.ts`, shared by prompt cap + warm dispatch + reconcile). Revisit for cost at Phase 5.
 - [ ] Regenerate: amend-prompt-only vs free-text replace. — Phase 4
 - [ ] Credit cost per image + whether the toggle shows an estimate. — Phase 5
 
@@ -229,3 +229,67 @@ the toggle.
 - Storage helpers → `lib/storage/project-assets.ts`, `lib/storage/sign.ts`
 - Realtime swap → `lib/realtime/*` (Phase 16), in-place update pattern
 - Credits (Phase 5) → `context/subscriptionmodel.md`
+
+---
+
+## 11. As-built + live-fill hardening (shipped 2026-06-02 — PR #48)
+
+Phase 2's "scan closed slides at the END → parallel steps" plan evolved into a
+**warm-during-stream** pipeline, and the *delivery to the browser* turned out to be the
+hard part. As-built:
+
+**Generation (server)**
+- `deck-generate` fires `deck.image.warm {projectId, slideKey, boxes}` the MOMENT each
+  slide with `data-genimage` boxes closes mid-stream (not at deck end) — deduped + capped
+  via a per-run `warmedGenids` set so a re-advance can't re-bill.
+- `deck-image-warm` (Inngest, `concurrency: 6`): per box → gpt-image-2 → store at the
+  deterministic path `${projectId}/gen/${genid}.png` → broadcast `slide.image.ready`.
+  Existence-checks first, so a retry re-broadcasts instead of re-billing. **No DB row
+  here** — the reconcile backfills rows later.
+- `deck-images-generate` (end-of-deck reconcile): ADOPTS a warmed image if already stored
+  (mark `ready` w/ the deterministic URL, no re-gen), else generates the straggler; writes
+  `GeneratedImage` rows + bakes `src` into the saved manifest. A box is billed at most once.
+
+**Delivery (the fix that made it actually work — broadcasts alone don't)**
+`slide.image.ready` broadcasts have no replay and don't arrive in local dev, so live fill
+can't depend on them. Instead:
+- **Status route** `?includeImageFills=true` returns `{genid: url}` = `ready`
+  `GeneratedImage` rows ∪ **every** warm-stored object under `${projectId}/gen/`
+  (`listWarmedGenids`). It returns the FULL warmed set and NEVER scopes to the live
+  `streamingPreview` — scoping retracted an already-shown image when Claude re-advanced a
+  slide (observed live). A superset is safe: the client filters to its own boxes.
+- **DeckView** polls that endpoint (gated on the rendered box set via `genBoxKey` →
+  `scanGenImages`), merges fills it actually rendered into `filledImages`, and stops only
+  when its OWN boxes are all covered — a late mid-deck image lands the instant it's stored,
+  not at completion.
+
+**Client rendering correctness (DeckView + SlideRenderer)** — three bugs, all found by
+watching live runs, all fixed:
+1. *Per-poll churn / heat:* the poll re-parsed the manifest every ~1.5s → new object
+   identities → every `SlideRenderer` re-applied `dangerouslySetInnerHTML`, recreating
+   each `<img>` (~1300 rebuilds/run — reset the shimmer + wiped patched src). Fix:
+   `stabilizeStreamingSlides` + `themesEqual` keep referential identity for unchanged
+   content + `React.memo(SlideRenderer)`.
+2. *Chain reaction:* a later image landing rebuilt earlier slides and wiped them. Fix:
+   `SlideRenderer` bakes each box's OWN fill into its sanitized HTML, keyed on
+   `[slide.html, thisSlide'sFills]` — another slide's fill can't touch it, and a genuine
+   rebuild carries the image with it. DOMPurify runs first; `src` applied via DOM
+   `setAttribute` (not string-splice).
+3. *Delivery gap:* the poll stopped on `serverCount >= genBoxTotal` (mismatched sources).
+   Fix: coverage measured against the client's own rendered boxes.
+
+**Verified live** (Playwright DOM recorder + Inngest run timings): per-image deliver gap
+**0–1s** (was minutes / only-at-completion), **0** cross-slide wipes, **0** idle rebuilds,
+**0** retractions, completed-deck render intact. Security review + `/simplify` both run;
+`tsc` + `eslint` clean.
+
+**New seams (additions to §10)**
+- `lib/images/store.ts` — `listWarmedGenids`, `publicGeneratedImageUrl`,
+  `generatedImageExists`, memoised admin client.
+- `lib/images/slide-images.ts` — `scanGenImages`, `injectImgSrc`, `SAFE_GENID`,
+  `MAX_GENERATED_IMAGES` (the genid namespace shared by prompt cap, warm dispatch,
+  reconcile, and DeckView's `genBoxKey`).
+- `components/slides/gen-image-context.ts` — `GenImageProvider` / `useGenImageFills`.
+- `app/api/projects/[id]/status/route.ts` — `?includeImageFills` union.
+- `inngest/functions/deck-image-warm.ts` — the warm fn; `deck-images-generate.ts` — reconcile/adopt.
+- `lib/geo/image-region.ts` — region-aware lifestyle-image descriptor (request headers → country).
