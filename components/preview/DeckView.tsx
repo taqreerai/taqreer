@@ -26,6 +26,7 @@ import {
   GenImageProvider,
   type GenImageFills,
 } from "@/components/slides/gen-image-context";
+import { scanGenImages } from "@/lib/images/slide-images";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { SlidePill } from "@/components/preview/SlidePill";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
@@ -727,14 +728,17 @@ export function DeckView({
   // coverage. genids are filename-safe (no commas), so the join/split is exact.
   const genBoxKey = useMemo(() => {
     const ids = new Set<string>();
-    const re = /data-genid=["']([^"']+)["']/g;
-    const scan = (html: string) => {
-      re.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(html)) !== null) ids.add(m[1]);
-    };
-    for (const s of manifest?.slides ?? []) scan(s.html);
-    for (const s of streamingPreview) scan(s.html);
+    // Use the canonical scanner (quote-agnostic, dedup, SAFE_GENID-filtered) so
+    // the poll's coverage target is EXACTLY the set of boxes SlideRenderer and
+    // the server actually fill — a raw `data-genid` regex also counts boxes
+    // with no `data-genimage`/empty prompt/unsafe id, which would never fill
+    // and would hold the poll open to its cap.
+    for (const s of manifest?.slides ?? []) {
+      for (const m of scanGenImages(s.html)) ids.add(m.genid);
+    }
+    for (const s of streamingPreview) {
+      for (const m of scanGenImages(s.html)) ids.add(m.genid);
+    }
     return Array.from(ids).sort().join(",");
   }, [manifest, streamingPreview]);
 

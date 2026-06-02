@@ -266,39 +266,49 @@ export async function GET(
   let imageFills: Record<string, string> | null = null;
   if (includeImageFills) {
     imageFills = {};
-    if (latestVersion?.id) {
-      const ready = await prisma.generatedImage.findMany({
-        where: {
-          presentationVersionId: latestVersion.id,
-          status: "ready",
-          storageUrl: { not: null },
-        },
-        select: { genid: true, storageUrl: true },
-      });
-      for (const r of ready) {
-        if (r.storageUrl) imageFills[r.genid] = r.storageUrl;
-      }
+    // The two sources are independent — read them concurrently (this runs on
+    // the every-6s image-fills poll, per viewer).
+    //   1. `ready` GeneratedImage rows — authoritative, post-reconcile.
+    //   2. EVERY warm image stored under `${projectId}/gen/`. We deliberately do
+    //      NOT scope this to the genids in `streamingPreview`: that set
+    //      fluctuates on a mid-stream re-advance/reset, and scoping to it would
+    //      RETRACT an image the client was already shown (observed live). A
+    //      superset is safe — a slide only renders a genid it contains, and the
+    //      client poll measures coverage against ITS OWN rendered boxes (not
+    //      this list), so extras never end the poll early. Never-retract +
+    //      client-side own-box filtering is what makes a mid-deck image land
+    //      live instead of waiting for the end.
+    const [ready, warmed] = await Promise.all([
+      latestVersion?.id
+        ? prisma.generatedImage.findMany({
+            where: {
+              presentationVersionId: latestVersion.id,
+              status: "ready",
+              storageUrl: { not: null },
+            },
+            select: { genid: true, storageUrl: true },
+          })
+        : Promise.resolve(
+            [] as { genid: string; storageUrl: string | null }[],
+          ),
+      listWarmedGenids(id).catch((err) => {
+        // Storage-list blip — DB-ready fills are still returned. Log it (every
+        // other image path logs its failures) so a persistent failure that
+        // would silently break live fill in dev isn't invisible.
+        console.warn(
+          `[status] listWarmedGenids failed for ${id}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+        return [] as string[];
+      }),
+    ]);
+    for (const r of ready) {
+      if (r.storageUrl) imageFills[r.genid] = r.storageUrl;
     }
-    // Union EVERY warm image stored under `${projectId}/gen/` that doesn't
-    // already have a `ready` DB row. We deliberately do NOT scope this to the
-    // genids currently in `streamingPreview`: that set fluctuates on a
-    // mid-stream re-advance/reset, and scoping to it would RETRACT an image the
-    // client was already shown (observed live — a warmed box vanished from the
-    // response the moment Claude re-advanced a slide). Returning a superset is
-    // safe: a slide only renders a genid it actually contains, so a stale genid
-    // from a prior regen is never displayed, and the client poll measures
-    // coverage against ITS OWN rendered boxes (not this list), so extra entries
-    // can't end the poll early. Never-retract + client-side own-box filtering
-    // is what makes a mid-deck image land live instead of waiting for the end.
-    try {
-      const warmed = await listWarmedGenids(id);
-      for (const genid of warmed) {
-        if (!imageFills[genid]) {
-          imageFills[genid] = publicGeneratedImageUrl(id, genid);
-        }
+    for (const genid of warmed) {
+      if (!imageFills[genid]) {
+        imageFills[genid] = publicGeneratedImageUrl(id, genid);
       }
-    } catch {
-      // Storage list blip — DB-ready fills (if any) are still returned.
     }
   }
 

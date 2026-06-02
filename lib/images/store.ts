@@ -24,15 +24,22 @@ function genImagePath(projectId: string, genid: string): string {
   return `${projectId}/gen/${genid}.png`;
 }
 
+// Memoised module singleton — the admin client is stateless (no session
+// persistence), and `publicGeneratedImageUrl` / `listWarmedGenids` are called
+// in a loop on the every-6s image-fills poll; constructing a fresh client each
+// time allocated N+1 fetch/auth/storage wrappers per request for nothing.
+let _adminClient: ReturnType<typeof createSupabaseAdminClient> | null = null;
 function adminClient() {
+  if (_adminClient) return _adminClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
     throw new Error("Supabase admin env (URL / service role key) not set");
   }
-  return createSupabaseAdminClient(url, serviceKey, {
+  _adminClient = createSupabaseAdminClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  return _adminClient;
 }
 
 /**
