@@ -1891,16 +1891,41 @@ body {
   }
 }
 img[data-genimage]:not([src]) {
-  background-color: var(--tq-bg-dim);
+  /* Bright highlight that slides across an EMPTY box (no src yet) so the slide
+     reads as "image loading here". Every STATIC background sub-property is
+     `!important` to beat Claude's inline placeholder gradient (which would
+     otherwise reset size/repeat and kill the slide); the ANIMATED
+     background-position wins over inline on its own. The rule drops the instant
+     `src` lands — SlideRenderer patches src straight into THIS node (it never
+     rebuilds the slide for an image), so the swap is in-place. */
+  background-color: var(--tq-bg-dim) !important;
   background-image: linear-gradient(
     110deg,
-    rgba(255, 255, 255, 0.04) 30%,
-    rgba(255, 255, 255, 0.11) 50%,
-    rgba(255, 255, 255, 0.04) 70%
-  );
-  background-size: 200% 100%;
-  background-repeat: no-repeat;
+    rgba(255, 255, 255, 0.05) 30%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.05) 70%
+  ) !important;
+  background-size: 200% 100% !important;
+  background-repeat: no-repeat !important;
   animation: tq-genimg-shimmer 1.4s ease-in-out infinite;
+}
+
+/* One-shot fade for a LIVE-patched image. SlideRenderer adds `.tq-genimg-in`
+   on the <img>'s `load` event ONLY when it patches the src into the live DOM
+   (an image landing mid-session). Images whose src is already baked into the
+   slide HTML (a reload or export) never get the class, so navigating between
+   slides doesn't replay the fade. Safe now that the node is no longer recreated
+   when an image lands. */
+@keyframes tq-genimg-fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+img[data-genimage].tq-genimg-in {
+  animation: tq-genimg-fadein 450ms ease both;
 }
 
 /* ─── Widget header link ─── */

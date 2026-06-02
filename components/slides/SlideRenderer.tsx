@@ -18,22 +18,14 @@
 // the DB. Then this client-side step becomes belt-and-suspenders rather
 // than the only line of defence.
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { SlideType, ThemeType } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
-import { injectImgSrc } from "@/lib/images/slide-images";
+import { scanGenImages } from "@/lib/images/slide-images";
 import { useGenImageFills } from "@/components/slides/gen-image-context";
 
-export function SlideRenderer({
-  slide,
-  theme,
-  direction = "rtl",
-  language = "ar",
-  width = 1920,
-  height = 1080,
-  scale = 1,
-}: {
+type SlideRendererProps = {
   slide: SlideType;
   theme: ThemeType;
   direction?: "rtl" | "ltr";
@@ -41,7 +33,17 @@ export function SlideRenderer({
   width?: number;
   height?: number;
   scale?: number;
-}) {
+};
+
+function SlideRendererImpl({
+  slide,
+  theme,
+  direction = "rtl",
+  language = "ar",
+  width = 1920,
+  height = 1080,
+  scale = 1,
+}: SlideRendererProps) {
   // Shared helper returns a `Record<string, string>` so the html-document
   // export can reuse the same source of truth. Cast to CSSProperties for
   // the inline-style API — React accepts string keys prefixed with `--`.
@@ -67,38 +69,79 @@ export function SlideRenderer({
   // render the saved HTML (which already carries reconciled src).
   const fills = useGenImageFills();
 
+  // The reserved-box genids present in THIS slide. Found via the shared
+  // scanner, which is QUOTE-AGNOSTIC — Claude emits attributes single-OR
+  // double-quoted (`data-genid='img-cover'`), so a hardcoded
+  // `includes('data-genid="…"')` check silently matched NOTHING and the
+  // live fill never injected. Memoised on slide.html alone so an unrelated
+  // slide's fill doesn't force a re-scan.
+  const slideGenids = useMemo(() => {
+    if (!slide.html.includes("data-genid")) return null;
+    return new Set(scanGenImages(slide.html).map((m) => m.genid));
+  }, [slide.html]);
+
   // Signature of THIS slide's relevant fills only. A string primitive, so
   // its VALUE is stable when this slide's boxes haven't changed — that's
   // what stops an unrelated `slide.image.ready` for another slide from
   // re-sanitising every mounted SlideRenderer (hero + N nav thumbnails).
   const fillSig = useMemo(() => {
-    if (!slide.html.includes("data-genid")) return "";
+    if (!slideGenids) return "";
     return Object.entries(fills)
-      .filter(([genid]) => slide.html.includes(`data-genid="${genid}"`))
+      .filter(([genid]) => slideGenids.has(genid))
       .map(([genid, url]) => `${genid}=${url}`)
       .sort()
       .join("\n");
-  }, [slide.html, fills]);
+  }, [slideGenids, fills]);
 
-  // Inject each filled box's src BEFORE sanitising. Memoised on the
-  // signature so it only re-runs when one of THIS slide's images lands.
-  const htmlWithImages = useMemo(() => {
-    if (!fillSig) return slide.html;
-    let out = slide.html;
-    for (const pair of fillSig.split("\n")) {
-      const eq = pair.indexOf("=");
-      out = injectImgSrc(out, pair.slice(0, eq), pair.slice(eq + 1));
-    }
-    return out;
-    // `slide.html` is implied by `fillSig` (it's derived from it), but
-    // listed for clarity / the exhaustive-deps rule.
-  }, [slide.html, fillSig]);
-
+  // Sanitise the slide HTML AND bake in THIS slide's ready image fills, as one
+  // string. Keyed on `[slide.html, fillSig]` where `fillSig` is THIS slide's
+  // fills only.
+  //
+  // Why bake the image into the content instead of patching it onto the DOM
+  // afterward (the previous approach): a generated image used to live OUTSIDE
+  // the slide HTML and was re-stitched by a separate effect every time the
+  // slide rendered. That left it fragile — any rebuild (a Claude re-stream
+  // mid-generation, the streaming→completed swap) recreated the <img> EMPTY,
+  // and the re-stitch lagged a poll cycle, so an already-shown image dropped
+  // back to its shimmer for seconds. Worse, because the patch keyed on the
+  // shared `sanitized`, a LATER image landing rebuilt EARLIER slides and wiped
+  // their images (the observed chain reaction). Making the image part of the
+  // slide's own content fixes both:
+  //   • another slide's fill can't change THIS `fillSig` → no rebuild here;
+  //   • any genuine rebuild carries the baked <img src> with it → no empty flash.
   useEffect(() => {
     // sanitizeSlideHtml() is fail-closed: empty string on any failure.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSanitized(sanitizeSlideHtml(htmlWithImages));
-  }, [htmlWithImages]);
+    const safe = sanitizeSlideHtml(slide.html);
+    if (!safe || !fillSig) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSanitized(safe);
+      return;
+    }
+    const byGenid = new Map(
+      fillSig.split("\n").map((pair) => {
+        const eq = pair.indexOf("=");
+        return [pair.slice(0, eq), pair.slice(eq + 1)] as const;
+      }),
+    );
+    // Inject via the DOM (client-only effect) rather than string-splicing
+    // unsanitised markup. URLs are our own deterministic Supabase public URLs.
+    const scratch = document.createElement("div");
+    scratch.innerHTML = safe;
+    let touched = false;
+    for (const img of scratch.querySelectorAll<HTMLImageElement>(
+      "img[data-genimage]",
+    )) {
+      const url = byGenid.get(img.getAttribute("data-genid") ?? "");
+      // Skip a box whose src is ALREADY the reconciled URL (reload / export
+      // path, where the saved HTML carries src) so the fade-in doesn't replay
+      // on every navigation — it only runs for a box filled live this session.
+      if (!url || img.getAttribute("src") === url) continue;
+      img.setAttribute("src", url);
+      img.classList.add("tq-genimg-in"); // one-shot fade for live-injected boxes
+      touched = true;
+    }
+    setSanitized(touched ? scratch.innerHTML : safe);
+  }, [slide.html, fillSig]);
 
   // NO inset buffer (was attempted 2026-05-23 then reverted same
   // day). The buffer-ring approach assumed the slide's own root bg
@@ -156,3 +199,41 @@ export function SlideRenderer({
     </div>
   );
 }
+
+// Skip re-render when a slide's CONTENT + layout are unchanged. The live
+// preview status poll re-fetches the whole streaming manifest every ~1.5s and
+// hands DeckView all-new slide/theme objects even when nothing changed; without
+// this guard each SlideRenderer re-applies its `dangerouslySetInnerHTML` on
+// every tick, which DESTROYS + recreates every <img> inside — resetting the
+// load shimmer AND wiping a freshly-patched gen-image `src` before it can
+// stick (~1300 needless rebuilds across one image-generation window, measured).
+// Comparing by VALUE here freezes a Claude-finished slide so only its image box
+// changes when gpt delivers it.
+//
+// Crucially this does NOT block live image fills: those arrive through the
+// GenImageFills CONTEXT (`useGenImageFills`), and a context change re-renders
+// its consumers regardless of React.memo — so a landing image still triggers
+// the imperative patch effect. We only skip the wasteful poll-churn re-renders
+// that carry identical content.
+function slideRendererPropsEqual(
+  a: SlideRendererProps,
+  b: SlideRendererProps,
+): boolean {
+  return (
+    a.scale === b.scale &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.direction === b.direction &&
+    a.language === b.language &&
+    a.slide.slideId === b.slide.slideId &&
+    a.slide.role === b.slide.role &&
+    a.slide.html === b.slide.html &&
+    // theme is kept referentially stable upstream for unchanged content
+    // (streaming theme + setManifestStable); a genuine theme change is a new
+    // object, so a ref check both skips churn and catches real changes.
+    a.theme === b.theme
+  );
+}
+
+export const SlideRenderer = memo(SlideRendererImpl, slideRendererPropsEqual);
+

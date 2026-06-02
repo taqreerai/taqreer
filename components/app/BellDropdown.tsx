@@ -52,7 +52,16 @@ const BELL_ANCHOR_GAP_PX = 25;
 
 export function BellDropdown() {
   const router = useRouter();
-  const items = useNotifications();
+  // Hide "deck finished" from the BELL only (its list, its toast pop, AND the
+  // unread badge — all derive from `items` below). For images decks it fires
+  // while the images are still rendering, so it's premature/misleading here.
+  // The row still lives in the store, so the dashboard Recent Activity widget
+  // (which reads the same `useNotifications()` UNFILTERED) keeps showing it.
+  const allItems = useNotifications();
+  const items = useMemo(
+    () => allItems.filter((n) => n.type !== "deck.generate.finished"),
+    [allItems],
+  );
   const [open, setOpen] = useState(false);
   const [seeAllOpen, setSeeAllOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);

@@ -91,3 +91,27 @@ export async function generatedImageExists(
   if (error) return false;
   return (data ?? []).some((f) => f.name === `${genid}.png`);
 }
+
+/**
+ * Genids that already have a STORED image under `${projectId}/gen/`. Used by
+ * the status route to surface WARM (during-stream) images BEFORE the end-of-
+ * deck reconcile writes their GeneratedImage rows — so the live-fill poll can
+ * deliver them while the deck is still generating, in dev (where realtime
+ * broadcasts don't arrive) and across the `/preview`→`/project` gap. One
+ * storage `list` call; pair each with `publicGeneratedImageUrl`.
+ */
+export async function listWarmedGenids(projectId: string): Promise<string[]> {
+  const { data, error } = await adminClient()
+    .storage.from(BUCKET)
+    .list(`${projectId}/gen`, { limit: 1000 });
+  if (error || !data) return [];
+  return data
+    .filter((f) => f.name.endsWith(".png"))
+    .map((f) => f.name.slice(0, -".png".length))
+    // Defensive: only surface filename-safe genids. Writers already gate on
+    // SAFE_GENID (slide-images.ts) before storing, so this never filters a
+    // real image — it's belt-and-suspenders against any future write path
+    // that bypasses that guard, keeping a `../`-style name from ever reaching
+    // the client as an <img src>.
+    .filter((genid) => /^[A-Za-z0-9._-]{1,64}$/.test(genid));
+}

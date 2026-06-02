@@ -1,18 +1,18 @@
 // Shared composition / layout rules that both the full deck-generate
-// prompt and the partial-regen prompt need to honour. Lifted here so
-// the two prompts can't drift — partial regen was previously missing
-// the COMPOSITION DIRECTION rule (graphics opposite text), and Claude
-// would teleport an element from the text side to the empty
-// background side because it didn't know that side was reserved.
+// prompt and the partial-regen prompt honour. Lifted here so the two
+// prompts can't drift.
 //
 // Format-agnostic: enumerates both 16:9 + 9:16 numbers inline so the
 // caller doesn't need to interpolate. The full prompt already worked
 // this way; partial inherits the same approach.
+//
+// NOTE: the COMPOSITION DIRECTION block (decoration anchors on the half
+// opposite the text) was removed by request as redundant. The full deck
+// prompt still states the rule in its GRAPHICS section; partial regen no
+// longer carries it, so single-slide regeneration may place a graphic on
+// the text side — an accepted tradeoff.
 
-export const COMPOSITION_RULES = `COMPOSITION DIRECTION — design natively, NO mirror pipeline downstream
-Every coordinate renders as written. Background graphics (gradients, decorative shapes, ring sets, atmospheric blobs, illustrations, recognizable objects) anchor on the OPPOSITE half of the canvas from the text content, so they complement instead of overlap. In RTL slides the text sits on the RIGHT (reading start), so all decoration anchors on the LEFT half (focal center-x < 960 on a 1920 canvas). LTR slides invert — text on LEFT, decoration on RIGHT.
-
-SLIDE MARGINS — two-layer + reserved chrome footer
+export const COMPOSITION_RULES = `SLIDE MARGINS — two-layer + reserved chrome footer
 Use the EXACT same side inset for content as for chrome corners (logo / pagination / persistent text). On a 1920-wide canvas that's 80 px; on a 1080-wide vertical canvas that's 50 px. Top inset matches the same number. BOTTOM is fixed at 140 px (chrome footer zone). Body MUST NOT extend below \`bottom:140px\`. Cover (\`role:"cover"\`) / closing (\`role:"closing"\`) may break chrome for hero composition.
 
 EXACTLY ONE content layer, AND inside it NO ABSOLUTE POSITIONING of body content. The single content \`<div>\` is a \`display: flex; flex-direction: column\` (or grid) container; every body element — title, kicker, subtitle, paragraphs, cards, stats, illustrations, charts, footers — is a NORMAL-FLOW CHILD of that container, never \`position: absolute\` inside it. The only siblings allowed alongside the content layer (NOT inside it) are: the background SVG layer (\`pointer-events:none\`) and the chrome blocks (logo / pagination / persistent text, all in the bottom 140 px chrome zone, never in the body region).

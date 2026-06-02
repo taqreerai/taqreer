@@ -258,9 +258,14 @@ export function mapKitToHydrated(kit: {
   colors?: unknown;
   fonts?: { heading?: unknown; body?: unknown } | null;
   assetUrls?: {
-    logo?: { storageUrl?: unknown; displayUrl?: unknown; name?: unknown } | null;
+    logo?: {
+      storageUrl?: unknown;
+      displayUrl?: unknown;
+      name?: unknown;
+      position?: unknown;
+      exclude?: unknown;
+    } | null;
   } | null;
-  logo?: { position?: unknown; exclude?: unknown } | null;
 }): HydratedBrand {
   const logoAsset = kit.assetUrls?.logo;
   const logo =
@@ -270,9 +275,13 @@ export function mapKitToHydrated(kit: {
           displayUrl:
             typeof logoAsset.displayUrl === "string" ? logoAsset.displayUrl : null,
           name: typeof logoAsset.name === "string" ? logoAsset.name : null,
+          // Position + exclude live in `assetUrls.logo` (where the save wrote
+          // them), NOT the top-level `logo` column (which is just the URL
+          // string). Reading them off `kit.logo` always yielded null, so the
+          // dropdown reset the logo to top-right.
           position:
-            typeof kit.logo?.position === "string" ? kit.logo.position : null,
-          exclude: kit.logo?.exclude,
+            typeof logoAsset.position === "string" ? logoAsset.position : null,
+          exclude: logoAsset.exclude,
         })
       : null;
   return {

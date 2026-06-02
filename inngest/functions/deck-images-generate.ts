@@ -37,6 +37,7 @@ import {
   generatedImageExists,
   publicGeneratedImageUrl,
 } from "@/lib/images/store";
+import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
 // Parallel gpt-image-2 calls in flight per deck. 4 keeps wall-clock low
 // (~3 batches for a full 12) without hammering the OpenAI image rate
@@ -172,6 +173,27 @@ export const deckImagesGenerate = inngest.createFunction(
           data,
         });
 
+      // Live progressive fill: the MOMENT a box becomes ready, tell every
+      // open viewer so the client swaps its placeholder → the image in
+      // place (context/images.md). The warm-during-stream pass also
+      // broadcasts, but warm's images can land in the `/preview`→`/project`
+      // navigation gap (broadcasts have no replay); this reconcile fires
+      // when the client is settled on `/project`, so it's the reliable
+      // live path. Awaited (not fire-and-forget) so the broadcast flushes
+      // before the Inngest step serializes; never fatal to image fill.
+      const announce = (slideKey: string, genid: string, url: string) =>
+        broadcastToProject(projectId, "slide.image.ready", {
+          slideKey,
+          genid,
+          url,
+        }).catch((err) => {
+          logger.warn("deck_image_broadcast_failed", {
+            versionId,
+            genid,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+
       const worker = async () => {
         // `cursor++` is atomic between awaits (single-threaded JS), so
         // workers in THIS run never pull the same box. The DB claim below
@@ -200,10 +222,12 @@ export const deckImagesGenerate = inngest.createFunction(
             // with that URL instead of re-billing gpt-image-2. Covers boxes
             // warmed before this run AND ones whose warm landed late.
             if (await generatedImageExists(projectId, b.genid)) {
+              const adoptedUrl = publicGeneratedImageUrl(projectId, b.genid);
               await setStatus(b.genid, {
                 status: "ready",
-                storageUrl: publicGeneratedImageUrl(projectId, b.genid),
+                storageUrl: adoptedUrl,
               });
+              await announce(b.slideKey, b.genid, adoptedUrl);
               adopted += 1;
               continue;
             }
@@ -221,6 +245,7 @@ export const deckImagesGenerate = inngest.createFunction(
               storageUrl: url,
               size,
             });
+            await announce(b.slideKey, b.genid, url);
             generated += 1;
           } catch (err) {
             failed += 1;

@@ -13,6 +13,7 @@ import {
   type Quality,
 } from "@/lib/types/quality";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
+import { detectImageRegion } from "@/lib/geo/image-region";
 
 // Defence-in-depth strip list for user-uploaded SVG markup. Compiled
 // once at module load instead of being rebuilt on every request. The
@@ -541,6 +542,14 @@ export async function POST(request: Request) {
   }
   const quality = resolveQuality(payload.quality);
 
+  // Location-aware lifestyle imagery: map the REQUEST's country (the "area of
+  // generation") to a regional people descriptor so an images-deck made from
+  // Saudi Arabia depicts local people, not a generic cast. Only resolved for
+  // images decks (the only place generated photos exist); null when the geo
+  // can't be determined, which keeps the brief — and the prompt — unchanged.
+  const imageRegion =
+    payload.imagesMode === true ? detectImageRegion(request.headers) : null;
+
   const brief = {
     title,
     language: contentLanguage,
@@ -554,6 +563,9 @@ export async function POST(request: Request) {
     // generated-image boxes. OMITTED when off, so a normal deck's brief
     // (and the prompt built from it) stays byte-for-byte unchanged.
     ...(payload.imagesMode === true ? { imagesMode: true } : {}),
+    // Regional people descriptor for generated lifestyle images (only when
+    // resolvable). buildUserMessage turns this into the cast directive.
+    ...(imageRegion ? { imageRegion } : {}),
     // Only include `source` when a valid SourceMeta was provided.
     // deck-generate's readSource() also treats `kind: "scratch"`
     // as null, so a future explicit-scratch payload remains a
@@ -594,18 +606,31 @@ export async function POST(request: Request) {
       },
     });
 
-    const brandKit = payload.saveBrandKit
-      ? await tx.brandKit.create({
-          data: {
-            userId: dbUser.id,
-            name: `${title} — هوية بصرية`,
-            logo: safeLogoForKit?.storageUrl ?? null,
-            colors: toJson(payload.brand?.colors ?? null),
-            fonts: toJson(payload.brand?.fonts ?? null),
-            assetUrls: toJson({ logo: safeLogoForKit }),
-          },
-        })
-      : null;
+    // "Save as default identity" (حفظ كهوية افتراضية). The saved kit becomes
+    // the user's DEFAULT so the landing flows auto-hydrate it — colours, fonts,
+    // AND the logo position — on the next mount (`fetchDefaultBrandKit`). Before
+    // this, the toggle saved the kit but never set `isDefault`, so the default-
+    // kit fetch always found nothing and nothing restored. Clear any prior
+    // default first (the partial unique index allows one per user); the clear-
+    // then-create is atomic inside this transaction.
+    let brandKit: { id: string } | null = null;
+    if (payload.saveBrandKit) {
+      await tx.brandKit.updateMany({
+        where: { userId: dbUser.id, isDefault: true },
+        data: { isDefault: false },
+      });
+      brandKit = await tx.brandKit.create({
+        data: {
+          userId: dbUser.id,
+          name: `${title} — هوية بصرية`,
+          logo: safeLogoForKit?.storageUrl ?? null,
+          colors: toJson(payload.brand?.colors ?? null),
+          fonts: toJson(payload.brand?.fonts ?? null),
+          assetUrls: toJson({ logo: safeLogoForKit }),
+          isDefault: true,
+        },
+      });
+    }
 
     const project = await tx.project.create({
       data: {

@@ -10,6 +10,7 @@
 // expand modal (LibraryImageModal) with a download CTA.
 
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { Pagination } from "@/components/app/Pagination";
 import { SegmentedToggle } from "@/components/create/controls";
@@ -154,13 +155,20 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
             <>
               <div className="grid grid-cols-2 gap-x-10 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {paginated.map((img) => (
-                  <LibraryImageCard
-                    key={img.id}
-                    image={img}
-                    onOpen={(img) =>
-                      setOpenIndex(visible.findIndex((i) => i.id === img.id))
-                    }
-                  />
+                  // `layout` animates each tile to its new position when the
+                  // rendered set reorders (sort) or narrows (search) — the
+                  // same Framer pattern as ProjectsGrid. The stable `img.id`
+                  // key is what lets Framer track each tile across the move
+                  // (and would animate the backfill on delete, if/when the
+                  // library gets a delete action).
+                  <motion.div key={img.id} layout>
+                    <LibraryImageCard
+                      image={img}
+                      onOpen={(img) =>
+                        setOpenIndex(visible.findIndex((i) => i.id === img.id))
+                      }
+                    />
+                  </motion.div>
                 ))}
               </div>
               <Pagination

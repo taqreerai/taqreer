@@ -111,17 +111,10 @@ LANGUAGE & DIRECTION
 
 ${COMPOSITION_RULES}
 
-DESIGN PHILOSOPHY
-- Let negative space follow the hierarchy — sparse slides breathe, dense slides earn tighter spacing. Never pad to a whitespace quota, and never shrink text just to manufacture emptiness.
-- Asymmetric composition. Vary every slide. Chrome stays locked.
-- Text length is a design variable — short → MASSIVE structural type; long → multi-column editorial.
-- Dominant colour + 1–2 accents. Vary themes across the deck.
-
 CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE
 Pick the layout from the content's shape. FORCE VARIETY: if three consecutive content slides are card grids, you've fallen into templating. Break by using one of these instead:
 - **Giant typography** — one word or phrase at hero scale, supporting line below.
 - **Magazine spread** — large display headline + 2–3 narrow text columns underneath.
-- **Asymmetric split-screen** — 60/40 or 70/30; one side typography, the other illustration/data/quote.
 - **Full-bleed illustration / poster** — a single concept rendered as inline SVG, text wrapping or laid over.
 - **Sparse poster** — one stat or fact at monumental scale, vast whitespace.
 - **Timeline** — horizontal or staggered visual path.
@@ -130,12 +123,10 @@ Pick the layout from the content's shape. FORCE VARIETY: if three consecutive co
 
 Cards are ONE option, not the default. Use them ONLY for genuine parallel sets (3–6 equal-weight categories). Card slides must carry concept-matching icons — never generic placeholder shapes. Never output <ul>/<li>.
 
-DESIGN TOKENS — CSS vars on the slide root
-- \`var(--brand-bg)\`, \`var(--brand-text)\` — surface + text
-- \`var(--primary)\`, \`var(--secondary)\`, \`var(--accent)\` — palette[0..2]
-- \`var(--brand-1)\` … \`var(--brand-N)\` — palette entries, 1-indexed
-- \`var(--font-heading)\`, \`var(--font-body)\`
-Fill matching \`theme\` in OUTPUT JSON; the renderer wires the vars.
+BRAND PALETTE & FONT — CSS vars on the slide root
+- \`var(--brand-1)\` … \`var(--brand-N)\` — the brand palette, 1-indexed. Here's the palette; use it as you see fit across the design.
+- \`var(--font-heading)\`, \`var(--font-body)\` — the brand typeface (one family; both resolve to it).
+Fill matching \`theme\` in the OUTPUT JSON (palette + fonts + background + text); the renderer wires the vars.
 
 TECHNICAL CONSTRAINTS
 Static deliverable — no animation, no transition, no \`:hover\`/\`:focus\`, no JavaScript. Every visual present at first paint.
@@ -154,25 +145,24 @@ GRAPHICS — inline SVG only
 - All decoration, atmosphere, icons, illustrations, logos: inline <svg> with brand-token fills. NO icon fonts (Material font, FontAwesome).
 - Alpha via SVG <radialGradient>/<linearGradient> \`stop-opacity\` (CSS rgba doesn't round-trip).
 - Every graphic must mean something. If you can't name what it represents in one phrase, cut it. Size each graphic to its role. Keep illustrations simple enough to export cleanly — a graphic that needs dozens of paths will break in export and balloon the output; simplify it instead.
-- No floating abstract shapes "filling space" — every shape anchors a corner or separates sections. Decoration stays on the OPPOSITE half from the text (per COMPOSITION DIRECTION) — never behind the headline.
+- No floating abstract shapes "filling space" — every shape anchors a corner or separates sections. Decoration stays on the OPPOSITE half from the text — never behind the headline.
 - Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.
 
 ICONS — Lucide stroke icons, concept-matched
 Envelope: \`<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">…paths…</svg>\` — the 24×24 viewBox is Lucide's path coordinate space, NOT a size constraint; render size is \`SIZE\`, your call.
 Match the icon to the concept and use Lucide's actual path data — don't invent or paraphrase. If you need a glyph not in standard Lucide, draw a Lucide-style stroke icon (stroke-width 2, linecap round) in the same 24×24 viewBox.
 
+COUNTRY FLAGS — accurate flag SVGs on demand
+When a slide is about a specific country, you MAY show its flag: \`<img src="https://flagcdn.com/<code>.svg" alt="علم <country>" style="height:…;border-radius:4px;"/>\` — <code> is the lowercase ISO 3166-1 alpha-2 code (السعودية → sa, مصر → eg, الإمارات → ae, USA → us, UK → gb). The flag inlines as a true vector on export, so prefer it over hand-drawing a flag in SVG (approximations look wrong). NEVER set \`data-fill\` on a flag — it MUST keep its real colours. Use flags with intent — a small accent beside a country name, a row for a country comparison, a header marker — never as filler on every slide. Give the flag a subtle \`border-radius\`; add a hairline border only when it sits on a same-tone background (e.g. a flag with a white edge on a light slide).
+
 TYPOGRAPHY
 - Fonts: when the brief sources fonts, use those (copy their URLs verbatim per FONT SOURCING). When none are provided, default to Cairo for Arabic and Poppins (Roboto fallback) for Latin.
 - Weights are yours to choose — no two-weight limit. Use whatever weights from the font's full range best serve each slide's hierarchy. The exporter embeds every weight you use, so each renders identically in PowerPoint. Sole judgment call: very heavy weights (\`800\`–\`900\`) thicken Arabic glyphs at small sizes, so prefer them for large display type over body copy.
 
-COLOUR CONTRAST — non-negotiable
-For each text / icon / shape, name the surface it sits on, pick a contrasting colour. WCAG AA (4.5:1 body) / AAA (7:1 hero headlines). Forbidden:
-- Text colour matching its container's background (same-tone text on same-tone surface).
-- Brand-token text on a brand-token surface of the same value.
-- SVG fill/stroke matching its surface (icon disappears).
-- Gradient stops, muted text, pill text within ~10 lightness pts of the background.
-Fallback: white on dark, near-black on light.
-
+BACKGROUND — on-brand surface, never invented
+- The slide-root background AND \`theme.background\` MUST be a brand colour: a palette entry, or the palette's lightest / most-neutral tone as the surface. If the palette is all vivid with no neutral, default to a near-WHITE surface (e.g. #F5F6F8) — never a dark one. Go dark ONLY when the brand palette ITSELF is dark.
+- NEVER invent an off-palette background, and never reach for a dark near-black canvas on a light or vivid brand. Dark tones belong on TEXT, accents, scrims and chrome — not on the surface.
+- Slides MAY vary their surface across the deck for rhythm, but every surface must be a brand colour, not a made-up one.
 OUTPUT — JSON only in the text channel
 - The FIRST character of your text response must be \`{\`. No analysis prose, no acknowledgement, no markdown fences, no "Here's the deck:" preamble.
 - Use your THINKING budget to draft, critique, and refine — iterate freely in thinking. Then commit ONE polished manifest to the text response. The text is your final answer, not a work-in-progress.
@@ -226,17 +216,13 @@ function swapSection(
 }
 
 // ─── IMAGES-DECK direction (context/images.md) ───────────────────────
-// The THREE sections that change when brief.imagesMode is on. Everything
-// else (BiDi, chrome, icons, typography, contrast, OUTPUT schema, fonts) is
-// shared with SYSTEM_PROMPT BY DERIVATION below — it cannot drift.
-const IMG_DESIGN_PHILOSOPHY = `DESIGN PHILOSOPHY
-- This is an IMAGE-LED deck: generated images (lifestyle photography OR abstract/graphic renders — see IMAGE STYLE) carry the atmosphere and emotion; type + layout frame them. Premium editorial / brand-campaign feel, not an icon-decorated slideshow.
-- Let negative space follow the hierarchy — sparse slides breathe, dense slides earn tighter spacing. Never pad to a whitespace quota, and never shrink text just to manufacture emptiness.
-- Asymmetric composition. Vary every slide. Chrome stays locked.
-- Text length is a design variable — short → MASSIVE structural type over imagery; long → multi-column editorial beside a supporting image.
-- Dominant colour + 1–2 accents pulled from the imagery's mood. Vary themes across the deck.`;
-
+// The TWO sections that change when brief.imagesMode is on. Everything else
+// (BiDi, chrome, icons, typography, OUTPUT schema, fonts) is shared with
+// SYSTEM_PROMPT BY DERIVATION below — it cannot drift. The image-led framing
+// that used to live in a swapped DESIGN PHILOSOPHY section now leads
+// IMG_LAYOUT_MENU, since the base DESIGN PHILOSOPHY section was removed.
 const IMG_LAYOUT_MENU = `CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE
+This is an IMAGE-LED deck: generated images (lifestyle photography OR abstract/graphic renders — see IMAGE STYLE) carry the atmosphere and emotion; type + layout frame them — premium editorial / brand-campaign feel, not an icon-decorated slideshow.
 Pick the layout from the content's shape and let imagery drive impact. FORCE VARIETY: never repeat a layout in a row. Reach for:
 - **Full-bleed image hero** — a generated image fills the slide; headline + supporting line laid OVER it with a scrim (see GRAPHICS) for legibility.
 - **Image / text split** — 50/50 or 60/40; a generated image one side, editorial type the other.
@@ -248,14 +234,14 @@ Pick the layout from the content's shape and let imagery drive impact. FORCE VAR
 
 Cards are ONE option, not the default — only for genuine parallel sets (3–6 equal-weight categories); give each a concept-matched generated image or a Lucide icon, never generic placeholder shapes. Never output <ul>/<li>.`;
 
-const IMG_GRAPHICS = `GRAPHICS — generated imagery for scenes, inline SVG for everything else
+const IMG_GRAPHICS = `GRAPHICS — generated imagery for scenes; inline SVG only where functional (logo, charts, flags), never decorative
 - IMAGE STYLE — DECIDE ONCE, UP FRONT, from the deck's subject, then commit EVERY generated image in the deck to that ONE style. NEVER mix the two within a deck:
   • LIFESTYLE PHOTOGRAPHY — authentic real-world photographic scenes (people, places, products, environments, candid moments, textures). Pick this for human / consumer / brand / travel / hospitality / real-estate / physical-product / on-the-ground service stories where real photography carries the emotion.
   • ABSTRACT / GRAPHIC — conceptual non-photographic renders: abstract 3D forms, material + light studies, gradient/glass/metal surfaces, geometric or generative art. Pick this for tech / SaaS / fintech / data / platform / B2B / deep-tech / abstract-idea decks, where a literal photo would read as generic stock.
   Whichever you choose, hold it across ALL slides — one consistent medium, lighting, palette and treatment. A deck that puts a lifestyle photo on one slide and an abstract 3D render on the next looks incoherent; that mix is forbidden.
 - PHOTOGRAPHIC / illustrative content — people, places, products, textures, atmospheric heroes, full-bleed backgrounds — is a GENERATED IMAGE, never hand-drawn as SVG. Reserve a box with NO src and the system fills it:
     <img data-genimage="<prompt>" data-genrole="hero|bg|accent" data-genaspect="landscape|portrait|square" data-genid="<unique-id>" alt="" style="width:…;height:…;object-fit:cover;display:block;background:<subtle brand-tinted placeholder gradient>;"/>
-  • data-genimage — WRITE THE PROMPT FROM THIS SLIDE'S OWN CONTENT. The image must depict what this specific slide is about — its real topic, place, product, people, process, or concept — grounded in the deck's actual subject and brand. Be concrete and literal to the text, never generic or decorative: a slide about a Riyadh logistics firm → "a fleet of delivery vans pulling out of a modern Riyadh distribution hub at dawn", NOT an abstract texture or an unrelated stock scene. Keep the imagery coherent across the deck — one consistent world, lighting, and mood. Describe SUBJECT / SCENE / MOOD only; NEVER request text, words, letters, numbers, captions, logos, signage, charts, diagrams, or UI inside the image (forbidden + stripped server-side) — all wording stays as real HTML over the box.
+  • data-genimage — WRITE THE PROMPT FROM THIS SLIDE'S OWN CONTENT. The image must depict what this specific slide is about — its real topic, place, product, people, process, or concept — grounded in the deck's actual subject and brand. Be concrete and literal to the text, never generic or decorative: a slide about a Riyadh logistics firm → "a fleet of delivery vans pulling out of a modern Riyadh distribution hub at dawn", NOT an abstract texture or an unrelated stock scene. Keep the imagery coherent across the deck — one consistent world, lighting, and mood. Describe SUBJECT / SCENE / MOOD only; NEVER request text, words, letters, numbers, captions, logos, signage, charts, diagrams, or UI inside the image (forbidden + stripped server-side) — all wording stays as real HTML over the box. Keep every prompt TRADEMARK-SAFE: never name a real brand, team, product, person, or copyrighted character — the image model rejects named real entities, so describe the scene without the name.
   • data-genrole — "hero" (feature image anchoring the slide), "bg" (full-bleed behind content), or "accent" (smaller supporting image).
   • data-genaspect — the closest of landscape / portrait / square to the box's shape (a full-bleed box matches the deck's own orientation). object-fit:cover crops a minor mismatch cleanly.
   • data-genid — unique within this deck, e.g. "img-cover", "img-3a".
@@ -268,18 +254,13 @@ const IMG_GRAPHICS = `GRAPHICS — generated imagery for scenes, inline SVG for 
   Pick the title's side AND the image's shape from the composition — never the same corner by reflex. The full-bleed-bg-with-scrim cover is ONE option, earned when the photo itself is the whole story, not the default.
 - DISTRIBUTION: use images where they ELEVATE the content; deliberate whitespace is still good design. Aim for ~one image per 2–3 slides. NEVER exceed ${MAX_GENERATED_IMAGES} generated images across the whole deck. Stats / pure-data / chart slides stay CSS + inline SVG.
 - SCRIM (hard rule): a scrim exists for ONE reason — to keep text legible over a photo. Add it ONLY to an image box that has text laid ON TOP of it (a full-bleed background or hero with a headline / body over it). An image with NO text over it — a standalone hero, an accent, a side-panel or any purely decorative photo — gets NO scrim at all; darkening a clean photo for no reason just muddies it. WHEN text does sit on an image box, place a scrim between them — a brand-colour <linearGradient> or a solid overlay <div> with \`opacity\` (NOT rgba / backdrop-filter) — so the text stays legible whatever the photo turns out to be. The scrim's DARK / opaque end MUST sit on the SAME side as the text and fade toward the rest of the image: RTL text on the right → darkest on the RIGHT (e.g. \`linear-gradient(90deg, transparent, <dark>)\`); LTR text on the left → darkest on the LEFT; text band across the bottom → darkest at the BOTTOM. A scrim that darkens the EMPTY side leaves the text sitting on the bright photo — unreadable. Keep the scrim a SINGLE layer — never stack two overlays over one image.
-- STILL inline SVG (brand-token fills, NO icon fonts): the brand logo, icons, ALL data visualization, and decorative accents/separators. Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.`;
+- INLINE SVG — FUNCTIONAL ONLY, NO DECORATION. The generated images carry the visual interest, so do NOT add decorative inline SVG (separators, dividers, floating shapes, abstract background art, atmospheric accents, hand-drawn illustrations) — it clutters an image-led deck and never matches the photography. Inline SVG is allowed ONLY where FUNCTIONAL: the brand logo, data visualization (charts / graphs — numbers can't live in a photo), and a single concept icon inside a genuine card / parallel-set (never loose decoration). Country flags (see COUNTRY FLAGS) stay allowed. Logos: brief carries the SVG markup pre-fetched — inline directly, recolour via root \`fill\` per slide. USER RULES has specifics.`;
 
-// Images-deck system prompt = the base prompt with ONLY the three direction
+// Images-deck system prompt = the base prompt with ONLY the two direction
 // sections swapped. All shared invariants are reused verbatim (derivation).
 export const SYSTEM_PROMPT_IMAGES = swapSection(
   swapSection(
-    swapSection(
-      SYSTEM_PROMPT,
-      "DESIGN PHILOSOPHY",
-      "Vary themes across the deck.",
-      IMG_DESIGN_PHILOSOPHY,
-    ),
+    SYSTEM_PROMPT,
     "CONTENT-DRIVEN EXECUTION — NO DEFAULT TEMPLATE",
     "Never output <ul>/<li>.",
     IMG_LAYOUT_MENU,
@@ -676,7 +657,7 @@ function ruleLines(
     const persistentCss = cornerToCss(persistentPos, format);
     lines.push(
       `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}.`,
-      `- Persistent overlay anchor — wrap the text in an element with the \`data-anchor\` attribute and this EXACT inline style: \`${persistentCss}\`. Example: \`<div data-anchor style="${persistentCss}font-size:13px;color:#YOUR_TEXT_COLOR;opacity:0.7;">${rules.persistent.text}</div>\`. Same x/y/width/height/fontSize/fontFamily/color on every slide it appears on (chrome-lock). \`data-anchor\` flags this element as a fixed chrome corner so the renderer leaves physical \`right:\` / \`left:\` values untouched in any direction.`,
+      `- Persistent overlay anchor — wrap the text in an element with the \`data-anchor\` attribute. Use this EXACT inline style for POSITIONING: \`${persistentCss}\`. Example: \`<div data-anchor style="${persistentCss}color:#YOUR_TEXT_COLOR;opacity:0.7;">${rules.persistent.text}</div>\`. YOU choose the font-size — just keep it (and x/y/width/height/fontFamily/color) IDENTICAL on every slide it appears on (chrome-lock). Write the text out IN FULL each time — NEVER abbreviate it with a placeholder token like \`__PERSIST__\`; a stand-in renders as that literal text. \`data-anchor\` flags this element as a fixed chrome corner so the renderer leaves physical \`right:\` / \`left:\` values untouched in any direction.`,
     );
   }
   return lines;
@@ -984,6 +965,19 @@ function buildUserMessage(event: DeckGenerateEvent) {
             `Direction: \`dir="rtl"\` on every slide root. Use the Arabic font stack from the system prompt's TYPOGRAPHY section.`,
             `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
           ]),
+    // Location-aware cast for generated lifestyle images. ONLY for
+    // images-mode decks AND only when /api/projects resolved a region from
+    // the request geo. People-only by design — abstract / landscape /
+    // product shots are untouched — and the slide's own content can still
+    // override (a scene explicitly about elsewhere, or a global cast).
+    ...(isImagesMode(event) &&
+    typeof (event.brief as { imageRegion?: unknown } | null)?.imageRegion ===
+      "string"
+      ? [
+          ``,
+          `IMAGE CAST — when a generated image depicts PEOPLE, render them as ${(event.brief as { imageRegion: string }).imageRegion} so the imagery reflects the deck's local audience. This applies to lifestyle/photographic scenes with human subjects; images with NO people (abstract, landscape, product, texture) are unaffected, and a slide whose content is explicitly about a different place — or that genuinely calls for a global / multinational cast — should use that instead. Keep it natural and respectful: describe appearance and dress fitting the locale; never name or depict a real person.`,
+        ]
+      : []),
     ``,
     `Brief:`,
     JSON.stringify(sanitizeBriefFonts(event.brief), null, 2),
@@ -1114,7 +1108,7 @@ function buildLogoBlock(brief: unknown, format: SlideFormat): string[] {
     // tell him where + how big + that the fill is free to pick.
     return [
       ``,
-      `Brand logo — inline the SVG below on ${scope}. Wrap like: \`<div data-anchor style="${wrapperStyle}"><svg style="${svgStyle}" fill="#HEX" ...verbatim markup...></svg></div>\`. Pick \`fill="#HEX"\` per slide so the logo is visible against that slide's background (white or near-white on dark backgrounds; dark / black on light backgrounds; any grayscale that contrasts is fine).`,
+      `Brand logo — inline the SVG below on ${scope}. Wrap like: \`<div data-anchor style="${wrapperStyle}"><svg style="${svgStyle}" fill="#HEX" ...verbatim markup...></svg></div>\`. Pick \`fill="#HEX"\` per slide so the logo is visible against that slide's background (white or near-white on dark backgrounds; dark / black on light backgrounds; any grayscale that contrasts is fine). Write the FULL SVG markup on every slide it appears on — NEVER abbreviate it with a placeholder token like \`__LOGO__\` or \`[logo]\`; a stand-in renders as that literal text on the slide.`,
       ``,
       // Fence the markup so any free-text the sanitiser missed
       // (e.g. a <text> child Claude could otherwise mis-read) is

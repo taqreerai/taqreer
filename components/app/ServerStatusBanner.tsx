@@ -9,7 +9,7 @@ import { useServerStatus } from "@/lib/hooks/useServerStatus";
 
 const COPY = {
   degraded: {
-    text: "خدمة الإنشاء تشهد بطئاً مؤقتاً — قد يستغرق إنشاء العرض وقتاً أطول من المعتاد.",
+    text: "خدمة الإنشاء أبطأ من المعتاد حالياً. قد يحتاج العرض وقتاً إضافياً ليكتمل.",
     cls: "border-[var(--tq-status-warn-border)] bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]",
   },
   down: {

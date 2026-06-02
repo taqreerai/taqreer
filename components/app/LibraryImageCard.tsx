@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 // One image tile in the /library grid.
 //
 // Matches the /projects thumbnail (aspect-video, tq-thumbnail). The
@@ -32,6 +34,31 @@ const ROLE_LABEL: Record<string, string> = {
   accent: "عنصر",
 };
 
+// Resized-thumbnail URL via Supabase's image-transform endpoint. A generated
+// image is a full-resolution PNG (~2.5 MB); a library tile renders it at
+// ~280px (×2 retina). Loading 15 originals at once is ~37 MB capped at the
+// browser's ~6-connection-per-host limit — tiles sit blank for seconds, which
+// reads as "thumbnails fail to load". Rewriting the public-object URL to the
+// `render/image` path serves a ~30 KB webp instead (~80× smaller, browser-
+// negotiated format) so the grid loads near-instantly.
+//
+// CRITICAL: pass a width+height BOUNDING BOX with resize=contain. Supabase's
+// width-only mode does NOT scale proportionally — it forces width=N but keeps
+// the original height, squishing the image horizontally (e.g. 1024×1536 →
+// 480×1536) so it renders stretched/"zoomed in". A square box + contain scales
+// the image down INSIDE the box preserving aspect (1024×1536 → 400×600), so
+// the thumbnail crops identically to the full original under object-cover.
+// 600px long-edge is crisp for a ~280px (×2) tile. Any non-Supabase-storage
+// URL passes through untouched. Download + expand keep the full original
+// (image.url) — they show ONE image where size is fine.
+const OBJECT_MARKER = "/storage/v1/object/public/";
+function thumbUrl(url: string): string {
+  if (!url.includes(OBJECT_MARKER)) return url;
+  const rendered = url.replace(OBJECT_MARKER, "/storage/v1/render/image/public/");
+  const sep = rendered.includes("?") ? "&" : "?";
+  return `${rendered}${sep}width=600&height=600&resize=contain&quality=60`;
+}
+
 export function LibraryImageCard({
   image,
   onOpen,
@@ -40,6 +67,22 @@ export function LibraryImageCard({
   onOpen: (image: LibraryImage) => void;
 }) {
   const roleLabel = ROLE_LABEL[image.role] ?? image.role;
+  // Load escalation for a transient drop. Attempt 0: resized thumbnail.
+  // Attempt 1: same thumbnail with a cache-busting param (the transform
+  // endpoint ignores unknown params and re-serves). Attempt 2: the full
+  // original — covers the rare case the transform endpoint itself hiccups.
+  // After that, a calm placeholder so a cell is never an empty void. This,
+  // together with the resized thumbnail above, is the "some thumbnails fail
+  // on refresh" fix.
+  const [attempt, setAttempt] = useState(0);
+  const [broken, setBroken] = useState(false);
+  const thumb = thumbUrl(image.url);
+  const src =
+    attempt === 0
+      ? thumb
+      : attempt === 1
+        ? `${thumb}${thumb.includes("?") ? "&" : "?"}retry=1`
+        : image.url;
   return (
     <div className="group tq-thumbnail relative aspect-video w-full overflow-hidden rounded-[14px]">
       {/* Image surface — a button that opens the expand modal. */}
@@ -50,16 +93,43 @@ export function LibraryImageCard({
         className="absolute inset-0 block h-full w-full"
       >
         {/* Native <img> — Supabase storage URLs aren't in next
-            remotePatterns (same call as ProjectThumbnail / TemplateTile). */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={image.url}
-          alt={`${roleLabel} — ${image.projectTitle}`}
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          className="h-full w-full object-cover"
-        />
+            remotePatterns (same call as ProjectThumbnail / TemplateTile).
+            onError retries with a cache-bust then falls back, so a
+            transient load failure self-heals instead of leaving a blank
+            tile. `key={attempt}` remounts the img each retry so onError
+            re-fires and the new src actually re-requests. */}
+        {broken ? (
+          <div className="flex h-full w-full items-center justify-center bg-[var(--tq-bg-dim)]">
+            <span className="material-symbols-outlined text-[26px] text-muted/50">
+              image
+            </span>
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={attempt}
+            src={src}
+            alt={`${roleLabel} — ${image.projectTitle}`}
+            // EAGER, not lazy. The grid is paginated to 15 tiles, so they're
+            // a small bounded set that's essentially all in/near the
+            // viewport — lazy-loading deferred the below-the-fold (bottom-
+            // row) tiles, which then flashed empty on refresh until they
+            // caught up. Eager fetches them immediately so the page paints
+            // complete. The browser still caps concurrency (~6/host) + the
+            // onError retry above covers any transient drop.
+            loading="eager"
+            decoding="async"
+            draggable={false}
+            // cover: fill the fixed 16:9 tile edge-to-edge. Most library
+            // images are portrait (9:16 slide backgrounds), so this crops
+            // them to the tile — the deliberate choice (over contain's side-
+            // bars) so the grid reads as a clean, fully-filled set.
+            className="h-full w-full object-cover"
+            onError={() =>
+              attempt < 2 ? setAttempt((a) => a + 1) : setBroken(true)
+            }
+          />
+        )}
       </button>
 
       {/* Hover / keyboard-focus overlay: download button (top-end) +

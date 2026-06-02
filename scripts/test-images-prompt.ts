@@ -21,7 +21,28 @@ import { createHash } from "node:crypto";
 // (Claude pairs uploaded families to fontHeading/fontBody, emits name only).
 // Re-baselined 2026-06-01: strengthened that rule for multi-weight uploads —
 // ONLY uploaded families (no Google/system fallback) + per-weight faces.
-const BASE_SHA256 = "9d1516352d3ff97fcc2601d251f1e3b0957fd7ab6f83e0492825b38f48048b2b";
+// Re-baselined 2026-06-01: added the COUNTRY FLAGS section (flagcdn.com SVG
+// by ISO 3166-1 alpha-2; inlines as a vector on export, no data-fill). In
+// the shared core so it rides into SYSTEM_PROMPT_IMAGES too.
+// Re-baselined 2026-06-01: added the BACKGROUND rule (theme.background +
+// slide surfaces must be a brand-palette colour; never an invented
+// off-palette dark canvas). Shared core → applies to images decks too.
+// Re-baselined 2026-06-01: prompt audit — REMOVED the COLOUR CONTRAST
+// section (its "white on dark / near-black on light" fallback was biasing
+// Claude toward dark canvases) and rewrote DESIGN TOKENS → "BRAND PALETTE
+// & FONT" (drop the primary/secondary/brand-bg role labels — just give the
+// palette to use freely; fonts are one family now).
+// Re-baselined 2026-06-01: dropped the "Dominant colour + 1–2 accents.
+// Vary themes across the deck." line from DESIGN PHILOSOPHY (base + images)
+// — it limited palette use / leaned monochromatic-dark. The DESIGN
+// PHILOSOPHY→IMG swap end-marker moved to "multi-column editorial."
+// Re-baselined 2026-06-01: removed redundancy by request — deleted the whole
+// DESIGN PHILOSOPHY section (base) + its base→images swap (the image-led line
+// now leads IMG_LAYOUT_MENU), the "Asymmetric split-screen" layout bullet,
+// and the COMPOSITION DIRECTION block from COMPOSITION_RULES (its "(per
+// COMPOSITION DIRECTION)" cross-ref in GRAPHICS dropped). The images prompt
+// now swaps TWO sections, not three.
+const BASE_SHA256 = "4a20918104bb31faf007ae67624236e945719c95ac238e0849ffc920a162fa15";
 
 async function main(): Promise<boolean> {
   const { SYSTEM_PROMPT, SYSTEM_PROMPT_IMAGES, isImagesMode } = await import(
@@ -40,7 +61,7 @@ async function main(): Promise<boolean> {
     baseHash === BASE_SHA256);
 
   // 2) Images prompt: direction swapped IN, SVG-only swapped OUT.
-  const inImages = ["PHOTOGRAPHY-LED", "data-genimage", "data-genaspect", "COVER MUST", "SCRIM (hard rule)"];
+  const inImages = ["IMAGE STYLE", "data-genimage", "data-genaspect", "THE COVER", "SCRIM (hard rule)"];
   check("SYSTEM_PROMPT_IMAGES contains the box contract + photo direction",
     inImages.every((m) => SYSTEM_PROMPT_IMAGES.includes(m)));
   check('SYSTEM_PROMPT_IMAGES dropped "GRAPHICS — inline SVG only"',
@@ -53,7 +74,7 @@ async function main(): Promise<boolean> {
   const sharedCore = [
     "LANGUAGE & DIRECTION",
     "ICONS — Lucide stroke icons",
-    "COLOUR CONTRAST — non-negotiable",
+    "BACKGROUND — on-brand surface",
     "TYPOGRAPHY",
     '"version": "2.0"',
     "FONT SOURCING",

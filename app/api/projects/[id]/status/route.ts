@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { listWarmedGenids, publicGeneratedImageUrl } from "@/lib/images/store";
 
 type Progress = {
   stage: "thinking" | "designing" | "validating" | "saving";
@@ -85,6 +86,15 @@ export async function GET(
   // row prepends) in a single round-trip. Adds ~250 B per slide so
   // it's also opt-in; the polling path doesn't request it.
   const includeSlideStates = url.searchParams.get("includeSlideStates") === "true";
+  // Optional ?includeImageFills=true — images-mode (context/images.md).
+  // Returns a `{ genid: url }` map of every reserved box already filled by
+  // gpt-image-2 on the latest version. DeckView seeds `filledImages` from
+  // it on mount so an image that finalized while the client wasn't
+  // listening (e.g. a `slide.image.ready` broadcast lost in the
+  // `/preview`→`/project` navigation gap — broadcasts have no replay)
+  // still swaps in, no reload. Cheap (2 columns, indexed by version);
+  // opt-in so the idle progress poll doesn't pay for it.
+  const includeImageFills = url.searchParams.get("includeImageFills") === "true";
   const versionsQuery = targetVersionId
     ? {
         where: { id: targetVersionId },
@@ -241,6 +251,57 @@ export async function GET(
     }));
   }
 
+  // Ready image fills for the latest version, keyed genid → public URL.
+  // Two sources, unioned:
+  //   1. GeneratedImage rows the reconcile (`deck-images-generate`) marks
+  //      `ready` — the durable, post-completion source.
+  //   2. WARM images stored mid-stream by `deck-image-warm`, which writes the
+  //      object to `${projectId}/gen/` but NO DB row (the reconcile backfills
+  //      rows later). Without surfacing these, the live-fill poll is blind to
+  //      warm images the whole time the deck generates — broadcasts are the
+  //      only other delivery path and they don't replay / don't arrive in
+  //      local dev, so images only showed up after a manual refresh. Public
+  //      URLs are deterministic and identical to what the reconcile bakes into
+  //      the manifest, so the union never churns the rendered slide.
+  let imageFills: Record<string, string> | null = null;
+  if (includeImageFills) {
+    imageFills = {};
+    if (latestVersion?.id) {
+      const ready = await prisma.generatedImage.findMany({
+        where: {
+          presentationVersionId: latestVersion.id,
+          status: "ready",
+          storageUrl: { not: null },
+        },
+        select: { genid: true, storageUrl: true },
+      });
+      for (const r of ready) {
+        if (r.storageUrl) imageFills[r.genid] = r.storageUrl;
+      }
+    }
+    // Union EVERY warm image stored under `${projectId}/gen/` that doesn't
+    // already have a `ready` DB row. We deliberately do NOT scope this to the
+    // genids currently in `streamingPreview`: that set fluctuates on a
+    // mid-stream re-advance/reset, and scoping to it would RETRACT an image the
+    // client was already shown (observed live — a warmed box vanished from the
+    // response the moment Claude re-advanced a slide). Returning a superset is
+    // safe: a slide only renders a genid it actually contains, so a stale genid
+    // from a prior regen is never displayed, and the client poll measures
+    // coverage against ITS OWN rendered boxes (not this list), so extra entries
+    // can't end the poll early. Never-retract + client-side own-box filtering
+    // is what makes a mid-deck image land live instead of waiting for the end.
+    try {
+      const warmed = await listWarmedGenids(id);
+      for (const genid of warmed) {
+        if (!imageFills[genid]) {
+          imageFills[genid] = publicGeneratedImageUrl(id, genid);
+        }
+      }
+    } catch {
+      // Storage list blip — DB-ready fills (if any) are still returned.
+    }
+  }
+
   return NextResponse.json({
     status: inferredStatus,
     slideCount,
@@ -250,6 +311,7 @@ export async function GET(
     streamingTheme,
     streamingDirection,
     streamingLanguage,
+    imageFills,
     // Latest version id + its own status. DeckView's partial-regen polling
     // uses this to distinguish "applying is done" (versionId == the new
     // version's id AND status=completed) from "you're still looking at the

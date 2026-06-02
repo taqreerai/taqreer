@@ -108,6 +108,17 @@ async function inlineSvgImages(root: HTMLElement): Promise<void> {
     root.querySelectorAll<HTMLImageElement>(
       "img[src$='.svg'], img[src*='.svg?']"
     )
+  ).filter(
+    // Country flags (flagcdn.com) are left as <img> so dom-to-pptx
+    // RASTERISES them to PNG. Many national flags carry intricate coats
+    // of arms (Spain, Argentina, Brazil, Portugal, Mexico…) whose SVGs
+    // use clip-paths / nested <use> / dense path sets that dom-to-pptx's
+    // SVG→OOXML vector path can't translate — the flag came out broken in
+    // PPTX. Rasterising is reliable for every flag, and at slide-export
+    // DPI a flag the size we use is visually identical to a vector. The
+    // browser preview + PDF/PNG (Puppeteer) still render the crisp SVG —
+    // only this PPTX path rasterises.
+    (img) => !/(^|\/\/|\.)flagcdn\.com\//i.test(img.src),
   );
   if (imgs.length === 0) return;
 

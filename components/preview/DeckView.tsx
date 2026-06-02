@@ -53,6 +53,45 @@ import {
 
 import type { ProjectRole } from "@/lib/api/project-access";
 
+// Preserve referential identity for streaming-preview slides whose content is
+// unchanged between status polls. The poll re-fetches the WHOLE preview every
+// ~1.5s and JSON.parse yields all-new slide objects even when nothing moved;
+// handing those straight to setState re-renders DeckView (and, without memo,
+// every SlideRenderer) on every tick — which rebuilds each slide's innerHTML
+// and recreates its <img> nodes. Keeping the prior object when slideId+role+html
+// all match lets `SlideRenderer`'s memo skip the re-render; returning the prior
+// ARRAY unchanged when nothing moved lets DeckView itself bail the whole
+// re-render on an idle poll.
+function stabilizeStreamingSlides(
+  prev: SlideType[],
+  next: SlideType[],
+): SlideType[] {
+  let changed = next.length !== prev.length;
+  const merged = next.map((ns, i) => {
+    const ps = prev[i];
+    if (
+      ps &&
+      ps.slideId === ns.slideId &&
+      ps.role === ns.role &&
+      ps.html === ns.html
+    ) {
+      return ps; // unchanged slide → keep stable reference
+    }
+    changed = true;
+    return ns;
+  });
+  return changed ? merged : prev;
+}
+
+// Stable-identity guard for the streaming theme — same rationale as the slides
+// above. Themes are small objects parsed from the same server JSON each poll,
+// so a deterministic stringify compare avoids a new-object identity churn that
+// would otherwise re-style every slide host (and defeat SlideRenderer's memo,
+// which compares theme by reference).
+function themesEqual(a: ThemeType, b: ThemeType): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 type Props = {
   projectId: string;
   // Role of the current viewer (Phase 15.B). "owner" / "edit" = full
@@ -308,6 +347,41 @@ export function DeckView({
   useEffect(() => {
     manifestRef.current = manifest;
   }, [manifest]);
+
+  // Churn-free manifest setter. The status poll + realtime broadcasts re-fetch
+  // the WHOLE manifest every few seconds; a raw `setManifest(parsed.data)` then
+  // hands every SlideRenderer all-new slide objects even when nothing changed,
+  // re-applying each slide's innerHTML — which RESETS loading animations,
+  // RELOADS images, and recreates nodes ("the whole block keeps refreshing even
+  // though the slide already landed"). This:
+  //   1. keeps the PREVIOUS slide object whenever its html is byte-identical, so
+  //      unchanged slides never re-render the DOM; and
+  //   2. never REVERTS a slide to a version with FEWER baked image URLs — a
+  //      stale/slower poll otherwise flips a freshly-filled box back to its
+  //      placeholder, which is the live-image flicker.
+  // Returns the previous manifest unchanged when nothing actually moved, so
+  // DeckView itself doesn't even re-render on an idle poll tick.
+  const setManifestStable = useCallback((next: SlideManifest) => {
+    const bakedCount = (html: string) =>
+      (html.match(/supabase\.co\/storage/g) || []).length;
+    setManifest((prev) => {
+      if (!prev) return next;
+      let changed = next.slides.length !== prev.slides.length;
+      const slides = next.slides.map((ns) => {
+        const ps = prev.slides.find((p) => p.slideId === ns.slideId);
+        if (!ps) {
+          changed = true;
+          return ns;
+        }
+        if (ps.html === ns.html) return ps; // identical → keep stable reference
+        if (bakedCount(ns.html) < bakedCount(ps.html)) return ps; // don't revert filled images
+        changed = true;
+        return ns;
+      });
+      return changed ? { ...next, slides } : prev;
+    });
+  }, []);
+
   // Per-slide pill state, keyed by slideKey. Mutated by Lock /
   // Undo / Try-again actions; reseeds from props on parent remount.
   // Map<slideKey, state> for O(1) lookup; serialised to InitialSlideState
@@ -610,7 +684,7 @@ export function DeckView({
         if (cancelled) return;
         if (data.manifest) {
           const parsed = SlideManifestSchema.safeParse(data.manifest);
-          if (parsed.success) setManifest(parsed.data);
+          if (parsed.success) setManifestStable(parsed.data);
         }
         if (!Array.isArray(data.slideStates)) return;
         const nextStates: Record<string, InitialSlideState> = {};
@@ -631,6 +705,116 @@ export function DeckView({
       window.clearInterval(interval);
     };
   }, [peerRegenInProgress, projectId]);
+
+  // How many reserved gen-image boxes does this deck have? Gates the
+  // hydration poll below (text-only decks — the common case — never fire it)
+  // AND gives the poll a completion target.
+  //
+  // Counted from BOTH the completed manifest AND the live streamingPreview, so
+  // it goes > 0 the moment a reserved box appears DURING generation — not only
+  // after the deck finishes. That matters because gpt-image-2 fills run while
+  // the deck is still on `/preview`, where the slides live in streamingPreview,
+  // not `manifest`. Gating on the manifest alone meant the poll never started
+  // in that window, so live fills depended entirely on `slide.image.ready`
+  // broadcasts — which have no replay and don't deliver at all in local dev, so
+  // images only appeared after a manual reload. With the streamingPreview boxes
+  // counted, the poll runs through the whole image-gen window and pulls each
+  // fill from the status endpoint as it lands (broadcasts stay a fast-path).
+  // The reserved-image genids the client has actually RENDERED (live preview +
+  // completed manifest). `genBoxKey` is a stable, comma-joined primitive used
+  // as the poll's effect dependency (a Set/array identity would churn every
+  // render); the poll re-derives the id set from it to measure own-box
+  // coverage. genids are filename-safe (no commas), so the join/split is exact.
+  const genBoxKey = useMemo(() => {
+    const ids = new Set<string>();
+    const re = /data-genid=["']([^"']+)["']/g;
+    const scan = (html: string) => {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(html)) !== null) ids.add(m[1]);
+    };
+    for (const s of manifest?.slides ?? []) scan(s.html);
+    for (const s of streamingPreview) scan(s.html);
+    return Array.from(ids).sort().join(",");
+  }, [manifest, streamingPreview]);
+
+  // Images-mode hydration + self-heal (context/images.md). The live swap
+  // is driven by `slide.image.ready` broadcasts, but broadcasts have no
+  // replay: one can land in the `/preview`→`/project` navigation gap
+  // (before this client subscribes) or be dropped by a throttled
+  // background socket. So once the deck has boxes, poll the fill endpoint
+  // and merge whatever's ready into `filledImages` — a box that finalizes
+  // after the client connected still swaps in, no reload.
+  //
+  // Poll until EVERY box is filled, or a generous hard cap. gpt-image-2
+  // runs ~15-30 s PER image and the reconcile starts only after the deck
+  // finishes streaming, so the first boxes can land 20-60 s post-stream.
+  // An early "nothing new this tick" must NOT stop the poll (the earlier
+  // dry-count stop gave up one tick before the first image was ready);
+  // only full coverage or the cap ends it. Merge never clears — a fill is
+  // permanent.
+  useEffect(() => {
+    if (!genBoxKey) return;
+    const ownIds = new Set(genBoxKey.split(","));
+    let cancelled = false;
+    let done = false;
+    let attempts = 0;
+    const poll = async () => {
+      if (cancelled || done) return;
+      attempts += 1;
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/status?includeImageFills=true`,
+          { credentials: "same-origin" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          imageFills?: Record<string, string> | null;
+        };
+        if (cancelled) return;
+        const fills = data.imageFills;
+        if (fills) {
+          setFilledImages((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const [genid, url] of Object.entries(fills)) {
+              // Adopt only fills for boxes THIS deck rendered — the endpoint
+              // returns a superset (it may surface stale genids from a prior
+              // regen); ignoring them keeps coverage honest and never bakes a
+              // foreign image. Merge never clears, so a fill is permanent.
+              if (ownIds.has(genid) && next[genid] !== url) {
+                next[genid] = url;
+                changed = true;
+              }
+            }
+            return changed ? next : prev;
+          });
+        }
+        // Coverage is measured against OUR rendered boxes — NOT the server's
+        // returned count — so a superset response can't stop the poll before
+        // our own boxes are filled. Keep polling until every rendered box has a
+        // fill (a late mid-deck image lands the instant the server has it), or
+        // the ~4-min cap (covers a box whose image failed permanently).
+        let covered = 0;
+        for (const id of ownIds) if (fills && fills[id]) covered += 1;
+        if (covered >= ownIds.size || attempts >= 40) done = true;
+      } catch {
+        /* network blip — next tick retries */
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => {
+      if (cancelled || done) {
+        window.clearInterval(interval);
+        return;
+      }
+      void poll();
+    }, 6000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [projectId, genBoxKey]);
   // Belt-and-braces clear for the peer-regen spinner: when a slide's
   // `currentVersionNumber` ticks up (a new version landed via the
   // fat-sync fetchAndSwapState in the slide.regen.finished handler),
@@ -894,7 +1078,7 @@ export function DeckView({
           if (cancelled) return;
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifest(parsed.data);
+            if (parsed.success) setManifestStable(parsed.data);
           }
           if (Array.isArray(data.slideStates)) {
             const nextStates: Record<string, InitialSlideState> = {};
@@ -1167,7 +1351,7 @@ export function DeckView({
           };
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifest(parsed.data);
+            if (parsed.success) setManifestStable(parsed.data);
           }
           if (Array.isArray(data.slideStates)) {
             const nextStates: Record<string, InitialSlideState> = {};
@@ -1479,7 +1663,7 @@ export function DeckView({
             if (record.status === "completed") {
               const parsed = SlideManifestSchema.safeParse(slideJson);
               if (parsed.success) {
-                setManifest(parsed.data);
+                setManifestStable(parsed.data);
                 setProgress(null);
               }
             }
@@ -1585,7 +1769,7 @@ export function DeckView({
               if (validated.length >= highWatermarkRef.current) {
                 lastManifestVersionRef.current = incomingVersion;
                 highWatermarkRef.current = validated.length;
-                return validated;
+                return stabilizeStreamingSlides(prev, validated);
               }
               // Polished pass still ramping up — hold the prior view.
               return prev;
@@ -1595,7 +1779,7 @@ export function DeckView({
               if (validated.length > highWatermarkRef.current) {
                 highWatermarkRef.current = validated.length;
               }
-              return validated;
+              return stabilizeStreamingSlides(prev, validated);
             }
             return prev;
           });
@@ -1614,7 +1798,14 @@ export function DeckView({
         if (metaVersion >= lastManifestVersionRef.current) {
           if (data.streamingTheme) {
             const parsed = ThemeSchema.safeParse(data.streamingTheme);
-            if (parsed.success) setStreamingTheme(parsed.data);
+            if (parsed.success) {
+              const nextTheme = parsed.data;
+              setStreamingTheme((prevTheme) =>
+                prevTheme && themesEqual(prevTheme, nextTheme)
+                  ? prevTheme // unchanged → keep stable ref so memo holds
+                  : nextTheme,
+              );
+            }
           }
           if (
             data.streamingDirection === "rtl" ||
@@ -1644,7 +1835,7 @@ export function DeckView({
           // immediately — no flash, no transient-client-state loss.
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifest(parsed.data);
+            if (parsed.success) setManifestStable(parsed.data);
           }
           setPolledCompleted(true);
           // Stop polling — completion is terminal. The interval
@@ -1875,7 +2066,7 @@ export function DeckView({
           // affect what the user sees).
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifest(parsed.data);
+            if (parsed.success) setManifestStable(parsed.data);
           }
           // Mirror the peer-broadcast handler: refresh slideStates +
           // historyVersions from the same status payload so the
