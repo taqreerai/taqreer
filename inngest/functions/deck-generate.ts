@@ -140,11 +140,14 @@ FONT SOURCING
 - When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those families — assign them to \`theme.fontHeading.name\` and \`theme.fontBody.name\` (a single family may serve both). Use the family \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts; the uploaded families are the only allowed typefaces. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship will render at its nearest available face.
 - If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
 
-// The designer-identity opener — the "LOCK ONE design system / disciplined
-// reuse" framing that opens SYSTEM_PROMPT.
-const DESIGNER_IDENTITY = `You are an elite editorial-grade presentation designer. You READ the content first and LOCK a design system based on what it is — its subject, tone, and register — then build the whole deck on that one system: a fixed frame, a small set of reusable layout archetypes, and a consistent type + motif language across every slide. You express range by how you populate the system, not by reinventing it each slide — disciplined reuse is the craft; rhythm + emphasis create the variety. The system is designed for THIS content — never generic AI-deck slop, never a stock template.`;
+// Prompt opener — intentionally BARE (2026-06-03, Part B.2): stripped of ALL
+// style / visual-direction enforcement so the substrate is neutral. Any look is
+// meant to come from the chosen style directive (ruleLines), NOT from a baked-in
+// default. Everything that remains in SYSTEM_PROMPT below is load-bearing
+// infrastructure (RTL/BiDi, export-safety, output contract), not style.
+const OPENER = `Create a slide deck.`;
 
-export const SYSTEM_PROMPT = `${DESIGNER_IDENTITY}
+export const SYSTEM_PROMPT = `${OPENER}
 
 CANVAS — output the slide BODY only: no <!DOCTYPE>/<html>/<head>/<body>; an inline <style> per slide is fine. Size from the brief: 16:9 → 1920×1080, 9:16 → 1080×1920; the slide root sets \`width:<W>px; height:<H>px;\`. Use any layout primitive (flex / grid / absolute / transform).
 
@@ -152,11 +155,12 @@ ${LANG_DIRECTION}
 
 ${COMPOSITION_RULES}
 
-BRAND — colour and type come ONLY from the brief: \`var(--brand-1)\` … \`var(--brand-N)\` (palette, 1-indexed) and \`var(--font-heading)\` / \`var(--font-body)\`; fill \`theme\` in the OUTPUT to match. The background MUST be a brand colour — default to a near-white surface (e.g. #F5F6F8) unless the brand palette itself is dark; never invent an off-palette colour or a dark canvas on a light/vivid brand.
+BRAND — colour and type come ONLY from the brief: \`var(--brand-1)\` … \`var(--brand-N)\` (palette, 1-indexed) and \`var(--font-heading)\` / \`var(--font-body)\`; fill \`theme\` in the OUTPUT to match. Choose the background from the brand palette.
 
-CHROME — place the logo, page number, and any footer yourself: a consistent position across every slide, clear of the headline (opposite its alignment edge — in RTL the right-aligned headline means the logo goes top-LEFT), and never overlapping body content. The brief carries the logo SVG markup pre-fetched: inline it directly and recolour via root \`fill\` per slide so it reads on that slide's background.
-
-GRAPHICS — inline <svg> ONLY where it is functional + vector: concept icons in the Lucide stroke style (\`viewBox="0 0 24 24"\`, real Lucide path data, \`stroke-width:2\`, round caps), charts / graphs, the brand logo, and country flags (\`<img src="https://flagcdn.com/<cc>.svg">\` — lowercase ISO code, keeps its real colours, never \`data-fill\`). No decorative SVG filler.
+GRAPHICS —
+Country flags usage: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours, never \`data-fill\`).
+Icons usage: inline an \`<svg viewBox="0 0 24 24">\` using a REAL icon's path data from a standard open set (e.g. Lucide).
+Charts / graphs usage: inline \`<svg>\`.
 
 AVOID (these don't render): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.
 ${OUTPUT_CONTRACT}`;
@@ -167,7 +171,7 @@ ${OUTPUT_CONTRACT}`;
 // pipeline scans for (data-genimage / -genrole / -genaspect / -genid).
 // MAX_GENERATED_IMAGES is enforced server-side by the warm dispatch +
 // reconcile (used below), so it's no longer stated in the prompt.
-const IMG_ADDENDUM = `GENERATED IMAGES — images mode is ON, so this deck SHOULD feature real generated imagery. USE it wherever it strengthens a slide — covers, section dividers, hero panels, full-bleed or side backgrounds, atmosphere / texture behind content, a supporting image beside a point. PREFER a generated image over a flat CSS fill or gradient for any decorative / atmospheric area — a plain CSS gradient is the FALLBACK, not the default. Don't hand-draw imagery in SVG or fake a photo / texture in CSS: reserve a box with NO src + a prompt describing it, and gpt-image generates the artwork while the system fills the box. Aim to use images on most slides (the system caps the total, so reach freely).
+const IMG_ADDENDUM = `GENERATED IMAGES — images mode is ON. Reserve a box with NO src + a prompt where the slide genuinely calls for imagery, and gpt-image generates the artwork while the system fills the box. Don't hand-draw imagery in SVG or fake a photo / texture in CSS — reserve a box instead.
   <img data-genimage="<prompt>" data-genid="<unique-id>" alt="" style="width:…px;height:…px;object-fit:cover;display:block;background:<a brand-tinted placeholder gradient>;"/>
   • Two attributes only: data-genimage (the prompt) + data-genid (unique per box). Size and place the box however the slide needs — the system reads your width/height to request the right image shape, so set them in px.
   • data-genimage — describe what you want concretely: a real scene / object / texture / abstract treatment, one consistent medium + mood across the whole deck. SUBJECT / SCENE / MOOD only — never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names).
@@ -463,49 +467,28 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
 
 function ruleLines(rules: Rules): string[] {
   if (!rules) return [];
-  const lines = ["", "Generation rules (user-specified, OVERRIDE matching defaults):"];
+  // Bare info, ONE line per AVAILABLE option — no chrome/layout how-to. An option
+  // that's off says nothing, EXCEPT pagination (its absence is stated in 2 words
+  // so "no page numbers" is explicit). `data-anchor` is the one functional marker
+  // kept — sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
+  const lines: string[] = [""];
+  lines.push(
+    rules.pagination
+      ? `Pagination — put a page number on every slide, marked \`data-anchor\`.`
+      : `No pagination.`,
+  );
+  if (rules.fixTypos) lines.push(`Fix typos silently, keeping the meaning.`);
+  if (rules.persistent && rules.persistent.text.trim()) {
+    const skip = rules.persistent.exclude.length
+      ? ` (not on ${rules.persistent.exclude.join(" / ")})`
+      : "";
+    lines.push(
+      `Footer — put this text on every slide${skip} as chrome, marked \`data-anchor\`: "${rules.persistent.text.trim()}".`,
+    );
+  }
   if (rules.designStyle) {
     const directive = DESIGN_STYLE_DIRECTIVES[rules.designStyle];
-    if (directive) {
-      lines.push(`- Design style: "${rules.designStyle}". ${directive}`);
-    } else {
-      lines.push(`- Design style: "${rules.designStyle}". Compose every slide accordingly.`);
-    }
-  }
-  lines.push(
-    rules.fixTypos
-      ? `- Fix typos: correct spelling and grammar errors in the source content silently while preserving meaning.`
-      : `- Do NOT auto-correct spelling or grammar — leave the source's spelling as the user wrote it.`,
-  );
-
-  // Chrome = the brand bits the user configured (logo / page number /
-  // persistent footer). Detailed guidance below, but with NO hardcoded
-  // positions / sizes / margins — Claude picks the corner + size and
-  // chrome-locks it across the deck.
-  if (rules.pagination) {
-    lines.push(
-      `- Pagination: REQUIRED on every slide. Emit EXACTLY ONE small text element per slide showing the page number in "N / Total" form (e.g. "01 / 07"). Use Latin digits + slash even in an Arabic deck so the indicator reads left-to-right.`,
-      `- YOU pick where the page number sits — a corner/edge that fits the composition, in a DIFFERENT corner from the logo and any footer text. Wrap it in an element with BOTH a \`data-anchor\` attribute AND \`dir="ltr"\` so the renderer keeps its physical position fixed in any direction. Example: \`<div data-anchor dir="ltr" style="position:absolute; …your corner, size, weight, colour…">02 / 07</div>\`.`,
-      `- CHROME-LOCK: decide the page number's corner, coordinates, size, weight, and colour ONCE and reuse them on every slide — no nudging or restyling per slide.`,
-    );
-  } else {
-    lines.push(`- Pagination: OFF — no page-number element on any slide.`);
-  }
-  if (rules.persistent && rules.persistent.text.trim()) {
-    const excludeCover = rules.persistent.exclude.includes("cover");
-    const excludeClosing = rules.persistent.exclude.includes("closing");
-    const exclusions = [
-      excludeCover ? "cover slides (role: cover)" : null,
-      excludeClosing ? "closing slides (role: closing)" : null,
-    ].filter(Boolean);
-    const scope = exclusions.length === 0
-      ? "EVERY slide including cover and closing"
-      : `every slide EXCEPT ${exclusions.join(" and ")}`;
-    lines.push(
-      `- Persistent overlay: place the text "${rules.persistent.text}" on ${scope}.`,
-      `- YOU choose where it sits — a corner or edge that fits the composition, in a DIFFERENT corner from the logo and the page number. Wrap it in an element with the \`data-anchor\` attribute so the renderer keeps its physical position fixed in any direction. Example: \`<div data-anchor style="position:absolute; …your corner…">${rules.persistent.text}</div>\`.`,
-      `- CHROME-LOCK: keep it IDENTICAL on every slide it appears on — decide once, and write the text out IN FULL each time (never a placeholder token).`,
-    );
+    if (directive) lines.push(`Style — ${directive}`);
   }
   return lines;
 }
@@ -767,9 +750,6 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // at this exact size and the PPT export uses the matching layout.
     // Echo them up-front so Claude doesn't have to dig them out of the brief.
     `Slide canvas: ${width}×${height} px (${format} ${orientationLabel}).`,
-    // Content frame consistency — no hardcoded value; Claude picks the inset
-    // (user direction 2026-06-03: remove all hardcoded positions / margins).
-    `Content frame: keep a consistent inset on every slide (you pick it) so the body edges line up deck-wide.`,
     ``,
     // LANGUAGE directive.
     //
@@ -796,12 +776,10 @@ function buildUserMessage(event: DeckGenerateEvent) {
       : briefLang === "en"
         ? [
             `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
-            `Direction: \`dir="ltr"\` on every slide root. Skip Arabic font fallbacks (Cairo / Tajawal / etc.) — use the Latin font sourcing rules from the system prompt's TYPOGRAPHY section. Inline mixed-script handling (\`<span dir="rtl">\` around any incidental Arabic run) still applies the same way RTL mode handles incidental Latin.`,
             `Manifest output: \`"language": "en"\`, \`"direction": "ltr"\`.`,
           ]
         : [
-            `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default. The brief's content may carry inline English runs (URLs, brand names, version numbers, code identifiers) — preserve those verbatim and wrap them in \`<span dir="ltr">\` per the system prompt's LANGUAGE & DIRECTION rules. Don't translate the inline English away.`,
-            `Direction: \`dir="rtl"\` on every slide root. Use the Arabic font stack from the system prompt's TYPOGRAPHY section.`,
+            `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default; preserve any inline English (URLs, brand names, version numbers) verbatim — don't translate it away.`,
             `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
           ]),
     // Location-aware cast for generated lifestyle images. ONLY for
@@ -875,8 +853,7 @@ function buildLogoBlock(brief: unknown): string[] {
     // Inline-markup path: brief carries the SVG bytes server-side.
     return [
       ``,
-      `Brand logo — inline the SVG below on EVERY slide. YOU choose which corner it sits in: a corner that fits the layout and is CLEAR of the page number, the persistent footer, and any hero image — then keep it in the EXACT same corner, size, and coordinates on every slide (chrome-lock). Wrap like: \`<div data-anchor style="position:absolute; …your corner + size…"><svg fill="#HEX" …verbatim markup…></svg></div>\`. Pick \`fill="#HEX"\` per slide so the logo reads against that slide's background. Write the FULL SVG markup on every slide (never a placeholder token).`,
-      ``,
+      `Logo — here is the brand logo. Inline this SVG on every slide, set its root \`fill\` per slide so it reads on the background, and mark its wrapper \`data-anchor\`. Write the full markup each time.`,
       // Fence the markup so any free-text the sanitiser missed is
       // unambiguously tagged as data, not instructions.
       `<<<LOGO_SVG_BEGIN>>>`,
@@ -892,7 +869,7 @@ function buildLogoBlock(brief: unknown): string[] {
   if (!logo.url) return [];
   return [
     ``,
-    `Brand logo — wrap an <img> on EVERY slide: \`<div data-anchor style="position:absolute; …your corner…"><img src="${logo.url}" style="…your size…; object-fit:contain;" alt=""/></div>\`. YOU pick the corner (clear of the page number / footer / hero imagery) and keep it identical on every slide.`,
+    `Logo — here is the brand logo: \`<img src="${logo.url}" alt=""/>\`. Show it on every slide, marked \`data-anchor\`.`,
   ];
 }
 
