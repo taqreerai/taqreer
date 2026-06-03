@@ -172,13 +172,8 @@ type CreateProjectPayload = {
     pagination: boolean;
     persistent: {
       text: string;
-      position:
-        | "top-left"
-        | "top-center"
-        | "top-right"
-        | "bottom-left"
-        | "bottom-center"
-        | "bottom-right";
+      // `position` dropped 2026-06-02 — Claude freestyles the persistent
+      // overlay's placement now (only the logo corner is reserved).
       exclude: ("cover" | "closing")[];
     } | null;
   };
@@ -308,7 +303,6 @@ function buildSafeLogoForKit(
     | {
         name?: string;
         storageUrl?: string;
-        position?: string;
         exclude?: ("cover" | "closing")[];
       }
     | null
@@ -316,7 +310,6 @@ function buildSafeLogoForKit(
 ): {
   name: string | null;
   storageUrl: string | null;
-  position: string | null;
   exclude: ("cover" | "closing")[];
 } | null {
   if (!logo) return null;
@@ -326,8 +319,6 @@ function buildSafeLogoForKit(
       typeof logo.storageUrl === "string"
         ? logo.storageUrl.slice(0, 2000)
         : null,
-    position:
-      typeof logo.position === "string" ? logo.position.slice(0, 32) : null,
     exclude: Array.isArray(logo.exclude)
       ? logo.exclude.filter(
           (v): v is "cover" | "closing" => v === "cover" || v === "closing",
@@ -383,7 +374,6 @@ function buildClaudeBrand(
           // or non-SVG), buildUserMessage emits the URL-only block
           // and Claude falls back to <img src="...">.
           svgMarkup: logoSvgMarkup,
-          position: rawBrand.logo.position ?? "top-right",
           exclude: rawBrand.logo.exclude ?? [],
         }
       : rawBrand.logo,

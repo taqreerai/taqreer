@@ -131,10 +131,12 @@ export function sanitizeSlideHtml(html: string): string {
   try {
     const dp = getClientDOMPurify();
     const clean = dp.sanitize(html, DOMPURIFY_CONFIG);
-    return rewriteImageScrim(
-      rewriteRtlImagePanelSide(
-        rewriteRtlMarginAutoEnd(
-          rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean)),
+    return rewriteChromeOnTop(
+      rewriteImageScrim(
+        rewriteRtlImagePanelSide(
+          rewriteRtlMarginAutoEnd(
+            rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean)),
+          ),
         ),
       ),
     );
@@ -487,6 +489,48 @@ function rewriteImageScrim(html: string): string {
     if (!slideRoot) return html;
     const dir = slideRoot.getAttribute("dir") === "ltr" ? "ltr" : "rtl";
     const changed = applyScrimFixes(slideRoot, dir);
+    return changed ? wrapper!.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Chrome (logo / pagination / persistent footer — all marked `data-anchor`)
+// must sit ABOVE body + generated images. Claude usually emits the logo as the
+// FIRST child of the slide root, so a later full-bleed <img> / scrim paints
+// over it — in the browser (DOM paint order) AND in the PPTX export (a later
+// DOM element becomes a higher shape). Fix both: give every chrome element a
+// high `z-index` (browser stacking) AND move slide-root-level chrome to the END
+// (export DOM order = top). Nested chrome only gets the z-index — re-parenting
+// an absolutely-positioned element would shift its containing block.
+function rewriteChromeOnTop(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot) return html;
+    const chrome = Array.from(
+      slideRoot.querySelectorAll<HTMLElement>("[data-anchor]"),
+    );
+    if (chrome.length === 0) return html;
+    let changed = false;
+    for (const el of chrome) {
+      const style = el.getAttribute("style") ?? "";
+      if (!/(^|;)\s*z-index\s*:/i.test(style)) {
+        const sep = style.trim() === "" || style.trim().endsWith(";") ? "" : ";";
+        el.setAttribute("style", `${style}${sep}z-index:100;`);
+        changed = true;
+      }
+      // Direct children of the slide root → move to the end (paints last).
+      if (el.parentElement === slideRoot && slideRoot.lastElementChild !== el) {
+        slideRoot.appendChild(el);
+        changed = true;
+      }
+    }
     return changed ? wrapper!.innerHTML : html;
   } catch {
     return html;

@@ -38,7 +38,6 @@ export type HydratedBrand = {
     storageUrl: string;
     displayUrl: string | null;
     name: string | null;
-    position: string;
     exclude: ("cover" | "closing")[];
   } | null;
 };
@@ -114,7 +113,6 @@ function buildLogo(args: {
   storageUrl: string;
   displayUrl: string | null;
   name: string | null;
-  position: string | null;
   exclude: unknown;
 }): HydratedBrand["logo"] {
   const exclude = Array.isArray(args.exclude)
@@ -126,7 +124,6 @@ function buildLogo(args: {
     storageUrl: args.storageUrl,
     displayUrl: args.displayUrl,
     name: args.name,
-    position: args.position ?? "top-right",
     exclude,
   };
 }
@@ -145,7 +142,6 @@ function readLogo(value: unknown): HydratedBrand["logo"] {
     storageUrl: blob.storageUrl,
     displayUrl: typeof blob.url === "string" ? blob.url : null,
     name: typeof blob.name === "string" ? blob.name : null,
-    position: typeof blob.position === "string" ? blob.position : null,
     exclude: blob.exclude,
   });
 }
@@ -236,7 +232,6 @@ export async function fetchDefaultBrandKit(): Promise<HydratedBrand | null> {
           storageUrl: logoBlob.storageUrl,
           displayUrl: logoBlob.signedUrl ?? null,
           name: logoBlob.name ?? null,
-          position: logoBlob.position ?? null,
           exclude: logoBlob.exclude,
         })
       : null;
@@ -275,12 +270,8 @@ export function mapKitToHydrated(kit: {
           displayUrl:
             typeof logoAsset.displayUrl === "string" ? logoAsset.displayUrl : null,
           name: typeof logoAsset.name === "string" ? logoAsset.name : null,
-          // Position + exclude live in `assetUrls.logo` (where the save wrote
-          // them), NOT the top-level `logo` column (which is just the URL
-          // string). Reading them off `kit.logo` always yielded null, so the
-          // dropdown reset the logo to top-right.
-          position:
-            typeof logoAsset.position === "string" ? logoAsset.position : null,
+          // `exclude` lives in `assetUrls.logo` (where the save wrote it),
+          // NOT the top-level `logo` column (which is just the URL string).
           exclude: logoAsset.exclude,
         })
       : null;

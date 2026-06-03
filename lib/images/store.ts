@@ -12,16 +12,35 @@
 // handles the project's `sb_secret_…` API-key format, which the raw
 // Storage REST endpoint rejects as a non-JWT.
 
+import { createHash } from "node:crypto";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 
 const BUCKET = "generated-images";
 
-// Deterministic per-image path — `${projectId}/gen/${genid}.png`. Stable
-// for a given (projectId, genid), which is what lets the warm-during-
-// stream fill and the end-of-deck reconcile agree on the same object
-// without a shared DB row mid-stream (context/images.md async fill).
-function genImagePath(projectId: string, genid: string): string {
-  return `${projectId}/gen/${genid}.png`;
+// Short, stable fingerprint of a box's PROMPT. The identity of a generated
+// image is (genid + promptHash), NOT genid alone — this is what makes the
+// fill drift-resilient (context/images.md §12). On the highest preset Claude
+// often DISCARDS a draft manifest mid-stream and re-emits a polished one
+// (parser.didReset()); a reused data-genid whose prompt CHANGED must NOT
+// collide with the draft's already-stored image. Folding the prompt into
+// the storage path means:
+//   • same genid + same prompt  → same path → adopt it (zero re-bill), and
+//   • same genid + changed prompt → different path → fresh, never stale.
+// sha256→12 hex (48 bits) is collision-free across a deck's ≤12 prompts; the
+// path is already scoped by projectId + genid, so this only disambiguates
+// prompt VERSIONS of one box (no cross-tenant or security surface — a crafted
+// brief can at worst self-collide two of its own boxes).
+export function genImageHash(prompt: string): string {
+  return createHash("sha256").update(prompt).digest("hex").slice(0, 12);
+}
+
+// Deterministic per-image path — `${projectId}/gen/${genid}-${hash}.png`.
+// Stable for a given (projectId, genid, promptHash), which is what lets the
+// warm-during-stream fill, the end-of-deck reconcile, AND the status-route
+// live poll all agree on the same object without a shared DB row mid-stream
+// (context/images.md async fill).
+function genImagePath(projectId: string, genid: string, hash: string): string {
+  return `${projectId}/gen/${genid}-${hash}.png`;
 }
 
 // Memoised module singleton — the admin client is stateless (no session
@@ -44,16 +63,18 @@ function adminClient() {
 
 /**
  * Upload a base64 PNG and return its permanent public URL.
- * Path is `${projectId}/gen/${genid}.png`; upsert so a regenerate
- * (same genid) overwrites in place. Throws on missing env / upload error.
+ * Path is `${projectId}/gen/${genid}-${hash}.png`; upsert so a re-store of
+ * the SAME prompt (same hash) overwrites in place, while a CHANGED prompt
+ * lands at a fresh path. Throws on missing env / upload error.
  */
 export async function storeGeneratedImage(opts: {
   projectId: string;
   genid: string;
+  hash: string;
   b64: string;
 }): Promise<string> {
   const admin = adminClient();
-  const path = genImagePath(opts.projectId, opts.genid);
+  const path = genImagePath(opts.projectId, opts.genid, opts.hash);
   const bytes = Buffer.from(opts.b64, "base64");
 
   const { error } = await admin.storage.from(BUCKET).upload(path, bytes, {
@@ -76,57 +97,66 @@ export async function storeGeneratedImage(opts: {
 export function publicGeneratedImageUrl(
   projectId: string,
   genid: string,
+  hash: string,
 ): string {
   return adminClient()
     .storage.from(BUCKET)
-    .getPublicUrl(genImagePath(projectId, genid)).data.publicUrl;
+    .getPublicUrl(genImagePath(projectId, genid, hash)).data.publicUrl;
 }
 
 /**
- * True if a box's image is already stored (e.g. filled by the warm-
- * during-stream pass). Lets the end-of-deck reconcile ADOPT warmed
- * images — mark them ready with the deterministic URL instead of
- * re-generating — so a box is billed to gpt-image-2 at most once.
+ * True if a box's image for THIS prompt (genid + hash) is already stored
+ * (e.g. filled by the warm-during-stream pass). Lets the end-of-deck
+ * reconcile ADOPT warmed images — mark them ready with the deterministic URL
+ * instead of re-generating — so a box is billed to gpt-image-2 at most once.
  */
 export async function generatedImageExists(
   projectId: string,
   genid: string,
+  hash: string,
 ): Promise<boolean> {
+  const filename = `${genid}-${hash}.png`;
   const { data, error } = await adminClient()
     .storage.from(BUCKET)
-    .list(`${projectId}/gen`, { search: `${genid}.png`, limit: 1 });
+    .list(`${projectId}/gen`, { search: filename, limit: 1 });
   // Do NOT treat a Storage lookup FAILURE as "missing" — that would make warm
   // + reconcile fall through to a billed generateImage() on a transient blip,
   // breaking "bill at most once" for a deterministic path. Throw so the caller
   // retries/skips (warm → reconcile safety net; reconcile → re-claimable box).
   if (error) {
     throw new Error(
-      `generated-images existence check failed (${projectId}/${genid}): ${error.message}`,
+      `generated-images existence check failed (${projectId}/${filename}): ${error.message}`,
     );
   }
-  return (data ?? []).some((f) => f.name === `${genid}.png`);
+  return (data ?? []).some((f) => f.name === filename);
 }
 
+// Filenames safe to surface as an <img src> — `${genid}-${hash}.png` where
+// genid is SAFE_GENID and hash is lowercase hex. Belt-and-suspenders against
+// any future write path that bypasses the writer-side genid guard, keeping a
+// `../`-style name from ever reaching the client.
+const SAFE_GEN_FILENAME = /^[A-Za-z0-9._-]+-[0-9a-f]{12}\.png$/;
+
 /**
- * Genids that already have a STORED image under `${projectId}/gen/`. Used by
- * the status route to surface WARM (during-stream) images BEFORE the end-of-
- * deck reconcile writes their GeneratedImage rows — so the live-fill poll can
- * deliver them while the deck is still generating, in dev (where realtime
- * broadcasts don't arrive) and across the `/preview`→`/project` gap. One
- * storage `list` call; pair each with `publicGeneratedImageUrl`.
+ * The set of STORED image FILENAMES under `${projectId}/gen/` (e.g.
+ * `img-cover-3f9a1c2b7e44.png`). Used by the status route to surface WARM
+ * (during-stream) images BEFORE the end-of-deck reconcile writes their
+ * GeneratedImage rows — so the live-fill poll can deliver them while the deck
+ * is still generating, in dev (where realtime broadcasts don't arrive) and
+ * across the `/preview`→`/project` gap. Returns FILENAMES (not bare genids)
+ * because identity is now (genid + promptHash): the caller computes each
+ * box's expected `${genid}-${hash}.png` from the live manifest and checks
+ * membership, so a stale draft hash is never mistaken for the live prompt's
+ * image. One storage `list` call.
  */
-export async function listWarmedGenids(projectId: string): Promise<string[]> {
+export async function listWarmedImageFiles(
+  projectId: string,
+): Promise<Set<string>> {
   const { data, error } = await adminClient()
     .storage.from(BUCKET)
     .list(`${projectId}/gen`, { limit: 1000 });
-  if (error || !data) return [];
-  return data
-    .filter((f) => f.name.endsWith(".png"))
-    .map((f) => f.name.slice(0, -".png".length))
-    // Defensive: only surface filename-safe genids. Writers already gate on
-    // SAFE_GENID (slide-images.ts) before storing, so this never filters a
-    // real image — it's belt-and-suspenders against any future write path
-    // that bypasses that guard, keeping a `../`-style name from ever reaching
-    // the client as an <img src>.
-    .filter((genid) => /^[A-Za-z0-9._-]{1,64}$/.test(genid));
+  if (error || !data) return new Set();
+  return new Set(
+    data.map((f) => f.name).filter((name) => SAFE_GEN_FILENAME.test(name)),
+  );
 }

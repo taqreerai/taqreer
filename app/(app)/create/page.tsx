@@ -58,8 +58,6 @@ import {
   InlinePaletteSwatch,
   SegmentedToggle,
   Toggle,
-  CORNER_POSITIONS,
-  type CornerPosition,
   type LanguageCode,
 } from "@/components/create/controls";
 import {
@@ -107,7 +105,7 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // Cards stretch to fill row when fewer than 4 fit, capping at 1fr
 // share so they never leave gutters on either edge. /enhance + /mimic
 // keep their fixed-width 360 px cards (fewer of them per row).
-const CARD_MIN_H_CLASS = "min-h-[387px]";
+const CARD_MIN_H_CLASS = "min-h-[540px]";
 
 const SLIDE_COUNT_OPTIONS = [
   { value: "auto" as const, label: "تلقائي" },
@@ -191,7 +189,6 @@ export default function CreatePage() {
   // re-uploading. Cleared if the user picks a fresh file via the
   // logo's onRemove → onSelect cycle.
   const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
-  const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
 
   // Apply a resolved brand (sessionStorage, default kit, or a picked saved
@@ -229,8 +226,6 @@ export default function CreatePage() {
     if (h.logo) {
       setLogoFile(null);
       setLoadedLogo(h.logo);
-      const pos = h.logo.position as CornerPosition;
-      if (CORNER_POSITIONS.includes(pos)) setLogoPosition(pos);
     }
   }, []);
 
@@ -293,8 +288,6 @@ export default function CreatePage() {
   // photography-led system prompt + reserves generated-image boxes.
   const [imagesMode, setImagesMode] = useState<boolean>(false);
   const [persistentText, setPersistentText] = useState<string>("");
-  const [persistentPosition, setPersistentPosition] =
-    useState<CornerPosition>("bottom-center");
 
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -493,14 +486,14 @@ export default function CreatePage() {
       // Every resolved uploaded family (name + weight faces) — forwarded so
       // Claude pairs them to heading/body; deck-generate signs each face file.
       const uploadedFontFields: UploadedFontFieldBrief[] = [];
-      if (brandFont.mode === "google" && brandFont.googleFamily) {
+      if (brandFont.uploaded.length === 0 && brandFont.googleFamily) {
         fontField = {
           name: brandFont.googleFamily,
           url: googleFontUrl(brandFont.googleFamily),
           storageUrl: null,
           family: brandFont.googleFamily,
         };
-      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
+      } else if (brandFont.uploaded.length > 0) {
         const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
         uploadedFontFields.push(...resolved);
         if (uploadedFontFields.length > 0) {
@@ -536,7 +529,6 @@ export default function CreatePage() {
         logo: resolvedLogoStorageUrl
           ? {
               storageUrl: resolvedLogoStorageUrl,
-              position: logoPosition,
               exclude: noExclude,
             }
           : null,
@@ -554,7 +546,6 @@ export default function CreatePage() {
         persistent: persistentText.trim()
           ? {
               text: persistentText.trim(),
-              position: persistentPosition,
               exclude: noExclude,
             }
           : null,
@@ -712,16 +703,14 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* Persistent footer element — input + position pill on one
-                row (moved here from output settings; no cover/closing
-                exclude — it's on every slide by definition). */}
+            {/* Persistent footer element — text input only (position
+                picker removed 2026-06-02; Claude places it). No cover/
+                closing exclude — it's on every slide by definition. */}
             <div className="border-t border-[var(--tq-border-glass)] pt-3">
               <PersistentRow
                 text={persistentText}
-                position={persistentPosition}
                 language={language}
                 onText={setPersistentText}
-                onPosition={setPersistentPosition}
               />
             </div>
           </div>
@@ -817,15 +806,16 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* Logo — compact zone + position pill on one row. */}
-            <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
+            {/* Logo — flex-1 so the dropzone grows to absorb the card's
+                leftover height (LogoRow's zone is flex-1 + min-h-20), filling
+                the gap above the save toggle instead of leaving dead space. */}
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>
               <LogoRow
                 file={logoFile}
                 previewUrl={loadedLogo?.displayUrl ?? null}
-                position={logoPosition}
                 onSelect={(f) => {
                   setLogoFile(f);
                   setLoadedLogo(null);
@@ -834,14 +824,13 @@ export default function CreatePage() {
                   setLogoFile(null);
                   setLoadedLogo(null);
                 }}
-                onPosition={setLogoPosition}
               />
             </div>
 
             {/* Save brand kit — present on BOTH branding cards
                 (fonts+colors AND logo), backed by the same state,
                 so the user can flip the toggle from either card. */}
-            <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
               <span className="text-xs font-semibold text-white/70">
                 حفظ كهوية افتراضية
               </span>
@@ -950,9 +939,11 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* AI images — prominent panel (moved here from the content
-                card, made unmissable). context/images.md. */}
-            <div className="mt-auto border-t border-[var(--tq-border-glass)] pt-3">
+            {/* AI images panel — tinted feature panel at the card bottom.
+                context/images.md. The visual-direction (mimic) panel that
+                sat above it was removed 2026-06-03; this slot will host the
+                design-style picker. */}
+            <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-glass)] pt-3">
               <AIImagesPanel
                 value={imagesMode}
                 onChange={setImagesMode}

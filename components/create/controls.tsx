@@ -222,12 +222,17 @@ export function PositionDropdown({
   disabled,
   disabledValues,
   disabledTooltip,
+  // Stretch the trigger to the full width of its container (label on the
+  // reading edge, chevron on the far edge). Used by the stacked LogoRow
+  // where the position pill sits full-width UNDER the logo dropzone.
+  fullWidth = false,
 }: {
   value: CornerPosition;
   onChange: (next: CornerPosition) => void;
   disabled?: boolean;
   disabledValues?: CornerPosition[];
   disabledTooltip?: string;
+  fullWidth?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -255,7 +260,7 @@ export function PositionDropdown({
   }, [open]);
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className={`relative ${fullWidth ? "w-full" : ""}`}>
       <button
         type="button"
         onClick={() => !disabled && setOpen((v) => !v)}
@@ -266,7 +271,9 @@ export function PositionDropdown({
         // wrapping to a second line when the parent row is tight
         // (the row has flex-wrap which would otherwise break the
         // button itself across rows).
-        className={`backdrop-blur-glass flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={`backdrop-blur-glass flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+          fullWidth ? "w-full justify-between" : "shrink-0"
+        } ${
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
         }`}
         style={{

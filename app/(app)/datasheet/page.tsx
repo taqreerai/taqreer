@@ -67,8 +67,6 @@ import {
   CardHeader,
   SegmentedToggle,
   Toggle,
-  CORNER_POSITIONS,
-  type CornerPosition,
   type LanguageCode,
 } from "@/components/create/controls";
 import {
@@ -105,7 +103,7 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // Same min-height + breakpoint math as /create — all four flows
 // share the 4-card row shape. See /create/page.tsx for the viewport
 // math; comment retained here for cross-file traceability.
-const CARD_MIN_H_CLASS = "min-h-[387px]";
+const CARD_MIN_H_CLASS = "min-h-[540px]";
 
 const SLIDE_COUNT_OPTIONS = [
   { value: "auto" as const, label: "تلقائي" },
@@ -186,7 +184,6 @@ export default function DatasheetPage() {
   // Pre-loaded logo from brand kit / default kit. See /create's
   // companion state for the rationale.
   const [loadedLogo, setLoadedLogo] = useState<HydratedBrand["logo"]>(null);
-  const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
   // Saved brand kits for the in-card dropdown (last 5). `options` drives
   // the menu; `raw` maps the picked id → HydratedBrand on select.
@@ -224,10 +221,6 @@ export default function DatasheetPage() {
     if (h.logo) {
       setLogoFile(null);
       setLoadedLogo(h.logo);
-      const pos = h.logo.position as CornerPosition;
-      if ((CORNER_POSITIONS as readonly string[]).includes(pos)) {
-        setLogoPosition(pos);
-      }
     }
   }, []);
 
@@ -290,8 +283,6 @@ export default function DatasheetPage() {
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
   const [pagination, setPagination] = useState<boolean>(true);
   const [persistentText, setPersistentText] = useState<string>("");
-  const [persistentPosition, setPersistentPosition] =
-    useState<CornerPosition>("bottom-center");
 
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -449,14 +440,14 @@ export default function DatasheetPage() {
       // Every resolved uploaded family (name + weight faces) — forwarded so
       // Claude pairs them to heading/body; deck-generate signs each face file.
       const uploadedFontFields: UploadedFontFieldBrief[] = [];
-      if (brandFont.mode === "google" && brandFont.googleFamily) {
+      if (brandFont.uploaded.length === 0 && brandFont.googleFamily) {
         fontField = {
           name: brandFont.googleFamily,
           url: googleFontUrl(brandFont.googleFamily),
           storageUrl: null,
           family: brandFont.googleFamily,
         };
-      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
+      } else if (brandFont.uploaded.length > 0) {
         const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
         uploadedFontFields.push(...resolved);
         if (uploadedFontFields.length > 0) {
@@ -490,7 +481,6 @@ export default function DatasheetPage() {
         logo: (logoUploaded?.storageUrl ?? loadedLogo?.storageUrl)
           ? {
               storageUrl: (logoUploaded?.storageUrl ?? loadedLogo?.storageUrl)!,
-              position: logoPosition,
               exclude: noExclude,
             }
           : null,
@@ -508,7 +498,6 @@ export default function DatasheetPage() {
         persistent: persistentText.trim()
           ? {
               text: persistentText.trim(),
-              position: persistentPosition,
               exclude: noExclude,
             }
           : null,
@@ -639,10 +628,8 @@ export default function DatasheetPage() {
             <div className="border-t border-[var(--tq-border-glass)] pt-3">
               <PersistentRow
                 text={persistentText}
-                position={persistentPosition}
                 language={language}
                 onText={setPersistentText}
-                onPosition={setPersistentPosition}
               />
             </div>
           </div>
@@ -730,16 +717,16 @@ export default function DatasheetPage() {
               />
             </div>
 
-            {/* Logo — compact zone + position pill on one row (merged
-                from the old standalone الشعار card). */}
-            <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
+            {/* Logo — flex-1 so the dropzone grows to fill the card's
+                leftover height (matches /create); gap-4 unifies the
+                title→zone gap with الخطوط. */}
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>
               <LogoRow
                 file={logoFile}
                 previewUrl={loadedLogo?.displayUrl ?? null}
-                position={logoPosition}
                 onSelect={(f) => {
                   setLogoFile(f);
                   setLoadedLogo(null);
@@ -748,11 +735,10 @@ export default function DatasheetPage() {
                   setLogoFile(null);
                   setLoadedLogo(null);
                 }}
-                onPosition={setLogoPosition}
               />
             </div>
 
-            <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
               <span className="text-xs font-semibold text-white/70">
                 حفظ كهوية افتراضية
               </span>

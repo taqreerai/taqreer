@@ -48,8 +48,6 @@ import {
   CardHeader,
   InlinePaletteSwatch,
   Toggle,
-  CORNER_POSITIONS,
-  type CornerPosition,
 } from "@/components/create/controls";
 import {
   emptyBrandFont,
@@ -287,7 +285,6 @@ export default function EnhanceContentPage() {
   // to 5 uploaded families (Claude pairs). Replaces the old heading +
   // body two-slot UI; mirrors /create's BrandFontPicker model.
   const [brandFont, setBrandFont] = useState<BrandFontState>(emptyBrandFont());
-  const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
   // Saved brand kits for the in-card dropdown (last 5). `options` drives
   // the menu; `raw` maps the picked id → HydratedBrand on select.
   const [kitOptions, setKitOptions] = useState<BrandKitOption[]>([]);
@@ -325,8 +322,6 @@ export default function EnhanceContentPage() {
     if (h.logo) {
       setLogoFile(null);
       setLoadedLogo(h.logo);
-      const pos = h.logo.position as CornerPosition;
-      if (CORNER_POSITIONS.includes(pos)) setLogoPosition(pos);
     }
   }, []);
 
@@ -659,14 +654,14 @@ export default function EnhanceContentPage() {
       // Every resolved uploaded family (name + weight faces) — forwarded so
       // Claude pairs them to heading/body; deck-generate signs each face file.
       const uploadedFontFields: UploadedFontFieldBrief[] = [];
-      if (brandFont.mode === "google" && brandFont.googleFamily) {
+      if (brandFont.uploaded.length === 0 && brandFont.googleFamily) {
         fontField = {
           name: brandFont.googleFamily,
           url: googleFontUrl(brandFont.googleFamily),
           storageUrl: null,
           family: brandFont.googleFamily,
         };
-      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
+      } else if (brandFont.uploaded.length > 0) {
         const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
         uploadedFontFields.push(...resolved);
         if (uploadedFontFields.length > 0) {
@@ -734,7 +729,6 @@ export default function EnhanceContentPage() {
         logo: resolvedLogoStorageUrl
           ? {
               storageUrl: resolvedLogoStorageUrl,
-              position: logoPosition,
               exclude: [] as ("cover" | "closing")[],
             }
           : null,
@@ -837,7 +831,7 @@ export default function EnhanceContentPage() {
               the file area needs much more vertical real estate.
               p-4 + gap-4 deliberately tighter than the create-flow
               cards so the row reads compact, not airy. */}
-          <div className="glass-card flex min-h-[387px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+          <div className="glass-card flex min-h-[540px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -1001,7 +995,7 @@ export default function EnhanceContentPage() {
               dropdown in the header, palette, single brand-font picker,
               logo row, save toggle. Same min-h / min-w / flex-1 sizing
               as the source card so the two-card row stays balanced. */}
-          <div className="glass-card flex min-h-[387px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+          <div className="glass-card flex min-h-[540px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
             {/* Inline header (not CardHeader) so the saved-kit pill can
                 overlay the title row. Mirrors /create's branding header:
                 pb-4 balances the card's p-4 top padding so the title sits
@@ -1087,16 +1081,16 @@ export default function EnhanceContentPage() {
               />
             </div>
 
-            {/* Logo — compact zone + position pill on one row (moved
-                here from الملف الأصلي). */}
-            <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
+            {/* Logo — flex-1 so the dropzone grows to fill the card's
+                leftover height (matches /create); gap-4 unifies the
+                title→zone gap with الخطوط. */}
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>
               <LogoRow
                 file={logoFile}
                 previewUrl={loadedLogo?.displayUrl ?? null}
-                position={logoPosition}
                 onSelect={(f) => {
                   setLogoFile(f);
                   setLoadedLogo(null);
@@ -1105,12 +1099,14 @@ export default function EnhanceContentPage() {
                   setLogoFile(null);
                   setLoadedLogo(null);
                 }}
-                onPosition={setLogoPosition}
               />
             </div>
 
-            {/* Save brand kit — mirrors /create's footer toggle. */}
-            <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+            {/* Save brand kit — mirrors /create's footer toggle. The logo
+                section's flex-1 absorbs the slack and pushes this to the
+                bottom, so no mt-auto (it would otherwise eat the slack and
+                stop the logo zone from growing). */}
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
               <span className="text-xs font-semibold text-white/70">
                 حفظ كهوية افتراضية
               </span>

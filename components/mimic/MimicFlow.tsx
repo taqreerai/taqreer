@@ -48,8 +48,6 @@ import {
   CardHeader,
   SegmentedToggle,
   Toggle,
-  CORNER_POSITIONS,
-  type CornerPosition,
 } from "@/components/create/controls";
 import {
   emptyBrandFont,
@@ -104,7 +102,7 @@ const CARD_W_CLASS = "w-[360px]";
 // items-stretch on the row already equalizes across siblings; min-h
 // pins them all to the /enhance baseline so when the branding card
 // is hidden the remaining 2 cards keep that exact height.
-const CARD_MIN_H_CLASS = "min-h-[387px]";
+const CARD_MIN_H_CLASS = "min-h-[540px]";
 
 // Segmented-toggle option lists — declared once so the SegmentedToggle
 // stays stable across re-renders (option-array identity is part of
@@ -248,7 +246,6 @@ export default function MimicFlow({
   // Logo placement corner — mirrors /create's PositionDropdown.
   // Defaults to top-right; restored from a hydrated brand kit's saved
   // position when it's one of our 6 known corners.
-  const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
 
   // Apply a resolved brand (sessionStorage, default kit, or a picked
   // saved kit) to the card state. Maps the heading font slot → the
@@ -281,10 +278,6 @@ export default function MimicFlow({
     if (h.logo) {
       setLogoFile(null);
       setLoadedLogo(h.logo);
-      const pos = h.logo.position as CornerPosition;
-      if ((CORNER_POSITIONS as readonly string[]).includes(pos)) {
-        setLogoPosition(pos);
-      }
     }
   }, []);
 
@@ -598,14 +591,14 @@ export default function MimicFlow({
       // Every resolved uploaded family (name + weight faces) — forwarded so
       // Claude pairs them to heading/body; deck-generate signs each face file.
       const uploadedFontFields: UploadedFontFieldBrief[] = [];
-      if (brandFont.mode === "google" && brandFont.googleFamily) {
+      if (brandFont.uploaded.length === 0 && brandFont.googleFamily) {
         fontField = {
           name: brandFont.googleFamily,
           url: googleFontUrl(brandFont.googleFamily),
           storageUrl: null,
           family: brandFont.googleFamily,
         };
-      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
+      } else if (brandFont.uploaded.length > 0) {
         const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
         uploadedFontFields.push(...resolved);
         if (uploadedFontFields.length > 0) {
@@ -638,7 +631,6 @@ export default function MimicFlow({
         logo: resolvedLogoStorageUrl
           ? {
               storageUrl: resolvedLogoStorageUrl,
-              position: logoPosition,
               exclude: [] as ("cover" | "closing")[],
             }
           : null,
@@ -950,16 +942,16 @@ export default function MimicFlow({
                     />
                   </div>
 
-                  {/* Logo — compact zone + position pill on one row
-                      (moved here from the content card). */}
-                  <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
+                  {/* Logo — flex-1 so the dropzone grows to fill the card's
+                      leftover height (matches /create); gap-4 unifies the
+                      title→zone gap with الخطوط. */}
+                  <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
                     <span className="block text-xs font-semibold text-white/70">
                       الشعار
                     </span>
                     <LogoRow
                       file={logoFile}
                       previewUrl={loadedLogo?.displayUrl ?? null}
-                      position={logoPosition}
                       onSelect={(f) => {
                         setLogoFile(f);
                         setLoadedLogo(null);
@@ -968,12 +960,13 @@ export default function MimicFlow({
                         setLogoFile(null);
                         setLoadedLogo(null);
                       }}
-                      onPosition={setLogoPosition}
                     />
                   </div>
 
-                  {/* Save brand kit — mirrors /create's footer toggle. */}
-                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+                  {/* Save brand kit — the logo section's flex-1 pushes this
+                      to the bottom, so no mt-auto (it would eat the slack
+                      and stop the logo zone from growing). */}
+                  <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
                     <span className="text-xs font-semibold text-white/70">
                       حفظ كهوية افتراضية
                     </span>

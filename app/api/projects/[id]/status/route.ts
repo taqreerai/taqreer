@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { listWarmedGenids, publicGeneratedImageUrl } from "@/lib/images/store";
+import {
+  listWarmedImageFiles,
+  publicGeneratedImageUrl,
+  genImageHash,
+} from "@/lib/images/store";
+import { scanGenImages } from "@/lib/images/slide-images";
 
 type Progress = {
   stage: "thinking" | "designing" | "validating" | "saving";
@@ -41,6 +46,27 @@ type SlideJson = {
 function getSlideJson(value: unknown): SlideJson | null {
   if (!value || typeof value !== "object") return null;
   return value as SlideJson;
+}
+
+// Collect the reserved image boxes (genid → prompt) from a slides array,
+// scanning the SAME HTML the client renders. Used to resolve each live box to
+// the URL for its CURRENT prompt's hash — so a drift's reused genid surfaces
+// the new image, never the discarded draft's (context/images.md §12). First
+// prompt per genid wins; the caller overlays streamingPreview (live) last.
+function collectGenBoxes(slides: unknown[] | undefined): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!Array.isArray(slides)) return map;
+  for (const s of slides) {
+    const html =
+      s && typeof s === "object" && typeof (s as { html?: unknown }).html === "string"
+        ? (s as { html: string }).html
+        : null;
+    if (!html) continue;
+    for (const m of scanGenImages(html)) {
+      if (!map.has(m.genid)) map.set(m.genid, m.prompt);
+    }
+  }
+  return map;
 }
 
 function isProgress(value: unknown): value is Progress {
@@ -252,62 +278,75 @@ export async function GET(
   }
 
   // Ready image fills for the latest version, keyed genid → public URL.
-  // Two sources, unioned:
-  //   1. GeneratedImage rows the reconcile (`deck-images-generate`) marks
-  //      `ready` — the durable, post-completion source.
-  //   2. WARM images stored mid-stream by `deck-image-warm`, which writes the
-  //      object to `${projectId}/gen/` but NO DB row (the reconcile backfills
-  //      rows later). Without surfacing these, the live-fill poll is blind to
-  //      warm images the whole time the deck generates — broadcasts are the
-  //      only other delivery path and they don't replay / don't arrive in
-  //      local dev, so images only showed up after a manual refresh. Public
-  //      URLs are deterministic and identical to what the reconcile bakes into
-  //      the manifest, so the union never churns the rendered slide.
+  //
+  // Identity is (genid + promptHash), NOT genid alone (context/images.md §12).
+  // On the highest preset Claude often discards a draft manifest mid-stream
+  // and re-emits a polished one; a reused data-genid whose prompt CHANGED must
+  // resolve to the NEW image, never the discarded draft's. So we scan the
+  // CURRENT live manifest for each box's prompt, hash it, and surface only the
+  // URL for that exact prompt.
+  //
+  // Scoping to the live manifest is safe (it does NOT reintroduce the churn an
+  // earlier version had) because the CLIENT merge never clears — a fill it was
+  // already shown stays put even if a later poll omits it (DeckView). So an
+  // unchanged box's URL is stable, and a drifted box just swaps to its new
+  // image the instant the warm fill lands.
   let imageFills: Record<string, string> | null = null;
   if (includeImageFills) {
     imageFills = {};
-    // The two sources are independent — read them concurrently (this runs on
-    // the every-6s image-fills poll, per viewer).
-    //   1. `ready` GeneratedImage rows — authoritative, post-reconcile.
-    //   2. EVERY warm image stored under `${projectId}/gen/`. We deliberately do
-    //      NOT scope this to the genids in `streamingPreview`: that set
-    //      fluctuates on a mid-stream re-advance/reset, and scoping to it would
-    //      RETRACT an image the client was already shown (observed live). A
-    //      superset is safe — a slide only renders a genid it contains, and the
-    //      client poll measures coverage against ITS OWN rendered boxes (not
-    //      this list), so extras never end the poll early. Never-retract +
-    //      client-side own-box filtering is what makes a mid-deck image land
-    //      live instead of waiting for the end.
-    const [ready, warmed] = await Promise.all([
-      latestVersion?.id
-        ? prisma.generatedImage.findMany({
-            where: {
-              presentationVersionId: latestVersion.id,
-              status: "ready",
-              storageUrl: { not: null },
-            },
-            select: { genid: true, storageUrl: true },
-          })
-        : Promise.resolve(
-            [] as { genid: string; storageUrl: string | null }[],
-          ),
-      listWarmedGenids(id).catch((err) => {
-        // Storage-list blip — DB-ready fills are still returned. Log it (every
-        // other image path logs its failures) so a persistent failure that
-        // would silently break live fill in dev isn't invisible.
-        console.warn(
-          `[status] listWarmedGenids failed for ${id}:`,
-          err instanceof Error ? err.message : String(err),
-        );
-        return [] as string[];
-      }),
-    ]);
-    for (const r of ready) {
-      if (r.storageUrl) imageFills[r.genid] = r.storageUrl;
+    // genid → prompt for every reserved box the client is rendering. Canonical
+    // slides first, then streamingPreview overlaid (the live prompt wins).
+    const genBoxes = collectGenBoxes(slideJson?.slides);
+    for (const [genid, prompt] of collectGenBoxes(slideJson?.streamingPreview)) {
+      genBoxes.set(genid, prompt);
     }
-    for (const genid of warmed) {
-      if (!imageFills[genid]) {
-        imageFills[genid] = publicGeneratedImageUrl(id, genid);
+    if (genBoxes.size > 0) {
+      // Two independent sources, read concurrently (every-6s poll, per viewer):
+      //   1. `ready` GeneratedImage rows — authoritative post-reconcile; their
+      //      storageUrl already encodes the FINAL prompt's hash.
+      //   2. WARM image FILENAMES stored mid-stream by `deck-image-warm` (no DB
+      //      row yet). We match each live box's `${genid}-${hash}.png` against
+      //      this set — a stale draft hash simply isn't present, so it can't be
+      //      surfaced. This is the live path: broadcasts don't replay / don't
+      //      arrive in local dev, so without it images only showed on refresh.
+      const [ready, warmedFiles] = await Promise.all([
+        latestVersion?.id
+          ? prisma.generatedImage.findMany({
+              where: {
+                presentationVersionId: latestVersion.id,
+                status: "ready",
+                storageUrl: { not: null },
+              },
+              select: { genid: true, storageUrl: true },
+            })
+          : Promise.resolve(
+              [] as { genid: string; storageUrl: string | null }[],
+            ),
+        listWarmedImageFiles(id).catch((err) => {
+          // Storage-list blip — DB-ready fills are still returned. Log it (every
+          // other image path logs its failures) so a persistent failure that
+          // would silently break live fill in dev isn't invisible.
+          console.warn(
+            `[status] listWarmedImageFiles failed for ${id}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+          return new Set<string>();
+        }),
+      ]);
+      const readyByGenid = new Map<string, string>();
+      for (const r of ready) {
+        if (r.storageUrl) readyByGenid.set(r.genid, r.storageUrl);
+      }
+      for (const [genid, prompt] of genBoxes) {
+        const dbUrl = readyByGenid.get(genid);
+        if (dbUrl) {
+          imageFills[genid] = dbUrl;
+          continue;
+        }
+        const hash = genImageHash(prompt);
+        if (warmedFiles.has(`${genid}-${hash}.png`)) {
+          imageFills[genid] = publicGeneratedImageUrl(id, genid, hash);
+        }
       }
     }
   }

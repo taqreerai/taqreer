@@ -26,7 +26,6 @@ import { LogoRow } from "@/components/brand/LogoRow";
 import {
   CardHeader,
   InlinePaletteSwatch,
-  type CornerPosition,
 } from "@/components/create/controls";
 import {
   emptyBrandFont,
@@ -71,7 +70,6 @@ export default function NewBrandKitPage() {
   // to 5 uploaded families (Claude pairs). Mirrors /create's picker.
   const [brandFont, setBrandFont] = useState<BrandFontState>(emptyBrandFont());
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPosition, setLogoPosition] = useState<CornerPosition>("top-right");
 
   // ─── Submit state ──────────────────────────────────────────────
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -106,14 +104,14 @@ export default function NewBrandKitPage() {
       // the kit keeps the first family + its faces. Mirrors /create.
       let fontField: ResolvedFontField = null;
       const uploadedFontFields: UploadedFontFieldBrief[] = [];
-      if (brandFont.mode === "google" && brandFont.googleFamily) {
+      if (brandFont.uploaded.length === 0 && brandFont.googleFamily) {
         fontField = {
           name: brandFont.googleFamily,
           url: googleFontUrl(brandFont.googleFamily),
           storageUrl: null,
           family: brandFont.googleFamily,
         };
-      } else if (brandFont.mode === "upload" && brandFont.uploaded.length > 0) {
+      } else if (brandFont.uploaded.length > 0) {
         const resolved = await resolveUploadedFontFamilies(brandFont.uploaded);
         uploadedFontFields.push(...resolved);
         if (uploadedFontFields.length > 0) {
@@ -145,7 +143,6 @@ export default function NewBrandKitPage() {
             ? {
                 name: logoUploaded.name,
                 storageUrl: logoUploaded.storageUrl,
-                position: logoPosition,
                 // Logo cover/closing excludes dropped — Claude decides
                 // logo presence per slide (matches /create).
                 exclude: [] as ("cover" | "closing")[],
@@ -230,7 +227,7 @@ export default function NewBrandKitPage() {
             ═══════════════════════════════════════════════════════ */}
         <div className="flex justify-center">
           <div
-            className={`glass-card flex ${CARD_W_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`glass-card flex ${CARD_W_CLASS} min-h-[540px] flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="palette" title="الهوية البصرية" />
 
@@ -279,17 +276,19 @@ export default function NewBrandKitPage() {
               />
             </div>
 
-            {/* Logo — compact zone + position pill on one row. */}
-            <div className="space-y-2 border-t border-[var(--tq-border-glass)] pt-3">
+            {/* Logo — flex-1 so the dropzone grows to fill the card's
+                leftover height (the card now carries min-h-[540px] to match
+                the deck flows); gap-4 unifies the title→zone gap with الخطوط.
+                No save toggle here — this page IS the save — so the logo zone
+                runs to the card's bottom edge. */}
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>
               <LogoRow
                 file={logoFile}
-                position={logoPosition}
                 onSelect={setLogoFile}
                 onRemove={() => setLogoFile(null)}
-                onPosition={setLogoPosition}
               />
             </div>
           </div>

@@ -9,17 +9,21 @@
 //
 // The boxes are emitted by OUR own images-mode prompt (deck-generate
 // SYSTEM_PROMPT_IMAGES), so the markup shape is known:
-//   <img data-genimage="<textless prompt>" data-genrole="hero|bg|accent"
-//        data-genaspect="landscape|portrait|square" data-genid="<unique>"
-//        alt="" style="…object-fit:cover;…" />   (NO src yet)
+//   <img data-genimage="<textless prompt>" data-genid="<unique>"
+//        alt="" style="width:…px;height:…px;object-fit:cover;…" />  (NO src yet)
+// Only data-genimage + data-genid are required of Claude; the image
+// ASPECT is derived from the box's own width/height (see scanGenImages),
+// and the ROLE is no-longer requested (defaults to "hero"). Legacy decks
+// that still carry data-genrole / data-genaspect are honoured.
 // Attribute ORDER is not assumed — Claude reorders freely — so every
 // lookup is attribute-name-keyed, and tag boundaries are found with a
 // quote-aware scan (a prompt value may legitimately contain a `>`).
 
-// Hard ceiling on generated images per deck — an aesthetic + cost guard
-// mirrored by SYSTEM_PROMPT_IMAGES. Shared by the warm-during-stream
-// dispatcher (deck-generate), the warm fill, and the end reconcile so the
-// cap can't drift between them.
+// Hard ceiling on generated images per deck — a cost guard enforced
+// server-side only (the prompt no longer states a cap; Claude reserves
+// boxes freely and the dispatcher stops warming past this count). Shared
+// by the warm-during-stream dispatcher (deck-generate), the warm fill,
+// and the end reconcile so the cap can't drift between them.
 export const MAX_GENERATED_IMAGES = 12;
 
 export type GenImageRole = "hero" | "bg" | "accent";
@@ -32,7 +36,8 @@ export interface GenImageMarker {
   prompt: string;
   /** data-genrole — defaults to "hero" when missing/invalid. */
   role: GenImageRole;
-  /** data-genaspect — defaults to "landscape" when missing/invalid. */
+  /** Derived from the box's width/height (or legacy data-genaspect);
+   *  defaults to "landscape" when the shape can't be determined. */
   aspect: GenImageAspect;
 }
 
@@ -91,6 +96,30 @@ function readAttr(tag: string, name: string): string | null {
   return m[2] !== undefined ? m[2] : (m[3] ?? null);
 }
 
+// Read a numeric px length for one CSS property out of an inline `style`
+// string (e.g. "width: 800px"). Returns null when absent or not in px
+// (%, vw, auto, calc()… can't be compared to a sibling px length).
+function readPxLen(style: string, prop: string): number | null {
+  const m = style.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([\\d.]+)px`, "i"));
+  return m ? parseFloat(m[1]) : null;
+}
+
+// Derive the closest gpt-image-2 aspect from the box's own width/height,
+// so Claude lays the box out naturally and never has to declare an enum.
+// Needs both lengths in px; a ±15% band around 1:1 reads as square.
+// Returns null when the shape can't be determined (caller defaults it).
+function deriveAspectFromStyle(tag: string): GenImageAspect | null {
+  const style = readAttr(tag, "style");
+  if (!style) return null;
+  const w = readPxLen(style, "width");
+  const h = readPxLen(style, "height");
+  if (w == null || h == null || w <= 0 || h <= 0) return null;
+  const ratio = w / h;
+  if (ratio >= 1.15) return "landscape";
+  if (ratio <= 0.87) return "portrait";
+  return "square";
+}
+
 const SRC_ATTR = /\bsrc\s*=\s*("([^"]*)"|'([^']*)')/i;
 
 // Decode the handful of HTML entities Claude may emit inside an
@@ -132,10 +161,12 @@ export function scanGenImages(html: string): GenImageMarker[] {
     const aspectRaw = readAttr(tag, "data-genaspect");
     const role: GenImageRole =
       roleRaw && ROLES.has(roleRaw) ? (roleRaw as GenImageRole) : "hero";
+    // Prefer an explicit data-genaspect (legacy decks still emit it), else
+    // derive the shape from the box's own width/height, else default.
     const aspect: GenImageAspect =
       aspectRaw && ASPECTS.has(aspectRaw)
         ? (aspectRaw as GenImageAspect)
-        : "landscape";
+        : (deriveAspectFromStyle(tag) ?? "landscape");
     seen.add(genid);
     out.push({ genid, prompt, role, aspect });
   }

@@ -45,7 +45,6 @@ export async function POST(request: Request) {
       name?: string | null;
       storageUrl?: string | null;
       previewDataUrl?: string | null;
-      position?: string | null;
       exclude?: unknown;
     } | null;
   } | null;
@@ -86,10 +85,6 @@ export async function POST(request: Request) {
         storageUrl:
           typeof body.logo.storageUrl === "string"
             ? body.logo.storageUrl.slice(0, 2000)
-            : null,
-        position:
-          typeof body.logo.position === "string"
-            ? body.logo.position.slice(0, 32)
             : null,
         exclude: Array.isArray(body.logo.exclude)
           ? body.logo.exclude.filter(

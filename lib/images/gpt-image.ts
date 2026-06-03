@@ -72,3 +72,44 @@ export async function generateImage(opts: {
   if (!b64) throw new Error("gpt-image-2 returned no image data");
   return { b64, size };
 }
+
+// A failure is TRANSIENT (worth retrying) when it's a rate-limit, a server
+// error, or a network/timeout blip — vs PERMANENT (a 400 / content-policy /
+// moderation rejection) which will never recover, so we surface it at once.
+function isTransientImageError(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status;
+  if (typeof status === "number") return status === 429 || status >= 500;
+  // SDK connection / timeout errors carry no HTTP status.
+  const text = `${(err as { name?: string } | null)?.name ?? ""} ${
+    err instanceof Error ? err.message : ""
+  }`;
+  return /timeout|timed out|connection|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i.test(
+    text,
+  );
+}
+
+/**
+ * `generateImage` + automatic retry on TRANSIENT failures (429 rate-limit,
+ * 5xx, network/timeout) with exponential backoff. Permanent failures
+ * (content-policy / 400) re-throw immediately. This is what the warm-fill
+ * and end-reconcile callers use so a single unlucky call doesn't leave a
+ * permanent empty box (observed 2026-06-03: one box failed mid-deck while
+ * three identical-theme prompts succeeded — a one-off 429).
+ */
+export async function generateImageWithRetry(
+  opts: { prompt: string; aspect: ImageAspect },
+  attempts = 3,
+): Promise<GeneratedImageResult> {
+  const backoffMs = [1500, 4000];
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await generateImage(opts);
+    } catch (err) {
+      lastErr = err;
+      if (i === attempts - 1 || !isTransientImageError(err)) throw err;
+      await new Promise((r) => setTimeout(r, backoffMs[i] ?? 4000));
+    }
+  }
+  throw lastErr;
+}

@@ -31,11 +31,12 @@ import {
   MAX_GENERATED_IMAGES,
   type GenImageAspect,
 } from "@/lib/images/slide-images";
-import { generateImage } from "@/lib/images/gpt-image";
+import { generateImageWithRetry } from "@/lib/images/gpt-image";
 import {
   storeGeneratedImage,
   generatedImageExists,
   publicGeneratedImageUrl,
+  genImageHash,
 } from "@/lib/images/store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
@@ -50,6 +51,12 @@ type ImageBox = {
   prompt: string;
   role: string;
   aspect: GenImageAspect;
+  // sha256→12hex of `prompt` (genImageHash). Folds the prompt into the
+  // storage path so this reconcile adopts ONLY a warm image whose prompt
+  // matches the FINAL manifest — a drifted (reused-genid, changed-prompt)
+  // box generates fresh instead of adopting the discarded draft's image
+  // (context/images.md §12).
+  hash: string;
 };
 
 export const deckImagesGenerate = inngest.createFunction(
@@ -100,7 +107,11 @@ export const deckImagesGenerate = inngest.createFunction(
       const collected: ImageBox[] = [];
       for (const slide of parsed.data.slides) {
         for (const marker of scanGenImages(slide.html)) {
-          collected.push({ slideKey: slide.slideId, ...marker });
+          collected.push({
+            slideKey: slide.slideId,
+            ...marker,
+            hash: genImageHash(marker.prompt),
+          });
           if (collected.length >= MAX_GENERATED_IMAGES) break;
         }
         if (collected.length >= MAX_GENERATED_IMAGES) break;
@@ -221,8 +232,12 @@ export const deckImagesGenerate = inngest.createFunction(
             // stored its image (deterministic path), ADOPT it — mark ready
             // with that URL instead of re-billing gpt-image-2. Covers boxes
             // warmed before this run AND ones whose warm landed late.
-            if (await generatedImageExists(projectId, b.genid)) {
-              const adoptedUrl = publicGeneratedImageUrl(projectId, b.genid);
+            if (await generatedImageExists(projectId, b.genid, b.hash)) {
+              const adoptedUrl = publicGeneratedImageUrl(
+                projectId,
+                b.genid,
+                b.hash,
+              );
               await setStatus(b.genid, {
                 status: "ready",
                 storageUrl: adoptedUrl,
@@ -231,13 +246,14 @@ export const deckImagesGenerate = inngest.createFunction(
               adopted += 1;
               continue;
             }
-            const { b64, size } = await generateImage({
+            const { b64, size } = await generateImageWithRetry({
               prompt: b.prompt,
               aspect: b.aspect,
             });
             const url = await storeGeneratedImage({
               projectId,
               genid: b.genid,
+              hash: b.hash,
               b64,
             });
             await setStatus(b.genid, {

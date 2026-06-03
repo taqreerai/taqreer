@@ -102,7 +102,6 @@ export async function seedFromBrandKit(kitId: string): Promise<void> {
         // signs `storageUrl` server-side, so we don't need a long-
         // lived URL here.
         url: logo.signedUrl,
-        position: logo.position,
         exclude: logo.exclude,
       }
     : null;

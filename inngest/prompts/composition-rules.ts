@@ -1,31 +1,21 @@
-// Shared composition / layout rules that both the full deck-generate
-// prompt and the partial-regen prompt honour. Lifted here so the two
-// prompts can't drift.
+// Shared composition rules honoured by BOTH the full deck-generate prompt and
+// the partial-regen prompt. Kept LEAN (2026-06-02 prompt rework): the old
+// SLIDE MARGINS / chrome-band / two-layer rules were verified server-handled
+// or forced-style (see context/plan-design-direction.md) and stay cut.
 //
-// Format-agnostic: enumerates both 16:9 + 9:16 numbers inline so the
-// caller doesn't need to interpolate. The full prompt already worked
-// this way; partial inherits the same approach.
+// What remains is (1) the Arabic typography floor that isn't enforced
+// server-side yet, and (2) the two RTL flex gotchas — RESTORED 2026-06-03 at
+// user request: lib/export/sanitize.ts's RTL rewriters
+// (`rewriteRtlFlexEndToFlexStart`, `rewriteRtlRowFlexOrder`) were built as
+// DEFENSIVE backstops to these exact prompt rules and are deliberately
+// conservative (they skip ambiguous cases — see the comments there), so the
+// prompt must still state them or the conservative cases slip through.
 //
-// NOTE: the COMPOSITION DIRECTION block (decoration anchors on the half
-// opposite the text) was removed by request as redundant. The full deck
-// prompt still states the rule in its GRAPHICS section; partial regen no
-// longer carries it, so single-slide regeneration may place a graphic on
-// the text side — an accepted tradeoff.
+// TODO (Bucket-2): move the line-height / min-height clamps into
+// lib/export/bidi-postprocess.ts.
 
-export const COMPOSITION_RULES = `SLIDE MARGINS — two-layer + reserved chrome footer
-Use the EXACT same side inset for content as for chrome corners (logo / pagination / persistent text). On a 1920-wide canvas that's 80 px; on a 1080-wide vertical canvas that's 50 px. Top inset matches the same number. BOTTOM is fixed at 140 px (chrome footer zone). Body MUST NOT extend below \`bottom:140px\`. Cover (\`role:"cover"\`) / closing (\`role:"closing"\`) may break chrome for hero composition.
+export const COMPOSITION_RULES = `Arabic typography: \`line-height\` ≥ 1.5 on bold headlines (≥ 1.6 where tashkeel appears); use \`min-height\` (never a fixed \`height\`) on Arabic text boxes so glyphs never clip.
 
-EXACTLY ONE content layer, AND inside it NO ABSOLUTE POSITIONING of body content. The single content \`<div>\` is a \`display: flex; flex-direction: column\` (or grid) container; every body element — title, kicker, subtitle, paragraphs, cards, stats, illustrations, charts, footers — is a NORMAL-FLOW CHILD of that container, never \`position: absolute\` inside it. The only siblings allowed alongside the content layer (NOT inside it) are: the background SVG layer (\`pointer-events:none\`) and the chrome blocks (logo / pagination / persistent text, all in the bottom 140 px chrome zone, never in the body region).
-To anchor a row at the bottom of the slide, set \`margin-top: auto\` on that row inside the flex column. Don't reach for \`position: absolute; bottom: 0\` on a child; it doesn't reserve vertical space.
-
-ARABIC TYPOGRAPHY
-- Glyphs render ~15–20 % wider in export. Default Arabic headlines + long single-line Arabic to FULL available width.
-- Bold Arabic ≥ 24 px: \`line-height: 1.5\` min.
-- Cards with Arabic need 32–48 px padding. NEVER fix \`height\` on Arabic content — use \`min-height\`.
-- Tashkeel: \`line-height\` ≥ 1.6 + ≥ 20 px \`margin-bottom\`. Doesn't apply to chrome (\`line-height: 1\`).
-
-LAYOUT GOTCHAS
-- Headline + body in one container: explicit \`margin-bottom\` or grid \`gap\` (tight stacks overlap in export).
-- Single-line text: \`width: max-content\` + \`padding-inline\`; inside constrained parent use \`white-space: nowrap\`.
-- Single-script siblings in flex (two Arabic spans at opposite ends) merge into one shape in export — \`justify-content: space-between\` is lost. Split them into separate flex / grid columns or wrap each in its own row INSIDE the single content layer so they're independent flow blocks; do NOT \`position:absolute\` them out of the content layer. Mixed-script siblings auto-split, so flex is fine for them.
-- RTL flex columns flip cross-axis alignment. \`align-items: flex-end\` on a \`flex-direction: column\` container lands items on the VISUAL LEFT in an RTL slide (the cross axis is inline-reversed). To right-align column items in RTL, use \`align-items: flex-start\` — or drop \`align-items\` entirely and let \`text-align: right\` on the container do the work with full-width block children.`;
+RTL layout gotchas:
+- RTL flex columns flip the cross axis: \`align-items: flex-end\` on a \`flex-direction: column\` container lands items on the VISUAL LEFT in an RTL slide (the cross axis is inline-reversed). To right-align column items in RTL use \`align-items: flex-start\` — or drop \`align-items\` and let \`text-align: right\` with full-width block children do the work.
+- Single-script siblings in one flex row (e.g. two Arabic spans at opposite ends) merge into a single shape on export — \`justify-content: space-between\` is lost. Split them into separate flex / grid columns (or wrap each in its own row) so they stay independent flow blocks. Mixed-script siblings auto-split, so flex is fine for them.`;

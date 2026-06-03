@@ -1,50 +1,37 @@
 "use client";
 
-// LogoRow — compact logo upload + position picker on ONE row (flow-card
-// redesign). Replaces the tall LogoUploadSlot + separate position grid +
-// cover/closing exclude pills. The exclude control is gone entirely:
-// Claude now decides which slides carry the logo; `position` is only a
-// hint for WHERE it lands when it does.
-//
-// Layout: a flex-1 compact logo control (empty dropzone OR a picked
-// preview row showing ONLY the white-flattened logo — sized to fill the
-// row height — plus a remove button) on the reading edge, and the compact
-// PositionDropdown pill at the other end — both at the same ~44 px height
-// so the row reads as one band.
-//
-// SVG-only, same as LogoUploadSlot. White-flatten the preview for the
-// dark glass chrome (preview only — saved bytes untouched).
+// LogoRow — logo upload + preview (2026-06-02). Just the SVG dropzone now:
+// the position picker was removed entirely — Claude decides WHERE the logo
+// sits (chrome-locked across the deck), the same way it now owns pagination
+// + the persistent footer. The exclude control is gone too; Claude decides
+// which slides carry the logo. White-flatten the preview for the dark glass
+// chrome (preview only — saved bytes untouched). SVG-only.
 
 import { useEffect, useRef, useState } from "react";
-import { PositionDropdown, type CornerPosition } from "@/components/create/controls";
 
-// Match the font dropzone / combobox height (44 px) so the logo row and
-// the font selector above it read as one consistent column of inputs.
-const ROW_H = 44;
+// Logo dropzone / preview sizing. flex-1 + min-h lets the zone GROW to
+// absorb any extra height the parent card hands down (e.g. /create's brand
+// card, where the logo section is flex-1) while never shrinking below the
+// visual-direction dropzone's 80 px. Where the parent doesn't grow it (the
+// other flows), it just sits at the 80 px floor.
+const ZONE_H = "min-h-20 flex-1";
 
 export function LogoRow({
   file,
   previewUrl = null,
-  position,
   onSelect,
   onRemove,
-  onPosition,
-  disabled = false,
 }: {
   file: File | null;
   // Remote logo (signed URL) when hydrated from a saved brand kit.
   previewUrl?: string | null;
-  position: CornerPosition;
   onSelect: (file: File) => void;
   onRemove: () => void;
-  onPosition: (p: CornerPosition) => void;
-  disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  // Blob-URL lifecycle for the local file preview (revoke on change /
-  // unmount), mirroring LogoUploadSlot.
+  // Blob-URL lifecycle for the local file preview (revoke on change / unmount).
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const lastFileRef = useRef<File | null>(null);
   const liveUrlRef = useRef<string | null>(null);
@@ -74,7 +61,7 @@ export function LogoRow({
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-1 flex-col">
       <input
         ref={inputRef}
         type="file"
@@ -89,23 +76,21 @@ export function LogoRow({
 
       {activeUrl ? (
         <div
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-2.5 py-1.5 bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
-          style={{ height: ROW_H }}
+          className={`relative flex w-full items-center justify-center rounded-xl border bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)] px-3 ${ZONE_H}`}
         >
-          {/* Logo only — no filename label. Fills the row height (object-
-              contain keeps the aspect ratio); max-w caps very wide marks so
-              the remove button stays reachable. */}
+          {/* Logo only — no filename label. object-contain keeps the aspect
+              ratio; max-h fills the zone, max-w caps very wide marks. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={activeUrl}
             alt="معاينة الشعار"
-            className="h-full max-w-[75%] shrink-0 object-contain object-right [filter:brightness(0)_invert(1)]"
+            className="max-h-[80%] max-w-[80%] object-contain [filter:brightness(0)_invert(1)]"
           />
           <button
             type="button"
             onClick={onRemove}
             aria-label="إزالة الشعار"
-            className="ms-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="absolute end-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/40 text-white/70 transition-colors hover:bg-black/60 hover:text-white"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
               close
@@ -126,28 +111,22 @@ export function LogoRow({
             setDragging(false);
             acceptSvg(event.dataTransfer.files?.[0]);
           }}
-          className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed bg-black/20 px-2.5 transition-colors ${
+          className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-black/20 transition-colors ${ZONE_H} ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
               : "border-white/15 hover:border-white/30"
           }`}
-          style={{ height: ROW_H }}
         >
           <span
             className="material-symbols-outlined text-white/70"
-            style={{ fontSize: 16 }}
+            style={{ fontSize: 20 }}
           >
             image
           </span>
           <span className="text-xs font-semibold text-white">شعار SVG</span>
+          <span className="text-[10px] text-white/40">SVG فقط</span>
         </button>
       )}
-
-      <PositionDropdown
-        value={position}
-        onChange={onPosition}
-        disabled={disabled || !activeUrl}
-      />
     </div>
   );
 }

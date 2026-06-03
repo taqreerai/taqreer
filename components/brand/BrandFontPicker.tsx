@@ -1,21 +1,22 @@
 "use client";
 
-// BrandFontPicker — the single brand-font selector (flow-card redesign).
+// BrandFontPicker — the brand-font selector (flow-card redesign).
 //
-// Replaces the old heading + body two-slot fonts UI. One control, two
-// modes via a SegmentedToggle:
-//   • "خط Google" → GoogleFontSlot, ONE family. Claude varies weights
+// BOTH inputs are shown, stacked (the mode SegmentedToggle was removed
+// 2026-06-02 to fill the branding-card height the logo position editor used
+// to take):
+//   • Google family → GoogleFontSlot, ONE family. Claude varies weights
 //     across the deck (the named-weight embed handles every weight) and
 //     uses the one family for headings + body, so there's no second slot.
-//   • "رفع خطوط"  → a multi-file dropzone: drop up to MAX_UPLOADED_FONTS
-//     family files in one go; Claude decides the pairings. Each picked
-//     family shows as a chip with a remove button.
+//   • Upload (under Google) → a multi-file dropzone: drop up to
+//     MAX_UPLOADED_FONTS family files in one go; Claude decides the
+//     pairings. Each picked family shows as a chip with a remove button.
 //
-// Pure UI — the parent owns the `BrandFontState`. Reuses the shared
-// SegmentedToggle + GoogleFontSlot primitives (reuse > build new).
+// RESOLUTION: each flow's submit prefers UPLOADED families when present,
+// else the Google family (the `mode` field is now vestigial). Pure UI —
+// the parent owns the `BrandFontState`.
 
 import { useRef, useState } from "react";
-import { SegmentedToggle } from "@/components/create/controls";
 import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import {
   FONT_ACCEPT_EXTS,
@@ -23,11 +24,6 @@ import {
   addUploadedFontFile,
   type BrandFontState,
 } from "@/lib/brand/fonts";
-
-const MODE_OPTIONS = [
-  { value: "google" as const, label: "خط Google" },
-  { value: "upload" as const, label: "رفع خطوط" },
-];
 
 export function BrandFontPicker({
   value,
@@ -69,26 +65,30 @@ export function BrandFontPicker({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-white/70">الخطوط</span>
-        <SegmentedToggle
-          options={MODE_OPTIONS}
-          value={value.mode}
-          onChange={(mode) => onChange({ ...value, mode })}
-          ariaLabel="نوع الخط"
-        />
+      {/* pb-1 (4px) + the stack's space-y-3 (12px) = a 16px title→selector
+          gap, unified with the logo section's gap-4 across every flow. */}
+      <span className="block pb-1 text-xs font-semibold text-white/70">
+        الخطوط
+      </span>
+
+      <GoogleFontSlot
+        selected={value.googleFamily}
+        sampleText={sampleText}
+        sampleSizeClass={sampleSizeClass}
+        onSelect={(family) => onChange({ ...value, googleFamily: family })}
+        hideSample
+      />
+
+      {/* أو — both inputs are shown now (the mode toggle was removed); each
+          flow's submit prefers uploaded font families when present, else the
+          chosen Google family. */}
+      <div className="flex items-center gap-2" aria-hidden>
+        <span className="h-px flex-1 bg-white/10" />
+        <span className="shrink-0 text-[10px] text-white/40">أو ارفع خطوطك</span>
+        <span className="h-px flex-1 bg-white/10" />
       </div>
 
-      {value.mode === "google" ? (
-        <GoogleFontSlot
-          selected={value.googleFamily}
-          sampleText={sampleText}
-          sampleSizeClass={sampleSizeClass}
-          onSelect={(family) => onChange({ ...value, googleFamily: family })}
-          hideSample
-        />
-      ) : (
-        <div className="space-y-2">
+      <div className="space-y-2">
           <input
             ref={inputRef}
             type="file"
@@ -119,7 +119,7 @@ export function BrandFontPicker({
               setDragging(false);
               if (!atCap) addFiles(event.dataTransfer.files);
             }}
-            className={`flex h-11 items-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 transition-colors ${
+            className={`flex h-16 items-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 transition-colors ${
               atCap ? "cursor-not-allowed" : "cursor-pointer"
             } ${hasPills ? "justify-start" : "justify-center"} ${
               dragging
@@ -200,7 +200,6 @@ export function BrandFontPicker({
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }
