@@ -285,7 +285,7 @@ watching live runs, all fixed:
 
 **New seams (additions to §10)**
 - `lib/images/store.ts` — `listWarmedGenids`, `publicGeneratedImageUrl`,
-  `generatedImageExists`, memoised admin client.
+  `generatedImageExists`, memoized admin client.
 - `lib/images/slide-images.ts` — `scanGenImages`, `injectImgSrc`, `SAFE_GENID`,
   `MAX_GENERATED_IMAGES` (the genid namespace shared by prompt cap, warm dispatch,
   reconcile, and DeckView's `genBoxKey`).

@@ -54,7 +54,11 @@ export function BrandFontPicker({
       if (!FONT_ACCEPT_EXTS.some((ext) => name.endsWith(ext))) continue;
       next = addUploadedFontFile(next, file);
     }
-    if (next !== value.uploaded) onChange({ ...value, uploaded: next });
+    // Uploading makes uploaded the active source (both submit flows prefer
+    // uploaded families), so clear any Google pick — otherwise a stale Google
+    // selection stays visible but is silently ignored on submit.
+    if (next !== value.uploaded)
+      onChange({ ...value, googleFamily: null, uploaded: next });
   };
 
   const removeAt = (index: number) =>
@@ -75,7 +79,12 @@ export function BrandFontPicker({
         selected={value.googleFamily}
         sampleText={sampleText}
         sampleSizeClass={sampleSizeClass}
-        onSelect={(family) => onChange({ ...value, googleFamily: family })}
+        onSelect={(family) =>
+          // Picking a Google family clears uploaded families so the two sources
+          // stay mutually exclusive and the visible choice matches what submit
+          // uses (uploaded would otherwise win and silently ignore this pick).
+          onChange({ ...value, googleFamily: family, uploaded: [] })
+        }
         hideSample
       />
 

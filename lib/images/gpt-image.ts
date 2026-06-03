@@ -100,14 +100,17 @@ export async function generateImageWithRetry(
   opts: { prompt: string; aspect: ImageAspect },
   attempts = 3,
 ): Promise<GeneratedImageResult> {
+  // Clamp to ≥1 so a 0/negative `attempts` can't skip the loop and fall through
+  // to `throw lastErr` while it's still undefined.
+  const total = Math.max(1, Math.floor(attempts));
   const backoffMs = [1500, 4000];
   let lastErr: unknown;
-  for (let i = 0; i < attempts; i++) {
+  for (let i = 0; i < total; i++) {
     try {
       return await generateImage(opts);
     } catch (err) {
       lastErr = err;
-      if (i === attempts - 1 || !isTransientImageError(err)) throw err;
+      if (i === total - 1 || !isTransientImageError(err)) throw err;
       await new Promise((r) => setTimeout(r, backoffMs[i] ?? 4000));
     }
   }

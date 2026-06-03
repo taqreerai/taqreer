@@ -155,7 +155,14 @@ export async function listWarmedImageFiles(
   const { data, error } = await adminClient()
     .storage.from(BUCKET)
     .list(`${projectId}/gen`, { limit: 1000 });
-  if (error || !data) return new Set();
+  // A real Storage error must NOT collapse to an empty set: that reads as "no
+  // warmed files this tick" and was swallowed silently (the caller's failure
+  // log never fired). Throw so the caller's catch logs it and still degrades to
+  // DB-ready fills. A genuinely empty bucket returns `data: []` with no error.
+  if (error) {
+    throw new Error(`Storage list failed for ${projectId}/gen: ${error.message}`);
+  }
+  if (!data) return new Set();
   return new Set(
     data.map((f) => f.name).filter((name) => SAFE_GEN_FILENAME.test(name)),
   );
