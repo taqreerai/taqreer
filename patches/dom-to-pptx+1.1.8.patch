@@ -1,5 +1,5 @@
 diff --git a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
-index 36b1ff9..2125315 100644
+index 36b1ff9..d0f0ac4 100644
 --- a/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 +++ b/node_modules/dom-to-pptx/dist/dom-to-pptx.mjs
 @@ -304,9 +304,17 @@ function extractTableData(node, scale) {
@@ -357,18 +357,24 @@ index 36b1ff9..2125315 100644
        );
        if (processed) item.options.data = processed;
        else item.skip = true;
-@@ -2484,19 +2699,44 @@ function prepareRenderItem(
+@@ -2484,19 +2699,50 @@ function prepareRenderItem(
            delete textOpts.highlight;
          }
  
-+        // Patched (taqreer): a child carrying margin-top (→ paraSpaceBefore)
-+        // is a NEW vertical block — e.g. a muted sub-line under a heading.
-+        // Force a line break BEFORE it so it lands on its own paragraph/line.
-+        // Without this the run stays in the previous paragraph and pptxgenjs
-+        // emits an (ignored) mid-paragraph <a:pPr>, collapsing heading +
-+        // sub-line onto one line. An inline label+value (no margin-top → no
-+        // paraSpaceBefore, e.g. "النتيجة: …") has no break and is left intact.
-+        if (textOpts.paraSpaceBefore && textParts.length > 0) {
++        // Patched (taqreer): an ELEMENT child carrying its OWN margin-top
++        // (→ paraSpaceBefore) is a NEW vertical block — e.g. a muted sub-line
++        // under a heading — so force a line break BEFORE it. Without this the
++        // run stays in the previous paragraph and pptxgenjs emits an (ignored)
++        // mid-paragraph <a:pPr>, collapsing heading + sub-line onto one line.
++        //
++        // GATE on nodeType === 1: a TEXT node inherits the PARENT's computed
++        // style (nodeStyle = style, above), so when the CONTAINER itself has a
++        // margin-top (e.g. a pill `<div style="margin-top:40px">flowing RTL
++        // sentence with <span dir="ltr"> islands</div>`), every text segment
++        // between the spans would inherit paraSpaceBefore and break — shattering
++        // one line into many paragraphs that overflow the box. Only an element's
++        // OWN margin counts. Inline label+value (no margin-top) stays intact.
++        if (child.nodeType === 1 && textOpts.paraSpaceBefore && textParts.length > 0) {
 +          const prevRun = textParts[textParts.length - 1];
 +          if (prevRun.options && !prevRun.options.breakLine) {
 +            prevRun.options.breakLine = true;
@@ -405,7 +411,7 @@ index 36b1ff9..2125315 100644
  
        let padding = getPadding(style, config.scale);
  
-@@ -2578,6 +2818,14 @@ function prepareRenderItem(
+@@ -2578,6 +2824,14 @@ function prepareRenderItem(
              w: w + padIn * 2,
              h: h + padIn * 2,
              rotate: rotation,
@@ -420,7 +426,7 @@ index 36b1ff9..2125315 100644
            },
          });
        }
-@@ -2586,6 +2834,32 @@ function prepareRenderItem(
+@@ -2586,6 +2840,32 @@ function prepareRenderItem(
      if (textPayload) {
        textPayload.text[0].options.fontSize =
          Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;
@@ -453,7 +459,7 @@ index 36b1ff9..2125315 100644
        items.push({
          type: 'text',
          zIndex: zIndex + 1,
-@@ -2598,9 +2872,8 @@ function prepareRenderItem(
+@@ -2598,9 +2878,8 @@ function prepareRenderItem(
            h,
            align: textPayload.align,
            valign: textPayload.valign,
@@ -464,7 +470,7 @@ index 36b1ff9..2125315 100644
            wrap: true,
            autoFit: true,
            vert: writingModeVert,
-@@ -2700,14 +2973,37 @@ function prepareRenderItem(
+@@ -2700,14 +2979,37 @@ function prepareRenderItem(
        if (textPayload) {
          textPayload.text[0].options.fontSize =
            Number(textPayload.text[0]?.options?.fontSize?.toFixed(1)) || 12;

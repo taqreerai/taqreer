@@ -51,6 +51,40 @@ function stripArabicLetterSpacing(root: HTMLElement): void {
   }
 }
 
+// Big titles carry a generous line-height for single-line breathing room
+// (often ≥ 1.5, and the Arabic-typography rule asks for it), but on a TWO-line
+// heading that ratio becomes a huge gap between the lines: dom-to-pptx converts
+// CSS line-height straight into PPTX <a:lnSpc> (absolute points), so a 36pt
+// title at line-height 1.5 exports as 54pt line spacing. Force single line
+// spacing on TITLES / big text so multi-line headings sit tight.
+//
+// Targets headings (h1–h6 — Claude's reliable title selector) unconditionally,
+// plus any element that DIRECTLY bears text at a large computed font-size (big
+// non-heading titles). The direct-text guard on the big-text branch keeps the
+// unitless `line-height:1` from cascading onto nested smaller / body text (body
+// keeps its Arabic-safe line-height). Offscreen DOM only — the preview is
+// untouched.
+const BIG_TEXT_PX = 40;
+function tightenHeadingLineSpacing(root: HTMLElement): void {
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>("*"))) {
+    if (/^H[1-6]$/.test(el.tagName)) {
+      // A heading is a title — no body text lives inside, so tighten directly.
+      el.style.setProperty("line-height", "1", "important");
+      continue;
+    }
+    const fontPx = parseFloat(window.getComputedStyle(el).fontSize) || 0;
+    if (fontPx < BIG_TEXT_PX) continue;
+    let hasDirectText = false;
+    for (const n of Array.from(el.childNodes)) {
+      if (n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").trim()) {
+        hasDirectText = true;
+        break;
+      }
+    }
+    if (hasDirectText) el.style.setProperty("line-height", "1", "important");
+  }
+}
+
 // Claude sometimes emits numbers / Latin words flush against Arabic without
 // a separating space ("1إنشاء", "70%faster", "تقريرTAQREER"). The prompt
 // rule says to add a space at every script transition; he doesn't always.
@@ -556,6 +590,7 @@ export async function exportManifestAsPptx(
       stripArabicLetterSpacing(slideNode);
       insertScriptTransitionSpaces(slideNode);
       stripInlineBackgrounds(slideNode);
+      tightenHeadingLineSpacing(slideNode);
     }
 
     // Walk the offscreen slides for any element using CSS `background-clip:
