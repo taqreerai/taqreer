@@ -135,27 +135,25 @@ const OUTPUT_CONTRACT = `OUTPUT — JSON only in the text channel
 }
 Slide count: decide it FIRST and write it as the top-level \`slideCount\` field (before \`theme\`) — match brief's \`slideCount\` if provided, otherwise adapt (sparse intro 5, deep doc 20+) — then produce EXACTLY that many slide objects. The live-preview reserves one slot per slide from this number, so the user sees the full total immediately; a mismatch leaves empty or missing tiles. Every \`slideId\` unique.
 
+VALID JSON — the ENTIRE response must parse in ONE \`JSON.parse\`. The \`html\` field is a JSON string, so: write EVERY HTML/SVG attribute with SINGLE quotes (e.g. \`<div class='x' style='color:var(--brand-1)'>\`) so a double-quote NEVER appears inside \`html\`, and keep each \`html\` on a SINGLE line with no raw line breaks. One unescaped \`"\` or newline inside any \`html\` corrupts the whole manifest and the deck is lost — single quotes throughout are what prevent it.
+
 FONT SOURCING
 - When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
 - When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those families — assign them to \`theme.fontHeading.name\` and \`theme.fontBody.name\` (a single family may serve both). Use the family \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts; the uploaded families are the only allowed typefaces. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship will render at its nearest available face.
 - If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
 
-// Prompt opener — intentionally BARE (2026-06-03, Part B.2): stripped of ALL
-// style / visual-direction enforcement so the substrate is neutral. Any look is
-// meant to come from the chosen style directive (ruleLines), NOT from a baked-in
-// default. Everything that remains in SYSTEM_PROMPT below is load-bearing
-// infrastructure (RTL/BiDi, export-safety, output contract), not style.
-const OPENER = `Create a slide deck.`;
-
-export const SYSTEM_PROMPT = `${OPENER}
-
-CANVAS — output the slide BODY only: no <!DOCTYPE>/<html>/<head>/<body>; an inline <style> per slide is fine. Size from the brief: 16:9 → 1920×1080, 9:16 → 1080×1920; the slide root sets \`width:<W>px; height:<H>px;\`. Use any layout primitive (flex / grid / absolute / transform).
+// SYSTEM_PROMPT is intentionally NEUTRAL (2026-06-03, Part B.2/B.3): no opener
+// sentence, no style / visual-direction enforcement. The "what to build" framing
+// + any look come from the chosen style directive, which leads the USER message
+// (see `styleDirectiveBlock`). Everything below is load-bearing infrastructure
+// (RTL/BiDi, export-safety, output contract), not style.
+export const SYSTEM_PROMPT = `CANVAS — output the slide BODY only: no <!DOCTYPE>/<html>/<head>/<body>; an inline <style> per slide is fine. Size from the brief: 16:9 → 1920×1080, 9:16 → 1080×1920; the slide root sets \`width:<W>px; height:<H>px;\`. Use any layout primitive (flex / grid / absolute / transform).
 
 ${LANG_DIRECTION}
 
 ${COMPOSITION_RULES}
 
-BRAND — colour and type come ONLY from the brief: \`var(--brand-1)\` … \`var(--brand-N)\` (palette, 1-indexed) and \`var(--font-heading)\` / \`var(--font-body)\`; fill \`theme\` in the OUTPUT to match. Choose the background from the brand palette.
+BRAND — colour and type come ONLY from the brief: \`var(--brand-1)\` … \`var(--brand-N)\` (palette, 1-indexed) and \`var(--font-heading)\` / \`var(--font-body)\`; fill \`theme\` in the OUTPUT to match. Choose the background from the brand palette. Use ONLY the brief's colours — NEVER introduce a new hue that isn't in the palette (no invented accent, no added colour, however well it suits the topic). \`theme.palette\` must list EXACTLY the brief's \`brand.colors\`, in order — nothing extra. You may vary OPACITY / lightness of a brief colour for tints and grounds, but never add a different colour. If the brand is monochrome (e.g. black + white), draw emphasis from weight, scale, and inverted fills of those colours — not a new colour.
 
 GRAPHICS —
 Country flags usage: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours, never \`data-fill\`).
@@ -448,21 +446,35 @@ type Rules = {
 // Design-style directives — each style cracks open the layout pattern
 // otherwise enforced by DESIGN-SYSTEM LOCK. Chrome stays locked across the
 // deck; the style determines WHAT chrome and body compositions look like.
+// Create-flow STYLE ENGINE (Part B.3, 2026-06-03). Each directive is a
+// mechanical, RTL/brand-token-adapted style-forcing spec derived from
+// context/research-design-styles.md and pressure-tested by Claude-design +
+// Gemini. The chosen style is injected at the TOP of the user message (see
+// `styleDirectiveBlock` + buildUserMessage) so it frames everything else,
+// prefixed with its ENGLISH name so Claude can lean on the named tradition,
+// and led by STYLE_LEAD — the universal forcing scaffold (fixed frame +
+// content-adaptive density + reusable layouts) stated once for all eight.
+// Keys MUST match DESIGN_STYLE_OPTIONS in components/create/OutputCards.tsx.
+const STYLE_LEAD =
+  "Apply this design system across the whole deck. Let the content decide how much sits on each slide — never invent filler or drop real points to hit a count. Lock a fixed frame (consistent margins + one small persistent marker in a corner you pick, clear of the RTL headline) and reuse it identically on every slide. Build slides from a small set of reusable layouts, not new geometry each time. Any 'accent' this style calls for is ONE of the brand's OWN colours used as a fill — if the brand is monochrome, the accent becomes weight, scale, and inverted fills of those colours, never a new hue.";
+
 const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
-  "إبداعي":
-    "Creative: lean into asymmetric compositions, full-bleed background shapes, rotated accent elements, and unusual content placements. Whitespace as a design element. Diagonal energy.",
-  "بسيط":
-    "Minimal: generous whitespace, single focal point per slide, restrained typography, tiny palette of accents, no decorative shapes unless they earn their place.",
-  "احترافي":
-    "Corporate: structured grid alignments, conservative palette usage, formal hierarchy with clear headline → subhead → body relationships, business-deck composure.",
-  "مرح":
-    "Playful: rounded shapes (circles, soft rectangles), bright accent colors used liberally, varied compositions, friendly visual rhythm. Not childish — just warm.",
-  "صحفي":
-    "Editorial / newspaper: multi-column body layouts, sidebars with secondary content, mixed type sizes within a slide (headline + deck + caption), kicker labels, byline-style metadata.",
-  "جريء":
-    "Bold: oversized typography that dominates the canvas, high-contrast color pairings, edge-to-edge headlines, aggressive negative space. Cinematic.",
-  "كلاسيكي":
-    "Classic: centered hierarchy, traditional book-cover style on cover, balanced compositions, restrained accents. Timeless rather than trendy.",
+  "Swiss / Grid":
+    "Lay every slide on a visible 12-column grid with fixed gutters; place blocks on asymmetric spans (e.g. cols 1–5, then 7–12) — never one centered column. Two weights of the brand font for hierarchy; flush to the reading edge, ragged on the other; uppercase Latin labels via CSS text-transform (Arabic untouched). Ink on a light neutral ground from the palette + exactly one brand accent as a small fill. Signature: hairline column/baseline rules (0.5–1px) + a tiny corner index. Density: 4–7 aligned blocks. Archetypes: grid-title, data-row, divider, two-column compare. When generating images: black-and-white or single-accent, geometric — or none.",
+  "Corporate / Data":
+    "Data and body slides open with an action title stating the takeaway; structural slides (agenda, section, appendix) use a plain label — never a manufactured takeaway. Dense grid of bordered stat cells, ruled tables, and direct-labeled charts (no legend chrome, no 3D, no gridline clutter). Two brand-font weights, strict title→subhead→body; 3–4 brand colors used semantically only (positive/negative/neutral). Signature + frame: a thin footer rule with a source line + page number, identical every slide. Density: 5–8 cells where the data supports it, fewer when it doesn't. Archetypes: stat-callout, table, chart, matrix. No photography; when generating images, a forced cover stays muted and desaturated.",
+  "Minimal / Keynote":
+    "One idea per slide on a calm ground (light, or a dark stage from the palette). Anchor the single focal element OFF-centre — a consistent optical position (lower band, or toward the reading edge), never dead-centre — at commanding scale (the hero element ~60–70% of slide height). Focal element = one full-bleed photo with a short overlaid line, or one very large number/word. One brand accent as a single deliberate FILL mark (a short rule/tick), never tinted body text. Signature + frame: that small accent mark in a fixed corner every slide. Density: 1–2 elements. Archetypes: big-number, full-bleed-statement, quote, section-break. When generating images: cinematic, single subject, generous space inside the frame, soft light — or none.",
+  "Editorial":
+    "Split each slide into a pinned sidebar + main column (in RTL: a ~30% sidebar on the LEFT with a light tint from the palette, the main column reading from the right); multi-column where the text supports it. Large display heading weight + small body weight; kicker labels above headings and hairline rules between blocks. Ink-led with one editorial accent; let imagery carry the color. Signature: the kicker + hairline-rule rhythm. Density: 3–5 text-rich blocks. Archetypes: feature-spread, hero-with-overprint, sidebar-list, pull-quote. No drop-caps — Arabic script is cursive and cannot take a raised initial. When generating images: photojournalistic, natural light, full-bleed heroes with the headline overprinted on a scrim.",
+  "Bold / Display":
+    "Typography is the hero, and it ALWAYS sits on a full brand-color block with the headline bleeding off one chosen edge (mandatory — this filled-ground + edge-bleed is what makes it Bold, not Minimal). One oversized statement per slide at dramatic scale (heaviest brand weight against a light caption), allowed to break across lines on purpose; uppercase Latin via CSS text-transform. High-contrast color as large fills. Signature + frame: the edge-bleeding headline anchored to the same edge each slide (never centred) + a small fixed slide index opposite. Density: 1 statement + optional caption. Archetypes: headline-bleed, big-number-on-field, headline+tight-hero, transition-word. When generating images: one high-contrast hero, dramatic light, tight crop — type still dominates.",
+  "Duotone / Full-bleed":
+    "Every slide is an edge-to-edge field with no margins; set the image as a full-bleed cover background and overprint bold type on a legibility scrim (a gradient from a high-opacity brand-dark at the reading edge to transparent — text always above the scrim, in the light brand token or white). Do NOT recolor photos in CSS; the duotone look comes from the image-generation step — here, just place and scrim. When no image is available, keep the style with a hard two-color split field (a diagonal or vertical brand-color division) — same edge-to-edge, scrim, and small fixed corner caption. Signature + frame: the corner caption + scrim, fixed each slide. Density: 1 field + a short headline. Archetypes: full-image-statement, split-field, number-over-image, section-cover. When generating images: strong-silhouette subjects, high contrast, full-bleed, texture welcome.",
+  "Playful / Dopamine":
+    "Modular rounded cards (a consistent large corner radius, ~24–32px) on softly tinted grounds; use the palette's MOST saturated token as the card fills and tint the remaining tokens for grounds — don't assume bright colors exist; work from the tokens given. Hard-edged offset shadows on cards (a solid brand-dark shadow offset down-right) for depth; one repeated shape motif (circles/blobs). One accent-filled hero card per slide carries the emphasis. Signature + frame: the rounded-card + offset-shadow system plus the repeated motif, every slide. Density: 3–5 cards. Archetypes: hero-card, card-grid, big-number-card, icon-row. When generating images: bright, high-saturation, soft even light, candid/lifestyle or rounded 3D illustration.",
+  "Brutalist":
+    "Expose the structure. Box regions with thick 2–3px solid rules in the brand's darkest ink AND use heavy flat FILL blocks as region backgrounds (not ink-on-light — this is what separates it from Swiss); collapse spacing so borders touch, and align hard-left/right or collide on purpose, never centred. Heaviest brand-font weight, uppercase Latin via CSS text-transform; one harsh accent as a flat fill. Hard offset shadows (solid, no blur); zero rounded corners, zero gradients, zero soft anything. Keep the brand fonts — no monospace. Signature + frame: every region boxed + a stark fixed corner label. Density: medium-to-dense, structural. Archetypes: boxed-grid, fill-statement, stacked-rules, collision-headline. When generating images: prefer none; if any, harsh high-contrast black-and-white or halftone, flat and unretouched.",
 };
 
 function ruleLines(rules: Rules): string[] {
@@ -486,11 +498,29 @@ function ruleLines(rules: Rules): string[] {
       `Footer — put this text on every slide${skip} as chrome, marked \`data-anchor\`: "${rules.persistent.text.trim()}".`,
     );
   }
-  if (rules.designStyle) {
-    const directive = DESIGN_STYLE_DIRECTIVES[rules.designStyle];
-    if (directive) lines.push(`Style — ${directive}`);
-  }
+  // NOTE: the design-style directive is NOT here — it's injected at the TOP of
+  // the user message (see `styleDirectiveBlock`) so it's the first thing Claude
+  // reads and frames the whole deck, not a trailing setting.
   return lines;
+}
+
+// The chosen design style — built as the FIRST block of the user message so it
+// frames the entire deck (the first dynamic instruction Claude acts on; it
+// can't live in the cached system prompt without breaking the prefix cache).
+// Prefixed with the style's English NAME so Claude leans on the named tradition,
+// then STYLE_LEAD (universal forcing scaffold) + the per-style directive.
+// Returns [] when no style is picked → the neutral B.2 substrate dictates
+// nothing, exactly as before.
+function styleDirectiveBlock(rules: Rules): string[] {
+  const name = rules?.designStyle;
+  if (!name) return [];
+  const directive = DESIGN_STYLE_DIRECTIVES[name];
+  if (!directive) return [];
+  return [
+    `DESIGN STYLE — ${name}. This is the visual direction for the ENTIRE deck; commit to it on every slide.`,
+    `${STYLE_LEAD} ${directive}`,
+    ``,
+  ];
 }
 
 // Resolve the slide aspect ratio the user picked on /create/brand.
@@ -741,8 +771,12 @@ function buildUserMessage(event: DeckGenerateEvent) {
   // /api/projects route's tolerance — language is a UX detail,
   // not a security boundary).
   const briefLang = resolveBriefLanguage(event.brief);
+  const rules = (event.brief as { rules?: Rules } | null)?.rules ?? null;
 
   const lines = [
+    // DESIGN STYLE first — the chosen style frames the entire deck, so it
+    // leads the user message before any canvas/language/brief content.
+    ...styleDirectiveBlock(rules),
     `Generate a slide manifest for this presentation.`,
     ``,
     `Flow: ${event.type ?? "create"}`,
@@ -813,7 +847,6 @@ function buildUserMessage(event: DeckGenerateEvent) {
   // with NO guard against inventing facts or dropping info). To restore, re-add
   // the two hard limits (never invent / never drop) gated on typed-text create.
 
-  const rules = (event.brief as { rules?: Rules } | null)?.rules ?? null;
   lines.push(...ruleLines(rules));
 
   // Logo placement — brand logo, if provided, is up to Claude to compose
@@ -2040,7 +2073,14 @@ export const deckGenerate = inngest.createFunction(
           | "rtl"
           | "ltr"
           | undefined;
-        return { title, language, direction };
+        // Declared slide count — Claude writes `slideCount` at the top of the
+        // manifest (before `theme`). Used by the degenerate-salvage guard below
+        // to detect when a malformed-JSON break ate most of the deck.
+        const slideCountRaw = headStr.match(/"slideCount"\s*:\s*(\d+)/)?.[1];
+        const slideCount = slideCountRaw
+          ? Number.parseInt(slideCountRaw, 10)
+          : undefined;
+        return { title, language, direction, slideCount };
       };
 
       // Assemble + validate a manifest from the streamed (per-slide-
@@ -2145,17 +2185,42 @@ export const deckGenerate = inngest.createFunction(
       // captured head/theme. Turns a truncation or a parse miss into "ship
       // the slides we got" — no throw, so Inngest never retries the step,
       // so no restart loop.
-      const salvaged = assemble(parseHead(call.text), call.slides);
+      const head = parseHead(call.text);
+      const salvaged = assemble(head, call.slides);
       if (salvaged) {
+        const recovered = salvaged.slides.length;
+        const declared = head.slideCount;
+        // Degenerate-salvage guard (2026-06-03). Claude FINISHED its turn
+        // (end_turn) intending `declared` slides, but a malformed-JSON break
+        // — e.g. an unescaped `"` inside one slide's `html` — desynced the
+        // streaming parser AND the whole-buffer parse, so we recovered far
+        // fewer than declared (the "1 slide out of 11" bug). That is NOT a
+        // deck we may silently ship. Throw so Inngest retries (retries:3) with
+        // a fresh generation — a re-roll almost always parses cleanly, and the
+        // strengthened OUTPUT_CONTRACT (single-quote HTML) makes the break rare.
+        // We gate on end_turn ONLY: a `max_tokens` truncation can't be helped
+        // by retrying (it would truncate again), so that case still degrades
+        // gracefully below ("ship the slides we got").
+        if (
+          call.stopReason === "end_turn" &&
+          typeof declared === "number" &&
+          declared >= 4 &&
+          recovered < Math.ceil(declared / 2)
+        ) {
+          logger.error("deck_generate_degenerate_salvage", {
+            declared,
+            recovered,
+            stopReason: call.stopReason,
+          });
+          throw new Error(
+            `Manifest recovered only ${recovered}/${declared} slides on a clean finish — malformed JSON broke the stream. Retrying.`,
+          );
+        }
         logger.info("deck_generate_salvaged", {
           stopReason: call.stopReason,
-          slides: salvaged.slides.length,
+          slides: recovered,
         });
-        await writeProgress(
-          "saving",
-          salvaged.slides.length,
-          salvaged.slides.length,
-        );
+        await writeProgress("saving", recovered, recovered);
         return { manifest: salvaged, usage };
       }
 

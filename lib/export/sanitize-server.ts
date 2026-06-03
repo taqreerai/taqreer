@@ -25,6 +25,7 @@ import DOMPurifyFactory from "dompurify";
 import type { Config } from "dompurify";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
 import { applyScrimFixes } from "@/lib/export/scrim";
+import { applyGridDenseFixes, gridNeedsDense } from "@/lib/export/grid-dense";
 
 const DOMPURIFY_CONFIG: Config = {
   ADD_TAGS: ["style", "link"],
@@ -101,7 +102,10 @@ export function sanitizeSlideHtmlServer(html: string): string {
           window,
           rewriteRtlRowFlexOrder(
             window,
-            rewriteRtlFlexEndToFlexStart(window, clean),
+            rewriteRtlFlexEndToFlexStart(
+              window,
+              rewriteGridAutoFlowDense(window, clean),
+            ),
           ),
         ),
       ),
@@ -254,6 +258,25 @@ function rewriteRtlMarginAutoEnd(window: JSDOMWindow, html: string): string {
       changed = true;
     });
     return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Server mirror — JSDOM `window.DOMParser`, then the shared core from
+// lib/export/grid-dense.ts (same logic the browser twin runs). `gridNeedsDense`
+// skips the parse on slides with no pinned grid.
+function rewriteGridAutoFlowDense(window: JSDOMWindow, html: string): string {
+  if (!gridNeedsDense(html)) return html;
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot) return html;
+    return applyGridDenseFixes(slideRoot) ? wrapper!.innerHTML : html;
   } catch {
     return html;
   }

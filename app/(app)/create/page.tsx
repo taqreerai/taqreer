@@ -48,14 +48,18 @@ import {
   type BrandKitOption,
 } from "@/components/brand/BrandKitDropdown";
 import {
+  DESIGN_STYLE_OPTIONS,
   InlineStepper,
+  SectionLabel,
   SlideSizeFields,
+  STYLE_REQUIRES_IMAGES,
   type SlideSize,
   type SlideCountMode,
 } from "@/components/create/OutputCards";
 import {
   CardHeader,
   InlinePaletteSwatch,
+  Pill,
   SegmentedToggle,
   Toggle,
   type LanguageCode,
@@ -287,6 +291,17 @@ export default function CreatePage() {
   // context/images.md — opt-in "images deck". On → deck-generate uses the
   // photography-led system prompt + reserves generated-image boxes.
   const [imagesMode, setImagesMode] = useState<boolean>(false);
+  // Design style (Part B.3) — the chosen create-flow style, or null. Drives the
+  // deck-generate DESIGN_STYLE_DIRECTIVES injection (the directive leads the
+  // user message). UI-only picker for now; polished modal UX lands later.
+  const [designStyle, setDesignStyle] = useState<string | null>(null);
+  const onDesignStyle = useCallback((style: string | null) => {
+    setDesignStyle(style);
+    // Image-leaning styles auto-enable images mode — overridable: we only flip
+    // it ON, never force it off, so the user keeps control (Duotone/Editorial/
+    // Minimal/Playful per STYLE_REQUIRES_IMAGES).
+    if (style && STYLE_REQUIRES_IMAGES.has(style)) setImagesMode(true);
+  }, []);
   const [persistentText, setPersistentText] = useState<string>("");
 
   // ─── Submit-level state ────────────────────────────────────────
@@ -540,7 +555,7 @@ export default function CreatePage() {
       };
 
       const rules = {
-        designStyle: null,
+        designStyle,
         fixTypos: false,
         pagination,
         persistent: persistentText.trim()
@@ -944,6 +959,26 @@ export default function CreatePage() {
                 sat above it was removed 2026-06-03; this slot will host the
                 design-style picker. */}
             <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-glass)] pt-3">
+              {/* Design-style picker (Part B.3) — inline pills for now;
+                  picking an image-leaning style auto-enables the panel below.
+                  Polished modal UX comes later. */}
+              <div>
+                <SectionLabel>نمط التصميم</SectionLabel>
+                <div className="flex flex-wrap gap-1.5 pt-2">
+                  {DESIGN_STYLE_OPTIONS.map((style) => (
+                    <Pill
+                      key={style}
+                      active={designStyle === style}
+                      disabled={submitting}
+                      onClick={() =>
+                        onDesignStyle(designStyle === style ? null : style)
+                      }
+                    >
+                      {style}
+                    </Pill>
+                  ))}
+                </div>
+              </div>
               <AIImagesPanel
                 value={imagesMode}
                 onChange={setImagesMode}

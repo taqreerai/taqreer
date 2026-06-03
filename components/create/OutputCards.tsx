@@ -29,14 +29,32 @@ export type SlideCountMode = "auto" | "custom";
 type LogoPosition = CornerPosition;
 export type PersistentPosition = CornerPosition;
 
+// Create-flow design styles (Part B.3, 2026-06-03). English names — they
+// double as the picker label, the deck-generate DESIGN_STYLE_DIRECTIVES key,
+// and the in-prompt anchor, so Claude can lean on the named tradition. Ordered
+// safe → expressive. Keep in sync with DESIGN_STYLE_DIRECTIVES in
+// inngest/functions/deck-generate.ts.
 export const DESIGN_STYLE_OPTIONS = [
-  "إبداعي",
-  "بسيط",
-  "احترافي",
-  "مرح",
-  "صحفي",
-  "جريء",
+  "Swiss / Grid",
+  "Corporate / Data",
+  "Minimal / Keynote",
+  "Editorial",
+  "Bold / Display",
+  "Duotone / Full-bleed",
+  "Playful / Dopamine",
+  "Brutalist",
 ];
+
+// Styles whose look leans on imagery → picking one auto-enables images mode
+// (overridable — the toggle flips on but isn't disabled; turning it off uses
+// the style's no-image fallback). The other four are image-averse / optional
+// and leave the toggle as the user set it.
+export const STYLE_REQUIRES_IMAGES = new Set<string>([
+  "Duotone / Full-bleed",
+  "Editorial",
+  "Minimal / Keynote",
+  "Playful / Dopamine",
+]);
 
 // Content language — user-picked on /create/content. Drives:
 //   • Project.language + Presentation.language (filter-accuracy on

@@ -30,6 +30,7 @@ import DOMPurifyFactory from "dompurify";
 import type { Config } from "dompurify";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
 import { applyScrimFixes } from "@/lib/export/scrim";
+import { applyGridDenseFixes, gridNeedsDense } from "@/lib/export/grid-dense";
 
 export type DOMPurifyAPI = {
   sanitize: (source: string, config?: Config) => string;
@@ -135,7 +136,9 @@ export function sanitizeSlideHtml(html: string): string {
       rewriteImageScrim(
         rewriteRtlImagePanelSide(
           rewriteRtlMarginAutoEnd(
-            rewriteRtlRowFlexOrder(rewriteRtlFlexEndToFlexStart(clean)),
+            rewriteRtlRowFlexOrder(
+              rewriteRtlFlexEndToFlexStart(rewriteGridAutoFlowDense(clean)),
+            ),
           ),
         ),
       ),
@@ -532,6 +535,27 @@ function rewriteChromeOnTop(html: string): string {
       }
     }
     return changed ? wrapper!.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Grid stacking guard — see lib/export/grid-dense.ts for the bug + strategy.
+// Browser twin: parse with the global DOMParser, then run the shared core.
+// The `gridNeedsDense` precheck skips the parse on slides with no pinned grid
+// (the common case) — cheap, since this chain re-runs per slide per fill poll.
+function rewriteGridAutoFlowDense(html: string): string {
+  if (typeof window === "undefined") return html;
+  if (!gridNeedsDense(html)) return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot) return html;
+    return applyGridDenseFixes(slideRoot) ? wrapper!.innerHTML : html;
   } catch {
     return html;
   }
