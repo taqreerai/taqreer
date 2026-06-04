@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { sourceKindToFlow } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
-  SlideSchema,
   SLIDE_DIMENSIONS,
   type SlideFormat,
   type SlideManifest,
@@ -13,13 +12,11 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
-import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
-import { repairJson } from "@/lib/extract/json-repair";
 import { expandWeightAxis, googleFontUrl } from "@/lib/brand/fonts";
 import { buildSlideHtml, extractLeadingStyleCss } from "@/lib/deck/scaffold";
 import { scopeDeckCss } from "@/lib/deck/scope-css";
@@ -102,10 +99,9 @@ async function flushSlideImages(fileIds: string[]): Promise<number> {
 type EnhanceImages = { fileIds: string[]; textPerSlide: string[] };
 
 // ─── Shared prompt fragments (DRY) ───────────────────────────────────
-// Extracted so the stripped mimic system prompt (SYSTEM_PROMPT_MIMIC) can
-// reuse the EXACT BiDi reinforcements + OUTPUT contract without duplicating
-// them. SYSTEM_PROMPT interpolates both below, so its assembled text is
-// byte-identical to before this extraction (verified).
+// The RTL/BiDi reinforcement block, interpolated into SYSTEM_PROMPT_CREATE_HTML
+// (the only system prompt now — the JSON-era SYSTEM_PROMPT / _IMAGES / _MIMIC and
+// the OUTPUT_CONTRACT were removed with the JSON manifest path, 2026-06-05).
 const LANG_DIRECTION = `LANGUAGE & DIRECTION
 - Set \`dir="rtl"\` (Arabic) or \`dir="ltr"\` (Latin) on the slide ROOT.
 - DO NOT set \`dir\` on a child block (\`<div>\`, \`<p>\`, \`<h1>\`–\`<h6>\`) that contains Latin letters. The block's own \`text-align: start\` would then resolve LEFT inside an RTL slide and push English headings / subtitles / labels to the visual left — wrong side. Unicode BiDi already renders contiguous Latin letters correctly inside an RTL parent without any \`dir\` attribute on the container.
@@ -113,58 +109,6 @@ const LANG_DIRECTION = `LANGUAGE & DIRECTION
 - Digit-only chrome blocks (pagination "01 / 07", dates "26.08.2026", phone numbers) — \`dir="ltr"\` on the block IS fine, because the digits would otherwise reorder under the RTL paragraph direction.
 - Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩) — even inside Arabic text; BiDi orders them correctly.
 - \`letter-spacing\` on Arabic-bearing elements is stripped at export.`;
-
-const OUTPUT_CONTRACT = `OUTPUT — JSON only in the text channel
-- The FIRST character of your text response must be \`{\`. No analysis prose, no acknowledgement, no markdown fences, no "Here's the deck:" preamble.
-- Use your THINKING budget to draft, critique, and refine — iterate freely in thinking. Then commit ONE polished manifest to the text response. The text is your final answer, not a work-in-progress.
-- The live-preview UI reads each slide \`{ ... }\` as it closes. Drafting in text confuses the preview and wastes output tokens; thinking is the right channel for iteration.
-
-{
-  "version": "2.0",
-  "presentationId": "<echo from brief>",
-  "title": "<3–8 word title in the deck's language>",
-  "language": "ar" | "en",
-  "direction": "rtl" | "ltr",
-  "slideCount": <integer — the EXACT number of slides you will produce; decide it here, before the theme, then emit exactly this many>,
-  "theme": {
-    "palette": ["#hex", ...],
-    "font": { "name": "...", "url": "https://fonts.googleapis.com/..." },
-    "background": "#hex",
-    "text": "#hex"
-  },
-  "slides": [
-    { "slideId": "<unique>", "role": "cover" | "section" | "content" | "stats" | "quote" | "image" | "closing", "html": "<div dir='rtl' style='...'>...</div>" }
-  ]
-}
-Slide count: decide it FIRST and write it as the top-level \`slideCount\` field (before \`theme\`) — match brief's \`slideCount\` if provided, otherwise adapt (sparse intro 5, deep doc 20+) — then produce EXACTLY that many slide objects. The live-preview reserves one slot per slide from this number, so the user sees the full total immediately; a mismatch leaves empty or missing tiles. Every \`slideId\` unique.
-
-VALID JSON — the ENTIRE response must parse in ONE \`JSON.parse\`. The \`html\` field is a JSON string, so: write EVERY HTML/SVG attribute with SINGLE quotes (e.g. \`<div class='x' style='color:var(--brand-1)'>\`) so a double-quote NEVER appears inside \`html\`, and keep each \`html\` on a SINGLE line with no raw line breaks. One unescaped \`"\` or newline inside any \`html\` corrupts the whole manifest and the deck is lost — single quotes throughout are what prevent it.
-
-FONT SOURCING — the brand has ONE font; emit it as \`theme.font\` (vary WEIGHT across the deck for hierarchy, never a second family).
-- When \`brief.brand.fonts.font.url\` is present, COPY the URL VERBATIM into \`theme.font.url\`, and \`name\` likewise. Don't rewrite — the user picked it on the brand page.
-- When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those — assign the family (the first/primary if several) to \`theme.font.name\`. Use the \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship renders at its nearest available face.
-- If neither is present, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
-
-// SYSTEM_PROMPT is intentionally NEUTRAL (2026-06-03, Part B.2/B.3): no opener
-// sentence, no style / visual-direction enforcement. The "what to build" framing
-// + any look come from the chosen style directive, which leads the USER message
-// (see `styleDirectiveBlock`). Everything below is load-bearing infrastructure
-// (RTL/BiDi, export-safety, output contract), not style.
-export const SYSTEM_PROMPT = `CANVAS — output the slide BODY only: no <!DOCTYPE>/<html>/<head>/<body>; an inline <style> per slide is fine. Size from the brief: 16:9 → 1920×1080, 9:16 → 1080×1920; the slide root sets \`width:<W>px; height:<H>px;\`. Use any layout primitive (flex / grid / absolute / transform).
-
-${LANG_DIRECTION}
-
-${COMPOSITION_RULES}
-
-BRAND — colour and type come ONLY from the brief: \`var(--brand-1)\` … \`var(--brand-N)\` (palette, 1-indexed) and \`var(--font-heading)\` / \`var(--font-body)\`; fill \`theme\` in the OUTPUT to match. Choose the background from the brand palette. Use ONLY the brief's colours — NEVER introduce a new hue that isn't in the palette (no invented accent, no added colour, however well it suits the topic). \`theme.palette\` must list EXACTLY the brief's \`brand.colors\`, in order — nothing extra. You may vary OPACITY / lightness of a brief colour for tints and grounds, but never add a different colour. If the brand is monochrome (e.g. black + white), draw emphasis from weight, scale, and inverted fills of those colours — not a new colour.
-
-GRAPHICS —
-Country flags usage: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours, never \`data-fill\`).
-Icons usage: anchor cards, list / bullet items, and stat callouts with a small line-icon where it sharpens scanning — reach for these by DEFAULT on card & feature layouts (they're under-used). Inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour. Keep them sparing on the most minimal / brutalist styles where restraint is the point.
-Charts / graphs usage: inline \`<svg>\`.
-
-AVOID (these don't render): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.
-${OUTPUT_CONTRACT}`;
 
 // ─── IMAGES-DECK direction (context/images.md) ───────────────────────
 // Images mode = the lean base prompt + this addendum, appended. The addendum
@@ -177,27 +121,6 @@ const IMG_ADDENDUM = `GENERATED IMAGES — images mode is ON. Reserve a box with
   • Two attributes only: data-genimage (the prompt) + data-genid (unique per box). Size and place the box however the slide needs — the system reads your width/height to request the right image shape, so set them in px.
   • data-genimage — describe what you want concretely: a real scene / object / texture / abstract treatment, one consistent medium + mood across the whole deck. SUBJECT / SCENE / MOOD only — never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names).
   • Only these stay CSS / SVG: brand-colour fills + the type system, flat shapes, concept icons, the brand logo. Stats / data / charts stay CSS + inline SVG (an image can't show exact numbers). When text sits on a generated image, add ONE scrim layer for legibility (the system orients it).`;
-
-// Images-deck system prompt = the lean base + the images addendum.
-export const SYSTEM_PROMPT_IMAGES = `${SYSTEM_PROMPT}
-
-${IMG_ADDENDUM}`;
-
-// ─── MIMIC system prompt (TEMPORARY TEST, 2026-06-03) ────────────────
-// User direction: when mimic mode is on, the design "basic prompt" is OFF —
-// the only system-level rules that remain are the BiDi/RTL reinforcements
-// (the export patches depend on them) plus the OUTPUT JSON contract (the
-// parser hard-needs it). NO designer identity, CANVAS, BRAND, CHROME,
-// GRAPHICS or AVOID — those are exactly the scaffolding suspected of making
-// mimic lock one layout and duplicate it. The actual mimic instruction
-// ("reproduce the reference's visual direction in brand variables") rides in
-// the user message (buildSourceTextDirective), mirroring how claude.ai/design
-// works with a bare prompt + no system prompt.
-export const SYSTEM_PROMPT_MIMIC = `${LANG_DIRECTION}
-
-${COMPOSITION_RULES}
-
-${OUTPUT_CONTRACT}`;
 
 // ─── CREATE → HTML authoring prompt (context/plan-create-agent-pivot.md) ───
 // CLAUDE-AUTHORED DESIGN (2026-06-04, Phase 2): we do NOT ship a fixed scaffold.
@@ -212,6 +135,8 @@ ${OUTPUT_CONTRACT}`;
 // constrained field (§3.5 load-bearing rule).
 export const SYSTEM_PROMPT_CREATE_HTML = `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief — as one HTML fragment.
 
+PLAN IN YOUR THINKING FIRST (before the opening \`<\`). For EACH slide work out: how much content actually fits the fixed frame without overflowing, and the type scale + spacing that leaves real breathing room. Design for FIT — don't pack a slide (especially lists and tables of contents), don't let blocks touch or overlap, never push content past the slide edges. A calmer, slightly emptier slide beats a crammed or clipped one. Commit only the polished result to the output.
+
 OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, no JSON, no \`<!DOCTYPE>\`/\`<html>\`/\`<head>\`/\`<body>\`):
 1. ONE \`<style>\` block FIRST — your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE here and reuse it via classes (this keeps the markup terse).
 2. THEN the slides, each a top-level \`<section data-label="<short Arabic name>" data-role="cover|content|section|stats|quote|image|closing">\`.
@@ -220,6 +145,7 @@ OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, n
 - Slides are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed slide frame).
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
+- VARY the composition slide to slide — give content, section, stats, and quote slides visibly DIFFERENT layouts; don't put every slide on the same grid. Reuse classes for a consistent LOOK, but vary the STRUCTURE so the deck feels bespoke, not one template repeated.
 
 BRAND & COLOUR — the brand variables are INJECTED for you; reference them, don't redefine them.
 
@@ -231,6 +157,20 @@ Icons: inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from
 Charts / graphs: inline \`<svg>\`.
 
 AVOID (these don't render in export): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.`;
+
+// Mimic flow's HTML system addendum. SYSTEM_PROMPT_CREATE_HTML tells the model to
+// design an ORIGINAL system; mimic needs the OPPOSITE — reproduce the attached
+// design reference. Appended AFTER the create prompt so this override wins (later
+// instructions outrank earlier ones). The OUTPUT contract is untouched.
+const MIMIC_HTML_ADDENDUM = `MIMIC MODE — this is NOT an original-design task. Override "Design a complete, ORIGINAL slide deck — your own visual system" above: instead REPRODUCE the visual language of the attached DESIGN reference as faithfully as you can — its layout system, type hierarchy, spacing rhythm, shapes, grids, and decorative motifs — applied to this deck's content and recoloured to the injected brand variables (\`var(--brand-1)\`…, \`var(--font-heading)\`/\`var(--font-body)\`). Match the reference's look; don't invent a new one. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
+
+// Enhance flow's HTML system addendum. Enhance REDESIGNS an existing deck rather
+// than inventing one, so it must neutralise the create prompt's "ORIGINAL / fresh"
+// framing AND its "VARY the composition slide to slide" rule (enhance wants the
+// OPPOSITE — one locked chrome + type system). The detailed per-slide redesign
+// brief lives in the user message (buildSourceTextDirective enhance branch); this
+// just redirects the base prompt toward it. Appended AFTER so it wins.
+const ENHANCE_HTML_ADDENDUM = `ENHANCE MODE — this is a REDESIGN of an EXISTING deck, not a fresh original. Override "Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief" and "VARY the composition slide to slide" above: follow the per-slide redesign brief in the user message instead. PRESERVE each source slide's CONTENT and the brand's VISUAL IDENTITY (palette, fonts, logo); improve only layout, hierarchy, typography, spacing, and rhythm. LOCK one consistent chrome + type system across every slide — a single coherent redesign, not a set of unrelated layouts. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
 
 // Valid `data-role` values (mirror SlideSchema.role). Used to coerce the
 // section's `data-role` to the schema enum; anything else → undefined.
@@ -258,19 +198,16 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
   );
 }
 
-// The new HTML-authoring path (context/plan-create-agent-pivot.md) is gated to
-// the CREATE flow (text or images) only. Enhance / mimic / datasheet keep the
-// JSON manifest path until they're migrated in a later pass (§7). Scratch source
-// or no source → create.
-export function isCreateHtmlFlow(event: DeckGenerateEvent): boolean {
-  const sourceKind = (event.brief as { source?: { kind?: string } } | null)
-    ?.source?.kind;
-  return (
-    (event.type ?? "create") === "create" &&
-    sourceKind !== "enhance" &&
-    sourceKind !== "mimic" &&
-    sourceKind !== "data"
-  );
+// HTML-authoring flows (context/plan-create-agent-pivot.md): Claude streams
+// `<section>` HTML, not a JSON manifest. Migration COMPLETE — every flow rides
+// the HTML path: `create` (scratch/text/images), `datasheet` (source.kind
+// "data"), `mimic` (source.kind "mimic"), and `enhance` (type "enhance"). The
+// JSON manifest path below is now dead and is removed in the Stage-3 cleanup.
+// (`type` is only ever "create" | "enhance", so this is effectively always true;
+// kept explicit so a future third flow defaults to the legacy path, not silently
+// to HTML, until it's deliberately migrated.)
+export function isHtmlAuthoringFlow(event: DeckGenerateEvent): boolean {
+  return (event.type ?? "create") === "create" || event.type === "enhance";
 }
 
 type EnhanceData = {
@@ -304,194 +241,6 @@ type DeckGenerateEvent = {
   actorPrismaUserId?: string | null;
 };
 
-function extractJson(text: string): string {
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  if (fenceMatch) return fenceMatch[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) return text.slice(start, end + 1);
-  return text.trim();
-}
-
-// Incremental JSON-shape parser that yanks completed slide objects out of
-// Claude's streaming buffer as they close. Used to surface a live per-slide
-// preview to the UI while the rest of the manifest is still streaming — the
-// FINAL deck still goes through the full extractJson + Zod + DOMPurify pass
-// at end-of-stream, so anything we yield here is preview-only and never
-// becomes the canonical manifest.
-//
-// State machine:
-//   • Walk every new char in the buffer since the last advance() call.
-//   • Track string state (escape-aware) so `{` / `}` / `[` / `]` inside
-//     html string values don't count toward structural depth.
-//   • Once we see `"slides"` followed by `:` then `[`, lock in the depth
-//     of that `[` as `slidesArrayDepth`.
-//   • Every `{` that opens at depth `slidesArrayDepth + 1` starts a new
-//     slide; the matching `}` at the same depth closes it. The substring
-//     between them (inclusive) is the slide's raw JSON.
-//
-// Returns an array of newly-closed slide JSON substrings on each advance().
-// Caller still has to JSON.parse + validate them — we only yield byte
-// ranges that LOOK balanced, not ones we know are well-formed.
-class StreamingSlideParser {
-  private inString = false;
-  private escapeNext = false;
-  private totalDepth = 0;
-  private slidesArrayDepth: number | null = null;
-  private currentSlideStart: number | null = null;
-  private lastIdx = 0;
-  // Theme tracking. The manifest is shape-fixed — `theme` always streams
-  // BEFORE `slides`, so by the time the first slide closes the theme
-  // object is fully in the buffer. We snapshot it once and never touch
-  // it again. Used by the live preview to wire the correct CSS vars on
-  // streamingPreview slides; without it colours and fonts fall through
-  // to browser defaults and the preview reads broken.
-  private themeStart: number | null = null;
-  private themeDepth = 0;
-  private themeJson: string | null = null;
-  // Manifest-reset signal. Flips to true when a top-level `}` closes
-  // after the parser had locked onto a `slides` array — i.e., a complete
-  // manifest just finished and any subsequent slides belong to a DIFFERENT
-  // manifest. Observed in the wild on /enhance (PDF document block) where
-  // Claude occasionally drafts a manifest, then re-emits a polished version
-  // in the same response. The caller drains this flag via `didReset()` and
-  // clears its own slide accumulator so the next live-preview snapshot
-  // shows ONLY slides from the latest manifest, not draft + final mixed.
-  // Without this reset the parser would lock onto the draft's slides array
-  // forever (the original `=== null` guard set it once and never cleared),
-  // and the final manifest's slides would stream past unparsed — exactly
-  // the empty-preview / green-checkmarks-only symptom users reported.
-  private resetSignaled = false;
-
-  // Walk back over whitespace + `:` + whitespace + `"<key>"` and return
-  // true if the quoted key matches `expected`. Used to anchor structural
-  // events (e.g. the `[` for `slides`, the `{` for `theme`) to the right
-  // top-level key — otherwise `theme.palette = [...]` would be mistaken
-  // for the `slides` array.
-  private precedingKeyEquals(buffer: string, posOfDelimiter: number, expected: string): boolean {
-    let j = posOfDelimiter - 1;
-    while (j >= 0 && /\s/.test(buffer[j])) j--;
-    if (j < 0 || buffer[j] !== ":") return false;
-    j--;
-    while (j >= 0 && /\s/.test(buffer[j])) j--;
-    if (j < 0 || buffer[j] !== '"') return false;
-    const closeQuote = j;
-    j--;
-    while (j >= 0 && buffer[j] !== '"') j--;
-    if (j < 0) return false;
-    return buffer.slice(j + 1, closeQuote) === expected;
-  }
-
-  advance(buffer: string): string[] {
-    const newSlides: string[] = [];
-    for (let i = this.lastIdx; i < buffer.length; i++) {
-      const c = buffer[i];
-
-      if (this.escapeNext) {
-        this.escapeNext = false;
-        continue;
-      }
-      if (this.inString) {
-        if (c === "\\") {
-          this.escapeNext = true;
-          continue;
-        }
-        if (c === '"') this.inString = false;
-        continue;
-      }
-
-      switch (c) {
-        case '"':
-          this.inString = true;
-          break;
-        case "{":
-          this.totalDepth++;
-          if (
-            this.slidesArrayDepth !== null &&
-            this.totalDepth === this.slidesArrayDepth + 1
-          ) {
-            this.currentSlideStart = i;
-          }
-          // Detect the `theme` object's opening brace by looking back
-          // for the `"theme":` key. Only ever captures once.
-          if (
-            this.themeJson === null &&
-            this.themeStart === null &&
-            this.precedingKeyEquals(buffer, i, "theme")
-          ) {
-            this.themeStart = i;
-            this.themeDepth = this.totalDepth;
-          }
-          break;
-        case "}":
-          if (
-            this.currentSlideStart !== null &&
-            this.slidesArrayDepth !== null &&
-            this.totalDepth === this.slidesArrayDepth + 1
-          ) {
-            newSlides.push(buffer.slice(this.currentSlideStart, i + 1));
-            this.currentSlideStart = null;
-          }
-          if (
-            this.themeStart !== null &&
-            this.totalDepth === this.themeDepth
-          ) {
-            this.themeJson = buffer.slice(this.themeStart, i + 1);
-            this.themeStart = null;
-          }
-          this.totalDepth--;
-          // Top-level close: the manifest object just finished. If we had
-          // locked onto its slides array, signal a reset so the caller
-          // discards everything we emitted from it — a new manifest may
-          // be streaming next (draft → polished pattern on /enhance), and
-          // we want the live-preview to reflect ONLY the latest manifest.
-          // Clear our own internal locks too so the next `"slides":` /
-          // `"theme":` re-anchors fresh.
-          if (this.totalDepth === 0 && this.slidesArrayDepth !== null) {
-            this.slidesArrayDepth = null;
-            this.currentSlideStart = null;
-            this.themeStart = null;
-            this.themeJson = null;
-            this.resetSignaled = true;
-          }
-          break;
-        case "[":
-          this.totalDepth++;
-          // First `[` whose preceding key is `"slides"`. Anything else
-          // (e.g. `theme.palette = [...]`) is ignored. Storing
-          // `totalDepth` POST-increment means a slide's `{` opens at
-          // `totalDepth === slidesArrayDepth + 1` — same check shape as
-          // the theme capture, no off-by-one between them.
-          if (
-            this.slidesArrayDepth === null &&
-            this.precedingKeyEquals(buffer, i, "slides")
-          ) {
-            this.slidesArrayDepth = this.totalDepth;
-          }
-          break;
-        case "]":
-          this.totalDepth--;
-          break;
-      }
-    }
-    this.lastIdx = buffer.length;
-    return newSlides;
-  }
-
-  getThemeJson(): string | null {
-    return this.themeJson;
-  }
-
-  // Drains the manifest-reset flag. Returns true if the most recent
-  // advance() observed a top-level `}` that closed a tracked manifest;
-  // the caller should drop any slides it accumulated from that manifest
-  // before processing the next batch. Always resets the flag to false.
-  didReset(): boolean {
-    const r = this.resetSignaled;
-    this.resetSignaled = false;
-    return r;
-  }
-}
 
 type Rules = {
   designStyle: string | null;
@@ -944,7 +693,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // DESIGN STYLE first — the chosen style frames the entire deck, so it
     // leads the user message before any canvas/language/brief content.
     ...styleDirectiveBlock(rules),
-    `Generate a slide manifest for this presentation.`,
+    `Generate the slide deck for this presentation.`,
     ``,
     `Flow: ${event.type ?? "create"}`,
     // Canvas dimensions are a hard contract — the renderer measures the DOM
@@ -972,16 +721,14 @@ function buildUserMessage(event: DeckGenerateEvent) {
     (event.brief as { source?: { kind?: string } } | null)?.source?.kind ===
       "mimic"
       ? [
-          `LANGUAGE: Match the attached source's LANGUAGE. Detect the language of each slide from the attached source (Arabic, English, mixed — whatever you see) and produce visible slide strings in that language. Do NOT translate, transliterate, or change script. The OUTPUT JSON \`language\` + \`direction\` fields must reflect what dominates the source.`,
+          `LANGUAGE: Match the attached source's LANGUAGE. Detect the language of each slide from the attached source (Arabic, English, mixed — whatever you see) and produce visible slide strings in that language. Do NOT translate, transliterate, or change script.`,
         ]
       : briefLang === "en"
         ? [
             `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
-            `Manifest output: \`"language": "en"\`, \`"direction": "ltr"\`.`,
           ]
         : [
             `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default; preserve any inline English (URLs, brand names, version numbers) verbatim — don't translate it away.`,
-            `Manifest output: \`"language": "ar"\`, \`"direction": "rtl"\`.`,
           ]),
     // Location-aware cast for generated lifestyle images. ONLY for
     // images-mode decks AND only when /api/projects resolved a region from
@@ -1022,7 +769,6 @@ function buildUserMessage(event: DeckGenerateEvent) {
   // expresses the orchestration shape, not the per-block prose.
   lines.push(...buildLogoBlock(event.brief));
 
-  lines.push(``, `Return the deck JSON now. No prose, no markdown fences.`);
   return lines.join("\n");
 }
 
@@ -1361,10 +1107,12 @@ function buildSourceTextDirective(
     const hasContentFile = Boolean(source.uglyAnthropicFileId);
     const hasContentText = Boolean(source.userContent && source.userContent.trim());
 
-    // TEMPORARY TEST (2026-06-03): bare claude.ai/design-style mimic prompt,
-    // paired with SYSTEM_PROMPT_MIMIC (BiDi + OUTPUT contract only). Replaces
-    // the verbose SOURCE / STRICT-VERBATIM / VISUAL-HANDLING directive that was
-    // suspected of making mimic lock one layout and duplicate it across slides.
+    // Bare claude.ai/design-style mimic directive: a short "match the reference"
+    // brief, not the verbose SOURCE / STRICT-VERBATIM / VISUAL-HANDLING block that
+    // made mimic lock one layout and repeat it. The system prompt is
+    // SYSTEM_PROMPT_CREATE_HTML + MIMIC_HTML_ADDENDUM (the "reproduce the
+    // reference, don't invent" override); the actual reference-matching instruction
+    // rides here in the user message.
     const refClause = hasContentFile
       ? "Two documents are attached before this text — the FIRST is the content to put in the deck, the SECOND is a design layout to follow."
       : hasContentText
@@ -1372,7 +1120,7 @@ function buildSourceTextDirective(
         : "The attached file is BOTH the content and a design layout to follow.";
 
     lines.push(
-      `${refClause} Create a deck with the same visual direction as the reference, but use the brand variables: colour \`var(--brand-1)\`…\`var(--brand-N)\` and type \`var(--font-heading)\` / \`var(--font-body)\`. Fill the OUTPUT \`theme\` (palette / fonts / background / text) from the brand in the brief.`,
+      `${refClause} Create a deck with the same visual direction as the reference, but use the brand variables: colour \`var(--brand-1)\`…\`var(--brand-N)\` and type \`var(--font-heading)\` / \`var(--font-body)\`.`,
       ``,
       `CONTENT FIDELITY (two hard limits): (1) Never invent — every number, name, claim, and fact on a slide must come from the source; do not add statistics, examples, or detail that isn't there. (2) Never drop real information — every distinct fact in the source must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it.`,
     );
@@ -1806,33 +1554,6 @@ export const deckGenerate = inngest.createFunction(
       // the slides). Reused for every continuation + the final assembly,
       // so the whole deck shares one locked theme.
       let streamingTheme: unknown = null;
-      // Images mode (context/images.md §12): warm-fill dispatch bookkeeping.
-      //   • warmedKeys  — `${genid}:${promptHash}` already dispatched, so a
-      //     re-advance / continuation doesn't re-send the SAME image (Inngest
-      //     idempotency would drop the duplicate anyway, but skipping the
-      //     send is cheaper). A drift's CHANGED prompt is a new key, so it
-      //     re-dispatches correctly.
-      //   • warmedGenidsForCap — DISTINCT genids dispatched, gating the
-      //     per-deck cap. Counts genids (not genid:hash) so a drift re-prompt
-      //     of an existing box doesn't consume a second slot.
-      // BOTH are cleared on parser.didReset(): a discarded draft's boxes must
-      // not pollute the polished manifest's budget. Re-dispatching unchanged
-      // (same-hash) boxes after the reset is free — idempotency dedupes them.
-      const warmedKeys = new Set<string>();
-      const warmedGenidsForCap = new Set<string>();
-      // Total slide count Claude commits to in the manifest head (top-level
-      // `slideCount`, emitted before the slides). Captured ONCE from the
-      // stream so the live nav can reserve a slot per planned slide instead of
-      // guessing — critical in AUTO mode, where the user otherwise sees a lone
-      // tile with no sense of how many slides are coming. Survives
-      // continuations (set on the first call, reused after).
-      let declaredTotal: number | null = null;
-      // Offset into the response buffer where the CURRENT manifest begins. In
-      // the draft→final re-emit pattern (a known /enhance behaviour), Claude
-      // closes one manifest and streams a polished one in the same response;
-      // on that reset we advance this so the head scans (theme / slideCount /
-      // title-language-direction) read the LATEST manifest, not the draft's.
-      let manifestHeadOffset = 0;
       const streamDirection = resolveBriefDirection(data.brief);
       const streamLanguage = resolveBriefLanguage(data.brief);
       // Sign the uploaded brand-font faces ONCE up front so the LIVE preview can
@@ -1897,7 +1618,7 @@ export const deckGenerate = inngest.createFunction(
       // server-provided + the theme is server-built), so there's NO JSON
       // salvage / theme-parse / degenerate-guard here — just split, bridge the
       // scaffold onto each section, and assemble.
-      if (isCreateHtmlFlow(data)) {
+      if (isHtmlAuthoringFlow(data)) {
         manifestVersion += 1;
         streamingPreview.length = 0;
         const theme = buildCreateHtmlTheme(data.brief);
@@ -1907,10 +1628,26 @@ export const deckGenerate = inngest.createFunction(
         applyUploadedFontFaces(theme, signedUploadedFaces);
         streamingTheme = theme;
 
-        const htmlSystem = isImagesMode(data)
-          ? `${SYSTEM_PROMPT_CREATE_HTML}\n\n${IMG_ADDENDUM}`
-          : SYSTEM_PROMPT_CREATE_HTML;
-        const userText = `${buildUserMessage(data)}\n\nAuthor the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
+        // System prompt = the create-HTML base + per-flow addenda. Images mode
+        // adds the reserve-a-box rules; mimic adds "reproduce the reference, don't
+        // invent"; enhance adds "redesign the existing deck, preserve identity,
+        // lock the chrome". The flow-specific addenda are mutually exclusive
+        // (distinct source kinds / type), but compose cleanly regardless.
+        const htmlSourceKind = readSource(data)?.kind;
+        const htmlSystem = [
+          SYSTEM_PROMPT_CREATE_HTML,
+          isImagesMode(data) ? IMG_ADDENDUM : null,
+          htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
+          data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+        // `baseUserMessage` already carries the flow-specific source directive
+        // (datasheet chart rules, enhance/mimic preservation rules) when one
+        // applies — built once at the top of this step, shared with the JSON
+        // path. The HTML suffix replaces the JSON path's "return the deck JSON"
+        // closer (gated out of buildUserMessage for HTML flows).
+        const userText = `${baseUserMessage}\n\nAuthor the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
 
         await writeProgress("thinking", 0, estimatedTotal, {
           thinkingTokens: 0,
@@ -1992,8 +1729,26 @@ export const deckGenerate = inngest.createFunction(
           ],
           // NO output_config — slide HTML streams FREE-FORM (§3.5 load-bearing
           // rule: never put slide HTML in a constrained field).
-          messages: [{ role: "user", content: userText }],
-        });
+          //
+          // Prepended source blocks (enhance PDF / mimic reference images / any
+          // /create upload) lead the content array when present; datasheet +
+          // scratch-text carry no blocks, so content stays a plain string.
+          messages: [
+            {
+              role: "user",
+              content: hasDocBlocks
+                ? [...docBlocks, { type: "text", text: userText }]
+                : userText,
+            },
+          ],
+        },
+          // File-referencing blocks (mimic reference / enhance PDF / any
+          // /create upload) need the Files API beta header, mirroring the JSON
+          // path. Harmless when blocks are base64-only; omitted when there are none.
+          hasDocBlocks
+            ? { headers: { "anthropic-beta": "files-api-2025-04-14" } }
+            : undefined,
+        );
 
         stream.on("thinking", (_delta, snapshot) => {
           const now = Date.now();
@@ -2155,461 +1910,12 @@ export const deckGenerate = inngest.createFunction(
         return { manifest: result.data, usage };
       }
 
-      // Compose message content. The doc blocks + baseUserMessage form a
-      // STABLE prefix marked with a cache breakpoint, so continuation calls
-      // (which re-send the same prefix) read it from cache instead of
-      // re-billing the PDF. `tail` (the continuation directive) varies and
-      // sits AFTER the breakpoint.
-      const buildContent = (
-        stableText: string,
-        tail?: string,
-      ): string | Anthropic.Messages.ContentBlockParam[] => {
-        if (!hasDocBlocks) {
-          return tail ? `${stableText}\n${tail}` : stableText;
-        }
-        const blocks: Anthropic.Messages.ContentBlockParam[] = [
-          ...docBlocks,
-          {
-            type: "text" as const,
-            text: stableText,
-            cache_control: { type: "ephemeral" as const },
-          },
-        ];
-        if (tail) blocks.push({ type: "text" as const, text: tail });
-        return blocks;
-      };
-
-      // One streaming Anthropic call. Parses slides incrementally (live
-      // preview + salvage), captures the theme, polls for cancel (aborts to
-      // stop output-token billing), accumulates usage, and — critically —
-      // returns `stopReason` so a `max_tokens` truncation is actionable
-      // instead of silently looping. `priorSlides` are the slides already
-      // collected from earlier calls (shown in the preview beneath this
-      // call's fresh slides).
-      type StreamCallResult =
-        | { cancelled: true }
-        | {
-            cancelled?: false;
-            text: string;
-            stopReason: string | null;
-            slides: SlideType[];
-          };
-      const runStream = async (
-        content: string | Anthropic.Messages.ContentBlockParam[],
-        label: string,
-        priorSlides: SlideType[],
-      ): Promise<StreamCallResult> => {
-        manifestVersion += 1;
-        // Reset the live preview to the already-collected slides, then grow
-        // it as this call streams — so the preview never visibly shrinks
-        // between calls (no flicker).
-        streamingPreview.length = 0;
-        streamingPreview.push(...priorSlides);
-
-        let cancelObserved = false;
-        let lastCancelCheckAt = 0;
-        let lastThinkingWriteAt = 0;
-        let lastWriteAt = 0;
-        let buffer = "";
-        const parser = new StreamingSlideParser();
-        const callSlides: SlideType[] = [];
-        const CANCEL_POLL_INTERVAL_MS = 2_000;
-
-        const stream = client.messages.stream(
-          {
-            model: callParams.model,
-            max_tokens: 128000,
-            thinking: callParams.thinking,
-            system: [
-              {
-                type: "text",
-                // Mimic mode (TEMPORARY TEST 2026-06-03) strips the design
-                // "basic prompt" down to BiDi + OUTPUT contract only — see
-                // SYSTEM_PROMPT_MIMIC. Images deck (context/images.md) swaps
-                // the 3 direction sections. Each mode's system prompt is a
-                // stable, independently-cached prefix.
-                text:
-                  readSource(data)?.kind === "mimic"
-                    ? SYSTEM_PROMPT_MIMIC
-                    : isImagesMode(data)
-                      ? SYSTEM_PROMPT_IMAGES
-                      : SYSTEM_PROMPT,
-                cache_control: { type: "ephemeral" },
-              },
-            ],
-            ...(callParams.outputConfig
-              ? { output_config: callParams.outputConfig }
-              : {}),
-            messages: [{ role: "user", content }],
-          },
-          hasDocBlocks
-            ? { headers: { "anthropic-beta": "files-api-2025-04-14" } }
-            : undefined,
-        );
-
-        stream.on("thinking", (_delta, snapshot) => {
-          const now = Date.now();
-          if (now - lastThinkingWriteAt > 1000) {
-            lastThinkingWriteAt = now;
-            void writeProgress(
-              "thinking",
-              priorSlides.length + callSlides.length,
-              declaredTotal ?? estimatedTotal,
-              {
-                thinkingTokens: Math.round(snapshot.length / 4),
-                thinkingBudget,
-              },
-            );
-          }
-        });
-
-        stream.on("text", (delta) => {
-          buffer += delta;
-          const justClosed = parser.advance(buffer);
-          // A complete manifest just closed and Claude is re-emitting a
-          // polished one in the SAME response (a known /enhance pattern:
-          // it drafts a deck, then re-does it). Drop the draft so BOTH the
-          // salvage buffer (callSlides) and the live preview reflect ONLY
-          // the latest manifest — otherwise draft + re-emit pile up with
-          // duplicate slides (bloated salvage + a preview that overshoots
-          // the real slide count).
-          if (parser.didReset()) {
-            callSlides.length = 0;
-            streamingPreview.length = 0;
-            streamingPreview.push(...priorSlides);
-            // Drop the draft's captured head/theme so they re-capture from the
-            // new manifest — otherwise salvage ships the latest slides under
-            // the draft's theme (wrong colours/fonts) and slide count.
-            streamingTheme = null;
-            declaredTotal = null;
-            manifestHeadOffset = buffer.length;
-            // Free the warm-fill budget the discarded draft consumed
-            // (context/images.md §12). Without this, draft boxes count toward
-            // the per-deck cap and can starve the polished manifest of live
-            // fills. Re-dispatching the polished boxes is safe: unchanged
-            // prompts hit the same (genid,hash) → Inngest idempotency drops
-            // the duplicate (no re-bill); changed prompts get a fresh image.
-            warmedKeys.clear();
-            warmedGenidsForCap.clear();
-          }
-          for (const raw of justClosed) {
-            try {
-              const candidate = JSON.parse(raw);
-              const parsed = SlideSchema.safeParse(candidate);
-              if (parsed.success) {
-                callSlides.push(parsed.data);
-                streamingPreview.push(parsed.data);
-                // Images mode: the MOMENT a slide with reserved image boxes
-                // closes, kick off the async gpt-image-2 warm fill so
-                // generation overlaps the rest of the stream and the live
-                // preview swaps each image in as it lands (deck.image.warm →
-                // deck-image-warm → slide.image.ready broadcast). Fire-and-
-                // forget — never blocks or fails the stream. ONE event per box
-                // so each carries its own idempotency key (projectId:genid:
-                // promptHash) — the warm fn's cross-run "bill at most once"
-                // claim (context/images.md §12).
-                if (isImagesMode(data)) {
-                  dispatchImageWarm(
-                    parsed.data.slideId,
-                    parsed.data.html,
-                    projectId,
-                    warmedKeys,
-                    warmedGenidsForCap,
-                    logger,
-                  );
-                }
-              }
-            } catch {
-              // Mid-stream partial — the per-call assembly re-checks.
-            }
-          }
-          // Capture the theme once (first call only — it streams before
-          // slides). Held in the closure so it survives the parser's
-          // end-of-object reset and is reused by continuations.
-          if (streamingTheme === null) {
-            const themeRaw = parser.getThemeJson();
-            if (themeRaw) {
-              try {
-                streamingTheme = JSON.parse(themeRaw);
-                // Attach the pre-signed uploaded-font faces to the live theme so
-                // DeckView @font-faces them mid-generation (Google fonts carry a
-                // `url` and are skipped). No-op when nothing was uploaded.
-                applyUploadedFontFaces(streamingTheme, signedUploadedFaces);
-              } catch {
-                // Wait for the next advance.
-              }
-            }
-          }
-          // Capture the declared total once. It's a top-level scalar that
-          // streams in the head (before `"slides"`), so scan only the head to
-          // avoid matching a stray occurrence inside slide HTML.
-          if (declaredTotal === null) {
-            // Scan only the CURRENT manifest (post-reset offset) so a draft's
-            // slideCount can't shadow the final one's.
-            const current = buffer.slice(manifestHeadOffset);
-            const slidesIdx = current.indexOf('"slides"');
-            const head = slidesIdx >= 0 ? current.slice(0, slidesIdx) : current;
-            const m = head.match(/"slideCount"\s*:\s*(\d+)/);
-            if (m) {
-              const n = parseInt(m[1], 10);
-              if (Number.isFinite(n) && n > 0 && n <= 100) declaredTotal = n;
-            }
-          }
-          const now = Date.now();
-          if (justClosed.length > 0 && now - lastWriteAt > 800) {
-            lastWriteAt = now;
-            void writeProgress(
-              "designing",
-              priorSlides.length + callSlides.length,
-              declaredTotal ?? estimatedTotal,
-            );
-          }
-          if (
-            jobId &&
-            !cancelObserved &&
-            now - lastCancelCheckAt > CANCEL_POLL_INTERVAL_MS
-          ) {
-            lastCancelCheckAt = now;
-            const pollJobId = jobId;
-            void (async () => {
-              try {
-                const row = await prisma.job.findUnique({
-                  where: { id: pollJobId },
-                  select: { cancelRequestedAt: true },
-                });
-                if (row?.cancelRequestedAt && !cancelObserved) {
-                  cancelObserved = true;
-                  stream.controller.abort();
-                }
-              } catch (err) {
-                void err;
-              }
-            })();
-          }
-        });
-
-        let message;
-        try {
-          message = await stream.finalMessage();
-        } catch (err) {
-          if (cancelObserved) {
-            logger.info("deck_generate_cancelled_by_user", { jobId, label });
-            return { cancelled: true };
-          }
-          throw err;
-        }
-        usage.attempts += 1;
-        usage.inputTokens += message.usage.input_tokens ?? 0;
-        usage.outputTokens += message.usage.output_tokens ?? 0;
-        usage.cacheReadTokens += message.usage.cache_read_input_tokens ?? 0;
-        usage.cacheCreationTokens +=
-          message.usage.cache_creation_input_tokens ?? 0;
-        const stopReason = message.stop_reason ?? null;
-        logger.info("claude_usage", {
-          label,
-          input: message.usage.input_tokens,
-          output: message.usage.output_tokens,
-          cache_read: message.usage.cache_read_input_tokens,
-          cache_write: message.usage.cache_creation_input_tokens,
-          stop_reason: stopReason,
-        });
-        const textBlock = message.content.find((b) => b.type === "text");
-        const text =
-          textBlock && textBlock.type === "text" ? textBlock.text : "";
-        return { text, stopReason, slides: callSlides };
-      };
-
-      // Pull the manifest HEAD (title / language / direction) out of the
-      // response text. The head always streams BEFORE the slides, so it
-      // survives a tail truncation. Theme comes from `streamingTheme`.
-      const parseHead = (text: string) => {
-        // Read the LATEST manifest only. On a draft→final re-emit the response
-        // text holds both; slicing from manifestHeadOffset drops the draft so
-        // title/language/direction come from the final manifest (matching the
-        // re-captured streamingTheme + the reset callSlides).
-        const latest =
-          manifestHeadOffset > 0 && manifestHeadOffset <= text.length
-            ? text.slice(manifestHeadOffset)
-            : text;
-        const json = extractJson(latest);
-        const slidesIdx = json.indexOf('"slides"');
-        const headStr = slidesIdx >= 0 ? json.slice(0, slidesIdx) : json;
-        const rawTitle = headStr.match(
-          /"title"\s*:\s*"((?:[^"\\]|\\.)*)"/,
-        )?.[1];
-        let title: string | undefined;
-        if (rawTitle !== undefined) {
-          try {
-            title = JSON.parse(`"${rawTitle}"`) as string;
-          } catch {
-            title = rawTitle;
-          }
-        }
-        const language = headStr.match(/"language"\s*:\s*"(ar|en)"/)?.[1] as
-          | "ar"
-          | "en"
-          | undefined;
-        const direction = headStr.match(/"direction"\s*:\s*"(rtl|ltr)"/)?.[1] as
-          | "rtl"
-          | "ltr"
-          | undefined;
-        // Declared slide count — Claude writes `slideCount` at the top of the
-        // manifest (before `theme`). Used by the degenerate-salvage guard below
-        // to detect when a malformed-JSON break ate most of the deck.
-        const slideCountRaw = headStr.match(/"slideCount"\s*:\s*(\d+)/)?.[1];
-        const slideCount = slideCountRaw
-          ? Number.parseInt(slideCountRaw, 10)
-          : undefined;
-        return { title, language, direction, slideCount };
-      };
-
-      // Assemble + validate a manifest from the streamed (per-slide-
-      // validated) slides + the captured head/theme. Returns null when an
-      // essential piece is missing (theme never streamed, no slides, etc.)
-      // so the caller can decide whether that's a hard failure. This is the
-      // SALVAGE path: a parse miss or a tail truncation degrades to "ship
-      // the slides we already have" instead of throwing.
-      const assemble = (
-        head: {
-          title?: string;
-          language?: "ar" | "en";
-          direction?: "rtl" | "ltr";
-        },
-        slides: SlideType[],
-      ): SlideManifest | null => {
-        if (
-          !head.title ||
-          !head.language ||
-          !head.direction ||
-          streamingTheme == null ||
-          slides.length === 0
-        ) {
-          return null;
-        }
-        const candidate = {
-          version: "2.0" as const,
-          presentationId: data.presentationId,
-          title: head.title,
-          language: head.language,
-          direction: head.direction,
-          theme: streamingTheme,
-          slides,
-        };
-        const result = SlideManifestSchema.safeParse(candidate);
-        if (!result.success) {
-          logger.warn("deck_generate_salvage_schema_failed", {
-            slideCount: slides.length,
-            issues: JSON.stringify(result.error.issues).slice(0, 1500),
-          });
-          return null;
-        }
-        return result.data;
-      };
-
-      // ONE streaming call. The lighter package (per-slide images + exact
-      // text + brand kit) makes the happy-path whole-buffer parse the norm.
-      // On a parse miss OR a tail truncation we DEGRADE GRACEFULLY: assemble
-      // from the slides the streaming parser already validated (the parser's
-      // reset signal, handled above, leaves only the LATEST manifest) + the
-      // captured head + theme.
-      //
-      // Critically we do NOT throw on a recoverable miss. A throw makes
-      // Inngest retry THIS step, which restarts the whole Claude call from
-      // slide 1 — the user-visible "looping / SlideNav resets to 0" failure
-      // (observed 2026-05-30). We only throw when there is genuinely nothing
-      // to ship. No multi-call continuation — one call, then salvage.
-      streamingPreview.length = 0;
-      streamingTheme = null;
-
-      await writeProgress("thinking", 0, estimatedTotal, {
-        thinkingTokens: 0,
-        thinkingBudget,
-      });
-
-      const call = await runStream(buildContent(baseUserMessage), "gen", []);
-      if (call.cancelled) return { cancelled: true } as const;
-
-      // Happy path: a complete response → robust whole-buffer parse.
-      if (call.stopReason !== "max_tokens") {
-        const jsonStr = extractJson(call.text);
-        let parsedWhole: unknown = null;
-        try {
-          parsedWhole = JSON.parse(jsonStr);
-        } catch {
-          try {
-            parsedWhole = JSON.parse(repairJson(jsonStr));
-          } catch {
-            parsedWhole = null;
-          }
-        }
-        if (parsedWhole) {
-          const whole = SlideManifestSchema.safeParse(parsedWhole);
-          if (whole.success) {
-            await writeProgress(
-              "saving",
-              whole.data.slides.length,
-              whole.data.slides.length,
-            );
-            return { manifest: whole.data, usage };
-          }
-          logger.warn("deck_generate_whole_parse_schema_failed", {
-            issues: JSON.stringify(whole.error.issues).slice(0, 1500),
-          });
-        }
-        // Completed but unparseable / invalid as a whole (e.g. a
-        // draft→re-emit that concatenated two manifests) → fall through
-        // to salvage instead of throwing.
-      }
-
-      // Salvage: build from the streamed, per-slide-validated slides +
-      // captured head/theme. Turns a truncation or a parse miss into "ship
-      // the slides we got" — no throw, so Inngest never retries the step,
-      // so no restart loop.
-      const head = parseHead(call.text);
-      const salvaged = assemble(head, call.slides);
-      if (salvaged) {
-        const recovered = salvaged.slides.length;
-        const declared = head.slideCount;
-        // Degenerate-salvage guard (2026-06-03). Claude FINISHED its turn
-        // (end_turn) intending `declared` slides, but a malformed-JSON break
-        // — e.g. an unescaped `"` inside one slide's `html` — desynced the
-        // streaming parser AND the whole-buffer parse, so we recovered far
-        // fewer than declared (the "1 slide out of 11" bug). That is NOT a
-        // deck we may silently ship. Throw so Inngest retries (retries:3) with
-        // a fresh generation — a re-roll almost always parses cleanly, and the
-        // strengthened OUTPUT_CONTRACT (single-quote HTML) makes the break rare.
-        // We gate on end_turn ONLY: a `max_tokens` truncation can't be helped
-        // by retrying (it would truncate again), so that case still degrades
-        // gracefully below ("ship the slides we got").
-        if (
-          call.stopReason === "end_turn" &&
-          typeof declared === "number" &&
-          declared >= 4 &&
-          recovered < Math.ceil(declared / 2)
-        ) {
-          logger.error("deck_generate_degenerate_salvage", {
-            declared,
-            recovered,
-            stopReason: call.stopReason,
-          });
-          throw new Error(
-            `Manifest recovered only ${recovered}/${declared} slides on a clean finish — malformed JSON broke the stream. Retrying.`,
-          );
-        }
-        logger.info("deck_generate_salvaged", {
-          stopReason: call.stopReason,
-          slides: recovered,
-        });
-        await writeProgress("saving", recovered, recovered);
-        return { manifest: salvaged, usage };
-      }
-
-      // Nothing usable — no slides closed, or the theme never streamed.
-      // Genuinely empty; throw so the run fails cleanly rather than
-      // shipping an empty deck. (Rare — the common failure modes are
-      // covered by salvage above.)
+      // Every flow takes the HTML-authoring branch above (isHtmlAuthoringFlow is
+      // true for create / datasheet / mimic / enhance). The JSON manifest path was
+      // removed in the HTML-pivot cleanup (2026-06-05). This guard makes a
+      // hypothetical un-migrated future flow fail loudly instead of silently.
       throw new Error(
-        `Generation produced no usable manifest (stop=${call.stopReason}, slides=${call.slides.length}, theme=${streamingTheme != null}).`,
+        "deckGenerate: no HTML-authoring branch matched — every flow must use the HTML path.",
       );
     });
     // Cancellation short-circuit: the streaming step returned the
