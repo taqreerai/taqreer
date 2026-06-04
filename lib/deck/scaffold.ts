@@ -21,15 +21,25 @@ const CANVAS_CLASS = "tq-canvas";
 // Stamp the scope class onto a `<section>`'s class list (idempotent), merging
 // with any class Claude wrote. Only the FIRST opening `<section …>` is touched.
 // Quote-agnostic.
+// Matches a class attribute in double-quoted, single-quoted, OR unquoted form.
+// Unquoted (`class=slide`, valid HTML) MUST be handled: if we miss it and fall
+// to the no-class branch, we emit a SECOND `class="tq-canvas"` → duplicate
+// attribute → the browser keeps the first and DROPS Claude's classes (silent
+// broken slide). Capture groups: 1=double, 2=single, 3=unquoted.
+const CLASS_ATTR = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
+
 export function withCanvasClass(sectionHtml: string): string {
   return sectionHtml.replace(/<section\b([^>]*)>/i, (full, attrs: string) => {
-    const classMatch = attrs.match(/\bclass\s*=\s*("|')([\s\S]*?)\1/i);
+    const classMatch = attrs.match(CLASS_ATTR);
     if (classMatch) {
-      const quote = classMatch[1];
-      const classes = classMatch[2].split(/\s+/).filter(Boolean);
+      const raw = classMatch[1] ?? classMatch[2] ?? classMatch[3] ?? "";
+      // Preserve single quotes if that's what Claude used; otherwise normalize
+      // to double (covers the unquoted case too).
+      const quote = classMatch[2] !== undefined ? "'" : '"';
+      const classes = raw.split(/\s+/).filter(Boolean);
       if (!classes.includes(CANVAS_CLASS)) classes.unshift(CANVAS_CLASS);
       const newAttrs = attrs.replace(
-        /\bclass\s*=\s*("|')[\s\S]*?\1/i,
+        CLASS_ATTR,
         `class=${quote}${classes.join(" ")}${quote}`,
       );
       return `<section${newAttrs}>`;

@@ -234,12 +234,20 @@ export function scopeDeckCss(css: string, scope = ".tq-canvas"): string {
       out.push(node.text);
     } else {
       const name = node.prelude.match(AT_NAME)?.[1]?.toLowerCase() ?? "";
-      if (name === "media" || name === "supports" || name === "container") {
-        // Conditional group: recurse so the INNER selectors get scoped.
+      if (
+        name === "media" ||
+        name === "supports" ||
+        name === "container" ||
+        name === "layer"
+      ) {
+        // Wraps normal style rules: recurse so the INNER selectors get scoped.
+        // `@layer name { body{…} }` would otherwise leak its selectors to the
+        // app (the block form; the `@layer a, b;` statement form has no block
+        // and is handled as an at-statement above).
         out.push(`${node.prelude}{${scopeDeckCss(node.block, scope)}}`);
       } else {
-        // @keyframes / @font-face / @page / @layer block / unknown — no element
-        // selectors to scope; leave the block verbatim.
+        // @keyframes / @font-face / @page / unknown — no element selectors to
+        // scope; leave the block verbatim.
         out.push(`${node.prelude}{${node.block}}`);
       }
     }

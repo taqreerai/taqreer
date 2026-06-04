@@ -95,6 +95,7 @@ function toSlide(openTag: string, html: string, index: number): ParsedSlide {
 export class StreamingHtmlSplitter {
   private buffer = "";
   private yielded = 0; // count of top-level sections already closed + returned
+  private emittedSyntheticTail = false; // flush() synthesized the truncated tail
 
   push(chunk: string): ParsedSlide[] {
     this.buffer += chunk;
@@ -124,6 +125,10 @@ export class StreamingHtmlSplitter {
       this.yielded = spans.length;
       return out;
     }
+    // Already synthesized the truncated tail on a prior flush — stay idempotent
+    // (the buffer + openStart are unchanged, so without this guard a second
+    // flush() would re-emit the same final slide under a new id).
+    if (this.emittedSyntheticTail) return [];
     if (openStart >= 0) {
       const raw = this.buffer.slice(openStart).trimEnd();
       const body = raw.replace(/^<section\b[^>]*>/i, "");
@@ -131,6 +136,7 @@ export class StreamingHtmlSplitter {
         const html = raw.endsWith("</section>") ? raw : `${raw}</section>`;
         const slide = toSlide(openTag || "<section>", html, this.yielded);
         this.yielded += 1;
+        this.emittedSyntheticTail = true;
         return [slide];
       }
     }
