@@ -10,6 +10,7 @@ import {
   type SlideFormat,
   type SlideManifest,
   type SlideType,
+  type ThemeType,
 } from "@/lib/schema/slide";
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
@@ -19,7 +20,10 @@ import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 import { repairJson } from "@/lib/extract/json-repair";
-import { expandWeightAxis } from "@/lib/brand/fonts";
+import { expandWeightAxis, googleFontUrl } from "@/lib/brand/fonts";
+import { buildSlideHtml, extractLeadingStyleCss } from "@/lib/deck/scaffold";
+import { scopeDeckCss } from "@/lib/deck/scope-css";
+import { StreamingHtmlSplitter, type ParsedSlide } from "@/lib/deck/html-stream";
 import { signBrandAssetUrl } from "@/lib/storage/sign";
 import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
 import {
@@ -124,8 +128,7 @@ const OUTPUT_CONTRACT = `OUTPUT — JSON only in the text channel
   "slideCount": <integer — the EXACT number of slides you will produce; decide it here, before the theme, then emit exactly this many>,
   "theme": {
     "palette": ["#hex", ...],
-    "fontHeading": { "name": "...", "url": "https://fonts.googleapis.com/..." },
-    "fontBody":    { "name": "...", "url": "https://fonts.googleapis.com/..." },
+    "font": { "name": "...", "url": "https://fonts.googleapis.com/..." },
     "background": "#hex",
     "text": "#hex"
   },
@@ -137,10 +140,10 @@ Slide count: decide it FIRST and write it as the top-level \`slideCount\` field 
 
 VALID JSON — the ENTIRE response must parse in ONE \`JSON.parse\`. The \`html\` field is a JSON string, so: write EVERY HTML/SVG attribute with SINGLE quotes (e.g. \`<div class='x' style='color:var(--brand-1)'>\`) so a double-quote NEVER appears inside \`html\`, and keep each \`html\` on a SINGLE line with no raw line breaks. One unescaped \`"\` or newline inside any \`html\` corrupts the whole manifest and the deck is lost — single quotes throughout are what prevent it.
 
-FONT SOURCING
-- When \`brief.brand.fonts.heading.url\` / \`.body.url\` are present, COPY URLs VERBATIM into \`theme.fontHeading.url\` / \`theme.fontBody.url\`, and \`name\` likewise. Don't rewrite — the user picked these on the brand page.
-- When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those families — assign them to \`theme.fontHeading.name\` and \`theme.fontBody.name\` (a single family may serve both). Use the family \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts; the uploaded families are the only allowed typefaces. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship will render at its nearest available face.
-- If missing, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
+FONT SOURCING — the brand has ONE font; emit it as \`theme.font\` (vary WEIGHT across the deck for hierarchy, never a second family).
+- When \`brief.brand.fonts.font.url\` is present, COPY the URL VERBATIM into \`theme.font.url\`, and \`name\` likewise. Don't rewrite — the user picked it on the brand page.
+- When \`brief.brand.fonts.uploaded\` lists families (the user uploaded their OWN brand fonts), you MUST use ONLY those — assign the family (the first/primary if several) to \`theme.font.name\`. Use the \`name\` EXACTLY as given. Emit ONLY the \`name\` (OMIT \`url\` entirely) — the system attaches the uploaded font files by name. Do NOT pick, suggest, or fall back to any Google/system font when the user uploaded fonts. Each family ships specific weight FACES (listed under \`faces[].weight\`) — design with those weights; the system embeds each weight file, so a weight the family does NOT ship renders at its nearest available face.
+- If neither is present, pick a Google font: \`https://fonts.googleapis.com/css2?family=<Name+With+Plus>:wght@100;200;300;400;500;600;700;800;900&display=swap\` — request the full ladder so every weight is in scope; Google silently drops the weights the family doesn't ship.`;
 
 // SYSTEM_PROMPT is intentionally NEUTRAL (2026-06-03, Part B.2/B.3): no opener
 // sentence, no style / visual-direction enforcement. The "what to build" framing
@@ -157,7 +160,7 @@ BRAND — colour and type come ONLY from the brief: \`var(--brand-1)\` … \`var
 
 GRAPHICS —
 Country flags usage: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours, never \`data-fill\`).
-Icons usage: inline an \`<svg viewBox="0 0 24 24">\` using a REAL icon's path data from a standard open set (e.g. Lucide).
+Icons usage: anchor cards, list / bullet items, and stat callouts with a small line-icon where it sharpens scanning — reach for these by DEFAULT on card & feature layouts (they're under-used). Inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour. Keep them sparing on the most minimal / brutalist styles where restraint is the point.
 Charts / graphs usage: inline \`<svg>\`.
 
 AVOID (these don't render): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.
@@ -196,6 +199,51 @@ ${COMPOSITION_RULES}
 
 ${OUTPUT_CONTRACT}`;
 
+// ─── CREATE → HTML authoring prompt (context/plan-create-agent-pivot.md) ───
+// CLAUDE-AUTHORED DESIGN (2026-06-04, Phase 2): we do NOT ship a fixed scaffold.
+// The model designs its OWN system — it streams ONE \`<style>\` (CSS vars +
+// component classes, built on the injected brand vars) then the \`<section>\`
+// slides. We give it only the brand colours, the style direction (user message),
+// and the technical rules (RTL / icons / SVG / AVOID). The corruption never
+// returns: a factored \`<style>\` (classes defined once) is the OPPOSITE of the
+// repeated-inline-styles that broke JSON. We then SCOPE Claude's \`<style>\` under
+// \`.tq-canvas\` (lib/deck/scope-css) so it can't leak, and enforce the canvas
+// frame (lib/deck/scaffold buildSlideHtml). The slide HTML is never put in a
+// constrained field (§3.5 load-bearing rule).
+export const SYSTEM_PROMPT_CREATE_HTML = `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief — as one HTML fragment.
+
+OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, no JSON, no \`<!DOCTYPE>\`/\`<html>\`/\`<head>\`/\`<body>\`):
+1. ONE \`<style>\` block FIRST — your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE here and reuse it via classes (this keeps the markup terse).
+2. THEN the slides, each a top-level \`<section data-label="<short Arabic name>" data-role="cover|content|section|stats|quote|image|closing">\`.
+
+- The FIRST character of your response is \`<\` (your \`<style>\`).
+- Slides are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed slide frame).
+- Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
+- Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
+
+BRAND & COLOUR — the brand variables are INJECTED for you; reference them, don't redefine them.
+
+${LANG_DIRECTION}
+
+GRAPHICS —
+Country flags: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours).
+Icons: inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour.
+Charts / graphs: inline \`<svg>\`.
+
+AVOID (these don't render in export): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.`;
+
+// Valid `data-role` values (mirror SlideSchema.role). Used to coerce the
+// section's `data-role` to the schema enum; anything else → undefined.
+const SLIDE_ROLES = new Set<NonNullable<SlideType["role"]>>([
+  "cover",
+  "section",
+  "content",
+  "stats",
+  "quote",
+  "image",
+  "closing",
+]);
+
 // Images deck = create/scratch flows ONLY (enhance/mimic/data have their own
 // visual handling and never get the override even if the flag leaks on).
 export function isImagesMode(event: DeckGenerateEvent): boolean {
@@ -203,6 +251,21 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
     ?.source?.kind;
   return (
     (event.brief as { imagesMode?: boolean } | null)?.imagesMode === true &&
+    (event.type ?? "create") === "create" &&
+    sourceKind !== "enhance" &&
+    sourceKind !== "mimic" &&
+    sourceKind !== "data"
+  );
+}
+
+// The new HTML-authoring path (context/plan-create-agent-pivot.md) is gated to
+// the CREATE flow (text or images) only. Enhance / mimic / datasheet keep the
+// JSON manifest path until they're migrated in a later pass (§7). Scratch source
+// or no source → create.
+export function isCreateHtmlFlow(event: DeckGenerateEvent): boolean {
+  const sourceKind = (event.brief as { source?: { kind?: string } } | null)
+    ?.source?.kind;
+  return (
     (event.type ?? "create") === "create" &&
     sourceKind !== "enhance" &&
     sourceKind !== "mimic" &&
@@ -580,6 +643,113 @@ function readBriefBrandColors(brief: unknown): {
   return { colors, dominant };
 }
 
+// Read the brand's single font from the brief for the SERVER-built create-HTML
+// theme (the model no longer emits a theme). Prefers the Google family the user
+// picked (`fonts.font`), else the first uploaded family by NAME (faces attach
+// post-manifest via injectUploadedFontSources), else a safe Arabic default.
+function readBriefThemeFont(brief: unknown): ThemeType["font"] {
+  const fonts = (
+    brief as {
+      brand?: {
+        fonts?: {
+          font?: { name?: string; url?: string };
+          uploaded?: Array<{ name?: string }> | null;
+        } | null;
+      } | null;
+    } | null
+  )?.brand?.fonts;
+  const picked = fonts?.font;
+  if (picked?.name) {
+    return { name: picked.name, ...(picked.url ? { url: picked.url } : {}) };
+  }
+  const uploaded = fonts?.uploaded?.find((f) => f?.name)?.name;
+  if (uploaded) return { name: uploaded };
+  return { name: "Cairo", url: googleFontUrl("Cairo") };
+}
+
+// Build the create-HTML deck theme SERVER-SIDE (the model authors only section
+// bodies now). The brand palette drives `--brand-1…N` (accents); the ground is a
+// neutral paper so the scaffold renders, and Claude's `.tinted`/`.accent`
+// sections carry the brand colour across the deck (user direction 2026-06-04).
+function buildCreateHtmlTheme(brief: unknown): ThemeType {
+  const { colors } = readBriefBrandColors(brief);
+  const palette = colors.filter((c) =>
+    /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c),
+  );
+  // ThemeSchema requires 3–8 colours; pad a sparse brand with the neutral
+  // ink / paper so a 1- or 2-colour brand still validates.
+  while (palette.length < 3) palette.push(palette.length === 0 ? "#16121F" : "#FFFFFF");
+  return {
+    palette: palette.slice(0, 8),
+    font: readBriefThemeFont(brief),
+    background: "#FFFFFF",
+    text: "#16121F",
+  };
+}
+
+// Fire-and-forget the generated-image warm fill for a freshly-closed slide
+// (images mode). Mirrors the JSON path's inline dispatch: one `deck.image.warm`
+// event per reserved box, deduped on `${genid}:${promptHash}`, capped at
+// MAX_GENERATED_IMAGES distinct genids, with rollback of THIS batch's
+// reservations if the send rejects. Shared by the create-HTML path.
+function dispatchImageWarm(
+  slideId: string,
+  slideHtml: string,
+  projectId: string,
+  warmedKeys: Set<string>,
+  warmedGenidsForCap: Set<string>,
+  log: { warn: (message: string, metadata?: Record<string, unknown>) => void },
+): void {
+  const events: {
+    name: "deck.image.warm";
+    data: {
+      projectId: string;
+      slideKey: string;
+      box: GenImageMarker & { hash: string };
+      idemKey: string;
+    };
+  }[] = [];
+  const addedKeys: string[] = [];
+  const addedGenids: string[] = [];
+  for (const m of scanGenImages(slideHtml)) {
+    const hash = genImageHash(m.prompt);
+    const key = `${m.genid}:${hash}`;
+    if (warmedKeys.has(key)) continue;
+    if (
+      !warmedGenidsForCap.has(m.genid) &&
+      warmedGenidsForCap.size >= MAX_GENERATED_IMAGES
+    ) {
+      continue;
+    }
+    warmedKeys.add(key);
+    addedKeys.push(key);
+    if (!warmedGenidsForCap.has(m.genid)) {
+      warmedGenidsForCap.add(m.genid);
+      addedGenids.push(m.genid);
+    }
+    events.push({
+      name: "deck.image.warm",
+      data: {
+        projectId,
+        slideKey: slideId,
+        box: { ...m, hash },
+        idemKey: `${projectId}:${m.genid}:${hash}`,
+      },
+    });
+  }
+  if (events.length > 0) {
+    void inngest.send(events).catch((err) => {
+      for (const k of addedKeys) warmedKeys.delete(k);
+      for (const g of addedGenids) warmedGenidsForCap.delete(g);
+      log.warn("deck_image_warm_dispatch_failed", {
+        projectId,
+        slideKey: slideId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+}
+
 // Auto-upgrade `sonnet-fast` → `opus-fast` on long-output source
 // flows (enhance / mimic / data). Sonnet 4.6 with thinking disabled
 // can't reliably emit the 30+ KB structured output that PDF /
@@ -657,8 +827,7 @@ function sanitizeBriefFonts(brief: unknown): unknown {
     return { ...(fam as Record<string, unknown>), faces };
   };
   const nextFonts: Record<string, unknown> = { ...fonts };
-  if (fonts.heading) nextFonts.heading = stripSlot(fonts.heading);
-  if (fonts.body) nextFonts.body = stripSlot(fonts.body);
+  if (fonts.font) nextFonts.font = stripSlot(fonts.font);
   if (Array.isArray(fonts.uploaded)) {
     nextFonts.uploaded = (fonts.uploaded as unknown[]).map(stripFamily);
   }
@@ -725,7 +894,7 @@ async function buildSignedUploadedFontFaces(
   return out;
 }
 
-// Attach the signed faces to a theme's heading/body slots by NAME match (the
+// Attach the signed faces to a theme's single font slot by NAME match (the
 // cheap, synchronous half). A Google font already carries a `url` — leave it
 // alone. Mutates the theme in place; safe to call on the raw mid-stream theme
 // object AND the final manifest theme. No-op when the map is empty.
@@ -734,12 +903,10 @@ function applyUploadedFontFaces(
   signedByName: Map<string, Array<{ weight: number; src: string }>>,
 ): void {
   if (signedByName.size === 0 || !theme || typeof theme !== "object") return;
-  const t = theme as { fontHeading?: ThemeFontSlotLike; fontBody?: ThemeFontSlotLike };
-  for (const slot of [t.fontHeading, t.fontBody]) {
-    if (!slot || !slot.name || slot.url) continue;
-    const faces = signedByName.get(slot.name.trim().toLowerCase());
-    if (faces) slot.fontFaces = faces;
-  }
+  const slot = (theme as { font?: ThemeFontSlotLike }).font;
+  if (!slot || !slot.name || slot.url) return;
+  const faces = signedByName.get(slot.name.trim().toLowerCase());
+  if (faces) slot.fontFaces = faces;
 }
 
 // After the manifest is built, match each theme font NAME back to the user's
@@ -1723,6 +1890,271 @@ export const deckGenerate = inngest.createFunction(
         cacheCreationTokens: 0,
       };
 
+      // ─── CREATE → HTML authoring path (context/plan-create-agent-pivot.md) ──
+      // create (+ images) authors static <section> bodies against the cached
+      // scaffold; enhance/mimic/datasheet fall through to the JSON path below.
+      // Every closed <section> is already a valid slide (the scaffold is
+      // server-provided + the theme is server-built), so there's NO JSON
+      // salvage / theme-parse / degenerate-guard here — just split, bridge the
+      // scaffold onto each section, and assemble.
+      if (isCreateHtmlFlow(data)) {
+        manifestVersion += 1;
+        streamingPreview.length = 0;
+        const theme = buildCreateHtmlTheme(data.brief);
+        // Attach pre-signed uploaded faces so the LIVE preview @font-faces them
+        // mid-stream (Google fonts carry a url and are skipped). The post-stream
+        // injectUploadedFontSources re-attaches on the final manifest.
+        applyUploadedFontFaces(theme, signedUploadedFaces);
+        streamingTheme = theme;
+
+        const htmlSystem = isImagesMode(data)
+          ? `${SYSTEM_PROMPT_CREATE_HTML}\n\n${IMG_ADDENDUM}`
+          : SYSTEM_PROMPT_CREATE_HTML;
+        const userText = `${buildUserMessage(data)}\n\nAuthor the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
+
+        await writeProgress("thinking", 0, estimatedTotal, {
+          thinkingTokens: 0,
+          thinkingBudget,
+        });
+
+        const splitter = new StreamingHtmlSplitter();
+        const slides: SlideType[] = [];
+        const warmedKeys = new Set<string>();
+        const warmedGenidsForCap = new Set<string>();
+        let cancelObserved = false;
+        let lastCancelCheckAt = 0;
+        let lastThinkingWriteAt = 0;
+        let lastWriteAt = 0;
+        const CANCEL_POLL_INTERVAL_MS = 2_000;
+        // ── Instrumentation (timing + gated raw dump) ──────────────────────
+        // Always-on: a single `deck_html_timing` log (think vs stream ms, tokens)
+        // for the JSON↔HTML speed comparison. Gated (DECK_DEBUG=1): writes the raw
+        // model output + per-section stats to /tmp/claude/deck-debug for offline
+        // inspection (style survival, inline overrides, any <style> Claude wrote).
+        const t0 = Date.now();
+        let tFirstText: number | null = null;
+        let tFirstSection: number | null = null;
+        let rawBuffer = "";
+        // Claude's OWN design-system `<style>` — everything it streamed before the
+        // first `<section>`. Extracted once (it's complete by the first slide) +
+        // SCOPED under `.tq-canvas` so it can't leak into the app, then reused for
+        // every slide. "" if Claude wrote no `<style>` (we still enforce the
+        // canvas frame + brand vars, so the slide renders, just plain).
+        let scopedStyle: string | null = null;
+
+        const ingestSlide = (parsed: ParsedSlide) => {
+          if (tFirstSection === null) tFirstSection = Date.now();
+          if (scopedStyle === null) {
+            scopedStyle = scopeDeckCss(
+              extractLeadingStyleCss(splitter.getLeadingHtml()),
+            );
+          }
+          const role =
+            parsed.role && SLIDE_ROLES.has(parsed.role as never)
+              ? (parsed.role as NonNullable<SlideType["role"]>)
+              : undefined;
+          const slide: SlideType = {
+            slideId: parsed.slideId,
+            ...(role ? { role } : {}),
+            // Self-contained slide: Claude's scoped design system + the enforced
+            // canvas frame inside the section; correctly sized for EVERY consumer
+            // (preview, thumbnail, PPTX/PDF export).
+            html: buildSlideHtml(
+              parsed.html,
+              scopedStyle,
+              SLIDE_DIMENSIONS[slideFormat],
+            ),
+          };
+          slides.push(slide);
+          streamingPreview.push(slide);
+          if (isImagesMode(data)) {
+            dispatchImageWarm(
+              slide.slideId,
+              slide.html,
+              projectId,
+              warmedKeys,
+              warmedGenidsForCap,
+              logger,
+            );
+          }
+        };
+
+        const stream = client.messages.stream({
+          model: callParams.model,
+          max_tokens: 128000,
+          thinking: callParams.thinking,
+          system: [
+            {
+              type: "text",
+              text: htmlSystem,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          // NO output_config — slide HTML streams FREE-FORM (§3.5 load-bearing
+          // rule: never put slide HTML in a constrained field).
+          messages: [{ role: "user", content: userText }],
+        });
+
+        stream.on("thinking", (_delta, snapshot) => {
+          const now = Date.now();
+          if (now - lastThinkingWriteAt > 1000) {
+            lastThinkingWriteAt = now;
+            void writeProgress("thinking", slides.length, estimatedTotal, {
+              thinkingTokens: Math.round(snapshot.length / 4),
+              thinkingBudget,
+            });
+          }
+        });
+
+        stream.on("text", (delta) => {
+          if (tFirstText === null) tFirstText = Date.now();
+          rawBuffer += delta;
+          for (const parsed of splitter.push(delta)) ingestSlide(parsed);
+          const now = Date.now();
+          if (slides.length > 0 && now - lastWriteAt > 800) {
+            lastWriteAt = now;
+            void writeProgress(
+              "designing",
+              slides.length,
+              Math.max(estimatedTotal, slides.length),
+            );
+          }
+          if (
+            jobId &&
+            !cancelObserved &&
+            now - lastCancelCheckAt > CANCEL_POLL_INTERVAL_MS
+          ) {
+            lastCancelCheckAt = now;
+            const pollJobId = jobId;
+            void (async () => {
+              try {
+                const row = await prisma.job.findUnique({
+                  where: { id: pollJobId },
+                  select: { cancelRequestedAt: true },
+                });
+                if (row?.cancelRequestedAt && !cancelObserved) {
+                  cancelObserved = true;
+                  stream.controller.abort();
+                }
+              } catch (err) {
+                void err;
+              }
+            })();
+          }
+        });
+
+        let message;
+        try {
+          message = await stream.finalMessage();
+        } catch (err) {
+          if (cancelObserved) {
+            logger.info("deck_generate_cancelled_by_user", {
+              jobId,
+              label: "create-html",
+            });
+            return { cancelled: true } as const;
+          }
+          throw err;
+        }
+        // Close a final section truncated mid-stream (no </section>).
+        for (const parsed of splitter.flush()) ingestSlide(parsed);
+
+        usage.attempts += 1;
+        usage.inputTokens += message.usage.input_tokens ?? 0;
+        usage.outputTokens += message.usage.output_tokens ?? 0;
+        usage.cacheReadTokens += message.usage.cache_read_input_tokens ?? 0;
+        usage.cacheCreationTokens +=
+          message.usage.cache_creation_input_tokens ?? 0;
+        logger.info("claude_usage", {
+          label: "create-html",
+          input: message.usage.input_tokens,
+          output: message.usage.output_tokens,
+          cache_read: message.usage.cache_read_input_tokens,
+          cache_write: message.usage.cache_creation_input_tokens,
+          stop_reason: message.stop_reason,
+          slides: slides.length,
+        });
+
+        // ── Timing (always) — the JSON↔HTML speed comparison number. ──
+        const tEnd = Date.now();
+        const timing = {
+          totalMs: tEnd - t0,
+          thinkMs: (tFirstText ?? tEnd) - t0, // extended-thinking before any text
+          streamMs: tEnd - (tFirstText ?? tEnd), // section authoring
+          firstSectionMs: (tFirstSection ?? tEnd) - t0,
+          slides: slides.length,
+          rawChars: rawBuffer.length,
+        };
+        logger.info("deck_html_timing", {
+          ...timing,
+          outTokens: usage.outputTokens,
+          inTokens: usage.inputTokens,
+          cacheRead: usage.cacheReadTokens,
+          stop: message.stop_reason,
+        });
+
+        // ── Gated raw dump (DECK_DEBUG=1) — offline inspection. Never throws. ──
+        if (process.env.DECK_DEBUG === "1") {
+          try {
+            const fs = await import("node:fs/promises");
+            const dir = "/tmp/claude/deck-debug";
+            await fs.mkdir(dir, { recursive: true });
+            const perSection = slides.map((s) => ({
+              slideId: s.slideId,
+              role: s.role,
+              htmlLen: s.html.length,
+              // <style> survives INSIDE the section (the render-bug fix)?
+              styleInsideSection: /<section\b[^>]*>\s*<style/i.test(s.html),
+              // Claude's inline overrides (the slide-6 pattern) — count `style=`.
+              inlineStyleAttrs: (s.html.match(/\sstyle=/gi) ?? []).length,
+            }));
+            await fs.writeFile(
+              `${dir}/${projectId}.json`,
+              JSON.stringify(
+                { projectId, timing, usage, stop: message.stop_reason, perSection },
+                null,
+                2,
+              ),
+            );
+            // Raw model output: grep for `<style`, `style=`, `.map`, `+ "` etc.
+            await fs.writeFile(`${dir}/${projectId}.raw.html`, rawBuffer);
+            logger.info("deck_html_debug_dumped", { dir, projectId });
+          } catch (err) {
+            logger.warn("deck_html_debug_dump_failed", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        if (slides.length === 0) {
+          throw new Error(
+            `Create-HTML produced no slides (stop=${message.stop_reason}).`,
+          );
+        }
+
+        const briefTitle = (data.brief as { title?: string } | null)?.title
+          ?.trim();
+        const manifest = {
+          version: "2.0" as const,
+          presentationId: data.presentationId,
+          title: briefTitle && briefTitle.length > 0 ? briefTitle : "عرض تقديمي",
+          language: streamLanguage,
+          direction: streamDirection,
+          theme,
+          slides,
+        };
+        const result = SlideManifestSchema.safeParse(manifest);
+        if (!result.success) {
+          logger.error("deck_generate_create_html_invalid", {
+            slides: slides.length,
+            issues: JSON.stringify(result.error.issues).slice(0, 1200),
+          });
+          throw new Error("Create-HTML manifest failed schema validation.");
+        }
+        await writeProgress("saving", slides.length, slides.length);
+        return { manifest: result.data, usage };
+      }
+
       // Compose message content. The doc blocks + baseUserMessage form a
       // STABLE prefix marked with a cache breakpoint, so continuation calls
       // (which re-send the same prefix) read it from cache instead of
@@ -1877,66 +2309,14 @@ export const deckGenerate = inngest.createFunction(
                 // promptHash) — the warm fn's cross-run "bill at most once"
                 // claim (context/images.md §12).
                 if (isImagesMode(data)) {
-                  const slideKey = parsed.data.slideId;
-                  const events: {
-                    name: "deck.image.warm";
-                    data: {
-                      projectId: string;
-                      slideKey: string;
-                      box: GenImageMarker & { hash: string };
-                      idemKey: string;
-                    };
-                  }[] = [];
-                  // Track ONLY the reservations THIS batch newly makes (not a
-                  // genid a prior batch already counted), so a failed dispatch
-                  // can roll them back. Without this, a rejected `inngest.send`
-                  // would permanently mark these boxes warmed — never retried on
-                  // a later slide-close, yet still consuming cap budget.
-                  const addedKeys: string[] = [];
-                  const addedGenids: string[] = [];
-                  for (const m of scanGenImages(parsed.data.html)) {
-                    const hash = genImageHash(m.prompt);
-                    const key = `${m.genid}:${hash}`;
-                    // Already dispatched this exact (genid, prompt) → skip.
-                    if (warmedKeys.has(key)) continue;
-                    // A NEW genid beyond the per-deck cap is dropped; a
-                    // re-prompt of an already-counted genid is allowed
-                    // (doesn't consume a second slot).
-                    if (
-                      !warmedGenidsForCap.has(m.genid) &&
-                      warmedGenidsForCap.size >= MAX_GENERATED_IMAGES
-                    ) {
-                      continue;
-                    }
-                    warmedKeys.add(key);
-                    addedKeys.push(key);
-                    if (!warmedGenidsForCap.has(m.genid)) {
-                      warmedGenidsForCap.add(m.genid);
-                      addedGenids.push(m.genid);
-                    }
-                    events.push({
-                      name: "deck.image.warm",
-                      data: {
-                        projectId,
-                        slideKey,
-                        box: { ...m, hash },
-                        idemKey: `${projectId}:${m.genid}:${hash}`,
-                      },
-                    });
-                  }
-                  if (events.length > 0) {
-                    void inngest.send(events).catch((err) => {
-                      // Roll back THIS batch's reservations so the boxes get
-                      // re-dispatched when a later slide-close re-scans them.
-                      for (const k of addedKeys) warmedKeys.delete(k);
-                      for (const g of addedGenids) warmedGenidsForCap.delete(g);
-                      logger.warn("deck_image_warm_dispatch_failed", {
-                        projectId,
-                        slideKey,
-                        error: err instanceof Error ? err.message : String(err),
-                      });
-                    });
-                  }
+                  dispatchImageWarm(
+                    parsed.data.slideId,
+                    parsed.data.html,
+                    projectId,
+                    warmedKeys,
+                    warmedGenidsForCap,
+                    logger,
+                  );
                 }
               }
             } catch {
@@ -2285,13 +2665,8 @@ export const deckGenerate = inngest.createFunction(
     // Normalize at this single source — the persisted manifest — and every
     // downstream consumer (renderer, export embed, showcase, html-doc)
     // inherits the full set with no per-call rewrite. See lib/brand/fonts.ts.
-    if (manifest.theme?.fontHeading?.url) {
-      manifest.theme.fontHeading.url = expandWeightAxis(
-        manifest.theme.fontHeading.url,
-      );
-    }
-    if (manifest.theme?.fontBody?.url) {
-      manifest.theme.fontBody.url = expandWeightAxis(manifest.theme.fontBody.url);
+    if (manifest.theme?.font?.url) {
+      manifest.theme.font.url = expandWeightAxis(manifest.theme.font.url);
     }
 
     // Uploaded brand fonts: Claude emitted only the NAME (no url) per the

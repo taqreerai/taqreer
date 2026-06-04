@@ -145,17 +145,16 @@ export function deriveBrandSnapshot(input: DeriveInput): BrandSnapshot | null {
     palette,
     background: manifest.theme.background,
     text: manifest.theme.text,
+    // The deck theme now carries a SINGLE font (2026-06-04 collapse); the
+    // BrandSnapshot schema keeps its legacy two-slot shape, so map the one
+    // font into both — heading and body are the same family in practice.
     fontHeading: {
-      name: manifest.theme.fontHeading.name,
-      ...(manifest.theme.fontHeading.url
-        ? { url: manifest.theme.fontHeading.url }
-        : {}),
+      name: manifest.theme.font.name,
+      ...(manifest.theme.font.url ? { url: manifest.theme.font.url } : {}),
     },
     fontBody: {
-      name: manifest.theme.fontBody.name,
-      ...(manifest.theme.fontBody.url
-        ? { url: manifest.theme.fontBody.url }
-        : {}),
+      name: manifest.theme.font.name,
+      ...(manifest.theme.font.url ? { url: manifest.theme.font.url } : {}),
     },
   };
 

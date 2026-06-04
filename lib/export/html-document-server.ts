@@ -46,7 +46,7 @@ export function buildHtmlDocumentServer(
   const { width: canvasW, height: canvasH } = dimensionsForFormat(
     manifest.format,
   );
-  const fontLinks = [manifest.theme.fontHeading.url, manifest.theme.fontBody.url]
+  const fontLinks = [manifest.theme.font.url]
     .filter(
       (url, i, arr): url is string =>
         typeof url === "string" && arr.indexOf(url) === i,
@@ -57,19 +57,18 @@ export function buildHtmlDocumentServer(
     )
     .join("\n  ");
 
-  // Uploaded brand fonts: emit a direct @font-face per WEIGHT carrying a signed
+  // Uploaded brand font: emit a direct @font-face per WEIGHT carrying a signed
   // `fontFaces[].src` (deck-generate attached one per uploaded weight by
   // matching the family name → uploaded storageUrls), so the slides — which
   // reference the family by NAME and vary font-weight — render each weighted
-  // run in the matching uploaded file. Name sanitised to word/space/hyphen so
-  // it can't break out of the CSS; src is a URL we signed. Dedupe by family so
-  // heading + body sharing one upload emit once.
+  // run in the matching uploaded file. Name sanitised so it can't break out of
+  // the CSS; src is a URL we signed.
   const fontFaceSeen = new Set<string>();
-  const fontFaceCss = [manifest.theme.fontHeading, manifest.theme.fontBody]
+  const fontFaceCss = [manifest.theme.font]
     .map((f) => ({
       // Carry the RAW family name (just trimmed); escape it at emit time with
-      // the SAME cssFontFamilyName() the --font-* vars use, so the @font-face
-      // family and `font-family: var(--font-heading)` resolve identically.
+      // the SAME cssFontFamilyName() the --font* vars use, so the @font-face
+      // family and `font-family: var(--font)` resolve identically.
       name: f.name?.trim() ?? "",
       faces: f.fontFaces ?? [],
     }))

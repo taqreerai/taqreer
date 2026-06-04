@@ -659,7 +659,7 @@ export async function exportManifestAsPptx(
       // Google fonts carry a CSS `url`; uploaded brand fonts carry signed
       // `fontFaces` (one font file per uploaded weight). Embed both — the
       // server route host-pins each (fonts.googleapis.com / Supabase storage).
-      const fontTargets = [manifest.theme.fontHeading, manifest.theme.fontBody]
+      const fontTargets = [manifest.theme.font]
         .filter(
           (f) =>
             f && f.name && (f.url || (f.fontFaces && f.fontFaces.length > 0)),

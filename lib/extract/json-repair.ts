@@ -42,7 +42,27 @@
 //
 // If the input is already well-formed JSON, this returns it unchanged.
 
-export function repairJson(input: string): string {
+// Collapse JavaScript-style string CONCATENATION back into single JSON
+// strings. Claude emits long `html` values as `"<chunk1>"+"<chunk2>"+…` —
+// valid JS, but INVALID JSON (JSON has no `+` operator), so `JSON.parse`
+// dies at the first `+` with "Expected ',' or '}' after property value".
+// Observed 2026-06-04 on /create image decks with the design-style engine:
+// the long, multi-block slide HTML pushes Claude to break each `html` value
+// into concatenated literals — one 11-slide deck contained 44 such joins and
+// recovered 0 slides. A join is an UNESCAPED closing quote, `+` (any
+// surrounding whitespace/newlines), then an UNESCAPED opening quote. Raw `"`
+// only appears at string boundaries — content quotes are `\"` — so a raw
+// `"+"` is unambiguously a concat seam; the `(?<!\\)` guard skips escaped
+// quotes so we never splice content. Splicing the seam out rejoins the two
+// chunks into the one string the model meant. Idempotent + a no-op on JSON
+// that has no such joins. Runs FIRST in repairJson so the comma walkers below
+// operate on clean single strings.
+export function collapseJsConcat(input: string): string {
+  return input.replace(/(?<!\\)"\s*\+\s*"/g, "");
+}
+
+export function repairJson(rawInput: string): string {
+  const input = collapseJsConcat(rawInput);
   let out = "";
   let inString = false;
   let escapeNext = false;

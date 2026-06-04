@@ -84,7 +84,7 @@ const FontDefinition = z.object({
     .optional(),
 });
 
-export const ThemeSchema = z.object({
+const ThemeObject = z.object({
   // Brand accent palette (3–8 hex). Exposed as CSS vars
   // --brand-1, --brand-2, … --brand-N by the renderer. Minimum 3 because
   // the renderer wires `--primary` / `--accent` / `--secondary` to
@@ -92,13 +92,37 @@ export const ThemeSchema = z.object({
   // leave `var(--accent)` undefined and slides referencing it would
   // render with the browser's fallback (transparent / inherit).
   palette: z.array(HexColor).min(3).max(8),
-  // Heading + body fonts. Exposed as --font-heading, --font-body.
-  fontHeading: FontDefinition,
-  fontBody: FontDefinition,
+  // SINGLE brand font (2026-06-04 collapse). The brand UI has emitted one
+  // family — Google OR an uploaded set — since 2026-06-02; the schema, the
+  // CSS vars, and the prompt now match. Exposed as --font by
+  // `themeToCssVars` (which also keeps --font-heading/--font-body as aliases
+  // so slide HTML authored before this collapse still resolves its font).
+  font: FontDefinition,
   // Background + text colors for the chrome. Claude picks these.
   background: HexColor,
   text: HexColor,
 });
+
+// Legacy persisted data — PresentationVersion.slideJson, BrandKit rows, and
+// Template showcase brand written before the 2026-06-04 collapse — carry the
+// old two-slot `{ fontHeading, fontBody }` shape. Map `fontHeading` → `font`
+// on parse so those rows + old decks still load (fontBody is dropped — in
+// practice it was always the same family). New manifests carry `font`
+// directly. No DB migration needed: `theme` is a JSON column, normalized here
+// at the single read boundary every consumer goes through.
+export const ThemeSchema = z.preprocess((val) => {
+  if (
+    val &&
+    typeof val === "object" &&
+    !Array.isArray(val) &&
+    !("font" in val) &&
+    "fontHeading" in val
+  ) {
+    const v = val as Record<string, unknown>;
+    return { ...v, font: v.fontHeading };
+  }
+  return val;
+}, ThemeObject);
 
 export const SlideSchema = z.object({
   slideId: z.string().min(1),

@@ -155,6 +155,20 @@ export function estimateSlideCountFromText(text: string | null | undefined): num
   if (words === 0) return null;
   const PER_SLIDE = 100;
   const contentSlides = Math.max(3, Math.ceil(words / PER_SLIDE));
-  const total = contentSlides + 2;
+  const wordTotal = contentSlides + 2; // + cover + closing
+
+  // Honour explicit STRUCTURE over raw length. A section-rich brief can be
+  // word-sparse (e.g. an Arabic outline of 10 sections in ~250 words estimates
+  // ~5 by word-count, Claude then matches it and trims content hard). When the
+  // author delineated sections with horizontal-rule dividers (⸻ / ——— / *** /
+  // ___ / ===), the block count is a far better signal — roughly one slide per
+  // block. Take the LARGER of the two, but only on a strong signal (≥2
+  // dividers) so unstructured prose is left exactly as before.
+  const dividers = (
+    text.match(/^[^\S\r\n]*(?:⸻|[*\-_—=]{3,})[^\S\r\n]*$/gmu) || []
+  ).length;
+  const blockTotal = dividers >= 2 ? dividers + 1 : 0; // chunks between rules
+
+  const total = Math.max(wordTotal, blockTotal);
   return Math.max(5, Math.min(20, total));
 }

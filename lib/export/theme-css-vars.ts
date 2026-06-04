@@ -14,8 +14,9 @@
 // Variables emitted:
 //   --brand-bg            theme.background
 //   --brand-text          theme.text
-//   --font-heading        "${name}", system-ui, sans-serif
-//   --font-body           "${name}", system-ui, sans-serif
+//   --font                "${name}", system-ui, sans-serif  (single brand font)
+//   --font-heading        alias of --font  (legacy — old slide HTML refs it)
+//   --font-body           alias of --font  (legacy — old slide HTML refs it)
 //   --brand-1 .. --brand-N every palette entry, 1-indexed
 //   --primary             palette[0] (alias)
 //   --secondary           palette[1] (alias)
@@ -48,11 +49,16 @@ export function cssFontFamilyName(name: string): string {
 }
 
 export function themeToCssVars(theme: ThemeType): Record<string, string> {
+  const fontStack = `"${cssFontFamilyName(theme.font.name)}", system-ui, sans-serif`;
   const vars: Record<string, string> = {
     "--brand-bg": theme.background,
     "--brand-text": theme.text,
-    "--font-heading": `"${cssFontFamilyName(theme.fontHeading.name)}", system-ui, sans-serif`,
-    "--font-body": `"${cssFontFamilyName(theme.fontBody.name)}", system-ui, sans-serif`,
+    // Single brand font. `--font` is the canonical var Claude references;
+    // `--font-heading`/`--font-body` stay as aliases so slide HTML authored
+    // before the single-font collapse keeps resolving its font.
+    "--font": fontStack,
+    "--font-heading": fontStack,
+    "--font-body": fontStack,
   };
   theme.palette.forEach((hex, i) => {
     vars[`--brand-${i + 1}`] = hex;

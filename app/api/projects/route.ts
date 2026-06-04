@@ -336,8 +336,7 @@ function buildSafeLogoForKit(
 // site stays a no-op for legacy payloads.
 function buildClaudeBrand(
   rawBrand: CreateProjectPayload["brand"],
-  headingFont: ReturnType<typeof readBriefFont>,
-  bodyFont: ReturnType<typeof readBriefFont>,
+  font: ReturnType<typeof readBriefFont>,
   uploadedFonts: UploadedFontFamilyBrief[],
   logoSignedUrl: string | null,
   logoSvgMarkup: string | null,
@@ -346,15 +345,14 @@ function buildClaudeBrand(
   return {
     ...rawBrand,
     fonts: {
-      // Carry `url` (Google CSS link) and `storageUrl` (uploaded
-      // file) BOTH through to the brief. The system prompt's OUTPUT
-      // schema asks Claude to emit `fontHeading.url` / `fontBody.url`;
-      // without `url` here Claude was guessing.
-      heading: headingFont,
-      body: bodyFont,
+      // SINGLE brand font (2026-06-04 collapse). Carry `url` (Google CSS
+      // link) and `storageUrl` (uploaded file) through to the brief — the
+      // OUTPUT schema asks Claude to emit `theme.font.url`; without `url`
+      // here Claude was guessing.
+      font,
       // The full uploaded-family list (name + weight faces) — present only
       // when the user uploaded fonts. deck-generate's FONT SOURCING rule
-      // tells Claude to pair these into heading/body by name; the
+      // tells Claude to use one for `theme.font.name`; the
       // injectUploadedFontSources step signs each face post-manifest.
       ...(uploadedFonts.length > 0 ? { uploaded: uploadedFonts } : {}),
     },
@@ -421,13 +419,18 @@ export async function POST(request: Request) {
   // Latin scripts.
   const incomingFonts = payload.brand?.fonts as
     | {
+        // The brand UI emits one font; the 4 flow pages still send it in BOTH
+        // `heading` and `body` (same value). Read `heading` (then `body` as a
+        // fallback) and forward a single `font`.
         heading?: BriefFontSlot;
         body?: BriefFontSlot;
+        font?: BriefFontSlot;
         uploaded?: IncomingUploadedFamily[];
       }
     | undefined;
-  const headingFont = readBriefFont(incomingFonts?.heading);
-  const bodyFont = readBriefFont(incomingFonts?.body);
+  const font = readBriefFont(
+    incomingFonts?.font ?? incomingFonts?.heading ?? incomingFonts?.body,
+  );
   // Uploaded brand fonts (the "Claude pairs" path): forward EVERY family with
   // ALL its weight faces (capped) so deck-generate can attach each weight file
   // to whichever role Claude assigns. Names go to Claude; storageUrls stay
@@ -456,8 +459,7 @@ export async function POST(request: Request) {
   // them — an unowned path would mint a signed URL for another tenant's
   // object. Same threat the logo path is guarded against below.
   for (const fontPath of [
-    headingFont.storageUrl,
-    bodyFont.storageUrl,
+    font.storageUrl,
     ...uploadedFonts.flatMap((fam) => fam.faces.map((f) => f.storageUrl)),
   ]) {
     if (fontPath && !isOwnedBrandAssetPath(fontPath, user.id)) {
@@ -492,8 +494,7 @@ export async function POST(request: Request) {
     : [null, null];
   const claudeBrand = buildClaudeBrand(
     payload.brand,
-    headingFont,
-    bodyFont,
+    font,
     uploadedFonts,
     logoSignedUrl,
     logoSvgMarkup,
@@ -615,14 +616,15 @@ export async function POST(request: Request) {
           name: `${title} — هوية بصرية`,
           logo: safeLogoForKit?.storageUrl ?? null,
           colors: toJson(payload.brand?.colors ?? null),
-          // Persist the NORMALIZED fonts (same shape buildClaudeBrand forwards),
-          // not raw `payload.brand?.fonts` — the normalized values already passed
-          // safeFontUrl + storage-path ownership + the uploaded-family caps, so a
-          // saved default kit can't retain arbitrary URLs / junk fields that
-          // generation itself would reject.
+          // Persist the NORMALIZED font — the value already passed safeFontUrl +
+          // storage-path ownership + the uploaded-family caps, so a saved default
+          // kit can't retain arbitrary URLs / junk fields that generation would
+          // reject. The BrandKit JSON keeps its legacy two-slot {heading,body}
+          // shape (hydrate-brand-from-session reads both); the brand is one font
+          // now, so write the same value into both slots.
           fonts: toJson({
-            heading: headingFont,
-            body: bodyFont,
+            heading: font,
+            body: font,
             ...(uploadedFonts.length > 0 ? { uploaded: uploadedFonts } : {}),
           }),
           assetUrls: toJson({ logo: safeLogoForKit }),

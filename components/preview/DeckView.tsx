@@ -1841,6 +1841,14 @@ export function DeckView({
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) setManifestStable(parsed.data);
           }
+          // Mirror the realtime path (which sets versionStatus on the row
+          // update): in dev — and any time Realtime is asleep — the poll is the
+          // ONLY completion detector, so it must drive `versionStatus` too.
+          // Otherwise the preview→/project redirect (gated on
+          // versionStatus === "completed") never fires: the user is stranded on
+          // /preview with a stale, pre-image-fill manifest and the deck exports
+          // WITHOUT its generated images until a manual reload.
+          setVersionStatus("completed");
           setPolledCompleted(true);
           // Stop polling — completion is terminal. The interval
           // clearInterval lives in the cleanup function; setting
@@ -2489,7 +2497,7 @@ export function DeckView({
     // ALLOWED_FONT_HOSTS), so any URL we see here has already passed that
     // check. Just dedupe and emit; matches html-document.ts's behaviour for
     // preview ↔ exported-HTML parity.
-    return [theme.fontHeading.url, theme.fontBody.url].filter(
+    return [theme.font.url].filter(
       (url, idx, all): url is string =>
         typeof url === "string" && all.indexOf(url) === idx,
     );
@@ -2514,13 +2522,10 @@ export function DeckView({
     if (!theme)
       return [] as { name: string; faces: { weight: number; src: string }[] }[];
     const out: { name: string; faces: { weight: number; src: string }[] }[] = [];
-    const seen = new Set<string>();
-    for (const f of [theme.fontHeading, theme.fontBody]) {
-      const name = f?.name?.trim();
-      if (f?.fontFaces && f.fontFaces.length > 0 && name && !seen.has(name)) {
-        seen.add(name);
-        out.push({ name, faces: f.fontFaces });
-      }
+    const f = theme.font;
+    const name = f?.name?.trim();
+    if (f?.fontFaces && f.fontFaces.length > 0 && name) {
+      out.push({ name, faces: f.fontFaces });
     }
     return out;
   }, [manifest, streamingTheme]);
@@ -2701,7 +2706,6 @@ export function DeckView({
     const slotCount = initialSlideCountAuto
       ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
       : placeholders.length;
-    const total = slotCount;
     // Mix real streamed slides (kind:"slide") into the head of the
     // nav row, padded with placeholders for slots Claude hasn't
     // closed yet. Once `streamingTheme` is null we can't render a
@@ -2927,15 +2931,7 @@ export function DeckView({
                   >
                     <div className="progress-bar" style={{ width: `${percent}%` }} />
                   </div>
-                  <p className="text-muted mt-2 text-xs">
-                    {/* Denominator switch: in custom mode the user
-                        picked a count, so X/N is meaningful. In auto
-                        mode the total is unknown until Claude finishes
-                        — show X/? instead of a growing fake N derived
-                        from the placeholder tail. */}
-                    {percent}% · {progress?.currentSlide ?? 0} /{" "}
-                    {initialSlideCountAuto ? "?" : total}
-                  </p>
+                  <p className="text-muted mt-2 text-xs">{percent}%</p>
                 </div>
                 {isSlow && (
                   <span className="text-[11px] leading-relaxed text-white/60">

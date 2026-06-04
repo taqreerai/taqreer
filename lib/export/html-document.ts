@@ -26,7 +26,7 @@ import { themeToCssVars } from "@/lib/export/theme-css-vars";
  */
 export function buildHtmlDocument(manifest: SlideManifest): string {
   const { width: canvasW, height: canvasH } = dimensionsForFormat(manifest.format);
-  const fontLinks = [manifest.theme.fontHeading.url, manifest.theme.fontBody.url]
+  const fontLinks = [manifest.theme.font.url]
     .filter(
       (url, i, arr): url is string =>
         typeof url === "string" && arr.indexOf(url) === i
