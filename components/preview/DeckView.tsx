@@ -26,7 +26,7 @@ import {
   GenImageProvider,
   type GenImageFills,
 } from "@/components/slides/gen-image-context";
-import { scanGenImages } from "@/lib/images/slide-images";
+import { scanGenImages, injectImgSrc } from "@/lib/images/slide-images";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { SlidePill } from "@/components/preview/SlidePill";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
@@ -647,6 +647,28 @@ export function DeckView({
   // placeholder → the image in place, no refresh. See the
   // `slide.image.ready` broadcast handler.
   const [filledImages, setFilledImages] = useState<GenImageFills>({});
+
+  // Export-ready manifest. The live preview shows generated images through the
+  // GenImageProvider context, which NEVER mutates `manifest` — so the toolbar's
+  // client export (PPTX / HTML), which renders `manifest` directly, would miss
+  // every image until a page reload re-read the reconciled slideJson from the
+  // DB (the "first export has no images, refresh fixes it" bug). Bake the live
+  // fills into the manifest the export consumes so the images are present
+  // immediately, no reload. No-op for non-images decks (fills are empty → the
+  // original `manifest` reference is returned, so no extra renders).
+  const exportManifest = useMemo(() => {
+    if (!manifest) return manifest;
+    const fills = Object.entries(filledImages);
+    if (fills.length === 0) return manifest;
+    return {
+      ...manifest,
+      slides: manifest.slides.map((s) => {
+        let html = s.html;
+        for (const [genid, url] of fills) html = injectImgSrc(html, genid, url);
+        return { ...s, html };
+      }),
+    };
+  }, [manifest, filledImages]);
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
   // throttles backgrounded / out-of-focus WebSockets and occasionally
   // drops broadcast frames entirely — symptom: the spinner overlay
@@ -3134,7 +3156,7 @@ export function DeckView({
                   projectId={projectId}
                   role={role}
                   projectTitle={projectTitle}
-                  manifest={manifest!}
+                  manifest={exportManifest!}
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
                   draftCommentCount={comments.length}
