@@ -230,6 +230,21 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     return () => document.removeEventListener("mousedown", onDown);
   }, [onDismiss]);
 
+  // ── Close popovers IMMEDIATELY on any pointer-down INSIDE the iframe (selecting
+  // another element / clicking the slide). The popovers' own outside-click
+  // listeners sit on the PARENT document and never see iframe events, so without
+  // this they'd linger until the selection-change re-render — closing on the
+  // iframe's mousedown dismisses them before the new element is even selected. ──
+  useEffect(() => {
+    const idoc = target.ownerDocument;
+    const onDown = () => {
+      setColorOpen(false);
+      setMoreOpen(false);
+    };
+    idoc.addEventListener("mousedown", onDown);
+    return () => idoc.removeEventListener("mousedown", onDown);
+  }, [target]);
+
   // ── commit ONCE on deselect/re-target (cleanup captures the OLD target). ──
   useEffect(() => {
     const el = target;
