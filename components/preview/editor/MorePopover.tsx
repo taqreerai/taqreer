@@ -11,7 +11,7 @@
 // and lives as a sibling of the pill's blur layer, so it blurs the slide directly
 // rather than the pill's flat interior. (memory: reference_backdrop_filter_traps)
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 
 type Kind = "text" | "image" | "svg";
@@ -59,25 +59,17 @@ export function MorePopover({
   setStyle: (prop: string, value: string) => void;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Close on outside click / Esc. mousedown (not click) so it dismisses before
-  // the pill's own outside-mousedown handler runs.
+  // Close on Esc only. Outside-click is intentionally NOT handled here: clicking
+  // outside the pill deselects it → the pill (and this popover, which is its
+  // child) unmounts together. A separate outside-click listener here used to
+  // close the menu a beat BEFORE the pill, which read as a double dismiss.
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current?.contains(e.target as Node)) return;
-      onClose();
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   // Live values read off computed style every render (the pill re-renders this on
@@ -99,7 +91,6 @@ export function MorePopover({
   // instant `open` flips false; the entrance (initial→animate) still plays.
   return (
     <motion.div
-      ref={ref}
       dir="ltr"
       className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 rounded-2xl px-3.5 py-3.5 shadow-2xl ${
         flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
