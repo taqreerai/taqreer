@@ -140,8 +140,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  // Whether the OPEN popover (colour picker / ⋯ menu) opens upward — decided the
-  // moment a popover opens, from its real height + which side the element is on
+  // Whether the OPEN popover (colour picker / ⋯ menu) opens upward — set the
+  // moment a popover opens, purely from which side of the pill the element is on
   // (see the layout effect below).
   const [popoverFlipUp, setPopoverFlipUp] = useState(false);
   // True while the pointer is pressed on the pill (clicking/holding a control).
@@ -155,19 +155,6 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   // lands on the new target, so the OLD element's border can't flash in between.
   const editingRef = useRef(false);
   const selectingRef = useRef(false);
-
-  // Close any open popover the instant the SELECTION changes. Selecting another
-  // element happens inside the iframe, so it never reaches the parent-document
-  // outside-click handlers that normally dismiss the colour picker / ⋯ menu —
-  // without this they'd stay open, re-anchored to the new element. Done during
-  // render (React's "reset state on prop change" pattern) rather than in an
-  // effect, which would cascade an extra render.
-  const [prevTarget, setPrevTarget] = useState(target);
-  if (prevTarget !== target) {
-    setPrevTarget(target);
-    setColorOpen(false);
-    setMoreOpen(false);
-  }
 
   // ── position: a rAF loop reads the live selection box (.tqe-sel) and writes the
   // pill's left/top every frame, so it always tracks the current selection. ──
@@ -249,11 +236,12 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     return () => document.removeEventListener("mousedown", onDown);
   }, [onDismiss]);
 
-  // ── Close popovers IMMEDIATELY on any pointer-down INSIDE the iframe (selecting
-  // another element / clicking the slide). The popovers' own outside-click
-  // listeners sit on the PARENT document and never see iframe events, so without
-  // this they'd linger until the selection-change re-render — closing on the
-  // iframe's mousedown dismisses them before the new element is even selected. ──
+  // ── Iframe pointer events drive two things the parent document never sees
+  // (the popovers' own outside-click listeners + the deselect handler all live on
+  // the PARENT doc). On pointer-down inside the iframe: (1) close any open popover
+  // immediately — before the new element is even selected, since selection only
+  // lands on `click`; (2) raise the "selection in flight" flag so the OLD
+  // element's outline stays hidden through the mousedown→click gap. ──
   useEffect(() => {
     // A new target means the previous in-flight selection has landed → clear the
     // flag (the rAF's "box not on target yet" check covers the brief window until

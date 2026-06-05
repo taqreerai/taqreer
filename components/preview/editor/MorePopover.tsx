@@ -98,89 +98,89 @@ export function MorePopover({
   // lingering exit would relocate to the next element and flash. It unmounts the
   // instant `open` flips false; the entrance (initial→animate) still plays.
   return (
-        <motion.div
-          ref={ref}
-          dir="ltr"
-          className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 rounded-2xl px-3.5 py-3.5 shadow-2xl ${
-            flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
-          }`}
-          style={{ left: 0, width: WIDTH }}
-          initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
-          animate={{ scale: 1, y: 0 }}
-          transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {kind === "text" ? (
-            <>
-              <Row label="Weight">
-                <Select
-                  value={weight}
-                  options={WEIGHTS}
-                  onChange={(v) => setStyle("font-weight", v)}
-                />
-              </Row>
-              <Row label="Line">
-                <Slider
-                  value={lineMul}
-                  min={0.8}
-                  max={3}
-                  step={0.05}
-                  digits={2}
-                  onChange={(n) => setStyle("line-height", String(n))}
-                />
-              </Row>
-              <Row label="Transform">
-                <Seg
-                  value={transform}
-                  options={TRANSFORMS}
-                  onChange={(v) => setStyle("text-transform", v)}
-                />
-              </Row>
-              <Row label="Decoration">
-                <Seg
-                  value={decoration}
-                  options={DECORATIONS}
-                  onChange={(v) => setStyle("text-decoration", v)}
-                />
-              </Row>
-              <Row label="Opacity">
-                <Slider
-                  value={opacityPct}
-                  min={0}
-                  max={100}
-                  step={1}
-                  digits={0}
-                  unit="%"
-                  onChange={(n) => setStyle("opacity", String(n / 100))}
-                />
-              </Row>
-            </>
-          ) : (
-            <>
-              <Row label="Opacity">
-                <Slider
-                  value={opacityPct}
-                  min={0}
-                  max={100}
-                  step={1}
-                  digits={0}
-                  unit="%"
-                  onChange={(n) => setStyle("opacity", String(n / 100))}
-                />
-              </Row>
-              <Row label="Rounding">
-                <Slider
-                  value={radiusPx}
-                  min={0}
-                  max={120}
-                  step={1}
-                  digits={0}
-                  unit="px"
-                  onChange={(n) => setStyle("border-radius", `${n}px`)}
-                />
-              </Row>
-            </>
-          )}
-        </motion.div>
+    <motion.div
+      ref={ref}
+      dir="ltr"
+      className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 rounded-2xl px-3.5 py-3.5 shadow-2xl ${
+        flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
+      }`}
+      style={{ left: 0, width: WIDTH }}
+      initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
+      animate={{ scale: 1, y: 0 }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {kind === "text" ? (
+        <>
+          <Row label="Weight">
+            <Select
+              value={weight}
+              options={WEIGHTS}
+              onChange={(v) => setStyle("font-weight", v)}
+            />
+          </Row>
+          <Row label="Line">
+            <Slider
+              value={lineMul}
+              min={0.8}
+              max={3}
+              step={0.05}
+              digits={2}
+              onChange={(n) => setStyle("line-height", String(n))}
+            />
+          </Row>
+          <Row label="Transform">
+            <Seg
+              value={transform}
+              options={TRANSFORMS}
+              onChange={(v) => setStyle("text-transform", v)}
+            />
+          </Row>
+          <Row label="Decoration">
+            <Seg
+              value={decoration}
+              options={DECORATIONS}
+              onChange={(v) => setStyle("text-decoration", v)}
+            />
+          </Row>
+          <Row label="Opacity">
+            <Slider
+              value={opacityPct}
+              min={0}
+              max={100}
+              step={1}
+              digits={0}
+              unit="%"
+              onChange={(n) => setStyle("opacity", String(n / 100))}
+            />
+          </Row>
+        </>
+      ) : (
+        <>
+          <Row label="Opacity">
+            <Slider
+              value={opacityPct}
+              min={0}
+              max={100}
+              step={1}
+              digits={0}
+              unit="%"
+              onChange={(n) => setStyle("opacity", String(n / 100))}
+            />
+          </Row>
+          <Row label="Rounding">
+            <Slider
+              value={radiusPx}
+              min={0}
+              max={120}
+              step={1}
+              digits={0}
+              unit="px"
+              onChange={(n) => setStyle("border-radius", `${n}px`)}
+            />
+          </Row>
+        </>
+      )}
+    </motion.div>
   );
 }
 
