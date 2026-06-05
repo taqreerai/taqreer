@@ -191,7 +191,7 @@ Hide/Show · Bring forward / to front / backward / to back · **Select parent** 
 🖼 Regenerate image · ✨ Change this with AI.
 
 ### Target layout
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │  top:  deck title · Present · Share · Export ▾ · History       │
 ├────────────────────────────────────────────────┬─────────────┤
