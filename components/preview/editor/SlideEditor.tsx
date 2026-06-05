@@ -16,6 +16,7 @@ import type { SlideType, ThemeType } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { isVisualLeaf, isTextEditable, resolveSelectable } from "@/lib/editor/leaves";
+import { buildDeckFontHead } from "@/lib/export/font-head";
 
 type Props = {
   slide: SlideType;
@@ -67,9 +68,14 @@ export function SlideEditor({
   const srcDoc = useMemo(() => {
     const vars = themeToCssVars(theme) as Record<string, string>;
     const rootVars = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(";");
+    // Load the deck's actual fonts INTO the iframe (Google <link> + uploaded
+    // @font-face) — same source the export uses; without it the iframe is its own
+    // document and falls back to a system font (wrong, esp. Arabic).
+    const { links, faceCss } = buildDeckFontHead(theme);
     return `<!doctype html><html dir="${direction}" lang="${language}"><head><meta charset="utf-8">
+${links}
 <style>
-  html,body{margin:0;padding:0}
+${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   :root{${rootVars}}
   body{position:relative;width:${dispW}px;height:${dispH}px;overflow:hidden;background:${theme.background};color:${theme.text};font-family:var(--font-body),'Cairo',system-ui,sans-serif}
   /* absolute + top-left so the RTL body can't right-align this wider-than-body stage */
