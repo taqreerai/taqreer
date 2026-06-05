@@ -1702,11 +1702,10 @@ body {
 }
 
 .glass-popover {
-  /* Faint white fill at the user's glass opacity (the documented
-     `--tq-bg-glass` = rgba(255,255,255, var(--glass-opacity))) layered
-     over the backdrop blur — popovers get a subtle lift for separation
-     while dropdowns/modals stay pure glass. */
-  background: var(--tq-bg-glass);
+  /* Dark fill over the backdrop blur so a popover stays legible on ANY contrast
+     (a faint white fill washed out over light slides / surfaces). User direction
+     2026-06-05. */
+  background: rgb(0 0 0 / 20%);
   border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
 }
 

@@ -4,27 +4,19 @@
 // floats over the element selected in the SlideEditor iframe. Lives in the PARENT
 // document (portaled to <body>) because its controls are parent-doc React
 // primitives — but it anchors to the in-iframe element via
-// `target.ownerDocument.defaultView.frameElement`, the <iframe> seen from inside,
-// so iframeRect + (the live selection box) maps the element to parent-page coords.
+// `target.ownerDocument.defaultView.frameElement`, the <iframe> seen from inside.
+//
+// Position is driven by a requestAnimationFrame LOOP (not React state): every frame
+// it reads the live selection box (.tqe-sel) and writes the pill's left/top. So the
+// pill ALWAYS tracks the current selection — switching elements, resizing via the
+// size control, aligning, or any reflow leaves it glued, never stuck on the old one.
 //
 // Model (decided 2026-06-05): WHOLE-ELEMENT styling — one inline style on the
-// element, never a <span> wrapper, so the round-trip stays clean. Export-safe
-// props only. Saving is deferred to "you're done": writes are live, but the
-// serialize → I3 save (onCommit = DeckView.handleSlideEdit) fires once, when the
-// element is DESELECTED (the pill unmounts / re-targets) — so a run of tweaks is
-// ONE version, not one-per-keystroke. The iframe is pinned, so a self-save never
-// blows away the live DOM.
-//
-// Scope: I2.1 (shell + positioning) + I2.2 (text core: size · bold · color ·
-// align). Font dropdown + "more" = I2.3, svg recolor = I2.4, image swap = I2.5.
+// element, never a <span> wrapper. Saving is deferred to "you're done": writes are
+// live, but the serialize → I3 save (onCommit) fires once, on DESELECT (the pill
+// unmounts / re-targets) — a run of tweaks is ONE version, not one-per-keystroke.
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { serializeSlideSection } from "@/lib/editor/serialize";
@@ -33,6 +25,9 @@ type Props = {
   target: HTMLElement;
   slideId: string;
   onCommit: (slideId: string, html: string) => void;
+  // Clears the selection (→ unmounts the pill). Fired on a click outside the pill
+  // AND outside the slide canvas (clicks inside the iframe go through SlideEditor).
+  onDismiss: () => void;
 };
 
 type Kind = "text" | "image" | "svg";
@@ -42,8 +37,6 @@ function kindOf(el: HTMLElement): Kind {
   return "text";
 }
 
-// getComputedStyle colours come back "rgb(r, g, b)" / "rgba(…)"; the picker wants
-// "#rrggbb".
 function rgbToHex(rgb: string): string {
   const m = rgb.match(/\d+(\.\d+)?/g);
   if (!m || m.length < 3) return "#000000";
@@ -55,7 +48,6 @@ function rgbToHex(rgb: string): string {
 
 type Align = "left" | "center" | "right" | "justify";
 
-// Text-align icon: four ragged lines flush to the active edge.
 function AlignIcon({ a }: { a: Align }) {
   const widths = [11, 7, 10, 6];
   return (
@@ -94,19 +86,6 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
     if (Number.isFinite(n)) onChange(clamp(n));
     setText(String(Number.isFinite(n) ? clamp(n) : value));
   };
-  const btn: React.CSSProperties = {
-    width: 18,
-    height: 18,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "none",
-    background: "transparent",
-    color: "var(--tq-text)",
-    cursor: "pointer",
-    fontSize: 14,
-    lineHeight: 1,
-  };
   return (
     <div
       className="flex items-center rounded-full border"
@@ -114,10 +93,15 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         height: 24,
         padding: "0 3px",
         borderColor: "var(--tq-border)",
-        background: "rgba(255,255,255,var(--glass-opacity))",
+        background: "rgba(255,255,255,0.04)",
       }}
     >
-      <button type="button" aria-label="Smaller" style={btn} onClick={() => onChange(clamp(value - 1))}>
+      <button
+        type="button"
+        aria-label="Smaller"
+        className="flex h-[18px] w-[18px] items-center justify-center text-base leading-none text-white/55 transition-colors hover:text-white"
+        onClick={() => onChange(clamp(value - 1))}
+      >
         −
       </button>
       <input
@@ -135,74 +119,72 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
-        className="no-spinner"
-        style={{
-          width: 34,
-          background: "transparent",
-          textAlign: "center",
-          color: "var(--tq-text)",
-          fontSize: 11,
-          outline: "none",
-          border: "none",
-        }}
+        className="no-spinner w-[34px] border-none bg-transparent text-center text-[11px] text-white outline-none"
       />
-      <button type="button" aria-label="Bigger" style={btn} onClick={() => onChange(clamp(value + 1))}>
+      <button
+        type="button"
+        aria-label="Bigger"
+        className="flex h-[18px] w-[18px] items-center justify-center text-base leading-none text-white/55 transition-colors hover:text-white"
+        onClick={() => onChange(clamp(value + 1))}
+      >
         +
       </button>
     </div>
   );
 }
 
-export function StylePill({ target, slideId, onCommit }: Props) {
+export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const kind = kindOf(target);
   const pillRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-  // Bumped after every style write so the controls re-read getComputedStyle.
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
-  // Set when a style was changed but not yet saved; the save fires on deselect.
   const dirty = useRef(false);
 
-  // ── anchor over the VISIBLE selection box (.tqe-sel, the green ink box), so the
-  // pill centres on the glyphs even for a right-aligned run in a wide layout box.
-  const reposition = useCallback(() => {
-    const win = target.ownerDocument.defaultView;
-    const iframeEl = (win?.frameElement as HTMLElement | null) ?? null;
-    if (!iframeEl || !target.isConnected) return;
-    const ir = iframeEl.getBoundingClientRect();
-    const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
-    const box =
-      selBox && getComputedStyle(selBox).display !== "none"
-        ? selBox.getBoundingClientRect()
-        : target.getBoundingClientRect();
-    const cx = ir.left + box.left + box.width / 2;
-    const topY = ir.top + box.top;
-    const botY = ir.top + box.bottom;
-    const pillW = pillRef.current?.offsetWidth ?? 240;
-    const pillH = pillRef.current?.offsetHeight ?? 40;
-    const GAP = 10;
-    let top = topY - GAP - pillH;
-    if (top < 8) top = Math.min(botY + GAP, window.innerHeight - pillH - 8);
-    const left = Math.max(8, Math.min(cx - pillW / 2, window.innerWidth - pillW - 8));
-    setPos({ left, top });
+  // ── position: a rAF loop reads the live selection box (.tqe-sel) and writes the
+  // pill's left/top every frame, so it always tracks the current selection. ──
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const el = pillRef.current;
+      const win = target.ownerDocument.defaultView;
+      const iframeEl = (win?.frameElement as HTMLElement | null) ?? null;
+      if (el && iframeEl && target.isConnected) {
+        const ir = iframeEl.getBoundingClientRect();
+        const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
+        const box =
+          selBox && selBox.style.display !== "none"
+            ? selBox.getBoundingClientRect()
+            : target.getBoundingClientRect();
+        const cx = ir.left + box.left + box.width / 2;
+        const topY = ir.top + box.top;
+        const botY = ir.top + box.bottom;
+        const pw = el.offsetWidth;
+        const ph = el.offsetHeight;
+        let top = topY - 10 - ph;
+        if (top < 8) top = Math.min(botY + 10, window.innerHeight - ph - 8);
+        const left = Math.max(8, Math.min(cx - pw / 2, window.innerWidth - pw - 8));
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+        el.style.visibility = "visible";
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [target]);
 
-  useLayoutEffect(() => {
-    reposition();
-  }, [reposition]);
-
+  // ── dismiss on a click outside the pill (and outside the canvas — clicks inside
+  // the iframe live in a separate document and never reach this listener). ──
   useEffect(() => {
-    const on = () => reposition();
-    window.addEventListener("scroll", on, true);
-    window.addEventListener("resize", on);
-    return () => {
-      window.removeEventListener("scroll", on, true);
-      window.removeEventListener("resize", on);
+    const onDown = (e: MouseEvent) => {
+      if (pillRef.current?.contains(e.target as Node)) return;
+      onDismiss();
     };
-  }, [reposition]);
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [onDismiss]);
 
-  // ── commit ONCE on deselect/re-target (the cleanup captures the OLD target). A
-  // run of tweaks → a single SlideVersion, not one per change.
+  // ── commit ONCE on deselect/re-target (cleanup captures the OLD target). ──
   useEffect(() => {
     const el = target;
     const sid = slideId;
@@ -214,29 +196,22 @@ export function StylePill({ target, slideId, onCommit }: Props) {
     };
   }, [target, slideId, onCommit]);
 
-  // Write one inline style live; mark dirty (save happens on deselect); follow the
-  // element if it resized; refresh the control values.
   const setStyle = useCallback(
     (prop: string, value: string) => {
       target.style.setProperty(prop, value);
       dirty.current = true;
       force((n) => n + 1);
-      reposition();
     },
-    [target, reposition],
+    [target],
   );
 
   if (!target.isConnected) return null;
 
-  // ── current values (read fresh each render) ──
   const cs = getComputedStyle(target);
   const fontPx = Math.round(parseFloat(cs.fontSize) || 16);
   const isBold = (parseInt(cs.fontWeight, 10) || 400) >= 600;
   const color = rgbToHex(cs.color);
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
-
-  // Left → right reading order so "align left" sits on the left, "align right" on
-  // the right (the pill itself is dir=ltr).
   const aligns: Align[] = ["left", "center", "right"];
 
   return createPortal(
@@ -246,9 +221,9 @@ export function StylePill({ target, slideId, onCommit }: Props) {
       className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-xl shadow-2xl"
       style={{
         position: "fixed",
-        left: pos?.left ?? -9999,
-        top: pos?.top ?? -9999,
-        visibility: pos ? "visible" : "hidden",
+        left: -9999,
+        top: -9999,
+        visibility: "hidden",
         zIndex: 2147483600,
         display: "flex",
         alignItems: "center",
@@ -305,6 +280,7 @@ export function StylePill({ target, slideId, onCommit }: Props) {
   );
 }
 
+// Icon button: muted by default, white on hover, white when active (no fill box).
 function Btn({
   active,
   onClick,
@@ -322,18 +298,9 @@ function Btn({
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 26,
-        height: 24,
-        borderRadius: 7,
-        border: "1px solid transparent",
-        background: active ? "var(--tq-text)" : "transparent",
-        color: active ? "var(--tq-bg)" : "var(--tq-text)",
-        cursor: "pointer",
-      }}
+      className={`inline-flex h-6 w-[26px] items-center justify-center rounded-md transition-colors ${
+        active ? "text-white" : "text-white/55 hover:text-white"
+      }`}
     >
       {children}
     </button>

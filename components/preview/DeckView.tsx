@@ -3440,6 +3440,7 @@ export function DeckView({
                 target={editorSelected}
                 slideId={focusedSlide.slideId}
                 onCommit={handleSlideEdit}
+                onDismiss={() => setEditorSelected(null)}
               />
             ) : null}
           </div>
