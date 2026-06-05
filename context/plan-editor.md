@@ -72,8 +72,67 @@ content inside, RTL right-aligned the stage → pin absolute top-left. **Selecti
 simplified to flat visual leaves** (user direction): only text/img/svg are selectable
 + listed; containers neither. **Chunk 5 (A5 panel) = next**, plus fonts-into-iframe.
 Remaining unknown = **export parity (A7)** — validate in `/project` (export already
-wired) rather than build lab export plumbing. All uncommitted (`app/lab/` untracked).
-Absolute-vs-flow positioning **parked** until the direct-manipulation phase.
+wired) rather than build lab export plumbing. Absolute-vs-flow positioning **parked**
+until the direct-manipulation phase.
+
+**Commit trail (dev, not pushed):** `36605ac` lab prototype · `81a6bee` productized
+engine (`lib/editor/leaves` + `components/preview/editor/SlideEditor`) · `1f51841` +
+`9940b77` standalone `/edit` route (**superseded**, see §0.6 decision). **Now building
+I1: Edit as a default mode of `DeckView`, in the shell.**
+
+## 0.6 — Integration plan: lab → `/project` (build it ONCE, in the shipping shell)
+
+Phase 0 proved the architecture in `/lab`. From here, **stop building in the lab** —
+port the proven `IframeCanvas` into the real shell and build features there. Principles:
+HTML stays the single source of truth (no parallel model); **reuse existing
+components/primitives, never fork** (`ColorPickerPopover`, `SegmentedToggle`,
+`InlineStepper`, brand controls…); realtime = in-place, never `router.refresh`;
+`--tq-*` tokens + Latin numerals; editing gated by `lib/api/project-access`.
+Each step is a shippable chunk; **touching `/project` needs an explicit go** (it's
+the live product, not the throwaway lab).
+
+> **DECISION (2026-06-05, user): the editor is the DEFAULT MODE of `/project`, IN THE
+> SHELL.** Not a separate route, not a fullscreen takeover. After generation, edit-capable
+> users land on `/project` already in **Edit** mode, with the dashboard chrome (header +
+> sidebar) visible. View / Comment / **Edit** are modes of ONE working surface (`DeckView`)
+> — because that surface owns everything editing needs alongside it (comments, AI regen,
+> export, history/lock, realtime, presence, the slide pill); a separate editor route would
+> fragment those. The standalone `/project/[id]/edit` route + `ProjectEditor` shell (commits
+> `1f51841`/`9940b77`) were a **de-risk detour — now SUPERSEDED**; the reusable engine
+> (`SlideEditor` + `lib/editor/leaves`, commit `81a6bee`) stays, the standalone shell is
+> retired/optional.
+
+- **I1 — Edit as a default mode of `DeckView`.** Add `editMode` state (mutually exclusive
+  with `commentMode`), defaulting **on for `canEdit` users** on a completed deck (so you
+  land in the editor). In edit mode the hero canvas (`DeckView` ~L3239) swaps
+  `SlideRenderer` → `SlideEditor` (controlled: `editorSelected` / `onSelect`); suppress the
+  comment overlay + per-slide pill while editing. A **View ⇄ Edit toggle** in the toolbar
+  (`PreviewActionBar`). Stays INSIDE the `(app)` shell — **no portal / z-index takeover**.
+  Productized engine already in `components/preview/editor/`. *(Status: in progress.)*
+- **I2 — A5 property panel** (core editing surface). Bound to the selected leaf:
+  TYPOGRAPHY (font, size, weight, color, align, line-height, tracking) + BOX (opacity,
+  padding, margin, border, radius) + SIZE (W/H). Writes **export-safe inline styles
+  ONLY** (A7 hard rule — no conic-gradient/backdrop-filter/blur). Reuse design-system
+  primitives. Consolidate-on-save (no inline override pile).
+- **I3 — Persistence.** On commit: serialize edited iframe DOM → `sanitizeSlideHtml` →
+  `slide.html` → write a new `SlideVersion` (treated exactly like a regen). `data-tq-id`
+  becomes the join key for matching edits back to source. Undo/redo = `slide.html`
+  snapshot stack. Status via existing realtime broadcast (in-place).
+- **I4 — Export-parity check (A7, the real one).** With persistence live: edit → export
+  PPTX + PDF + PNG via existing routes → confirm fidelity. The one real export test.
+- **I5 — Roles + realtime + lock.** Gate Edit mode to owner/editor; viewers/comment-only
+  can't edit. Broadcast edits in-place; lock so two editors don't clobber.
+- **I6 — Images + AI hooks (later).** Image leaf: swap/upload + regen via the existing
+  gpt-image pipeline (`deck.image.warm` → `deck-images-generate` → `injectImgSrc`)
+  targeted at the selected box. Element-scoped AI ("rewrite/redesign this") uses
+  `data-tq-cc` as the address for partial regen.
+- **Deferred** (needs the absolute-vs-flow decision): drag/resize/rotate + multi-select
+  group-move → likely flow-generate → freeze-to-absolute on edit → absolute-export.
+
+**Cadence:** `/security-review` after the persistence route + iframe changes (new
+route / schema / upload-handler territory). **Cross-origin hardening:** when ready,
+move the slide iframe to a sandboxed cross-origin origin + `postMessage` bridge
+(claude.ai's model) so untrusted AI HTML is fully quarantined from the app.
 
 ---
 
