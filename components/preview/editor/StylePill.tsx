@@ -149,6 +149,19 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const [pillActive, setPillActive] = useState(false);
   const dirty = useRef(false);
 
+  // Close any open popover the instant the SELECTION changes. Selecting another
+  // element happens inside the iframe, so it never reaches the parent-document
+  // outside-click handlers that normally dismiss the colour picker / ⋯ menu —
+  // without this they'd stay open, re-anchored to the new element. Done during
+  // render (React's "reset state on prop change" pattern) rather than in an
+  // effect, which would cascade an extra render.
+  const [prevTarget, setPrevTarget] = useState(target);
+  if (prevTarget !== target) {
+    setPrevTarget(target);
+    setColorOpen(false);
+    setMoreOpen(false);
+  }
+
   // ── position: a rAF loop reads the live selection box (.tqe-sel) and writes the
   // pill's left/top every frame, so it always tracks the current selection. ──
   useEffect(() => {
