@@ -172,15 +172,29 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         // Default ABOVE the element; flip BELOW when the element hugs the canvas
         // top (no room above without spilling off the slide / under the toolbar).
         let top = topY - 10 - ph;
-        if (top < ir.top + 4) top = botY + 10;
+        let pillBelowElement = false;
+        if (top < ir.top + 4) {
+          top = botY + 10;
+          pillBelowElement = true;
+        }
         top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
         const left = Math.max(8, Math.min(cx - pw / 2, window.innerWidth - pw - 8));
         el.style.left = `${left}px`;
         el.style.top = `${top}px`;
         el.style.visibility = "visible";
-        // Popovers open DOWN by default; flip them UP when there isn't room for a
-        // ~300px panel below the pill (pill is low in the viewport).
-        const wantFlipUp = top + ph + 300 > window.innerHeight - 8;
+        // Popovers open AWAY from the element so they don't cover it: UP when the
+        // pill is ABOVE the element (element below), DOWN when the pill is below —
+        // unless that side can't fit a ~280px panel, then fall back to whichever
+        // side has more room.
+        const POPOVER_H = 280;
+        const roomAbove = top - 8;
+        const roomBelow = window.innerHeight - 8 - (top + ph);
+        let wantFlipUp = !pillBelowElement;
+        if (wantFlipUp && roomAbove < POPOVER_H && roomBelow > roomAbove) {
+          wantFlipUp = false;
+        } else if (!wantFlipUp && roomBelow < POPOVER_H && roomAbove > roomBelow) {
+          wantFlipUp = true;
+        }
         if (wantFlipUp !== flipUpRef.current) {
           flipUpRef.current = wantFlipUp;
           setPopoverFlipUp(wantFlipUp);
