@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
+import { MorePopover } from "./MorePopover";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 
 type Props = {
@@ -138,6 +139,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const pillRef = useRef<HTMLDivElement>(null);
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const dirty = useRef(false);
 
   // ── position: a rAF loop reads the live selection box (.tqe-sel) and writes the
@@ -210,6 +212,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const cs = getComputedStyle(target);
   const fontPx = Math.round(parseFloat(cs.fontSize) || 16);
   const isBold = (parseInt(cs.fontWeight, 10) || 400) >= 600;
+  const isItalic = cs.fontStyle === "italic";
   const color = rgbToHex(cs.color);
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
@@ -253,6 +256,9 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
             <span style={{ fontWeight: 800, fontSize: 13 }}>B</span>
           </Btn>
+          <Btn active={isItalic} onClick={() => setStyle("font-style", isItalic ? "normal" : "italic")} label="Italic">
+            <span style={{ fontStyle: "italic", fontWeight: 600, fontSize: 13, fontFamily: "Georgia, serif" }}>I</span>
+          </Btn>
           <div style={{ position: "relative" }}>
             <button
               type="button"
@@ -295,9 +301,34 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           {kind === "image" ? "Image — swap coming (I2.5)" : "Graphic — recolor coming (I2.4)"}
         </span>
       )}
+      {/* "⋯ more" — the rest of the inspector (weight/line/spacing/transform/
+          decoration/opacity for text; opacity/rounding for image+graphic). */}
+      <Divider />
+      <div style={{ position: "relative" }}>
+        <Btn active={moreOpen} onClick={() => setMoreOpen((o) => !o)} label="More options">
+          <MoreIcon />
+        </Btn>
+        <MorePopover
+          open={moreOpen}
+          target={target}
+          kind={kind}
+          setStyle={setStyle}
+          onClose={() => setMoreOpen(false)}
+        />
+      </div>
       </div>
     </div>,
     document.body,
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <circle cx="3" cy="8" r="1.4" />
+      <circle cx="8" cy="8" r="1.4" />
+      <circle cx="13" cy="8" r="1.4" />
+    </svg>
   );
 }
 
