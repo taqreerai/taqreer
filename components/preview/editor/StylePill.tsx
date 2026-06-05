@@ -318,23 +318,24 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         </span>
       )}
       {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
-          opacity for text; opacity/rounding for image+graphic). */}
+          opacity for text; opacity/rounding for image+graphic). The menu hangs
+          from the ⋯ button's LEFT edge and extends rightward (off the right of
+          the pill) so it clears the element below it. */}
       <Divider />
-      <Btn active={moreOpen} onClick={() => setMoreOpen((o) => !o)} label="More options">
-        <MoreIcon />
-      </Btn>
+      <div style={{ position: "relative" }}>
+        <Btn active={moreOpen} onClick={() => setMoreOpen((o) => !o)} label="More options">
+          <MoreIcon />
+        </Btn>
+        <MorePopover
+          open={moreOpen}
+          target={target}
+          kind={kind}
+          flipUp={popoverFlipUp}
+          setStyle={setStyle}
+          onClose={() => setMoreOpen(false)}
+        />
       </div>
-      {/* Rendered at the PILL level (not under the ⋯ button) so it anchors to the
-          pill's LEFT corner (left:0 of the fixed pillRef) and extends rightward —
-          keeps the element's right side (the start of RTL text) uncovered. */}
-      <MorePopover
-        open={moreOpen}
-        target={target}
-        kind={kind}
-        flipUp={popoverFlipUp}
-        setStyle={setStyle}
-        onClose={() => setMoreOpen(false)}
-      />
+      </div>
     </div>,
     document.body,
   );
