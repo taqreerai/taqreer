@@ -23,6 +23,7 @@ import {
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
+import { StylePill } from "@/components/preview/editor/StylePill";
 import {
   GenImageProvider,
   type GenImageFills,
@@ -3426,6 +3427,14 @@ export function DeckView({
                 scale={gridScale}
               />
             )}
+            {/* I2 — contextual style pill over the selected element (edit mode only). */}
+            {editMode && !commentMode && editorSelected ? (
+              <StylePill
+                target={editorSelected}
+                slideId={focusedSlide.slideId}
+                onCommit={handleSlideEdit}
+              />
+            ) : null}
           </div>
 
           {/* Per-slide pill — Undo / Try again / Regen / History /
