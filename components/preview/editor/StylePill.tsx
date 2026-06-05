@@ -218,7 +218,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     <div
       ref={pillRef}
       dir="ltr"
-      className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-xl shadow-2xl"
+      className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) rounded-xl shadow-2xl"
       style={{
         position: "fixed",
         left: -9999,
@@ -259,9 +259,10 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               onChange={(hex) => setStyle("color", hex)}
               onClose={() => setColorOpen(false)}
               align="center"
-              // Match the pill's dark glass instead of the default white-tint
-              // card so the picker reads over a slide.
-              surfaceClassName="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation)"
+              // Match the pill exactly: same dark glass + the modal-strength
+              // boost blur (not the default white-tint card) so the picker
+              // reads as frosted glass over a slide.
+              surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
             />
           </div>
           <Divider />

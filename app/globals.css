@@ -1704,8 +1704,10 @@ body {
 .glass-popover {
   /* Dark fill over the backdrop blur so a popover stays legible on ANY contrast
      (a faint white fill washed out over light slides / surfaces). User direction
-     2026-06-05. */
-  background: rgb(0 0 0 / 20%);
+     2026-06-05: 0.2 → 0.3, a touch darker so the pill + colour picker read as
+     solid frosted glass over bright slides (paired with the modal-strength
+     backdrop-blur-glass-boost the pill + picker now carry). */
+  background: rgb(0 0 0 / 30%);
   border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
 }
 
