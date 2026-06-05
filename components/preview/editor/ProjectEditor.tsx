@@ -8,6 +8,7 @@
 // Scope (I1): mount + select + text-edit + nav. Edits live in the iframe DOM only —
 // persistence (serialize → new SlideVersion) is I3; the property panel is I2.
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { dimensionsForFormat, type SlideManifest } from "@/lib/schema/slide";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
@@ -29,6 +30,14 @@ export function ProjectEditor({
   const [selected, setSelected] = useState<HTMLElement | null>(null);
   const [doc, setDoc] = useState<Document | null>(null);
   const [layers, setLayers] = useState<LayerNode[]>([]);
+
+  // Render through a portal to <body> so the fullscreen takeover escapes the (app)
+  // layout's nested stacking context and covers the dashboard header + sidebar.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const slide = slides[idx];
   const dims = dimensionsForFormat(manifest.format);
@@ -60,8 +69,8 @@ export function ProjectEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  return (
-    <div className="fixed inset-0 flex flex-col bg-[#0D0B1F] text-white" dir="ltr">
+  const ui = (
+    <div className="fixed inset-0 z-[100] flex flex-col bg-[#0D0B1F] text-white" dir="ltr">
       {/* Top bar */}
       <div className="flex items-center gap-3 border-b border-white/10 px-4 py-2.5">
         <Link
@@ -139,4 +148,6 @@ export function ProjectEditor({
       </div>
     </div>
   );
+
+  return mounted ? createPortal(ui, document.body) : null;
 }
