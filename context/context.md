@@ -1,16 +1,16 @@
 # Taqreer — Architecture & Handover
 
-Arabic-first, RTL AI presentation platform. User provides content + brand, **Claude designs each slide as HTML**, the browser renders it 1:1, and a patched `dom-to-pptx` + custom OOXML post-processor exports a high-fidelity PPTX. No manual slide editor — every visual change goes through Claude.
+Arabic-first, RTL AI presentation platform. User provides content + brand, **Claude designs each slide as HTML**, the browser renders it 1:1, and a patched `dom-to-pptx` + custom OOXML post-processor exports a high-fidelity PPTX. An in-canvas manual editor is the next major build ([`context/plan-editor.md`](./plan-editor.md)); today every visual change goes through Claude.
 
 | | |
 |---|---|
 | **Stack** | Next.js 16 + Turbopack, React 19, TypeScript 5, Prisma 7 + Postgres, Inngest, Supabase (auth + storage), Anthropic SDK, Puppeteer |
-| **Output** | PPTX (shipped) · PNG/PDF (planned, step 15) · Templates (pending) |
+| **Output** | PPTX · PDF · PNG · HTML — all shipped · Templates shipped |
 | **Differentiator** | HTML-first generation; preview = export; ~99 % Arabic PPT parity via custom BiDi post-processor |
-| **Active plan** | This file (§16 "Build Phases" + §21 "Phase 17") is the working backlog. [`context/log.md`](./log.md) is the dated changelog. |
+| **Active plan** | **In-canvas slide editor** → [`context/plan-editor.md`](./plan-editor.md). Generation is now 100 % HTML-first: the JSON manifest path was deleted 2026-06-05 and all four flows (create / enhance / mimic / datasheet) author `<section>` HTML. |
 | **Branch strategy** | All work goes to `dev`. CodeRabbit reviews `dev → main` PRs. |
 
-For the dated log of every fix, see [`log.md`](./log.md). For the patch ledger, see §19.
+Change history is the **git log** (no separate changelog file). For the patch ledger, see §19.
 
 **Status legend:** ✅ shipped · 🟡 partial · ⏳ planned
 
@@ -573,13 +573,17 @@ The schema lives in [`lib/schema/slide.ts`](../lib/schema/slide.ts). Each slide 
 
 ## 08. AI Pipeline
 
-### Generate Deck (Flow 1) ✅
+### Generate Deck — ALL flows (HTML-first) ✅
 
-1. **Brief assembly** — `POST /api/projects` persists Project + v1 PresentationVersion (status `queued`), fires `deck.generate.requested`.
-2. **Inngest `deck-generate`** — `buildUserMessage` emits a per-request "Generation rules" block (tone, design-style hints, verbatim mode, logo placement). System prompt is `cache_control: ephemeral`; per-request mutations would kill the cache.
-3. **Claude Opus 4.8 stream** — Adaptive thinking, prompt caching, anthropic-beta context-1m. Subscribes to `stream.on("text")`, counts `"slideId":` occurrences = current slide, throttles DB writes (~800 ms) into `slideJson.progress`.
-4. **Parse + Zod validate** — Strip markdown fences, parse JSON, validate `SlideManifestSchema`. On failure: append error to prompt and retry (max 3 attempts inside the Inngest step).
-5. **Persist + promote title + filter cols** — Update v1 row to `completed`. Promote `manifest.title` to `Project.title`. **Freeze `slideCount` + `dominantColor` on first generation** (conditional spread, only writes if currently null). `seedSlideVersionsForInitialGeneration` seeds v1 of every slide into `SlideState` + `SlideVersion`.
+All four flows (create / enhance / mimic / datasheet) fan into ONE Inngest
+`deck-generate` function and author `<section>` HTML. (The JSON manifest path was
+deleted 2026-06-05.)
+
+1. **Brief assembly** — `POST /api/projects` persists Project + v1 PresentationVersion (status `queued`), fires `deck.generate.requested`. (Source flows pre-step: `POST /api/extract` for enhance/mimic, `POST /api/datasheet/parse` for datasheet.)
+2. **Inngest `deck-generate`** — `isHtmlAuthoringFlow` is true for every flow. System = `SYSTEM_PROMPT_CREATE_HTML` + a per-flow addendum (`IMG_ADDENDUM` images / `MIMIC_HTML_ADDENDUM` / `ENHANCE_HTML_ADDENDUM`), `cache_control: ephemeral`. User msg = per-flow source directive (`buildSourceTextDirective`) + `buildUserMessage` + the "emit the `<section>` slides" closer. File-based source blocks (enhance images / mimic PDF / create upload) carry the `anthropic-beta: files-api-2025-04-14` header.
+3. **Claude Opus 4.8 stream** — adaptive thinking + prompt caching. `stream.on("text")` feeds `StreamingHtmlSplitter`; each closed `<section>` → `scopeDeckCss(extractLeadingStyleCss())` (once) + `buildSlideHtml` → a live-preview slide pushed into `slideJson.streamingPreview` (throttled DB writes).
+4. **Assemble + validate** — NO JSON parse (the slides ARE HTML). Build `{ version:"2.0", theme, slides }`; `SlideManifestSchema.safeParse` is shape-only. Top-level `language`/`direction` come from the brief for create/datasheet, and from the produced slides (dominant script) for enhance/mimic.
+5. **Persist + promote title + filter cols** — update v1 row to `completed`. Promote `manifest.title` to `Project.title`. **Freeze `slideCount` + `dominantColor` on first generation** (conditional spread). `seedSlideVersionsForInitialGeneration` seeds v1 of every slide into `SlideState` + `SlideVersion`. Images-mode dispatches `deck.images.requested`; enhance flushes its transient image uploads.
 
 ### Partial Regen ✅
 
@@ -591,9 +595,13 @@ Per-slide regen — comment authoring + apply, OR per-slide pill's regen button.
 4. **Inngest `deck-regenerate-partial`** — Parallel Claude calls via `step.run("regen-slide-${id}")` per target slide. Splices new HTML into a manifest copy. `currentVersionId` flips to v_n+1 ONLY on the post-write atomic transaction (`prisma.$transaction([version.update, presentation.update, project.update])`) — deck stays visible during regen.
 5. **History** — Each regenerated slide gets a new `SlideVersion` row + `SlideState.currentVersionNumber` bump. History capped at 5 (oldest pruned). `cachedComments` cleared on clean regen; replaced on comment-payload regen.
 
-### Enhance Deck (Flow 2) 🟡
+### Enhance / Mimic / Datasheet (Flows 2–4) ✅
 
-Upload PPTX → `brand.analyze.requested` (planned) extracts palette/fonts/logo via Claude vision → review page lets user override → `deck.generate.requested` with `type: "enhance"`. Currently: upload page works; review + extraction pending.
+All shipped, all on the SAME HTML path as Flow 1 — they differ only in INPUT + the
+system addendum (see step 2):
+- **Enhance** — upload PDF/PPTX → `extract-source` rasterizes per-slide PNGs at gen time → interleaved {image + verbatim-text} blocks; "redesign, preserve identity, lock chrome" addendum.
+- **Mimic** — upload a design reference (PDF document block) + optional content (file or typed text); "reproduce the reference, recolour to brand vars" addendum.
+- **Datasheet** — parsed-spreadsheet markdown inlined in the directive (NO document block); chart-deck directive (inline `<svg>`, strict data fidelity).
 
 ---
 
@@ -864,9 +872,9 @@ Schema is wired (`Subscription` + `UsageEvent`); enforcement is partial.
 
 ## 16. Build Phases
 
-Authoritative project board. `context/log.md` is the granular changelog; this
-table is the high-level "what's in / what's next." All shipped phases live
-permanently here as the audit trail.
+Authoritative project board — the high-level "what's in / what's next." Granular
+change history is the git log. All shipped phases live permanently here as the
+audit trail.
 
 | # | Phase | Status |
 |---|---|---|
@@ -1019,7 +1027,7 @@ Total: 7 `Patched (taqreer)` markers.
 If you're a fresh agent picking this up, read in this order:
 
 1. **This file (`context.md`)** — architecture + how the pieces fit + active working plan. **Source of truth for "what's next"** (see §16 build phases + §21 Phase 17 detail).
-2. [`context/log.md`](./log.md) — dated changelog of every fix. Newest first.
+2. [`context/plan-editor.md`](./plan-editor.md) — the active plan (in-canvas slide editor).
 4. [`app/globals.css`](../app/globals.css) header — design system non-negotiables.
 5. [`inngest/functions/deck-generate.ts`](../inngest/functions/deck-generate.ts) — system prompt + Claude call.
 6. [`lib/schema/slide.ts`](../lib/schema/slide.ts) — v2 SlideManifest schema.
@@ -1126,9 +1134,9 @@ npx tsx scripts/setup-storage.ts         # one-time Supabase bucket setup (idemp
 
 ---
 
-## 21. Phase 17 — Upload-driven flows (planned)
+## 21. Phase 17 — Upload-driven flows ✅ (shipped)
 
-The next phase ships the remaining three flows (Enhance / Mimic / Data). They
+This phase shipped the remaining three flows (Enhance / Mimic / Data). They
 share an **upstream pattern** — file ingestion → server-side extraction →
 seed sessionStorage in the StandardBrief shape → user lands on `/create/brand`
 (pre-filled) → `/create/summary` → POST `/api/projects`. From that POST
@@ -1307,4 +1315,4 @@ once 17.A lands — they can ship sequentially or in parallel.
 
 ---
 
-*Living document — updated each shipping milestone. See [`log.md`](./log.md) for the dated changelog.*
+*Living document — updated each shipping milestone. Change history is the git log.*
