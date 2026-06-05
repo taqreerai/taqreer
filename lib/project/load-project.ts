@@ -34,7 +34,7 @@ import {
 // 2026-05-20).
 export type InitialSlideVersion = {
   versionNumber: number;
-  source: string; // "create" | "regen" | "partial_regen" | "restore"
+  source: string; // "create" | "regen" | "partial_regen" | "restore" | "manual_edit"
   createdAt: string; // ISO
 };
 

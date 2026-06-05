@@ -425,7 +425,28 @@ export function DeckView({
   // content) AND the per-slide pill state (currentVersionNumber).
   // Server returns the slide JSON + new pointer; client mirrors
   // those into local state. No re-fetch needed.
-  const applyRestoredSlide = (
+  // Move a slide's version pointer in local pill state, preserving the other
+  // SlideState fields (comments cache, lock) from the prior entry. Shared by
+  // applyRestoredSlide and the optimistic/revert writes in restoreToVersion —
+  // one place to spell the SlideState shape so the three can't drift.
+  const setSlideVersionPointer = useCallback(
+    (slideKey: string, currentVersionNumber: number) => {
+      setSlideStates((prev) => {
+        const current = prev[slideKey];
+        return {
+          ...prev,
+          [slideKey]: {
+            slideKey,
+            currentVersionNumber,
+            hasCachedComments: current?.hasCachedComments ?? false,
+            lockedAt: current?.lockedAt ?? null,
+          },
+        };
+      });
+    },
+    [],
+  );
+  const applyRestoredSlide = useCallback((
     slideKey: string,
     payload: { currentVersionNumber: number; slide: SlideType },
   ) => {
@@ -438,25 +459,14 @@ export function DeckView({
         ),
       };
     });
-    setSlideStates((prev) => {
-      const current = prev[slideKey];
-      return {
-        ...prev,
-        [slideKey]: {
-          slideKey,
-          currentVersionNumber: payload.currentVersionNumber,
-          hasCachedComments: current?.hasCachedComments ?? false,
-          lockedAt: current?.lockedAt ?? null,
-        },
-      };
-    });
+    setSlideVersionPointer(slideKey, payload.currentVersionNumber);
     // historyVersions cache is intentionally NOT cleared here.
     // Restore is non-destructive — the rows themselves don't
     // change, only the SlideState pointer (currentVersionNumber)
     // moves. Clearing then refetching would briefly empty the
     // popover before unmount, producing the "collapse-then-flash"
     // glitch the user flagged 2026-05-20.
-  };
+  }, [setSlideVersionPointer]);
   const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
 
@@ -611,6 +621,90 @@ export function DeckView({
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
   const editMode = canEdit;
   const [editorSelected, setEditorSelected] = useState<HTMLElement | null>(null);
+  // Bumped to force the editor iframe to rebuild from slide.html on an EXTERNAL
+  // content change (restore / undo / redo). A self-save deliberately does NOT
+  // bump it — the iframe already shows the user's edit, so rebuilding would wipe
+  // their place. See SlideEditor's pinned bodyHtml effect.
+  const [editorReloadKey, setEditorReloadKey] = useState(0);
+  // Save a manual edit from the in-canvas editor (Editor I3): POST → new
+  // SlideVersion (see /slides/[slideKey]/edit), then update state IN PLACE — the
+  // manifest html (for thumbnails/export; the pinned editor iframe ignores it),
+  // the version pointer, and the cached history rows (dropped so the popover
+  // re-fetches). Stored behind SlideEditor's onEditRef, so identity is harmless.
+  const handleSlideEdit = useCallback(
+    async (slideKey: string, html: string) => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/edit`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ html }),
+          },
+        );
+        if (!res.ok) throw new Error(`edit: ${res.status}`);
+        const data = (await res.json()) as {
+          currentVersionNumber: number;
+          slide: SlideType;
+        };
+        // Mirror the new version into the manifest + pill state — identical to a
+        // restore (the edit IS a new SlideVersion the pointer now targets).
+        applyRestoredSlide(slideKey, data);
+        // ...but unlike a restore, an edit CREATES a version row, so drop this
+        // slide's cached history list; the popover refetches on next open.
+        setHistoryVersions((prev) => {
+          if (!(slideKey in prev)) return prev;
+          const next = { ...prev };
+          delete next[slideKey];
+          return next;
+        });
+      } catch (err) {
+        console.error("[edit] save failed", err);
+        // The iframe keeps the user's edit; only the DB write missed. (Toast = I5.)
+      }
+    },
+    [projectId, applyRestoredSlide],
+  );
+
+  // Move the slide's version pointer + splice that version into the manifest.
+  // Shared by the History popover and undo/redo (⌘Z / ⌘⇧Z — the SlideVersion
+  // history IS the undo stack). Bumps editorReloadKey because the content
+  // actually changed → the editor iframe must rebuild. The /restore route 400s
+  // past either end of history, which the catch swallows (a no-op undo/redo).
+  const restoreToVersion = useCallback(
+    async (slideKey: string, versionNumber: number) => {
+      if (versionNumber < 1) return;
+      const prevVersionNumber =
+        slideStates[slideKey]?.currentVersionNumber ?? null;
+      if (prevVersionNumber === versionNumber) return;
+      // Optimistic pointer move (reverted below on failure).
+      setSlideVersionPointer(slideKey, versionNumber);
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/restore`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ versionNumber }),
+          },
+        );
+        if (!res.ok) throw new Error(`restore: ${res.status}`);
+        const data = (await res.json()) as {
+          currentVersionNumber: number;
+          slide: SlideType;
+        };
+        applyRestoredSlide(slideKey, data);
+        setEditorReloadKey((k) => k + 1);
+      } catch (err) {
+        console.error("restore failed", err);
+        // Roll the optimistic pointer back to where it was.
+        if (prevVersionNumber != null) {
+          setSlideVersionPointer(slideKey, prevVersionNumber);
+        }
+      }
+    },
+    [projectId, slideStates, applyRestoredSlide, setSlideVersionPointer],
+  );
   // True while the read-only marker preview popup (HeroCommentOverlay
   // sub-component) is open. Drives chrome that would otherwise compete
   // with the popup — the per-slide pill (regen / history / lock) hides
@@ -1594,6 +1688,26 @@ export function DeckView({
 
     const handleKey = (e: KeyboardEvent) => {
       if (isNavBlocked()) return;
+      // ⌘Z / ⌘⇧Z in edit mode → undo / redo by hopping the SlideVersion pointer
+      // (the history IS the undo stack). isNavBlocked already excluded comment
+      // mode, in-flight regen, and typing in a field, so this is safe. Runs
+      // before the modifier-key bail below.
+      if (
+        editMode &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        e.key.toLowerCase() === "z"
+      ) {
+        e.preventDefault();
+        const slideKey =
+          manifest?.slides[
+            Math.min(Math.max(slideIndexRef.current, 0), totalSlides - 1)
+          ]?.slideId;
+        if (!slideKey) return;
+        const cur = slideStates[slideKey]?.currentVersionNumber ?? 1;
+        void restoreToVersion(slideKey, e.shiftKey ? cur + 1 : cur - 1);
+        return;
+      }
       // Modifier keys → leave for native shortcuts (refresh, devtools, etc.)
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       switch (e.key) {
@@ -1641,7 +1755,16 @@ export function DeckView({
         wheelIdleTimerRef.current = null;
       }
     };
-  }, [status, manifest, commentMode, applying, historyAnchor]);
+  }, [
+    status,
+    manifest,
+    commentMode,
+    applying,
+    historyAnchor,
+    editMode,
+    slideStates,
+    restoreToVersion,
+  ]);
 
   // Realtime — Inngest writes the version → Supabase emits → we parse + render.
   // Scoped to this presentation via a server-side filter so other projects'
@@ -2997,6 +3120,7 @@ export function DeckView({
     manifest!.slides.length - 1,
   );
   const focusedSlide = manifest!.slides[focusedIndex];
+
   const navItems: NavItem[] = manifest!.slides.map((slide, idx) => ({
     kind: "slide",
     index: idx,
@@ -3254,6 +3378,8 @@ export function DeckView({
                 selected={editorSelected}
                 onSelect={setEditorSelected}
                 onDocReady={() => {}}
+                onEdit={handleSlideEdit}
+                reloadKey={editorReloadKey}
               />
             ) : (
               <SlideRenderer
@@ -3567,79 +3693,12 @@ export function DeckView({
         onRestore={async (versionNumber) => {
           if (!historySlideKey) return;
           const targetSlideKey = historySlideKey;
-          // Capture the slide's pre-optimistic version BEFORE the
-          // setSlideStates call below mutates it — fixes a CR-flagged
-          // bug where the catch path was reading `current` AFTER the
-          // optimistic write and "reverting" to the same value that
-          // was just set, making the rollback a no-op. Now `prevVersionNumber`
-          // holds the original currentVersionNumber and the catch path
-          // restores it for real.
-          const prevVersionNumber =
-            slideStates[targetSlideKey]?.currentVersionNumber ?? null;
-          // CLOSE THE POPOVER FIRST — start the exit animation
-          // immediately so the click feels responsive. The async
-          // work below splices the slide into the manifest after.
-          // Previously we awaited both the /restore call AND a
-          // followup /versions refetch BEFORE closing the popover,
-          // leaving the popover frozen at full opacity for ~500 ms.
-          // Optimistic local pointer update so the highlighted
-          // "current" row would have already moved if the popover
-          // weren't unmounting — keeps the projects table in sync
-          // before the server response.
-          setSlideStates((prev) => {
-            const current = prev[targetSlideKey];
-            return {
-              ...prev,
-              [targetSlideKey]: {
-                slideKey: targetSlideKey,
-                currentVersionNumber: versionNumber,
-                hasCachedComments: current?.hasCachedComments ?? false,
-                lockedAt: current?.lockedAt ?? null,
-              },
-            };
-          });
+          // Close the popover FIRST so the click feels responsive — its exit
+          // animation runs while restoreToVersion does the optimistic pointer
+          // move + /restore call + in-place splice (and reverts on failure).
           setHistoryAnchor(null);
           setHistorySlideKey(null);
-          try {
-            const res = await fetch(
-              `/api/projects/${projectId}/slides/${encodeURIComponent(targetSlideKey)}/restore`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ versionNumber }),
-              },
-            );
-            if (!res.ok) throw new Error(`restore: ${res.status}`);
-            const data = (await res.json()) as {
-              currentVersionNumber: number;
-              slide: SlideType;
-            };
-            // Splice the returned slide into the manifest so the
-            // hero renders the restored version. NOT clearing the
-            // historyVersions cache — restore is non-destructive,
-            // the list didn't change.
-            applyRestoredSlide(targetSlideKey, data);
-          } catch (err) {
-            console.error("restore failed", err);
-            // Revert to the version captured BEFORE the optimistic
-            // write (now in `prevVersionNumber`). If the slide had
-            // no SlideState row to begin with (prevVersionNumber ==
-            // null) we leave the row alone — there was nothing to
-            // restore to that didn't exist before.
-            if (prevVersionNumber != null) {
-              setSlideStates((prev) => {
-                const current = prev[targetSlideKey];
-                if (!current) return prev;
-                return {
-                  ...prev,
-                  [targetSlideKey]: {
-                    ...current,
-                    currentVersionNumber: prevVersionNumber,
-                  },
-                };
-              });
-            }
-          }
+          await restoreToVersion(targetSlideKey, versionNumber);
         }}
       />
     </section>

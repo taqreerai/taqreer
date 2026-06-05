@@ -21,6 +21,7 @@ import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import { SlideManifestSchema, SlideSchema } from "@/lib/schema/slide";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
+import { retryOnP2002 } from "@/lib/api/regen-helpers";
 
 // Matches the product requirement from 2026-05-19 — cap history
 // at 5 entries per slide. Oldest pruned on insert. Tweak in one
@@ -187,28 +188,35 @@ export async function recordSlidePartialRegen(
       }),
     ]);
 
-    // Prune oldest if over the cap. Using count + take(asc) so the
-    // first version of the slide goes first — matches the natural
-    // "scroll history newest-first, drop the tail" UX. Doesn't
-    // protect locked versions (lock is a SlideState-level flag,
-    // not a version-level flag — see schema comment).
-    const total = await prisma.slideVersion.count({
-      where: { slideStateId: state.id },
+    await pruneOldestVersions(prisma, state.id);
+  }
+}
+
+/**
+ * Prune a slide's history down to MAX_VERSIONS_PER_SLIDE, dropping the oldest
+ * rows first. Using count + take(asc) so the first version of the slide goes
+ * first — matches the natural "scroll history newest-first, drop the tail" UX.
+ * Doesn't protect locked versions (lock is a SlideState-level flag, not a
+ * version-level flag — see schema comment). Shared by recordSlidePartialRegen
+ * and recordSlideManualEdit (both append a row).
+ */
+async function pruneOldestVersions(
+  prisma: PrismaClient,
+  slideStateId: string,
+): Promise<void> {
+  const total = await prisma.slideVersion.count({ where: { slideStateId } });
+  if (total <= MAX_VERSIONS_PER_SLIDE) return;
+  const overflow = total - MAX_VERSIONS_PER_SLIDE;
+  const oldest = await prisma.slideVersion.findMany({
+    where: { slideStateId },
+    orderBy: { versionNumber: "asc" },
+    take: overflow,
+    select: { id: true },
+  });
+  if (oldest.length > 0) {
+    await prisma.slideVersion.deleteMany({
+      where: { id: { in: oldest.map((v) => v.id) } },
     });
-    if (total > MAX_VERSIONS_PER_SLIDE) {
-      const overflow = total - MAX_VERSIONS_PER_SLIDE;
-      const oldest = await prisma.slideVersion.findMany({
-        where: { slideStateId: state.id },
-        orderBy: { versionNumber: "asc" },
-        take: overflow,
-        select: { id: true },
-      });
-      if (oldest.length > 0) {
-        await prisma.slideVersion.deleteMany({
-          where: { id: { in: oldest.map((v) => v.id) } },
-        });
-      }
-    }
   }
 }
 
@@ -363,4 +371,134 @@ export async function restoreSlideToVersion(
     slide: parsed.data,
     currentVersionNumber: targetVersionNumber,
   };
+}
+
+/**
+ * Records a manual (hand-edited) slide as a new SlideVersion and splices it into
+ * the active manifest — the synchronous twin of restoreSlideToVersion, but the
+ * target is brand-new HTML the user typed/styled in the in-canvas editor rather
+ * than a stored version. Mirrors recordSlidePartialRegen's bump + prune, scoped
+ * to one slide, with no Inngest / Claude in the loop (a manual edit is cheap).
+ *
+ * `newHtml` MUST already be sanitised by the caller (sanitizeSlideHtmlServer) —
+ * we never store unsanitised client HTML. The slide's `role` is preserved from
+ * the currently-active slide; only `html` changes.
+ *
+ * Returns null if the slide isn't in the active manifest. Returns the existing
+ * (unchanged) slide WITHOUT writing a version when `newHtml` is byte-identical to
+ * what's already active — a no-op-save guard so re-saving an untouched slide (or
+ * a stray duplicate POST) never churns the 5-deep history.
+ */
+export async function recordSlideManualEdit(
+  prisma: PrismaClient,
+  presentationId: string,
+  slideKey: string,
+  newHtml: string,
+): Promise<RestoreResult | null> {
+  // Read the active slide first: it's the existence check, the source of the
+  // preserved `role`, and the baseline for the no-op guard.
+  const presentation = await prisma.presentation.findUnique({
+    where: { id: presentationId },
+    select: { currentVersionId: true },
+  });
+  if (!presentation?.currentVersionId) return null;
+  const activeVersion = await prisma.presentationVersion.findUnique({
+    where: { id: presentation.currentVersionId },
+    select: { slideJson: true },
+  });
+  const manifestParsed = activeVersion
+    ? SlideManifestSchema.safeParse(activeVersion.slideJson)
+    : null;
+  if (!manifestParsed?.success) return null;
+  const existing = manifestParsed.data.slides.find(
+    (s) => s.slideId === slideKey,
+  );
+  if (!existing) return null;
+
+  const state = await prisma.slideState.findUnique({
+    where: { presentationId_slideKey: { presentationId, slideKey } },
+    select: { id: true, currentVersionNumber: true },
+  });
+
+  // No-op: identical HTML already active → keep history clean.
+  if (existing.html === newHtml && state) {
+    return { slide: existing, currentVersionNumber: state.currentVersionNumber };
+  }
+
+  // Only `html` changes; role/slideId carry over from the live slide.
+  const newSlide: SlideType = { ...existing, html: newHtml };
+  const validated = SlideSchema.safeParse(newSlide);
+  if (!validated.success) {
+    throw new Error(
+      `Edited slide failed validation: ${JSON.stringify(validated.error.issues).slice(0, 400)}`,
+    );
+  }
+
+  // Legacy project with no SlideState yet → this edit seeds v1 (same lazy-create
+  // trade as recordSlidePartialRegen: prior content isn't recoverable for those).
+  if (!state) {
+    await prisma.$transaction(async (tx) => {
+      await tx.slideState.create({
+        data: {
+          presentationId,
+          slideKey,
+          currentVersionNumber: 1,
+          versions: {
+            create: {
+              versionNumber: 1,
+              slideJson: slideToJson(validated.data),
+              source: "manual_edit",
+            },
+          },
+        },
+      });
+      await spliceSlideIntoActiveManifest(
+        tx,
+        presentationId,
+        slideKey,
+        validated.data,
+      );
+    });
+    return { slide: validated.data, currentVersionNumber: 1 };
+  }
+
+  // Append a new version, race-safe. Two concurrent saves can both read the same
+  // max versionNumber and try to write max+1 → P2002. retryOnP2002 re-reads the
+  // max each attempt, so the loser simply picks the next free number. Atomic per
+  // attempt: version row + pointer + manifest splice commit together (same
+  // rationale as restoreSlideToVersion — no half-applied edit).
+  const stateId = state.id;
+  const newVersionNumber = await retryOnP2002(async () => {
+    const latest = await prisma.slideVersion.findFirst({
+      where: { slideStateId: stateId },
+      orderBy: { versionNumber: "desc" },
+      select: { versionNumber: true },
+    });
+    const next = (latest?.versionNumber ?? 0) + 1;
+    await prisma.$transaction(async (tx) => {
+      await tx.slideVersion.create({
+        data: {
+          slideStateId: stateId,
+          versionNumber: next,
+          slideJson: slideToJson(validated.data),
+          source: "manual_edit",
+        },
+      });
+      await tx.slideState.update({
+        where: { id: stateId },
+        data: { currentVersionNumber: next },
+      });
+      await spliceSlideIntoActiveManifest(
+        tx,
+        presentationId,
+        slideKey,
+        validated.data,
+      );
+    });
+    return next;
+  });
+
+  await pruneOldestVersions(prisma, stateId);
+
+  return { slide: validated.data, currentVersionNumber: newVersionNumber };
 }

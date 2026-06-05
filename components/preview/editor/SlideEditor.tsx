@@ -16,6 +16,7 @@ import type { SlideType, ThemeType } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { isVisualLeaf, isTextEditable, resolveSelectable } from "@/lib/editor/leaves";
+import { serializeSlideSection } from "@/lib/editor/serialize";
 import { buildDeckFontHead } from "@/lib/export/font-head";
 
 type Props = {
@@ -29,11 +30,20 @@ type Props = {
   selected: HTMLElement | null;
   onSelect: (el: HTMLElement | null) => void;
   onDocReady: (doc: Document | null) => void;
+  // Fired when a text edit settles (blur) and actually changed the slide — the
+  // parent persists it. Carries the slide's id (so a save lands on the right
+  // slide even if focus moved) + the serialized section HTML.
+  onEdit?: (slideId: string, html: string) => void;
+  // Bump to force the iframe to re-render from `slide.html` (restore / undo /
+  // peer edit). The iframe is otherwise PINNED to the slide identity so a
+  // self-save — which updates `slide.html` — never blows away the live DOM the
+  // user is editing. See the bodyHtml effect.
+  reloadKey?: number;
 };
 
 export function SlideEditor({
   slide, theme, direction, language, width, height, scale,
-  selected, onSelect, onDocReady,
+  selected, onSelect, onDocReady, onEdit, reloadKey = 0,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const selBoxRef = useRef<HTMLElement | null>(null);
@@ -48,15 +58,27 @@ export function SlideEditor({
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+  // Keep onEdit current without re-attaching iframe listeners.
+  const onEditRef = useRef(onEdit);
+  useEffect(() => {
+    onEditRef.current = onEdit;
+  }, [onEdit]);
 
   // Sanitise the slide HTML in an effect — DOMPurify needs the live window, so doing
   // it during render hits the fail-closed (empty) path. Same pattern as SlideRenderer;
   // first render is intentionally empty, then this fills it.
+  //
+  // PINNED to slide IDENTITY (slideId), not slide.html: the iframe is the live
+  // editing surface, so a self-save — which updates slide.html to the serialized
+  // DOM — must NOT rebuild the iframe and wipe the user's place. The iframe
+  // rebuilds only when the slide changes (navigation) or `reloadKey` bumps
+  // (restore / undo / peer edit), reading the latest slide.html at that moment.
   const [bodyHtml, setBodyHtml] = useState("");
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBodyHtml(sanitizeSlideHtml(slide.html));
-  }, [slide.html]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slide.slideId, reloadKey]);
 
   // Scale the CONTENT inside the iframe — a `transform` on the iframe ELEMENT clips
   // its paint in Chromium (element box scales but the slide gets cut to a sliver). The
@@ -80,9 +102,27 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   body{position:relative;width:${dispW}px;height:${dispH}px;overflow:hidden;background:${theme.background};color:${theme.text};font-family:var(--font-body),'Cairo',system-ui,sans-serif}
   /* absolute + top-left so the RTL body can't right-align this wider-than-body stage */
   #tqe-stage{position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform:scale(${scale});transform-origin:top left}
+  /* The slide is a CANVAS OF OBJECTS, not selectable text: a plain pointer cursor
+     (never the text I-beam) and no native text selection, so the empty space inside
+     a text box is fully inert and only an object's real ink is ever interactive.
+     Both flip to text behaviour ONLY on the element actually being edited. */
+  #tqe-stage,#tqe-stage *{cursor:default;-webkit-user-select:none;user-select:none}
+  /* Hide the native caret (it's the font's full em box — ~2x the visible glyphs
+     for Arabic) and draw a custom one sized to the text via .tqe-caret. */
+  #tqe-stage [contenteditable="true"],#tqe-stage [contenteditable="true"] *{cursor:text;-webkit-user-select:text;user-select:text;caret-color:transparent}
+  /* While editing, lift the element above its neighbours so a drag-select always
+     lands on the text being edited — not on an overlapping sibling (e.g. a headline
+     whose tall glyphs overflow up into the smaller line above it). Siblings are
+     user-select:none, so without this the drag gets captured by the wrong element
+     and the selection inside the edited run can't extend. position:relative with no
+     offsets doesn't move it; it just creates a stacking context. Stays below the
+     overlays (2147483646). */
+  #tqe-stage [contenteditable="true"]{position:relative;z-index:2147483640}
   .tqe-ov{position:fixed;pointer-events:none;z-index:2147483646;box-sizing:border-box;display:none}
   .tqe-hover{border:2px solid #10B981}
   .tqe-sel{border:2px solid #15B04F}
+  .tqe-caret{position:fixed;width:2px;pointer-events:none;z-index:2147483646;display:none;animation:tqe-caret-blink 1.06s infinite}
+  @keyframes tqe-caret-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
   [contenteditable="true"]{outline:none}
 </style></head><body><div id="tqe-stage">${bodyHtml}</div></body></html>`;
   }, [bodyHtml, theme, direction, language, width, height, scale, dispW, dispH]);
@@ -93,9 +133,18 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
     if (!iframe) return;
 
     const wire = () => {
-      const doc = iframe.contentDocument;
+      const doc = iframe.contentDocument as
+        | (Document & { __tqWired?: boolean })
+        | null;
       const sec = doc?.querySelector("section");
       if (!doc || !sec) return;
+      // Run ONCE per document. The effect calls wire() both on the `load` event
+      // AND synchronously when readyState is already "complete" (srcDoc iframes
+      // usually are) — without this guard every doc listener + overlay would be
+      // attached twice, so a single edit fired two save POSTs (and raced the DB
+      // unique constraint). A fresh srcDoc → fresh document → re-wires.
+      if (doc.__tqWired) return;
+      doc.__tqWired = true;
 
       // Tag every element with a stable id; flag visual leaves (the editable units).
       let i = 0;
@@ -110,31 +159,64 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
       hover.className = "tqe-ov tqe-hover";
       const selBox = doc.createElement("div");
       selBox.className = "tqe-ov tqe-sel";
-      doc.body.append(hover, selBox);
+      const caret = doc.createElement("div");
+      caret.className = "tqe-caret";
+      doc.body.append(hover, selBox, caret);
       hoverBoxRef.current = hover;
       selBoxRef.current = selBox;
 
+      // Draw the custom caret at the collapsed selection, sized to the VISIBLE text
+      // (~font-size) rather than the native caret's font-em box (which is ~2x the
+      // glyphs for Arabic). The browser's collapsed-range rect gives the x + the
+      // text's vertical centre; we centre a font-size-tall bar on it.
+      const placeCaret = (t: HTMLElement) => {
+        const selc = doc.getSelection();
+        if (!selc || !selc.isCollapsed || selc.rangeCount === 0 ||
+            !t.contains(selc.getRangeAt(0).startContainer)) {
+          caret.style.display = "none";
+          return;
+        }
+        const r = selc.getRangeAt(0).getBoundingClientRect();
+        const fs = parseFloat(getComputedStyle(t).fontSize) || 0;
+        const h = fs ? Math.min(r.height, fs * scale * 1.02) : r.height;
+        caret.style.display = "block";
+        caret.style.left = `${r.left}px`;
+        caret.style.top = `${r.top + r.height / 2 - h / 2}px`;
+        caret.style.height = `${h}px`;
+        caret.style.background = getComputedStyle(t).color;
+      };
+
+      // Last element the hover box was drawn for. Lets onMove skip the
+      // (Range + canvas TextMetrics) re-measure in place()/inkBounds() when the
+      // pointer hasn't crossed into a DIFFERENT unit since the previous move —
+      // the common case on a dense slide, where the box is already correct.
+      let lastHover: HTMLElement | null = null;
       const onMove = (e: MouseEvent) => {
-        const t = e.target as Element | null;
-        if (!t || t === sec || !sec.contains(t)) { place(hover, null); return; }
-        const unit = resolveSelectable(t, sec);
-        place(hover, unit && unit !== selectedRef.current ? unit : null);
+        // resolveHit walks the FULL stack at the cursor and returns the topmost
+        // element whose actual ink is under it — so an overlapping element's empty
+        // overflow (e.g. a huge headline's glyphs spilling over a small label) never
+        // steals the hover, and empty space hovers nothing.
+        const unit = resolveHit(sec, e.clientX, e.clientY);
+        const target = unit && unit !== selectedRef.current ? unit : null;
+        if (target === lastHover) return;
+        lastHover = target;
+        place(hover, target);
       };
-      const onLeave = () => place(hover, null);
-      const onClick = (e: MouseEvent) => {
-        const t = e.target as Element | null;
-        if (!t || !sec.contains(t)) return;
-        if ((t as HTMLElement).isContentEditable) return;
-        e.preventDefault();
-        // null when the click lands on a layout container or the bare slide bg → deselect.
-        onSelectRef.current(resolveSelectable(t, sec));
+      const onLeave = () => {
+        lastHover = null;
+        place(hover, null);
       };
-      const onDbl = (e: MouseEvent) => {
-        const t = e.target as HTMLElement | null;
-        if (!t || t === sec || !sec.contains(t) || t.isContentEditable) return;
-        if (!isTextEditable(t)) return;
+
+      // Put a text element into edit mode (contentEditable) + wire its edit session.
+      const enterEdit = (t: HTMLElement) => {
+        if (t.isContentEditable || !isTextEditable(t)) return;
+        // Snapshot the slide BEFORE editing so blur can tell a real change from a
+        // focus-and-leave (no-op → no save, no version churn).
+        const before = serializeSlideSection(sec);
         t.setAttribute("contenteditable", "true");
-        t.focus();
+        // preventScroll: focusing a huge-font element (whose glyphs overflow its
+        // box) otherwise scrolls it into view and the whole number visibly JUMPS.
+        t.focus({ preventScroll: true });
         try { doc.execCommand("defaultParagraphSeparator", false, "br"); } catch { /* unsupported */ }
         const onPaste = (ev: ClipboardEvent) => {
           ev.preventDefault();
@@ -145,13 +227,67 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
             if (line) doc.execCommand("insertText", false, line);
           });
         };
+        // Enter → a <br> inside THIS element (one editable unit, two visual lines).
+        // Without intercepting it the browser splits the block into two separate
+        // elements, leaving the first line uneditable. Shift+Enter is the same here.
+        const onKeyDown = (ev: KeyboardEvent) => {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            doc.execCommand("insertLineBreak");
+          }
+        };
+        // Keep the selection box wrapping the text + the custom caret tracking the
+        // insertion point as the text grows/shrinks while typing (the controlled
+        // `selected` doesn't change mid-edit, so its place() effect won't re-run).
+        const onInput = () => { place(selBoxRef.current, t); placeCaret(t); };
+        // selectionchange (document-level) covers caret moves from clicks + arrows.
+        const onSelChange = () => placeCaret(t);
+        // One-shot. Removing `contenteditable` from a FOCUSED element fires a
+        // synchronous `blur`, which re-enters finish (→ a duplicate save, racing
+        // the version unique-constraint) unless we latch + detach the listener
+        // BEFORE removing the attribute.
+        let done = false;
         const finish = () => {
-          t.removeAttribute("contenteditable");
+          if (done) return;
+          done = true;
           t.removeEventListener("blur", finish);
           t.removeEventListener("paste", onPaste);
+          t.removeEventListener("keydown", onKeyDown);
+          t.removeEventListener("input", onInput);
+          doc.removeEventListener("selectionchange", onSelChange);
+          caret.style.display = "none";
+          t.removeAttribute("contenteditable");
+          // Commit on settle: serialize the slide (editor artifacts stripped) and
+          // hand it to the parent to persist — only if it actually changed.
+          const after = serializeSlideSection(sec);
+          if (after !== before) onEditRef.current?.(slide.slideId, after);
         };
         t.addEventListener("paste", onPaste);
+        t.addEventListener("keydown", onKeyDown);
+        t.addEventListener("input", onInput);
         t.addEventListener("blur", finish);
+        doc.addEventListener("selectionchange", onSelChange);
+        placeCaret(t);
+      };
+
+      const onClick = (e: MouseEvent) => {
+        if ((e.target as HTMLElement | null)?.isContentEditable) return;
+        const unit = resolveHit(sec, e.clientX, e.clientY);
+        if (!unit) { onSelectRef.current(null); return; } // empty / bg → deselect
+        e.preventDefault();
+        // First click on a text leaf SELECTS it; clicking it AGAIN (now selected)
+        // drops into edit mode — like Figma/Canva. A double-click is just two clicks,
+        // so it lands in edit too (onDbl is the belt-and-braces shortcut below).
+        if (unit === selectedRef.current && isTextEditable(unit)) {
+          enterEdit(unit);
+        } else {
+          onSelectRef.current(unit);
+        }
+      };
+      const onDbl = (e: MouseEvent) => {
+        if ((e.target as HTMLElement | null)?.isContentEditable) return;
+        const unit = resolveHit(sec, e.clientX, e.clientY);
+        if (unit) { e.preventDefault(); enterEdit(unit); }
       };
 
       doc.addEventListener("mousemove", onMove);
@@ -195,15 +331,179 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   );
 }
 
-// Position an overlay box over a target element (in the iframe's own viewport coords),
-// inflated ~2px so the border floats just OUTSIDE the content.
+// Resolve a pointer position to the topmost SELECTABLE leaf whose actual ink sits
+// under it. Walks the full elementsFromPoint stack (not just e.target) so an
+// overlapping element's EMPTY overflow can't capture the hit — e.g. a huge
+// headline whose glyphs spill up over a small label, or a wide-but-mostly-empty
+// text box. The first stacked element whose pointInInk passes wins; empty space
+// (no ink under the cursor) resolves to null → deselect.
+function resolveHit(sec: Element, x: number, y: number): HTMLElement | null {
+  for (const el of sec.ownerDocument.elementsFromPoint(x, y)) {
+    if (el === sec || !sec.contains(el)) continue;
+    const unit = resolveSelectable(el, sec);
+    if (unit && pointInInk(unit, x, y)) return unit;
+  }
+  return null;
+}
+
+// Per-line client rects for an element's text content (iframe viewport coords),
+// or null for non-text (img / svg) / empty elements — callers fall back to the
+// layout box. Returns the raw Range line rects; each caller filters as it needs.
+// Shared by pointInInk (hit-testing) and inkBounds (overlay placement) so the
+// "is this measurable text, and where are its lines" preamble lives in one place.
+function textContentRects(el: HTMLElement): DOMRectList | null {
+  const tag = el.tagName.toLowerCase();
+  if (tag === "img" || tag === "svg" || !(el.textContent || "").trim()) return null;
+  const range = el.ownerDocument.createRange();
+  range.selectNodeContents(el);
+  return range.getClientRects();
+}
+
+// True when (x, y) — iframe viewport coords — is over the element's actual visible
+// content. For an image/graphic that's its box. For TEXT it's the union of per-LINE
+// hit regions: each line's HORIZONTAL span comes from its text rects (tight to the
+// glyphs), its VERTICAL span from an equal slice of the element's line-height box.
+// Keeps hover / select / edit off the empty layout space beside, above, and below
+// the text (e.g. the gap left of a short right-aligned line).
+//
+// Why not use the raw Range client rects directly: for large, tight-leading text
+// they're FONT-EM-sized — taller than the line box, overlapping each other, and
+// spilling ~font-size past the box top and bottom — so a naive rect test reports a
+// hit across the whole block and even outside it. We take only their horizontal
+// extent and rebuild the vertical from the real line-height grid.
+function pointInInk(el: HTMLElement, x: number, y: number): boolean {
+  const box = el.getBoundingClientRect();
+  const contentRects = textContentRects(el);
+  if (!contentRects) {
+    // img / svg / empty → the whole layout box is the hit target.
+    return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+  }
+  const PAD = 3;
+  // The layout box is the true vertical bound — anything past it isn't the text.
+  if (
+    x < box.left - PAD || x > box.right + PAD ||
+    y < box.top - PAD || y > box.bottom + PAD
+  ) {
+    return false;
+  }
+  const win = el.ownerDocument.defaultView;
+  const fs = win ? parseFloat(win.getComputedStyle(el).fontSize) || 0 : 0;
+  const rects = [...contentRects].filter((r) => r.width > 0.5);
+  if (!rects.length) return true; // text exists but unmeasurable → fall back to box
+  // Group the text rects into LINES by vertical centre. We derive the line count
+  // from the rects THEMSELVES, not box.height / line-height — the rendered height
+  // and computed line-height don't always agree, which collapsed multi-line text
+  // into a single full-width band. Two rects share a line when their centres are
+  // within ~0.3em; distinct lines always sit farther apart.
+  const gap = Math.max(3, fs * 0.3);
+  const lines: { cy: number; left: number; right: number }[] = [];
+  for (const r of rects.sort((a, b) => a.top + a.bottom - (b.top + b.bottom))) {
+    const cy = (r.top + r.bottom) / 2;
+    const last = lines[lines.length - 1];
+    if (last && cy - last.cy <= gap) {
+      last.left = Math.min(last.left, r.left);
+      last.right = Math.max(last.right, r.right);
+    } else {
+      lines.push({ cy, left: r.left, right: r.right });
+    }
+  }
+  // Each line's hit region: its rects' HORIZONTAL span × a VERTICAL band running to
+  // the midpoints between adjacent line centres (clamped to the box top/bottom).
+  for (let i = 0; i < lines.length; i++) {
+    const L = lines[i];
+    const top = i === 0 ? box.top : (lines[i - 1].cy + L.cy) / 2;
+    const bottom =
+      i === lines.length - 1 ? box.bottom : (L.cy + lines[i + 1].cy) / 2;
+    if (
+      x >= L.left - PAD && x <= L.right + PAD &&
+      y >= top - PAD && y <= bottom + PAD
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Position an overlay box over the element's VISIBLE INK (iframe viewport coords),
+// inflated ~2px so the border floats just outside the glyphs. Critically it tracks the
+// real glyph ink — not the layout box — so it wraps the text correctly even when the
+// font massively overflows its own box (e.g. a 440px decorative number in a 220px box).
 function place(box: HTMLElement | null, el: HTMLElement | null) {
   if (!box) return;
   if (!el) { box.style.display = "none"; return; }
-  const r = el.getBoundingClientRect();
+  const b = inkBounds(el);
+  if (!b) { box.style.display = "none"; return; }
+  const PAD = 2;
   box.style.display = "block";
-  box.style.left = `${r.left - 2}px`;
-  box.style.top = `${r.top - 2}px`;
-  box.style.width = `${r.width + 4}px`;
-  box.style.height = `${r.height + 4}px`;
+  box.style.left = `${b.left - PAD}px`;
+  box.style.top = `${b.top - PAD}px`;
+  box.style.width = `${b.right - b.left + PAD * 2}px`;
+  box.style.height = `${b.bottom - b.top + PAD * 2}px`;
+}
+
+// Shared per-document measuring canvas for font-aware ink bounds.
+let measureCanvas: HTMLCanvasElement | null = null;
+
+// The element's visible-ink bounding box (iframe viewport coords). Images / graphics /
+// empty elements use their layout box. For TEXT we walk the per-line text rects (which
+// sit correctly on each line even when the glyphs overflow the element's own box) and,
+// within each, carve out the actual painted ink via canvas TextMetrics: a line rect is
+// the font's full em box, so the baseline sits a known fraction down it and the real
+// ink runs from baseline − actualAscent to baseline + actualDescent. The union of those
+// is the tight glyph box — robust for Arabic's baseline-heavy ink AND huge fonts.
+function inkBounds(
+  el: HTMLElement,
+): { left: number; top: number; right: number; bottom: number } | null {
+  const r = el.getBoundingClientRect();
+  const fallback = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  const win = el.ownerDocument.defaultView;
+  const contentRects = textContentRects(el);
+  if (!contentRects || !win) return fallback;
+  const rects = [...contentRects].filter(
+    (c) => c.width > 0.5 && c.height > 0.5,
+  );
+  if (!rects.length) return fallback;
+  const cs = win.getComputedStyle(el);
+  const m = measureInk(
+    el.ownerDocument,
+    cs,
+    (el.textContent || "").replace(/\s+/g, " ").trim(),
+  );
+  const fontH = m.fBA + m.fBD || 1;
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const c of rects) {
+    const ratio = c.height / fontH; // display px per natural font-metric unit
+    const baseline = c.top + m.fBA * ratio;
+    top = Math.min(top, baseline - m.aBA * ratio);
+    bottom = Math.max(bottom, baseline + m.aBD * ratio);
+    left = Math.min(left, c.left);
+    right = Math.max(right, c.right);
+  }
+  return { left, top, right, bottom };
+}
+
+// Canvas TextMetrics (natural px) for THIS text in THIS font: the real ink ascent /
+// descent (actualBoundingBox) + the font's declared em box (fontBoundingBox).
+function measureInk(
+  doc: Document,
+  cs: CSSStyleDeclaration,
+  text: string,
+): { aBA: number; aBD: number; fBA: number; fBD: number } {
+  const fs = parseFloat(cs.fontSize) || 16;
+  if (!measureCanvas || measureCanvas.ownerDocument !== doc) {
+    measureCanvas = doc.createElement("canvas");
+  }
+  const ctx = measureCanvas.getContext("2d");
+  if (!ctx) return { aBA: fs * 0.7, aBD: fs * 0.2, fBA: fs * 0.8, fBD: fs * 0.2 };
+  ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${fs}px ${cs.fontFamily}`;
+  const m = ctx.measureText(text || "X");
+  return {
+    aBA: m.actualBoundingBoxAscent || fs * 0.7,
+    aBD: m.actualBoundingBoxDescent || fs * 0.2,
+    fBA: m.fontBoundingBoxAscent || fs * 0.8,
+    fBD: m.fontBoundingBoxDescent || fs * 0.2,
+  };
 }
