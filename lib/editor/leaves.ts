@@ -27,7 +27,15 @@ export const TEXT_TAGS = new Set([
 // A visual TEXT leaf: renders visible text with no block-level children. This is the
 // OUTERMOST such element (we never recurse into one), so a heading containing an
 // inline <span> counts as ONE leaf, not two.
+//
+// <div> is explicitly NOT a text leaf even when it holds inline text: in the
+// Claude-authored decks a <div> is a layout/overlay wrapper (e.g. a caption laid
+// over an image), never the primary editable text — which is always semantic
+// (<p>/<h*>/<span>/…). Treating an overlay <div> as selectable made it steal the
+// click from the image beneath it (→ wrong selection box). Skipping divs lets the
+// hit fall through to the real content.
 export function isTextLeaf(el: Element): boolean {
+  if (el.tagName === "DIV") return false;
   return (
     (el.textContent ?? "").trim().length > 0 &&
     [...el.children].every((c) => INLINE_TAGS.has(c.tagName))

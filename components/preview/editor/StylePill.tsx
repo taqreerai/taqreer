@@ -210,10 +210,17 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         const botY = ir.top + box.bottom;
         const pw = el.offsetWidth;
         const ph = el.offsetHeight;
-        // Default ABOVE the element; flip BELOW when the element hugs the canvas
-        // top (no room above without spilling off the slide / under the toolbar).
-        let top = topY - 10 - ph;
-        if (top < ir.top + 4) top = botY + 10;
+        // Images: the pill floats INSIDE the image at its top, with a small margin
+        // (Canva-style) — images are big and a pill above them wastes space / can
+        // sit off-canvas. Everything else: ABOVE the element, flipping BELOW when
+        // it hugs the canvas top.
+        let top: number;
+        if (kind === "image") {
+          top = topY + 12;
+        } else {
+          top = topY - 10 - ph;
+          if (top < ir.top + 4) top = botY + 10;
+        }
         top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
         const left = Math.max(8, Math.min(cx - pw / 2, window.innerWidth - pw - 8));
         el.style.left = `${left}px`;
@@ -243,7 +250,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
       const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
       if (selBox) selBox.style.visibility = "visible";
     };
-  }, [target]);
+  }, [target, kind]);
 
   // ── Popovers open on the OPPOSITE side from the element, mirroring the pill's
   // own placement: pill ABOVE the element → open UP (above the pill); pill BELOW
@@ -395,6 +402,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
   const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
+  const opacityPct = Math.round((parseFloat(cs.opacity) || 1) * 100);
 
   return createPortal(
     <div
@@ -485,37 +493,45 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           </div>
         </>
       )}
-      {/* Graphic (svg): recolour swatch — recolours every painted shape. */}
+      {/* Graphic (svg): recolour swatch + inline opacity (no ⋯ — only two
+          controls, both fit on the pill). */}
       {kind === "svg" && (
-        <div style={{ position: "relative" }}>
-          <button
-            type="button"
-            aria-label="Graphic colour"
-            onClick={() => {
-              setColorOpen((o) => !o);
-              setMoreOpen(false);
-            }}
-            style={{
-              display: "block",
-              width: 22,
-              height: 22,
-              borderRadius: "50%",
-              border: "1px solid var(--tq-border-glass)",
-              background: svgColor,
-              cursor: "pointer",
-            }}
+        <>
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              aria-label="Graphic colour"
+              onClick={() => {
+                setColorOpen((o) => !o);
+                setMoreOpen(false);
+              }}
+              style={{
+                display: "block",
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                border: "1px solid var(--tq-border-glass)",
+                background: svgColor,
+                cursor: "pointer",
+              }}
+            />
+            <ColorPickerPopover
+              open={colorOpen}
+              value={svgColor}
+              onChange={recolorSvg}
+              onClose={() => setColorOpen(false)}
+              align="center"
+              flipUp={popoverFlipUp}
+              instantExit
+              surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
+            />
+          </div>
+          <Divider />
+          <OpacityControl
+            value={opacityPct}
+            onChange={(pct) => setStyle("opacity", String(pct / 100))}
           />
-          <ColorPickerPopover
-            open={colorOpen}
-            value={svgColor}
-            onChange={recolorSvg}
-            onClose={() => setColorOpen(false)}
-            align="center"
-            flipUp={popoverFlipUp}
-            instantExit
-            surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
-          />
-        </div>
+        </>
       )}
       {/* Image: replace via upload → swap the src. */}
       {kind === "image" && (
@@ -525,7 +541,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
             aria-label="Replace image"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
             style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
           >
             <ReplaceIcon />
@@ -541,30 +557,34 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         </>
       )}
       {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
-          opacity for text; opacity/rounding for image+graphic). The menu hangs
-          from the ⋯ button's LEFT edge and extends rightward (off the right of
-          the pill) so it clears the element below it. */}
-      <Divider />
-      <div style={{ position: "relative" }}>
-        <Btn
-          active={moreOpen}
-          onClick={() => {
-            setMoreOpen((o) => !o);
-            setColorOpen(false);
-          }}
-          label="More options"
-        >
-          <MoreIcon />
-        </Btn>
-        <MorePopover
-          open={moreOpen}
-          target={target}
-          kind={kind}
-          flipUp={popoverFlipUp}
-          setStyle={setStyle}
-          onClose={() => setMoreOpen(false)}
-        />
-      </div>
+          opacity for text; opacity/rounding for image). SVG has no ⋯ — its two
+          controls (colour + opacity) live inline above. The menu hangs from the ⋯
+          button's LEFT edge and extends rightward so it clears the element. */}
+      {kind !== "svg" && (
+        <>
+          <Divider />
+          <div style={{ position: "relative" }}>
+            <Btn
+              active={moreOpen}
+              onClick={() => {
+                setMoreOpen((o) => !o);
+                setColorOpen(false);
+              }}
+              label="More options"
+            >
+              <MoreIcon />
+            </Btn>
+            <MorePopover
+              open={moreOpen}
+              target={target}
+              kind={kind}
+              flipUp={popoverFlipUp}
+              setStyle={setStyle}
+              onClose={() => setMoreOpen(false)}
+            />
+          </div>
+        </>
+      )}
       </div>
     </div>,
     document.body,
@@ -599,6 +619,29 @@ function ReplaceIcon() {
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
+  );
+}
+
+// Inline opacity slider (0–100%) — used directly on the pill for graphics, which
+// only have two controls so a ⋯ menu would be overkill.
+function OpacityControl({ value, onChange }: { value: number; onChange: (pct: number) => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={value}
+        aria-label="Opacity"
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        className="h-1.5 w-[48px] cursor-pointer"
+        style={{ accentColor: "var(--tq-violet)" }}
+      />
+      <span className="w-[34px] shrink-0 text-right text-[11px] tabular-nums text-white">
+        {value}%
+      </span>
+    </div>
   );
 }
 

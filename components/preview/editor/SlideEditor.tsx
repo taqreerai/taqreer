@@ -463,11 +463,21 @@ function place(box: HTMLElement | null, el: HTMLElement | null) {
   const b = inkBounds(el);
   if (!b) { box.style.display = "none"; return; }
   const PAD = 2;
+  // Inflate ~2px so the border floats just outside the ink, but CLAMP inside the
+  // iframe viewport: a full-bleed image's box would otherwise extend past the
+  // canvas edge, where the border is clipped and reads as "no selection box".
+  const root = el.ownerDocument.documentElement;
+  const maxW = root.clientWidth || Infinity;
+  const maxH = root.clientHeight || Infinity;
+  const left = Math.max(0, b.left - PAD);
+  const top = Math.max(0, b.top - PAD);
+  const right = Math.min(maxW, b.right + PAD);
+  const bottom = Math.min(maxH, b.bottom + PAD);
   box.style.display = "block";
-  box.style.left = `${b.left - PAD}px`;
-  box.style.top = `${b.top - PAD}px`;
-  box.style.width = `${b.right - b.left + PAD * 2}px`;
-  box.style.height = `${b.bottom - b.top + PAD * 2}px`;
+  box.style.left = `${left}px`;
+  box.style.top = `${top}px`;
+  box.style.width = `${Math.max(0, right - left)}px`;
+  box.style.height = `${Math.max(0, bottom - top)}px`;
 }
 
 // Shared per-document measuring canvas for font-aware ink bounds.
