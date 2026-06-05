@@ -325,7 +325,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
       </Btn>
       </div>
       {/* Rendered at the PILL level (not under the ⋯ button) so it anchors to the
-          pill's right corner (right:0 of the fixed pillRef) and flips with it. */}
+          pill's LEFT corner (left:0 of the fixed pillRef) and extends rightward —
+          keeps the element's right side (the start of RTL text) uncovered. */}
       <MorePopover
         open={moreOpen}
         target={target}

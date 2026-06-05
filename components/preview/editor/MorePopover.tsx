@@ -103,7 +103,7 @@ export function MorePopover({
           className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 rounded-2xl px-3.5 py-3.5 shadow-2xl ${
             flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
           }`}
-          style={{ right: 0, width: WIDTH }}
+          style={{ left: 0, width: WIDTH }}
           initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.96, y: flipUp ? 4 : -4 }}
