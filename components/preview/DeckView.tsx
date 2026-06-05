@@ -626,6 +626,23 @@ export function DeckView({
   // bump it — the iframe already shows the user's edit, so rebuilding would wipe
   // their place. See SlideEditor's pinned bodyHtml effect.
   const [editorReloadKey, setEditorReloadKey] = useState(0);
+  // Per-slide mutation counter. Edit (save) and restore (undo/redo) are async
+  // and target the same slide; their server responses can resolve OUT OF ORDER
+  // (e.g. a save in flight when the user hits ⌘Z), which would let an older
+  // response clobber newer content and leave the canvas on the wrong version.
+  // Each mutation captures the slide's seq before awaiting and only applies its
+  // result if it's still the latest — last-started wins, stale responses drop.
+  const slideMutationSeqRef = useRef<Record<string, number>>({});
+  const nextSlideMutationSeq = useCallback((slideKey: string) => {
+    const next = (slideMutationSeqRef.current[slideKey] ?? 0) + 1;
+    slideMutationSeqRef.current[slideKey] = next;
+    return next;
+  }, []);
+  const isLatestSlideMutation = useCallback(
+    (slideKey: string, seq: number) =>
+      slideMutationSeqRef.current[slideKey] === seq,
+    [],
+  );
   // Save a manual edit from the in-canvas editor (Editor I3): POST → new
   // SlideVersion (see /slides/[slideKey]/edit), then update state IN PLACE — the
   // manifest html (for thumbnails/export; the pinned editor iframe ignores it),
@@ -633,6 +650,7 @@ export function DeckView({
   // re-fetches). Stored behind SlideEditor's onEditRef, so identity is harmless.
   const handleSlideEdit = useCallback(
     async (slideKey: string, html: string) => {
+      const seq = nextSlideMutationSeq(slideKey);
       try {
         const res = await fetch(
           `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/edit`,
@@ -647,6 +665,9 @@ export function DeckView({
           currentVersionNumber: number;
           slide: SlideType;
         };
+        // A newer edit/restore for this slide started while we were in flight →
+        // its result is the source of truth; drop ours rather than clobber it.
+        if (!isLatestSlideMutation(slideKey, seq)) return;
         // Mirror the new version into the manifest + pill state — identical to a
         // restore (the edit IS a new SlideVersion the pointer now targets).
         applyRestoredSlide(slideKey, data);
@@ -663,7 +684,7 @@ export function DeckView({
         // The iframe keeps the user's edit; only the DB write missed. (Toast = I5.)
       }
     },
-    [projectId, applyRestoredSlide],
+    [projectId, applyRestoredSlide, nextSlideMutationSeq, isLatestSlideMutation],
   );
 
   // Move the slide's version pointer + splice that version into the manifest.
@@ -677,6 +698,9 @@ export function DeckView({
       const prevVersionNumber =
         slideStates[slideKey]?.currentVersionNumber ?? null;
       if (prevVersionNumber === versionNumber) return;
+      // Claim the slide AFTER the no-op guards above — a no-op undo/redo at the
+      // ends of history must not bump the counter and invalidate an in-flight save.
+      const seq = nextSlideMutationSeq(slideKey);
       // Optimistic pointer move (reverted below on failure).
       setSlideVersionPointer(slideKey, versionNumber);
       try {
@@ -693,17 +717,27 @@ export function DeckView({
           currentVersionNumber: number;
           slide: SlideType;
         };
+        // Superseded by a newer mutation while in flight → leave its state alone.
+        if (!isLatestSlideMutation(slideKey, seq)) return;
         applyRestoredSlide(slideKey, data);
         setEditorReloadKey((k) => k + 1);
       } catch (err) {
         console.error("restore failed", err);
-        // Roll the optimistic pointer back to where it was.
-        if (prevVersionNumber != null) {
+        // Roll the optimistic pointer back — but only if we're still the latest
+        // mutation, else we'd clobber a newer edit/restore that already landed.
+        if (prevVersionNumber != null && isLatestSlideMutation(slideKey, seq)) {
           setSlideVersionPointer(slideKey, prevVersionNumber);
         }
       }
     },
-    [projectId, slideStates, applyRestoredSlide, setSlideVersionPointer],
+    [
+      projectId,
+      slideStates,
+      applyRestoredSlide,
+      setSlideVersionPointer,
+      nextSlideMutationSeq,
+      isLatestSlideMutation,
+    ],
   );
   // True while the read-only marker preview popup (HeroCommentOverlay
   // sub-component) is open. Drives chrome that would otherwise compete
