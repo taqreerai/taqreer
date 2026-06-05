@@ -108,7 +108,10 @@ the live product, not the throwaway lab).
   `SlideRenderer` → `SlideEditor` (controlled: `editorSelected` / `onSelect`); suppress the
   comment overlay + per-slide pill while editing. A **View ⇄ Edit toggle** in the toolbar
   (`PreviewActionBar`). Stays INSIDE the `(app)` shell — **no portal / z-index takeover**.
-  Productized engine already in `components/preview/editor/`. *(Status: in progress.)*
+  Productized engine already in `components/preview/editor/`. *(Status: **DONE** —
+  `DeckView` swaps the hero canvas to `SlideEditor` when `editMode && !commentMode`;
+  `editMode = canEdit` so owners land in the editor in-shell. Verified live: single
+  hero iframe, select works, 6 leaves tagged. Toggle + pill-in-edit = follow-up.)*
 - **I2 — A5 property panel** (core editing surface). Bound to the selected leaf:
   TYPOGRAPHY (font, size, weight, color, align, line-height, tracking) + BOX (opacity,
   padding, margin, border, radius) + SIZE (W/H). Writes **export-safe inline styles

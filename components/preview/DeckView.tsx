@@ -22,6 +22,7 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import {
   GenImageProvider,
   type GenImageFills,
@@ -605,6 +606,11 @@ export function DeckView({
   //                Inngest completes). Targeted slides get a
   //                "regenerating" overlay; the Apply button locks.
   const [commentMode, setCommentMode] = useState(false);
+  // Edit mode = the DEFAULT working surface for edit-capable users (plan §0.6 — you
+  // land in the editor). Mutually exclusive with commentMode: the comment overlay
+  // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
+  const editMode = canEdit;
+  const [editorSelected, setEditorSelected] = useState<HTMLElement | null>(null);
   // True while the read-only marker preview popup (HeroCommentOverlay
   // sub-component) is open. Drives chrome that would otherwise compete
   // with the popup — the per-slide pill (regen / history / lock) hides
@@ -3236,15 +3242,30 @@ export function DeckView({
               flat dim gives the spinner readable contrast against
               any slide background without an extra chrome chip. */}
           <div className="h-full w-full overflow-hidden">
-            <SlideRenderer
-              slide={focusedSlide}
-              theme={manifest!.theme}
-              direction={manifest!.direction}
-              language={manifest!.language}
-              width={canvasW}
-              height={canvasH}
-              scale={gridScale}
-            />
+            {editMode && !commentMode ? (
+              <SlideEditor
+                slide={focusedSlide}
+                theme={manifest!.theme}
+                direction={manifest!.direction}
+                language={manifest!.language}
+                width={canvasW}
+                height={canvasH}
+                scale={gridScale}
+                selected={editorSelected}
+                onSelect={setEditorSelected}
+                onDocReady={() => {}}
+              />
+            ) : (
+              <SlideRenderer
+                slide={focusedSlide}
+                theme={manifest!.theme}
+                direction={manifest!.direction}
+                language={manifest!.language}
+                width={canvasW}
+                height={canvasH}
+                scale={gridScale}
+              />
+            )}
           </div>
 
           {/* Per-slide pill — Undo / Try again / Regen / History /
