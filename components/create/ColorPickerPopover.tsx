@@ -109,12 +109,16 @@ export function ColorPickerPopover({
   onChange,
   onClose,
   align = "center",
+  flipUp = false,
   surfaceClassName = "glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation)",
 }: {
   open: boolean;
   value: string;
   onChange: (hex: string) => void;
   onClose: () => void;
+  // Open ABOVE the swatch instead of below (when the trigger sits low in the
+  // viewport and a downward popover would clip).
+  flipUp?: boolean;
   // How the popover lines up horizontally vs its swatch:
   //   • "start"  — anchored to the swatch's start edge (extends end-ward)
   //   • "center" — centered on the swatch
@@ -301,11 +305,13 @@ export function ColorPickerPopover({
         <motion.div
           ref={wrapperRef}
           dir="ltr"
-          className={`${surfaceClassName} absolute top-full z-30 mt-3.5 rounded-xl p-2.5 shadow-2xl`}
+          className={`${surfaceClassName} absolute z-30 rounded-xl p-2.5 shadow-2xl ${
+            flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
+          }`}
           style={{ ...positionStyle, width: POPOVER_WIDTH }}
-          initial={{ scale: 0.96, y: -4 }}
+          initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.96, y: -4 }}
+          exit={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* SV plane */}

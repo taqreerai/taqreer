@@ -47,12 +47,16 @@ export function MorePopover({
   open,
   target,
   kind,
+  flipUp = false,
   setStyle,
   onClose,
 }: {
   open: boolean;
   target: HTMLElement;
   kind: Kind;
+  // When the pill sits low in the viewport, open the menu UPWARD (above the
+  // pill) instead of down, so it never runs off the bottom edge.
+  flipUp?: boolean;
   setStyle: (prop: string, value: string) => void;
   onClose: () => void;
 }) {
@@ -96,11 +100,13 @@ export function MorePopover({
         <motion.div
           ref={ref}
           dir="ltr"
-          className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute top-full z-30 mt-3.5 rounded-2xl px-3.5 py-3.5 shadow-2xl"
+          className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 rounded-2xl px-3.5 py-3.5 shadow-2xl ${
+            flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
+          }`}
           style={{ right: 0, width: WIDTH }}
-          initial={{ scale: 0.96, y: -4 }}
+          initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.96, y: -4 }}
+          exit={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
         >
           {kind === "text" ? (

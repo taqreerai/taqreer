@@ -140,6 +140,11 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  // Whether the pill's popovers (⋯ menu + colour picker) should open upward
+  // (set by the rAF loop when the pill sits low in the viewport). Kept in a ref
+  // too so the loop only triggers a re-render when the direction actually flips.
+  const [popoverFlipUp, setPopoverFlipUp] = useState(false);
+  const flipUpRef = useRef(false);
   const dirty = useRef(false);
 
   // ── position: a rAF loop reads the live selection box (.tqe-sel) and writes the
@@ -162,12 +167,22 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         const botY = ir.top + box.bottom;
         const pw = el.offsetWidth;
         const ph = el.offsetHeight;
+        // Default ABOVE the element; flip BELOW when the element hugs the canvas
+        // top (no room above without spilling off the slide / under the toolbar).
         let top = topY - 10 - ph;
-        if (top < 8) top = Math.min(botY + 10, window.innerHeight - ph - 8);
+        if (top < ir.top + 4) top = botY + 10;
+        top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
         const left = Math.max(8, Math.min(cx - pw / 2, window.innerWidth - pw - 8));
         el.style.left = `${left}px`;
         el.style.top = `${top}px`;
         el.style.visibility = "visible";
+        // Popovers open DOWN by default; flip them UP when there isn't room for a
+        // ~300px panel below the pill (pill is low in the viewport).
+        const wantFlipUp = top + ph + 300 > window.innerHeight - 8;
+        if (wantFlipUp !== flipUpRef.current) {
+          flipUpRef.current = wantFlipUp;
+          setPopoverFlipUp(wantFlipUp);
+        }
       }
       raf = requestAnimationFrame(tick);
     };
@@ -280,6 +295,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               onChange={(hex) => setStyle("color", hex)}
               onClose={() => setColorOpen(false)}
               align="center"
+              flipUp={popoverFlipUp}
               // Match the pill exactly: same dark glass + the modal-strength
               // boost blur (not the default white-tint card) so the picker
               // reads as frosted glass over a slide.
@@ -301,22 +317,23 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           {kind === "image" ? "Image — swap coming (I2.5)" : "Graphic — recolor coming (I2.4)"}
         </span>
       )}
-      {/* "⋯ more" — the rest of the inspector (weight/line/spacing/transform/
-          decoration/opacity for text; opacity/rounding for image+graphic). */}
+      {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
+          opacity for text; opacity/rounding for image+graphic). */}
       <Divider />
-      <div style={{ position: "relative" }}>
-        <Btn active={moreOpen} onClick={() => setMoreOpen((o) => !o)} label="More options">
-          <MoreIcon />
-        </Btn>
-        <MorePopover
-          open={moreOpen}
-          target={target}
-          kind={kind}
-          setStyle={setStyle}
-          onClose={() => setMoreOpen(false)}
-        />
+      <Btn active={moreOpen} onClick={() => setMoreOpen((o) => !o)} label="More options">
+        <MoreIcon />
+      </Btn>
       </div>
-      </div>
+      {/* Rendered at the PILL level (not under the ⋯ button) so it anchors to the
+          pill's right corner (right:0 of the fixed pillRef) and flips with it. */}
+      <MorePopover
+        open={moreOpen}
+        target={target}
+        kind={kind}
+        flipUp={popoverFlipUp}
+        setStyle={setStyle}
+        onClose={() => setMoreOpen(false)}
+      />
     </div>,
     document.body,
   );
