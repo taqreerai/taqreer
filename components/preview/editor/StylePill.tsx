@@ -218,20 +218,35 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     <div
       ref={pillRef}
       dir="ltr"
-      className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) rounded-xl shadow-2xl"
       style={{
         position: "fixed",
         left: -9999,
         top: -9999,
         visibility: "hidden",
         zIndex: 2147483600,
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "5px 7px",
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
+      {/* The blurred glass sits on a SIBLING layer BEHIND the controls, not as
+          their ancestor. A backdrop-filter element is a "backdrop root" for its
+          descendants — so if the pill's blur wrapped the controls, the colour
+          picker (which pops out below the controls) would be nested inside it
+          and could only blur the pill's flat interior, never the slide. With the
+          blur on a sibling layer, the picker's only backdrop-filter ancestor is
+          none → it blurs the slide directly, exactly like the pill. */}
+      <div
+        className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) rounded-xl shadow-2xl"
+        style={{ position: "absolute", inset: 0 }}
+      />
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "5px 7px",
+        }}
+      >
       {kind === "text" && (
         <>
           <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
@@ -280,6 +295,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           {kind === "image" ? "Image — swap coming (I2.5)" : "Graphic — recolor coming (I2.4)"}
         </span>
       )}
+      </div>
     </div>,
     document.body,
   );
