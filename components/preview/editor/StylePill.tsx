@@ -148,6 +148,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const [pillActive, setPillActive] = useState(false);
   const dirty = useRef(false);
 
+  // Read by the rAF (every frame) to drive the selection-outline's visibility,
+  // without effect-timing races. `editingRef` = hide the outline while editing
+  // (popover open / pill pressed). `selectingRef` = a selection change is in
+  // flight (pointer went down on a DIFFERENT element); stay hidden until the box
+  // lands on the new target, so the OLD element's border can't flash in between.
+  const editingRef = useRef(false);
+  const selectingRef = useRef(false);
+
   // Close any open popover the instant the SELECTION changes. Selecting another
   // element happens inside the iframe, so it never reaches the parent-document
   // outside-click handlers that normally dismiss the colour picker / ⋯ menu —
@@ -172,10 +180,9 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
       if (el && iframeEl && target.isConnected) {
         const ir = iframeEl.getBoundingClientRect();
         const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
-        const box =
-          selBox && selBox.style.display !== "none"
-            ? selBox.getBoundingClientRect()
-            : target.getBoundingClientRect();
+        const selRect =
+          selBox && selBox.style.display !== "none" ? selBox.getBoundingClientRect() : null;
+        const box = selRect ?? target.getBoundingClientRect();
         const cx = ir.left + box.left + box.width / 2;
         const topY = ir.top + box.top;
         const botY = ir.top + box.bottom;
@@ -190,35 +197,46 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         el.style.left = `${left}px`;
         el.style.top = `${top}px`;
         el.style.visibility = "visible";
+
+        // Selection-outline visibility. Hide while EDITING (popover open / pill
+        // pressed) so the live change is observable; ALSO hide while a selection
+        // change is in flight and until the box has actually LANDED on the current
+        // target — the selection only commits on `click`, and SlideEditor re-places
+        // the box a frame later, so the OLD element's border would otherwise flash
+        // during the mousedown→click gap. `box center inside target rect` = landed.
+        if (selBox && selRect) {
+          const tr = target.getBoundingClientRect();
+          const bcx = selRect.left + selRect.width / 2;
+          const bcy = selRect.top + selRect.height / 2;
+          const onTarget = bcx >= tr.left && bcx <= tr.right && bcy >= tr.top && bcy <= tr.bottom;
+          selBox.style.visibility =
+            editingRef.current || selectingRef.current || !onTarget ? "hidden" : "visible";
+        }
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
+      if (selBox) selBox.style.visibility = "visible";
+    };
   }, [target]);
 
-  // ── Decide the popover's open direction the MOMENT it opens: open AWAY from the
-  // element (so it never covers it) — UP when the element sits below the pill,
-  // DOWN when above — using the OPEN popover's REAL height (the picker and the ⋯
-  // menu differ; a single oversized estimate wrongly flipped a short menu down
-  // over the element). Falls back to the roomier side only if the preferred side
-  // genuinely can't fit. Runs in a layout effect (before paint) so no flicker. ──
+  // ── Popovers open on the OPPOSITE side from the element, mirroring the pill's
+  // own placement: pill ABOVE the element → open UP (above the pill); pill BELOW
+  // the element → open DOWN. That single rule guarantees the popover never lands
+  // over the element, in every position. Decided the moment a popover opens, in a
+  // layout effect (before paint) so there's no flicker. ──
   useLayoutEffect(() => {
     if (!colorOpen && !moreOpen) return;
     const pill = pillRef.current;
     const iframeEl = (target.ownerDocument.defaultView?.frameElement as HTMLElement | null) ?? null;
     if (!pill || !iframeEl) return;
-    const pr = pill.getBoundingClientRect();
+    const pillBottom = pill.getBoundingClientRect().bottom;
     const elTop = iframeEl.getBoundingClientRect().top + target.getBoundingClientRect().top;
-    const popH = colorOpen ? 268 : kind === "text" ? 234 : 120;
-    const elementBelowPill = elTop >= pr.bottom - 2;
-    const roomAbove = pr.top - 8;
-    const roomBelow = window.innerHeight - 8 - pr.bottom;
-    let up = elementBelowPill;
-    if (up && roomAbove < popH && roomBelow > roomAbove) up = false;
-    else if (!up && roomBelow < popH && roomAbove > roomBelow) up = true;
-    setPopoverFlipUp(up);
-  }, [colorOpen, moreOpen, target, kind]);
+    setPopoverFlipUp(elTop >= pillBottom - 2); // element below the pill → open up
+  }, [colorOpen, moreOpen, target]);
 
   // ── dismiss on a click outside the pill (and outside the canvas — clicks inside
   // the iframe live in a separate document and never reach this listener). ──
@@ -237,13 +255,34 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   // this they'd linger until the selection-change re-render — closing on the
   // iframe's mousedown dismisses them before the new element is even selected. ──
   useEffect(() => {
+    // A new target means the previous in-flight selection has landed → clear the
+    // flag (the rAF's "box not on target yet" check covers the brief window until
+    // SlideEditor re-places the box).
+    selectingRef.current = false;
     const idoc = target.ownerDocument;
-    const onDown = () => {
+    const onDown = (e: MouseEvent) => {
       setColorOpen(false);
       setMoreOpen(false);
+      // Pointer down on a DIFFERENT element than the current selection → a
+      // selection change is coming (it only lands on `click`). Mark it so the
+      // outline stays hidden through the mousedown→click gap, so the OLD element's
+      // border can't flash. Cleared by this effect re-running on the target change.
+      const leaf = (e.target as HTMLElement | null)?.closest?.("[data-tq-cc]") ?? null;
+      if (leaf !== target) selectingRef.current = true;
+    };
+    // Gesture ended on the CURRENT element (re-click to edit / drag-back → no
+    // selection change, so the target-change clear won't fire) → clear here so the
+    // outline isn't left stuck hidden.
+    const onClick = (e: MouseEvent) => {
+      const leaf = (e.target as HTMLElement | null)?.closest?.("[data-tq-cc]") ?? null;
+      if (leaf === target) selectingRef.current = false;
     };
     idoc.addEventListener("mousedown", onDown);
-    return () => idoc.removeEventListener("mousedown", onDown);
+    idoc.addEventListener("click", onClick);
+    return () => {
+      idoc.removeEventListener("mousedown", onDown);
+      idoc.removeEventListener("click", onClick);
+    };
   }, [target]);
 
   // ── commit ONCE on deselect/re-target (cleanup captures the OLD target). ──
@@ -258,20 +297,13 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     };
   }, [target, slideId, onCommit]);
 
-  // ── Hide the selection outline while editing via the pill/menu (a popover is
-  // open, or the pointer is pressed on the pill) so the live change is
-  // observable without the green box on top. `visibility` (not `display`) keeps
-  // the box laid out — the pill's rAF still reads its rect and SlideEditor's
-  // place() leaves visibility untouched. The cleanup restores it so the NEXT
-  // selection's box isn't left invisible. ──
+  // (Selection-outline visibility is driven by the rAF above — it reads the box
+  // every frame, so it can gate on whether the box has actually landed on the
+  // current target, which a state-driven effect can't do race-free.) Mirror the
+  // "editing" flag into a ref the rAF reads (can't write a ref during render).
   useEffect(() => {
-    const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
-    if (!selBox) return;
-    selBox.style.visibility = colorOpen || moreOpen || pillActive ? "hidden" : "visible";
-    return () => {
-      selBox.style.visibility = "visible";
-    };
-  }, [target, colorOpen, moreOpen, pillActive]);
+    editingRef.current = colorOpen || moreOpen || pillActive;
+  }, [colorOpen, moreOpen, pillActive]);
 
   // Pointer released anywhere ends the "pressing the pill" state.
   useEffect(() => {
