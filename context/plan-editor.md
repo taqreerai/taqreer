@@ -38,7 +38,10 @@ cross-origin iframe):**
 **Already replicated in the lab (this session):** content-unit click resolution
 (skips divs) · inflated non-overlapping single outline (focus-ring killed) · robust
 text editing (paste→plain-text, `<br>` not `<div>`, no stacked-listener dup, headings
-always re-editable) · semantic Layers tree.
+always re-editable) · semantic Layers tree *(lab build; SELECTION was later
+simplified to flat visual leaves — see Build status below — while the pruned
+tree returns as the productized Layers panel, a navigation aid in the Layout
+tab, §5.4)*.
 
 **Rebuild sequence (the full clone):**
 - **Chunk 1 — Iframe-isolated renderer.** Render the active slide into a same-origin
@@ -70,7 +73,9 @@ prompt) — keeps generation untouched. Selection colors: keep brand green for n
 sanitize must run in an effect (was empty), transform-on-iframe paint clip → scale
 content inside, RTL right-aligned the stage → pin absolute top-left. **Selection
 simplified to flat visual leaves** (user direction): only text/img/svg are selectable
-+ listed; containers neither. **Chunk 5 (A5 panel) = next**, plus fonts-into-iframe.
++ listed (a FLAT leaf list, not a tree); containers neither. *(The pruned semantic
+tree is a productized Layers-panel navigation aid — §5.4 — NOT the selection model.)*
+**Chunk 5 (A5 panel) = next**, plus fonts-into-iframe.
 Remaining unknown = **export parity (A7)** — validate in `/project` (export already
 wired) rather than build lab export plumbing. Absolute-vs-flow positioning **parked**
 until the direct-manipulation phase.
@@ -255,7 +260,7 @@ Right-panel assembler `views/editor-right-side.tsx`: single block selected →
 - `views/editor-bottom-toolbar.tsx`: floating pill, **AI ⇄ Design** tabs (Shift+Tab toggles).
   - AI tab: auto-grow textarea + send.
   - Design tab tools: Select(V), Move/Pan(Space), Text(T), Image(file picker), Frame(F), Arrow(A), Draw(D), | Undo(⌘Z), Redo(⌘⇧Z), | Export ▾ (image / copy-JSON).
-- `views/editor-left-side.tsx`: **Layers** list (z-order; per-item: type icon, inline label, click-select, hover-highlight, dimmed-when-hidden; ⋯ = Rename/Duplicate/Delete/Hide-Show/Bring forward/to-front/backward/to-back). Footer: GitHub, theme toggle, settings. **(We DROP this — see §5.)**
+- `views/editor-left-side.tsx`: **Layers** list (z-order; per-item: type icon, inline label, click-select, hover-highlight, dimmed-when-hidden; ⋯ = Rename/Duplicate/Delete/Hide-Show/Bring forward/to-front/backward/to-back). Footer: GitHub, theme toggle, settings. **(We DON'T replicate this left-panel Layers; a PRUNED version is KEPT, folded into the Layout tab — see §5.4.)**
 - `views/editor-right-side.tsx`: context-sensitive Properties (the controls in §2b).
 - Zoom/pan: `zoomable.tsx` (−/+/reset), `use-canvas-zoom-pan.ts` (0.25×–5×, ctrl-wheel zoom / wheel pan). **(We don't need infinite pan; slide is a fixed frame.)**
 - Hotkeys (`hooks/use-canvas-hotkeys.ts`): ⌘A select-all, ⌘C/⌘V copy/paste, Space=pan, V/F/T/A/D mode, Backspace/Delete. (No undo/redo/nudge/cut hotkey — gaps.)

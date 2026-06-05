@@ -142,9 +142,18 @@ Key reason: we serialize THROUGH `sanitizeSlideHtml`, which strips contentEditab
   class-editing / "apply to all of type" is a deliberate LATER phase — that's where
   the CSSOM-serialization risk is quarantined.)*
 
-### A6. Selection model on real nested slides — ✅ GREEN (live)
+### A6. Selection model on real nested slides — ✅ GREEN (model since changed)
 
-*Live: leaf-click selects the leaf, Esc/↑/alt-click escalate (stop at `<section>`),
+> **⚠️ The criteria in this section describe the PRE-2026-06-05 selection model and
+> are kept for history.** Current model = the **A6 STATUS UPDATE** at the top of this
+> file: SELECTION is a flat list of **visual leaves** (text / img / svg only;
+> containers are NOT selectable — click a container → deselect). The
+> escalate-to-container, "reach the unreachable", and semantic-tree-AS-SELECTION
+> items below are superseded. The pruned semantic tree itself is *not* dropped — it
+> returns as the productized **Layers panel** (a navigation aid in the Layout tab,
+> NOT a selection mechanism); see `plan-editor.md` §5.4.
+
+*(Historical) Live: leaf-click selects the leaf, Esc/↑/alt-click escalate (stop at `<section>`),
 breadcrumb is truthful (`div ‹ section.tq-canvas`), and the **semantic Layers tree**
 shows ~7 readable entries on the cover (svg = ONE "Graphic" entry, text leaves
 labeled) — exactly the pruned grouping, not a node dump.*
