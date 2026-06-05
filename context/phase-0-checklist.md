@@ -44,10 +44,13 @@ not `<div>`, no stacked-listener dup, headings always re-editable).
 **Remaining before the gate:** **A5** (inline-style panel — a known build, not an
 unknown), **A7 export parity** (the LAST real unknown), **A8** undo.
 
-**Parked decision:** absolute-vs-flow positioning (PowerPoint-style proportional
-scale vs CSS flow). Doesn't block A5 / export / persistence (all model-agnostic);
-ONLY blocks direct-manipulation (drag/resize). Decide when we build that, likely
-via **flow-generate → freeze-to-absolute on edit → absolute-export**.
+**Decided (2026-06-05):** absolute-vs-flow positioning — **general drag/resize/rotate
+is DROPPED.** A lab spike showed per-element freeze re-packs flex/grid siblings (~502px),
+and the only stable model (freeze the WHOLE slide to absolute on first manipulation;
+measured ≤2px shift, 0px disturbance) makes the whole slide rigid the moment you touch
+anything — not worth it for text/boxes. General elements are STYLED (I2 pill), not moved.
+**Images keep move/resize/swap** as a scoped later feature. Doesn't affect A5 / export /
+persistence (all model-agnostic). See plan-editor.md §0.5 I-series for the decision.
 
 **Recommendation:** Phase-0 de-risk is essentially done. **A7 (export parity) is the
 one unknown left, and it's best validated in `/project` where export is already

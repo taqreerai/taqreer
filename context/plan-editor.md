@@ -136,8 +136,15 @@ the live product, not the throwaway lab).
   gpt-image pipeline (`deck.image.warm` → `deck-images-generate` → `injectImgSrc`)
   targeted at the selected box. Element-scoped AI ("rewrite/redesign this") uses
   `data-tq-cc` as the address for partial regen.
-- **Deferred** (needs the absolute-vs-flow decision): drag/resize/rotate + multi-select
-  group-move → likely flow-generate → freeze-to-absolute on edit → absolute-export.
+- **DECIDED (2026-06-05, after a lab spike): general drag/resize/rotate is DROPPED.**
+  The only model that keeps the rest of the slide stable is freeze-the-WHOLE-slide-to-
+  absolute on first manipulation (per-element freeze re-packs flex/grid siblings —
+  measured 502px shift; whole-slide freeze measured ≤2px + 0px disturbance when moving).
+  It works, but the UX cost — the entire slide goes rigid the instant you touch anything,
+  losing the flow layout — isn't worth it for nudging text/boxes. So: NO geometry editing
+  for general elements (they're styled via the I2 pill, not moved). **Exception: IMAGES**
+  get move/resize/swap as a scoped, later feature (the one case where direct manipulation
+  earns its keep). The lab freeze-drag spike was reverted; see context/log for the data.
 
 **Cadence:** `/security-review` after the persistence route + iframe changes (new
 route / schema / upload-handler territory). **Cross-origin hardening:** when ready,
