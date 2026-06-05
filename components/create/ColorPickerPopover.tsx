@@ -290,37 +290,28 @@ export function ColorPickerPopover({
   return (
     <AnimatePresence>
       {open ? (
-        // The fade lives on this positioning wrapper, NOT on the glass surface
-        // below. `backdrop-filter` does not composite on an element that carries
-        // its own `transform` — so the pill's blur works (it's static) but the
-        // picker's used to die because the glass surface was the animated
-        // motion.div (scale/y → transform). Animating only OPACITY here, and
-        // keeping the surface a plain static div, makes the picker blur exactly
-        // like the pill. (opacity 1 at rest creates no stacking context, so the
-        // surface's backdrop-filter is untouched once the fade settles.)
+        // One element is BOTH the glass surface AND the open/close animation. The
+        // motion is scale + y only — a TRANSFORM. We deliberately do NOT animate
+        // opacity: opacity < 1 suppresses backdrop-filter for every mid-fade
+        // frame, which is what made the blur appear delayed / glitch in on open.
+        // An element's OWN transform does not suppress its own backdrop-filter,
+        // so the blur is on from frame one. (This only holds because the picker
+        // is not a descendant of another backdrop-filter element — the style pill
+        // keeps its blur on a sibling layer for exactly this reason.)
         //
-        // Width 182 px (per user direction 2026-06-01); all inner dimensions
-        // scaled with it (SV plane 94 px tall, hue h-2.5, presets h-5, etc.).
+        // `surfaceClassName` carries the glass recipe: default `.glass-card`
+        // (white-tint) for the create/brand/mimic cards; the style pill passes
+        // `.glass-popover` (dark fill). `mt-3.5` leaves a small gap below the
+        // trigger. Width 182 px; inner dims scale with it.
         <motion.div
-          className="absolute top-full z-30 mt-2"
-          style={{ ...positionStyle, width: POPOVER_WIDTH }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-        >
-        {/* Glass surface — STATIC (no transform/opacity of its own) so its
-            backdrop-filter blur renders identically to the pill.
-            `surfaceClassName` carries the glass recipe: default `.glass-card`
-            (white-tint) for the create/brand/mimic cards; the style pill passes
-            `.glass-popover` (dark fill) so the picker reads over a slide.
-            `backdrop-blur-glass` + the saturate utility ride on the same class
-            string so the Tailwind layer wins composition over the class's raw
-            backdrop-filter (memory: feedback_tw_glass_system). */}
-        <div
           ref={wrapperRef}
           dir="ltr"
-          className={`${surfaceClassName} rounded-xl p-2.5 shadow-2xl`}
+          className={`${surfaceClassName} absolute top-full z-30 mt-3.5 rounded-xl p-2.5 shadow-2xl`}
+          style={{ ...positionStyle, width: POPOVER_WIDTH }}
+          initial={{ scale: 0.96, y: -4 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.96, y: -4 }}
+          transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* SV plane */}
           <div
@@ -393,7 +384,6 @@ export function ColorPickerPopover({
               />
             ))}
           </div>
-        </div>
         </motion.div>
       ) : null}
     </AnimatePresence>
