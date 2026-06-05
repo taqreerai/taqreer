@@ -97,6 +97,10 @@ function hsvToHex(h: number, s: number, v: number) {
 
 // ─── Component ────────────────────────────────────────────────────
 
+// Fixed popover width (px). Shared by the width style and the "center"
+// margin-left offset so the two never drift apart.
+const POPOVER_WIDTH = 182;
+
 export type ColorPickerAlign = "center" | "start" | "end";
 
 export function ColorPickerPopover({
@@ -272,15 +276,20 @@ export function ColorPickerPopover({
     onChange(preset);
   };
 
-  // Anchor wrapper handles positioning; the motion.div inside owns
-  // animation transforms. Framer Motion's `scale` / `y` apply via
-  // CSS `transform`, which would clobber `translateX(-50%)` if both
-  // lived on the same element — split into two wrappers to keep
-  // the centering math out of Framer's hands.
+  // Anchor wrapper handles positioning; the motion.div inside owns the
+  // open/close animation (scale + y, applied via CSS `transform`).
+  //
+  // The anchor MUST NOT carry a `transform` itself: a transformed ANCESTOR
+  // becomes the backdrop root for `backdrop-filter`, so the glass surface
+  // below it would lose its blur entirely (the same well-known trap that bit
+  // the Bell + History popovers). So "center" offsets via a negative
+  // `margin-left` of half the fixed width instead of `translateX(-50%)` —
+  // pure layout, no transform, blur intact. The motion.div's OWN transform is
+  // fine; only ancestor transforms break a descendant's backdrop-filter.
   const positionStyle: React.CSSProperties = (() => {
     if (align === "start") return { left: 0 };
     if (align === "end") return { right: 0 };
-    return { left: "50%", transform: "translateX(-50%)" };
+    return { left: "50%", marginLeft: -POPOVER_WIDTH / 2 };
   })();
 
   return (
@@ -294,7 +303,7 @@ export function ColorPickerPopover({
           // 10 → 13 px, padding p-2 → p-2.5. (The 240 px original was
           // shrunk to 140 px on 2026-05-26; this brings it partway back.)
           className="absolute top-full z-30 mt-2"
-          style={{ ...positionStyle, width: 182 }}
+          style={{ ...positionStyle, width: POPOVER_WIDTH }}
         >
         {/* Glass surface — `surfaceClassName` carries the glass recipe.
             Default `.glass-card` is the canonical white-tint (background =

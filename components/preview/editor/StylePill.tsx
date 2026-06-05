@@ -92,7 +92,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
       style={{
         height: 24,
         padding: "0 3px",
-        borderColor: "var(--tq-border)",
+        borderColor: "var(--tq-border-glass)",
         background: "rgba(255,255,255,0.04)",
       }}
     >
@@ -238,16 +238,17 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
             <span style={{ fontWeight: 800, fontSize: 13 }}>B</span>
           </Btn>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
             <button
               type="button"
               aria-label="Text colour"
               onClick={() => setColorOpen((o) => !o)}
               style={{
-                width: 24,
-                height: 24,
-                borderRadius: 7,
-                border: "1px solid var(--tq-border)",
+                display: "block",
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                border: "1px solid var(--tq-border-glass)",
                 background: color,
                 cursor: "pointer",
               }}
@@ -311,5 +312,5 @@ function Btn({
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 18, background: "var(--tq-border)" }} />;
+  return <div style={{ width: 1, height: 18, background: "var(--tq-border-glass)" }} />;
 }
