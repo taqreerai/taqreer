@@ -7,6 +7,76 @@ detail because context is limited; everything needed to resume is here.
 
 ---
 
+## 0.5 — REBUILD DECISION (2026-06-05): faithful **claude.ai/design** clone
+
+Mid-Phase-0 we discovered **claude.ai/design** is the SAME architecture we're
+building (HTML-native slides + inline-style control panel), done robustly — proof
+the DOM-native path is right and the "nightmare" was only **raw contentEditable**,
+not the architecture. User directive: **clone it entirely; iframe + tagging first.**
+
+**The claude.ai/design blueprint (reverse-engineered live, Playwright into its
+cross-origin iframe):**
+1. **Sandboxed iframe** — slide HTML runs in its own iframe (they use cross-origin
+   `*.claudeusercontent.com` + `postMessage`; **we use a same-origin `srcdoc`
+   iframe** for the prototype → CSS isolation + clean chrome WITHOUT a postMessage
+   bridge; harden to cross-origin later for prod security). This is WHY their chrome
+   is clean: the slide is its own document, nothing from the app bleeds onto it.
+2. **Element tagging on load** — every element gets a stable id (`data-om-id`);
+   **content units** (text blocks, img, svg) also get `data-cc-id`; plain layout
+   divs get neither. Enables precise selection + mapping edits back to source HTML.
+3. **Selection model** — a click resolves to the nearest **content unit**, SKIPPING
+   layout wrappers. Chrome = two `pointer-events:none` overlay divs INSIDE the
+   iframe: **hover green `#10B981`**, **selection violet `#8B5CF6`**, 2px, **box
+   inflated ~2px** so the border floats OUTSIDE the glyphs (measured: H2 box
+   271/310/966×75 → overlay 269/308/970×79). Never overlaps text.
+4. **Inline-style panel** — TYPOGRAPHY (Font, Size, Weight, Color, Align,
+   Line-Height, Tracking) + SIZE (W/H) + BOX (Opacity, Padding, Margin, Border,
+   Radius), bound to selected unit, writes inline styles. (= our A5, confirmed 1:1.)
+5. **Transient `contentEditable`** — applied only during an active text edit.
+6. HTML stays the single source of truth.
+
+**Already replicated in the lab (this session):** content-unit click resolution
+(skips divs) · inflated non-overlapping single outline (focus-ring killed) · robust
+text editing (paste→plain-text, `<br>` not `<div>`, no stacked-listener dup, headings
+always re-editable) · semantic Layers tree.
+
+**Rebuild sequence (the full clone):**
+- **Chunk 1 — Iframe-isolated renderer.** Render the active slide into a same-origin
+  `srcdoc` iframe sized 1920×1080, scaled to fit. Doc = reset + `themeToCssVars` +
+  fonts + `theme.background/text` + `var(--font-body)` + the `sanitizeSlideHtml(slide.html)`
+  `<section>`. Replaces the in-app `<SlideRenderer>` in the lab canvas. Selection/
+  overlay/layers/edit/harness must all re-point from `canvasRef` to
+  `iframe.contentDocument` and operate inside it.
+- **Chunk 2 — On-load tagging.** After load, walk the iframe DOM: assign `data-tq-id`
+  to every element; `data-tq-cc` to content units (reuse `isSelectableUnit`). Stable
+  identity for selection + edit-mapping.
+- **Chunk 3 — Overlay chrome inside the iframe.** Inject a hover box (green) +
+  selection box (violet/brand), `pointer-events:none`, inflated ~2px, tracking the
+  hovered/selected unit; click selects content unit; events wired on the iframe doc.
+- **Chunk 4 — Text editing in the iframe.** Dbl-click unit → transient
+  `contentEditable` with our hardened paste/junk fixes; A1/A2/A3 harness run against
+  the iframe doc.
+- **Chunk 5 — A5 inline-style panel.** TYPOGRAPHY/SIZE/BOX bound to selected unit,
+  writes inline styles into the iframe element.
+
+**Decisions:** same-origin `srcdoc` iframe (not cross-origin) for the prototype —
+flag cross-origin+postMessage as prod hardening. Tagging at LOAD time (not in the AI
+prompt) — keeps generation untouched. Selection colors: keep brand green for now
+(violet is claude's); revisit.
+
+**Build status (2026-06-05):** Chunks **1–4 DONE + verified** in `app/lab/editor/`
+(`IframeCanvas.tsx` = render + tag + overlays + edit; `LabEditor.tsx` = shell;
+`harness.ts` = round-trip tests + `buildLayerTree`). Bugs found+fixed along the way:
+sanitize must run in an effect (was empty), transform-on-iframe paint clip → scale
+content inside, RTL right-aligned the stage → pin absolute top-left. **Selection
+simplified to flat visual leaves** (user direction): only text/img/svg are selectable
++ listed; containers neither. **Chunk 5 (A5 panel) = next**, plus fonts-into-iframe.
+Remaining unknown = **export parity (A7)** — validate in `/project` (export already
+wired) rather than build lab export plumbing. All uncommitted (`app/lab/` untracked).
+Absolute-vs-flow positioning **parked** until the direct-manipulation phase.
+
+---
+
 ## 0. TL;DR
 
 Every editing path we have today is **AI-driven** (full deck regen, single-slide
@@ -173,15 +243,27 @@ this mostly bites only non-absolute boxes), arrow/draw vector tools, their AI st
 3. **AI triggers live in the bottom bar's AI mode only.** Clicking AI reveals ALL
    our AI actions: slide regen, region-select (comment) regen, element-scoped
    "change this with AI", image regen. Edit mode = manual tools only.
-4. **Layers panel = DROPPED** (was going to be left, same as theirs). Reason: for a
-   slide (≤~30 visible elements) the panel is mostly its ⋯ menu. Move the ⋯ actions
-   to a **right-click context menu** on the canvas element → more canvas width.
-   - The ONE thing a tree did that right-click can't = **select an element you can't
-     click** (occluded, or the **parent container** of a clicked leaf — common in
-     nested flex/grid HTML). Cover it cheaply with: **(a)** click-to-escalate /
-     "select parent" (`Esc`/`↑`/alt-click walks up the DOM), **(b)** a one-line
-     **selection breadcrumb** (`section › card › h2`, click a crumb to select that
-     ancestor), **(c)** a "Select parent" entry in the right-click menu.
+4. **Layers — KEPT, folded into the Layout tab** (reversed 2026-06-05 after an
+   architecture review). A tree is the single most useful affordance for the
+   hardest case — picking the right node in deeply nested flex/grid — and a
+   breadcrumb lets you *walk* the tree but not *see* it (you can't tell where to
+   stop climbing). So Layers lives as a compact list at the top of the **Layout
+   tab** (no separate left panel → canvas stays wide); right-click ⋯ + breadcrumb +
+   click-to-escalate (`Esc`/`↑`/alt-click) stay as **complements**, not replacements.
+   - **Grouping — the Layers list is a PRUNED SEMANTIC tree, never the raw DOM**
+     (this is what keeps it from being a confusing pile). Rules:
+     - **Top level = the slide's composition blocks** — the direct children of
+       `<section>` (title, stat row, chart, logo) — how a user thinks about a slide.
+     - **Prune noise:** single-child wrapper `<div>`s are flattened (promote child);
+       an `<svg>` is **one** "Graphic/Icon" entry, NEVER expanded into its paths;
+       inline text spans collapse into their parent text block.
+     - **Labels:** text snippet for text nodes; "Image"/"Logo"/"Chart"/"Icon" for
+       graphics; role/class for containers. Default 1–2 levels deep, chevron for more.
+     - Result: ~6–15 entries per slide, not 50 nodes.
+     - **Presentation-only — we NEVER wrap the DOM.** HTML stays the single source
+       of truth, so the round-trip stays clean. Multi-select (style/move several at
+       once) works without wrapping; **persistent Figma-style groups = injecting a
+       wrapper `<div>` = HTML mutation = NOT Phase 0.**
 5. **`/project` is the editor** (final destination).
 6. **Dark-locked.** No editor theme toggle. Light mode is reserved on the existing
    **header switcher**, kept **inactive** until we build light mode.
@@ -198,8 +280,9 @@ Hide/Show · Bring forward / to front / backward / to back · **Select parent** 
 │            CENTER — slide canvas (WIDER)         │ RIGHT (tabs)│
 │   select · handles · inline-text · right-click ⋯ │[Slides][Layout]
 │   breadcrumb:  section › card › h2               │ Slides: film│
-│                                                  │ Layout:Text/│
-│                                                  │  Box/Image  │
+│                                                  │ Layout:      │
+│                                                  │  Layers(tree)│
+│                                                  │  +Text/Box/Im│
 ├──────────────────────────────────────────────────┴─────────────┤
 │  COMMAND BAR (floating):  [ Edit ⇆ AI ]                         │
 │   Edit:  select · T text · ▢ shape · 🖼 image · ↶ ↷             │
@@ -211,7 +294,7 @@ Hide/Show · Bring forward / to front / backward / to back · **Select parent** 
 
 ### Fate of each existing element
 - **Right `SlideNavSidebar`** → kept, becomes the **[Slides]** tab of a tabbed right rail; gains a sibling **[Layout]** tab (the Inspector).
-- **Left `PreviewActionBar`** → its deck actions (export/share/present/history) move to a **top strip**; the editing tools move to the bottom command bar. The left edge is freed (no Layers panel) → wider canvas.
+- **Left `PreviewActionBar`** → its deck actions (export/share/present/history) move to a **top strip**; the editing tools move to the bottom command bar. The left edge is freed (Layers lives in the Layout tab, not a left panel) → wider canvas.
 - **`SlidePill`** → kept; add an **"edited/unsaved"** state; respect **lock** (locked slide = read-only in editor).
 - **`CommentsPanel`/`HeroCommentOverlay`** → the region-comment regen becomes one of the AI-mode triggers in the bottom bar (relocated, not retired).
 
@@ -223,6 +306,32 @@ Hide/Show · Bring forward / to front / backward / to back · **Select parent** 
 | Line-spacing / restyle | Layout-tab controls, instant inline-style, no AI |
 | Inline text fix | `contentEditable` on the DOM node |
 | Slide/full regen, history, share, export, presence | top strip + filmstrip context menus; plumbing unchanged |
+
+### Hard rules (architecture review, 2026-06-05) — non-negotiable
+
+1. **The round-trip risk is ADDITIVE, not subtractive.** The danger isn't the
+   serializer *stripping* RTL/`dir`/spans — it's `contentEditable` + `outerHTML`
+   *adding/mutating* things we didn't ask for: stray `<div>`/`<br>`/`<span style>`,
+   `&nbsp;`, injected bidi spans, attr-reorder drift, noisy version diffs. **A1 on
+   clean HTML already passes byte-perfect (2026-06-05); the real gate is the
+   EDIT round-trip — checklist A2/A3.** Fallback if contentEditable can't be tamed:
+   a real text model (Lexical/ProseMirror) for **text nodes only**, DOM for layout.
+   Decide it in `/lab`, never in Phase 2.
+2. **Transforms are export-safe-ONLY.** If dom-to-pptx can't reproduce CSS
+   rotate/scale, the editor does NOT expose them — preview MUST equal export.
+   A7 decides empirically; until it passes, those controls don't ship.
+3. **Inline-style now, class-editing is a real LATER phase (not never).** Phase 0
+   is inline-only (keeps the round-trip clean). The accumulation problem is real, so
+   (a) **consolidate** an element's repeated writes into ONE clean `style` on save
+   (checklist A5 "no redundant accumulation"), and (b) "apply to all of type" =
+   editing the shared scoped class — a deliberately-quarantined later phase where the
+   CSSOM-serialization risk lives.
+4. **Free-drag (absolute) vs nudge (flow) — set the expectation, don't hide it.**
+   The editor feels less free than Canva for flow elements; that's inherent to
+   DOM-native and fine under the "scalpel" framing.
+5. **Grouping is presentation-only.** The Layers tree groups/prunes the DOM for
+   display; it NEVER wraps elements in new `<div>`s. HTML stays the single source of
+   truth.
 
 ---
 
