@@ -93,7 +93,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         height: 24,
         padding: "0 3px",
         borderColor: "var(--tq-border-glass)",
-        background: "rgba(255,255,255,0.04)",
+        background: "var(--tq-bg-glass)",
       }}
     >
       <button

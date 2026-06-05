@@ -622,6 +622,9 @@ export function DeckView({
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
   const editMode = canEdit;
   const [editorSelected, setEditorSelected] = useState<HTMLElement | null>(null);
+  // Stable reference so StylePill's outside-click `mousedown` listener isn't
+  // re-attached on every DeckView render (`setEditorSelected` is itself stable).
+  const dismissEditorSelection = useCallback(() => setEditorSelected(null), []);
   // Bumped to force the editor iframe to rebuild from slide.html on an EXTERNAL
   // content change (restore / undo / redo). A self-save deliberately does NOT
   // bump it — the iframe already shows the user's edit, so rebuilding would wipe
@@ -3440,7 +3443,7 @@ export function DeckView({
                 target={editorSelected}
                 slideId={focusedSlide.slideId}
                 onCommit={handleSlideEdit}
-                onDismiss={() => setEditorSelected(null)}
+                onDismiss={dismissEditorSelection}
               />
             ) : null}
           </div>

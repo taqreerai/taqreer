@@ -40,6 +40,11 @@ const POPOVER_WIDTH = 220;
 // they belong to the same visual family.
 const ANCHOR_GAP_PX = 12;
 const VIEWPORT_EDGE_INSET_PX = 12;
+// Defense-in-depth cap on rendered rows. The server already prunes to
+// MAX_VERSIONS_PER_SLIDE (20), so this is normally a no-op — it just bounds the
+// list if the status payload ever returns more than expected. (Can't import the
+// server constant here without pulling Prisma into the client bundle.)
+const MAX_HISTORY_ROWS = 20;
 
 export function HistoryPopover({
   open,
@@ -161,7 +166,7 @@ export function HistoryPopover({
           </header>
           <ul className="flex max-h-[280px] flex-col overflow-y-auto overscroll-contain">
             <AnimatePresence initial={false}>
-              {rest.slice(0, 20).map((row) => (
+              {rest.slice(0, MAX_HISTORY_ROWS).map((row) => (
                 <motion.li
                   key={row.versionNumber}
                   initial={{ opacity: 0 }}
