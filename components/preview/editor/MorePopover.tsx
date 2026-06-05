@@ -34,7 +34,6 @@ const TRANSFORMS: { value: string; label: string }[] = [
   { value: "none", label: "—" },
   { value: "uppercase", label: "AA" },
   { value: "lowercase", label: "aa" },
-  { value: "capitalize", label: "Aa" },
 ];
 
 const DECORATIONS: { value: string; label: string }[] = [

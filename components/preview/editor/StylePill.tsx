@@ -145,6 +145,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   // too so the loop only triggers a re-render when the direction actually flips.
   const [popoverFlipUp, setPopoverFlipUp] = useState(false);
   const flipUpRef = useRef(false);
+  // True while the pointer is pressed on the pill (clicking/holding a control).
+  const [pillActive, setPillActive] = useState(false);
   const dirty = useRef(false);
 
   // ── position: a rAF loop reads the live selection box (.tqe-sel) and writes the
@@ -213,6 +215,28 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     };
   }, [target, slideId, onCommit]);
 
+  // ── Hide the selection outline while editing via the pill/menu (a popover is
+  // open, or the pointer is pressed on the pill) so the live change is
+  // observable without the green box on top. `visibility` (not `display`) keeps
+  // the box laid out — the pill's rAF still reads its rect and SlideEditor's
+  // place() leaves visibility untouched. The cleanup restores it so the NEXT
+  // selection's box isn't left invisible. ──
+  useEffect(() => {
+    const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
+    if (!selBox) return;
+    selBox.style.visibility = colorOpen || moreOpen || pillActive ? "hidden" : "visible";
+    return () => {
+      selBox.style.visibility = "visible";
+    };
+  }, [target, colorOpen, moreOpen, pillActive]);
+
+  // Pointer released anywhere ends the "pressing the pill" state.
+  useEffect(() => {
+    const onUp = () => setPillActive(false);
+    document.addEventListener("mouseup", onUp);
+    return () => document.removeEventListener("mouseup", onUp);
+  }, []);
+
   const setStyle = useCallback(
     (prop: string, value: string) => {
       target.style.setProperty(prop, value);
@@ -243,7 +267,10 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         visibility: "hidden",
         zIndex: 2147483600,
       }}
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+        setPillActive(true);
+      }}
     >
       {/* The blurred glass sits on a SIBLING layer BEHIND the controls, not as
           their ancestor. A backdrop-filter element is a "backdrop root" for its
