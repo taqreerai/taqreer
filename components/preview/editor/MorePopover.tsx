@@ -12,7 +12,7 @@
 // rather than the pill's flat interior. (memory: reference_backdrop_filter_traps)
 
 import { useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 type Kind = "text" | "image" | "svg";
 
@@ -93,9 +93,11 @@ export function MorePopover({
   const decoration = decorationOf(cs.textDecorationLine || cs.textDecoration);
   const radiusPx = Math.round(parseFloat(cs.borderTopLeftRadius) || 0);
 
+  if (!open) return null;
+  // No AnimatePresence / exit animation: the popover is a child of the pill, so a
+  // lingering exit would relocate to the next element and flash. It unmounts the
+  // instant `open` flips false; the entrance (initial→animate) still plays.
   return (
-    <AnimatePresence>
-      {open ? (
         <motion.div
           ref={ref}
           dir="ltr"
@@ -105,7 +107,6 @@ export function MorePopover({
           style={{ left: 0, width: WIDTH }}
           initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
         >
           {kind === "text" ? (
@@ -180,8 +181,6 @@ export function MorePopover({
             </>
           )}
         </motion.div>
-      ) : null}
-    </AnimatePresence>
   );
 }
 

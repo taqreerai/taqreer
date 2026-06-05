@@ -110,6 +110,7 @@ export function ColorPickerPopover({
   onClose,
   align = "center",
   flipUp = false,
+  instantExit = false,
   surfaceClassName = "glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation)",
 }: {
   open: boolean;
@@ -119,6 +120,9 @@ export function ColorPickerPopover({
   // Open ABOVE the swatch instead of below (when the trigger sits low in the
   // viewport and a downward popover would clip).
   flipUp?: boolean;
+  // Unmount instantly on close (no exit fade). Used by the in-canvas style pill
+  // so the popover can't linger and relocate to the next element on a switch.
+  instantExit?: boolean;
   // How the popover lines up horizontally vs its swatch:
   //   • "start"  — anchored to the swatch's start edge (extends end-ward)
   //   • "center" — centered on the swatch
@@ -311,7 +315,10 @@ export function ColorPickerPopover({
           style={{ ...positionStyle, width: POPOVER_WIDTH }}
           initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.96, y: flipUp ? 4 : -4 }}
+          // `instantExit` (the in-canvas style pill) skips the exit fade: the
+          // popover is a child of the pill, so a lingering exit would relocate to
+          // the next element and flash on element switch.
+          exit={instantExit ? undefined : { scale: 0.96, y: flipUp ? 4 : -4 }}
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* SV plane */}

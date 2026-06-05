@@ -16,7 +16,7 @@
 // live, but the serialize → I3 save (onCommit) fires once, on DESELECT (the pill
 // unmounts / re-targets) — a run of tweaks is ONE version, not one-per-keystroke.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { MorePopover } from "./MorePopover";
@@ -140,11 +140,10 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  // Whether the pill's popovers (⋯ menu + colour picker) should open upward
-  // (set by the rAF loop when the pill sits low in the viewport). Kept in a ref
-  // too so the loop only triggers a re-render when the direction actually flips.
+  // Whether the OPEN popover (colour picker / ⋯ menu) opens upward — decided the
+  // moment a popover opens, from its real height + which side the element is on
+  // (see the layout effect below).
   const [popoverFlipUp, setPopoverFlipUp] = useState(false);
-  const flipUpRef = useRef(false);
   // True while the pointer is pressed on the pill (clicking/holding a control).
   const [pillActive, setPillActive] = useState(false);
   const dirty = useRef(false);
@@ -185,39 +184,41 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         // Default ABOVE the element; flip BELOW when the element hugs the canvas
         // top (no room above without spilling off the slide / under the toolbar).
         let top = topY - 10 - ph;
-        let pillBelowElement = false;
-        if (top < ir.top + 4) {
-          top = botY + 10;
-          pillBelowElement = true;
-        }
+        if (top < ir.top + 4) top = botY + 10;
         top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
         const left = Math.max(8, Math.min(cx - pw / 2, window.innerWidth - pw - 8));
         el.style.left = `${left}px`;
         el.style.top = `${top}px`;
         el.style.visibility = "visible";
-        // Popovers open AWAY from the element so they don't cover it: UP when the
-        // pill is ABOVE the element (element below), DOWN when the pill is below —
-        // unless that side can't fit a ~280px panel, then fall back to whichever
-        // side has more room.
-        const POPOVER_H = 280;
-        const roomAbove = top - 8;
-        const roomBelow = window.innerHeight - 8 - (top + ph);
-        let wantFlipUp = !pillBelowElement;
-        if (wantFlipUp && roomAbove < POPOVER_H && roomBelow > roomAbove) {
-          wantFlipUp = false;
-        } else if (!wantFlipUp && roomBelow < POPOVER_H && roomAbove > roomBelow) {
-          wantFlipUp = true;
-        }
-        if (wantFlipUp !== flipUpRef.current) {
-          flipUpRef.current = wantFlipUp;
-          setPopoverFlipUp(wantFlipUp);
-        }
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target]);
+
+  // ── Decide the popover's open direction the MOMENT it opens: open AWAY from the
+  // element (so it never covers it) — UP when the element sits below the pill,
+  // DOWN when above — using the OPEN popover's REAL height (the picker and the ⋯
+  // menu differ; a single oversized estimate wrongly flipped a short menu down
+  // over the element). Falls back to the roomier side only if the preferred side
+  // genuinely can't fit. Runs in a layout effect (before paint) so no flicker. ──
+  useLayoutEffect(() => {
+    if (!colorOpen && !moreOpen) return;
+    const pill = pillRef.current;
+    const iframeEl = (target.ownerDocument.defaultView?.frameElement as HTMLElement | null) ?? null;
+    if (!pill || !iframeEl) return;
+    const pr = pill.getBoundingClientRect();
+    const elTop = iframeEl.getBoundingClientRect().top + target.getBoundingClientRect().top;
+    const popH = colorOpen ? 268 : kind === "text" ? 234 : 120;
+    const elementBelowPill = elTop >= pr.bottom - 2;
+    const roomAbove = pr.top - 8;
+    const roomBelow = window.innerHeight - 8 - pr.bottom;
+    let up = elementBelowPill;
+    if (up && roomAbove < popH && roomBelow > roomAbove) up = false;
+    else if (!up && roomBelow < popH && roomAbove > roomBelow) up = true;
+    setPopoverFlipUp(up);
+  }, [colorOpen, moreOpen, target, kind]);
 
   // ── dismiss on a click outside the pill (and outside the canvas — clicks inside
   // the iframe live in a separate document and never reach this listener). ──
@@ -347,7 +348,10 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
             <button
               type="button"
               aria-label="Text colour"
-              onClick={() => setColorOpen((o) => !o)}
+              onClick={() => {
+                setColorOpen((o) => !o);
+                setMoreOpen(false);
+              }}
               style={{
                 display: "block",
                 width: 22,
@@ -365,6 +369,9 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               onClose={() => setColorOpen(false)}
               align="center"
               flipUp={popoverFlipUp}
+              // Close instantly (no exit fade): the picker is a child of the pill,
+              // so a lingering exit would relocate to the next element and flash.
+              instantExit
               // Match the pill exactly: same dark glass + the modal-strength
               // boost blur (not the default white-tint card) so the picker
               // reads as frosted glass over a slide.
@@ -392,7 +399,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           the pill) so it clears the element below it. */}
       <Divider />
       <div style={{ position: "relative" }}>
-        <Btn active={moreOpen} onClick={() => setMoreOpen((o) => !o)} label="More options">
+        <Btn
+          active={moreOpen}
+          onClick={() => {
+            setMoreOpen((o) => !o);
+            setColorOpen(false);
+          }}
+          label="More options"
+        >
           <MoreIcon />
         </Btn>
         <MorePopover
