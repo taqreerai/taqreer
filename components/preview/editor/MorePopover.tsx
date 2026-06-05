@@ -85,7 +85,6 @@ export function MorePopover({
   // line-height → unitless multiplier (CSS-idiomatic + survives font-size changes).
   const lhPx = parseFloat(cs.lineHeight);
   const lineMul = Number.isFinite(lhPx) ? lhPx / fontPx : 1.2;
-  const spacing = parseFloat(cs.letterSpacing) || 0; // px ("normal" → 0)
   const opacityPct = Math.round((parseFloat(cs.opacity) || 1) * 100);
   const transform = cs.textTransform || "none";
   const decoration = decorationOf(cs.textDecorationLine || cs.textDecoration);
@@ -97,7 +96,7 @@ export function MorePopover({
         <motion.div
           ref={ref}
           dir="ltr"
-          className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute top-full z-30 mt-3.5 rounded-xl px-3 py-2 shadow-2xl"
+          className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute top-full z-30 mt-3.5 rounded-xl px-3.5 py-3 shadow-2xl"
           style={{ right: 0, width: WIDTH }}
           initial={{ scale: 0.96, y: -4 }}
           animate={{ scale: 1, y: 0 }}
@@ -121,17 +120,6 @@ export function MorePopover({
                   step={0.05}
                   digits={2}
                   onChange={(n) => setStyle("line-height", String(n))}
-                />
-              </Row>
-              <Row label="Spacing">
-                <Slider
-                  value={spacing}
-                  min={-2}
-                  max={20}
-                  step={0.5}
-                  digits={1}
-                  unit="px"
-                  onChange={(n) => setStyle("letter-spacing", `${n}px`)}
                 />
               </Row>
               <Row label="Transform">
@@ -202,7 +190,7 @@ function decorationOf(raw: string): string {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1">
+    <div className="flex items-center justify-between gap-3 py-2">
       <span className="w-[64px] shrink-0 text-[11px] text-white/55">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         {children}

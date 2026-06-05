@@ -52,7 +52,7 @@ type Align = "left" | "center" | "right" | "justify";
 function AlignIcon({ a }: { a: Align }) {
   const widths = [11, 7, 10, 6];
   return (
-    <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden>
+    <svg width="17" height="14" viewBox="0 0 14 12" aria-hidden>
       {[1, 4, 7, 10].map((y, i) => {
         const w = widths[i];
         const x =
@@ -91,8 +91,8 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
     <div
       className="flex items-center rounded-full border"
       style={{
-        height: 24,
-        padding: "0 3px",
+        height: 30,
+        padding: "0 4px",
         borderColor: "var(--tq-border-glass)",
         background: "var(--tq-bg-glass)",
       }}
@@ -100,7 +100,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
       <button
         type="button"
         aria-label="Smaller"
-        className="flex h-[18px] w-[18px] items-center justify-center text-base leading-none text-white/55 transition-colors hover:text-white"
+        className="flex h-[24px] w-[24px] items-center justify-center text-lg leading-none text-white/55 transition-colors hover:text-white"
         onClick={() => onChange(clamp(value - 1))}
       >
         −
@@ -120,12 +120,12 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
-        className="no-spinner w-[34px] border-none bg-transparent text-center text-[11px] text-white outline-none"
+        className="no-spinner w-[40px] border-none bg-transparent text-center text-[13px] text-white outline-none"
       />
       <button
         type="button"
         aria-label="Bigger"
-        className="flex h-[18px] w-[18px] items-center justify-center text-base leading-none text-white/55 transition-colors hover:text-white"
+        className="flex h-[24px] w-[24px] items-center justify-center text-lg leading-none text-white/55 transition-colors hover:text-white"
         onClick={() => onChange(clamp(value + 1))}
       >
         +
@@ -246,18 +246,18 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           position: "relative",
           display: "flex",
           alignItems: "center",
-          gap: 6,
-          padding: "5px 7px",
+          gap: 7,
+          padding: "6px 9px",
         }}
       >
       {kind === "text" && (
         <>
           <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
           <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
-            <span style={{ fontWeight: 800, fontSize: 13 }}>B</span>
+            <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>
           </Btn>
           <Btn active={isItalic} onClick={() => setStyle("font-style", isItalic ? "normal" : "italic")} label="Italic">
-            <span style={{ fontStyle: "italic", fontWeight: 600, fontSize: 13, fontFamily: "Georgia, serif" }}>I</span>
+            <span style={{ fontStyle: "italic", fontWeight: 600, fontSize: 15, fontFamily: "Georgia, serif" }}>I</span>
           </Btn>
           <div style={{ position: "relative" }}>
             <button
@@ -266,8 +266,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               onClick={() => setColorOpen((o) => !o)}
               style={{
                 display: "block",
-                width: 18,
-                height: 18,
+                width: 22,
+                height: 22,
                 borderRadius: "50%",
                 border: "1px solid var(--tq-border-glass)",
                 background: color,
@@ -324,7 +324,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
 
 function MoreIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+    <svg width="19" height="19" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
       <circle cx="3" cy="8" r="1.4" />
       <circle cx="8" cy="8" r="1.4" />
       <circle cx="13" cy="8" r="1.4" />
@@ -350,7 +350,7 @@ function Btn({
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`inline-flex h-6 w-[26px] items-center justify-center rounded-md transition-colors ${
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
         active ? "text-white" : "text-white/55 hover:text-white"
       }`}
     >
@@ -360,5 +360,5 @@ function Btn({
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 18, background: "var(--tq-border-glass)" }} />;
+  return <div style={{ width: 1, height: 22, background: "var(--tq-border-glass)" }} />;
 }
