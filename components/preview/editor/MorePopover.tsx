@@ -196,7 +196,7 @@ function decorationOf(raw: string): string {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
       <span className="w-[64px] shrink-0 text-[12px] text-white/55">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         {children}
