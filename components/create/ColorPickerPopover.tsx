@@ -290,19 +290,14 @@ export function ColorPickerPopover({
   return (
     <AnimatePresence>
       {open ? (
-        // One element is BOTH the glass surface AND the open/close animation. The
-        // motion is scale + y only — a TRANSFORM. We deliberately do NOT animate
-        // opacity: opacity < 1 suppresses backdrop-filter for every mid-fade
-        // frame, which is what made the blur appear delayed / glitch in on open.
-        // An element's OWN transform does not suppress its own backdrop-filter,
-        // so the blur is on from frame one. (This only holds because the picker
-        // is not a descendant of another backdrop-filter element — the style pill
-        // keeps its blur on a sibling layer for exactly this reason.)
-        //
-        // `surfaceClassName` carries the glass recipe: default `.glass-card`
-        // (white-tint) for the create/brand/mimic cards; the style pill passes
-        // `.glass-popover` (dark fill). `mt-3.5` leaves a small gap below the
-        // trigger. Width 182 px; inner dims scale with it.
+        // One element = glass surface + open animation. Animate scale + y only,
+        // never opacity: opacity < 1 suppresses backdrop-filter mid-fade, so the
+        // blur would pop in late. An element's own transform does NOT suppress its
+        // own blur — but the picker must not be nested inside another
+        // backdrop-filter element (the style pill keeps its blur on a sibling
+        // layer for this). `surfaceClassName` is the glass recipe (default
+        // `.glass-card`; the style pill passes `.glass-popover`); `mt-3.5` gaps it
+        // below the trigger. Width 182 px; inner dims scale with it.
         <motion.div
           ref={wrapperRef}
           dir="ltr"
