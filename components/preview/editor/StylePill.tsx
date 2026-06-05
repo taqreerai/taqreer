@@ -238,7 +238,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           blur on a sibling layer, the picker's only backdrop-filter ancestor is
           none → it blurs the slide directly, exactly like the pill. */}
       <div
-        className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) rounded-xl shadow-2xl"
+        className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) rounded-full shadow-2xl"
         style={{ position: "absolute", inset: 0 }}
       />
       <div

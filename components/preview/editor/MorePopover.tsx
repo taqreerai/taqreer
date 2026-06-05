@@ -96,7 +96,7 @@ export function MorePopover({
         <motion.div
           ref={ref}
           dir="ltr"
-          className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute top-full z-30 mt-3.5 rounded-xl px-3.5 py-3 shadow-2xl"
+          className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute top-full z-30 mt-3.5 rounded-2xl px-3.5 py-3.5 shadow-2xl"
           style={{ right: 0, width: WIDTH }}
           initial={{ scale: 0.96, y: -4 }}
           animate={{ scale: 1, y: 0 }}
@@ -190,8 +190,8 @@ function decorationOf(raw: string): string {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2">
-      <span className="w-[64px] shrink-0 text-[11px] text-white/55">{label}</span>
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <span className="w-[64px] shrink-0 text-[12px] text-white/55">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         {children}
       </div>
@@ -220,7 +220,7 @@ function Slider({
 }) {
   return (
     <>
-      <span className="w-[40px] shrink-0 text-right text-[11px] tabular-nums text-white">
+      <span className="w-[40px] shrink-0 text-right text-[12px] tabular-nums text-white">
         {value.toFixed(digits)}
         {unit}
       </span>
@@ -231,7 +231,7 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="h-1 min-w-0 flex-1 cursor-pointer"
+        className="h-1.5 min-w-0 flex-1 cursor-pointer"
         style={{ accentColor: "var(--tq-violet)" }}
       />
     </>
@@ -253,7 +253,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full cursor-pointer appearance-none rounded-md border px-2 py-1 text-[11px] text-white outline-none"
+      className="w-full cursor-pointer appearance-none rounded-md border px-2 py-1.5 text-[12px] text-white outline-none"
       style={{
         borderColor: "var(--tq-border-glass)",
         background: "var(--tq-bg-glass)",
@@ -289,7 +289,7 @@ function Seg({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            className={`inline-flex h-6 min-w-[26px] items-center justify-center rounded-md px-1 text-[11px] transition-colors ${
+            className={`inline-flex h-7 min-w-[26px] items-center justify-center rounded-md px-1 text-[12px] transition-colors ${
               active ? "text-white" : "text-white/55 hover:text-white"
             }`}
             style={
