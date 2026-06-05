@@ -370,6 +370,33 @@ function resolveBriefDirection(brief: unknown): "rtl" | "ltr" {
   return dir === "ltr" ? "ltr" : "rtl";
 }
 
+// SOURCE-PRESERVING flows (enhance / mimic) follow the ATTACHED deck's language,
+// not the brief — the brief's language can be a stale default (e.g. "ar") while
+// the source is English, which would mislabel the saved manifest's top-level
+// language/direction (preview chrome, keyboard nav, export metadata). Detect the
+// dominant script from the PRODUCED slides instead. (Create / datasheet keep the
+// user-picked brief language — Claude is told to produce exactly that.)
+// Scoped to visible text: drop the scoped <style> CSS + inline <svg> (both Latin-
+// heavy: CSS keywords, SVG path commands) before counting Arabic vs Latin glyphs.
+function detectDeckDirection(
+  slides: { html: string }[],
+): { language: "ar" | "en"; direction: "rtl" | "ltr" } {
+  let arabic = 0;
+  let latin = 0;
+  for (const s of slides) {
+    const text = s.html
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+      .replace(/<[^>]*>/g, " ");
+    arabic += (text.match(/[؀-ۿݐ-ݿࢠ-ࣿ]/g) ?? [])
+      .length;
+    latin += (text.match(/[A-Za-z]/g) ?? []).length;
+  }
+  return arabic >= latin
+    ? { language: "ar", direction: "rtl" }
+    : { language: "en", direction: "ltr" };
+}
+
 // Read the brand palette + dominant color off the brief. Pure
 // data-shape narrowing — the brief's `brand.colors` is `Json` at
 // the DB layer so each field gets defensively narrowed. Dominant
@@ -1889,12 +1916,23 @@ export const deckGenerate = inngest.createFunction(
 
         const briefTitle = (data.brief as { title?: string } | null)?.title
           ?.trim();
+        // Enhance / mimic preserve the SOURCE's language (per their directive +
+        // the LANGUAGE block), so the saved top-level language/direction must
+        // follow the produced content, NOT the brief (which can default to ar/rtl
+        // for an English source). Create / datasheet keep the user-picked brief
+        // values. (CR PR #49.)
+        const htmlFlowSourceKind = readSource(data)?.kind;
+        const sourcePreserving =
+          data.type === "enhance" || htmlFlowSourceKind === "mimic";
+        const langDir = sourcePreserving
+          ? detectDeckDirection(slides)
+          : { language: streamLanguage, direction: streamDirection };
         const manifest = {
           version: "2.0" as const,
           presentationId: data.presentationId,
           title: briefTitle && briefTitle.length > 0 ? briefTitle : "عرض تقديمي",
-          language: streamLanguage,
-          direction: streamDirection,
+          language: langDir.language,
+          direction: langDir.direction,
           theme,
           slides,
         };
