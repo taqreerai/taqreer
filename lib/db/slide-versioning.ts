@@ -213,19 +213,16 @@ async function pruneOldestVersions(
   const total = await prisma.slideVersion.count({ where: { slideStateId } });
   if (total <= MAX_VERSIONS_PER_SLIDE) return;
   const overflow = total - MAX_VERSIONS_PER_SLIDE;
-  // The absolute-oldest row is the genesis — exclude it from the prune set so
-  // the original generation always survives.
-  const genesis = await prisma.slideVersion.findFirst({
+  // Fetch the genesis + the `overflow` oldest rows after it (ascending), then
+  // drop the genesis (the first/lowest row) from the delete set so the original
+  // generation always survives. One query — the genesis is just `rows[0]`.
+  const rows = await prisma.slideVersion.findMany({
     where: { slideStateId },
     orderBy: { versionNumber: "asc" },
-    select: { versionNumber: true },
-  });
-  const oldest = await prisma.slideVersion.findMany({
-    where: { slideStateId, versionNumber: { not: genesis?.versionNumber } },
-    orderBy: { versionNumber: "asc" },
-    take: overflow,
+    take: overflow + 1,
     select: { id: true },
   });
+  const oldest = rows.slice(1);
   if (oldest.length > 0) {
     await prisma.slideVersion.deleteMany({
       where: { id: { in: oldest.map((v) => v.id) } },

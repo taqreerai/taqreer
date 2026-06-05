@@ -253,7 +253,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
             <span style={{ fontWeight: 800, fontSize: 13 }}>B</span>
           </Btn>
-          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          <div style={{ position: "relative" }}>
             <button
               type="button"
               aria-label="Text colour"

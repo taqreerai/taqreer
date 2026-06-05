@@ -250,14 +250,7 @@ function OriginalRow({
             </span>
           </span>
         </span>
-        {isCurrent ? (
-          <span
-            className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-white"
-            style={{ background: "var(--tq-violet)" }}
-          >
-            الحالي
-          </span>
-        ) : null}
+        {isCurrent ? <CurrentBadge /> : null}
       </button>
     </div>
   );
@@ -296,14 +289,19 @@ function HistoryItem({
         </span>
         <span className="text-[10px] text-white/50">{relative}</span>
       </span>
-      {isCurrent ? (
-        <span
-          className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-white"
-          style={{ background: "var(--tq-violet)" }}
-        >
-          الحالي
-        </span>
-      ) : null}
+      {isCurrent ? <CurrentBadge /> : null}
     </button>
+  );
+}
+
+// The «الحالي» (current-version) pill — shared by HistoryItem + OriginalRow.
+function CurrentBadge() {
+  return (
+    <span
+      className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-white"
+      style={{ background: "var(--tq-violet)" }}
+    >
+      الحالي
+    </span>
   );
 }
