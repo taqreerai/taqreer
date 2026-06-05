@@ -194,8 +194,14 @@ export async function recordSlidePartialRegen(
 
 /**
  * Prune a slide's history down to MAX_VERSIONS_PER_SLIDE, dropping the oldest
- * rows first. Using count + take(asc) so the first version of the slide goes
- * first — matches the natural "scroll history newest-first, drop the tail" UX.
+ * rows first — the natural "scroll history newest-first, drop the tail" UX.
+ *
+ * EXCEPT the genesis version (the lowest versionNumber = the slide's initial
+ * generation). It's never pruned: it's the user's guaranteed "restore to the
+ * original" anchor (History popover pins it as «النسخة الأصلية»). So the kept
+ * window is genesis + the (MAX-1) most-recent versions, and we drop the oldest
+ * of everything in between.
+ *
  * Doesn't protect locked versions (lock is a SlideState-level flag, not a
  * version-level flag — see schema comment). Shared by recordSlidePartialRegen
  * and recordSlideManualEdit (both append a row).
@@ -207,8 +213,15 @@ async function pruneOldestVersions(
   const total = await prisma.slideVersion.count({ where: { slideStateId } });
   if (total <= MAX_VERSIONS_PER_SLIDE) return;
   const overflow = total - MAX_VERSIONS_PER_SLIDE;
-  const oldest = await prisma.slideVersion.findMany({
+  // The absolute-oldest row is the genesis — exclude it from the prune set so
+  // the original generation always survives.
+  const genesis = await prisma.slideVersion.findFirst({
     where: { slideStateId },
+    orderBy: { versionNumber: "asc" },
+    select: { versionNumber: true },
+  });
+  const oldest = await prisma.slideVersion.findMany({
+    where: { slideStateId, versionNumber: { not: genesis?.versionNumber } },
     orderBy: { versionNumber: "asc" },
     take: overflow,
     select: { id: true },

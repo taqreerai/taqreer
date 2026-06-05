@@ -320,17 +320,24 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   }, [srcDoc]);
 
   // Reposition the selection box whenever the controlled `selected` changes, AND
-  // keep it glued to the element as its geometry changes — e.g. the style pill
-  // bumps font-size or flips text-align, which resizes/moves the element. A
-  // ResizeObserver re-places the box (and the caret if mid-edit) on every reflow.
+  // keep it glued to the element through two distinct kinds of change:
+  //   • ResizeObserver — the element's BOX changes size (font-size bump, bold,
+  //     web-font swap-in, container reflow).
+  //   • MutationObserver on `style` — a text-align flip MOVES the glyphs inside
+  //     an unchanged box, so it never triggers a resize. Watching the inline
+  //     style attribute re-inks the box on align (and on any other pill write).
   useEffect(() => {
     place(selBoxRef.current, selected);
     if (!selected) return;
-    const ro = new ResizeObserver(() => {
-      place(selBoxRef.current, selected);
-    });
+    const replace = () => place(selBoxRef.current, selected);
+    const ro = new ResizeObserver(replace);
     ro.observe(selected);
-    return () => ro.disconnect();
+    const mo = new MutationObserver(replace);
+    mo.observe(selected, { attributes: true, attributeFilter: ["style"] });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
   }, [selected]);
 
   return (

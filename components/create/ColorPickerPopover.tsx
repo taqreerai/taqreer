@@ -105,6 +105,7 @@ export function ColorPickerPopover({
   onChange,
   onClose,
   align = "center",
+  surfaceClassName = "glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation)",
 }: {
   open: boolean;
   value: string;
@@ -117,6 +118,10 @@ export function ColorPickerPopover({
   // Use to keep the popover on-screen when the swatch sits in a
   // grid column near the page edge.
   align?: ColorPickerAlign;
+  // Glass surface recipe. Defaults to the white-tint `.glass-card` used on
+  // the create/brand/mimic flows' light cards. The in-canvas style pill passes
+  // `.glass-popover` (dark fill) so the picker matches the pill over a slide.
+  surfaceClassName?: string;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svRef = useRef<HTMLDivElement>(null);
@@ -291,15 +296,14 @@ export function ColorPickerPopover({
           className="absolute top-full z-30 mt-2"
           style={{ ...positionStyle, width: 182 }}
         >
-        {/* Glass surface — `.glass-card` is the canonical white-tint
-            recipe (background = rgba(255,255,255,var(--glass-opacity)),
-            border = var(--tq-border-glass), backdrop-filter wired
-            to the user's preset). Replaces an inline rgba pair that
-            duplicated the class — same visual, design-system
-            compliant. `backdrop-blur-glass` + the saturate utility
-            stay on the element so the Tailwind layer wins
-            composition over .glass-card's raw backdrop-filter
-            (memory: feedback_tw_glass_system). */}
+        {/* Glass surface — `surfaceClassName` carries the glass recipe.
+            Default `.glass-card` is the canonical white-tint (background =
+            rgba(255,255,255,var(--glass-opacity)), border =
+            var(--tq-border-glass)); the style pill overrides it with
+            `.glass-popover` (dark fill) so the picker reads over a slide.
+            `backdrop-blur-glass` + the saturate utility ride on the same
+            class string so the Tailwind layer wins composition over the
+            class's raw backdrop-filter (memory: feedback_tw_glass_system). */}
         <motion.div
           ref={wrapperRef}
           initial={{ opacity: 0, scale: 0.9, y: 6 }}
@@ -307,7 +311,7 @@ export function ColorPickerPopover({
           exit={{ opacity: 0, scale: 0.9, y: 6 }}
           transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
-          className="glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-xl p-2.5 shadow-2xl"
+          className={`${surfaceClassName} rounded-xl p-2.5 shadow-2xl`}
         >
           {/* SV plane */}
           <div
