@@ -1,18 +1,18 @@
 "use client";
 
-// Phase 0 prototype — selection + breadcrumb + contentEditable + semantic Layers
-// tree + the A1/A2/A3 test harness, all against a REAL deck. Edits live only in the
-// browser DOM; nothing persists. See context/phase-0-checklist.md.
+// Lab shell — mounts the PRODUCTION <SlideEditor> (the exact engine /project uses)
+// so the lab stays 100% identical to live, plus a breadcrumb, the flat Layers list
+// (lib/editor/leaves), and the A1/A2/A3 round-trip harness — all against a REAL deck.
+// Edits live only in the browser DOM; nothing persists. See context/phase-0-checklist.md.
 import { useEffect, useMemo, useState } from "react";
-import { IframeCanvas } from "./IframeCanvas";
+import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { dimensionsForFormat, type SlideManifest } from "@/lib/schema/slide";
+import { buildLayerTree, type LayerNode } from "@/lib/editor/leaves";
 import {
   a1ForSlide,
   a2a3ForSlide,
-  buildLayerTree,
   type A1Result,
   type A2Result,
-  type LayerNode,
 } from "./harness";
 
 export function LabEditor({ manifest }: { manifest: SlideManifest }) {
@@ -150,7 +150,7 @@ export function LabEditor({ manifest }: { manifest: SlideManifest }) {
               <span style={S.dim}>click an element · dbl-click text to edit · Esc to deselect</span>
             )}
           </div>
-          <IframeCanvas
+          <SlideEditor
             slide={slide}
             theme={manifest.theme}
             direction={manifest.direction}

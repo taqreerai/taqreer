@@ -78,11 +78,10 @@ export type LayerNode = {
 // Layout/wrapper divs are skipped entirely (recursed THROUGH, never listed). No
 // groups, no nesting. Presentation-only — never mutates the DOM.
 //
-// Retained as engine for the I2 Layers panel (plan-editor §5.4) — has NO in-product
-// caller right now: its only consumer was the standalone /edit `ProjectEditor`,
-// retired once Edit became the default mode of `/project` in the shell. DeckView's
-// editor uses the selection helpers above (resolveSelectable / isTextEditable), not
-// this. (The lab keeps its own copy in app/lab/editor/harness.ts.)
+// Engine for the I2 Layers panel (plan-editor §5.4). No in-PRODUCT caller yet —
+// DeckView's editor uses the selection helpers above (resolveSelectable /
+// isTextEditable), not this — but the lab (app/lab/editor/LabEditor) consumes it
+// for its Layers list, so the lab and the future product panel share one builder.
 export function buildLayerTree(section: HTMLElement): LayerNode[] {
   const out: LayerNode[] = [];
   const walk = (el: HTMLElement) => {
