@@ -47,6 +47,38 @@ function rgbToHex(rgb: string): string {
   return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
+// A paint value that contributes no ink — skipped when reading/recolouring an
+// SVG so its cut-outs / transparent backgrounds are preserved.
+function isNoPaint(c: string): boolean {
+  return !c || c === "none" || c === "transparent" || /,\s*0(\.0+)?\)\s*$/.test(c);
+}
+
+// The graphic's current paint colour (first inked fill, else first inked
+// stroke) as hex — drives the recolour swatch.
+function svgPaintHex(svg: HTMLElement): string {
+  const els = [svg, ...svg.querySelectorAll<SVGElement>("*")];
+  for (const el of els) {
+    const f = getComputedStyle(el).fill;
+    if (!isNoPaint(f)) return rgbToHex(f);
+  }
+  for (const el of els) {
+    const s = getComputedStyle(el).stroke;
+    if (!isNoPaint(s)) return rgbToHex(s);
+  }
+  return "#000000";
+}
+
+// Recolour a graphic: every shape that currently HAS a paint takes the new
+// colour (fill→fill, stroke→stroke) via inline style — which serializes into
+// the saved HTML and is what dom-to-pptx reads at export. `none`/transparent
+// paints are left alone so the SVG's structure stays intact.
+function recolorSvgEl(svg: HTMLElement, hex: string): void {
+  for (const el of [svg, ...svg.querySelectorAll<SVGElement>("*")]) {
+    if (!isNoPaint(getComputedStyle(el).fill)) el.style.fill = hex;
+    if (!isNoPaint(getComputedStyle(el).stroke)) el.style.stroke = hex;
+  }
+}
+
 type Align = "left" | "center" | "right" | "justify";
 
 function AlignIcon({ a }: { a: Align }) {
@@ -146,6 +178,9 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const [popoverFlipUp, setPopoverFlipUp] = useState(false);
   // True while the pointer is pressed on the pill (clicking/holding a control).
   const [pillActive, setPillActive] = useState(false);
+  // Image "Replace": hidden file input + in-flight upload flag.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const dirty = useRef(false);
 
   // Read by the rAF (every frame) to drive the selection-outline's visibility,
@@ -309,6 +344,47 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     [target],
   );
 
+  // Recolour the selected graphic (inline fill/stroke on its painted shapes).
+  const recolorSvg = useCallback(
+    (hex: string) => {
+      recolorSvgEl(target, hex);
+      dirty.current = true;
+      force((n) => n + 1);
+    },
+    [target],
+  );
+
+  // Replace the selected image: upload the picked file → permanent public URL →
+  // swap the <img src>. Persists on deselect like any other edit.
+  const onPickImage = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = ""; // allow re-picking the same file later
+      if (!file) return;
+      setUploading(true);
+      try {
+        const body = new FormData();
+        body.append("file", file);
+        const res = await fetch("/api/storage/upload-image", { method: "POST", body });
+        const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
+        if (!res.ok || !data?.url) throw new Error(data?.error || "upload failed");
+        // setAttribute (a method call, like setStyle's setProperty) rather than
+        // `img.src = …` — a direct property assignment on the captured element
+        // trips react-hooks/immutability. removeAttribute drops any responsive
+        // srcset so the browser can't keep serving the old image.
+        target.removeAttribute("srcset");
+        target.setAttribute("src", data.url);
+        dirty.current = true;
+        force((n) => n + 1);
+      } catch (err) {
+        console.error("Image replace failed:", err);
+      } finally {
+        setUploading(false);
+      }
+    },
+    [target],
+  );
+
   if (!target.isConnected) return null;
 
   const cs = getComputedStyle(target);
@@ -318,6 +394,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const color = rgbToHex(cs.color);
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
+  const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
 
   return createPortal(
     <div
@@ -408,10 +485,60 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           </div>
         </>
       )}
-      {kind !== "text" && (
-        <span style={{ fontSize: 12, color: "var(--tq-text-muted)", padding: "0 6px" }}>
-          {kind === "image" ? "Image — swap coming (I2.5)" : "Graphic — recolor coming (I2.4)"}
-        </span>
+      {/* Graphic (svg): recolour swatch — recolours every painted shape. */}
+      {kind === "svg" && (
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            aria-label="Graphic colour"
+            onClick={() => {
+              setColorOpen((o) => !o);
+              setMoreOpen(false);
+            }}
+            style={{
+              display: "block",
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              border: "1px solid var(--tq-border-glass)",
+              background: svgColor,
+              cursor: "pointer",
+            }}
+          />
+          <ColorPickerPopover
+            open={colorOpen}
+            value={svgColor}
+            onChange={recolorSvg}
+            onClose={() => setColorOpen(false)}
+            align="center"
+            flipUp={popoverFlipUp}
+            instantExit
+            surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
+          />
+        </div>
+      )}
+      {/* Image: replace via upload → swap the src. */}
+      {kind === "image" && (
+        <>
+          <button
+            type="button"
+            aria-label="Replace image"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
+            style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
+          >
+            <ReplaceIcon />
+            {uploading ? "Uploading…" : "Replace"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            hidden
+            onChange={onPickImage}
+          />
+        </>
       )}
       {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
           opacity for text; opacity/rounding for image+graphic). The menu hangs
@@ -450,6 +577,27 @@ function MoreIcon() {
       <circle cx="3" cy="8" r="1.4" />
       <circle cx="8" cy="8" r="1.4" />
       <circle cx="13" cy="8" r="1.4" />
+    </svg>
+  );
+}
+
+// Upload glyph (tray + up arrow) for the image "Replace" button.
+function ReplaceIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   );
 }

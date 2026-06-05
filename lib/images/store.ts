@@ -12,7 +12,7 @@
 // handles the project's `sb_secret_…` API-key format, which the raw
 // Storage REST endpoint rejects as a non-JWT.
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 
 const BUCKET = "generated-images";
@@ -86,6 +86,43 @@ export async function storeGeneratedImage(opts: {
     throw new Error(`generated-images upload failed: ${error.message}`);
   }
 
+  return admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+// Raster MIME → file extension. Deliberately NO SVG: SVGs can carry inline
+// scripts, and these objects are served from a public bucket — a raster-only
+// allowlist removes the stored-XSS surface entirely.
+const UPLOAD_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/**
+ * Persist a USER-uploaded image (the in-canvas "replace image" action) to the
+ * same PUBLIC bucket under `uploads/<userId>/<uuid>.<ext>`, returning a
+ * permanent public URL. Public + permanent for the same reason as generated
+ * images: the URL is written straight into the saved slide HTML and must keep
+ * resolving in exports and in decks older than a year. The caller MUST have
+ * already authenticated the user and validated `contentType` against an image
+ * allowlist (see the route). Throws on unsupported type / upload error.
+ */
+export async function storeUploadedImage(opts: {
+  userId: string;
+  bytes: Buffer;
+  contentType: string;
+}): Promise<string> {
+  const ext = UPLOAD_EXT[opts.contentType];
+  if (!ext) throw new Error(`unsupported image type: ${opts.contentType}`);
+  const path = `uploads/${opts.userId}/${randomUUID()}.${ext}`;
+  const admin = adminClient();
+  const { error } = await admin.storage.from(BUCKET).upload(path, opts.bytes, {
+    contentType: opts.contentType,
+    upsert: false,
+    cacheControl: "31536000",
+  });
+  if (error) throw new Error(`image upload failed: ${error.message}`);
   return admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
