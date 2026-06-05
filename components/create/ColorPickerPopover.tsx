@@ -276,16 +276,11 @@ export function ColorPickerPopover({
     onChange(preset);
   };
 
-  // Anchor wrapper handles positioning; the motion.div inside owns the
-  // open/close animation (scale + y, applied via CSS `transform`).
-  //
-  // The anchor MUST NOT carry a `transform` itself: a transformed ANCESTOR
-  // becomes the backdrop root for `backdrop-filter`, so the glass surface
-  // below it would lose its blur entirely (the same well-known trap that bit
-  // the Bell + History popovers). So "center" offsets via a negative
-  // `margin-left` of half the fixed width instead of `translateX(-50%)` —
-  // pure layout, no transform, blur intact. The motion.div's OWN transform is
-  // fine; only ancestor transforms break a descendant's backdrop-filter.
+  // Positioning offsets for the anchor wrapper. "center" uses a negative
+  // `margin-left` of half the fixed width rather than `translateX(-50%)`: a
+  // transform here would make the anchor a backdrop root and kill the glass
+  // surface's blur (the same trap that bit the Bell + History popovers). Pure
+  // layout, no transform — blur intact.
   const positionStyle: React.CSSProperties = (() => {
     if (align === "start") return { left: 0 };
     if (align === "end") return { right: 0 };
@@ -295,30 +290,35 @@ export function ColorPickerPopover({
   return (
     <AnimatePresence>
       {open ? (
-        <div
-          // Width 182 px (≈ +30 % from the prior 140 px, per user
-          // direction 2026-06-01). All inner dimensions scaled with
-          // it: SV plane 72 → 94 px tall, hue slider h-2 → h-2.5,
-          // swatch h-5 → h-6, preset tiles h-4 → h-5, hex text
-          // 10 → 13 px, padding p-2 → p-2.5. (The 240 px original was
-          // shrunk to 140 px on 2026-05-26; this brings it partway back.)
+        // The fade lives on this positioning wrapper, NOT on the glass surface
+        // below. `backdrop-filter` does not composite on an element that carries
+        // its own `transform` — so the pill's blur works (it's static) but the
+        // picker's used to die because the glass surface was the animated
+        // motion.div (scale/y → transform). Animating only OPACITY here, and
+        // keeping the surface a plain static div, makes the picker blur exactly
+        // like the pill. (opacity 1 at rest creates no stacking context, so the
+        // surface's backdrop-filter is untouched once the fade settles.)
+        //
+        // Width 182 px (per user direction 2026-06-01); all inner dimensions
+        // scaled with it (SV plane 94 px tall, hue h-2.5, presets h-5, etc.).
+        <motion.div
           className="absolute top-full z-30 mt-2"
           style={{ ...positionStyle, width: POPOVER_WIDTH }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
         >
-        {/* Glass surface — `surfaceClassName` carries the glass recipe.
-            Default `.glass-card` is the canonical white-tint (background =
-            rgba(255,255,255,var(--glass-opacity)), border =
-            var(--tq-border-glass)); the style pill overrides it with
+        {/* Glass surface — STATIC (no transform/opacity of its own) so its
+            backdrop-filter blur renders identically to the pill.
+            `surfaceClassName` carries the glass recipe: default `.glass-card`
+            (white-tint) for the create/brand/mimic cards; the style pill passes
             `.glass-popover` (dark fill) so the picker reads over a slide.
-            `backdrop-blur-glass` + the saturate utility ride on the same
-            class string so the Tailwind layer wins composition over the
-            class's raw backdrop-filter (memory: feedback_tw_glass_system). */}
-        <motion.div
+            `backdrop-blur-glass` + the saturate utility ride on the same class
+            string so the Tailwind layer wins composition over the class's raw
+            backdrop-filter (memory: feedback_tw_glass_system). */}
+        <div
           ref={wrapperRef}
-          initial={{ opacity: 0, scale: 0.9, y: 6 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 6 }}
-          transition={{ type: "spring", bounce: 0.3, duration: 0.3 }}
           dir="ltr"
           className={`${surfaceClassName} rounded-xl p-2.5 shadow-2xl`}
         >
@@ -393,8 +393,8 @@ export function ColorPickerPopover({
               />
             ))}
           </div>
-        </motion.div>
         </div>
+        </motion.div>
       ) : null}
     </AnimatePresence>
   );
