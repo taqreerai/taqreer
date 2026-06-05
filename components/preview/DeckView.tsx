@@ -3187,6 +3187,12 @@ export function DeckView({
   const isFocusedRegenerating =
     !!applying?.targetSlideIds.includes(focusedSlide.slideId) ||
     peerRegenInProgress.has(focusedSlide.slideId);
+  // Editing is disabled for the focused slide while it's being (partial-)
+  // regenerated OR while it's locked — the editor falls back to the read-only
+  // renderer and the style pill is suppressed. Per-slide: other slides stay
+  // editable.
+  const isFocusedLocked = slideStates[focusedSlide.slideId]?.lockedAt != null;
+  const editingDisabled = isFocusedRegenerating || isFocusedLocked;
   // Hero width clamp — two candidates, smallest wins:
   //   • viewport-height-derived width (so hero never exceeds the
   //     remaining vertical space given its aspect ratio)
@@ -3425,6 +3431,9 @@ export function DeckView({
                 onDocReady={() => {}}
                 onEdit={handleSlideEdit}
                 reloadKey={editorReloadKey}
+                // Locked / mid-regen: keep the editor mounted (no render swap →
+                // no flash/nudge) but inert. The pill is suppressed below.
+                disabled={editingDisabled}
               />
             ) : (
               <SlideRenderer
@@ -3437,8 +3446,9 @@ export function DeckView({
                 scale={gridScale}
               />
             )}
-            {/* I2 — contextual style pill over the selected element (edit mode only). */}
-            {editMode && !commentMode && editorSelected ? (
+            {/* I2 — contextual style pill over the selected element (edit mode only;
+                suppressed while the slide is regenerating or locked). */}
+            {editMode && !commentMode && !editingDisabled && editorSelected ? (
               <StylePill
                 target={editorSelected}
                 slideId={focusedSlide.slideId}

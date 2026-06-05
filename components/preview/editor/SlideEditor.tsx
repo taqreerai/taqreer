@@ -39,11 +39,16 @@ type Props = {
   // self-save — which updates `slide.html` — never blows away the live DOM the
   // user is editing. See the bodyHtml effect.
   reloadKey?: number;
+  // When true (slide locked / mid-regen) the editor renders IDENTICALLY but is
+  // inert — no hover box, no click-to-select, no edit mode, no selection box.
+  // Kept mounted (rather than swapped for SlideRenderer) so disabling never
+  // swaps renderers, which would flash + nudge the content.
+  disabled?: boolean;
 };
 
 export function SlideEditor({
   slide, theme, direction, language, width, height, scale,
-  selected, onSelect, onDocReady, onEdit, reloadKey = 0,
+  selected, onSelect, onDocReady, onEdit, reloadKey = 0, disabled = false,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const selBoxRef = useRef<HTMLElement | null>(null);
@@ -63,6 +68,12 @@ export function SlideEditor({
   useEffect(() => {
     onEditRef.current = onEdit;
   }, [onEdit]);
+  // Latest `disabled`, read by the once-attached iframe handlers so lock/regen
+  // toggles take effect without re-wiring.
+  const disabledRef = useRef(disabled);
+  useEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
 
   // Sanitise the slide HTML in an effect — DOMPurify needs the live window, so doing
   // it during render hits the fail-closed (empty) path. Same pattern as SlideRenderer;
@@ -190,6 +201,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
       // the common case on a dense slide, where the box is already correct.
       let lastHover: HTMLElement | null = null;
       const onMove = (e: MouseEvent) => {
+        if (disabledRef.current) { place(hover, null); return; } // inert when locked/regen
         // resolveHit walks the FULL stack at the cursor and returns the topmost
         // element whose actual ink is under it — so an overlapping element's empty
         // overflow (e.g. a huge headline's glyphs spilling over a small label) never
@@ -284,6 +296,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
       };
 
       const onClick = (e: MouseEvent) => {
+        if (disabledRef.current) return; // locked/regen → no selection
         if ((e.target as HTMLElement | null)?.isContentEditable) return;
         const unit = resolveHit(sec, e.clientX, e.clientY);
         if (!unit) { onSelectRef.current(null); return; } // empty / bg → deselect
@@ -298,6 +311,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
         }
       };
       const onDbl = (e: MouseEvent) => {
+        if (disabledRef.current) return; // locked/regen → no edit mode
         if ((e.target as HTMLElement | null)?.isContentEditable) return;
         const unit = resolveHit(sec, e.clientX, e.clientY);
         if (unit) { e.preventDefault(); enterEdit(unit); }
@@ -327,18 +341,21 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   //     an unchanged box, so it never triggers a resize. Watching the inline
   //     style attribute re-inks the box on align (and on any other pill write).
   useEffect(() => {
-    place(selBoxRef.current, selected);
-    if (!selected) return;
-    const replace = () => place(selBoxRef.current, selected);
+    // When disabled (locked/regen) the selection box is hidden too — the editor
+    // is inert, so nothing should look selected.
+    const sel = disabled ? null : selected;
+    place(selBoxRef.current, sel);
+    if (!sel) return;
+    const replace = () => place(selBoxRef.current, sel);
     const ro = new ResizeObserver(replace);
-    ro.observe(selected);
+    ro.observe(sel);
     const mo = new MutationObserver(replace);
-    mo.observe(selected, { attributes: true, attributeFilter: ["style"] });
+    mo.observe(sel, { attributes: true, attributeFilter: ["style"] });
     return () => {
       ro.disconnect();
       mo.disconnect();
     };
-  }, [selected]);
+  }, [selected, disabled]);
 
   return (
     <div style={{ width: dispW, height: dispH, position: "relative" }}>

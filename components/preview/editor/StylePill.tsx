@@ -541,7 +541,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
             aria-label="Replace image"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full pl-2 pr-3 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
             style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
           >
             <ReplaceIcon />
