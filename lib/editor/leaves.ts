@@ -77,6 +77,12 @@ export type LayerNode = {
 // Flat list of ONLY the visually-rendered leaves — text runs, images, graphics.
 // Layout/wrapper divs are skipped entirely (recursed THROUGH, never listed). No
 // groups, no nesting. Presentation-only — never mutates the DOM.
+//
+// Retained as engine for the I2 Layers panel (plan-editor §5.4) — has NO in-product
+// caller right now: its only consumer was the standalone /edit `ProjectEditor`,
+// retired once Edit became the default mode of `/project` in the shell. DeckView's
+// editor uses the selection helpers above (resolveSelectable / isTextEditable), not
+// this. (The lab keeps its own copy in app/lab/editor/harness.ts.)
 export function buildLayerTree(section: HTMLElement): LayerNode[] {
   const out: LayerNode[] = [];
   const walk = (el: HTMLElement) => {

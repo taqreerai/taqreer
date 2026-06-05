@@ -105,7 +105,9 @@ the live product, not the throwaway lab).
 > fragment those. The standalone `/project/[id]/edit` route + `ProjectEditor` shell (commits
 > `1f51841`/`9940b77`) were a **de-risk detour — now SUPERSEDED**; the reusable engine
 > (`SlideEditor` + `lib/editor/leaves`, commit `81a6bee`) stays, the standalone shell is
-> retired/optional.
+> **REMOVED** (route `app/(app)/project/[projectId]/edit/` + `ProjectEditor.tsx` deleted —
+> `/project/[id]/edit` now 404s; nothing linked to it). `buildLayerTree` in
+> `lib/editor/leaves` is kept as engine for the I2 Layers panel.
 
 - **I1 — Edit as a default mode of `DeckView`.** Add `editMode` state (mutually exclusive
   with `commentMode`), defaulting **on for `canEdit` users** on a completed deck (so you
