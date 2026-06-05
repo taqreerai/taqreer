@@ -141,9 +141,9 @@ export function HistoryPopover({
           <header className="border-b border-white/[0.08] px-3 py-2">
             <p className="text-xs font-semibold text-white">سجل الإصدارات</p>
           </header>
-          <ul className="flex flex-col">
+          <ul className="flex max-h-[280px] flex-col overflow-y-auto overscroll-contain">
             <AnimatePresence initial={false}>
-              {versions.map((row) => (
+              {versions.slice(0, 20).map((row) => (
                 <motion.li
                   key={row.versionNumber}
                   initial={{ opacity: 0 }}

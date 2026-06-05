@@ -3,19 +3,19 @@
 // I2 — the floating style pill. A contextual, type-aware property toolbar that
 // floats over the element selected in the SlideEditor iframe. Lives in the PARENT
 // document (portaled to <body>) because its controls are parent-doc React
-// primitives (ColorPickerPopover, InlineStepper…) — but it anchors to the
-// in-iframe element via `target.ownerDocument.defaultView.frameElement`, the
-// <iframe> seen from inside, so iframeRect + targetRect maps the element to
-// parent-page coords with no ref-threading.
+// primitives — but it anchors to the in-iframe element via
+// `target.ownerDocument.defaultView.frameElement`, the <iframe> seen from inside,
+// so iframeRect + (the live selection box) maps the element to parent-page coords.
 //
 // Model (decided 2026-06-05): WHOLE-ELEMENT styling — one inline style on the
 // element, never a <span> wrapper, so the round-trip stays clean. Export-safe
-// props only. Persistence is free: write the inline style live, then (debounced)
-// serialize the <section> and hand it to the existing I3 save path (onCommit =
-// DeckView.handleSlideEdit). The iframe is pinned, so a self-save never blows
-// away the live DOM.
+// props only. Saving is deferred to "you're done": writes are live, but the
+// serialize → I3 save (onCommit = DeckView.handleSlideEdit) fires once, when the
+// element is DESELECTED (the pill unmounts / re-targets) — so a run of tweaks is
+// ONE version, not one-per-keystroke. The iframe is pinned, so a self-save never
+// blows away the live DOM.
 //
-// Scope here: I2.1 (shell + positioning) + I2.2 (text core: size · bold · color ·
+// Scope: I2.1 (shell + positioning) + I2.2 (text core: size · bold · color ·
 // align). Font dropdown + "more" = I2.3, svg recolor = I2.4, image swap = I2.5.
 
 import {
@@ -26,7 +26,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { InlineStepper } from "@/components/create/OutputCards";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 
@@ -51,14 +50,12 @@ function rgbToHex(rgb: string): string {
   const [r, g, b] = m
     .slice(0, 3)
     .map((n) => Math.max(0, Math.min(255, Math.round(parseFloat(n)))));
-  return (
-    "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")
-  );
+  return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
 type Align = "left" | "center" | "right" | "justify";
 
-// Text-align icon: four ragged lines, flush to the active edge.
+// Text-align icon: four ragged lines flush to the active edge.
 function AlignIcon({ a }: { a: Align }) {
   const widths = [11, 7, 10, 6];
   return (
@@ -79,6 +76,83 @@ function AlignIcon({ a }: { a: Align }) {
   );
 }
 
+const SIZE_MIN = 4;
+const SIZE_MAX = 1200;
+
+// Free-typing font-size control: type any value (no per-keystroke clamp — the
+// shared InlineStepper clamps every change, so "700" snaps to its min), commit on
+// blur / Enter, ± buttons nudge by 1. Range spans the decorative 700px+ numbers.
+function SizeStepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(String(value));
+  }, [value]);
+  const clamp = (n: number) => Math.min(SIZE_MAX, Math.max(SIZE_MIN, Math.round(n)));
+  const commitText = () => {
+    const n = parseFloat(text);
+    if (Number.isFinite(n)) onChange(clamp(n));
+    setText(String(Number.isFinite(n) ? clamp(n) : value));
+  };
+  const btn: React.CSSProperties = {
+    width: 18,
+    height: 18,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "none",
+    background: "transparent",
+    color: "var(--tq-text)",
+    cursor: "pointer",
+    fontSize: 14,
+    lineHeight: 1,
+  };
+  return (
+    <div
+      className="flex items-center rounded-full border"
+      style={{
+        height: 24,
+        padding: "0 3px",
+        borderColor: "var(--tq-border)",
+        background: "rgba(255,255,255,var(--glass-opacity))",
+      }}
+    >
+      <button type="button" aria-label="Smaller" style={btn} onClick={() => onChange(clamp(value - 1))}>
+        −
+      </button>
+      <input
+        value={text}
+        inputMode="numeric"
+        aria-label="Font size"
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          focused.current = false;
+          commitText();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="no-spinner"
+        style={{
+          width: 34,
+          background: "transparent",
+          textAlign: "center",
+          color: "var(--tq-text)",
+          fontSize: 11,
+          outline: "none",
+          border: "none",
+        }}
+      />
+      <button type="button" aria-label="Bigger" style={btn} onClick={() => onChange(clamp(value + 1))}>
+        +
+      </button>
+    </div>
+  );
+}
+
 export function StylePill({ target, slideId, onCommit }: Props) {
   const kind = kindOf(target);
   const pillRef = useRef<HTMLDivElement>(null);
@@ -86,18 +160,24 @@ export function StylePill({ target, slideId, onCommit }: Props) {
   // Bumped after every style write so the controls re-read getComputedStyle.
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
-  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set when a style was changed but not yet saved; the save fires on deselect.
+  const dirty = useRef(false);
 
-  // ── anchor over the target (above it, flipping below if no room) ──
+  // ── anchor over the VISIBLE selection box (.tqe-sel, the green ink box), so the
+  // pill centres on the glyphs even for a right-aligned run in a wide layout box.
   const reposition = useCallback(() => {
     const win = target.ownerDocument.defaultView;
     const iframeEl = (win?.frameElement as HTMLElement | null) ?? null;
     if (!iframeEl || !target.isConnected) return;
     const ir = iframeEl.getBoundingClientRect();
-    const tr = target.getBoundingClientRect();
-    const cx = ir.left + tr.left + tr.width / 2;
-    const topY = ir.top + tr.top;
-    const botY = ir.top + tr.bottom;
+    const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
+    const box =
+      selBox && getComputedStyle(selBox).display !== "none"
+        ? selBox.getBoundingClientRect()
+        : target.getBoundingClientRect();
+    const cx = ir.left + box.left + box.width / 2;
+    const topY = ir.top + box.top;
+    const botY = ir.top + box.bottom;
     const pillW = pillRef.current?.offsetWidth ?? 240;
     const pillH = pillRef.current?.offsetHeight ?? 40;
     const GAP = 10;
@@ -121,31 +201,29 @@ export function StylePill({ target, slideId, onCommit }: Props) {
     };
   }, [reposition]);
 
+  // ── commit ONCE on deselect/re-target (the cleanup captures the OLD target). A
+  // run of tweaks → a single SlideVersion, not one per change.
   useEffect(() => {
+    const el = target;
+    const sid = slideId;
     return () => {
-      if (commitTimer.current) clearTimeout(commitTimer.current);
+      if (!dirty.current) return;
+      dirty.current = false;
+      const sec = el.closest("section");
+      if (sec && el.isConnected) onCommit(sid, serializeSlideSection(sec));
     };
-  }, []);
-
-  // ── debounced commit through the I3 save path ──
-  const commit = useCallback(() => {
-    if (commitTimer.current) clearTimeout(commitTimer.current);
-    commitTimer.current = setTimeout(() => {
-      const sec = target.closest("section");
-      if (sec) onCommit(slideId, serializeSlideSection(sec));
-    }, 400);
   }, [target, slideId, onCommit]);
 
-  // Write one inline style live, refresh the control values, follow the element
-  // if it resized, and schedule a save.
+  // Write one inline style live; mark dirty (save happens on deselect); follow the
+  // element if it resized; refresh the control values.
   const setStyle = useCallback(
     (prop: string, value: string) => {
       target.style.setProperty(prop, value);
+      dirty.current = true;
       force((n) => n + 1);
       reposition();
-      commit();
     },
-    [target, reposition, commit],
+    [target, reposition],
   );
 
   if (!target.isConnected) return null;
@@ -157,13 +235,15 @@ export function StylePill({ target, slideId, onCommit }: Props) {
   const color = rgbToHex(cs.color);
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
 
-  const aligns: Align[] = ["right", "center", "left"];
+  // Left → right reading order so "align left" sits on the left, "align right" on
+  // the right (the pill itself is dir=ltr).
+  const aligns: Align[] = ["left", "center", "right"];
 
   return createPortal(
     <div
       ref={pillRef}
       dir="ltr"
-      className="glass-popover"
+      className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-xl shadow-2xl"
       style={{
         position: "fixed",
         left: pos?.left ?? -9999,
@@ -174,19 +254,12 @@ export function StylePill({ target, slideId, onCommit }: Props) {
         alignItems: "center",
         gap: 6,
         padding: "5px 7px",
-        borderRadius: 12,
       }}
-      // Don't let a click inside the pill bubble to the page / deselect.
       onMouseDown={(e) => e.stopPropagation()}
     >
       {kind === "text" && (
         <>
-          <InlineStepper
-            value={fontPx}
-            onChange={(n) => setStyle("font-size", `${n}px`)}
-            min={8}
-            max={400}
-          />
+          <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
           <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
             <span style={{ fontWeight: 800, fontSize: 13 }}>B</span>
           </Btn>

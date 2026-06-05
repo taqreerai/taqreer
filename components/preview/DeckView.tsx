@@ -1095,6 +1095,13 @@ export function DeckView({
       prev < manifest.slides.length ? prev : 0,
     );
   }, [manifest]);
+  // Dismiss the editor selection (and its style pill) when the focused slide
+  // changes — the selected element belongs to the previous slide's iframe doc, so
+  // it must not linger over the new slide.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEditorSelected(null);
+  }, [currentSlideIndex]);
 
 
   // ─── Phase 16.B presence ────────────────────────────────────────────

@@ -23,10 +23,10 @@ import { SlideManifestSchema, SlideSchema } from "@/lib/schema/slide";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 import { retryOnP2002 } from "@/lib/api/regen-helpers";
 
-// Matches the product requirement from 2026-05-19 — cap history
-// at 5 entries per slide. Oldest pruned on insert. Tweak in one
-// place if the policy changes.
-export const MAX_VERSIONS_PER_SLIDE = 5;
+// Keep the last 20 versions per slide (raised from 5 on 2026-06-05 once the
+// manual editor made small tweaks frequent). Oldest pruned on insert; the History
+// popover shows them newest-first, scrollable. Tweak in one place.
+export const MAX_VERSIONS_PER_SLIDE = 20;
 
 type RegenSource = "regen" | "partial_regen";
 

@@ -110,14 +110,12 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   /* Hide the native caret (it's the font's full em box — ~2x the visible glyphs
      for Arabic) and draw a custom one sized to the text via .tqe-caret. */
   #tqe-stage [contenteditable="true"],#tqe-stage [contenteditable="true"] *{cursor:text;-webkit-user-select:text;user-select:text;caret-color:transparent}
-  /* While editing, lift the element above its neighbours so a drag-select always
-     lands on the text being edited — not on an overlapping sibling (e.g. a headline
-     whose tall glyphs overflow up into the smaller line above it). Siblings are
-     user-select:none, so without this the drag gets captured by the wrong element
-     and the selection inside the edited run can't extend. position:relative with no
-     offsets doesn't move it; it just creates a stacking context. Stays below the
-     overlays (2147483646). */
-  #tqe-stage [contenteditable="true"]{position:relative;z-index:2147483640}
+  /* NOTE: the "lift the edited element above its neighbours" rule used to live here
+     as a contenteditable position:relative + z-index, but an id-selector
+     position:relative BEATS a class-based position:absolute — so editing an
+     absolutely-positioned element (e.g. a 400px decorative number) snapped it to its
+     in-flow spot. The lift is now applied in JS (enterEdit), position-aware: only add
+     position:relative when the element is statically positioned. */
   .tqe-ov{position:fixed;pointer-events:none;z-index:2147483646;box-sizing:border-box;display:none}
   .tqe-hover{border:2px solid #10B981}
   .tqe-sel{border:2px solid #15B04F}
@@ -217,6 +215,18 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
         // preventScroll: focusing a huge-font element (whose glyphs overflow its
         // box) otherwise scrolls it into view and the whole number visibly JUMPS.
         t.focus({ preventScroll: true });
+        // Lift the edited element above overlapping siblings so a drag-select lands
+        // on it (siblings are user-select:none). Position-aware: only add
+        // position:relative when the element is STATIC — forcing it onto an
+        // absolutely-positioned element (e.g. a 400px decorative number) would snap
+        // it to its in-flow spot. Restored in finish() before serialize, so the lift
+        // never persists into the saved HTML.
+        const liftStatic =
+          (doc.defaultView ?? window).getComputedStyle(t).position === "static";
+        const prevInlineZ = t.style.zIndex;
+        const prevInlinePos = t.style.position;
+        if (liftStatic) t.style.position = "relative";
+        t.style.zIndex = "2147483640";
         try { doc.execCommand("defaultParagraphSeparator", false, "br"); } catch { /* unsupported */ }
         const onPaste = (ev: ClipboardEvent) => {
           ev.preventDefault();
@@ -257,6 +267,9 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
           doc.removeEventListener("selectionchange", onSelChange);
           caret.style.display = "none";
           t.removeAttribute("contenteditable");
+          // Undo the edit-time lift before serializing so it never lands in the HTML.
+          t.style.zIndex = prevInlineZ;
+          if (liftStatic) t.style.position = prevInlinePos;
           // Commit on settle: serialize the slide (editor artifacts stripped) and
           // hand it to the parent to persist — only if it actually changed.
           const after = serializeSlideSection(sec);
@@ -306,9 +319,18 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcDoc]);
 
-  // Reposition the selection box whenever the controlled `selected` changes.
+  // Reposition the selection box whenever the controlled `selected` changes, AND
+  // keep it glued to the element as its geometry changes — e.g. the style pill
+  // bumps font-size or flips text-align, which resizes/moves the element. A
+  // ResizeObserver re-places the box (and the caret if mid-edit) on every reflow.
   useEffect(() => {
     place(selBoxRef.current, selected);
+    if (!selected) return;
+    const ro = new ResizeObserver(() => {
+      place(selBoxRef.current, selected);
+    });
+    ro.observe(selected);
+    return () => ro.disconnect();
   }, [selected]);
 
   return (
