@@ -21,8 +21,10 @@ as a new `SlideVersion`.
 
 We borrow the **UI/UX** of **kyh/ai-canvas** (MIT, our exact stack) — its control
 panels + editor shell — but **not its engine** (Konva) and **not its AI stack**
-(Vercel AI SDK / Gateway / DALL·E). We keep DOM rendering + our Anthropic+Inngest
-pipeline.
+(Vercel AI SDK / Gateway / DALL·E). We keep DOM rendering + our **two** AI backends
+(both via Inngest), and both must wire into the canvas: **Claude** (Anthropic)
+designs/edits the HTML/SVG/text, and **gpt-image** (OpenAI) generates the raster
+images (`deck.image.warm` → `deck-images-generate` → `injectImgSrc`).
 
 **Build order:** static prototype first (`/lab/editor`, real deck, no wiring) →
 prove DOM-editing survives our real slides → then port into the `/project` shell →
@@ -113,8 +115,9 @@ Right-panel assembler `views/editor-right-side.tsx`: single block selected →
   (`@loremllm/transport`, `src/components/demo-transport.ts`). Two agents:
   `canvas-agent` emits structured block tool-calls (mutates the scene), `builder-agent`
   emits a full HTML doc into an iframe `html` block, both vision-driven (a canvas
-  screenshot is attached each message). **We keep our Anthropic+Inngest pipeline;
-  reuse none of this — only the chat-input UX surface as a pattern.**
+  screenshot is attached each message). **We keep our own pipeline — Claude
+  (Anthropic) for structure/text + gpt-image (OpenAI) for raster images, both via
+  Inngest; reuse none of theirs — only the chat-input UX surface as a pattern.**
 
 ### 2d. Its shell / UX (the structure we mirror)
 - `views/editor-bottom-toolbar.tsx`: floating pill, **AI ⇄ Design** tabs (Shift+Tab toggles).
@@ -265,8 +268,15 @@ Hide/Show · Bring forward / to front / backward / to back · **Select parent** 
 - **Region-comment regen:** existing `HeroCommentOverlay` flow, surfaced as an AI-mode
   trigger.
 - **Slide regen / full regen:** existing routes.
-- **Image regen:** right-click `<img data-genid>` → reuse `deck.image.warm` (gpt-image)
-  → `slide.image.ready` broadcast → `injectImgSrc` swap.
+- **Images = gpt-image** (OpenAI — NOT Claude; Claude does structure/text, gpt-image
+  does the raster). Wire it into the canvas TWO ways:
+  - **Regenerate / replace** an existing `<img data-genid>` (right-click or the Image
+    panel, with an editable prompt) → reuse `deck.image.warm` (gpt-image) →
+    `slide.image.ready` broadcast → `injectImgSrc` swap.
+  - **Add a NEW image** (the Edit-mode image tool): drop a box → it becomes a
+    `data-genimage` / `data-genid` element → describe → triggers the SAME warm/fill
+    pipeline → `injectImgSrc`. (Manual image-box creation is the only new part; the
+    generate/fill pipeline is reused as-is.)
 - Stream the result into the live preview; on accept, write a new version.
 
 ## 8. Persistence + realtime + lock (Phase 4)
