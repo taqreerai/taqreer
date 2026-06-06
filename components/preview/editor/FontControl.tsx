@@ -9,7 +9,7 @@
 // Results dropdown uses the glass recipe + animates scale+y ONLY (never opacity —
 // that suppresses the backdrop-filter mid-fade).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   searchGoogleFonts,
@@ -42,6 +42,19 @@ export function FontControl({
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => searchGoogleFonts(query, { limit: 60 }), [query]);
+
+  // Width morph: animate the pill's REAL width (collapsed name-fit ⇄ search width)
+  // rather than a framer `layout` transform — `layout` snaps the box to its final
+  // size at once, so the rest of the toolbar jumps; animating the width makes the
+  // flex row reflow every frame, so the siblings glide along. Measure the collapsed
+  // name button so we have a concrete value to spring from.
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [collapsedW, setCollapsedW] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (open) return;
+    const w = btnRef.current?.offsetWidth;
+    if (w) setCollapsedW(w);
+  }, [open, label]);
 
   // Fresh query + autofocus the field each time it opens.
   useEffect(() => {
@@ -86,20 +99,21 @@ export function FontControl({
 
   return (
     <div style={{ position: "relative" }}>
-      {/* The morphing pill: a name button that springs open into a search field. */}
+      {/* The morphing pill: its REAL width springs between the name-fit and the
+          search width (overflow-hidden clips the content mid-morph), so the rest
+          of the toolbar reflows smoothly alongside it. */}
       <motion.div
-        layout
-        transition={SPRING}
         className="flex h-8 items-center overflow-hidden rounded-full"
-        style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
+        style={{
+          background: "var(--tq-bg-glass)",
+          border: "1px solid var(--tq-border-glass)",
+          width: collapsedW == null ? "max-content" : undefined,
+        }}
+        animate={collapsedW == null ? undefined : { width: open ? WIDTH : collapsedW }}
+        transition={SPRING}
       >
         {open ? (
-          <motion.div
-            layout="position"
-            dir="rtl"
-            className="flex items-center gap-1.5 px-2.5"
-            style={{ width: WIDTH }}
-          >
+          <div dir="rtl" className="flex items-center gap-1.5 px-2.5" style={{ width: WIDTH }}>
             <SearchIcon className="shrink-0 text-white/40" />
             <input
               ref={inputRef}
@@ -110,20 +124,20 @@ export function FontControl({
               aria-label="ابحث عن خط"
               className="min-w-0 flex-1 bg-transparent text-right text-[13px] text-white outline-none placeholder:text-white/40"
             />
-          </motion.div>
+          </div>
         ) : (
-          <motion.button
-            layout="position"
+          <button
+            ref={btnRef}
             type="button"
             aria-label="Font family"
             onClick={() => onOpenChange(true)}
-            className="flex h-full items-center gap-1 px-2.5 text-[12px] text-white/85 transition-colors hover:text-white"
+            className="flex h-full items-center gap-1 whitespace-nowrap px-2.5 text-[12px] text-white/85 transition-colors hover:text-white"
           >
             <span className="max-w-[124px] truncate" dir="ltr">
               {label}
             </span>
             <Chevron />
-          </motion.button>
+          </button>
         )}
       </motion.div>
 
