@@ -3581,7 +3581,13 @@ export function DeckView({
           className={`canvas-gradient-border group/canvas relative p-0 shadow-2xl${
             commentMode ? " cursor-crosshair" : ""
           }`}
-          data-active={commentMode ? "true" : "false"}
+          // The gradient halo is the "you're instructing the AI" indicator —
+          // only while commenting in AI mode. Normal (Edit-mode) user comments
+          // are collaboration, not AI input, so they get the crosshair cursor
+          // but no halo (§16 Chunk 4).
+          data-active={
+            commentMode && studioMode === "ai" ? "true" : "false"
+          }
         >
           {/* Slide content. `overflow-hidden` clips the scaled
               SlideRenderer so it can't bleed past the canvas while
@@ -3593,7 +3599,7 @@ export function DeckView({
               flat dim gives the spinner readable contrast against
               any slide background without an extra chrome chip. */}
           <div className="h-full w-full overflow-hidden">
-            {editMode && !commentMode ? (
+            {editMode ? (
               <SlideEditor
                 slide={focusedSlide}
                 theme={manifest!.theme}
@@ -3607,9 +3613,11 @@ export function DeckView({
                 onDocReady={setEditorDoc}
                 onEdit={handleSlideEdit}
                 reloadKey={editorReloadKey}
-                // Locked / mid-regen: keep the editor mounted (no render swap →
-                // no flash/nudge) but inert. The pill is suppressed below.
-                disabled={editingDisabled}
+                // Locked / mid-regen / comment mode: keep the editor mounted
+                // (no SlideEditor→SlideRenderer swap → no canvas flash) but
+                // inert. The StylePill is suppressed below; the comment overlay
+                // sits on top and owns the draw interaction.
+                disabled={editingDisabled || commentMode}
               />
             ) : (
               <SlideRenderer
