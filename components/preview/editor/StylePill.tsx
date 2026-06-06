@@ -33,11 +33,24 @@ type Props = {
   onDismiss: () => void;
 };
 
-type Kind = "text" | "image" | "svg";
+type Kind = "text" | "image" | "svg" | "shape";
 function kindOf(el: HTMLElement): Kind {
   if (el.tagName === "IMG") return "image";
   if (el.tagName.toLowerCase() === "svg" || el.closest("svg")) return "svg";
+  if (isSolidFill(el)) return "shape";
   return "text";
+}
+
+// A solid-colour decorative fill (a colour block / accent bar — the "شكل" layer):
+// no text, no img/svg, no gradient or background image — just an opaque
+// background colour. Recolours via background-color, mirroring how an SVG
+// recolours via fill. Matches lib/editor/leaves.ts's "shape" classification.
+function isSolidFill(el: HTMLElement): boolean {
+  if ((el.textContent ?? "").trim() !== "") return false;
+  if (el.querySelector("img, svg")) return false;
+  const cs = getComputedStyle(el);
+  if (cs.backgroundImage && cs.backgroundImage !== "none") return false;
+  return !isNoPaint(cs.backgroundColor);
 }
 
 function rgbToHex(rgb: string): string {
@@ -382,14 +395,16 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     [target],
   );
 
-  // Recolour the selected graphic (inline fill/stroke on its painted shapes).
-  const recolorSvg = useCallback(
+  // Recolour the selection inline (serializes into the saved HTML): an SVG's
+  // painted shapes (fill/stroke), or a solid fill's background-color.
+  const recolorPaint = useCallback(
     (hex: string) => {
-      recolorSvgEl(target, hex);
+      if (kind === "shape") target.style.setProperty("background-color", hex);
+      else recolorSvgEl(target, hex);
       dirty.current = true;
       force((n) => n + 1);
     },
-    [target],
+    [target, kind],
   );
 
   // Apply a picked font family (null = reset to the deck's theme font). Set the
@@ -458,7 +473,12 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const color = rgbToHex(cs.color);
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
-  const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
+  const paintColor =
+    kind === "svg"
+      ? svgPaintHex(target)
+      : kind === "shape"
+        ? rgbToHex(cs.backgroundColor)
+        : "#000000";
   const opacityPct = Math.round((parseFloat(cs.opacity) || 1) * 100);
   // The element's explicitly-picked Google font (from its inline style), or null
   // when it's inheriting the deck's theme font.
@@ -579,14 +599,15 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           </div>
         </>
       )}
-      {/* Graphic (svg): recolour swatch + inline opacity (no ⋯ — only two
-          controls, both fit on the pill). */}
-      {kind === "svg" && (
+      {/* Graphic (svg) + solid fill (shape): recolour swatch + inline opacity (no
+          ⋯ — only two controls, both fit on the pill). The swatch recolours the
+          SVG's paint or the fill's background-color. */}
+      {(kind === "svg" || kind === "shape") && (
         <>
           <div style={{ position: "relative" }}>
             <button
               type="button"
-              aria-label="Graphic colour"
+              aria-label={kind === "shape" ? "Fill colour" : "Graphic colour"}
               onClick={() => {
                 setColorOpen((o) => !o);
                 setMoreOpen(false);
@@ -597,14 +618,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
                 height: 22,
                 borderRadius: "50%",
                 border: "1px solid var(--tq-border-glass)",
-                background: svgColor,
+                background: paintColor,
                 cursor: "pointer",
               }}
             />
             <ColorPickerPopover
               open={colorOpen}
-              value={svgColor}
-              onChange={recolorSvg}
+              value={paintColor}
+              onChange={recolorPaint}
               onClose={() => setColorOpen(false)}
               align="center"
               flipUp={popoverFlipUp}
@@ -643,10 +664,11 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         </>
       )}
       {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
-          opacity for text; opacity/rounding for image). SVG has no ⋯ — its two
-          controls (colour + opacity) live inline above. The menu hangs from the ⋯
-          button's LEFT edge and extends rightward so it clears the element. */}
-      {kind !== "svg" && (
+          opacity for text; opacity/rounding for image). SVG + shape have no ⋯ —
+          their two controls (colour + opacity) live inline above. The menu hangs
+          from the ⋯ button's LEFT edge and extends rightward so it clears the
+          element. */}
+      {kind !== "svg" && kind !== "shape" && (
         <>
           <Divider />
           <div style={{ position: "relative" }}>
