@@ -14,7 +14,9 @@ import { buildLayerTree, type LayerNode } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { SLIDE_NAV_WIDTH } from "@/components/preview/SlideNavSidebar";
 
-const SPRING = { type: "spring", stiffness: 500, damping: 35 } as const;
+// Snappier than the house 500/35 so a dropped row settles into its new slot
+// quickly (the reorder/settle was reading slow at the default).
+const SPRING = { type: "spring", stiffness: 700, damping: 42 } as const;
 
 // Localize the non-text kind labels. buildLayerTree (shared with the lab) hands
 // back English "Image"/"Generated image"/"Graphic"; text rows already carry the
