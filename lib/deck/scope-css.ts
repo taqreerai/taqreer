@@ -254,3 +254,46 @@ export function scopeDeckCss(css: string, scope = ".tq-canvas"): string {
   }
   return out.join("\n");
 }
+
+// Inverse of scopeDeckCss, sufficient for a re-scope round-trip: strip the
+// `scope` prefix each selector carries, so the CSS can be fed back through
+// scopeDeckCss canonically. Used to normalize PARTIAL-REGEN output: that path
+// trusts the model to hand-prefix its selectors, and the model sometimes emits
+// only the compound form (`.tq-canvas.uc .uc-ic`) and drops the descendant form
+// (`.tq-canvas .uc .uc-ic`) — leaving a rule that matches nothing (icons fall to
+// the browser default ~300px = huge). `scopeDeckCss(unscopeDeckCss(css))` rebuilds
+// BOTH forms. A selector the model forgot to scope is left as-is, so re-scoping
+// then adds the prefix it was missing.
+export function unscopeDeckCss(css: string, scope = ".tq-canvas"): string {
+  const esc = scope.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lead = new RegExp(`^${esc}`);
+  const stripOne = (sel: string): string => {
+    const s = sel.trim();
+    if (!lead.test(s)) return s; // unscoped already — leave for scopeDeckCss
+    const rest = s.replace(lead, "").replace(/^\s+/, "");
+    return rest === "" ? ":root" : rest; // bare scope was a root selector
+  };
+  const nodes = tokenize(stripComments(css));
+  const out: string[] = [];
+  for (const node of nodes) {
+    if (node.kind === "rule") {
+      const sels = splitTopLevel(node.prelude, ",").map(stripOne);
+      out.push(`${[...new Set(sels)].join(", ")}{${node.block}}`);
+    } else if (node.kind === "at-statement") {
+      out.push(node.text);
+    } else {
+      const name = node.prelude.match(AT_NAME)?.[1]?.toLowerCase() ?? "";
+      if (
+        name === "media" ||
+        name === "supports" ||
+        name === "container" ||
+        name === "layer"
+      ) {
+        out.push(`${node.prelude}{${unscopeDeckCss(node.block, scope)}}`);
+      } else {
+        out.push(`${node.prelude}{${node.block}}`);
+      }
+    }
+  }
+  return out.join("\n");
+}

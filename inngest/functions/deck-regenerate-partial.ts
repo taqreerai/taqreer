@@ -11,6 +11,7 @@ import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
+import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
 import { edbg } from "@/lib/debug/editor-debug";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
@@ -684,14 +685,27 @@ export const deckRegeneratePartial = inngest.createFunction(
           if (!textBlock || textBlock.type !== "text") {
             throw new Error(`No text block in Claude response for slide ${slideId}`);
           }
-          const html = extractSlideHtml(textBlock.text);
-          if (!html) {
+          const rawHtml = extractSlideHtml(textBlock.text);
+          if (!rawHtml) {
             throw new Error(`Empty HTML returned for slide ${slideId}`);
           }
-          // [editor-debug] What the model PRODUCED — compare the icon rules to
-          // the INPUT log above. If the input was scoped (`.bul svg{…}`) and the
-          // output is bare (`svg{width:100%}`), the model un-scoped it (huge
-          // icons). reported 2026-06-07.
+          // FIX A — re-scope the model's <style> through the canonical scoper.
+          // Generation scopes Claude's CSS via scopeDeckCss (emitting BOTH the
+          // root-compound `.tq-canvas.x` AND the descendant `.tq-canvas .x`
+          // form); the partial regen instead trusted the model to hand-prefix,
+          // and it sometimes emitted only the compound form for a NESTED class
+          // (`.tq-canvas.uc .uc-ic`) — a selector that matches no element, so
+          // the rule is dead and the icons fall to the browser-default ~300px
+          // (huge, list broken). unscope → scope rebuilds both forms. Idempotent
+          // on already-correct CSS. Applies to every per-slide regen + redesign,
+          // every project (the single chokepoint both routes dispatch into).
+          const html = rawHtml.replace(
+            /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
+            (_m, css: string) =>
+              `<style>${scopeDeckCss(unscopeDeckCss(css))}</style>`,
+          );
+          // [editor-debug] icon rules AFTER the re-scope — should now carry both
+          // the compound and descendant forms for every class.
           edbg("server:partial-regen", `OUTPUT slide=${slideId}`, {
             outputIconRules: iconCssRules(html),
             outputLen: html.length,
