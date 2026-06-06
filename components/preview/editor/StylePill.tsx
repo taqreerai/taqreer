@@ -104,9 +104,10 @@ function AlignIcon({ a }: { a: Align }) {
 const SIZE_MIN = 4;
 const SIZE_MAX = 1200;
 
-// Free-typing font-size control: type any value (no per-keystroke clamp — the
-// shared InlineStepper clamps every change, so "700" snaps to its min), commit on
-// blur / Enter, ± buttons nudge by 1. Range spans the decorative 700px+ numbers.
+// Free-typing font-size control: type any value (commit on blur / Enter), with a
+// tight stacked ▲/▼ column on the trailing edge that nudges by 1. Compact — the
+// number reads first, the spinner is a quiet secondary affordance. Range spans the
+// decorative 700px+ numbers.
 function SizeStepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   const [text, setText] = useState(String(value));
   const focused = useRef(false);
@@ -124,23 +125,17 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
       className="flex items-center rounded-full border"
       style={{
         height: 30,
-        padding: "0 4px",
+        paddingInlineStart: 8,
+        paddingInlineEnd: 3,
         borderColor: "var(--tq-border-glass)",
         background: "var(--tq-bg-glass)",
       }}
     >
-      <button
-        type="button"
-        aria-label="Smaller"
-        className="flex h-[24px] w-[24px] items-center justify-center text-lg leading-none text-white/55 transition-colors hover:text-white"
-        onClick={() => onChange(clamp(value - 1))}
-      >
-        −
-      </button>
       <input
         value={text}
         inputMode="numeric"
         aria-label="Font size"
+        dir="ltr"
         onFocus={() => {
           focused.current = true;
         }}
@@ -151,18 +146,39 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          else if (e.key === "ArrowUp") { e.preventDefault(); onChange(clamp(value + 1)); }
+          else if (e.key === "ArrowDown") { e.preventDefault(); onChange(clamp(value - 1)); }
         }}
-        className="no-spinner w-[40px] border-none bg-transparent text-center text-[13px] text-white outline-none"
+        className="no-spinner w-[26px] border-none bg-transparent text-center text-[13px] tabular-nums text-white outline-none"
       />
-      <button
-        type="button"
-        aria-label="Bigger"
-        className="flex h-[24px] w-[24px] items-center justify-center text-lg leading-none text-white/55 transition-colors hover:text-white"
-        onClick={() => onChange(clamp(value + 1))}
-      >
-        +
-      </button>
+      <div className="flex flex-col">
+        <button
+          type="button"
+          aria-label="Bigger"
+          className="flex h-[12px] w-[15px] items-center justify-center text-white/45 transition-colors hover:text-white"
+          onClick={() => onChange(clamp(value + 1))}
+        >
+          <Chevron up />
+        </button>
+        <button
+          type="button"
+          aria-label="Smaller"
+          className="flex h-[12px] w-[15px] items-center justify-center text-white/45 transition-colors hover:text-white"
+          onClick={() => onChange(clamp(value - 1))}
+        >
+          <Chevron />
+        </button>
+      </div>
     </div>
+  );
+}
+
+// Tiny single-stroke chevron — `up` points it up (size +), default points down.
+function Chevron({ up = false }: { up?: boolean }) {
+  return (
+    <svg width="9" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={up ? "M1 5l4-4 4 4" : "M1 1l4 4 4-4"} />
+    </svg>
   );
 }
 
