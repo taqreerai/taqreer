@@ -27,6 +27,9 @@ function displayLabel(node: LayerNode, isEn: boolean): string {
     return isEn ? (gen ? "Generated image" : "Image") : gen ? "صورة مولّدة" : "صورة";
   }
   if (node.kind === "graphic") return isEn ? "Graphic" : "رسمة";
+  if (node.kind === "gradient") return isEn ? "Gradient" : "تدرّج";
+  if (node.kind === "shape") return isEn ? "Shape" : "شكل";
+  if (node.kind === "background") return isEn ? "Background" : "الخلفية";
   return node.label;
 }
 
@@ -313,6 +316,29 @@ function LayerIcon({ kind, active }: { kind: LayerNode["kind"]; active: boolean 
         <path d="M12 2 2 7l10 5 10-5-10-5Z" />
         <path d="m2 17 10 5 10-5" />
         <path d="m2 12 10 5 10-5" />
+      </svg>
+    );
+  }
+  if (kind === "gradient") {
+    return (
+      <svg className={cls} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (kind === "shape") {
+    return (
+      <svg className={cls} width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden>
+        <rect x="4" y="4" width="16" height="16" rx="2.5" />
+      </svg>
+    );
+  }
+  if (kind === "background") {
+    return (
+      <svg className={cls} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="3" y="3" width="13" height="13" rx="2" />
+        <path d="M8 21h11a2 2 0 0 0 2-2V8" />
       </svg>
     );
   }

@@ -80,9 +80,47 @@ export function isTextEditable(el: Element): boolean {
 export type LayerNode = {
   el: HTMLElement;
   label: string;
-  kind: "text" | "image" | "graphic";
+  // text run · image · svg graphic · gradient fill · solid shape · the slide bg.
+  kind: "text" | "image" | "graphic" | "gradient" | "shape" | "background";
   depth: number; // always 0 — flat list, no nesting / groups
 };
+
+// A colour string reads as actually-painted (not fully transparent).
+function isOpaqueish(color: string): boolean {
+  if (!color || color === "transparent") return false;
+  const m = color.match(/rgba?\(([^)]+)\)/);
+  if (!m) return true; // named / hex colour → assume painted
+  const parts = m[1].split(",").map((s) => s.trim());
+  const a = parts.length >= 4 ? parseFloat(parts[3]) : 1;
+  return a > 0.01;
+}
+
+// Classify an element's VISIBLE fill: a gradient, a background image, a solid
+// colour — or null when it paints nothing.
+function fillType(cs: CSSStyleDeclaration): "gradient" | "image" | "color" | null {
+  const bg = cs.backgroundImage;
+  if (/gradient/i.test(bg)) return "gradient";
+  if (/url\(/i.test(bg)) return "image";
+  if (isOpaqueish(cs.backgroundColor)) return "color";
+  return null;
+}
+
+// A decorative FILL leaf: an element with a visible fill but NO content (no text,
+// no img/svg descendant) — a gradient scrim, an accent bar, a colour block. These
+// are real visual layers, not layout wrappers. Needs a live view for the computed
+// style; returns null without one (or for content-bearing containers).
+function fillLeaf(
+  el: HTMLElement,
+  win: Window,
+): { label: string; kind: LayerNode["kind"] } | null {
+  if ((el.textContent ?? "").trim() !== "") return null;
+  if (el.querySelector("img, svg")) return null;
+  const t = fillType(win.getComputedStyle(el));
+  if (t === "gradient") return { label: "Gradient", kind: "gradient" };
+  if (t === "image") return { label: "Image", kind: "image" };
+  if (t === "color") return { label: "Shape", kind: "shape" };
+  return null;
+}
 
 // Flat list of ONLY the visually-rendered leaves — text runs, images, graphics.
 // Layout/wrapper divs are skipped entirely (recursed THROUGH, never listed). No
@@ -94,6 +132,7 @@ export type LayerNode = {
 // for its Layers list, so the lab and the future product panel share one builder.
 export function buildLayerTree(section: HTMLElement): LayerNode[] {
   const out: LayerNode[] = [];
+  const win = section.ownerDocument.defaultView;
   const walk = (el: HTMLElement) => {
     for (const child of [...el.children] as HTMLElement[]) {
       const tag = child.tagName.toLowerCase();
@@ -122,10 +161,23 @@ export function buildLayerTree(section: HTMLElement): LayerNode[] {
         });
         continue;
       }
+      // Decorative fill (gradient scrim / colour block / bg image, no content) —
+      // a real visual layer, listed; NOT a layout wrapper to recurse through.
+      const fill = win ? fillLeaf(child, win) : null;
+      if (fill) {
+        out.push({ el: child, label: fill.label, kind: fill.kind, depth: 0 });
+        continue;
+      }
       // layout container — not a visual element; recurse to find leaves inside it.
       walk(child);
     }
   };
   walk(section);
+  // The slide BACKGROUND itself — a fill painted on the section root. Listed last
+  // (= backmost). The root carries content, so the no-text fillLeaf rule skips it;
+  // check its own background directly.
+  if (win && fillType(win.getComputedStyle(section)) !== null) {
+    out.push({ el: section, label: "Background", kind: "background", depth: 0 });
+  }
   return out;
 }
