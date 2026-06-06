@@ -1258,7 +1258,14 @@ export function DeckView({
           if (cancelled) return;
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifestStable(parsed.data);
+            if (parsed.success) {
+              setManifestStable(parsed.data);
+              // Reload the editor iframe from the new slide.html. SlideEditor is
+              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
+              // (same id, new html) would otherwise only show after a manual
+              // refresh. Bumping reloadKey re-reads the latest slide.html now.
+              setEditorReloadKey((k) => k + 1);
+            }
           }
           if (Array.isArray(data.slideStates)) {
             const nextStates: Record<string, InitialSlideState> = {};
@@ -1531,7 +1538,14 @@ export function DeckView({
           };
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifestStable(parsed.data);
+            if (parsed.success) {
+              setManifestStable(parsed.data);
+              // Reload the editor iframe from the new slide.html. SlideEditor is
+              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
+              // (same id, new html) would otherwise only show after a manual
+              // refresh. Bumping reloadKey re-reads the latest slide.html now.
+              setEditorReloadKey((k) => k + 1);
+            }
           }
           if (Array.isArray(data.slideStates)) {
             const nextStates: Record<string, InitialSlideState> = {};
@@ -2044,7 +2058,14 @@ export function DeckView({
           // immediately — no flash, no transient-client-state loss.
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifestStable(parsed.data);
+            if (parsed.success) {
+              setManifestStable(parsed.data);
+              // Reload the editor iframe from the new slide.html. SlideEditor is
+              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
+              // (same id, new html) would otherwise only show after a manual
+              // refresh. Bumping reloadKey re-reads the latest slide.html now.
+              setEditorReloadKey((k) => k + 1);
+            }
           }
           // Mirror the realtime path (which sets versionStatus on the row
           // update): in dev — and any time Realtime is asleep — the poll is the
@@ -2287,7 +2308,14 @@ export function DeckView({
           // affect what the user sees).
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
-            if (parsed.success) setManifestStable(parsed.data);
+            if (parsed.success) {
+              setManifestStable(parsed.data);
+              // Reload the editor iframe from the new slide.html. SlideEditor is
+              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
+              // (same id, new html) would otherwise only show after a manual
+              // refresh. Bumping reloadKey re-reads the latest slide.html now.
+              setEditorReloadKey((k) => k + 1);
+            }
           }
           // Mirror the peer-broadcast handler: refresh slideStates +
           // historyVersions from the same status payload so the
@@ -2306,7 +2334,11 @@ export function DeckView({
             setHistoryVersions(nextVersions);
           }
           setApplying(null);
-          setComments([]);
+          // The AI comments were consumed (applied) by this regen; the user /
+          // collaboration comments were carried forward to the new version
+          // server-side (regenerate-partial tx). Drop only the applied AI ones
+          // locally so the user comments stay visible without a refresh.
+          setComments((prev) => prev.filter((c) => !c.forAi));
           setCommentMode(false);
           return;
         }
