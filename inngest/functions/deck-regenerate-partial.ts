@@ -11,6 +11,7 @@ import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
+import { edbg } from "@/lib/debug/editor-debug";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
@@ -266,7 +267,6 @@ ${COMPOSITION_RULES}
 ${designAnchorBlock}
 - Decorative graphics stay inline <svg>. Icons stay inline <svg> (not icon fonts).
 - **Icons: use Lucide** (https://lucide.dev/icons) — inline \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\` with the path data from lucide.dev. Material icons (https://fonts.google.com/icons) are an acceptable fallback. NEVER icon fonts.
-- **Icon SIZING — critical.** Every inline icon \`<svg>\` MUST carry explicit small pixel dimensions (e.g. \`width="28" height="28"\`), sized to sit INSIDE its label / list row — typically 20–40px. NEVER let an icon stretch to fill its container: no \`width:100%\`, no \`height:100%\`, no \`flex:1\` on the svg, no sizing an icon to the comment's region box. A list-item icon is the height of that item's text, not the height of the list.
 - Webfont URLs must be on \`fonts.googleapis.com\` / \`fonts.gstatic.com\`.
 
 DECORATIVE GRAPHICS — keep them relevant
@@ -610,6 +610,22 @@ export const deckRegeneratePartial = inngest.createFunction(
         step.run(`regen-slide-${slideId}`, async () => {
           const client = getClient();
           const userMessage = buildPartialUserMessage(source, slideId, comments);
+          // [editor-debug] What the model RECEIVES for this slide — the region
+          // box(es) it's told to change + the svg sizing rules already in the
+          // INPUT html. Compare against the OUTPUT log below to see if the model
+          // ADDS a bad `svg{width:100%}` or inherits one.
+          {
+            const inHtml =
+              source.slides.find((s) => s.slideId === slideId)?.html ?? "";
+            const slideComments = comments.filter((c) => c.slideId === slideId);
+            edbg("server:partial-regen", `INPUT slide=${slideId}`, {
+              mode: pickRegenMode(comments, slideId),
+              regions: slideComments.map((c) => c.boundsJson),
+              instructions: slideComments.map((c) => c.content),
+              inputSvgRules: inHtml.match(/svg\s*\{[^}]*\}/gi) || [],
+              inputHasSvg100pct: /svg\s*\{[^}]*width\s*:\s*100%/i.test(inHtml),
+            });
+          }
           // Mode mirrors what buildPartialUserMessage picks internally:
           // a slide with comments → apply-comments (strict preservation);
           // a slide without → redesign (variation required). Keeps the
@@ -653,6 +669,14 @@ export const deckRegeneratePartial = inngest.createFunction(
           if (!html) {
             throw new Error(`Empty HTML returned for slide ${slideId}`);
           }
+          // [editor-debug] What the model PRODUCED — compare svg rules to the
+          // INPUT log above. If outputHasSvg100pct is true but the input wasn't,
+          // the model introduced the bad rule (huge icons). reported 2026-06-07.
+          edbg("server:partial-regen", `OUTPUT slide=${slideId}`, {
+            outputSvgRules: html.match(/svg\s*\{[^}]*\}/gi) || [],
+            outputHasSvg100pct: /svg\s*\{[^}]*width\s*:\s*100%/i.test(html),
+            outputLen: html.length,
+          });
           completedSlides += 1;
           // Push the heartbeat promise into the queue (NOT fire-and-
           // forget). We don't await here — that would serialise the
