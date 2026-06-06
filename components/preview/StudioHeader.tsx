@@ -36,33 +36,20 @@ export function StudioHeader({
     <>
       <header
         dir="rtl"
-        className="fixed inset-x-0 top-0 z-[1060] flex h-14 items-center justify-between px-4"
+        // Same glass surface as the dashboard Header (header-bg + backdrop-blur).
+        className="header-bg backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed inset-x-0 top-0 z-[1060] flex h-14 items-center justify-between px-4"
       >
-        {/* Leading (right): back + project title. */}
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Link
-            href="/dashboard"
-            aria-label="الرجوع إلى لوحة التحكم"
-            className="btn-pill flex h-9 w-9 items-center justify-center no-underline"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </Link>
-          <h1 className="min-w-0 max-w-[280px] truncate text-[14px] font-medium text-white/90">
-            {projectTitle}
-          </h1>
-        </div>
+        {/* Leading (right): back to dashboard. The project title is dropped —
+            it's already shown atop the slide-nav. */}
+        <Link
+          href="/dashboard"
+          aria-label="الرجوع إلى لوحة التحكم"
+          className="btn-pill flex h-9 w-9 items-center justify-center no-underline"
+        >
+          <span className="material-symbols-outlined text-[20px]" aria-hidden>
+            space_dashboard
+          </span>
+        </Link>
 
         {/* Trailing (left): export + share. */}
         <div className="flex items-center gap-2">
