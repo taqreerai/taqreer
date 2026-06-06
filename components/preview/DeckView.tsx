@@ -42,6 +42,7 @@ import {
 import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDialog";
 import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
+import { edbg } from "@/lib/debug/editor-debug";
 import { PreviewActionBar, type StudioMode } from "@/components/slides/PreviewActionBar";
 import { StudioHeader } from "./StudioHeader";
 import { createClient } from "@/lib/supabase/client";
@@ -622,6 +623,12 @@ export function DeckView({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (commentMode) setNavTab("comments");
   }, [commentMode]);
+  // [editor-debug] Trace every mode / comment / tab transition so the manual
+  // test pass can see exactly what state the editor is in. Remove with the
+  // rest of the editor-debug calls once verified.
+  useEffect(() => {
+    edbg("mode", "transition", { studioMode, commentMode, navTab });
+  }, [studioMode, commentMode, navTab]);
   // Edit mode = the DEFAULT working surface for edit-capable users (plan §0.6 — you
   // land in the editor). Mutually exclusive with commentMode: the comment overlay
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
@@ -2262,6 +2269,10 @@ export function DeckView({
 
         // 1. Success.
         if (isPinned && data.versionStatus === "completed") {
+          edbg("regen", "COMPLETED (version swapped in)", {
+            versionId: data.versionId,
+            hasManifest: !!data.manifest,
+          });
           // Splice the new manifest in directly from the status
           // response. Local-dev parity: Supabase Realtime doesn't
           // broadcast from the docker Postgres, so we couldn't lean
@@ -2414,8 +2425,20 @@ export function DeckView({
           forAi: studioMode === "ai",
         }),
       });
-      if (!res.ok) throwApiError(res.status, "تعذر حفظ التعليق.");
+      if (!res.ok) {
+        edbg("comment", "create FAILED", {
+          status: res.status,
+          forAi: studioMode === "ai",
+          slideId: input.slideId,
+        });
+        throwApiError(res.status, "تعذر حفظ التعليق.");
+      }
       const data = (await res.json()) as { comment: CommentRow };
+      edbg("comment", "created ✓", {
+        id: data.comment.id,
+        forAi: data.comment.forAi,
+        slideId: data.comment.slideId,
+      });
       setComments((prev) => [...prev, data.comment]);
     },
     [projectId, studioMode],
@@ -2474,10 +2497,17 @@ export function DeckView({
   // authoritative versionId arrives when the API resolves.
   const handleFirePartialRegen = useCallback(async () => {
     if (applying) return;
-    if (comments.length === 0) return;
+    // Only AI comments are applied (§16 Chunk 4) — scope the guard + the
+    // optimistic overlay to forAi slides so they match what the server promotes.
+    const aiComments = comments.filter((c) => c.forAi);
+    if (aiComments.length === 0) return;
     const optimisticTargetIds = Array.from(
-      new Set(comments.map((c) => c.slideId)),
+      new Set(aiComments.map((c) => c.slideId)),
     );
+    edbg("regen", "partial-regen FIRE (apply AI comments)", {
+      aiCommentCount: aiComments.length,
+      targetSlides: optimisticTargetIds,
+    });
     setApplying({ versionId: "__pending__", targetSlideIds: optimisticTargetIds });
     try {
       const res = await fetch(
@@ -2492,11 +2522,18 @@ export function DeckView({
         versionId: string;
         targetSlideIds: string[];
       };
+      edbg("regen", "partial-regen ACCEPTED", {
+        versionId: data.versionId,
+        targetSlides: data.targetSlideIds,
+      });
       setApplying({
         versionId: data.versionId,
         targetSlideIds: data.targetSlideIds,
       });
     } catch (err) {
+      edbg("regen", "partial-regen ERROR", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       console.error(err);
       setApplying(null);
     }
@@ -3488,6 +3525,9 @@ export function DeckView({
                     if (applying) return;
                     if (slideStates[focusedSlide.slideId]?.lockedAt != null)
                       return;
+                    edbg("regen", "slide-regen FIRE (redesign this slide)", {
+                      slideId: focusedSlide.slideId,
+                    });
                     setApplying({
                       versionId: "__pending__",
                       targetSlideIds: [focusedSlide.slideId],

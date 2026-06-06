@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/project-access";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
+import { edbg } from "@/lib/debug/editor-debug";
 
 // Drag-box coordinates are persisted in slide-space — slide width/height
 // depending on the deck's format. 16:9 → 1920×1080; 9:16 → 1080×1920.
@@ -271,6 +272,14 @@ export async function POST(
       authorId: ctx.authorPrismaUserId,
     },
     include: COMMENT_INCLUDE,
+  });
+
+  edbg("server:comment", "created", {
+    id: created.id,
+    forAi: created.forAi,
+    role: ctx.role,
+    slideId: created.slideId,
+    bodyForAi: parsed.data.forAi,
   });
 
   // Phase 16.C — emit a Realtime broadcast so concurrent viewers of
