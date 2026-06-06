@@ -1117,36 +1117,54 @@ body {
    reuses `--tq-gradient-full` so it stays on-brand and reads distinct from
    the orange user-comment box. The 1px border uses the same border-box vs
    content-box mask trick as `.btn-gradient-anim` (padding == stroke).      */
-@keyframes ai-box-shimmer {
-  0%   { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
-}
+/* The drift animation lives on the element so the inherited `--mesh-*` vars
+   feed BOTH pseudo-elements (border + fill) — same mechanism as
+   `.canvas-gradient-border`. Random-feeling blob motion, NOT a linear sweep. */
 .ai-comment-box {
   position: relative;
   isolation: isolate;
   border-radius: 6px;
+  animation:
+    mx1 2.5s ease-in-out infinite alternate,
+    my1 4.0s ease-in-out infinite alternate,
+    mx2 4.8s ease-in-out infinite alternate,
+    my2 3.3s ease-in-out infinite alternate,
+    mx3 6.2s ease-in-out infinite alternate,
+    my3 1.8s ease-in-out infinite alternate,
+    mx4 3.0s ease-in-out infinite alternate,
+    my4 4.5s ease-in-out infinite alternate,
+    mx5 2.3s ease-in-out infinite alternate,
+    my5 3.8s ease-in-out infinite alternate,
+    mx6 5.0s ease-in-out infinite alternate,
+    my6 5.8s ease-in-out infinite alternate;
 }
-.ai-comment-box::after {        /* faint gradient wash fill — low opacity */
+.ai-comment-box::after {        /* faint mesh wash fill — low opacity */
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: var(--tq-gradient-full);
-  background-size: 200% 100%;
-  opacity: 0.12;
-  animation: ai-box-shimmer 4s linear infinite;
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%);
+  opacity: 0.14;
   pointer-events: none;
 }
-.ai-comment-box::before {       /* 1px shimmering gradient border */
+.ai-comment-box::before {       /* 1px mesh-gradient border */
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: var(--tq-gradient-full);
-  background-size: 200% 100%;
-  animation: ai-box-shimmer 4s linear infinite;
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
           mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1154,8 +1172,7 @@ body {
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-comment-box::before,
-  .ai-comment-box::after { animation: none; }
+  .ai-comment-box { animation: none; }
 }
 
 /* ─── Standard secondary pill ─────────────────────────────────────────
