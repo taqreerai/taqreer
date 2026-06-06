@@ -3331,9 +3331,14 @@ export function DeckView({
       />
 
       {/* Right-edge slot: the Slides nav (with a Comments tab for reviewing
-          comments). HIDDEN while commenting — both side panels clear out so the
-          canvas is the only comment surface (user direction 2026-06-07). */}
-      {!commentMode ? (
+          comments). FADED OUT (not unmounted) while commenting — both side
+          panels clear so the canvas is the only comment surface. Kept mounted so
+          the thumbnails don't remount + flash white when commenting ends. */}
+      <motion.div
+        animate={{ opacity: commentMode ? 0 : 1 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        style={{ pointerEvents: commentMode ? "none" : "auto" }}
+      >
       <SlideNavSidebar
         items={navItems}
         currentIndex={focusedIndex}
@@ -3380,20 +3385,26 @@ export function DeckView({
           ) : undefined
         }
       />
-      ) : null}
+      </motion.div>
 
       {/* Studio — Layers panel (left), mirroring the Slides nav on the right.
           Lists the focused slide's visual leaves from the live editor DOM;
           clicking a row selects that element. Only while the editor is active. */}
-      {editMode && !commentMode ? (
-        <LayersPanel
-          doc={editorDoc}
-          selected={editorSelected}
-          onSelect={setEditorSelected}
-          onCommit={handleSlideEdit}
-          slideId={focusedSlide.slideId}
-          language={manifest!.language === "en" ? "en" : "ar"}
-        />
+      {editMode ? (
+        <motion.div
+          animate={{ opacity: commentMode ? 0 : 1 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          style={{ pointerEvents: commentMode ? "none" : "auto" }}
+        >
+          <LayersPanel
+            doc={editorDoc}
+            selected={editorSelected}
+            onSelect={setEditorSelected}
+            onCommit={handleSlideEdit}
+            slideId={focusedSlide.slideId}
+            language={manifest!.language === "en" ? "en" : "ar"}
+          />
+        </motion.div>
       ) : null}
 
       {/* Universal toolbar. Portal'd to document.body so its z-index
