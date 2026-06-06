@@ -1669,6 +1669,18 @@ body {
   user-select: none !important;
 }
 
+/* A Layers row carries a lift shadow only while it's being dragged. Both states
+   declare a full 4-length box-shadow (the resting one fully transparent) so the
+   browser interpolates between them — the shadow FADES OUT on drop instead of the
+   framer value getting stranded. */
+.tq-layer-row {
+  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  transition: box-shadow 0.2s ease;
+}
+.tq-layer-row.is-dragging {
+  box-shadow: 0 14px 34px 0 rgba(0, 0, 0, 0.55);
+}
+
 /* ─── Studio canvas (full-screen editor at /project) ─────────────────────
    The chrome-less editing stage: the slide floats over a dotted canvas with
    a soft center-out vignette for depth. Dots + vignette are LAYERED

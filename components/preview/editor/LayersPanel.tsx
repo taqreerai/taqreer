@@ -248,12 +248,10 @@ function LayerRow({
       dragControls={controls}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      // Lift via `animate` keyed on the per-row dragging flag (NOT whileDrag,
-      // whose boxShadow was sticking after drop) so it reverts cleanly.
-      animate={{
-        scale: dragging ? 1.03 : 1,
-        boxShadow: dragging ? "0 14px 34px rgba(0,0,0,0.55)" : "0 0 0 rgba(0,0,0,0)",
-      }}
+      // Scale via framer `animate`; the lift SHADOW is a CSS transition (.is-
+      // dragging) so it always fades back to none on drop — animating box-shadow
+      // through framer was getting stranded by the drop's layout animation.
+      animate={{ scale: dragging ? 1.03 : 1 }}
       transition={SPRING}
       style={{
         position: "relative",
@@ -263,9 +261,9 @@ function LayerRow({
         background: dragging ? "rgba(var(--tq-bg-rgb), 0.96)" : undefined,
         border: dragging ? "1px solid var(--tq-border-glass)" : undefined,
       }}
-      className={`group/row flex items-center gap-1 rounded-xl pr-1 ${
+      className={`tq-layer-row group/row flex items-center gap-1 rounded-xl pr-1 ${
         dragging
-          ? ""
+          ? "is-dragging"
           : active
             ? "bg-white/[0.10]"
             : "hover:bg-white/[0.05]"
