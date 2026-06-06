@@ -3450,17 +3450,6 @@ export function DeckView({
                   }
                   // Armed = drafts exist, user has exited comment
                   // mode, and no apply is in flight → the regen
-                  // button morphs to the AI icon and now triggers
-                  // the partial regen.
-                  commentsArmed={
-                    // Only AI comments (forAi) arm the regen. Normal user
-                    // comments stay collaboration-only and never morph the
-                    // button into "apply comments" (§16 Chunk 4).
-                    !commentMode &&
-                    comments.some((c) => c.forAi) &&
-                    !applying
-                  }
-                  onFirePartialRegen={handleFirePartialRegen}
                   // Shared cluster (§16) — History + Lock relocated off the
                   // deleted canvas pill, plus the AI-mode single-slide regen.
                   // The History button is a TOGGLE relative to the current

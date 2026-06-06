@@ -233,8 +233,6 @@ export function PreviewActionBar({
   draftCommentCount,
   aiCommentCount,
   focusedSlideLocked,
-  commentsArmed,
-  onFirePartialRegen,
   onOpenHistory,
   onToggleLock,
   onRegenSlide,
@@ -278,8 +276,6 @@ export function PreviewActionBar({
   // True when there are unsent drafts ready to be fired. Drives the
   // autorenew → assistant icon morph + swaps the click handler
   // from full regen to partial regen.
-  commentsArmed: boolean;
-  onFirePartialRegen: () => void;
   // Studio command-bar shared cluster (§16) — History + Lock relocated off
   // the deleted canvas pill; `onRegenSlide` is the AI-mode single-slide
   // regen (precursor to the composer's Generate). `historyOpen` drives the
@@ -562,39 +558,16 @@ export function PreviewActionBar({
                     disabled={applying || focusedSlideLocked}
                   />
                 ) : null}
-                {/* Regen the whole deck / apply comments. */}
+                {/* Regen the whole deck. Applying AI comments is NOT here
+                    anymore — it lives on the obvious in-canvas button in the
+                    comment overlay (user direction). This button always means
+                    "redesign the whole deck". */}
                 <ToolButton
-                  icon={commentsArmed ? "auto_awesome" : "autorenew"}
-                  label={
-                    commentsArmed
-                      ? "تطبيق التعليقات على الشرائح"
-                      : "أعد تصميم الكل"
-                  }
+                  icon="autorenew"
+                  label="أعد تصميم الكل"
                   running={regen.status === "running"}
-                  onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
+                  onClick={handleRegenerate}
                   disabled={applying || commentMode}
-                  iconNode={
-                    <motion.div
-                      animate={{ rotate: commentsArmed ? 360 : 0 }}
-                      transition={{
-                        rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
-                      }}
-                      className="flex h-[18px] w-[18px] items-center justify-center"
-                    >
-                      <AnimatePresence mode="wait" initial={false}>
-                        <motion.span
-                          key={commentsArmed ? "armed" : "idle"}
-                          initial={{ opacity: 0, scale: 0.6 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.6 }}
-                          transition={{ duration: 0.25 }}
-                          className="material-symbols-outlined text-[18px]"
-                        >
-                          {commentsArmed ? "auto_awesome" : "autorenew"}
-                        </motion.span>
-                      </AnimatePresence>
-                    </motion.div>
-                  }
                 />
               </motion.div>
             ) : null}
