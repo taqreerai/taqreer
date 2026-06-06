@@ -520,7 +520,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           position: "relative",
           display: "flex",
           alignItems: "center",
-          gap: 7,
+          gap: 2,
           padding: "6px 6px",
         }}
       >
@@ -555,7 +555,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
             </Btn>
             {/* Colour swatch centered in a 32px box so it lines up with the icon
                 buttons (was a bare 22px circle that read as misaligned). */}
-            <div className="relative flex h-8 w-8 items-center justify-center">
+            <div className="relative flex h-8 items-center justify-center px-1.5">
               <button
                 type="button"
                 aria-label="Text colour"
@@ -566,8 +566,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
                 }}
                 style={{
                   display: "block",
-                  width: 22,
-                  height: 22,
+                  width: 16,
+                  height: 16,
                   borderRadius: "50%",
                   border: "1px solid var(--tq-border-glass)",
                   background: color,
@@ -605,7 +605,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           controls, both fit on the pill). */}
       {kind === "svg" && (
         <>
-          <div style={{ position: "relative" }}>
+          <div className="relative flex h-8 items-center justify-center px-1.5">
             <button
               type="button"
               aria-label="Graphic colour"
@@ -615,8 +615,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               }}
               style={{
                 display: "block",
-                width: 22,
-                height: 22,
+                width: 16,
+                height: 16,
                 borderRadius: "50%",
                 border: "1px solid var(--tq-border-glass)",
                 background: svgColor,
@@ -773,7 +773,7 @@ function Btn({
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+      className={`inline-flex h-8 items-center justify-center rounded-md px-1.5 transition-colors ${
         active ? "text-white" : "text-white/55 hover:text-white"
       }`}
     >
