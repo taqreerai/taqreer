@@ -20,6 +20,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { MorePopover } from "./MorePopover";
+import { FontPopover } from "./FontPopover";
+import { canonicalFamily, googleFontUrl } from "@/lib/editor/font-search";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 
 type Props = {
@@ -188,6 +190,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [fontOpen, setFontOpen] = useState(false);
   // Whether the OPEN popover (colour picker / ⋯ menu) opens upward — set the
   // moment a popover opens, purely from which side of the pill the element is on
   // (see the layout effect below).
@@ -274,14 +277,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   // over the element, in every position. Decided the moment a popover opens, in a
   // layout effect (before paint) so there's no flicker. ──
   useLayoutEffect(() => {
-    if (!colorOpen && !moreOpen) return;
+    if (!colorOpen && !moreOpen && !fontOpen) return;
     const pill = pillRef.current;
     const iframeEl = (target.ownerDocument.defaultView?.frameElement as HTMLElement | null) ?? null;
     if (!pill || !iframeEl) return;
     const pillBottom = pill.getBoundingClientRect().bottom;
     const elTop = iframeEl.getBoundingClientRect().top + target.getBoundingClientRect().top;
     setPopoverFlipUp(elTop >= pillBottom - 2); // element below the pill → open up
-  }, [colorOpen, moreOpen, target]);
+  }, [colorOpen, moreOpen, fontOpen, target]);
 
   // ── dismiss on a click outside the pill (and outside the canvas — clicks inside
   // the iframe live in a separate document and never reach this listener). ──
@@ -309,6 +312,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     const onDown = (e: MouseEvent) => {
       setColorOpen(false);
       setMoreOpen(false);
+      setFontOpen(false);
       // Pointer down on a DIFFERENT element than the current selection → a
       // selection change is coming (it only lands on `click`). Mark it so the
       // outline stays hidden through the mousedown→click gap, so the OLD element's
@@ -348,8 +352,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   // current target, which a state-driven effect can't do race-free.) Mirror the
   // "editing" flag into a ref the rAF reads (can't write a ref during render).
   useEffect(() => {
-    editingRef.current = colorOpen || moreOpen || pillActive;
-  }, [colorOpen, moreOpen, pillActive]);
+    editingRef.current = colorOpen || moreOpen || fontOpen || pillActive;
+  }, [colorOpen, moreOpen, fontOpen, pillActive]);
 
   // Pointer released anywhere ends the "pressing the pill" state.
   useEffect(() => {
@@ -371,6 +375,32 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const recolorSvg = useCallback(
     (hex: string) => {
       recolorSvgEl(target, hex);
+      dirty.current = true;
+      force((n) => n + 1);
+    },
+    [target],
+  );
+
+  // Apply a picked font family (null = reset to the deck's theme font). Set the
+  // inline font-family AND lazy-load the css2 face INTO THE IFRAME so the preview
+  // renders immediately; on save the family persists in the slide HTML and the
+  // render/export paths re-inject the link from `usedGoogleFonts()`.
+  const onPickFont = useCallback(
+    (family: string | null) => {
+      if (!family) {
+        target.style.removeProperty("font-family");
+      } else {
+        target.style.setProperty("font-family", `"${family}", sans-serif`);
+        const doc = target.ownerDocument;
+        const id = `tq-font-${family.replace(/[^A-Za-z0-9]+/g, "-")}`;
+        if (!doc.getElementById(id)) {
+          const link = doc.createElement("link");
+          link.id = id;
+          link.rel = "stylesheet";
+          link.href = googleFontUrl(family);
+          doc.head.appendChild(link);
+        }
+      }
       dirty.current = true;
       force((n) => n + 1);
     },
@@ -419,6 +449,13 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const aligns: Align[] = ["left", "center", "right"];
   const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
   const opacityPct = Math.round((parseFloat(cs.opacity) || 1) * 100);
+  // The element's explicitly-picked Google font (from its inline style), or null
+  // when it's inheriting the deck's theme font.
+  const inlineFontFirst = (target.style.fontFamily || "")
+    .split(",")[0]
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  const currentFontFamily = inlineFontFirst ? canonicalFamily(inlineFontFirst) : null;
 
   return createPortal(
     <div
@@ -458,6 +495,33 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
       >
       {kind === "text" && (
         <>
+          {/* Font family — a search over the full Google Fonts catalog. */}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              aria-label="Font family"
+              onClick={() => {
+                setFontOpen((o) => !o);
+                setColorOpen(false);
+                setMoreOpen(false);
+              }}
+              className="inline-flex h-8 max-w-[112px] items-center gap-1 rounded-full px-2.5 text-[12px] text-white/85 transition-colors hover:text-white"
+              style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
+            >
+              <span className="truncate" dir="ltr">
+                {currentFontFamily ?? "الخط"}
+              </span>
+              <Chevron />
+            </button>
+            <FontPopover
+              open={fontOpen}
+              currentFamily={currentFontFamily}
+              flipUp={popoverFlipUp}
+              onPick={onPickFont}
+              onClose={() => setFontOpen(false)}
+            />
+          </div>
+          <Divider />
           <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
           <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
             <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>
@@ -472,6 +536,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               onClick={() => {
                 setColorOpen((o) => !o);
                 setMoreOpen(false);
+                setFontOpen(false);
               }}
               style={{
                 display: "block",
@@ -585,6 +650,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               onClick={() => {
                 setMoreOpen((o) => !o);
                 setColorOpen(false);
+                setFontOpen(false);
               }}
               label="More options"
             >

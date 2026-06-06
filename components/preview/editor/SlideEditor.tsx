@@ -18,6 +18,7 @@ import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { isVisualLeaf, isTextEditable, resolveSelectable } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { buildDeckFontHead } from "@/lib/export/font-head";
+import { googleFontLinkTags } from "@/lib/editor/font-search";
 
 type Props = {
   slide: SlideType;
@@ -105,8 +106,12 @@ export function SlideEditor({
     // @font-face) — same source the export uses; without it the iframe is its own
     // document and falls back to a system font (wrong, esp. Arabic).
     const { links, faceCss } = buildDeckFontHead(theme);
+    // Per-element fonts the user picked (font-search) — inject the css2 <link>
+    // for any catalog font referenced in this slide's HTML so it renders on load.
+    const pickedFontLinks = googleFontLinkTags(bodyHtml);
     return `<!doctype html><html dir="${direction}" lang="${language}"><head><meta charset="utf-8">
 ${links}
+${pickedFontLinks}
 <style>
 ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   :root{${rootVars}}

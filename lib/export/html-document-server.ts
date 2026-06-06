@@ -27,6 +27,7 @@ import type { SlideManifest } from "@/lib/schema/slide";
 import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtmlServer } from "@/lib/export/sanitize-server";
 import { themeToCssVars, cssFontFamilyName } from "@/lib/export/theme-css-vars";
+import { googleFontLinkTags } from "@/lib/editor/font-search";
 
 export type HtmlDocumentServerOptions = {
   // When true, emit `@page { size: <canvas-dims>; margin: 0 }` +
@@ -85,6 +86,14 @@ export function buildHtmlDocumentServer(
     )
     .join("\n");
 
+  // Per-element fonts the user picked in the editor (font-search). Scan every
+  // slide's HTML for catalog families and emit their css2 <link>s into the head
+  // so the export renders them AND the PPTX embeds them (dom-to-pptx fetches
+  // whatever the page has loaded). Trusted code, never into sanitized content.
+  const pickedFontLinks = googleFontLinkTags(
+    manifest.slides.map((s) => s.html).join("\n"),
+  );
+
   const cssVarRecord = themeToCssVars(manifest.theme);
   const cssVars = Object.entries(cssVarRecord)
     .map(([k, v]) => `    ${k}: ${escapeCssValue(v)};`)
@@ -132,6 +141,7 @@ export function buildHtmlDocumentServer(
 <meta charset="UTF-8">
 <title>${escapeText(manifest.title)}</title>
 ${fontLinks}
+${pickedFontLinks}
 <style>
 ${fontFaceCss ? `${fontFaceCss}\n` : ""}  :root {
 ${cssVars}

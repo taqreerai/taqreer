@@ -2,6 +2,7 @@ import type { SlideManifest } from "@/lib/schema/slide";
 import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
+import { googleFontLinkTags } from "@/lib/editor/font-search";
 
 /**
  * Builds a single self-contained HTML document containing every slide of the
@@ -37,6 +38,12 @@ export function buildHtmlDocument(manifest: SlideManifest): string {
     )
     .join("\n  ");
 
+  // Per-element fonts picked in the editor (font-search) — emit each catalog
+  // family's css2 <link> so the downloaded HTML renders them. Trusted code.
+  const pickedFontLinks = googleFontLinkTags(
+    manifest.slides.map((s) => s.html).join("\n"),
+  );
+
   // Shared source of truth — same record SlideRenderer spreads into its
   // inline style. Adapt to CSS-text-string lines for the <style> block.
   const cssVarRecord = themeToCssVars(manifest.theme);
@@ -61,6 +68,7 @@ export function buildHtmlDocument(manifest: SlideManifest): string {
 <meta charset="UTF-8">
 <title>${escapeText(manifest.title)}</title>
 ${fontLinks}
+${pickedFontLinks}
 <style>
   :root {
 ${cssVars}

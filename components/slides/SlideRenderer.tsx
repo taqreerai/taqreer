@@ -23,6 +23,7 @@ import type { SlideType, ThemeType } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scanGenImages } from "@/lib/images/slide-images";
+import { usedGoogleFonts, googleFontUrl } from "@/lib/editor/font-search";
 import { useGenImageFills } from "@/components/slides/gen-image-context";
 
 type SlideRendererProps = {
@@ -142,6 +143,22 @@ function SlideRendererImpl({
     }
     setSanitized(touched ? scratch.innerHTML : safe);
   }, [slide.html, fillSig]);
+
+  // Per-element picked fonts (font-search) — render side. SlideRenderer paints
+  // INLINE in the parent document, so any Google font the slide references must
+  // be loaded into <head>. Inject the css2 <link> once per family (deduped by id)
+  // — same trusted-code pattern as the theme font, never into user HTML.
+  useEffect(() => {
+    for (const family of usedGoogleFonts(sanitized)) {
+      const id = `tq-gfont-${family.replace(/[^A-Za-z0-9]+/g, "-")}`;
+      if (document.getElementById(id)) continue;
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = googleFontUrl(family);
+      document.head.appendChild(link);
+    }
+  }, [sanitized]);
 
   // NO inset buffer (was attempted 2026-05-23 then reverted same
   // day). The buffer-ring approach assumed the slide's own root bg

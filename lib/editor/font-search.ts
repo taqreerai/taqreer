@@ -87,3 +87,17 @@ export function googleFontLinkTags(html: string): string {
     )
     .join("\n");
 }
+
+/**
+ * One css2 URL that loads the DEFAULT weight of MANY families at once — for the
+ * picker's live previews (a single request for the whole visible list, rather
+ * than one <link> per row). Not for applying: the apply path uses
+ * `googleFontUrl()` with the full weight ladder.
+ */
+export function previewCss2Url(families: string[]): string {
+  const fams = families
+    .slice(0, 64)
+    .map((f) => `family=${f.replace(/ /g, "+")}`)
+    .join("&");
+  return `https://fonts.googleapis.com/css2?${fams}&display=swap`;
+}
