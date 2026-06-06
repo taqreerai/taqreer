@@ -231,6 +231,7 @@ export function PreviewActionBar({
   commentMode,
   onToggleCommentMode,
   draftCommentCount,
+  aiCommentCount,
   focusedSlideLocked,
   commentsArmed,
   onFirePartialRegen,
@@ -259,7 +260,11 @@ export function PreviewActionBar({
   // button morphs to the AI icon and fires the partial regen.
   commentMode: boolean;
   onToggleCommentMode: () => void;
+  // User (collaboration) comment count — badges the Edit-mode Comment
+  // button. AI comments are counted separately by `aiCommentCount`.
   draftCommentCount: number;
+  // AI-comment (forAi) draft count — badges the AI-mode comment button.
+  aiCommentCount: number;
   // True when the currently-focused slide is locked. Disables the
   // Comment button entry-point — a locked slide refuses new comment
   // markers (server enforces with 423, overlay suppresses click-to-
@@ -528,6 +533,26 @@ export function PreviewActionBar({
                   pointerEvents: effectiveMode === "ai" ? "auto" : "none",
                 }}
               >
+                {/* AI comment — draw a region + tell the model what to change.
+                    Same draw-box comment flow as the Edit-mode button, but
+                    authored in AI mode so DeckView tags it forAi → it feeds the
+                    partial regen (§16 Chunk 4). `assistant` = the comment+sparkle
+                    glyph (AI comment). */}
+                <ToolButton
+                  icon="assistant"
+                  label={
+                    focusedSlideLocked && !commentMode
+                      ? "الشريحة مقفلة — أعد فتح القفل لإضافة تعليق"
+                      : commentMode
+                        ? "إنهاء وضع التعليقات"
+                        : "علّق للذكاء"
+                  }
+                  iconFilled={commentMode}
+                  onClick={onToggleCommentMode}
+                  active={commentMode}
+                  disabled={applying || (focusedSlideLocked && !commentMode)}
+                  countBadge={aiCommentCount}
+                />
                 {/* Regenerate THIS slide — folds into the composer's Generate (Chunk 5). */}
                 {onRegenSlide ? (
                   <ToolButton
@@ -539,7 +564,7 @@ export function PreviewActionBar({
                 ) : null}
                 {/* Regen the whole deck / apply comments. */}
                 <ToolButton
-                  icon={commentsArmed ? "assistant" : "autorenew"}
+                  icon={commentsArmed ? "auto_awesome" : "autorenew"}
                   label={
                     commentsArmed
                       ? "تطبيق التعليقات على الشرائح"
@@ -565,7 +590,7 @@ export function PreviewActionBar({
                           transition={{ duration: 0.25 }}
                           className="material-symbols-outlined text-[18px]"
                         >
-                          {commentsArmed ? "assistant" : "autorenew"}
+                          {commentsArmed ? "auto_awesome" : "autorenew"}
                         </motion.span>
                       </AnimatePresence>
                     </motion.div>

@@ -30,6 +30,10 @@ const CreateCommentSchema = z.object({
   // empty comments — they look like ghosts on the slide.
   content: z.string().trim().min(1).max(2000),
   boundsJson: BoundsSchema,
+  // True = AI instruction (created in AI mode → fed to the model on
+  // partial regen). False/omitted = normal collaboration comment that
+  // never reaches Claude. Optional for back-compat with older clients.
+  forAi: z.boolean().optional().default(false),
 });
 
 // PII guard — `author` joins on Comment.findMany / .create. Email is
@@ -253,6 +257,15 @@ export async function POST(
       content: parsed.data.content,
       boundsJson: toJson(parsed.data.boundsJson),
       status: "draft",
+      // Server-enforced: only editors (owner/edit) can author AI comments —
+      // the client only exposes AI mode to them. A comment-only collaborator
+      // CAN craft forAi=true in the body, so coerce it to false here; otherwise
+      // they could inject an instruction into an editor's regen. Matches the
+      // "AI comments = AI mode = editors" model (§16 Chunk 4).
+      forAi:
+        ctx.role === "owner" || ctx.role === "edit"
+          ? parsed.data.forAi
+          : false,
       // Required (see guard above) — non-null guarantees the
       // creator can later edit / delete their own comment.
       authorId: ctx.authorPrismaUserId,

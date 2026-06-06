@@ -346,6 +346,12 @@ model Comment {
   screenshotUrl  String?
   content        String
   status         String              @default("draft")
+  // True when the comment is an AI instruction — created in AI mode
+  // ("draw a region + tell the AI what to change"). False for normal
+  // collaboration comments written for other people on the share link.
+  // Only forAi comments are gathered + sent to the model on partial
+  // regen (§16, Chunk 4); user comments never reach Claude.
+  forAi          Boolean             @default(false)
   createdAt      DateTime            @default(now())
   presentation   Presentation        @relation(fields: [presentationId], references: [id], onDelete: Cascade)
   version        PresentationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)

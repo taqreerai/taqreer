@@ -2406,13 +2406,19 @@ export function DeckView({
           slideId: input.slideId,
           boundsJson: input.bounds,
           content: input.content,
+          // Tag by mode (§16 Chunk 4): a comment authored in AI mode is
+          // an instruction for the model (fed to the partial regen); in
+          // Edit mode it's a normal collaboration comment that never
+          // reaches Claude. Only editors can reach AI mode, so non-edit
+          // roles always create user comments.
+          forAi: studioMode === "ai",
         }),
       });
       if (!res.ok) throwApiError(res.status, "تعذر حفظ التعليق.");
       const data = (await res.json()) as { comment: CommentRow };
       setComments((prev) => [...prev, data.comment]);
     },
-    [projectId],
+    [projectId, studioMode],
   );
 
   const handleUpdateComment = useCallback(
@@ -3363,7 +3369,10 @@ export function DeckView({
                   onSetStudioMode={setStudioMode}
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
-                  draftCommentCount={comments.length}
+                  draftCommentCount={
+                    comments.filter((c) => !c.forAi).length
+                  }
+                  aiCommentCount={comments.filter((c) => c.forAi).length}
                   // Locked focused slide → PreviewActionBar disables
                   // the Comment button (only the toggle-out path
                   // stays live if commentMode is already on; see
@@ -3379,7 +3388,12 @@ export function DeckView({
                   // button morphs to the AI icon and now triggers
                   // the partial regen.
                   commentsArmed={
-                    !commentMode && comments.length > 0 && !applying
+                    // Only AI comments (forAi) arm the regen. Normal user
+                    // comments stay collaboration-only and never morph the
+                    // button into "apply comments" (§16 Chunk 4).
+                    !commentMode &&
+                    comments.some((c) => c.forAi) &&
+                    !applying
                   }
                   onFirePartialRegen={handleFirePartialRegen}
                   // Shared cluster (§16) — History + Lock relocated off the

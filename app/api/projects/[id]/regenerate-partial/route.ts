@@ -64,6 +64,12 @@ async function runSnapshotAndPromoteTx(args: {
           presentationId,
           versionId: sourceVersionId,
           status: "draft",
+          // Only AI comments are fed to the model + promoted. Normal
+          // user/collaboration comments (forAi=false) stay as drafts —
+          // they're for other people on the share link, never sent to
+          // Claude (§16, Chunk 4). Downstream promote/re-read key off
+          // these ids, so this single filter scopes the whole apply.
+          forAi: true,
         },
         select: { id: true, slideId: true, content: true, boundsJson: true },
       });

@@ -34,6 +34,10 @@ export type CommentRow = {
   // pins without bounds rather than failing on them.
   boundsJson: CommentBounds | null;
   status: string;
+  // True = AI instruction (fed to the model on partial regen); false =
+  // normal collaboration comment (never sent to Claude). See the
+  // Comment model + §16 Chunk 4.
+  forAi: boolean;
   createdAt: string;
   // Phase 15.D — author surfaces the commenter's name + avatar in
   // the CommentsPanel. Null for legacy rows authored before the
