@@ -24,6 +24,7 @@ import {
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
+import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import {
   GenImageProvider,
   type GenImageFills,
@@ -622,6 +623,9 @@ export function DeckView({
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
   const editMode = canEdit;
   const [editorSelected, setEditorSelected] = useState<HTMLElement | null>(null);
+  // The editor iframe's document — captured via SlideEditor.onDocReady so the
+  // Studio Layers panel can build its tree from the live slide DOM.
+  const [editorDoc, setEditorDoc] = useState<Document | null>(null);
   // Stable reference so StylePill's outside-click `mousedown` listener isn't
   // re-attached on every DeckView render (`setEditorSelected` is itself stable).
   const dismissEditorSelection = useCallback(() => setEditorSelected(null), []);
@@ -3326,6 +3330,18 @@ export function DeckView({
         )}
       </AnimatePresence>
 
+      {/* Studio — Layers panel (left), mirroring the Slides nav on the right.
+          Lists the focused slide's visual leaves from the live editor DOM;
+          clicking a row selects that element. Only while the editor is active. */}
+      {editMode && !commentMode ? (
+        <LayersPanel
+          doc={editorDoc}
+          selected={editorSelected}
+          onSelect={setEditorSelected}
+          language={manifest!.language === "en" ? "en" : "ar"}
+        />
+      ) : null}
+
       {/* Universal toolbar. Portal'd to document.body so its z-index
           isn't trapped by any ancestor stacking context (transform,
           filter, isolation, opacity != 1, etc.). pointer-events-none
@@ -3455,7 +3471,7 @@ export function DeckView({
                 scale={gridScale}
                 selected={editorSelected}
                 onSelect={setEditorSelected}
-                onDocReady={() => {}}
+                onDocReady={setEditorDoc}
                 onEdit={handleSlideEdit}
                 reloadKey={editorReloadKey}
                 // Locked / mid-regen: keep the editor mounted (no render swap →
