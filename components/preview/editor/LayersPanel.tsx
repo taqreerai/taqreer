@@ -9,9 +9,21 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { buildLayerTree, type LayerNode } from "@/lib/editor/leaves";
+import { SLIDE_NAV_WIDTH } from "@/components/preview/SlideNavSidebar";
 
-const PANEL_WIDTH = 280;
 const SPRING = { type: "spring", stiffness: 500, damping: 35 } as const;
+
+// Localize the non-text kind labels. buildLayerTree (shared with the lab) hands
+// back English "Image"/"Generated image"/"Graphic"; text rows already carry the
+// slide's own (Arabic) text. We translate here, never in the shared builder.
+function displayLabel(node: LayerNode, isEn: boolean): string {
+  if (node.kind === "image") {
+    const gen = node.el.hasAttribute("data-genimage");
+    return isEn ? (gen ? "Generated image" : "Image") : gen ? "صورة مولّدة" : "صورة";
+  }
+  if (node.kind === "graphic") return isEn ? "Graphic" : "رسمة";
+  return node.label;
+}
 
 export function LayersPanel({
   doc,
@@ -69,7 +81,7 @@ export function LayersPanel({
         left: 16,
         top: 76,
         bottom: 100,
-        width: PANEL_WIDTH,
+        width: SLIDE_NAV_WIDTH,
         background: "var(--tq-bg-glass)",
         borderColor: "var(--tq-border-glass)",
       }}
@@ -98,6 +110,7 @@ export function LayersPanel({
               node={node}
               active={node.el === selected}
               onSelect={onSelect}
+              isEn={isEn}
             />
           ))
         )}
@@ -110,10 +123,12 @@ function LayerRow({
   node,
   active,
   onSelect,
+  isEn,
 }: {
   node: LayerNode;
   active: boolean;
   onSelect: (el: HTMLElement | null) => void;
+  isEn: boolean;
 }) {
   return (
     <li>
@@ -127,8 +142,10 @@ function LayerRow({
         }`}
       >
         <LayerIcon kind={node.kind} active={active} />
-        <span className="min-w-0 flex-1 truncate" dir="auto">
-          {node.label}
+        {/* No dir="auto": labels follow the panel's RTL so Latin names (e.g. a
+            kind label or a Latin text run) still sit on the leading edge. */}
+        <span className="min-w-0 flex-1 truncate text-start">
+          {displayLabel(node, isEn)}
         </span>
       </button>
     </li>

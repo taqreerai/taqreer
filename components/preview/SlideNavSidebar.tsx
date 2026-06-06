@@ -27,7 +27,9 @@ import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import type { PresenceViewer } from "@/lib/realtime/project-channel";
 
-export const SLIDE_NAV_WIDTH = 320;
+// Studio: the Slides nav + Layers panel share this width (so the slide centers
+// symmetrically between them). 280 — the nav's thumbnails size to this width.
+export const SLIDE_NAV_WIDTH = 280;
 
 type PlaceholderState = "done" | "current" | "pending";
 
