@@ -1,6 +1,6 @@
 # Plan — In-canvas slide editor (DOM-native, ai-canvas-inspired UX)
 
-Status: **PLANNED / not started.** Last updated 2026-06-05.
+Status: **PLANNED / not started.** Last updated 2026-06-06.
 Owner context: this is the "manual scalpel" editor — direct WYSIWYG editing of a
 slide's HTML, sitting alongside the existing AI regen paths. Written in full
 detail because context is limited; everything needed to resume is here.

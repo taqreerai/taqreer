@@ -233,7 +233,13 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         }
         const r = selc.getRangeAt(0).getBoundingClientRect();
         const fs = parseFloat(getComputedStyle(t).fontSize) || 0;
-        const h = fs ? Math.min(r.height, fs * scale * 1.02) : r.height;
+        // The stage scales by fillScale now; read it via the live ref (this
+        // setup effect runs once, so closing over `fillScale` directly would
+        // go stale on resize, and the prop `scale` is the pre-overscan value).
+        // CR #52: caret height was drifting at fractional overscan scales.
+        const h = fs
+          ? Math.min(r.height, fs * scaleRef.current * 1.02)
+          : r.height;
         caret.style.display = "block";
         caret.style.left = `${r.left}px`;
         caret.style.top = `${r.top + r.height / 2 - h / 2}px`;
