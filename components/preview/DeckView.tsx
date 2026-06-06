@@ -614,15 +614,10 @@ export function DeckView({
   // scalpel + user comments; AI = generative. Defaults to Edit (§16).
   const [studioMode, setStudioMode] = useState<StudioMode>("edit");
   // Slide-nav tab (§16) — Slides (the thumbnail grid) vs Comments (the embedded
-  // CommentsPanel). Replaces the old full panel swap; entering comment mode
-  // auto-selects Comments (effect below).
+  // CommentsPanel) for REVIEWING comments outside comment mode. In comment mode
+  // BOTH side panels hide (the canvas is the comment surface), so there's no
+  // auto-switch to Comments — it would just be hidden anyway.
   const [navTab, setNavTab] = useState<"slides" | "comments">("slides");
-  // Entering comment mode (toolbar Comment button OR clicking a marker) auto-
-  // selects the Comments tab. Leaving it doesn't force the user back to Slides.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (commentMode) setNavTab("comments");
-  }, [commentMode]);
   // [editor-debug] Trace every mode / comment / tab transition so the manual
   // test pass can see exactly what state the editor is in. Remove with the
   // rest of the editor-debug calls once verified.
@@ -3335,10 +3330,10 @@ export function DeckView({
         role={role}
       />
 
-      {/* Right-edge slot: the Slides nav. For comment-capable roles it also
-          hosts a Comments tab (the embedded CommentsPanel) — §16 replaced the
-          old full-panel swap with an in-panel tab, so the slot never reflows
-          and the slide grid stays one click away while commenting. */}
+      {/* Right-edge slot: the Slides nav (with a Comments tab for reviewing
+          comments). HIDDEN while commenting — both side panels clear out so the
+          canvas is the only comment surface (user direction 2026-06-07). */}
+      {!commentMode ? (
       <SlideNavSidebar
         items={navItems}
         currentIndex={focusedIndex}
@@ -3385,6 +3380,7 @@ export function DeckView({
           ) : undefined
         }
       />
+      ) : null}
 
       {/* Studio — Layers panel (left), mirroring the Slides nav on the right.
           Lists the focused slide's visual leaves from the live editor DOM;
