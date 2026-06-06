@@ -139,6 +139,10 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
       className="flex items-center rounded-full border"
       style={{
         height: 30,
+        // The pill's bg/border runs to its edge, so without margin it crowds the
+        // neighbouring buttons (whose glyphs are inset 6px). 6px margin matches
+        // that inset → even visual gaps on both sides.
+        marginInline: 6,
         paddingInlineStart: 8,
         paddingInlineEnd: 3,
         borderColor: "var(--tq-border-glass)",
@@ -527,21 +531,24 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
       {kind === "text" && (
         <>
           {/* Font family — a pill showing the current font that morphs into a
-              search over the full Google Fonts catalog. */}
-          <FontControl
-            open={fontOpen}
-            onOpenChange={(o) => {
-              setFontOpen(o);
-              if (o) {
-                setColorOpen(false);
-                setMoreOpen(false);
-              }
-            }}
-            currentFamily={currentFontFamily}
-            label={renderedFontName}
-            flipUp={popoverFlipUp}
-            onPick={onPickFont}
-          />
+              search over the full Google Fonts catalog. The 6px end margin
+              matches the size pill / buttons' inset so the divider sits evenly. */}
+          <div style={{ marginInlineEnd: 6 }}>
+            <FontControl
+              open={fontOpen}
+              onOpenChange={(o) => {
+                setFontOpen(o);
+                if (o) {
+                  setColorOpen(false);
+                  setMoreOpen(false);
+                }
+              }}
+              currentFamily={currentFontFamily}
+              label={renderedFontName}
+              flipUp={popoverFlipUp}
+              onPick={onPickFont}
+            />
+          </div>
           <Divider />
           {/* Character cluster — size / bold / italic / colour, tightly spaced
               (gap 2) like the align cluster so every button sits evenly. */}
@@ -783,13 +790,5 @@ function Btn({
 }
 
 function Divider() {
-  // marginInline gives the separator breathing room: the filled pills (font /
-  // stepper) run their background to the edge, so the 2px flex gap alone read as
-  // ~0 against them. 4px each side → a clear section break (the icon buttons are
-  // transparent, so they keep their tight 2px rhythm within clusters).
-  return (
-    <div
-      style={{ width: 1, height: 22, marginInline: 4, background: "var(--tq-border-glass)" }}
-    />
-  );
+  return <div style={{ width: 1, height: 22, background: "var(--tq-border-glass)" }} />;
 }
