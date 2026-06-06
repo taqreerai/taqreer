@@ -105,20 +105,34 @@ export function SlideEditor({
   // iframe sits at DISPLAY size; an inner #tqe-stage holds the full slide scaled to
   // fit. getBoundingClientRect of slide elements then returns display coords, which the
   // overlays use directly.
-  const dispW = Math.round(width * scale);
-  const dispH = Math.round(height * scale);
+  //
+  // CEIL, not round: the clip parent is sized by `aspect-ratio` + `width:min()`, so
+  // its height is fractional (e.g. 779.625px). The iframe ELEMENT is ceil'd so it
+  // always ≥ the clip and overflow-hidden trims the overshoot (sharp integer paint;
+  // a fractional iframe rounds its internal viewport).
+  const dispW = Math.ceil(width * scale);
+  const dispH = Math.ceil(height * scale);
+  // OVERSCAN the content to FILL the ceil'd iframe, not the fractional clip. At the
+  // exact fit, the slide's bottom/right edge lands ON the fractional clip boundary,
+  // so its anti-aliased edge blends with whatever's behind it — and the iframe/body
+  // bg is the DECK theme (e.g. white) while the slide section can be a different
+  // colour (e.g. a black title slide). That mismatch is the ~1px white line. Scaling
+  // the stage to dispW×dispH pushes the edge PAST the clip, so overflow-hidden trims
+  // the fuzzy edge and only SOLID slide colour meets the boundary — works for any
+  // slide colour or gradient. The overshoot on the other axis is sub-px, also clipped.
+  const fillScale = Math.max(dispW / width, dispH / height);
   // The display scale lives in a CSS var (--tqe-scale), NOT baked into the srcDoc
   // string. A resize changes `scale` ~every frame; if that recomputed the srcDoc,
   // the iframe would RELOAD on every tick — flashing the canvas AND re-firing
   // onDocReady (which rebuilds the Layers tree → that panel flashes too). The
   // srcDoc bakes the current scale as the var's initial value (no first-paint pop)
-  // but `scale` is NOT a memo dep, so a resize doesn't recompute it. A ref carries
-  // the latest scale to wire() (which sets the var on iframe load), and the effect
-  // below sets it on every resize.
-  const scaleRef = useRef(scale);
+  // but it's NOT a memo dep, so a resize doesn't recompute it. A ref carries the
+  // latest scale to wire() (which sets the var on iframe load), and the effect below
+  // sets it on every resize.
+  const scaleRef = useRef(fillScale);
   useEffect(() => {
-    scaleRef.current = scale;
-  }, [scale]);
+    scaleRef.current = fillScale;
+  }, [fillScale]);
   const srcDoc = useMemo(() => {
     const vars = themeToCssVars(theme) as Record<string, string>;
     const rootVars = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(";");
@@ -134,7 +148,7 @@ ${links}
 ${pickedFontLinks}
 <style>
 ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
-  :root{${rootVars};--tqe-scale:${scale}}
+  :root{${rootVars};--tqe-scale:${fillScale}}
   /* Body fills the iframe ELEMENT (sized to dispW×dispH in React), so a resize
      resizes the iframe element without touching this document. */
   body{position:relative;width:100%;height:100%;overflow:hidden;background:${theme.background};color:${theme.text};font-family:var(--font-body),'Cairo',system-ui,sans-serif}
@@ -162,9 +176,9 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   @keyframes tqe-caret-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
   [contenteditable="true"]{outline:none}
 </style></head><body><div id="tqe-stage">${bodyHtml}</div></body></html>`;
-    // scale/dispW/dispH intentionally excluded — they're presentation, applied
-    // live via the --tqe-scale var + the iframe element's size, so a resize never
-    // rebuilds (reloads) this document. scaleRef.current bakes the initial scale.
+    // scale intentionally excluded — it's presentation, applied live via the
+    // --tqe-scale var + the iframe element's dispW×dispH size, so a resize never
+    // rebuilds (reloads) this document. The memo bakes the initial scale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyHtml, theme, direction, language, width, height]);
 
@@ -375,9 +389,9 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   useLayoutEffect(() => {
     iframeRef.current?.contentDocument?.documentElement?.style.setProperty(
       "--tqe-scale",
-      String(scale),
+      String(fillScale),
     );
-  }, [scale, srcDoc]);
+  }, [fillScale, srcDoc]);
 
   // Reposition the selection box whenever the controlled `selected` changes, AND
   // keep it glued to the element through two distinct kinds of change:
@@ -404,6 +418,8 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   }, [selected, disabled]);
 
   return (
+    // dispW×dispH are ceil'd (≥ the fractional clip), so the iframe slightly
+    // overshoots and overflow-hidden on the parent trims it — no bottom/edge gap.
     <div style={{ width: dispW, height: dispH, position: "relative" }}>
       <iframe
         ref={iframeRef}
