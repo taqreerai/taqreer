@@ -84,6 +84,17 @@ export function LayersPanel({
     orderRef.current = order;
   }, [order]);
 
+  // Which row is mid-drag (its data-tq-id), or null. Drives the per-row lift, the
+  // un-clip so the dragged row floats free of the sidebar, and the global
+  // grab-cursor + no-select lock (else the pointer reverts and drag-selects text).
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!draggingId) return;
+    document.body.classList.add("tq-grabbing");
+    return () => document.body.classList.remove("tq-grabbing");
+  }, [draggingId]);
+  const isDragging = draggingId != null;
+
   // Build + live-rebuild the tree from the slide's stage. childList/subtree
   // catches add/remove; characterData refreshes a text row's label. Attribute
   // toggles (contenteditable, the edit-time z-lift, OUR z-index writes) are NOT
@@ -150,7 +161,11 @@ export function LayersPanel({
     <aside
       dir={isEn ? "ltr" : "rtl"}
       aria-label={isEn ? "Layers" : "الطبقات"}
-      className="backdrop-blur-glass fixed z-[30] flex flex-col overflow-hidden rounded-3xl border p-3 shadow-2xl"
+      // While dragging, drop the clip so the lifted row can float past the panel
+      // edges and stick to the cursor.
+      className={`backdrop-blur-glass fixed z-[30] flex flex-col rounded-3xl border p-3 shadow-2xl ${
+        isDragging ? "overflow-visible" : "overflow-hidden"
+      }`}
       style={{
         left: 16,
         top: 76,
@@ -176,18 +191,28 @@ export function LayersPanel({
           axis="y"
           values={order}
           onReorder={setOrder}
-          className="flex-1 space-y-0.5 overflow-y-auto overscroll-contain pt-2"
+          className={`flex-1 space-y-0.5 overscroll-contain pt-2 ${
+            isDragging ? "overflow-visible" : "overflow-y-auto"
+          }`}
         >
-          {order.map((node) => (
-            <LayerRow
-              key={node.el.getAttribute("data-tq-id") ?? node.label}
-              node={node}
-              active={node.el === selected}
-              onSelect={onSelect}
-              onDragEnd={commitOrder}
-              isEn={isEn}
-            />
-          ))}
+          {order.map((node) => {
+            const id = node.el.getAttribute("data-tq-id") ?? node.label;
+            return (
+              <LayerRow
+                key={id}
+                node={node}
+                active={node.el === selected}
+                dragging={draggingId === id}
+                onSelect={onSelect}
+                onDragStart={() => setDraggingId(id)}
+                onDragEnd={() => {
+                  commitOrder();
+                  setDraggingId(null);
+                }}
+                isEn={isEn}
+              />
+            );
+          })}
         </Reorder.Group>
       )}
     </aside>
@@ -197,13 +222,17 @@ export function LayersPanel({
 function LayerRow({
   node,
   active,
+  dragging,
   onSelect,
+  onDragStart,
   onDragEnd,
   isEn,
 }: {
   node: LayerNode;
   active: boolean;
+  dragging: boolean;
   onSelect: (el: HTMLElement | null) => void;
+  onDragStart: () => void;
   onDragEnd: () => void;
   isEn: boolean;
 }) {
@@ -215,11 +244,29 @@ function LayerRow({
       value={node}
       dragListener={false}
       dragControls={controls}
+      onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      // Lift via `animate` keyed on the per-row dragging flag (NOT whileDrag,
+      // whose boxShadow was sticking after drop) so it reverts cleanly.
+      animate={{
+        scale: dragging ? 1.03 : 1,
+        boxShadow: dragging ? "0 14px 34px rgba(0,0,0,0.55)" : "0 0 0 rgba(0,0,0,0)",
+      }}
       transition={SPRING}
-      whileDrag={{ scale: 1.03, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}
+      style={{
+        position: "relative",
+        zIndex: dragging ? 60 : undefined,
+        // Opaque + bordered while dragging so the floating chip reads solidly
+        // once it leaves the panel over the canvas.
+        background: dragging ? "rgba(var(--tq-bg-rgb), 0.96)" : undefined,
+        border: dragging ? "1px solid var(--tq-border-glass)" : undefined,
+      }}
       className={`group/row flex items-center gap-1 rounded-xl pr-1 ${
-        active ? "bg-white/[0.10]" : "hover:bg-white/[0.05]"
+        dragging
+          ? ""
+          : active
+            ? "bg-white/[0.10]"
+            : "hover:bg-white/[0.05]"
       }`}
     >
       <button

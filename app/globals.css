@@ -1659,6 +1659,16 @@ body {
   filter: blur(80px);
 }
 
+/* While a Studio Layers row is being dragged, lock the whole document to the
+   grabbing cursor and kill text selection — otherwise the pointer reverts to the
+   per-element cursor and drag-selects the row labels. Toggled on <body> for the
+   duration of the drag. */
+.tq-grabbing,
+.tq-grabbing * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
 /* ─── Studio canvas (full-screen editor at /project) ─────────────────────
    The chrome-less editing stage: the slide floats over a dotted canvas with
    a soft center-out vignette for depth. Dots + vignette are LAYERED
