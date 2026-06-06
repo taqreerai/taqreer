@@ -543,50 +543,56 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
             onPick={onPickFont}
           />
           <Divider />
-          <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
-          <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
-            <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>
-          </Btn>
-          <Btn active={isItalic} onClick={() => setStyle("font-style", isItalic ? "normal" : "italic")} label="Italic">
-            <span style={{ fontStyle: "italic", fontWeight: 600, fontSize: 15, fontFamily: "Georgia, serif" }}>I</span>
-          </Btn>
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              aria-label="Text colour"
-              onClick={() => {
-                setColorOpen((o) => !o);
-                setMoreOpen(false);
-                setFontOpen(false);
-              }}
-              style={{
-                display: "block",
-                width: 22,
-                height: 22,
-                borderRadius: "50%",
-                border: "1px solid var(--tq-border-glass)",
-                background: color,
-                cursor: "pointer",
-              }}
-            />
-            <ColorPickerPopover
-              open={colorOpen}
-              value={color}
-              onChange={(hex) => setStyle("color", hex)}
-              onClose={() => setColorOpen(false)}
-              align="center"
-              flipUp={popoverFlipUp}
-              // Close instantly (no exit fade): the picker is a child of the pill,
-              // so a lingering exit would relocate to the next element and flash.
-              instantExit
-              // Match the pill exactly: same dark glass + the modal-strength
-              // boost blur (not the default white-tint card) so the picker
-              // reads as frosted glass over a slide.
-              surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
-            />
+          {/* Character cluster — size / bold / italic / colour, tightly spaced
+              (gap 2) like the align cluster so every button sits evenly. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
+            <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
+              <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>
+            </Btn>
+            <Btn active={isItalic} onClick={() => setStyle("font-style", isItalic ? "normal" : "italic")} label="Italic">
+              <span style={{ fontStyle: "italic", fontWeight: 600, fontSize: 15, fontFamily: "Georgia, serif" }}>I</span>
+            </Btn>
+            {/* Colour swatch centered in a 32px box so it lines up with the icon
+                buttons (was a bare 22px circle that read as misaligned). */}
+            <div className="relative flex h-8 w-8 items-center justify-center">
+              <button
+                type="button"
+                aria-label="Text colour"
+                onClick={() => {
+                  setColorOpen((o) => !o);
+                  setMoreOpen(false);
+                  setFontOpen(false);
+                }}
+                style={{
+                  display: "block",
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  border: "1px solid var(--tq-border-glass)",
+                  background: color,
+                  cursor: "pointer",
+                }}
+              />
+              <ColorPickerPopover
+                open={colorOpen}
+                value={color}
+                onChange={(hex) => setStyle("color", hex)}
+                onClose={() => setColorOpen(false)}
+                align="center"
+                flipUp={popoverFlipUp}
+                // Close instantly (no exit fade): the picker is a child of the pill,
+                // so a lingering exit would relocate to the next element and flash.
+                instantExit
+                // Match the pill exactly: same dark glass + the modal-strength
+                // boost blur (not the default white-tint card) so the picker
+                // reads as frosted glass over a slide.
+                surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
+              />
+            </div>
           </div>
           <Divider />
-          <div style={{ display: "flex", gap: 2 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
             {aligns.map((a) => (
               <Btn key={a} active={align === a} onClick={() => setStyle("text-align", a)} label={`Align ${a}`}>
                 <AlignIcon a={a} />
