@@ -544,3 +544,82 @@ Hide/Show · Bring forward / to front / backward / to back · **Select parent** 
 - Slide build/render/export spine: `lib/deck/{scaffold,scope-css}.ts`, `lib/export/{theme-css-vars,html-document-server,html-export}.ts`, `patches/dom-to-pptx+1.1.8.patch`.
 - AI reuse: `inngest/functions/{deck-regenerate-partial,deck-image-warm,deck-images-generate}.ts`, `app/api/projects/[id]/status/route.ts`, `lib/images/slide-images.ts` (`scanGenImages`/`injectImgSrc`).
 - The generation flow it edits: `context/html-flow.md`.
+
+## 15. Studio editing stage — full-screen canvas redesign (DEFERRED — build WITH the bottom command bar)
+
+**Status: planned, not built. Build this together with the upcoming bottom toolbar
+(the Edit⇄AI command bar from §11) — they're one redesign of the editing surface.**
+User direction 2026-06-06. The earlier "toggle the app chrome on /project" attempt
+was built (commit `b0ec791`) and **reverted** (`45a05bb`) — it fought the layout (the
+slide-nav never reflowed into the freed gap; the floating toggle collided with header
+buttons). The right model is a dedicated full-screen Studio, not a togglable chrome.
+
+### The model
+The dashboard is "browse"; the editor is its own focused world. Click a project →
+full-bleed Studio (NO app header/sidebar) → a "← لوحة التحكم" pill returns you. No
+chrome toggle.
+
+### Chrome-less approach (keep the route + auth)
+Do NOT move `/project` out of the `(app)` group (it'd re-do the auth gate). Instead
+`DashboardShell` detects `pathname.startsWith("/project/")` and renders `{children}`
+FULL-BLEED — no `<Header>`, no `<Sidebar>`, no margins/padding. The `/project` page
+(DeckView) owns the whole viewport.
+
+### Layout (all inside Taqreer's glass + `--tq-*` tokens — never fork)
+```
+ ⟵ لوحة التحكم        · · · dotted canvas · · ·        [حفظ][↗ مشاركة][⤓ تصدير]
+   ┌─────────┐        ╔════════════════╗        ┌─────────┐
+   │ الطبقات │        ║   the slide    ║        │ الشرائح │
+   │ (Layers)│        ║ (zoom + pan)   ║        │ (Slides)│
+   └─────────┘        ╚════════════════╝        └─────────┘
+                   ┌────── bottom command bar (Edit ⇄ AI, §11) ──────┐
+                   └──────────  + zoom controls: ⊟ 100% ⊞ ⤢ fit ─────┘
+```
+- **Dotted canvas:** low-opacity dot grid (radial-gradient, `--tq-*` dot color) over
+  `--tq-bg` → "infinite surface" depth. Slide floats with a soft shadow.
+- **Floating ROUNDED glass panels** (`glass-popover` recipe, margin from edges — NOT
+  docked rails), entering on the 500/35 spring:
+  - **RIGHT = Slides** — restyle `SlideNavSidebar` content as a floating card.
+  - **LEFT = Layers** — NEW. `buildLayerTree(section)` already exists in
+    `lib/editor/leaves.ts` (text/image/graphic rows, flat). Row click = select (→
+    StylePill), hover = highlight on canvas.
+- **Top-leading:** back-to-dashboard pill (→ `/dashboard`).
+- **Top-trailing:** Save / Share / Export — document-level actions (reuse `PreviewActionBar`).
+- **Bottom command bar (the toolbox lives HERE — NOT a top cluster):** modeled on the
+  harvest source **ai-canvas (github.com/kyh/ai-canvas)** — a floating bottom toolbar
+  carrying the editing tools + an **Edit ⇄ AI toggle** (this IS the §11 command bar).
+  The current left icon-rail toolbox's actions move into THIS bottom bar (user
+  correction 2026-06-06 — earlier note wrongly said "top cluster"). Zoom controls
+  (⊟ % ⊞ ⤢ fit) sit alongside it.
+- Left edge is then free for the **Layers** panel.
+
+### Existing-pieces mapping
+| Piece | In the Studio |
+|---|---|
+| DashboardShell chrome | suppressed on `/project` → full-bleed (keeps auth gate + route) |
+| DeckView hero canvas | becomes the zoom/pan canvas; "fit to screen" computes initial zoom |
+| SlideNavSidebar | floating RIGHT panel (restyle) |
+| Layers | NEW left panel via `buildLayerTree()` |
+| StylePill | unchanged behavior; coordinate math gains a zoom factor (see risk) |
+| Save/Share/Export | floating top-trailing cluster (document actions) |
+| Toolbox / editing tools + AI toggle | floating **BOTTOM** command bar (ai-canvas style) |
+
+### Zoom + pan (the hard part — Phase 3 of the build)
+Slide is in an IFRAME (`SlideEditor`), so wrap it in a transform layer
+`transform: translate(panX,panY) scale(zoom)`. Controls: Ctrl/⌘+wheel or pinch =
+zoom-around-cursor; plain wheel / space-drag / middle-drag = pan; fit-to-screen +
+zoom-% pill. **RISK:** the StylePill maps in-iframe `.tqe-sel` coords → screen via the
+iframe's `frameElement` rect; under the outer zoom it must factor the effective scale
+(innerScale × zoom). Update its rAF mapping. Build + test this AFTER the shell.
+
+### Build phases (when we do it)
+1. **Studio shell** (visual): full-bleed `/project`, dotted bg, back pill, Slides
+   floating right, NEW Layers panel left, floating top-trailing actions (incl. folded
+   toolbox). Canvas stays fit-to-screen (no user zoom yet).
+2. **Bottom command bar** (§11 Edit⇄AI) — the trigger for doing this redesign now.
+3. **Zoom + pan** + StylePill zoom-aware coords + zoom controls.
+
+### Aesthetic notes (frontend-design lens, but inside our system)
+Dotted canvas for atmosphere/depth; slide as the lit focal object (soft shadow);
+floating glass panels (not chrome) so the slide owns the space; staggered 500/35
+spring entrance; Cairo + `--tq-*` only; Latin numerals in the zoom-% readout.
