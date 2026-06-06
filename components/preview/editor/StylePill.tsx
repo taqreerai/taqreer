@@ -20,7 +20,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { MorePopover } from "./MorePopover";
-import { FontPopover } from "./FontPopover";
+import { FontControl } from "./FontControl";
 import { canonicalFamily, googleFontUrl } from "@/lib/editor/font-search";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 
@@ -456,6 +456,10 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     .trim()
     .replace(/^["']|["']$/g, "");
   const currentFontFamily = inlineFontFirst ? canonicalFamily(inlineFontFirst) : null;
+  // The font the element ACTUALLY renders in (theme font when no inline pick) —
+  // shown on the collapsed font pill.
+  const renderedFontName =
+    (cs.fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "") || "الخط";
 
   return createPortal(
     <div
@@ -495,32 +499,22 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
       >
       {kind === "text" && (
         <>
-          {/* Font family — a search over the full Google Fonts catalog. */}
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              aria-label="Font family"
-              onClick={() => {
-                setFontOpen((o) => !o);
+          {/* Font family — a pill showing the current font that morphs into a
+              search over the full Google Fonts catalog. */}
+          <FontControl
+            open={fontOpen}
+            onOpenChange={(o) => {
+              setFontOpen(o);
+              if (o) {
                 setColorOpen(false);
                 setMoreOpen(false);
-              }}
-              className="inline-flex h-8 max-w-[112px] items-center gap-1 rounded-full px-2.5 text-[12px] text-white/85 transition-colors hover:text-white"
-              style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
-            >
-              <span className="truncate" dir="ltr">
-                {currentFontFamily ?? "الخط"}
-              </span>
-              <Chevron />
-            </button>
-            <FontPopover
-              open={fontOpen}
-              currentFamily={currentFontFamily}
-              flipUp={popoverFlipUp}
-              onPick={onPickFont}
-              onClose={() => setFontOpen(false)}
-            />
-          </div>
+              }
+            }}
+            currentFamily={currentFontFamily}
+            label={renderedFontName}
+            flipUp={popoverFlipUp}
+            onPick={onPickFont}
+          />
           <Divider />
           <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
           <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
