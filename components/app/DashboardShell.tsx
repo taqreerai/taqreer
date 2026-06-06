@@ -116,6 +116,11 @@ export function DashboardShell({
   // same horizontal real estate.
   const isFullWidthRoute =
     pathname.startsWith("/preview/") || pathname.startsWith("/project/");
+  // The working editor (/project) is the full-screen "Studio": no app Header
+  // or Sidebar, no page padding — DeckView paints its own dotted canvas,
+  // floating panels, and a back-to-dashboard control. (Earlier attempt to make
+  // the chrome TOGGLABLE was reverted — this is permanent full-bleed.)
+  const isStudioRoute = pathname.startsWith("/project/");
 
   // Share-revoked listener — `notificationStore` dispatches
   // `taqreer:share-revoked` on its window when the user channel
@@ -161,6 +166,12 @@ export function DashboardShell({
     : isFlowRoute
       ? "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16"
       : "pt-28 px-8 pb-8 space-y-16";
+
+  if (isStudioRoute) {
+    return (
+      <div className="studio-canvas text-on-background">{children}</div>
+    );
+  }
 
   return (
     <div className="dashboard-bg min-h-screen relative opacity-100">

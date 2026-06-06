@@ -183,11 +183,13 @@ function ToolButton({
 // dividers would clip against the `rounded-full` container's curves.
 // w-6 centred between the 36 px buttons reads as a clean category
 // boundary without bleeding.
-function ToolbarDivider() {
+function ToolbarDivider({ horizontal = false }: { horizontal?: boolean }) {
   return (
     <div
       aria-hidden
-      className="my-2 h-px w-6 bg-white/[0.12]"
+      className={
+        horizontal ? "mx-2 h-6 w-px bg-white/[0.12]" : "my-2 h-px w-6 bg-white/[0.12]"
+      }
     />
   );
 }
@@ -208,6 +210,7 @@ export function PreviewActionBar({
   currentVersionId,
   isSaved,
   onSaved,
+  horizontal = false,
 }: {
   projectId: string;
   // Phase 15.B — viewer's role on this project. Drives which toolbar
@@ -260,6 +263,9 @@ export function PreviewActionBar({
     savedVersionId: string;
     savedSlideVersions: Record<string, number>;
   }) => void;
+  // Studio bottom-bar mode — lay the cluster out as a horizontal row (pill +
+  // dividers rotate) instead of the default vertical left-rail strip.
+  horizontal?: boolean;
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
@@ -408,7 +414,7 @@ export function PreviewActionBar({
       // future re-layouts won't accidentally trip the click handler
       // into killing comment mode on toolbar clicks.
       data-preview-toolbar="true"
-      className="flex flex-col items-center gap-3"
+      className={`flex items-center gap-3 ${horizontal ? "flex-row" : "flex-col"}`}
     >
       {/* Toolbar column — Photoshop-style icon stack, grouped into
           three visual categories by horizontal dividers. Categories
@@ -429,7 +435,9 @@ export function PreviewActionBar({
         // by the design system for compact tool clusters; the bell
         // and collapsed-sidebar icons stay rounded-rect because they
         // host larger square chrome, not a cluster.
-        className="glass-card flex flex-col items-center gap-1 rounded-full p-1.5"
+        className={`glass-card flex items-center gap-1 rounded-full p-1.5 ${
+          horizontal ? "flex-row" : "flex-col"
+        }`}
       >
         {/* ── Category 1: AI / Edit ─────────────────────────────── */}
         {/* Regen — owners / edit only. The AI pair (regen + comment
@@ -503,7 +511,7 @@ export function PreviewActionBar({
         {/* First divider — only when the Persistence category below
             (Save / Share) has content. canEdit covers owner + edit;
             both render Save, and owner additionally renders Share. */}
-        {canEdit ? <ToolbarDivider /> : null}
+        {canEdit ? <ToolbarDivider horizontal={horizontal} /> : null}
 
         {/* ── Category 2: Persistence ───────────────────────────── */}
         {/* Save Project — owners / edit only. Comment + view roles
@@ -555,7 +563,7 @@ export function PreviewActionBar({
             and/or Persistence) has rendered something. View-only:
             no divider; comment-only / edit / owner: separator
             above exports. canComment covers comment+edit+owner. */}
-        {canComment ? <ToolbarDivider /> : null}
+        {canComment ? <ToolbarDivider horizontal={horizontal} /> : null}
 
         {/* ── Category 3: Export ────────────────────────────────── */}
         {/* Tooltip wording unified — every export reads "تصدير X"

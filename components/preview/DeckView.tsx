@@ -265,7 +265,7 @@ const FALLBACK_SCALE = 0.18;
 // match the wrapper paddings DashboardShell uses for preview
 // routes (pt-[120px] + pb-[40px]); the row's `minHeight: calc(100vh
 // - HERO_VERTICAL_PADDING_PX)` then fits exactly between them.
-const HERO_VERTICAL_PADDING_PX = 160;
+const HERO_VERTICAL_PADDING_PX = 180;
 
 function isCompleted(projectStatus: string, versionStatus: string | null): boolean {
   return (
@@ -3032,7 +3032,10 @@ export function DeckView({
         <div
           dir="ltr"
           className="flex items-center justify-center"
-          style={{ minHeight: `calc(100vh - ${HERO_VERTICAL_PADDING_PX}px)` }}
+          // Full-viewport row so the canvas (sized to 100vh − padding) centers
+        // vertically with equal breathing top/bottom — clearing the back pill
+        // and the bottom toolbar.
+        style={{ minHeight: "100vh" }}
         >
           <div
             ref={gridRef}
@@ -3234,9 +3237,29 @@ export function DeckView({
     <section
       dir={manifest!.direction}
       className="relative"
-      style={{ marginRight: SLIDE_NAV_WIDTH }}
+      // Studio: the slide centers between the two floating panels (Slides on
+      // the right, Layers on the left). Symmetric gutters reserve their space;
+      // the panels themselves are fixed overlays so this only drives centering.
+      style={{
+        marginLeft: SLIDE_NAV_WIDTH + 24,
+        marginRight: SLIDE_NAV_WIDTH + 24,
+      }}
     >
       {fontAssets}
+
+      {/* Studio — exit to the dashboard. Floats at the top-right (RTL leading
+          edge), above the canvas + panels. */}
+      <Link
+        href="/dashboard"
+        dir="rtl"
+        aria-label="الرجوع إلى لوحة التحكم"
+        className="btn-pill fixed right-4 top-4 z-[1060] flex items-center gap-1.5 px-3.5 py-2 text-[13px] no-underline"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+        <span>الرجوع</span>
+      </Link>
 
       {/* Right-edge slot: SlideNavSidebar swaps for CommentsPanel
           while in comment mode. Same fixed position (against the
@@ -3297,6 +3320,7 @@ export function DeckView({
               onLockAll={canEdit ? () => bulkSetLock(true) : undefined}
               onUnlockAll={canEdit ? () => bulkSetLock(false) : undefined}
               viewersBySlide={viewersBySlide}
+              floating
             />
           </motion.div>
         )}
@@ -3323,17 +3347,17 @@ export function DeckView({
       {bodyMounted
         ? createPortal(
             <motion.div
-              className="pointer-events-none fixed inset-y-0 z-[1050] flex items-center"
-              style={{ left: 16 }}
-              initial={{ x: -150, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
+              className="pointer-events-none fixed inset-x-0 bottom-5 z-[1050] flex justify-center"
+              initial={{ y: 90, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
               transition={{
-                x: TOOLBAR_POSITION_SPRING,
+                y: TOOLBAR_POSITION_SPRING,
                 opacity: { duration: 0.5, ease: "easeOut" },
               }}
             >
               <div className="pointer-events-auto">
                 <PreviewActionBar
+                  horizontal
                   projectId={projectId}
                   role={role}
                   projectTitle={projectTitle}
@@ -3381,7 +3405,10 @@ export function DeckView({
       <div
         dir="ltr"
         className="flex items-center justify-center"
-        style={{ minHeight: `calc(100vh - ${HERO_VERTICAL_PADDING_PX}px)` }}
+        // Full-viewport row so the canvas (sized to 100vh − padding) centers
+        // vertically with equal breathing top/bottom — clearing the back pill
+        // and the bottom toolbar.
+        style={{ minHeight: "100vh" }}
       >
         <motion.div
           ref={gridRef}

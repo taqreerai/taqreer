@@ -257,6 +257,12 @@
      neutral on the v17 gray-black background. Tuned 2026-05-24; see
      `.in-slide-popover`. */
   --tq-bg-popover-dim: rgba(12, 12, 12, 0.45);
+  /* Studio (full-screen editor) dotted canvas. The dot is a faint white at
+     a fraction of a glass alpha so it reads as texture, never noise; the gap
+     sets the grid density. Token-driven so it tracks the glass system rather
+     than living as a hardcoded rgba in `.studio-canvas`. */
+  --tq-studio-dot:     rgba(255, 255, 255, 0.05);
+  --tq-studio-dot-gap: 26px;
   /* Full-screen dim behind modal panels (`.modal-dim`). oklab mix keeps the
      darken perceptually-uniform over the brand aurora. 45% (2026-05-24) so
      the dashboard light-leaks still read through the dim, while bright
@@ -1651,6 +1657,31 @@ body {
     #0000 97%
   );
   filter: blur(80px);
+}
+
+/* ─── Studio canvas (full-screen editor at /project) ─────────────────────
+   The chrome-less editing stage: the slide floats over a dotted canvas with
+   a soft center-out vignette for depth. Dots + vignette are LAYERED
+   backgrounds on the container itself — no extra DOM, no z-index fights with
+   the editor's own fixed panels/toolbar. `attachment: fixed` pins the grid to
+   the viewport so it doesn't scroll with content. Token-driven dots. */
+.studio-canvas {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  background-color: var(--tq-bg);
+  background-image:
+    radial-gradient(
+      ellipse 78% 78% at 50% 46%,
+      transparent 52%,
+      rgba(var(--tq-bg-rgb), 0.92) 100%
+    ),
+    radial-gradient(circle, var(--tq-studio-dot) 1.2px, transparent 1.2px);
+  background-size:
+    100% 100%,
+    var(--tq-studio-dot-gap) var(--tq-studio-dot-gap);
+  background-position: center, center;
+  background-attachment: fixed, fixed;
 }
 
 /* ─── Avatar ─── */

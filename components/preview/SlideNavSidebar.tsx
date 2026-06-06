@@ -79,6 +79,9 @@ export function SlideNavSidebar({
   // that thumbnail. Optional so consumers that haven't wired
   // realtime yet keep working.
   viewersBySlide,
+  // Studio mode — float as a rounded glass card inset from the viewport edges
+  // (no longer docked against the now-absent main sidebar).
+  floating = false,
 }: {
   items: NavItem[];
   currentIndex: number | null;
@@ -94,6 +97,7 @@ export function SlideNavSidebar({
   // slide-nav docks against the main sidebar's inner edge — visual
   // contract: the two panels feel like one.
   mainSidebarWidth: number;
+  floating?: boolean;
   language?: "ar" | "en";
   // Fires when the user clicks the bulk pill. Parent owns the
   // network call + optimistic state update so it can fan the result
@@ -239,15 +243,33 @@ export function SlideNavSidebar({
       // physical right (positioned via `right: mainSidebarWidth`)
       // and its left edge still faces the canvas. Logical
       // `border-inline-start` would flip.
-      className={`backdrop-blur-glass fixed top-20 bottom-0 z-[30] flex flex-col overflow-hidden border-l p-3 ease-in-out ${
-        enableRightTransition ? "transition-[right] duration-300" : ""
-      }`}
-      style={{
-        right: mainSidebarWidth,
-        width: SLIDE_NAV_WIDTH,
-        background: "var(--tq-bg-glass)",
-        borderLeftColor: "var(--tq-border-glass)",
-      }}
+      className={
+        floating
+          ? // Studio: a rounded glass card floating off the right edge, inset
+            // from the top (clears the back pill) and bottom (clears the
+            // bottom action bar). Full border + radius — not a flush rail.
+            "backdrop-blur-glass fixed z-[30] flex flex-col overflow-hidden rounded-3xl border p-3 shadow-2xl"
+          : `backdrop-blur-glass fixed top-20 bottom-0 z-[30] flex flex-col overflow-hidden border-l p-3 ease-in-out ${
+              enableRightTransition ? "transition-[right] duration-300" : ""
+            }`
+      }
+      style={
+        floating
+          ? {
+              right: 16,
+              top: 76,
+              bottom: 100,
+              width: SLIDE_NAV_WIDTH,
+              background: "var(--tq-bg-glass)",
+              borderColor: "var(--tq-border-glass)",
+            }
+          : {
+              right: mainSidebarWidth,
+              width: SLIDE_NAV_WIDTH,
+              background: "var(--tq-bg-glass)",
+              borderLeftColor: "var(--tq-border-glass)",
+            }
+      }
     >
       {(() => {
         // Localize the slide-count label by deck language. Both headers
