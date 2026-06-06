@@ -8,9 +8,6 @@ import { createContext, useContext, useState } from "react";
 const ToolbarHorizontalContext = createContext(false);
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
-import { useExportActions } from "@/lib/preview/use-export-actions";
-import { ShareDialog } from "@/components/app/ShareDialog";
 
 type Status = "idle" | "running" | "success" | "error";
 
@@ -209,8 +206,6 @@ function ToolbarDivider({ horizontal = false }: { horizontal?: boolean }) {
 export function PreviewActionBar({
   projectId,
   role,
-  projectTitle,
-  manifest,
   commentMode,
   onToggleCommentMode,
   draftCommentCount,
@@ -218,7 +213,6 @@ export function PreviewActionBar({
   commentsArmed,
   onFirePartialRegen,
   applying,
-  formatFallback,
   currentVersionId,
   isSaved,
   onSaved,
@@ -230,8 +224,6 @@ export function PreviewActionBar({
   // → comments + exports only (no regen/save/lock). "view" → exports
   // + share, no comments at all.
   role: "owner" | "edit" | "comment" | "view";
-  projectTitle: string;
-  manifest: SlideManifest;
   // Comment-mode state — owned by DeckView. Apply lives inside the
   // CommentsPanel footer and just exits commentMode (drafts persist
   // as drafts). When drafts exist + commentMode is off, the regen
@@ -257,11 +249,6 @@ export function PreviewActionBar({
   // Partial regen in flight. Locks the toolbar buttons so the user
   // can't kick off a second job while one is running.
   applying: boolean;
-  // Format fallback when `manifest.format` is missing — used by export
-  // helpers so legacy 9:16 manifests (saved before deck-generate.ts
-  // started stamping `format`) export at the correct aspect ratio.
-  // DeckView passes the project-level `Project.format` here.
-  formatFallback?: SlideFormat;
   // Save-Project state. `currentVersionId` gates the save button
   // (can't save while there's no version to pin). `isSaved` is the
   // precomputed display flag — DeckView owns the comparison
@@ -281,34 +268,9 @@ export function PreviewActionBar({
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
-  // Export pipelines + their busy/error state live in a shared hook
-  // (`useExportActions`) so the new ShareDialog Export tab drives the
-  // SAME four handlers without duplicating logic. Both consumers
-  // instantiate their own hook with the same projectId; per-instance
-  // state is fine because exports are idempotent server-side and the
-  // worst case of double-click is a redundant Puppeteer run.
-  const exportActions = useExportActions({
-    projectId,
-    projectTitle,
-    manifest,
-    formatFallback,
-  });
-  const exportBusy = exportActions.busy;
-  const exportPptx = exportActions.states.pptx;
-  const exportPdf = exportActions.states.pdf;
-  const exportPng = exportActions.states.png;
-  const exportHtml = exportActions.states.html;
-  const handleExport = exportActions.runPptx;
-  const handleExportPdf = exportActions.runPdf;
-  const handleExportPng = exportActions.runPng;
-  const handleDownloadHtml = exportActions.runHtml;
+  // Export + Share moved to the StudioHeader (command-bar redesign §16) —
+  // useExportActions + the ShareDialog live up there now, not in this bar.
   const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
-  // Share modal — opens to the Share tab by default. The same modal
-  // hosts the Export tab so the user can copy a link / invite people
-  // OR export to PPTX/PDF/HTML/PNG without leaving the editor. The
-  // toolbar's own 4 export buttons remain as quick-access; the modal
-  // is for the deliberate "I'm distributing this" workflow.
-  const [shareOpen, setShareOpen] = useState<boolean>(false);
 
   // Capability flags from role (Phase 15.B). Edit/owner sees all
   // mutation buttons. Comment sees only the Comment toggle (flat,
@@ -408,10 +370,6 @@ export function PreviewActionBar({
   // user sees auth / 4xx failures.
   const visibleMessage =
     regen.status === "error" ? { text: regen.message, kind: "error" as const } :
-    exportPptx.status === "error" ? { text: exportPptx.message, kind: "error" as const } :
-    exportHtml.status === "error" ? { text: exportHtml.message, kind: "error" as const } :
-    exportPng.status === "error" ? { text: exportPng.message, kind: "error" as const } :
-    exportPdf.status === "error" ? { text: exportPdf.message, kind: "error" as const } :
     saveProject.status === "error" ? { text: saveProject.message, kind: "error" as const } :
     regen.status === "running" ? { text: regen.message, kind: "info" as const } :
     null;
@@ -553,66 +511,7 @@ export function PreviewActionBar({
             }
           />
         ) : null}
-        {/* Share — owner only. The modal hosts invitee management
-            (POST /share is owner-only), so invitees / public-view
-            users wouldn't have anything to do in the Share tab.
-            Export remains accessible via the dedicated export
-            buttons below for every role. */}
-        {role === "owner" ? (
-          <ToolButton
-            // `person_add` reflects the actual action — inviting
-            // collaborators — instead of the generic share glyph
-            // (which read as "system share sheet" / "copy link").
-            // Changed 2026-05-24 alongside the Export-tab removal
-            // from this toolbar's ShareDialog.
-            icon="person_add"
-            label="مشاركة"
-            onClick={() => setShareOpen(true)}
-            disabled={applying}
-          />
-        ) : null}
-
-        {/* Second divider — only when the section above (AI/Edit
-            and/or Persistence) has rendered something. View-only:
-            no divider; comment-only / edit / owner: separator
-            above exports. canComment covers comment+edit+owner. */}
-        {canComment ? <ToolbarDivider horizontal={horizontal} /> : null}
-
-        {/* ── Category 3: Export ────────────────────────────────── */}
-        {/* Tooltip wording unified — every export reads "تصدير X"
-            and the order is PPTX → PDF → PNG → HTML (locked
-            2026-05-21). PDF currently disabled with "قريباً"
-            badge until step E lands. HTML was historically
-            labelled "تنزيل HTML" — renamed to "تصدير HTML" so the
-            export category reads as a single family. */}
-        <ToolButton
-          icon="download"
-          label="تصدير PPTX"
-          running={exportPptx.status === "running"}
-          onClick={handleExport}
-          disabled={applying || exportBusy}
-        />
-        <ToolButton
-          icon="picture_as_pdf"
-          label="تصدير PDF"
-          running={exportPdf.status === "running"}
-          onClick={handleExportPdf}
-          disabled={applying || exportBusy}
-        />
-        <ToolButton
-          icon="image"
-          label="تصدير PNG"
-          running={exportPng.status === "running"}
-          onClick={handleExportPng}
-          disabled={applying || exportBusy}
-        />
-        <ToolButton
-          icon="code"
-          label="تصدير HTML"
-          running={exportHtml.status === "running"}
-          onClick={handleDownloadHtml}
-          disabled={applying || exportBusy}
-        />
+        {/* Export + Share moved to the StudioHeader (§16). */}
       </div>
 
       {/* Status toast below the toolbar — error (red) or info (muted).
@@ -630,26 +529,6 @@ export function PreviewActionBar({
         </div>
       ) : null}
 
-      {/* Legacy save-as-template inline popover removed 2026-05-22. */}
-
-      {/* Share + Export modal — mounted at the editor level so it
-          floats above the toolbar. Manifest + formatFallback are
-          handed in so the Export tab can run the same pipelines
-          this toolbar uses. */}
-      <ShareDialog
-        open={shareOpen}
-        projectId={projectId}
-        projectTitle={projectTitle}
-        manifest={manifest}
-        formatFallback={formatFallback}
-        // Editor toolbox already has dedicated PPTX/PDF/PNG/HTML
-        // export buttons in the same toolbar, so the in-modal Export
-        // tab is redundant here. Modal becomes share-only; tile-
-        // launched ShareDialog keeps the Export tab as the only
-        // export path from /projects.
-        showExportTab={false}
-        onClose={() => setShareOpen(false)}
-      />
     </div>
     </ToolbarHorizontalContext.Provider>
   );

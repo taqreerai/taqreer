@@ -3376,8 +3376,6 @@ export function DeckView({
                   horizontal
                   projectId={projectId}
                   role={role}
-                  projectTitle={projectTitle}
-                  manifest={exportManifest!}
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
                   draftCommentCount={comments.length}
@@ -3400,7 +3398,6 @@ export function DeckView({
                   }
                   onFirePartialRegen={handleFirePartialRegen}
                   applying={!!applying}
-                  formatFallback={initialFormat}
                   currentVersionId={initialVersionId ?? null}
                   isSaved={isSaved}
                   onSaved={(payload) => {
