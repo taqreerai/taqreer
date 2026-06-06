@@ -52,7 +52,6 @@ export function HeroCommentOverlay({
   currentUserId,
   commentMode,
   onRequestCommentMode,
-  onPreviewOpenChange,
 }: {
   slideId: string;
   // ALL drafts — filtered to this slide internally so the caller
@@ -92,12 +91,6 @@ export function HeroCommentOverlay({
   // `commentMode` propagates back as `isInteractive`. Optional —
   // omitting it disables the Edit affordance in the popup.
   onRequestCommentMode?: () => void;
-  // Notifies DeckView when the read-only marker preview popup
-  // opens / closes. DeckView uses this to hide chrome that would
-  // otherwise compete with the popup (the per-slide pill — regen /
-  // history / lock — sits at the top edge of the canvas and reads
-  // as visual noise behind the comment preview).
-  onPreviewOpenChange?: (open: boolean) => void;
 }) {
   // Defaults true so the historical callers that gated the whole
   // mount on `{commentMode ? <HeroCommentOverlay /> : null}` keep
@@ -149,16 +142,6 @@ export function HeroCommentOverlay({
       setPreviewState(null);
     }
   }, [isInteractive, previewCommentId]);
-
-  // Bubble preview open/close up to the parent so chrome that
-  // would compete with the popup (the per-slide pill — regen /
-  // history / lock) can hide itself while the popup is visible.
-  // Ref-stable callback comparison would be cleaner, but the
-  // parent's handler is stable across renders via useCallback so
-  // including it in deps doesn't re-fire spuriously.
-  useEffect(() => {
-    onPreviewOpenChange?.(previewCommentId !== null);
-  }, [previewCommentId, onPreviewOpenChange]);
 
   // Viewport coords → slide-space coords via the overlay's bounding
   // rect + the current scale. Clamped to canvas so persisted values

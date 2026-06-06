@@ -3,7 +3,8 @@
 // Studio top header (command-bar redesign, plan-editor §16). A thin fixed top
 // bar that owns the DOCUMENT chrome — pulled OUT of the bottom command pill so
 // that pill can be a pure Edit⇄AI composer:
-//   • leading (RTL right): back-to-dashboard + the project title.
+//   • leading (RTL right): back-to-dashboard only (the project title is
+//     dropped — it's already shown atop the slide-nav).
 //   • trailing (RTL left):  Export ▾ (the 4 formats collapsed into one popover)
 //     + Share (owner-only, opens ShareDialog).
 // Detached from the floating Layers/Slides panels (they sit at top:76, below

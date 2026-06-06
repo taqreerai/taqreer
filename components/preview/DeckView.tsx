@@ -413,15 +413,6 @@ export function DeckView({
       initialSlideStates.map((s) => [s.slideKey, s.versions ?? []]),
     ),
   );
-  // `popoverEngaged` latches TRUE while the history popover is
-  // either open OR fading out. Used by the slide pill to stay
-  // visible through the entire popover lifecycle — without this,
-  // the pill flickered when the popover unmounted because the
-  // cursor was on the popover (outside the canvas hover area) at
-  // the moment historyAnchor flipped to null. Set true on every
-  // popover open; reset to false by HistoryPopover's
-  // onExitComplete after the fade-out finishes.
-  const [popoverEngaged, setPopoverEngaged] = useState(false);
   // Splice helper used by both Undo and Restore. Updates the live
   // manifest (so the renderer immediately shows the older slide
   // content) AND the per-slide pill state (currentVersionNumber).
@@ -3400,7 +3391,7 @@ export function DeckView({
                   // The History button is a TOGGLE relative to the current
                   // anchor; its popover flips up from the bottom bar.
                   historyOpen={
-                    popoverEngaged &&
+                    historyAnchor != null &&
                     historySlideKey === focusedSlide.slideId
                   }
                   onOpenHistory={async (rect) => {
@@ -3412,7 +3403,6 @@ export function DeckView({
                     if (!rect) return;
                     setHistoryAnchor(rect);
                     setHistorySlideKey(focusedSlide.slideId);
-                    setPopoverEngaged(true);
                     if (!historyVersions[focusedSlide.slideId]) {
                       try {
                         const res = await fetch(
@@ -3741,10 +3731,6 @@ export function DeckView({
       <HistoryPopover
         open={historyAnchor != null && historySlideKey != null}
         triggerRect={historyAnchor}
-        // Fires after the popover's fade-out animation completes.
-        // Releases the pill's `popoverEngaged` latch so it returns
-        // to canvas-hover-only visibility.
-        onExitComplete={() => setPopoverEngaged(false)}
         versions={
           historySlideKey ? (historyVersions[historySlideKey] ?? []) : []
         }
