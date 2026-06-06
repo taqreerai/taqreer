@@ -81,7 +81,7 @@ export function SegmentedToggle<T extends string>({
   variant = "default",
   size = "default",
 }: {
-  options: ReadonlyArray<{ value: T; label: string }>;
+  options: ReadonlyArray<{ value: T; label: string; icon?: string }>;
   value: T;
   onChange: (next: T) => void;
   // Names the control as a whole for screen readers (e.g.
@@ -145,7 +145,14 @@ export function SegmentedToggle<T extends string>({
                 aria-hidden
               />
             ) : null}
-            <span className="relative z-10">{opt.label}</span>
+            <span className="relative z-10 flex items-center gap-1">
+              {opt.icon ? (
+                <span className="material-symbols-outlined text-[16px]" aria-hidden>
+                  {opt.icon}
+                </span>
+              ) : null}
+              {opt.label}
+            </span>
           </button>
         );
       })}

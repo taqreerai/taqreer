@@ -90,9 +90,11 @@ function ToolButton({
   // read as too thick at 1px on a dark page; white/60 gives a
   // clearly-defined ring without the chunky feel (user feedback
   // 2026-05-22 after the first all-white attempt).
+  // Bare icon buttons (§16): no ring, no background chip. State reads purely
+  // from icon brightness — active/hover = white, idle = white/60.
   const colorClasses = active
-    ? "border-white/60 text-white"
-    : "border-white/15 text-white/60 hover:border-white/60 hover:text-white";
+    ? "text-white"
+    : "text-white/60 hover:text-white";
   return (
     <div className="group relative">
       <button
@@ -123,7 +125,7 @@ function ToolButton({
               // rule is: small icon-only buttons are circles. The bell +
               // collapsed sidebar are larger square chrome (intentionally
               // rounded-rect, not in scope here).
-              `backdrop-blur-glass backdrop-saturate-(--glass-saturation) relative flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${colorClasses} ${
+              `relative flex h-9 w-9 items-center justify-center rounded-full transition-colors ${colorClasses} ${
                 isDisabled ? "opacity-40" : ""
               }`
         }
@@ -417,6 +419,9 @@ export function PreviewActionBar({
         // by the design system for compact tool clusters; the bell
         // and collapsed-sidebar icons stay rounded-rect because they
         // host larger square chrome, not a cluster.
+        // dir=rtl so the Edit⇄AI toggle leads on the RIGHT (RTL leading edge)
+        // and the rest of the cluster flows leftward from it.
+        dir="rtl"
         className={`glass-card flex items-center gap-1 rounded-full p-1.5 ${
           horizontal ? "flex-row" : "flex-col"
         }`}
@@ -426,8 +431,8 @@ export function PreviewActionBar({
           <>
             <SegmentedToggle
               options={[
-                { value: "edit", label: "تحرير" },
-                { value: "ai", label: "ذكاء" },
+                { value: "edit", label: "تحرير", icon: "edit" },
+                { value: "ai", label: "ذكاء", icon: "auto_awesome" },
               ]}
               value={studioMode}
               onChange={onSetStudioMode}
