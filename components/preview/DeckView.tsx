@@ -3805,6 +3805,12 @@ export function DeckView({
               onRequestCommentMode={
                 canComment ? () => setCommentMode(true) : undefined
               }
+              // AI mode → the composer drops the suggestion chips, swaps to the
+              // "write your changes for the AI" placeholder, and the overlay
+              // surfaces the in-canvas apply button (onApply fires the partial
+              // regen). Mirrors handleCreateComment's `forAi: studioMode==="ai"`.
+              forAi={studioMode === "ai"}
+              onApply={handleFirePartialRegen}
             />
           ) : null}
         </motion.div>

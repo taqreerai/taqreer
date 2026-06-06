@@ -52,6 +52,8 @@ export function HeroCommentOverlay({
   currentUserId,
   commentMode,
   onRequestCommentMode,
+  forAi = false,
+  onApply,
 }: {
   slideId: string;
   // ALL drafts — filtered to this slide internally so the caller
@@ -91,6 +93,15 @@ export function HeroCommentOverlay({
   // `commentMode` propagates back as `isInteractive`. Optional —
   // omitting it disables the Edit affordance in the popup.
   onRequestCommentMode?: () => void;
+  // True when the active studio mode is AI (the comment being authored feeds
+  // the model on apply). Drives the AI-specific composer copy (placeholder),
+  // drops the quick-suggestion chips (AI users write freeform instructions),
+  // and surfaces the in-canvas "apply to AI" button. §16 Chunk 4.
+  forAi?: boolean;
+  // Fires the partial regen (apply AI comments). Wired to handleFirePartialRegen
+  // in DeckView; the in-canvas apply button calls it so the toolbar no longer
+  // needs the non-obvious morph button.
+  onApply?: () => void;
 }) {
   // Defaults true so the historical callers that gated the whole
   // mount on `{commentMode ? <HeroCommentOverlay /> : null}` keep
@@ -314,6 +325,25 @@ export function HeroCommentOverlay({
       style={{ zIndex: 1 }}
       onMouseDown={isInteractive ? handleStartDrag : undefined}
     >
+      {/* In-canvas "apply to AI" button — the obvious trigger for the partial
+          regen. Shows in AI comment mode once at least one AI comment exists.
+          Replaces the non-obvious toolbar morph button (user direction). */}
+      {forAi && isInteractive && onApply && comments.some((c) => c.forAi) ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onApply();
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="btn-gradient-anim pointer-events-auto absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-2xl"
+        >
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+            auto_awesome
+          </span>
+          اضغط لتطبيق تعليقاتك بالذكاء
+        </button>
+      ) : null}
       {/* Existing pins. Hidden when their comment is being edited so
           the editor's solid anchor box doesn't double up on a pin.
           In read-only mode (`!isInteractive`) pins render as plain
@@ -432,6 +462,7 @@ export function HeroCommentOverlay({
             canvasW={canvasW}
             canvasH={canvasH}
             direction={direction}
+            forAi={forAi}
             error={editorError}
             onContentChange={(content) => {
               if (editorError) setEditorError(null);
@@ -588,6 +619,7 @@ function CommentEditor({
   error,
   saving,
   deleting,
+  forAi,
 }: {
   editor: NonNullable<EditorState>;
   scale: number;
@@ -606,6 +638,7 @@ function CommentEditor({
   // as "nothing happened" and double-fires.
   saving?: boolean;
   deleting?: boolean;
+  forAi: boolean;
 }) {
   const POPOVER_W = 360;
   const POPOVER_GAP = 8;
@@ -683,6 +716,9 @@ function CommentEditor({
           {error}
         </div>
       ) : null}
+      {/* Quick-suggestion chips: AI comments only (instructions to the model).
+          User / collaboration comments are freeform notes — no chips. */}
+      {forAi ? (
       <div className="mb-2 flex flex-wrap gap-1.5">
         {QUICK_CHIPS.map((chip) => (
           <button
@@ -698,6 +734,7 @@ function CommentEditor({
           </button>
         ))}
       </div>
+      ) : null}
       <textarea
         ref={textareaRef}
         value={editor.content}
@@ -712,7 +749,7 @@ function CommentEditor({
           }
         }}
         rows={3}
-        placeholder="اكتب تعليقك هنا..."
+        placeholder={forAi ? "اكتب تغييراتك للذكاء" : "اكتب تعليقك هنا..."}
         style={{
           background: "rgba(255, 255, 255, var(--glass-opacity))",
           borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
