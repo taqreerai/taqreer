@@ -1111,6 +1111,53 @@ body {
   .canvas-gradient-border { animation: none; }
 }
 
+/* ─── AI comment box ──────────────────────────────────────────────────
+   The drawn box for an AI comment (+ its saved marker). A thin (1px)
+   brand-gradient border that shimmers, over a faint gradient wash fill —
+   reuses `--tq-gradient-full` so it stays on-brand and reads distinct from
+   the orange user-comment box. The 1px border uses the same border-box vs
+   content-box mask trick as `.btn-gradient-anim` (padding == stroke).      */
+@keyframes ai-box-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.ai-comment-box {
+  position: relative;
+  isolation: isolate;
+  border-radius: 6px;
+}
+.ai-comment-box::after {        /* faint gradient wash fill — low opacity */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--tq-gradient-full);
+  background-size: 200% 100%;
+  opacity: 0.12;
+  animation: ai-box-shimmer 4s linear infinite;
+  pointer-events: none;
+}
+.ai-comment-box::before {       /* 1px shimmering gradient border */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--tq-gradient-full);
+  background-size: 200% 100%;
+  animation: ai-box-shimmer 4s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-comment-box::before,
+  .ai-comment-box::after { animation: none; }
+}
+
 /* ─── Standard secondary pill ─────────────────────────────────────────
    The default style for all non-CTA buttons across the dashboard:
    glass surface, dim border + muted text idle, bright border + white

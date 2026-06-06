@@ -389,8 +389,7 @@ export function HeroCommentOverlay({
               }}
               onMouseDown={(e) => e.stopPropagation()}
               aria-label="تعديل تعليق الذكاء"
-              data-active="true"
-              className="canvas-gradient-border pointer-events-auto absolute flex items-end justify-center rounded-md bg-violet-500/15"
+              className="ai-comment-box pointer-events-auto absolute flex items-center justify-center"
               style={style}
             >
               {onApply ? (
@@ -401,7 +400,7 @@ export function HeroCommentOverlay({
                     onApply();
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="pointer-events-auto mb-2 rounded-full bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg transition-colors hover:bg-violet-500"
+                  className="pointer-events-auto rounded-full bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg transition-colors hover:bg-violet-500"
                 >
                   تطبيق
                 </button>
@@ -450,7 +449,11 @@ export function HeroCommentOverlay({
           obvious. */}
       {isInteractive && editor ? (
         <div
-          className="pointer-events-none absolute rounded-md border border-orange-400 bg-orange-400/15"
+          className={
+            forAi
+              ? "ai-comment-box pointer-events-none absolute"
+              : "pointer-events-none absolute rounded-md border border-orange-400 bg-orange-400/15"
+          }
           style={{
             left: editor.bounds.x * scale,
             top: editor.bounds.y * scale,
