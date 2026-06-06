@@ -124,7 +124,19 @@ export function HistoryPopover({
         ),
       )
     : 0;
-  const top = triggerRect ? triggerRect.bottom + ANCHOR_GAP_PX : 0;
+  // Flip up when there isn't room below — e.g. when anchored to the bottom
+  // command bar, where a downward popover would fall off-screen. Anchors
+  // `bottom` to the trigger's TOP so the popover grows upward instead.
+  const flipUp = !!(
+    triggerRect &&
+    triggerRect.bottom + ANCHOR_GAP_PX + 360 > window.innerHeight
+  );
+  const top =
+    triggerRect && !flipUp ? triggerRect.bottom + ANCHOR_GAP_PX : undefined;
+  const bottom =
+    triggerRect && flipUp
+      ? window.innerHeight - triggerRect.top + ANCHOR_GAP_PX
+      : undefined;
 
   // The genesis version (the slide's initial generation) is pinned in its own
   // always-visible footer row as the guaranteed "restore the original" anchor —
@@ -154,12 +166,12 @@ export function HistoryPopover({
           ref={surfaceRef}
           dir="rtl"
           data-history-popover
-          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          initial={{ opacity: 0, y: flipUp ? 6 : -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -6, scale: 0.98 }}
+          exit={{ opacity: 0, y: flipUp ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
-          style={{ top, left, width: POPOVER_WIDTH }}
+          style={{ top, bottom, left, width: POPOVER_WIDTH }}
         >
           <header className="border-b border-white/[0.08] px-3 py-2">
             <p className="text-xs font-semibold text-white">سجل الإصدارات</p>

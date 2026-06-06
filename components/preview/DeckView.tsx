@@ -31,7 +31,6 @@ import {
 } from "@/components/slides/gen-image-context";
 import { scanGenImages, injectImgSrc } from "@/lib/images/slide-images";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
-import { SlidePill } from "@/components/preview/SlidePill";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
 import type { InitialSlideState } from "@/lib/project/load-project";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
@@ -751,12 +750,6 @@ export function DeckView({
       isLatestSlideMutation,
     ],
   );
-  // True while the read-only marker preview popup (HeroCommentOverlay
-  // sub-component) is open. Drives chrome that would otherwise compete
-  // with the popup — the per-slide pill (regen / history / lock) hides
-  // while a preview is showing so the popup reads as the primary
-  // focus.
-  const [markerPreviewOpen, setMarkerPreviewOpen] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
   // Seed `applying` from `initialActiveRegen` so a browser reload
   // during a partial regen restores the per-slide overlay instead of
@@ -3402,6 +3395,144 @@ export function DeckView({
                     !commentMode && comments.length > 0 && !applying
                   }
                   onFirePartialRegen={handleFirePartialRegen}
+                  // Shared cluster (§16) — History + Lock relocated off the
+                  // deleted canvas pill, plus the AI-mode single-slide regen.
+                  // The History button is a TOGGLE relative to the current
+                  // anchor; its popover flips up from the bottom bar.
+                  historyOpen={
+                    popoverEngaged &&
+                    historySlideKey === focusedSlide.slideId
+                  }
+                  onOpenHistory={async (rect) => {
+                    if (historyAnchor != null) {
+                      setHistoryAnchor(null);
+                      setHistorySlideKey(null);
+                      return;
+                    }
+                    if (!rect) return;
+                    setHistoryAnchor(rect);
+                    setHistorySlideKey(focusedSlide.slideId);
+                    setPopoverEngaged(true);
+                    if (!historyVersions[focusedSlide.slideId]) {
+                      try {
+                        const res = await fetch(
+                          `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/versions`,
+                        );
+                        if (!res.ok)
+                          throw new Error(`versions: ${res.status}`);
+                        const data = (await res.json()) as {
+                          currentVersionNumber: number | null;
+                          versions: HistoryRow[];
+                        };
+                        setHistoryVersions((prev) => ({
+                          ...prev,
+                          [focusedSlide.slideId]: data.versions,
+                        }));
+                      } catch (err) {
+                        console.error("history fetch failed", err);
+                      }
+                    }
+                  }}
+                  onToggleLock={async () => {
+                    const current = slideStates[focusedSlide.slideId];
+                    const shouldLock = current?.lockedAt == null;
+                    // Optimistic flip — server response replaces it; revert on error.
+                    const optimistic: InitialSlideState = {
+                      slideKey: focusedSlide.slideId,
+                      currentVersionNumber: current?.currentVersionNumber ?? 1,
+                      hasCachedComments: current?.hasCachedComments ?? false,
+                      lockedAt: shouldLock ? new Date().toISOString() : null,
+                    };
+                    setSlideStates((prev) => ({
+                      ...prev,
+                      [focusedSlide.slideId]: optimistic,
+                    }));
+                    try {
+                      const res = await fetch(
+                        `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/lock`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ locked: shouldLock }),
+                        },
+                      );
+                      if (!res.ok)
+                        throw new Error(`lock toggle: ${res.status}`);
+                      const data = (await res.json()) as {
+                        lockedAt: string | null;
+                      };
+                      setSlideStates((prev) => ({
+                        ...prev,
+                        [focusedSlide.slideId]: {
+                          ...optimistic,
+                          lockedAt: data.lockedAt,
+                        },
+                      }));
+                    } catch (err) {
+                      console.error("lock toggle failed", err);
+                      setSlideStates((prev) => ({
+                        ...prev,
+                        [focusedSlide.slideId]: {
+                          slideKey: focusedSlide.slideId,
+                          currentVersionNumber:
+                            current?.currentVersionNumber ?? 1,
+                          hasCachedComments:
+                            current?.hasCachedComments ?? false,
+                          lockedAt: current?.lockedAt ?? null,
+                        },
+                      }));
+                    }
+                  }}
+                  onRegenSlide={async () => {
+                    // Clean partial regen of the focused slide — no comments.
+                    if (applying) return;
+                    if (slideStates[focusedSlide.slideId]?.lockedAt != null)
+                      return;
+                    setApplying({
+                      versionId: "__pending__",
+                      targetSlideIds: [focusedSlide.slideId],
+                    });
+                    try {
+                      const res = await fetch(
+                        `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/regen`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ replay: false }),
+                        },
+                      );
+                      if (!res.ok) {
+                        const errorBody = (await res
+                          .json()
+                          .catch(() => null)) as { error?: string } | null;
+                        throw new Error(errorBody?.error ?? "regen failed");
+                      }
+                      const data = (await res.json()) as {
+                        versionId: string;
+                        targetSlideIds: string[];
+                      };
+                      setApplying({
+                        versionId: data.versionId,
+                        targetSlideIds: data.targetSlideIds,
+                      });
+                      setSlideStates((prev) => {
+                        const cur = prev[focusedSlide.slideId];
+                        return {
+                          ...prev,
+                          [focusedSlide.slideId]: {
+                            slideKey: focusedSlide.slideId,
+                            currentVersionNumber:
+                              cur?.currentVersionNumber ?? 1,
+                            hasCachedComments: false,
+                            lockedAt: cur?.lockedAt ?? null,
+                          },
+                        };
+                      });
+                    } catch (err) {
+                      console.error("regen failed", err);
+                      setApplying(null);
+                    }
+                  }}
                   applying={!!applying}
                   currentVersionId={initialVersionId ?? null}
                   isSaved={isSaved}
@@ -3504,178 +3635,6 @@ export function DeckView({
             ) : null}
           </div>
 
-          {/* Per-slide pill — Undo / Try again / Regen / History /
-              Lock. Mounted inside the canvas-gradient-border
-              container so it inherits the `group/canvas` hover
-              state, fading in on canvas hover.
-              Hidden while the slide is being regenerated (the
-              blur + spinner overlay owns the canvas) AND while
-              the user is in comment mode (the comment overlay
-              owns the canvas; the pill would steal cursor focus
-              from drag-to-draw). */}
-          {!isFocusedRegenerating && !commentMode && !markerPreviewOpen && canEdit ? (
-            <SlidePill
-              currentVersionNumber={
-                slideStates[focusedSlide.slideId]?.currentVersionNumber ?? 1
-              }
-              isLocked={
-                slideStates[focusedSlide.slideId]?.lockedAt != null
-              }
-              // Keep the pill fully opaque while THIS slide's history
-              // popover is open OR is animating out — without latching
-              // through the exit phase the pill flickered the instant
-              // historyAnchor flipped to null (cursor was still over
-              // the fading popover, not the canvas).
-              popoverOpen={
-                popoverEngaged &&
-                historySlideKey === focusedSlide.slideId
-              }
-              onToggleLock={async () => {
-                const current = slideStates[focusedSlide.slideId];
-                const shouldLock = current?.lockedAt == null;
-                // Optimistic flip — UI reacts before the request lands.
-                // Server response (lockedAt ISO string) replaces our
-                // synthesised value once it arrives. On error we revert.
-                const optimistic: InitialSlideState = {
-                  slideKey: focusedSlide.slideId,
-                  currentVersionNumber: current?.currentVersionNumber ?? 1,
-                  hasCachedComments: current?.hasCachedComments ?? false,
-                  lockedAt: shouldLock ? new Date().toISOString() : null,
-                };
-                setSlideStates((prev) => ({
-                  ...prev,
-                  [focusedSlide.slideId]: optimistic,
-                }));
-                try {
-                  const res = await fetch(
-                    `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/lock`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ locked: shouldLock }),
-                    },
-                  );
-                  if (!res.ok) throw new Error(`lock toggle: ${res.status}`);
-                  const data = (await res.json()) as {
-                    lockedAt: string | null;
-                  };
-                  setSlideStates((prev) => ({
-                    ...prev,
-                    [focusedSlide.slideId]: {
-                      ...optimistic,
-                      lockedAt: data.lockedAt,
-                    },
-                  }));
-                } catch (err) {
-                  console.error("lock toggle failed", err);
-                  setSlideStates((prev) => ({
-                    ...prev,
-                    [focusedSlide.slideId]: {
-                      slideKey: focusedSlide.slideId,
-                      currentVersionNumber:
-                        current?.currentVersionNumber ?? 1,
-                      hasCachedComments: current?.hasCachedComments ?? false,
-                      lockedAt: current?.lockedAt ?? null,
-                    },
-                  }));
-                }
-              }}
-              onRegen={async () => {
-                // Clean partial regen of the focused slide — no
-                // user comments. Sets `applying` so the existing
-                // per-slide regenerating overlay (blur + spinner)
-                // shows up immediately while the API + Inngest
-                // worker churn. Server clears the slide's cached
-                // comments as part of the same write.
-                if (applying) return;
-                if (slideStates[focusedSlide.slideId]?.lockedAt != null)
-                  return;
-                setApplying({
-                  versionId: "__pending__",
-                  targetSlideIds: [focusedSlide.slideId],
-                });
-                try {
-                  const res = await fetch(
-                    `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/regen`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ replay: false }),
-                    },
-                  );
-                  if (!res.ok) {
-                    const errorBody = (await res.json().catch(() => null)) as
-                      | { error?: string }
-                      | null;
-                    throw new Error(errorBody?.error ?? "regen failed");
-                  }
-                  const data = (await res.json()) as {
-                    versionId: string;
-                    targetSlideIds: string[];
-                  };
-                  setApplying({
-                    versionId: data.versionId,
-                    targetSlideIds: data.targetSlideIds,
-                  });
-                  // Optimistically clear the cache locally — the
-                  // Inngest worker will do the same server-side
-                  // when it commits the new version.
-                  setSlideStates((prev) => {
-                    const current = prev[focusedSlide.slideId];
-                    return {
-                      ...prev,
-                      [focusedSlide.slideId]: {
-                        slideKey: focusedSlide.slideId,
-                        currentVersionNumber:
-                          current?.currentVersionNumber ?? 1,
-                        hasCachedComments: false,
-                        lockedAt: current?.lockedAt ?? null,
-                      },
-                    };
-                  });
-                } catch (err) {
-                  console.error("regen failed", err);
-                  setApplying(null);
-                }
-              }}
-              onOpenHistory={async (rect) => {
-                // Pill is stateless w.r.t. popover open/closed —
-                // every click here is a TOGGLE relative to the
-                // parent's current historyAnchor. If the popover
-                // is already open for this slide, close it; else
-                // open it at the new rect.
-                if (historyAnchor != null) {
-                  setHistoryAnchor(null);
-                  setHistorySlideKey(null);
-                  return;
-                }
-                if (!rect) return;
-                setHistoryAnchor(rect);
-                setHistorySlideKey(focusedSlide.slideId);
-                setPopoverEngaged(true);
-                // Lazy-fetch versions on open. Cached per slide so
-                // re-opening the same slide skips the round-trip.
-                if (!historyVersions[focusedSlide.slideId]) {
-                  try {
-                    const res = await fetch(
-                      `/api/projects/${projectId}/slides/${encodeURIComponent(focusedSlide.slideId)}/versions`,
-                    );
-                    if (!res.ok) throw new Error(`versions: ${res.status}`);
-                    const data = (await res.json()) as {
-                      currentVersionNumber: number | null;
-                      versions: HistoryRow[];
-                    };
-                    setHistoryVersions((prev) => ({
-                      ...prev,
-                      [focusedSlide.slideId]: data.versions,
-                    }));
-                  } catch (err) {
-                    console.error("history fetch failed", err);
-                  }
-                }
-              }}
-            />
-          ) : null}
 
           {/* Regenerating overlay — full-canvas dim + clean spinner.
               The dim layer uses `var(--tq-bg-dim)` (the same 55 %
@@ -3770,7 +3729,6 @@ export function DeckView({
               onRequestCommentMode={
                 canComment ? () => setCommentMode(true) : undefined
               }
-              onPreviewOpenChange={setMarkerPreviewOpen}
             />
           ) : null}
         </motion.div>

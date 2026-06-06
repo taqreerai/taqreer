@@ -55,7 +55,10 @@ function ToolButton({
   // Small numeric badge in the top-end corner. Used for the comment toggle
   // to show how many draft comments live across the deck.
   countBadge?: number;
-  onClick?: () => void;
+  // Receives the click event so callers that need the button's geometry
+  // (e.g. the History button anchoring its popover) can read
+  // `e.currentTarget.getBoundingClientRect()`. Most callers ignore it.
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   running?: boolean;
   active?: boolean;
@@ -220,6 +223,10 @@ export function PreviewActionBar({
   focusedSlideLocked,
   commentsArmed,
   onFirePartialRegen,
+  onOpenHistory,
+  onToggleLock,
+  onRegenSlide,
+  historyOpen,
   applying,
   currentVersionId,
   isSaved,
@@ -257,6 +264,14 @@ export function PreviewActionBar({
   // from full regen to partial regen.
   commentsArmed: boolean;
   onFirePartialRegen: () => void;
+  // Studio command-bar shared cluster (§16) — History + Lock relocated off
+  // the deleted canvas pill; `onRegenSlide` is the AI-mode single-slide
+  // regen (precursor to the composer's Generate). `historyOpen` drives the
+  // History button's active styling while its popover is open.
+  onOpenHistory?: (rect: DOMRect) => void;
+  onToggleLock?: () => void;
+  onRegenSlide?: () => void;
+  historyOpen?: boolean;
   // Partial regen in flight. Locks the toolbar buttons so the user
   // can't kick off a second job while one is running.
   applying: boolean;
@@ -442,11 +457,21 @@ export function PreviewActionBar({
             <ToolbarDivider horizontal={horizontal} />
           </>
         ) : null}
-        {/* AI mode — Regen (deck regen / apply comments). No gradient (§16). */}
+        {/* AI mode — regenerate THIS slide (the canvas pill's old action; folds
+            into the composer's Generate in Chunk 5). No gradient (§16). */}
+        {canEdit && effectiveMode === "ai" && onRegenSlide ? (
+          <ToolButton
+            icon="auto_fix_high"
+            label="أعد تصميم الشريحة"
+            onClick={onRegenSlide}
+            disabled={applying || focusedSlideLocked}
+          />
+        ) : null}
+        {/* AI mode — Regen the whole deck / apply comments. No gradient (§16). */}
         {canEdit && effectiveMode === "ai" ? (
           <ToolButton
             icon={commentsArmed ? "auto_awesome" : "autorenew"}
-            label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد التصميم"}
+            label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد تصميم الكل"}
             running={regen.status === "running"}
             onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
             disabled={applying || commentMode}
@@ -507,10 +532,32 @@ export function PreviewActionBar({
           />
         ) : null}
 
-        {/* First divider — only when the Persistence category below
-            (Save / Share) has content. canEdit covers owner + edit;
-            both render Save, and owner additionally renders Share. */}
+        {/* Divider — separates the mode content from the shared cluster
+            (History · Lock · Save), which is visible in both modes. */}
         {canEdit ? <ToolbarDivider horizontal={horizontal} /> : null}
+
+        {/* Shared cluster (§16) — History + Lock, relocated off the deleted
+            canvas pill. The History button hands its own rect to the popover
+            (which flips UP from the bottom bar). */}
+        {canEdit && onOpenHistory ? (
+          <ToolButton
+            icon="history"
+            label="سجل الإصدارات"
+            active={historyOpen}
+            onClick={(e) =>
+              onOpenHistory(e.currentTarget.getBoundingClientRect())
+            }
+          />
+        ) : null}
+        {canEdit && onToggleLock ? (
+          <ToolButton
+            icon={focusedSlideLocked ? "lock" : "lock_open"}
+            label={focusedSlideLocked ? "إلغاء قفل الشريحة" : "قفل الشريحة"}
+            active={focusedSlideLocked}
+            iconFilled={focusedSlideLocked}
+            onClick={onToggleLock}
+          />
+        ) : null}
 
         {/* ── Category 2: Persistence ───────────────────────────── */}
         {/* Save Project — owners / edit only. Comment + view roles
