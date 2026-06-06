@@ -8,15 +8,27 @@
 // draggable-list feel) to change stacking order: on drop we reassign z-index by
 // the new order and persist. Rebuilds live as the slide's DOM changes.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { buildLayerTree, type LayerNode } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { SLIDE_NAV_WIDTH } from "@/components/preview/SlideNavSidebar";
+import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 
 // Snappier than the house 500/35 so a dropped row settles into its new slot
 // quickly (the reorder/settle was reading slow at the default).
 const SPRING = { type: "spring", stiffness: 700, damping: 42 } as const;
+
+// rgb(a)/named computed colour → hex for the colour-picker value. (Local copy —
+// the StylePill has its own; not worth a shared module for six lines.)
+function rgbToHex(rgb: string): string {
+  const m = rgb.match(/\d+(\.\d+)?/g);
+  if (!m || m.length < 3) return "#000000";
+  const [r, g, b] = m
+    .slice(0, 3)
+    .map((n) => Math.max(0, Math.min(255, Math.round(parseFloat(n)))));
+  return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
 
 // Localize the non-text kind labels. buildLayerTree (shared with the lab) hands
 // back English "Image"/"Generated image"/"Graphic"; text rows already carry the
@@ -100,6 +112,11 @@ export function LayersPanel({
   }, [draggingId]);
   const isDragging = draggingId != null;
 
+  // The background-colour swatch on the pinned الخلفية row. forceBg re-reads the
+  // root's computed colour after a live recolour so the swatch tracks the picker.
+  const [bgPickerOpen, setBgPickerOpen] = useState(false);
+  const [, forceBg] = useReducer((x: number) => x + 1, 0);
+
   // Build + live-rebuild the tree from the slide's stage. childList/subtree
   // catches add/remove; characterData refreshes a text row's label. Attribute
   // toggles (contenteditable, the edit-time z-lift, OUR z-index writes) are NOT
@@ -158,6 +175,30 @@ export function LayersPanel({
   };
 
   const isEn = language === "en";
+  // The slide BACKGROUND — synthesized from the real slide root (the first tagged
+  // element inside the stage), since buildLayerTree is handed the stage, not the
+  // root. Pinned as a fixed bottom row; never in the draggable list.
+  const slideRoot =
+    doc?.getElementById("tqe-stage")?.querySelector<HTMLElement>("[data-tq-id]") ?? null;
+  const bgNode: LayerNode | null = slideRoot
+    ? { el: slideRoot, label: "Background", kind: "background", depth: 0 }
+    : null;
+  // The background's current colour (transparent → an empty swatch). Computed in
+  // the IFRAME's view, since slideRoot lives there.
+  const bgRgb =
+    slideRoot && doc?.defaultView
+      ? doc.defaultView.getComputedStyle(slideRoot).backgroundColor
+      : "rgba(0, 0, 0, 0)";
+  const bgIsTransparent = /,\s*0(\.0+)?\)\s*$/.test(bgRgb) || bgRgb === "transparent";
+  // Live recolour the canvas as the picker drags; persist once on close.
+  const recolorBgLive = (hex: string) => {
+    slideRoot?.style.setProperty("background-color", hex);
+    forceBg();
+  };
+  const commitBg = () => {
+    setBgPickerOpen(false);
+    if (slideRoot) onCommit(slideId, serializeSlideSection(slideRoot));
+  };
   const countLabel = isEn
     ? `${tree.length} ${tree.length === 1 ? "layer" : "layers"}`
     : `${tree.length} ${tree.length === 1 ? "طبقة" : "طبقات"}`;
@@ -187,38 +228,78 @@ export function LayersPanel({
         </h2>
       </header>
 
-      {order.length === 0 ? (
+      {order.length === 0 && !bgNode ? (
         <p className="px-2 py-4 text-[12px] text-white/40">
           {isEn ? "No layers" : "لا توجد طبقات"}
         </p>
       ) : (
-        <Reorder.Group
-          axis="y"
-          values={order}
-          onReorder={setOrder}
-          className={`flex-1 space-y-0.5 overscroll-contain pt-2 ${
-            isDragging ? "overflow-visible" : "overflow-y-auto"
-          }`}
-        >
-          {order.map((node) => {
-            const id = node.el.getAttribute("data-tq-id") ?? node.label;
-            return (
-              <LayerRow
-                key={id}
-                node={node}
-                active={node.el === selected}
-                dragging={draggingId === id}
-                onSelect={onSelect}
-                onDragStart={() => setDraggingId(id)}
-                onDragEnd={() => {
-                  commitOrder();
-                  setDraggingId(null);
-                }}
-                isEn={isEn}
-              />
-            );
-          })}
-        </Reorder.Group>
+        <>
+          <Reorder.Group
+            axis="y"
+            values={order}
+            onReorder={setOrder}
+            className={`flex-1 space-y-0.5 overscroll-contain pt-2 ${
+              isDragging ? "overflow-visible" : "overflow-y-auto"
+            }`}
+          >
+            {order.map((node) => {
+              const id = node.el.getAttribute("data-tq-id") ?? node.label;
+              return (
+                <LayerRow
+                  key={id}
+                  node={node}
+                  active={node.el === selected}
+                  dragging={draggingId === id}
+                  onSelect={onSelect}
+                  onDragStart={() => setDraggingId(id)}
+                  onDragEnd={() => {
+                    commitOrder();
+                    setDraggingId(null);
+                  }}
+                  isEn={isEn}
+                />
+              );
+            })}
+          </Reorder.Group>
+          {/* The slide background — pinned at the bottom (always backmost), not
+              draggable. Its colour is changed inline from the swatch on the
+              trailing (left in RTL) edge; no canvas pill. */}
+          {bgNode && (
+            <div className="mt-1 shrink-0 border-t border-white/[0.06] pt-1">
+              <div className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-white/70">
+                <LayerIcon kind="background" active={false} />
+                <span className="min-w-0 flex-1 truncate text-start">
+                  {displayLabel(bgNode, isEn)}
+                </span>
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    aria-label={isEn ? "Background colour" : "لون الخلفية"}
+                    onClick={() => setBgPickerOpen((o) => !o)}
+                    className="block h-[18px] w-[18px] rounded-full border transition-transform hover:scale-110"
+                    style={{
+                      borderColor: "var(--tq-border-glass)",
+                      // Transparent → a checker hint so the empty swatch still reads.
+                      background: bgIsTransparent
+                        ? "repeating-conic-gradient(rgba(255,255,255,0.25) 0% 25%, transparent 0% 50%) 50% / 8px 8px"
+                        : bgRgb,
+                    }}
+                  />
+                  <ColorPickerPopover
+                    open={bgPickerOpen}
+                    value={rgbToHex(bgRgb)}
+                    onChange={recolorBgLive}
+                    onClose={commitBg}
+                    align="center"
+                    flipUp
+                    instantExit
+                    surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </aside>
   );

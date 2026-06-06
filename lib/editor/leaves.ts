@@ -173,11 +173,8 @@ export function buildLayerTree(section: HTMLElement): LayerNode[] {
     }
   };
   walk(section);
-  // The slide BACKGROUND itself — a fill painted on the section root. Listed last
-  // (= backmost). The root carries content, so the no-text fillLeaf rule skips it;
-  // check its own background directly.
-  if (win && fillType(win.getComputedStyle(section)) !== null) {
-    out.push({ el: section, label: "Background", kind: "background", depth: 0 });
-  }
+  // NOTE: the slide BACKGROUND (kind "background") is NOT emitted here — the
+  // builder's arg is the editor STAGE, not the slide root, so the panel
+  // synthesizes that node from the real slide root and pins it backmost.
   return out;
 }
