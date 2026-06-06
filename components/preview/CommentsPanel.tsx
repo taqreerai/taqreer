@@ -28,10 +28,16 @@ export function CommentsPanel({
   onClose,
   onApply,
   mainSidebarWidth,
+  embedded = false,
 }: {
   comments: CommentRow[];
   slideId: string;
   onClose: () => void;
+  // Embedded mode (command-bar redesign §16): render INSIDE the slide-nav's
+  // Comments tab — drop the fixed `<aside>` chrome + the title/close header
+  // (the tab provides both) and just fill the tab body with the list + the
+  // "finish commenting" footer.
+  embedded?: boolean;
   // Click handler for the sticky-footer "finish commenting" button.
   // Despite the historical `onApply` name, this never actually
   // triggers regen — it just exits comment mode. Drafts persist as
@@ -55,32 +61,46 @@ export function CommentsPanel({
       // on a sidebar panel). The `backdrop-blur-glass` utility is
       // the preset-linked blur token; the inline bg / border-color
       // use the same CSS variables `.glass-card` reads.
-      className="backdrop-blur-glass fixed z-[30] flex flex-col border-l p-3 transition-[right] duration-300 ease-in-out"
-      style={{
-        top: 80, // Header height (h-20)
-        bottom: 0,
-        right: mainSidebarWidth,
-        width: COMMENTS_PANEL_WIDTH,
-        background: "rgba(255, 255, 255, var(--glass-opacity))",
-        borderLeftColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
-      }}
+      className={
+        embedded
+          ? // Inside the nav's Comments tab — fill the body, no chrome.
+            "flex h-full min-h-0 flex-col"
+          : "backdrop-blur-glass fixed z-[30] flex flex-col border-l p-3 transition-[right] duration-300 ease-in-out"
+      }
+      style={
+        embedded
+          ? undefined
+          : {
+              top: 80, // Header height (h-20)
+              bottom: 0,
+              right: mainSidebarWidth,
+              width: COMMENTS_PANEL_WIDTH,
+              background: "rgba(255, 255, 255, var(--glass-opacity))",
+              borderLeftColor:
+                "rgba(255, 255, 255, var(--glass-border-opacity))",
+            }
+      }
     >
-      <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3 px-1">
-        <p className="text-sm font-semibold text-white">التعليقات</p>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="إغلاق وضع التعليق"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "18px" }}
+      {/* Standalone-only header — in embedded mode the nav's tab bar is the
+          header, so the title + close button are dropped. */}
+      {embedded ? null : (
+        <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3 px-1">
+          <p className="text-sm font-semibold text-white">التعليقات</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="إغلاق وضع التعليق"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
-            close
-          </span>
-        </button>
-      </header>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "18px" }}
+            >
+              close
+            </span>
+          </button>
+        </header>
+      )}
 
       {/* Scrollable list area — flex-1 takes whatever vertical
           space the footer leaves. */}

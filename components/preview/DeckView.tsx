@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
   SlideManifestSchema,
@@ -612,6 +612,16 @@ export function DeckView({
   // Studio mode (Edit ⇄ AI) — the bottom command bar's toggle. Edit = manual
   // scalpel + user comments; AI = generative. Defaults to Edit (§16).
   const [studioMode, setStudioMode] = useState<StudioMode>("edit");
+  // Slide-nav tab (§16) — Slides (the thumbnail grid) vs Comments (the embedded
+  // CommentsPanel). Replaces the old full panel swap; entering comment mode
+  // auto-selects Comments (effect below).
+  const [navTab, setNavTab] = useState<"slides" | "comments">("slides");
+  // Entering comment mode (toolbar Comment button OR clicking a marker) auto-
+  // selects the Comments tab. Leaving it doesn't force the user back to Slides.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (commentMode) setNavTab("comments");
+  }, [commentMode]);
   // Edit mode = the DEFAULT working surface for edit-capable users (plan §0.6 — you
   // land in the editor). Mutually exclusive with commentMode: the comment overlay
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
@@ -3250,70 +3260,50 @@ export function DeckView({
         role={role}
       />
 
-      {/* Right-edge slot: SlideNavSidebar swaps for CommentsPanel
-          while in comment mode. Same fixed position (against the
-          main sidebar's inner edge), same 260 px width, so section
-          marginRight stays constant and the hero doesn't reflow.
-          AnimatePresence crossfades the two panels — opacity is
-          inheritable, so motion.div wrappers handle the fade without
-          touching the fixed-positioned asides inside. */}
-      <AnimatePresence initial={false}>
-        {commentMode ? (
-          <motion.div
-            key="comments"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            // 1 s ease — matches the canvas gradient-border fade so
-            // both transitions hit completion at the same moment.
-            // Matches CSS `ease` (cubic-bezier(0.25, 0.1, 0.25, 1)),
-            // so this swap's curve mirrors the canvas border's CSS
-            // `transition: opacity 1s ease`.
-            transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1] }}
-          >
+      {/* Right-edge slot: the Slides nav. For comment-capable roles it also
+          hosts a Comments tab (the embedded CommentsPanel) — §16 replaced the
+          old full-panel swap with an in-panel tab, so the slot never reflows
+          and the slide grid stays one click away while commenting. */}
+      <SlideNavSidebar
+        items={navItems}
+        currentIndex={focusedIndex}
+        onSelect={(idx) => setCurrentSlideIndex(idx)}
+        manifest={manifest}
+        format={manifest!.format ?? initialFormat ?? "16:9"}
+        title={manifest!.title}
+        mainSidebarWidth={mainSidebarWidth}
+        // Sidebar reading direction follows the deck's language —
+        // EN decks flip to LTR so the visual #1 lands on the left
+        // (user feedback 2026-05-20). Defaults to "ar" if missing.
+        language={manifest!.language === "en" ? "en" : "ar"}
+        // Bulk lock pill is hidden for non-edit roles (SlideNavSidebar
+        // already auto-hides when both callbacks are omitted). Same
+        // gating logic as the per-slide lock toggle in NavItem.
+        onLockAll={canEdit ? () => bulkSetLock(true) : undefined}
+        onUnlockAll={canEdit ? () => bulkSetLock(false) : undefined}
+        viewersBySlide={viewersBySlide}
+        floating
+        // Slides ⇄ Comments tab (§16). Comment-capable roles get the Comments
+        // tab; entering comment mode auto-selects it (effect above). The badge
+        // counts the focused slide's comments.
+        tab={navTab}
+        onTabChange={setNavTab}
+        commentCount={
+          comments.filter((c) => c.slideId === focusedSlide.slideId).length
+        }
+        commentsSlot={
+          canComment ? (
             <CommentsPanel
+              embedded
               comments={comments}
               slideId={focusedSlide.slideId}
               onClose={handleToggleCommentMode}
               onApply={handleApplyComments}
               mainSidebarWidth={mainSidebarWidth}
             />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="slidenav"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            // Matches CSS `ease` (cubic-bezier(0.25, 0.1, 0.25, 1)),
-            // so this swap's curve mirrors the canvas border's CSS
-            // `transition: opacity 1s ease`.
-            transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1] }}
-          >
-            <SlideNavSidebar
-              items={navItems}
-              currentIndex={focusedIndex}
-              onSelect={(idx) => setCurrentSlideIndex(idx)}
-              manifest={manifest}
-              format={manifest!.format ?? initialFormat ?? "16:9"}
-              title={manifest!.title}
-              mainSidebarWidth={mainSidebarWidth}
-              // Sidebar reading direction follows the deck's language —
-              // EN decks flip to LTR so the visual #1 lands on the left
-              // (user feedback 2026-05-20). Defaults to "ar" if missing.
-              language={manifest!.language === "en" ? "en" : "ar"}
-              // Bulk lock pill is hidden for non-edit roles (SlideNavSidebar
-              // already auto-hides when both callbacks are omitted). Same
-              // gating logic as the per-slide lock toggle in NavItem,
-              // which checks canEdit before firing onToggleLock.
-              onLockAll={canEdit ? () => bulkSetLock(true) : undefined}
-              onUnlockAll={canEdit ? () => bulkSetLock(false) : undefined}
-              viewersBySlide={viewersBySlide}
-              floating
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ) : undefined
+        }
+      />
 
       {/* Studio — Layers panel (left), mirroring the Slides nav on the right.
           Lists the focused slide's visual leaves from the live editor DOM;

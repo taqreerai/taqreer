@@ -19,7 +19,8 @@
 // The header + footer are flex children; the middle grid scrolls
 // independently via `flex-1 overflow-y-auto`.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { SegmentedToggle } from "@/components/create/controls";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlidePresenceStack } from "@/components/preview/SlidePresenceStack";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
@@ -84,6 +85,14 @@ export function SlideNavSidebar({
   // Studio mode — float as a rounded glass card inset from the viewport edges
   // (no longer docked against the now-absent main sidebar).
   floating = false,
+  // Slides ⇄ Comments tab (§16). `commentsSlot` is the embedded CommentsPanel
+  // rendered in the Comments tab; when omitted, only the Slides grid shows and
+  // no tab bar appears. `tab` defaults to "slides" so unwired callers (the
+  // /create + /enhance live previews) are unchanged.
+  tab = "slides",
+  onTabChange,
+  commentsSlot,
+  commentCount,
 }: {
   items: NavItem[];
   currentIndex: number | null;
@@ -100,6 +109,12 @@ export function SlideNavSidebar({
   // contract: the two panels feel like one.
   mainSidebarWidth: number;
   floating?: boolean;
+  // Slides ⇄ Comments tab (§16). Active tab + change handler; `commentsSlot`
+  // is the embedded CommentsPanel body; `commentCount` badges the tab.
+  tab?: "slides" | "comments";
+  onTabChange?: (tab: "slides" | "comments") => void;
+  commentsSlot?: ReactNode;
+  commentCount?: number;
   language?: "ar" | "en";
   // Fires when the user clicks the bulk pill. Parent owns the
   // network call + optimistic state update so it can fan the result
@@ -310,10 +325,35 @@ export function SlideNavSidebar({
           </header>
         );
       })()}
-      {/* Scrollable middle — `flex-1` so it absorbs vertical slack
-          between header and footer; `overflow-y-auto` so the slide
-          grid scrolls independently of the chrome. */}
-      <div className="flex-1 overflow-y-auto pt-3">
+      {/* Slides ⇄ Comments tab — only when the parent wires a comments slot
+          (the Studio editor for owner/edit/comment roles). */}
+      {commentsSlot ? (
+        <div className="flex px-1 pt-3">
+          <SegmentedToggle
+            options={[
+              { value: "slides", label: "الشرائح", icon: "grid_view" },
+              {
+                value: "comments",
+                label: commentCount
+                  ? `التعليقات ${commentCount}`
+                  : "التعليقات",
+                icon: "chat_bubble",
+              },
+            ]}
+            value={tab}
+            onChange={(t) => onTabChange?.(t)}
+            ariaLabel="عرض الشرائح أو التعليقات"
+            size="comfortable"
+          />
+        </div>
+      ) : null}
+      {/* Body — Comments tab = the embedded CommentsPanel; Slides tab (default)
+          = the scrollable thumbnail grid (flex-1 + overflow-y-auto so it scrolls
+          independently of the chrome). */}
+      {commentsSlot && tab === "comments" ? (
+        <div className="flex min-h-0 flex-1 flex-col pt-3">{commentsSlot}</div>
+      ) : (
+        <div className="flex-1 overflow-y-auto pt-3">
         {/* `m-0.5` (= 2 px each side, via Tailwind's `--spacing`)
             inset the grid 2 px inside the aside's content-box so the
             buttons aren't flush against the aside's `overflow:hidden`
@@ -502,12 +542,14 @@ export function SlideNavSidebar({
         })}
         </div>
       </div>
+      )}
 
       {/* Footer — Lock all / Unlock all bulk pill. Label flips
           based on the global locked state across the deck. Hidden
-          during generation (placeholders don't have lock state)
-          and when the parent didn't wire either handler. */}
-      {showBulkPill ? (
+          during generation (placeholders don't have lock state),
+          when the parent didn't wire either handler, AND on the
+          Comments tab (the embedded panel owns the footer there). */}
+      {showBulkPill && tab === "slides" ? (
         <footer className="border-t border-white/[0.08] pt-3 px-1">
           <button
             type="button"
