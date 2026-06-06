@@ -43,7 +43,7 @@ import {
 import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDialog";
 import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
-import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
+import { PreviewActionBar, type StudioMode } from "@/components/slides/PreviewActionBar";
 import { StudioHeader } from "./StudioHeader";
 import { createClient } from "@/lib/supabase/client";
 import { cssFontFamilyName } from "@/lib/export/theme-css-vars";
@@ -619,6 +619,9 @@ export function DeckView({
   //                Inngest completes). Targeted slides get a
   //                "regenerating" overlay; the Apply button locks.
   const [commentMode, setCommentMode] = useState(false);
+  // Studio mode (Edit ⇄ AI) — the bottom command bar's toggle. Edit = manual
+  // scalpel + user comments; AI = generative. Defaults to Edit (§16).
+  const [studioMode, setStudioMode] = useState<StudioMode>("edit");
   // Edit mode = the DEFAULT working surface for edit-capable users (plan §0.6 — you
   // land in the editor). Mutually exclusive with commentMode: the comment overlay
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
@@ -3376,6 +3379,8 @@ export function DeckView({
                   horizontal
                   projectId={projectId}
                   role={role}
+                  studioMode={studioMode}
+                  onSetStudioMode={setStudioMode}
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
                   draftCommentCount={comments.length}

@@ -8,6 +8,10 @@ import { createContext, useContext, useState } from "react";
 const ToolbarHorizontalContext = createContext(false);
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { SegmentedToggle } from "@/components/create/controls";
+
+// Studio editor mode — Edit (manual scalpel + user comments) vs AI (generative).
+export type StudioMode = "edit" | "ai";
 
 type Status = "idle" | "running" | "success" | "error";
 
@@ -206,6 +210,8 @@ function ToolbarDivider({ horizontal = false }: { horizontal?: boolean }) {
 export function PreviewActionBar({
   projectId,
   role,
+  studioMode,
+  onSetStudioMode,
   commentMode,
   onToggleCommentMode,
   draftCommentCount,
@@ -224,6 +230,9 @@ export function PreviewActionBar({
   // → comments + exports only (no regen/save/lock). "view" → exports
   // + share, no comments at all.
   role: "owner" | "edit" | "comment" | "view";
+  // Studio mode (Edit ⇄ AI) — owned by DeckView; only owners/edit see the toggle.
+  studioMode: StudioMode;
+  onSetStudioMode: (m: StudioMode) => void;
   // Comment-mode state — owned by DeckView. Apply lives inside the
   // CommentsPanel footer and just exits commentMode (drafts persist
   // as drafts). When drafts exist + commentMode is off, the regen
@@ -278,6 +287,8 @@ export function PreviewActionBar({
   // sees neither — pure read-only toolbar = exports + share.
   const canEdit = role === "owner" || role === "edit";
   const canComment = canEdit || role === "comment";
+  // Non-editors have no AI mode — they're effectively always in "edit".
+  const effectiveMode: StudioMode = canEdit ? studioMode : "edit";
 
   // Legacy `saveTpl` state + `showSaveForm` popover + `templateTitle`
   // input were removed 2026-05-22. The canonical "Save as template"
@@ -410,15 +421,27 @@ export function PreviewActionBar({
           horizontal ? "flex-row" : "flex-col"
         }`}
       >
-        {/* ── Category 1: AI / Edit ─────────────────────────────── */}
-        {/* Regen — owners / edit only. The AI pair (regen + comment
-            with gradient ring) is the editor's signature; viewers
-            never see it. */}
+        {/* Edit ⇄ AI mode toggle — owners/edit only (others have no AI mode). */}
         {canEdit ? (
+          <>
+            <SegmentedToggle
+              options={[
+                { value: "edit", label: "تحرير" },
+                { value: "ai", label: "ذكاء" },
+              ]}
+              value={studioMode}
+              onChange={onSetStudioMode}
+              ariaLabel="وضع المحرر"
+              size="comfortable"
+            />
+            <ToolbarDivider horizontal={horizontal} />
+          </>
+        ) : null}
+        {/* AI mode — Regen (deck regen / apply comments). No gradient (§16). */}
+        {canEdit && effectiveMode === "ai" ? (
           <ToolButton
             icon={commentsArmed ? "auto_awesome" : "autorenew"}
             label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد التصميم"}
-            gradient
             running={regen.status === "running"}
             onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
             disabled={applying || commentMode}
@@ -453,7 +476,8 @@ export function PreviewActionBar({
                 no gradient. They can't fire regen, so claiming the
                 AI affordance would be misleading. User direction
                 2026-05-23. */}
-        {canComment ? (
+        {/* Edit mode — user comments (no gradient §16). */}
+        {canComment && effectiveMode === "edit" ? (
           <ToolButton
             icon={canEdit ? "assistant" : "chat_bubble_outline"}
             label={
@@ -463,7 +487,6 @@ export function PreviewActionBar({
                   ? "إنهاء وضع التعليقات"
                   : "إضافة تعليق"
             }
-            gradient={canEdit}
             iconFilled={commentMode}
             onClick={onToggleCommentMode}
             active={commentMode}
