@@ -783,5 +783,13 @@ function Btn({
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 22, background: "var(--tq-border-glass)" }} />;
+  // marginInline gives the separator breathing room: the filled pills (font /
+  // stepper) run their background to the edge, so the 2px flex gap alone read as
+  // ~0 against them. 4px each side → a clear section break (the icon buttons are
+  // transparent, so they keep their tight 2px rhythm within clusters).
+  return (
+    <div
+      style={{ width: 1, height: 22, marginInline: 4, background: "var(--tq-border-glass)" }}
+    />
+  );
 }
