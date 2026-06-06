@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { BellDropdown } from "@/components/app/BellDropdown";
 import { HeaderSearch } from "@/components/app/HeaderSearch";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
@@ -10,10 +9,6 @@ import { ServerStatusChip } from "@/components/app/ServerStatusChip";
 type Props = {
   isCollapsed?: boolean;
   onToggleSidebar?: () => void;
-  // When true (distraction-free /project editing) the header slides up off the
-  // top + fades out. Transform is owned by framer; the CSS transition below
-  // covers only `right` (the sidebar-collapse reflow) so the two don't fight.
-  hidden?: boolean;
 };
 
 // Icon-only header button — NO background, no border, just the icon
@@ -22,19 +17,15 @@ type Props = {
 const HEADER_ICON_BTN =
   "flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white";
 
-export function Header({ isCollapsed, onToggleSidebar, hidden = false }: Props) {
+export function Header({ isCollapsed, onToggleSidebar }: Props) {
   // Owns the global "Start a new project" picker so the four
   // landing flows are reachable from any page, not just the
   // dashboard's QuickActions row.
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   return (
-    <motion.header
-      initial={false}
-      animate={{ y: hidden ? "-100%" : "0%", opacity: hidden ? 0 : 1 }}
-      transition={{ type: "spring", stiffness: 500, damping: 35 }}
-      style={{ pointerEvents: hidden ? "none" : "auto" }}
-      className={`header-bg backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed top-0 left-0 z-40 h-20 flex items-center px-8 transition-[right] duration-300 ease-in-out ${
+    <header
+      className={`header-bg backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed top-0 left-0 z-40 h-20 flex items-center px-8 transition-all duration-300 ease-in-out ${
         isCollapsed ? "right-[80px]" : "right-[260px]"
       }`}
     >
@@ -133,6 +124,6 @@ export function Header({ isCollapsed, onToggleSidebar, hidden = false }: Props) 
         open={newProjectOpen}
         onClose={() => setNewProjectOpen(false)}
       />
-    </motion.header>
+    </header>
   );
 }

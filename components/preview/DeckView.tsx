@@ -2975,7 +2975,7 @@ export function DeckView({
     // Slide-nav is fixed-positioned outside the row, so the row has
     // no internal reservation while generating (no comments yet,
     // either). Hero centers in the remaining width.
-    const genHeroWidthCss = `min(calc((100vh - var(--tq-chrome-pad, ${HERO_VERTICAL_PADDING_PX}px)) * ${canvasW} / ${canvasH}), 100%)`;
+    const genHeroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
     return (
       <GenImageProvider value={filledImages}>
       <section
@@ -3032,7 +3032,7 @@ export function DeckView({
         <div
           dir="ltr"
           className="flex items-center justify-center"
-          style={{ minHeight: `calc(100vh - var(--tq-chrome-pad, ${HERO_VERTICAL_PADDING_PX}px))` }}
+          style={{ minHeight: `calc(100vh - ${HERO_VERTICAL_PADDING_PX}px)` }}
         >
           <div
             ref={gridRef}
@@ -3198,7 +3198,7 @@ export function DeckView({
   //     remaining vertical space given its aspect ratio)
   //   • the row's full width (side panels are fixed-positioned
   //     outside the section, so the row reserves nothing).
-  const heroWidthCss = `min(calc((100vh - var(--tq-chrome-pad, ${HERO_VERTICAL_PADDING_PX}px)) * ${canvasW} / ${canvasH}), 100%)`;
+  const heroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
 
   // Saved-state comparator. Two halves, both required for "saved":
   //   1. Version pointer matches (catches partial regen + full regen,
@@ -3381,7 +3381,7 @@ export function DeckView({
       <div
         dir="ltr"
         className="flex items-center justify-center"
-        style={{ minHeight: `calc(100vh - var(--tq-chrome-pad, ${HERO_VERTICAL_PADDING_PX}px))` }}
+        style={{ minHeight: `calc(100vh - ${HERO_VERTICAL_PADDING_PX}px)` }}
       >
         <motion.div
           ref={gridRef}
