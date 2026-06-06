@@ -214,6 +214,12 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   // pill's left/top every frame, so it always tracks the current selection. ──
   useEffect(() => {
     let raf = 0;
+    // Place the pill ONCE per selection: track the element until its selection box
+    // lands, then LOCK the position. Otherwise the follow-loop re-centers every
+    // frame and an edit that resizes the element (the size stepper, alignment, …)
+    // slides the controls out from under the cursor. Re-anchors only on a new
+    // selection — this effect re-runs on `target`, so `placed` starts false again.
+    let placed = false;
     const tick = () => {
       const el = pillRef.current;
       const win = target.ownerDocument.defaultView;
@@ -242,8 +248,11 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         }
         top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
         const left = Math.max(8, Math.min(cx - pw / 2, window.innerWidth - pw - 8));
-        el.style.left = `${left}px`;
-        el.style.top = `${top}px`;
+        // Hold the placed position; only the first frames (until the box lands) move it.
+        if (!placed) {
+          el.style.left = `${left}px`;
+          el.style.top = `${top}px`;
+        }
         el.style.visibility = "visible";
 
         // Selection-outline visibility. Hide while EDITING (popover open / pill
@@ -257,6 +266,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           const bcx = selRect.left + selRect.width / 2;
           const bcy = selRect.top + selRect.height / 2;
           const onTarget = bcx >= tr.left && bcx <= tr.right && bcy >= tr.top && bcy <= tr.bottom;
+          // Box has settled on the current target → lock the pill where it is.
+          if (onTarget) placed = true;
           selBox.style.visibility =
             editingRef.current || selectingRef.current || !onTarget ? "hidden" : "visible";
         }
