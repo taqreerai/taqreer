@@ -369,7 +369,11 @@ export function HeroCommentOverlay({
                 setPreviewState({ commentId: c.id, x: localX, y: localY });
               }}
               aria-label="عرض التعليق"
-              className="pointer-events-auto absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
+              className={
+                c.forAi
+                  ? "ai-comment-box pointer-events-auto absolute transition-opacity hover:opacity-80"
+                  : "pointer-events-auto absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
+              }
               style={style}
             />
           );
