@@ -392,6 +392,25 @@ function extractSlideHtml(raw: string): string {
   return text;
 }
 
+// [editor-debug] Extract the CSS rules that size svgs / icons, WITH their full
+// selector, so a trace can distinguish a properly-scoped rule
+// (`.tq-canvas .bul svg{width:30px}`) from a bare global one (`svg{width:100%}`)
+// that bleeds onto every icon. The plain `svg{…}` regex used elsewhere strips
+// the selector and is blind to exactly this difference.
+function iconCssRules(html: string): string[] {
+  const style = (html.match(/<style[\s\S]*?<\/style>/i) ?? [""])[0];
+  const out: string[] = [];
+  const re = /([^{}]+)\{([^}]*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(style)) !== null) {
+    const sel = m[1].trim().replace(/\s+/g, " ");
+    if (/svg|uc-ic|\bbul\b|\bic\b/i.test(sel)) {
+      out.push(`${sel} { ${m[2].trim().slice(0, 70)} }`);
+    }
+  }
+  return out;
+}
+
 type RegenPartialEvent = {
   projectId: string;
   presentationId: string;
@@ -622,8 +641,8 @@ export const deckRegeneratePartial = inngest.createFunction(
               mode: pickRegenMode(comments, slideId),
               regions: slideComments.map((c) => c.boundsJson),
               instructions: slideComments.map((c) => c.content),
-              inputSvgRules: inHtml.match(/svg\s*\{[^}]*\}/gi) || [],
-              inputHasSvg100pct: /svg\s*\{[^}]*width\s*:\s*100%/i.test(inHtml),
+              // full selectors — scoped (`.bul svg{…}`) vs bare (`svg{…}`)
+              inputIconRules: iconCssRules(inHtml),
             });
           }
           // Mode mirrors what buildPartialUserMessage picks internally:
@@ -669,12 +688,12 @@ export const deckRegeneratePartial = inngest.createFunction(
           if (!html) {
             throw new Error(`Empty HTML returned for slide ${slideId}`);
           }
-          // [editor-debug] What the model PRODUCED — compare svg rules to the
-          // INPUT log above. If outputHasSvg100pct is true but the input wasn't,
-          // the model introduced the bad rule (huge icons). reported 2026-06-07.
+          // [editor-debug] What the model PRODUCED — compare the icon rules to
+          // the INPUT log above. If the input was scoped (`.bul svg{…}`) and the
+          // output is bare (`svg{width:100%}`), the model un-scoped it (huge
+          // icons). reported 2026-06-07.
           edbg("server:partial-regen", `OUTPUT slide=${slideId}`, {
-            outputSvgRules: html.match(/svg\s*\{[^}]*\}/gi) || [],
-            outputHasSvg100pct: /svg\s*\{[^}]*width\s*:\s*100%/i.test(html),
+            outputIconRules: iconCssRules(html),
             outputLen: html.length,
           });
           completedSlides += 1;
