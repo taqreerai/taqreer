@@ -108,6 +108,22 @@ async function runSnapshotAndPromoteTx(args: {
         select: { id: true, slideId: true, content: true, boundsJson: true },
       });
       if (promoted.length === 0) return { kind: "empty" as const };
+
+      // Carry the REMAINING draft comments forward onto the new version. Only
+      // AI (forAi) comments were promoted to "applied" above; the user /
+      // collaboration comments are still "draft" on the source version. After
+      // this regen completes the current-version pointer moves to newVersion,
+      // so without re-pointing them the user comments would vanish from view
+      // even though only the AI comment was applied (§16 Chunk 4 — user-vs-AI
+      // split; reported 2026-06-07).
+      await tx.comment.updateMany({
+        where: {
+          presentationId,
+          versionId: sourceVersionId,
+          status: "draft",
+        },
+        data: { versionId: newVersion.id },
+      });
       return { kind: "ok" as const, promoted, newVersion };
     }),
   );

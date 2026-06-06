@@ -10,6 +10,7 @@ import {
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
 import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
+import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
@@ -265,6 +266,7 @@ ${COMPOSITION_RULES}
 ${designAnchorBlock}
 - Decorative graphics stay inline <svg>. Icons stay inline <svg> (not icon fonts).
 - **Icons: use Lucide** (https://lucide.dev/icons) — inline \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\` with the path data from lucide.dev. Material icons (https://fonts.google.com/icons) are an acceptable fallback. NEVER icon fonts.
+- **Icon SIZING — critical.** Every inline icon \`<svg>\` MUST carry explicit small pixel dimensions (e.g. \`width="28" height="28"\`), sized to sit INSIDE its label / list row — typically 20–40px. NEVER let an icon stretch to fill its container: no \`width:100%\`, no \`height:100%\`, no \`flex:1\` on the svg, no sizing an icon to the comment's region box. A list-item icon is the height of that item's text, not the height of the list.
 - Webfont URLs must be on \`fonts.googleapis.com\` / \`fonts.gstatic.com\`.
 
 DECORATIVE GRAPHICS — keep them relevant
@@ -365,8 +367,10 @@ function buildPartialUserMessage(
     ``,
     intentSection,
     ``,
-    `THEME (locked, do not change):`,
-    JSON.stringify(manifest.theme, null, 2),
+    `THEME (locked, do not change) — these are the deck's CSS custom properties; reuse them, never hardcode new colours/fonts:`,
+    Object.entries(themeToCssVars(manifest.theme))
+      .map(([k, v]) => `  ${k}: ${v};`)
+      .join("\n"),
     ``,
     htmlLabel,
     slide.html,
