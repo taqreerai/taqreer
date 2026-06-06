@@ -11,7 +11,7 @@
 //
 // Proven in /lab/editor (Phase 0). Content is scaled INSIDE the iframe (#tqe-stage):
 // a transform on the iframe ELEMENT clips its paint in Chromium.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SlideType, ThemeType } from "@/lib/schema/slide";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
@@ -107,6 +107,18 @@ export function SlideEditor({
   // overlays use directly.
   const dispW = Math.round(width * scale);
   const dispH = Math.round(height * scale);
+  // The display scale lives in a CSS var (--tqe-scale), NOT baked into the srcDoc
+  // string. A resize changes `scale` ~every frame; if that recomputed the srcDoc,
+  // the iframe would RELOAD on every tick — flashing the canvas AND re-firing
+  // onDocReady (which rebuilds the Layers tree → that panel flashes too). The
+  // srcDoc bakes the current scale as the var's initial value (no first-paint pop)
+  // but `scale` is NOT a memo dep, so a resize doesn't recompute it. A ref carries
+  // the latest scale to wire() (which sets the var on iframe load), and the effect
+  // below sets it on every resize.
+  const scaleRef = useRef(scale);
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
   const srcDoc = useMemo(() => {
     const vars = themeToCssVars(theme) as Record<string, string>;
     const rootVars = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(";");
@@ -121,11 +133,14 @@ export function SlideEditor({
 ${links}
 ${pickedFontLinks}
 <style>
-${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
-  :root{${rootVars}}
-  body{position:relative;width:${dispW}px;height:${dispH}px;overflow:hidden;background:${theme.background};color:${theme.text};font-family:var(--font-body),'Cairo',system-ui,sans-serif}
-  /* absolute + top-left so the RTL body can't right-align this wider-than-body stage */
-  #tqe-stage{position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform:scale(${scale});transform-origin:top left}
+${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
+  :root{${rootVars};--tqe-scale:${scale}}
+  /* Body fills the iframe ELEMENT (sized to dispW×dispH in React), so a resize
+     resizes the iframe element without touching this document. */
+  body{position:relative;width:100%;height:100%;overflow:hidden;background:${theme.background};color:${theme.text};font-family:var(--font-body),'Cairo',system-ui,sans-serif}
+  /* absolute + top-left so the RTL body can't right-align this wider-than-body
+     stage. Scale via the live --tqe-scale var (updated on resize, no reload). */
+  #tqe-stage{position:absolute;top:0;left:0;width:${width}px;height:${height}px;transform:scale(var(--tqe-scale));transform-origin:top left}
   /* The slide is a CANVAS OF OBJECTS, not selectable text: a plain pointer cursor
      (never the text I-beam) and no native text selection, so the empty space inside
      a text box is fully inert and only an object's real ink is ever interactive.
@@ -147,7 +162,11 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
   @keyframes tqe-caret-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
   [contenteditable="true"]{outline:none}
 </style></head><body><div id="tqe-stage">${bodyHtml}</div></body></html>`;
-  }, [bodyHtml, theme, direction, language, width, height, scale, dispW, dispH]);
+    // scale/dispW/dispH intentionally excluded — they're presentation, applied
+    // live via the --tqe-scale var + the iframe element's size, so a resize never
+    // rebuilds (reloads) this document. scaleRef.current bakes the initial scale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bodyHtml, theme, direction, language, width, height]);
 
   // Wire the iframe document once it loads (and on every srcDoc change → reload).
   useEffect(() => {
@@ -334,6 +353,9 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
       doc.addEventListener("mouseleave", onLeave);
       doc.addEventListener("click", onClick);
       doc.addEventListener("dblclick", onDbl);
+      // Sync the live scale onto the freshly-loaded doc (the srcDoc's baked value
+      // can be stale if `scale` changed while the iframe was loading).
+      doc.documentElement.style.setProperty("--tqe-scale", String(scaleRef.current));
       onDocReady(doc);
     };
 
@@ -345,6 +367,17 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcDoc]);
+
+  // Push the live display scale into the iframe's --tqe-scale var on every resize
+  // (the iframe ELEMENT is resized to dispW×dispH in React). This recolours the
+  // #tqe-stage transform WITHOUT reloading the document — no flash. The srcDoc
+  // already baked the correct initial value, so first paint is right too.
+  useLayoutEffect(() => {
+    iframeRef.current?.contentDocument?.documentElement?.style.setProperty(
+      "--tqe-scale",
+      String(scale),
+    );
+  }, [scale, srcDoc]);
 
   // Reposition the selection box whenever the controlled `selected` changes, AND
   // keep it glued to the element through two distinct kinds of change:
