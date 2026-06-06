@@ -1,6 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
+
+// Toolbar orientation → drives where each ToolButton's tooltip pops. Vertical
+// (left rail): to the right, toward content. Horizontal (Studio bottom bar):
+// above the button. Context so it doesn't have to thread through every call site.
+const ToolbarHorizontalContext = createContext(false);
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
@@ -68,6 +73,7 @@ function ToolButton({
   iconFilled?: boolean;
 }) {
   const isDisabled = disabled || running;
+  const tooltipHorizontal = useContext(ToolbarHorizontalContext);
   // Two coordinated visual transitions on hover:
   //   - icon: muted (white/60) → white
   //   - border: dim (white/15) → bright (white/40)
@@ -168,8 +174,14 @@ function ToolButton({
           Latin label, no per-button decision needed. */}
       <div
         dir="auto"
-        className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-black/90 px-3 py-1.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-        style={{ left: "100%", marginLeft: "12px" }}
+        className="pointer-events-none absolute whitespace-nowrap rounded-md bg-black/90 px-3 py-1.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
+        style={
+          tooltipHorizontal
+            ? // Bottom bar → pop ABOVE the button, centered.
+              { bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: "10px" }
+            : // Left rail → pop to the right, toward content.
+              { top: "50%", left: "100%", transform: "translateY(-50%)", marginLeft: "12px" }
+        }
       >
         {label}
         {badge ? <span className="badge-purple ms-2">{badge}</span> : null}
@@ -405,6 +417,7 @@ export function PreviewActionBar({
     null;
 
   return (
+    <ToolbarHorizontalContext.Provider value={horizontal}>
     <div
       dir="ltr"
       // Stable selector for DeckView's click-outside handler to
@@ -638,5 +651,6 @@ export function PreviewActionBar({
         onClose={() => setShareOpen(false)}
       />
     </div>
+    </ToolbarHorizontalContext.Provider>
   );
 }

@@ -261,7 +261,7 @@
      a fraction of a glass alpha so it reads as texture, never noise; the gap
      sets the grid density. Token-driven so it tracks the glass system rather
      than living as a hardcoded rgba in `.studio-canvas`. */
-  --tq-studio-dot:     rgba(255, 255, 255, 0.05);
+  --tq-studio-dot:     rgba(255, 255, 255, 0.09);
   --tq-studio-dot-gap: 26px;
   /* Full-screen dim behind modal panels (`.modal-dim`). oklab mix keeps the
      darken perceptually-uniform over the brand aurora. 45% (2026-05-24) so
@@ -1682,6 +1682,27 @@ body {
     var(--tq-studio-dot-gap) var(--tq-studio-dot-gap);
   background-position: center, center;
   background-attachment: fixed, fixed;
+}
+
+/* Same bottom-anchored brand-violet glow the dashboard uses, so the editor keeps
+   the product's signature wash rising from the bottom edge. Sits above the dotted
+   canvas (the element's own background) and below the editor content. */
+.studio-canvas::before {
+  content: "";
+  position: fixed;
+  top: 145%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at bottom,
+    rgba(var(--tq-violet-rgb), 0.4) 60%,
+    #0000 97%
+  );
+  filter: blur(80px);
 }
 
 /* ─── Avatar ─── */
