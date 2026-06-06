@@ -81,10 +81,15 @@ function Tooltip({ isCollapsed, text }: { isCollapsed: boolean; text: string }) 
 
 export function Sidebar({
   isCollapsed = false,
-  transitionClass = "transition-all duration-300 ease-in-out"
+  transitionClass = "transition-all duration-300 ease-in-out",
+  hidden = false,
 }: {
   isCollapsed?: boolean;
   transitionClass?: string;
+  // When true (distraction-free /project editing) the sidebar slides off the
+  // trailing (right, in RTL) edge + fades. Transform is owned by framer; the
+  // `transitionClass` below should cover only width, not transform.
+  hidden?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -195,8 +200,12 @@ export function Sidebar({
   ];
 
   return (
-    <aside
+    <motion.aside
       aria-label="Sidebar"
+      initial={false}
+      animate={{ x: hidden ? "100%" : "0%", opacity: hidden ? 0 : 1 }}
+      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+      style={{ pointerEvents: hidden ? "none" : "auto" }}
       // `backdrop-blur-glass backdrop-saturate-(--glass-saturation)`
       // tracks the user's Settings → glass preset; `sidebar-bg`
       // owns the (now-transparent) tint + border color. Tailwind
@@ -419,6 +428,6 @@ export function Sidebar({
           document.body
         )}
       </div>
-    </aside>
+    </motion.aside>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/app/Sidebar";
 import { Header } from "@/components/app/Header";
+import { ChromeToggle } from "@/components/app/ChromeToggle";
 
 const sidebarStorageKey = "taqreer_sidebar_collapsed";
 const sidebarStorageEvent = "taqreer_sidebar_collapsed_changed";
@@ -71,6 +72,11 @@ export function DashboardShell({
     setIsReady(true);
   }, []);
 
+  // Distraction-free editing: on the working /project canvas the header + main
+  // sidebar default to HIDDEN (slide off + fade) so the slide owns the viewport;
+  // a floating toggle brings them back. Every other route keeps the chrome.
+  const [chromeHidden, setChromeHidden] = useState(false);
+
   useEffect(() => {
     function handleSidebarChange(event: Event) {
       if (event instanceof CustomEvent && typeof event.detail === "boolean") {
@@ -97,7 +103,12 @@ export function DashboardShell({
   };
 
   const sidebarWidth = isCollapsed ? 80 : 260;
-  const transitionClass = isReady ? "transition-all duration-300 ease-in-out" : "transition-none";
+  // Excludes `transform` on purpose — the chrome's slide-in/out is owned by
+  // framer-motion (in Header/Sidebar); a CSS `transition: all` here would
+  // double-animate the transform and make the slide laggy.
+  const transitionClass = isReady
+    ? "transition-[width,margin,right] duration-300 ease-in-out"
+    : "transition-none";
 
   // Preview routes use a full-width canvas layout (hero + side panels
   // must fit a 16:9 slide at viewport height — ~1850 px wide — which
@@ -116,6 +127,17 @@ export function DashboardShell({
   // same horizontal real estate.
   const isFullWidthRoute =
     pathname.startsWith("/preview/") || pathname.startsWith("/project/");
+
+  // The chrome toggle is only offered on the /project working canvas. Default it
+  // to HIDDEN when entering a project, SHOWN everywhere else — the effect re-runs
+  // on route change, so navigating away restores the chrome and coming back to a
+  // project re-hides it. Within a project, the user's toggle sticks (the effect
+  // doesn't re-fire until the route actually changes).
+  const isProjectRoute = pathname.startsWith("/project/");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChromeHidden(isProjectRoute);
+  }, [isProjectRoute]);
 
   // Share-revoked listener — `notificationStore` dispatches
   // `taqreer:share-revoked` on its window when the user channel
@@ -156,26 +178,50 @@ export function DashboardShell({
     pathname.startsWith("/mimic") ||
     pathname.startsWith("/datasheet") ||
     pathname.startsWith("/use-template");
+  // When the header is hidden the canvas reclaims the top band: a smaller top
+  // pad (just clears the floating toggle) + a smaller `--tq-chrome-pad` so
+  // DeckView's `calc(100vh - var)` hero grows to fill it.
+  const fullWidthPad = chromeHidden
+    ? "pt-[52px] pb-[40px] pl-[120px] pr-[40px]"
+    : "pt-[120px] pb-[40px] pl-[120px] pr-[40px]";
   const contentClasses = isFullWidthRoute
-    ? "pt-[120px] pb-[40px] pl-[120px] pr-[40px]"
+    ? fullWidthPad
     : isFlowRoute
       ? "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16"
       : "pt-28 px-8 pb-8 space-y-16";
+  // pad = top + bottom; DeckView reads it as `calc(100vh - var(--tq-chrome-pad))`.
+  const chromePadPx = chromeHidden ? 92 : 160;
 
   return (
-    <div className="dashboard-bg min-h-screen relative opacity-100">
-      <Sidebar isCollapsed={isCollapsed} transitionClass={transitionClass} />
+    <div
+      className="dashboard-bg min-h-screen relative opacity-100"
+      style={{ "--tq-chrome-pad": `${chromePadPx}px` } as React.CSSProperties}
+    >
+      <Sidebar
+        isCollapsed={isCollapsed}
+        transitionClass={transitionClass}
+        hidden={chromeHidden}
+      />
 
       <main
         className={`min-h-screen text-on-background relative ${transitionClass}`}
-        style={{ marginRight: `${sidebarWidth}px`, marginLeft: 0, zIndex: 1 }}
+        style={{ marginRight: `${chromeHidden ? 0 : sidebarWidth}px`, marginLeft: 0, zIndex: 1 }}
       >
         <Header
           isCollapsed={isCollapsed}
           onToggleSidebar={toggleSidebar}
+          hidden={chromeHidden}
         />
         <div className={contentClasses}>{children}</div>
       </main>
+
+      {/* Floating chrome toggle — only on the /project canvas. */}
+      {isProjectRoute ? (
+        <ChromeToggle
+          hidden={chromeHidden}
+          onToggle={() => setChromeHidden((h) => !h)}
+        />
+      ) : null}
     </div>
   );
 }
