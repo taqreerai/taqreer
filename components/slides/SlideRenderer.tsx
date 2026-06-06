@@ -169,18 +169,22 @@ function SlideRendererImpl({
   // SlideNavSidebar thumbnails — the user reported "thumbnails
   // don't fit the frame, there is padding inside" 2026-05-23.
   //
-  // Trade-off: slide-edge strokes (full-width dividers / borders
-  // at the canvas edges) may get sub-pixel-aliased at low scales
-  // (thumbnails). Accepting that for now — visible padding is the
-  // worse defect. A proper fix would either (a) snapshot
-  // thumbnails to PNG so sub-pixel rendering applies once
-  // server-side, or (b) detect the actual slide-root bg and feed
-  // it into the outer wrapper instead of `theme.background`.
+  // OVERSCAN to kill the sub-pixel edge bleed at low scales: at the exact fit,
+  // `width*scale` is fractional and the scaled slide's edge lands ON the consumer's
+  // fractional overflow-hidden boundary, so its anti-aliased edge blends with the
+  // outer `theme.background` (often white) — a ~1px line on differently-coloured
+  // slides (e.g. a dark slide). ceil the outer so it's ≥ the consumer's clip, and
+  // scale the content to FILL it: the slide's edge then lands PAST the clip, which
+  // trims the fuzzy edge so only solid slide colour meets it. The sub-px overshoot
+  // is clipped too. (Same fix the SlideEditor iframe uses.)
+  const dispW = Math.ceil(width * scale);
+  const dispH = Math.ceil(height * scale);
+  const fillScale = Math.max(dispW / width, dispH / height);
   return (
     <div
       style={{
-        width: width * scale,
-        height: height * scale,
+        width: dispW,
+        height: dispH,
         position: "relative",
         // No `overflow: hidden` on either wrapper. The CONSUMER owns
         // the visual clip (hero canvas + thumbnail button both wrap
@@ -206,7 +210,7 @@ function SlideRendererImpl({
           position: "absolute",
           left: 0,
           top: 0,
-          transform: `scale(${scale})`,
+          transform: `scale(${fillScale})`,
           transformOrigin: "top left",
           color: theme.text,
           fontFamily: `var(--font-body)`,
