@@ -28,14 +28,16 @@ export const TEXT_TAGS = new Set([
 // OUTERMOST such element (we never recurse into one), so a heading containing an
 // inline <span> counts as ONE leaf, not two.
 //
-// <div> is explicitly NOT a text leaf even when it holds inline text: in the
-// Claude-authored decks a <div> is a layout/overlay wrapper (e.g. a caption laid
-// over an image), never the primary editable text — which is always semantic
-// (<p>/<h*>/<span>/…). Treating an overlay <div> as selectable made it steal the
-// click from the image beneath it (→ wrong selection box). Skipping divs lets the
-// hit fall through to the real content.
+// A <div> qualifies on the SAME terms as any other element — it holds text and all
+// its element-children are inline — because Claude authors plenty of primary text as
+// a bare <div>…</div>, and excluding the tag wholesale made that text unselectable /
+// uneditable. Image/icon wrappers are still excluded for free: <img>/<svg> aren't in
+// INLINE_TAGS, so a <div><img></div> fails the inline-only test and stays a
+// pass-through container. Overlay captions laid OVER an image no longer need a
+// special case either — the editor's hit-test (resolveHit + pointInInk) only selects
+// an element when the cursor is over its actual text ink, so clicking the image's
+// empty area falls through to the image, while clicking the caption text selects it.
 export function isTextLeaf(el: Element): boolean {
-  if (el.tagName === "DIV") return false;
   return (
     (el.textContent ?? "").trim().length > 0 &&
     [...el.children].every((c) => INLINE_TAGS.has(c.tagName))
