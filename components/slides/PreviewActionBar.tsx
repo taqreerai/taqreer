@@ -271,7 +271,7 @@ export function PreviewActionBar({
   // re-entering the deck.
   focusedSlideLocked: boolean;
   // True when there are unsent drafts ready to be fired. Drives the
-  // autorenew → auto_awesome icon morph + swaps the click handler
+  // autorenew → assistant icon morph + swaps the click handler
   // from full regen to partial regen.
   commentsArmed: boolean;
   onFirePartialRegen: () => void;
@@ -539,7 +539,7 @@ export function PreviewActionBar({
                 ) : null}
                 {/* Regen the whole deck / apply comments. */}
                 <ToolButton
-                  icon={commentsArmed ? "auto_awesome" : "autorenew"}
+                  icon={commentsArmed ? "assistant" : "autorenew"}
                   label={
                     commentsArmed
                       ? "تطبيق التعليقات على الشرائح"
@@ -565,7 +565,7 @@ export function PreviewActionBar({
                           transition={{ duration: 0.25 }}
                           className="material-symbols-outlined text-[18px]"
                         >
-                          {commentsArmed ? "auto_awesome" : "autorenew"}
+                          {commentsArmed ? "assistant" : "autorenew"}
                         </motion.span>
                       </AnimatePresence>
                     </motion.div>
@@ -573,8 +573,9 @@ export function PreviewActionBar({
                 />
               </motion.div>
             ) : null}
-            {/* Edit — user comments. owner/edit → `assistant` glyph; comment-only
-                → `chat_bubble_outline` (no regen path, so no AI affordance). */}
+            {/* Edit — user comments. Plain comment glyph for ALL roles now; the
+                AI-flavored `assistant` glyph (comment + sparkle) moved onto the
+                AI-mode "apply comments" regen button. */}
             <motion.div
               ref={editSlotRef}
               aria-hidden={effectiveMode !== "edit"}
@@ -592,7 +593,7 @@ export function PreviewActionBar({
               }}
             >
               <ToolButton
-                icon={canEdit ? "assistant" : "chat_bubble_outline"}
+                icon="chat_bubble_outline"
                 label={
                   focusedSlideLocked && !commentMode
                     ? "الشريحة مقفلة — أعد فتح القفل لإضافة تعليق"

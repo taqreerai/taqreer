@@ -148,31 +148,29 @@ export function CommentsPanel({
         )}
       </div>
 
-      {/* Sticky footer — Apply button. Visible whenever any draft
-          exists in the deck. Clicking it just exits comment mode;
-          drafts persist as drafts. The toolbar's regen button takes
-          over from here (shows the AI icon and fires the partial
-          regen on click). */}
-      {/* "إنهاء التعليق" — always visible while comment-mode is
-          active. Clicking just exits comment mode; drafts persist.
-          Normal pill (not gradient) because this doesn't trigger a
-          model call — that's the toolbar's regen button. */}
-      <div className="border-t border-white/[0.08] pt-3">
-        <button
-          type="button"
-          onClick={onApply}
-          className="btn-pill flex w-full items-center justify-center gap-2 text-sm"
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "18px" }}
-            aria-hidden
+      {/* Footer — standalone mode only. In embedded mode (the slide-nav's
+          Comments tab) there's no Apply button: the user exits comment mode
+          by clicking the Slides tab, clicking outside the canvas, or Esc.
+          Drafts persist regardless; the toolbar's regen button fires the
+          partial regen. */}
+      {embedded ? null : (
+        <div className="border-t border-white/[0.08] pt-3">
+          <button
+            type="button"
+            onClick={onApply}
+            className="btn-pill flex w-full items-center justify-center gap-2 text-sm"
           >
-            check
-          </span>
-          إنهاء التعليق
-        </button>
-      </div>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "18px" }}
+              aria-hidden
+            >
+              check
+            </span>
+            إنهاء التعليق
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

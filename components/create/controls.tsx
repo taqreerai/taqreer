@@ -80,6 +80,7 @@ export function SegmentedToggle<T extends string>({
   ariaLabel,
   variant = "default",
   size = "default",
+  fullWidth = false,
 }: {
   options: ReadonlyArray<{ value: T; label: string; icon?: string }>;
   value: T;
@@ -99,6 +100,10 @@ export function SegmentedToggle<T extends string>({
   // for higher-stakes choices like language where the pill needs
   // to read clearly at a glance.
   size?: "default" | "comfortable";
+  // Stretch to fill the container, splitting width evenly between the
+  // segments (the slide-nav's Slides|Comments tab). Default false keeps
+  // the content-sized pill the other consumers rely on.
+  fullWidth?: boolean;
 }) {
   const segCls =
     size === "comfortable"
@@ -114,7 +119,9 @@ export function SegmentedToggle<T extends string>({
   const indicatorId = useId();
   return (
     <div
-      className="relative flex items-center gap-0.5 rounded-full p-0.5 bg-[var(--tq-bg-glass)]"
+      className={`relative flex items-center gap-0.5 rounded-full p-0.5 bg-[var(--tq-bg-glass)] ${
+        fullWidth ? "w-full" : ""
+      }`}
       role="radiogroup"
       aria-label={ariaLabel}
     >
@@ -134,8 +141,8 @@ export function SegmentedToggle<T extends string>({
             // re-mounts on the new one with `layoutId` matching,
             // triggering a smooth slide).
             className={`relative rounded-full transition-colors ${segCls} ${
-              active ? activeTextCls : "text-white/60 hover:text-white"
-            }`}
+              fullWidth ? "flex flex-1 items-center justify-center" : ""
+            } ${active ? activeTextCls : "text-white/60 hover:text-white"}`}
           >
             {active ? (
               <motion.span

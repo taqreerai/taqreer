@@ -328,7 +328,7 @@ export function SlideNavSidebar({
       {/* Slides ⇄ Comments tab — only when the parent wires a comments slot
           (the Studio editor for owner/edit/comment roles). */}
       {commentsSlot ? (
-        <div className="flex px-1 pt-3">
+        <div className="px-1 pt-3">
           <SegmentedToggle
             options={[
               { value: "slides", label: "الشرائح", icon: "grid_view" },
@@ -344,6 +344,7 @@ export function SlideNavSidebar({
             onChange={(t) => onTabChange?.(t)}
             ariaLabel="عرض الشرائح أو التعليقات"
             size="comfortable"
+            fullWidth
           />
         </div>
       ) : null}

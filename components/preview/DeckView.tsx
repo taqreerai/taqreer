@@ -3287,7 +3287,13 @@ export function DeckView({
         // tab; entering comment mode auto-selects it (effect above). The badge
         // counts the focused slide's comments.
         tab={navTab}
-        onTabChange={setNavTab}
+        // Switching to Slides also exits comment mode — the embedded panel
+        // dropped its "finish commenting" button, so the Slides tab (and
+        // clicking outside the canvas, and Esc) is how you leave.
+        onTabChange={(t) => {
+          setNavTab(t);
+          if (t === "slides") setCommentMode(false);
+        }}
         commentCount={
           comments.filter((c) => c.slideId === focusedSlide.slideId).length
         }
