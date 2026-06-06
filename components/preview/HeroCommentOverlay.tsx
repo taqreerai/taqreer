@@ -325,25 +325,6 @@ export function HeroCommentOverlay({
       style={{ zIndex: 1 }}
       onMouseDown={isInteractive ? handleStartDrag : undefined}
     >
-      {/* In-canvas "apply to AI" button — the obvious trigger for the partial
-          regen. Shows in AI comment mode once at least one AI comment exists.
-          Replaces the non-obvious toolbar morph button (user direction). */}
-      {forAi && isInteractive && onApply && comments.some((c) => c.forAi) ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onApply();
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="btn-gradient-anim pointer-events-auto absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-2xl"
-        >
-          <span className="material-symbols-outlined text-[18px]" aria-hidden>
-            auto_awesome
-          </span>
-          اضغط لتطبيق تعليقاتك بالذكاء
-        </button>
-      ) : null}
       {/* Existing pins. Hidden when their comment is being edited so
           the editor's solid anchor box doesn't double up on a pin.
           In read-only mode (`!isInteractive`) pins render as plain
@@ -393,6 +374,41 @@ export function HeroCommentOverlay({
             />
           );
         }
+        // AI comment box: the brand mesh-gradient ring (the same one as the
+        // canvas halo) for the purple "shimmer", a violet tint fill, and the
+        // apply button INSIDE the box. User comments stay orange + flat.
+        if (c.forAi) {
+          return (
+            <div
+              key={c.id}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePinClick(c);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              aria-label="تعديل تعليق الذكاء"
+              data-active="true"
+              className="canvas-gradient-border pointer-events-auto absolute flex items-end justify-center rounded-md bg-violet-500/15"
+              style={style}
+            >
+              {onApply ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onApply();
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="pointer-events-auto mb-2 rounded-full bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg transition-colors hover:bg-violet-500"
+                >
+                  تطبيق
+                </button>
+              ) : null}
+            </div>
+          );
+        }
         return (
           <button
             type="button"
@@ -414,7 +430,11 @@ export function HeroCommentOverlay({
           exist there anyway, but explicit guard reads cleaner). */}
       {isInteractive && liveBounds ? (
         <div
-          className="pointer-events-none absolute rounded-md border border-dashed border-orange-400 bg-orange-400/10"
+          className={`pointer-events-none absolute rounded-md border border-dashed ${
+            forAi
+              ? "border-violet-400 bg-violet-500/10"
+              : "border-orange-400 bg-orange-400/10"
+          }`}
           style={{
             left: liveBounds.x * scale,
             top: liveBounds.y * scale,
