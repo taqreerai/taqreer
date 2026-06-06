@@ -44,6 +44,7 @@ import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDia
 import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
 import { PreviewActionBar } from "@/components/slides/PreviewActionBar";
+import { StudioHeader } from "./StudioHeader";
 import { createClient } from "@/lib/supabase/client";
 import { cssFontFamilyName } from "@/lib/export/theme-css-vars";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
@@ -3251,19 +3252,16 @@ export function DeckView({
     >
       {fontAssets}
 
-      {/* Studio — exit to the dashboard. Floats at the top-right (RTL leading
-          edge), above the canvas + panels. */}
-      <Link
-        href="/dashboard"
-        dir="rtl"
-        aria-label="الرجوع إلى لوحة التحكم"
-        className="btn-pill fixed right-4 top-4 z-[1060] flex items-center gap-1.5 px-3.5 py-2 text-[13px] no-underline"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M9 18l6-6-6-6" />
-        </svg>
-        <span>الرجوع</span>
-      </Link>
+      {/* Studio top header — back + project title (leading/right) · Export ▾ +
+          Share (trailing/left). Replaced the standalone back pill; the document
+          chrome lives here so the bottom pill is a pure composer (§16). */}
+      <StudioHeader
+        projectId={projectId}
+        projectTitle={projectTitle}
+        manifest={exportManifest!}
+        formatFallback={initialFormat}
+        role={role}
+      />
 
       {/* Right-edge slot: SlideNavSidebar swaps for CommentsPanel
           while in comment mode. Same fixed position (against the

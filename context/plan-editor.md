@@ -622,4 +622,76 @@ iframe's `frameElement` rect; under the outer zoom it must factor the effective 
 ### Aesthetic notes (frontend-design lens, but inside our system)
 Dotted canvas for atmosphere/depth; slide as the lit focal object (soft shadow);
 floating glass panels (not chrome) so the slide owns the space; staggered 500/35
-spring entrance; Cairo + `--tq-*` only; Latin numerals in the zoom-% readout.
+spring entrance; Cairo + `--tq-*` only.
+
+## 16. Command bar + Edit⇄AI mode system — LOCKED design (2026-06-06)
+
+The editor's last big primitive. Restructures the Studio chrome around an
+**Edit ⇄ AI** mode switch. UX locked with the user; build in 7 chunks below.
+
+**Global rules (user, 2026-06-06):** NO zoom/pan (dropped — "serves nothing").
+NO button gradients — the mode toggle's active state + Generate use neutral glass
+(`--tq-bg-glass`), retiring the old "gradient AI pair" convention for these. The
+side panels (Layers left, Slides-nav right) stay floating rounded glass cards,
+DETACHED — the top header never docks them. Everything inside Cairo + `--tq-*` +
+glass + spring 500/35; reuse `SegmentedToggle`, `glass-popover`, `btn-pill`.
+
+**Harvest source:** kyh/ai-canvas `src/components/canvas/views/editor-bottom-toolbar.tsx`
+(re-clone `git clone --depth 1 https://github.com/kyh/ai-canvas /tmp/ai-canvas-study`,
+read-only, NEVER install/run). Its shape: a floating pill where **mode tabs sit at
+one end** and the **active mode's content fills the rest** — AI tab = auto-grow
+textarea + send; Design tab = a row of ghost icon buttons + dividers + Export ▾.
+We mirror that shape in our `backdrop-blur-glass` + glass border/shadow.
+
+### Where everything lives (user-decided split)
+- **Top header (NEW, full-width, detached):** project title/back on the leading
+  (right) edge; on the trailing (left) edge **Export ▾** (popover) + **Share**.
+  These two ONLY. The 4 export buttons collapse into one Export button → a
+  `glass-popover` menu (PPTX / PDF / PNG / HTML) via `useExportActions`.
+- **Bottom pill (the composer):** `[ Edit ⇄ AI toggle ]` · mode content · ‖ ·
+  shared `[ History · Lock · Save ]` cluster. (History/Lock absorbed from the
+  deleted canvas SlidePill; Save stays; Export+Share left for the header.)
+  - **Edit mode content:** `[ 💬 Comment ]` (user feedback). Element editing is
+    on-canvas via StylePill — no bar tools needed.
+  - **AI mode content:** `[ ◰ تحديد منطقة ] [ ▭ auto-grow input: اكتب تعليمات للذكاء… ▭ ]
+    [ ➤ توليد ] [ ↻ أعد تصميم الكل ]`.
+
+### Mode model
+- **editMode** stays (canEdit). NEW **studioMode: "edit" | "ai"** (the toggle).
+  commentMode becomes a sub-state of EDIT only.
+- **Edit:** manual scalpel + USER comments (threaded, persist, NEVER regen).
+  Canvas: select→StylePill, Layers panel.
+- **AI:** generative. Always-visible instruction input. Canvas: draw a region for
+  partial regen. (Layers-panel-in-AI behaviour = PARKED decision — decide at Chunk 5.)
+
+### The two comment concepts (SEPARATED — the core change)
+- **User comment (Edit):** drop a feedback pin/note. Persists, shows in the nav's
+  Comments tab. Decoupled from regen entirely (kills today's "comment = implicit
+  regen directive" coupling).
+- **AI directive (AI):** EPHEMERAL one-shot (user-chosen). Draw a region (optional)
+  + type instruction → Generate → fires partial regen of that region + clears.
+  Nothing stored. Empty input + no region + Generate = clean focused-slide regen.
+  `أعد تصميم الكل` = whole-deck regen, a VISIBLE button beside Generate (user-chosen).
+
+### Slide-nav: Slides | Comments tab (keep thumbnails as-is, add a header)
+Stop CommentsPanel REPLACING the nav. Add a header to SlideNavSidebar: an optional
+project/presence row + a `[ الشرائح | التعليقات ]` tab strip (Slides leading/right).
+Slides tab = today's grid (unchanged). Comments tab = today's CommentsPanel body
+(feedback-only). Entering Edit-comment mode auto-selects Comments. Width stays 280.
+
+### Build order (7 chunks, smallest-risk → most-coupled)
+1. **Top header** — new component; Export popover (4→1) + Share moved up, both
+   pulled out of PreviewActionBar.
+2. **Bottom pill restructure** — Edit⇄AI `SegmentedToggle`; mode content vs shared
+   `[History·Lock·Save]`; absorb History+Lock from SlidePill; DELETE the canvas pill.
+3. **Slides | Comments tab** on the nav (stop the full swap).
+4. **Decouple user comments from regen** (feedback-only).
+5. **AI composer** — always-visible input + draw-region + Generate + deck-regen.
+6. **Backend** — thread free-text instruction into single-slide regen; ephemeral
+   region+instruction partial-regen (reuse `deck-regenerate-partial.ts`).
+7. **Polish** + the parked Layers-in-AI decision + `/security-review`.
+
+### Key files
+`components/slides/PreviewActionBar.tsx` (the bottom bar — restructure), NEW
+`StudioHeader` + `ExportMenu`, `components/preview/{DeckView,SlidePill,CommentsPanel,
+SlideNavSidebar,HeroCommentOverlay}.tsx`, `lib/preview/use-export-actions.ts`.
