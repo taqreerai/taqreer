@@ -40,7 +40,6 @@ function displayLabel(node: LayerNode, isEn: boolean): string {
   }
   if (node.kind === "graphic") return isEn ? "Graphic" : "رسمة";
   if (node.kind === "gradient") return isEn ? "Gradient" : "تدرّج";
-  if (node.kind === "shape") return isEn ? "Shape" : "شكل";
   if (node.kind === "background") return isEn ? "Background" : "الخلفية";
   return node.label;
 }
@@ -183,13 +182,12 @@ export function LayersPanel({
   const bgNode: LayerNode | null = slideRoot
     ? { el: slideRoot, label: "Background", kind: "background", depth: 0 }
     : null;
-  // The background's current colour (transparent → an empty swatch). Computed in
-  // the IFRAME's view, since slideRoot lives there.
+  // The background's current colour (shown in the swatch). Computed in the
+  // IFRAME's view, since slideRoot lives there.
   const bgRgb =
     slideRoot && doc?.defaultView
       ? doc.defaultView.getComputedStyle(slideRoot).backgroundColor
       : "rgba(0, 0, 0, 0)";
-  const bgIsTransparent = /,\s*0(\.0+)?\)\s*$/.test(bgRgb) || bgRgb === "transparent";
   // Live recolour the canvas as the picker drags; persist once on close.
   const recolorBgLive = (hex: string) => {
     slideRoot?.style.setProperty("background-color", hex);
@@ -207,10 +205,10 @@ export function LayersPanel({
     <aside
       dir={isEn ? "ltr" : "rtl"}
       aria-label={isEn ? "Layers" : "الطبقات"}
-      // While dragging, drop the clip so the lifted row can float past the panel
-      // edges and stick to the cursor.
+      // Drop the clip while dragging (lifted row floats past the edges) OR while
+      // the background colour picker is open (it spills below the panel).
       className={`backdrop-blur-glass fixed z-[30] flex flex-col rounded-3xl border p-3 shadow-2xl ${
-        isDragging ? "overflow-visible" : "overflow-hidden"
+        isDragging || bgPickerOpen ? "overflow-visible" : "overflow-hidden"
       }`}
       style={{
         left: 16,
@@ -277,20 +275,16 @@ export function LayersPanel({
                     aria-label={isEn ? "Background colour" : "لون الخلفية"}
                     onClick={() => setBgPickerOpen((o) => !o)}
                     className="block h-[18px] w-[18px] rounded-full border transition-transform hover:scale-110"
-                    style={{
-                      borderColor: "var(--tq-border-glass)",
-                      // Transparent → a checker hint so the empty swatch still reads.
-                      background: bgIsTransparent
-                        ? "repeating-conic-gradient(rgba(255,255,255,0.25) 0% 25%, transparent 0% 50%) 50% / 8px 8px"
-                        : bgRgb,
-                    }}
+                    style={{ borderColor: "var(--tq-border-glass)", background: bgRgb }}
                   />
+                  {/* align="start" so the 182px popover opens RIGHTWARD into the
+                      panel from the left-edge swatch instead of off the edge. */}
                   <ColorPickerPopover
                     open={bgPickerOpen}
                     value={rgbToHex(bgRgb)}
                     onChange={recolorBgLive}
                     onClose={commitBg}
-                    align="center"
+                    align="start"
                     flipUp
                     instantExit
                     surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
@@ -405,13 +399,6 @@ function LayerIcon({ kind, active }: { kind: LayerNode["kind"]; active: boolean 
       <svg className={cls} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <circle cx="12" cy="12" r="9" />
         <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
-      </svg>
-    );
-  }
-  if (kind === "shape") {
-    return (
-      <svg className={cls} width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden>
-        <rect x="4" y="4" width="16" height="16" rx="2.5" />
       </svg>
     );
   }

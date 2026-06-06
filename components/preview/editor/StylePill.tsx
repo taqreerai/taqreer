@@ -33,23 +33,22 @@ type Props = {
   onDismiss: () => void;
 };
 
-type Kind = "text" | "image" | "svg" | "shape";
+type Kind = "text" | "image" | "svg";
 function kindOf(el: HTMLElement): Kind {
   if (el.tagName === "IMG") return "image";
   if (el.tagName.toLowerCase() === "svg" || el.closest("svg")) return "svg";
-  if (isSolidFill(el)) return "shape";
   return "text";
 }
 
-// A solid-colour decorative fill (a colour block / accent bar — the "شكل" layer):
-// no text, no img/svg, no gradient or background image — just an opaque
-// background colour. Recolours via background-color, mirroring how an SVG
-// recolours via fill. Matches lib/editor/leaves.ts's "shape" classification.
-function isSolidFill(el: HTMLElement): boolean {
+// A decorative fill — a gradient scrim, a background image, or a colour block,
+// with NO content (no text, no img/svg). These have no useful pill controls (you
+// edit a gradient/background from the Layers panel), so the pill SUPPRESSES for
+// them: selecting a تدرّج (or any fill) shows nothing on the canvas.
+function isDecorativeFill(el: HTMLElement): boolean {
   if ((el.textContent ?? "").trim() !== "") return false;
   if (el.querySelector("img, svg")) return false;
   const cs = getComputedStyle(el);
-  if (cs.backgroundImage && cs.backgroundImage !== "none") return false;
+  if (/gradient|url\(/i.test(cs.backgroundImage)) return true;
   return !isNoPaint(cs.backgroundColor);
 }
 
@@ -395,16 +394,15 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
     [target],
   );
 
-  // Recolour the selection inline (serializes into the saved HTML): an SVG's
-  // painted shapes (fill/stroke), or a solid fill's background-color.
-  const recolorPaint = useCallback(
+  // Recolour the selected graphic — inline fill/stroke on its painted shapes
+  // (serializes into the saved HTML).
+  const recolorSvg = useCallback(
     (hex: string) => {
-      if (kind === "shape") target.style.setProperty("background-color", hex);
-      else recolorSvgEl(target, hex);
+      recolorSvgEl(target, hex);
       dirty.current = true;
       force((n) => n + 1);
     },
-    [target, kind],
+    [target],
   );
 
   // Apply a picked font family (null = reset to the deck's theme font). Set the
@@ -465,6 +463,9 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   );
 
   if (!target.isConnected) return null;
+  // A decorative fill (a gradient scrim, a colour block) has no useful pill — you
+  // edit it from the Layers panel. Suppress the canvas pill entirely.
+  if (isDecorativeFill(target)) return null;
 
   const cs = getComputedStyle(target);
   const fontPx = Math.round(parseFloat(cs.fontSize) || 16);
@@ -473,12 +474,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const color = rgbToHex(cs.color);
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
-  const paintColor =
-    kind === "svg"
-      ? svgPaintHex(target)
-      : kind === "shape"
-        ? rgbToHex(cs.backgroundColor)
-        : "#000000";
+  const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
   const opacityPct = Math.round((parseFloat(cs.opacity) || 1) * 100);
   // The element's explicitly-picked Google font (from its inline style), or null
   // when it's inheriting the deck's theme font.
@@ -599,15 +595,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
           </div>
         </>
       )}
-      {/* Graphic (svg) + solid fill (shape): recolour swatch + inline opacity (no
-          ⋯ — only two controls, both fit on the pill). The swatch recolours the
-          SVG's paint or the fill's background-color. */}
-      {(kind === "svg" || kind === "shape") && (
+      {/* Graphic (svg): recolour swatch + inline opacity (no ⋯ — only two
+          controls, both fit on the pill). */}
+      {kind === "svg" && (
         <>
           <div style={{ position: "relative" }}>
             <button
               type="button"
-              aria-label={kind === "shape" ? "Fill colour" : "Graphic colour"}
+              aria-label="Graphic colour"
               onClick={() => {
                 setColorOpen((o) => !o);
                 setMoreOpen(false);
@@ -618,14 +613,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
                 height: 22,
                 borderRadius: "50%",
                 border: "1px solid var(--tq-border-glass)",
-                background: paintColor,
+                background: svgColor,
                 cursor: "pointer",
               }}
             />
             <ColorPickerPopover
               open={colorOpen}
-              value={paintColor}
-              onChange={recolorPaint}
+              value={svgColor}
+              onChange={recolorSvg}
               onClose={() => setColorOpen(false)}
               align="center"
               flipUp={popoverFlipUp}
@@ -664,11 +659,11 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
         </>
       )}
       {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
-          opacity for text; opacity/rounding for image). SVG + shape have no ⋯ —
-          their two controls (colour + opacity) live inline above. The menu hangs
+          opacity for text; opacity/rounding for image). SVG has no ⋯ — its two
+          controls (colour + opacity) live inline above. The menu hangs
           from the ⋯ button's LEFT edge and extends rightward so it clears the
           element. */}
-      {kind !== "svg" && kind !== "shape" && (
+      {kind !== "svg" && (
         <>
           <Divider />
           <div style={{ position: "relative" }}>

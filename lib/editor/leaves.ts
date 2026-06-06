@@ -80,8 +80,8 @@ export function isTextEditable(el: Element): boolean {
 export type LayerNode = {
   el: HTMLElement;
   label: string;
-  // text run · image · svg graphic · gradient fill · solid shape · the slide bg.
-  kind: "text" | "image" | "graphic" | "gradient" | "shape" | "background";
+  // text run · image · svg graphic · gradient fill · the slide bg.
+  kind: "text" | "image" | "graphic" | "gradient" | "background";
   depth: number; // always 0 — flat list, no nesting / groups
 };
 
@@ -118,7 +118,7 @@ function fillLeaf(
   const t = fillType(win.getComputedStyle(el));
   if (t === "gradient") return { label: "Gradient", kind: "gradient" };
   if (t === "image") return { label: "Image", kind: "image" };
-  if (t === "color") return { label: "Shape", kind: "shape" };
+  // Solid-colour fills (accent bars / blocks) are intentionally NOT listed.
   return null;
 }
 
