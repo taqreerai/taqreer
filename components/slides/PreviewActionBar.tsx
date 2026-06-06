@@ -1,11 +1,22 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 // Toolbar orientation → drives where each ToolButton's tooltip pops. Vertical
 // (left rail): to the right, toward content. Horizontal (Studio bottom bar):
 // above the button. Context so it doesn't have to thread through every call site.
 const ToolbarHorizontalContext = createContext(false);
+// useLayoutEffect on the client (measure before paint, no flash), useEffect on
+// the server (no-op, avoids the SSR warning).
+const useIsoLayoutEffect =
+  typeof document !== "undefined" ? useLayoutEffect : useEffect;
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
@@ -297,6 +308,17 @@ export function PreviewActionBar({
   // Export + Share moved to the StudioHeader (command-bar redesign §16) —
   // useExportActions + the ShareDialog live up there now, not in this bar.
   const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
+  // Edit⇄AI mode-content resize: the two mode contents are absolutely stacked
+  // and cross-FADE (icons fade in place, never slide), while the slot's WIDTH
+  // animates between the two contents' measured PIXEL widths via a CSS
+  // transition (px↔px IS transitionable, unlike width:auto, and it doesn't
+  // bump/glitch the way two-in-flow groups do). Measured pre-paint so there's
+  // no flash; the transition is armed only after the first measure so the slot
+  // doesn't grow-in on mount.
+  const editSlotRef = useRef<HTMLDivElement>(null);
+  const aiSlotRef = useRef<HTMLDivElement>(null);
+  const [modeWidth, setModeWidth] = useState<number>();
+  const [widthAnimatable, setWidthAnimatable] = useState(false);
 
   // Capability flags from role (Phase 15.B). Edit/owner sees all
   // mutation buttons. Comment sees only the Comment toggle (flat,
@@ -306,6 +328,22 @@ export function PreviewActionBar({
   const canComment = canEdit || role === "comment";
   // Non-editors have no AI mode — they're effectively always in "edit".
   const effectiveMode: StudioMode = canEdit ? studioMode : "edit";
+  // The AI slot shows a slide-regen button only when DeckView wires one.
+  const showSlideRegen = canEdit && !!onRegenSlide;
+
+  // Measure the active mode content (pre-paint) so the slot animates to its
+  // pixel width. Re-measures when the mode or the AI button set changes.
+  useIsoLayoutEffect(() => {
+    const el = effectiveMode === "ai" ? aiSlotRef.current : editSlotRef.current;
+    if (el) setModeWidth(el.offsetWidth);
+  }, [effectiveMode, canEdit, canComment, showSlideRegen]);
+  // Arm the width transition only AFTER the first measure (this runs post-paint,
+  // after the layout-effect above set the initial width), so the slot doesn't
+  // animate its initial width in from zero on mount. One-shot mount flag.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWidthAnimatable(true);
+  }, []);
 
   // Legacy `saveTpl` state + `showSaveForm` popover + `templateTitle`
   // input were removed 2026-05-22. The canonical "Save as template"
@@ -427,13 +465,10 @@ export function PreviewActionBar({
           header / footer borders so the toolbar reads as part of
           the same chrome family. */}
       <div
-        // Pill shape — `rounded-full` on a vertical flex column with
-        // square (36 × 36) circle children produces a stadium
-        // silhouette (curves at top + bottom edges, straight sides).
-        // Matches the "icon-only buttons live in a pill" pattern used
-        // by the design system for compact tool clusters; the bell
-        // and collapsed-sidebar icons stay rounded-rect because they
-        // host larger square chrome, not a cluster.
+        // Pill shape — `rounded-full` on a flex row of square (36 × 36) circle
+        // children → a stadium silhouette. The pill is auto-width, so it follows
+        // the mode content's animated width (below) and resizes smoothly without
+        // any layout-projection (framer `layout` doesn't animate reliably here).
         // dir=rtl so the Edit⇄AI toggle leads on the RIGHT (RTL leading edge)
         // and the rest of the cluster flows leftward from it.
         dir="rtl"
@@ -443,7 +478,7 @@ export function PreviewActionBar({
       >
         {/* Edit ⇄ AI mode toggle — owners/edit only (others have no AI mode). */}
         {canEdit ? (
-          <>
+          <div className="flex items-center gap-1">
             <SegmentedToggle
               options={[
                 { value: "edit", label: "تحرير", icon: "edit" },
@@ -455,136 +490,179 @@ export function PreviewActionBar({
               size="comfortable"
             />
             <ToolbarDivider horizontal={horizontal} />
-          </>
+          </div>
         ) : null}
-        {/* AI mode — regenerate THIS slide (the canvas pill's old action; folds
-            into the composer's Generate in Chunk 5). No gradient (§16). */}
-        {canEdit && effectiveMode === "ai" && onRegenSlide ? (
-          <ToolButton
-            icon="auto_fix_high"
-            label="أعد تصميم الشريحة"
-            onClick={onRegenSlide}
-            disabled={applying || focusedSlideLocked}
-          />
-        ) : null}
-        {/* AI mode — Regen the whole deck / apply comments. No gradient (§16). */}
-        {canEdit && effectiveMode === "ai" ? (
-          <ToolButton
-            icon={commentsArmed ? "auto_awesome" : "autorenew"}
-            label={commentsArmed ? "تطبيق التعليقات على الشرائح" : "أعد تصميم الكل"}
-            running={regen.status === "running"}
-            onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
-            disabled={applying || commentMode}
-            iconNode={
+        {/* Mode content — Edit (Comment) ↔ AI (regen pair). The two contents are
+            absolutely STACKED and cross-FADE (so the icons fade in place, never
+            slide), while the slot's WIDTH animates between their measured pixel
+            widths via a CSS transition. Only the active content is interactive;
+            no overflow-hidden, so the count-badge + hover tooltips stay visible. */}
+        {canComment ? (
+          <div
+            className="relative h-9 shrink-0"
+            style={{
+              width: modeWidth,
+              // Delayed so the outgoing icon (below) finishes its fast fade-out
+              // BEFORE the bar starts moving — no icon is ever visible mid-resize.
+              transition: widthAnimatable
+                ? "width 140ms 60ms cubic-bezier(0.16, 1, 0.3, 1)"
+                : undefined,
+            }}
+          >
+            {/* AI — regen pair. Owners/edit only. */}
+            {canEdit ? (
               <motion.div
-                animate={{ rotate: commentsArmed ? 360 : 0 }}
-                transition={{ rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }}
-                className="flex h-[18px] w-[18px] items-center justify-center"
+                ref={aiSlotRef}
+                aria-hidden={effectiveMode !== "ai"}
+                animate={{ opacity: effectiveMode === "ai" ? 1 : 0 }}
+                // Entering: delayed fade-in, AFTER the bar has resized (so it
+                // appears at its final spot, not mid-move). Leaving: quick
+                // fade-out BEFORE the resize, so it's gone before the bar moves.
+                transition={
+                  effectiveMode === "ai"
+                    ? { duration: 0.11, delay: 0.16 }
+                    : { duration: 0.07 }
+                }
+                className="absolute inset-y-0 right-0 flex items-center gap-1"
+                style={{
+                  pointerEvents: effectiveMode === "ai" ? "auto" : "none",
+                }}
               >
+                {/* Regenerate THIS slide — folds into the composer's Generate (Chunk 5). */}
+                {onRegenSlide ? (
+                  <ToolButton
+                    icon="auto_fix_high"
+                    label="أعد تصميم الشريحة"
+                    onClick={onRegenSlide}
+                    disabled={applying || focusedSlideLocked}
+                  />
+                ) : null}
+                {/* Regen the whole deck / apply comments. */}
+                <ToolButton
+                  icon={commentsArmed ? "auto_awesome" : "autorenew"}
+                  label={
+                    commentsArmed
+                      ? "تطبيق التعليقات على الشرائح"
+                      : "أعد تصميم الكل"
+                  }
+                  running={regen.status === "running"}
+                  onClick={commentsArmed ? onFirePartialRegen : handleRegenerate}
+                  disabled={applying || commentMode}
+                  iconNode={
+                    <motion.div
+                      animate={{ rotate: commentsArmed ? 360 : 0 }}
+                      transition={{
+                        rotate: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
+                      }}
+                      className="flex h-[18px] w-[18px] items-center justify-center"
+                    >
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.span
+                          key={commentsArmed ? "armed" : "idle"}
+                          initial={{ opacity: 0, scale: 0.6 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.6 }}
+                          transition={{ duration: 0.25 }}
+                          className="material-symbols-outlined text-[18px]"
+                        >
+                          {commentsArmed ? "auto_awesome" : "autorenew"}
+                        </motion.span>
+                      </AnimatePresence>
+                    </motion.div>
+                  }
+                />
+              </motion.div>
+            ) : null}
+            {/* Edit — user comments. owner/edit → `assistant` glyph; comment-only
+                → `chat_bubble_outline` (no regen path, so no AI affordance). */}
+            <motion.div
+              ref={editSlotRef}
+              aria-hidden={effectiveMode !== "edit"}
+              animate={{ opacity: effectiveMode === "edit" ? 1 : 0 }}
+              // Entering: delayed fade-in after the resize; leaving: quick
+              // fade-out before it — see the AI group above.
+              transition={
+                effectiveMode === "edit"
+                  ? { duration: 0.11, delay: 0.16 }
+                  : { duration: 0.07 }
+              }
+              className="absolute inset-y-0 right-0 flex items-center gap-1"
+              style={{
+                pointerEvents: effectiveMode === "edit" ? "auto" : "none",
+              }}
+            >
+              <ToolButton
+                icon={canEdit ? "assistant" : "chat_bubble_outline"}
+                label={
+                  focusedSlideLocked && !commentMode
+                    ? "الشريحة مقفلة — أعد فتح القفل لإضافة تعليق"
+                    : commentMode
+                      ? "إنهاء وضع التعليقات"
+                      : "إضافة تعليق"
+                }
+                iconFilled={commentMode}
+                onClick={onToggleCommentMode}
+                active={commentMode}
+                // Locked focused slide → muted + no-op, UNLESS commentMode is
+                // already on (so the user can still toggle out of it).
+                disabled={applying || (focusedSlideLocked && !commentMode)}
+                countBadge={draftCommentCount}
+              />
+            </motion.div>
+          </div>
+        ) : null}
+
+        {/* Shared cluster (§16) — divider + History + Lock + Save, visible in
+            both modes. owners/edit only (History needs onOpenHistory, Lock
+            onToggleLock). Reflows via flex as the mode content width animates. */}
+        {canEdit ? (
+          <div className="flex items-center gap-1">
+            <ToolbarDivider horizontal={horizontal} />
+            {onOpenHistory ? (
+              <ToolButton
+                icon="history"
+                label="سجل الإصدارات"
+                active={historyOpen}
+                onClick={(e) =>
+                  onOpenHistory(e.currentTarget.getBoundingClientRect())
+                }
+              />
+            ) : null}
+            {onToggleLock ? (
+              <ToolButton
+                icon={focusedSlideLocked ? "lock" : "lock_open"}
+                label={
+                  focusedSlideLocked ? "إلغاء قفل الشريحة" : "قفل الشريحة"
+                }
+                active={focusedSlideLocked}
+                iconFilled={focusedSlideLocked}
+                onClick={onToggleLock}
+              />
+            ) : null}
+            {/* Save Project. */}
+            <ToolButton
+              icon={isSaved ? "check" : "save"}
+              label={isSaved ? "محفوظ" : "حفظ المشروع"}
+              running={saveProject.status === "running"}
+              onClick={handleSaveProject}
+              active={isSaved}
+              disabled={applying || commentMode || !currentVersionId}
+              iconNode={
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.span
-                    key={commentsArmed ? "armed" : "idle"}
+                    key={isSaved ? "saved" : "unsaved"}
                     initial={{ opacity: 0, scale: 0.6 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.6 }}
                     transition={{ duration: 0.25 }}
                     className="material-symbols-outlined text-[18px]"
                   >
-                    {commentsArmed ? "auto_awesome" : "autorenew"}
+                    {isSaved ? "check" : "save"}
                   </motion.span>
                 </AnimatePresence>
-              </motion.div>
-            }
-          />
-        ) : null}
-        {/* Comment toggle. Two visual variants split by role:
-              • owner / edit → `assistant` (AI sparkles) glyph + the
-                animated `.btn-gradient-anim` ring. They have a
-                regen path; the AI pair (Regen + Comment) is the
-                editor's signature.
-              • comment-only → plain `chat_bubble_outline` glyph,
-                no gradient. They can't fire regen, so claiming the
-                AI affordance would be misleading. User direction
-                2026-05-23. */}
-        {/* Edit mode — user comments (no gradient §16). */}
-        {canComment && effectiveMode === "edit" ? (
-          <ToolButton
-            icon={canEdit ? "assistant" : "chat_bubble_outline"}
-            label={
-              focusedSlideLocked && !commentMode
-                ? "الشريحة مقفلة — أعد فتح القفل لإضافة تعليق"
-                : commentMode
-                  ? "إنهاء وضع التعليقات"
-                  : "إضافة تعليق"
-            }
-            iconFilled={commentMode}
-            onClick={onToggleCommentMode}
-            active={commentMode}
-            // Locked focused slide → button is muted + click is a
-            // no-op. EXCEPTION: when commentMode is already ON (the
-            // user entered comment mode on an unlocked slide and
-            // then navigated TO a locked one), keep the button live
-            // so they can still click it to exit comment mode. The
-            // overlay's own create-gate (in DeckView) suppresses
-            // marker drawing on the locked slide regardless.
-            disabled={applying || (focusedSlideLocked && !commentMode)}
-            countBadge={draftCommentCount}
-          />
-        ) : null}
-
-        {/* Divider — separates the mode content from the shared cluster
-            (History · Lock · Save), which is visible in both modes. */}
-        {canEdit ? <ToolbarDivider horizontal={horizontal} /> : null}
-
-        {/* Shared cluster (§16) — History + Lock, relocated off the deleted
-            canvas pill. The History button hands its own rect to the popover
-            (which flips UP from the bottom bar). */}
-        {canEdit && onOpenHistory ? (
-          <ToolButton
-            icon="history"
-            label="سجل الإصدارات"
-            active={historyOpen}
-            onClick={(e) =>
-              onOpenHistory(e.currentTarget.getBoundingClientRect())
-            }
-          />
-        ) : null}
-        {canEdit && onToggleLock ? (
-          <ToolButton
-            icon={focusedSlideLocked ? "lock" : "lock_open"}
-            label={focusedSlideLocked ? "إلغاء قفل الشريحة" : "قفل الشريحة"}
-            active={focusedSlideLocked}
-            iconFilled={focusedSlideLocked}
-            onClick={onToggleLock}
-          />
-        ) : null}
-
-        {/* ── Category 2: Persistence ───────────────────────────── */}
-        {/* Save Project — owners / edit only. Comment + view roles
-            don't pin versions. */}
-        {canEdit ? (
-          <ToolButton
-            icon={isSaved ? "check" : "save"}
-            label={isSaved ? "محفوظ" : "حفظ المشروع"}
-            running={saveProject.status === "running"}
-            onClick={handleSaveProject}
-            active={isSaved}
-            disabled={applying || commentMode || !currentVersionId}
-            iconNode={
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={isSaved ? "saved" : "unsaved"}
-                  initial={{ opacity: 0, scale: 0.6 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.6 }}
-                  transition={{ duration: 0.25 }}
-                  className="material-symbols-outlined text-[18px]"
-                >
-                  {isSaved ? "check" : "save"}
-                </motion.span>
-              </AnimatePresence>
-            }
-          />
+              }
+            />
+          </div>
         ) : null}
         {/* Export + Share moved to the StudioHeader (§16). */}
       </div>
