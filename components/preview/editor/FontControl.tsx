@@ -55,6 +55,15 @@ export function FontControl({
     const w = btnRef.current?.offsetWidth;
     if (w) setCollapsedW(w);
   }, [open, label]);
+  // The very first width (max-content → the measured integer) must SNAP in, not
+  // spring — otherwise the pill visibly shrinks a hair as it appears. Spring only
+  // kicks in for open/close after that first application has painted.
+  const [widthInited, setWidthInited] = useState(false);
+  useEffect(() => {
+    if (collapsedW == null || widthInited) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWidthInited(true);
+  }, [collapsedW, widthInited]);
 
   // Fresh query + autofocus the field each time it opens.
   useEffect(() => {
@@ -110,7 +119,7 @@ export function FontControl({
           width: collapsedW == null ? "max-content" : undefined,
         }}
         animate={collapsedW == null ? undefined : { width: open ? WIDTH : collapsedW }}
-        transition={SPRING}
+        transition={widthInited ? SPRING : { duration: 0 }}
       >
         {open ? (
           <div dir="rtl" className="flex items-center gap-1.5 px-2.5" style={{ width: WIDTH }}>
