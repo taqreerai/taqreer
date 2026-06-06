@@ -215,6 +215,10 @@
      without any hue. Propagates to .in-slide-dim + HeroComment-
      Overlay + DeckView's slide dim layer. */
   --tq-bg-dim:          rgba(12, 12, 12, 0.55);
+  /* Pre-composed 92 %-alpha of --tq-bg (#0E0E18) for the studio vignette's
+     outer stop. Composite (not `rgba(var(--tq-bg-rgb), 0.92)`) for the same
+     Safari var-in-rgba reason as --tq-bg-dim above. */
+  --tq-bg-strong:       rgba(14, 14, 24, 0.92);
 
   /* 3. Text */
   --tq-text-primary: #ffffff;
@@ -1696,7 +1700,7 @@ body {
     radial-gradient(
       ellipse 78% 78% at 50% 46%,
       transparent 52%,
-      rgba(var(--tq-bg-rgb), 0.92) 100%
+      var(--tq-bg-strong) 100%
     ),
     radial-gradient(circle, var(--tq-studio-dot) 1.2px, transparent 1.2px);
   background-size:

@@ -18,16 +18,18 @@ type Kind = "text" | "image" | "svg";
 
 const WIDTH = 232;
 
-const WEIGHTS: { value: string; label: string }[] = [
-  { value: "100", label: "Thin" },
-  { value: "200", label: "Extra Light" },
-  { value: "300", label: "Light" },
-  { value: "400", label: "Regular" },
-  { value: "500", label: "Medium" },
-  { value: "600", label: "Semi Bold" },
-  { value: "700", label: "Bold" },
-  { value: "800", label: "Extra Bold" },
-  { value: "900", label: "Black" },
+// Localized in the render via `isEn`. Symbol-based controls (transform /
+// decoration) are language-neutral, so they carry no Arabic variant.
+const WEIGHTS: { value: string; label: string; ar: string }[] = [
+  { value: "100", label: "Thin", ar: "رفيع" },
+  { value: "200", label: "Extra Light", ar: "خفيف جداً" },
+  { value: "300", label: "Light", ar: "خفيف" },
+  { value: "400", label: "Regular", ar: "عادي" },
+  { value: "500", label: "Medium", ar: "متوسط" },
+  { value: "600", label: "Semi Bold", ar: "نصف عريض" },
+  { value: "700", label: "Bold", ar: "عريض" },
+  { value: "800", label: "Extra Bold", ar: "عريض جداً" },
+  { value: "900", label: "Black", ar: "أسود" },
 ];
 
 const TRANSFORMS: { value: string; label: string }[] = [
@@ -42,10 +44,21 @@ const DECORATIONS: { value: string; label: string }[] = [
   { value: "line-through", label: "S" },
 ];
 
+// Row labels per locale (Arabic-first editor chrome).
+const ROW = {
+  weight: { en: "Weight", ar: "الوزن" },
+  line: { en: "Line", ar: "الأسطر" },
+  transform: { en: "Transform", ar: "الأحرف" },
+  decoration: { en: "Decoration", ar: "الزخرفة" },
+  opacity: { en: "Opacity", ar: "الشفافية" },
+  rounding: { en: "Rounding", ar: "التدوير" },
+} as const;
+
 export function MorePopover({
   open,
   target,
   kind,
+  isEn,
   flipUp = false,
   setStyle,
   onClose,
@@ -53,12 +66,16 @@ export function MorePopover({
   open: boolean;
   target: HTMLElement;
   kind: Kind;
+  // Deck language — Arabic-first; English labels only for an English deck.
+  isEn: boolean;
   // When the pill sits low in the viewport, open the menu UPWARD (above the
   // pill) instead of down, so it never runs off the bottom edge.
   flipUp?: boolean;
   setStyle: (prop: string, value: string) => void;
   onClose: () => void;
 }) {
+  const t = (k: keyof typeof ROW) => (isEn ? ROW[k].en : ROW[k].ar);
+  const weightOptions = WEIGHTS.map((w) => ({ value: w.value, label: isEn ? w.label : w.ar }));
   // Close on Esc only. Outside-click is intentionally NOT handled here: clicking
   // outside the pill deselects it → the pill (and this popover, which is its
   // child) unmounts together. A separate outside-click listener here used to
@@ -102,14 +119,14 @@ export function MorePopover({
     >
       {kind === "text" ? (
         <>
-          <Row label="Weight">
+          <Row label={t("weight")}>
             <Select
               value={weight}
-              options={WEIGHTS}
+              options={weightOptions}
               onChange={(v) => setStyle("font-weight", v)}
             />
           </Row>
-          <Row label="Line">
+          <Row label={t("line")}>
             <Slider
               value={lineMul}
               min={0.8}
@@ -119,21 +136,21 @@ export function MorePopover({
               onChange={(n) => setStyle("line-height", String(n))}
             />
           </Row>
-          <Row label="Transform">
+          <Row label={t("transform")}>
             <Seg
               value={transform}
               options={TRANSFORMS}
               onChange={(v) => setStyle("text-transform", v)}
             />
           </Row>
-          <Row label="Decoration">
+          <Row label={t("decoration")}>
             <Seg
               value={decoration}
               options={DECORATIONS}
               onChange={(v) => setStyle("text-decoration", v)}
             />
           </Row>
-          <Row label="Opacity">
+          <Row label={t("opacity")}>
             <Slider
               value={opacityPct}
               min={0}
@@ -147,7 +164,7 @@ export function MorePopover({
         </>
       ) : (
         <>
-          <Row label="Opacity">
+          <Row label={t("opacity")}>
             <Slider
               value={opacityPct}
               min={0}
@@ -158,7 +175,7 @@ export function MorePopover({
               onChange={(n) => setStyle("opacity", String(n / 100))}
             />
           </Row>
-          <Row label="Rounding">
+          <Row label={t("rounding")}>
             <Slider
               value={radiusPx}
               min={0}

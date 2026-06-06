@@ -3338,6 +3338,8 @@ export function DeckView({
           doc={editorDoc}
           selected={editorSelected}
           onSelect={setEditorSelected}
+          onCommit={handleSlideEdit}
+          slideId={focusedSlide.slideId}
           language={manifest!.language === "en" ? "en" : "ar"}
         />
       ) : null}
@@ -3497,6 +3499,7 @@ export function DeckView({
                 slideId={focusedSlide.slideId}
                 onCommit={handleSlideEdit}
                 onDismiss={dismissEditorSelection}
+                language={manifest!.language === "en" ? "en" : "ar"}
               />
             ) : null}
           </div>

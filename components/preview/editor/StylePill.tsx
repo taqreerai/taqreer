@@ -31,6 +31,8 @@ type Props = {
   // Clears the selection (→ unmounts the pill). Fired on a click outside the pill
   // AND outside the slide canvas (clicks inside the iframe go through SlideEditor).
   onDismiss: () => void;
+  // Deck language — drives the ⋯ inspector's localized labels (Arabic-first).
+  language?: "en" | "ar";
 };
 
 type Kind = "text" | "image" | "svg";
@@ -200,7 +202,7 @@ function Chevron({ up = false }: { up?: boolean }) {
   );
 }
 
-export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
+export function StylePill({ target, slideId, onCommit, onDismiss, language = "ar" }: Props) {
   const kind = kindOf(target);
   const pillRef = useRef<HTMLDivElement>(null);
   const [, force] = useState(0);
@@ -479,7 +481,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
   const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
-  const opacityPct = Math.round((parseFloat(cs.opacity) || 1) * 100);
+  const opacityRaw = parseFloat(cs.opacity);
+  const opacityPct = Math.round((Number.isFinite(opacityRaw) ? opacityRaw : 1) * 100);
   // The element's explicitly-picked Google font (from its inline style), or null
   // when it's inheriting the deck's theme font.
   const inlineFontFirst = (target.style.fontFamily || "")
@@ -695,6 +698,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss }: Props) {
               open={moreOpen}
               target={target}
               kind={kind}
+              isEn={language === "en"}
               flipUp={popoverFlipUp}
               setStyle={setStyle}
               onClose={() => setMoreOpen(false)}

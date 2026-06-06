@@ -138,7 +138,7 @@ export function FontControl({
           <button
             ref={btnRef}
             type="button"
-            aria-label="Font family"
+            aria-label={`Font family: ${label}`}
             onClick={() => onOpenChange(true)}
             className="flex h-full items-center gap-1 whitespace-nowrap px-2.5 text-[12px] text-white/85 transition-colors hover:text-white"
           >

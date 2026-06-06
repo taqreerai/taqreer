@@ -173,6 +173,21 @@ export function LayersPanel({
     if (section) onCommit(slideId, serializeSlideSection(section));
   };
 
+  // Keyboard reorder for the grip handle (a11y): move a layer one step toward the
+  // front (-1, ArrowUp) or back (+1, ArrowDown). Mirrors a drag — swap in `order`,
+  // then reassign z + persist. orderRef is synced first so commitOrder sees it.
+  const moveLayer = (node: LayerNode, dir: -1 | 1) => {
+    const cur = orderRef.current;
+    const i = cur.indexOf(node);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= cur.length) return;
+    const next = [...cur];
+    [next[i], next[j]] = [next[j], next[i]];
+    orderRef.current = next;
+    setOrder(next);
+    commitOrder();
+  };
+
   const isEn = language === "en";
   // The slide BACKGROUND — synthesized from the real slide root (the first tagged
   // element inside the stage), since buildLayerTree is handed the stage, not the
@@ -254,6 +269,7 @@ export function LayersPanel({
                     commitOrder();
                     setDraggingId(null);
                   }}
+                  onMove={(dir) => moveLayer(node, dir)}
                   isEn={isEn}
                 />
               );
@@ -273,7 +289,9 @@ export function LayersPanel({
                   <button
                     type="button"
                     aria-label={isEn ? "Background colour" : "لون الخلفية"}
-                    onClick={() => setBgPickerOpen((o) => !o)}
+                    // Closing via the swatch must persist too — commitBg() both
+                    // closes and serializes, else a live recolor is dropped.
+                    onClick={() => (bgPickerOpen ? commitBg() : setBgPickerOpen(true))}
                     className="block h-[18px] w-[18px] rounded-full border transition-transform hover:scale-110"
                     style={{ borderColor: "var(--tq-border-glass)", background: bgRgb }}
                   />
@@ -306,6 +324,7 @@ function LayerRow({
   onSelect,
   onDragStart,
   onDragEnd,
+  onMove,
   isEn,
 }: {
   node: LayerNode;
@@ -314,6 +333,7 @@ function LayerRow({
   onSelect: (el: HTMLElement | null) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onMove: (dir: -1 | 1) => void;
   isEn: boolean;
 }) {
   // Drag is initiated ONLY by the grip handle (dragListener off) so the rest of
@@ -361,12 +381,23 @@ function LayerRow({
           {displayLabel(node, isEn)}
         </span>
       </button>
-      {/* Grip handle (trailing edge). Appears on row hover; cursor-grab. */}
+      {/* Grip handle (trailing edge). Drag with the pointer, or focus it and use
+          ↑/↓ to reorder by keyboard (a11y). Appears on row hover OR keyboard focus. */}
       <span
         role="button"
-        aria-label={isEn ? "Reorder" : "إعادة الترتيب"}
+        tabIndex={0}
+        aria-label={isEn ? "Reorder layer (use arrow keys)" : "إعادة ترتيب الطبقة (بمفاتيح الأسهم)"}
         onPointerDown={(e) => controls.start(e)}
-        className="flex shrink-0 cursor-grab touch-none items-center px-1.5 py-2 text-white/25 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-white/60 active:cursor-grabbing"
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onMove(-1);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onMove(1);
+          }
+        }}
+        className="flex shrink-0 cursor-grab touch-none items-center rounded px-1.5 py-2 text-white/25 opacity-0 outline-none transition-opacity hover:text-white/60 focus-visible:opacity-100 focus-visible:text-white/70 focus-visible:ring-1 focus-visible:ring-white/40 group-hover/row:opacity-100 active:cursor-grabbing"
       >
         <GripIcon />
       </span>

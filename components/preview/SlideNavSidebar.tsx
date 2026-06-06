@@ -170,7 +170,9 @@ export function SlideNavSidebar({
   // the inline-end of each button that the button's `overflow-hidden`
   // ate as edge-stroke trim — the visual symptom the user kept flagging.
   const ASIDE_PADDING_PX = 12;
-  const ASIDE_BORDER_PX = 1;
+  // Flush rail has `border-l` (1px, inline-start only); the floating Studio card
+  // has a full `border` (both inline edges), so its horizontal chrome is 2px.
+  const ASIDE_BORDER_PX = floating ? 2 : 1;
   const GRID_GAP_PX = 16;
   const GRID_MARGIN_PX = 2;
   const thumbW =

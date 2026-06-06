@@ -74,6 +74,14 @@ export function SlideEditor({
   const disabledRef = useRef(disabled);
   useEffect(() => {
     disabledRef.current = disabled;
+    if (!disabled) return;
+    // Lock / regenerate flipped on mid-edit: end any open edit session too, not
+    // just block new ones. Blur the active contenteditable (its one-shot blur
+    // handler removes `contenteditable` + commits) and drop the hover box, so a
+    // locked/regenerating slide can no longer accept keystrokes.
+    place(hoverBoxRef.current, null);
+    const active = iframeRef.current?.contentDocument?.activeElement as HTMLElement | null;
+    if (active?.isContentEditable) active.blur();
   }, [disabled]);
 
   // Sanitise the slide HTML in an effect — DOMPurify needs the live window, so doing
