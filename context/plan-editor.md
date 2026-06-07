@@ -752,3 +752,23 @@ wire HeroCommentOverlay + PreviewActionBar; reuse the ~2464 /comments POST +
 `handleFirePartialRegen`), `app/globals.css` (remove `.ai-comment-box`). Latin
 numerals only; spring 500/35; `--tq-*` tokens only. Run `/security-review` after
 (touches a comment-creation path). RTL throughout.
+
+### §17 follow-ups (post-merge cleanups — not blockers, 2026-06-07)
+UX papercuts surfaced during the /simplify + review pass:
+- **Stale AI input on slide nav.** `aiInput` text lives in PreviewActionBar and is
+  NOT cleared when the focused slide changes (DeckView only clears `pendingAiBounds`).
+  Navigate away mid-type → stale text persists + region is gone. Fix: clear `aiInput`
+  on `currentSlideIndex` change — lift it into DeckView beside `pendingAiBounds`, or
+  pass a `resetKey={currentSlideIndex}` prop that clears it internally.
+- **Whole-slide AI comment has no on-slide marker.** `if (!c.boundsJson) return null`
+  in HeroCommentOverlay drops null-bounds (whole-slide) AI comments → no visual marker;
+  the regen overlay is the only feedback. Decide: render a full-slide badge, or confirm
+  the overlay is enough (whole-slide legitimately has no region to point at).
+
+Deferred quality cleanups (from /simplify, safe but behavior-touching — do with care):
+- Send button + sending spinner: reuse `ToolButton` (gradient/running props) instead of
+  the hand-rolled `btn-gradient-anim` markup in PreviewActionBar.
+- Extract the AI composer (input + chip + send) into an `AiComposer` component to slim
+  the ~750-line PreviewActionBar.
+- `.ai-marker-chip .material-symbols-outlined` 17px override → reuse the `.tq-icon-sm`
+  utility pattern (add `.tq-icon-md` if 17px is a new common size).
