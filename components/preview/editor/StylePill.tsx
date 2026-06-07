@@ -26,7 +26,12 @@ import { serializeSlideSection } from "@/lib/editor/serialize";
 import type { GenImageAspect } from "@/lib/images/slide-images";
 
 type Props = {
-  target: HTMLElement;
+  // The selection SET (plan-editor §20). Length 1 → the classic single-element
+  // pill (text / image / svg). Length > 1 → a multi-text pill: the gate below
+  // only renders when EVERY target is text, and every control applies to ALL of
+  // them (showing a "mixed" hint when their values differ). targets[0] is the
+  // primary — it anchors the pill and represents the displayed values.
+  targets: HTMLElement[];
   slideId: string;
   onCommit: (slideId: string, html: string) => void;
   // Clears the selection (→ unmounts the pill). Fired on a click outside the pill
@@ -45,6 +50,23 @@ type Props = {
     aspect: GenImageAspect;
   }) => void;
 };
+
+// Union of a list of rects (viewport coords) → the tight bounding box, or null
+// for an empty list. Drives the multi-select pill's anchor (it spans the whole
+// marquee set) while degrading to the single box for a length-1 selection.
+function unionRect(
+  rects: DOMRect[],
+): { left: number; top: number; right: number; bottom: number; width: number; height: number } | null {
+  if (!rects.length) return null;
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const r of rects) {
+    left = Math.min(left, r.left);
+    top = Math.min(top, r.top);
+    right = Math.max(right, r.right);
+    bottom = Math.max(bottom, r.bottom);
+  }
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
 
 type Kind = "text" | "image" | "svg";
 function kindOf(el: HTMLElement): Kind {
@@ -221,7 +243,14 @@ function Chevron({ up = false }: { up?: boolean }) {
   );
 }
 
-export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, language = "ar" }: Props) {
+export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage, language = "ar" }: Props) {
+  // The primary target — anchors positioning, drives single-element controls
+  // (image/svg), and supplies the DISPLAYED value for every text control. A
+  // multi-text selection still reads/writes through `targets`.
+  const target = targets[0];
+  // True multi-element selection (the marquee picked 2+). When false this is the
+  // classic single-element pill and every code path below collapses to `target`.
+  const multi = targets.length > 1;
   const kind = kindOf(target);
   const pillRef = useRef<HTMLDivElement>(null);
   const [, force] = useState(0);
@@ -251,15 +280,16 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
   const editingRef = useRef(false);
   const selectingRef = useRef(false);
 
-  // ── position: a rAF loop reads the live selection box (.tqe-sel) and writes the
-  // pill's left/top every frame, so it always tracks the current selection. ──
+  // ── position: a rAF loop reads the live selection box(es) (.tqe-sel) and writes
+  // the pill's left/top every frame, so it always tracks the current selection.
+  // For a multi-text selection it anchors over the UNION of every box. ──
   useEffect(() => {
     let raf = 0;
     // Place the pill ONCE per selection: track the element until its selection box
     // lands, then LOCK the position. Otherwise the follow-loop re-centers every
     // frame and an edit that resizes the element (the size stepper, alignment, …)
     // slides the controls out from under the cursor. Re-anchors only on a new
-    // selection — this effect re-runs on `target`, so `placed` starts false again.
+    // selection — this effect re-runs on `targets`, so `placed` starts false again.
     let placed = false;
     const tick = () => {
       const el = pillRef.current;
@@ -267,10 +297,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
       const iframeEl = (win?.frameElement as HTMLElement | null) ?? null;
       if (el && iframeEl && target.isConnected) {
         const ir = iframeEl.getBoundingClientRect();
-        const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
-        const selRect =
-          selBox && selBox.style.display !== "none" ? selBox.getBoundingClientRect() : null;
-        const box = selRect ?? target.getBoundingClientRect();
+        // Every live selection box (one per selected element). The pill anchors to
+        // their UNION so a marquee pill spans the whole set; single-select is just
+        // the one box.
+        const selBoxes = [...target.ownerDocument.querySelectorAll<HTMLElement>(".tqe-sel")].filter(
+          (b) => b.style.display !== "none",
+        );
+        const union = unionRect(selBoxes.map((b) => b.getBoundingClientRect()));
+        const box = union ?? target.getBoundingClientRect();
         const cx = ir.left + box.left + box.width / 2;
         const topY = ir.top + box.top;
         const botY = ir.top + box.bottom;
@@ -278,10 +312,10 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
         const ph = el.offsetHeight;
         // Images: the pill floats INSIDE the image at its top, with a small margin
         // (Canva-style) — images are big and a pill above them wastes space / can
-        // sit off-canvas. Everything else: ABOVE the element, flipping BELOW when
-        // it hugs the canvas top.
+        // sit off-canvas. Everything else (incl. a multi-text set): ABOVE the
+        // selection, flipping BELOW when it hugs the canvas top.
         let top: number;
-        if (kind === "image") {
+        if (kind === "image" && !multi) {
           top = topY + 12;
         } else {
           top = topY - 10 - ph;
@@ -297,20 +331,25 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
         el.style.visibility = "visible";
 
         // Selection-outline visibility. Hide while EDITING (popover open / pill
-        // pressed) so the live change is observable; ALSO hide while a selection
-        // change is in flight and until the box has actually LANDED on the current
-        // target — the selection only commits on `click`, and SlideEditor re-places
-        // the box a frame later, so the OLD element's border would otherwise flash
-        // during the mousedown→click gap. `box center inside target rect` = landed.
-        if (selBox && selRect) {
-          const tr = target.getBoundingClientRect();
-          const bcx = selRect.left + selRect.width / 2;
-          const bcy = selRect.top + selRect.height / 2;
-          const onTarget = bcx >= tr.left && bcx <= tr.right && bcy >= tr.top && bcy <= tr.bottom;
-          // Box has settled on the current target → lock the pill where it is.
+        // pressed) so the live change is observable; ALSO hide while a single
+        // selection change is in flight until the box has LANDED on the current
+        // target — the selection commits on `click`, and SlideEditor re-places the
+        // box a frame later, so the OLD element's border would otherwise flash
+        // during the mousedown→click gap. A MARQUEE set commits on mouseup (no such
+        // gap), so it's considered landed as soon as its boxes are drawn.
+        if (selBoxes.length) {
+          let onTarget = true;
+          if (!multi) {
+            const selRect = selBoxes[0].getBoundingClientRect();
+            const tr = target.getBoundingClientRect();
+            const bcx = selRect.left + selRect.width / 2;
+            const bcy = selRect.top + selRect.height / 2;
+            onTarget = bcx >= tr.left && bcx <= tr.right && bcy >= tr.top && bcy <= tr.bottom;
+          }
+          // Box(es) settled → lock the pill where it is.
           if (onTarget) placed = true;
-          selBox.style.visibility =
-            editingRef.current || selectingRef.current || !onTarget ? "hidden" : "visible";
+          const hidden = editingRef.current || selectingRef.current || !onTarget;
+          for (const b of selBoxes) b.style.visibility = hidden ? "hidden" : "visible";
         }
       }
       raf = requestAnimationFrame(tick);
@@ -318,10 +357,11 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
-      const selBox = target.ownerDocument.querySelector(".tqe-sel") as HTMLElement | null;
-      if (selBox) selBox.style.visibility = "visible";
+      for (const b of target.ownerDocument.querySelectorAll<HTMLElement>(".tqe-sel")) {
+        b.style.visibility = "visible";
+      }
     };
-  }, [target, kind]);
+  }, [target, kind, multi]);
 
   // ── Popovers open on the OPPOSITE side from the element, mirroring the pill's
   // own placement: pill ABOVE the element → open UP (above the pill); pill BELOW
@@ -365,10 +405,12 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
       setColorOpen(false);
       setMoreOpen(false);
       setFontOpen(false);
-      // Pointer down on a DIFFERENT element than the current selection → a
-      // selection change is coming (it only lands on `click`). Mark it so the
-      // outline stays hidden through the mousedown→click gap, so the OLD element's
-      // border can't flash. Cleared by this effect re-running on the target change.
+      // Single-select only: pointer down on a DIFFERENT element than the current
+      // selection → a selection change is coming (it only lands on `click`). Mark
+      // it so the outline stays hidden through the mousedown→click gap, so the OLD
+      // element's border can't flash. A MARQUEE commits on mouseup (no such gap),
+      // so the multi path skips this guard. Cleared on the target/effect re-run.
+      if (multi) return;
       const leaf = (e.target as HTMLElement | null)?.closest?.("[data-tq-cc]") ?? null;
       if (leaf !== target) selectingRef.current = true;
     };
@@ -376,6 +418,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
     // selection change, so the target-change clear won't fire) → clear here so the
     // outline isn't left stuck hidden.
     const onClick = (e: MouseEvent) => {
+      if (multi) return;
       const leaf = (e.target as HTMLElement | null)?.closest?.("[data-tq-cc]") ?? null;
       if (leaf === target) selectingRef.current = false;
     };
@@ -385,19 +428,29 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
       idoc.removeEventListener("mousedown", onDown);
       idoc.removeEventListener("click", onClick);
     };
-  }, [target]);
+  }, [target, multi]);
 
-  // ── commit ONCE on deselect/re-target (cleanup captures the OLD target). ──
+  // ── commit ONCE on deselect/re-target (cleanup captures the OLD target set).
+  // A run of tweaks across the whole selection is ONE save per affected slide: we
+  // serialize each DISTINCT section the targets belong to (a marquee lives in one
+  // slide, but dedupe defensively) and fire onCommit once for each. ──
   useEffect(() => {
-    const el = target;
+    const els = targets;
     const sid = slideId;
     return () => {
       if (!dirty.current) return;
       dirty.current = false;
-      const sec = el.closest("section");
-      if (sec && el.isConnected) onCommit(sid, serializeSlideSection(sec));
+      // Dedupe by section so two targets in the same slide don't double-save.
+      const seen = new Set<HTMLElement>();
+      for (const el of els) {
+        if (!el.isConnected) continue;
+        const sec = el.closest("section") as HTMLElement | null;
+        if (!sec || seen.has(sec)) continue;
+        seen.add(sec);
+        onCommit(sid, serializeSlideSection(sec));
+      }
     };
-  }, [target, slideId, onCommit]);
+  }, [targets, slideId, onCommit]);
 
   // (Selection-outline visibility is driven by the rAF above — it reads the box
   // every frame, so it can gate on whether the box has actually landed on the
@@ -414,13 +467,15 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
     return () => document.removeEventListener("mouseup", onUp);
   }, []);
 
+  // Apply an inline style to EVERY target (one element for single-select; the
+  // whole text set for a marquee → "apply to all").
   const setStyle = useCallback(
     (prop: string, value: string) => {
-      target.style.setProperty(prop, value);
+      for (const t of targets) t.style.setProperty(prop, value);
       dirty.current = true;
       force((n) => n + 1);
     },
-    [target],
+    [targets],
   );
 
   // Recolour the selected graphic — inline fill/stroke on its painted shapes
@@ -440,10 +495,17 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
   // render/export paths re-inject the link from `usedGoogleFonts()`.
   const onPickFont = useCallback(
     (family: string | null) => {
-      if (!family) {
-        target.style.removeProperty("font-family");
-      } else {
-        target.style.setProperty("font-family", `"${family}", sans-serif`);
+      for (const t of targets) {
+        if (!family) {
+          t.style.removeProperty("font-family");
+        } else {
+          t.style.setProperty("font-family", `"${family}", sans-serif`);
+        }
+      }
+      // Lazy-load the css2 face ONCE into the iframe (all targets share the doc)
+      // so the preview renders immediately; on save the family persists in the
+      // slide HTML and the render/export paths re-inject the link.
+      if (family) {
         const doc = target.ownerDocument;
         const id = `tq-font-${family.replace(/[^A-Za-z0-9]+/g, "-")}`;
         if (!doc.getElementById(id)) {
@@ -457,7 +519,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
       dirty.current = true;
       force((n) => n + 1);
     },
-    [target],
+    [targets, target],
   );
 
   // Replace the selected image: upload the picked file → permanent public URL →
@@ -529,9 +591,14 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
   }, [regenOpen]);
 
   if (!target.isConnected) return null;
+  // Multi-select gate (plan-editor §20): a set of 2+ elements only shows the pill
+  // when EVERY one is text — a mixed / non-text multi-selection shows NO pill. The
+  // single-element pill (length 1) is unchanged: text, image, and svg all qualify.
+  if (multi && !targets.every((t) => kindOf(t) === "text")) return null;
   // A decorative fill (a gradient scrim, a colour block) has no useful pill — you
-  // edit it from the Layers panel. Suppress the canvas pill entirely.
-  if (isDecorativeFill(target)) return null;
+  // edit it from the Layers panel. Suppress the canvas pill entirely. (Single-
+  // element only; an all-text multi-set has no decorative fills by construction.)
+  if (!multi && isDecorativeFill(target)) return null;
 
   // An AI-generated image box (vs an uploaded/replaced one) carries both
   // data-genid and a non-empty data-genimage prompt — only those can regen.
@@ -561,6 +628,27 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
   // shown on the collapsed font pill.
   const renderedFontName =
     (cs.fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "") || "الخط";
+
+  // ── "Mixed" indicators (multi-text only). Each control DISPLAYS the primary
+  // target's value; when the set's values DIFFER for that control we flag it so the
+  // UI can hint "متعدد / mixed". Single-select is never mixed. We read the same
+  // value per element that the display read above uses for `target`. ──
+  const someDiffer = (read: (el: HTMLElement) => string): boolean => {
+    if (!multi) return false;
+    const first = read(target);
+    return targets.some((t) => read(t) !== first);
+  };
+  const sizeMixed = someDiffer((el) => String(Math.round(parseFloat(getComputedStyle(el).fontSize) || 16)));
+  const boldMixed = someDiffer((el) => String((parseInt(getComputedStyle(el).fontWeight, 10) || 400) >= 600));
+  const italicMixed = someDiffer((el) => (getComputedStyle(el).fontStyle === "italic" ? "1" : "0"));
+  const colorMixed = someDiffer((el) => rgbToHex(getComputedStyle(el).color));
+  const alignMixed = someDiffer((el) => (el.style.textAlign || getComputedStyle(el).textAlign || "right"));
+  const fontMixed = someDiffer((el) => {
+    const f = (el.style.fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "");
+    return f ? (canonicalFamily(f) ?? f) : "";
+  });
+  const isEn = language === "en";
+  const mixedLabel = isEn ? "Mixed" : "متعدد";
 
   return createPortal(
     <div
@@ -603,7 +691,7 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
           {/* Font family — a pill showing the current font that morphs into a
               search over the full Google Fonts catalog. The 6px end margin
               matches the size pill / buttons' inset so the divider sits evenly. */}
-          <div style={{ marginInlineEnd: 6 }}>
+          <div style={{ marginInlineEnd: 6, display: "flex", alignItems: "center" }}>
             <FontControl
               open={fontOpen}
               onOpenChange={(o) => {
@@ -613,23 +701,35 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
                   setMoreOpen(false);
                 }
               }}
-              currentFamily={currentFontFamily}
-              label={renderedFontName}
+              currentFamily={fontMixed ? null : currentFontFamily}
+              label={fontMixed ? mixedLabel : renderedFontName}
               flipUp={popoverFlipUp}
               onPick={onPickFont}
             />
+            {fontMixed && <MixedDot label={mixedLabel} />}
           </div>
           <Divider />
           {/* Character cluster — size / bold / italic / colour, tightly spaced
               (gap 2) like the align cluster so every button sits evenly. */}
           <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
-            <Btn active={isBold} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
-              <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>
-            </Btn>
-            <Btn active={isItalic} onClick={() => setStyle("font-style", isItalic ? "normal" : "italic")} label="Italic">
-              <span style={{ fontStyle: "italic", fontWeight: 600, fontSize: 15, fontFamily: "Georgia, serif" }}>I</span>
-            </Btn>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <SizeStepper value={fontPx} onChange={(n) => setStyle("font-size", `${n}px`)} />
+              {sizeMixed && <MixedDot label={mixedLabel} />}
+            </div>
+            {/* Bold / Italic show the primary's state; a "mixed" set isn't shown as
+                uniformly active (the dot flags the divergence). */}
+            <span style={{ display: "inline-flex", alignItems: "center" }}>
+              <Btn active={isBold && !boldMixed} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
+                <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>
+              </Btn>
+              {boldMixed && <MixedDot label={mixedLabel} />}
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center" }}>
+              <Btn active={isItalic && !italicMixed} onClick={() => setStyle("font-style", isItalic ? "normal" : "italic")} label="Italic">
+                <span style={{ fontStyle: "italic", fontWeight: 600, fontSize: 15, fontFamily: "Georgia, serif" }}>I</span>
+              </Btn>
+              {italicMixed && <MixedDot label={mixedLabel} />}
+            </span>
             {/* Colour swatch centered in a 32px box so it lines up with the icon
                 buttons (was a bare 22px circle that read as misaligned). */}
             <div className="relative flex h-8 items-center justify-center px-1.5">
@@ -649,6 +749,9 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
                   border: "1px solid var(--tq-border-glass)",
                   background: color,
                   cursor: "pointer",
+                  // A mixed colour set reads as a faint dashed ring rather than a
+                  // single (misleading) swatch colour.
+                  boxShadow: colorMixed ? "0 0 0 1.5px var(--tq-violet)" : undefined,
                 }}
               />
               <ColorPickerPopover
@@ -671,10 +774,11 @@ export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, 
           <Divider />
           <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
             {aligns.map((a) => (
-              <Btn key={a} active={align === a} onClick={() => setStyle("text-align", a)} label={`Align ${a}`}>
+              <Btn key={a} active={align === a && !alignMixed} onClick={() => setStyle("text-align", a)} label={`Align ${a}`}>
                 <AlignIcon a={a} />
               </Btn>
             ))}
+            {alignMixed && <MixedDot label={mixedLabel} />}
           </div>
         </>
       )}
@@ -951,4 +1055,25 @@ function Btn({
 
 function Divider() {
   return <div style={{ width: 1, height: 22, background: "var(--tq-border-glass)" }} />;
+}
+
+// Compact "mixed" chip — a small brand-violet dot shown beside a control whose
+// values differ across a multi-text selection (the control still DISPLAYS the
+// primary's value; the dot flags that applying it would unify the set).
+function MixedDot({ label }: { label: string }) {
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      style={{
+        display: "inline-block",
+        width: 5,
+        height: 5,
+        borderRadius: "50%",
+        background: "var(--tq-violet)",
+        marginInlineStart: 3,
+        flexShrink: 0,
+      }}
+    />
+  );
 }

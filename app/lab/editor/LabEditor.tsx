@@ -150,6 +150,8 @@ export function LabEditor({ manifest }: { manifest: SlideManifest }) {
               <span style={S.dim}>click an element · dbl-click text to edit · Esc to deselect</span>
             )}
           </div>
+          {/* SlideEditor speaks the §20 multi-select SET; the lab shell stays
+              single-select, so adapt at the boundary (first element ⇄ array). */}
           <SlideEditor
             slide={slide}
             theme={manifest.theme}
@@ -158,8 +160,8 @@ export function LabEditor({ manifest }: { manifest: SlideManifest }) {
             width={dims.width}
             height={dims.height}
             scale={scale}
-            selected={selected}
-            onSelect={setSelected}
+            selected={selected ? [selected] : []}
+            onSelect={(els) => setSelected(els[0] ?? null)}
             onDocReady={setDoc}
           />
         </div>

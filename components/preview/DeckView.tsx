@@ -633,13 +633,17 @@ export function DeckView({
   // land in the editor). Mutually exclusive with commentMode: the comment overlay
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
   const editMode = canEdit;
-  const [editorSelected, setEditorSelected] = useState<HTMLElement | null>(null);
+  // The editor's selection SET (plan-editor §20 multi-select). Single-click → one
+  // element; a marquee drag → the intersected set; bg-click / slide-change → [].
+  // StylePill + LayersPanel read it; the empty array is a stable sentinel so
+  // effects/handlers can compare lengths without null-guards.
+  const [editorSelected, setEditorSelected] = useState<HTMLElement[]>([]);
   // The editor iframe's document — captured via SlideEditor.onDocReady so the
   // Studio Layers panel can build its tree from the live slide DOM.
   const [editorDoc, setEditorDoc] = useState<Document | null>(null);
   // Stable reference so StylePill's outside-click `mousedown` listener isn't
   // re-attached on every DeckView render (`setEditorSelected` is itself stable).
-  const dismissEditorSelection = useCallback(() => setEditorSelected(null), []);
+  const dismissEditorSelection = useCallback(() => setEditorSelected([]), []);
   // Bumped to force the editor iframe to rebuild from slide.html on an EXTERNAL
   // content change (restore / undo / redo). A self-save deliberately does NOT
   // bump it — the iframe already shows the user's edit, so rebuilding would wipe
@@ -1191,7 +1195,7 @@ export function DeckView({
   // it must not linger over the new slide.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEditorSelected(null);
+    setEditorSelected([]);
   }, [currentSlideIndex]);
 
 
@@ -3414,8 +3418,11 @@ export function DeckView({
         >
           <LayersPanel
             doc={editorDoc}
-            selected={editorSelected}
-            onSelect={setEditorSelected}
+            // The Layers panel is single-select by design (one row at a time).
+            // Show the sole selection, and a row click replaces the whole set
+            // with that one element.
+            selected={editorSelected.length === 1 ? editorSelected[0] : null}
+            onSelect={(el) => setEditorSelected(el ? [el] : [])}
             onCommit={handleSlideEdit}
             slideId={focusedSlide?.slideId ?? ""}
             language={
@@ -3769,6 +3776,7 @@ export function DeckView({
                 selected={editorSelected}
                 onSelect={setEditorSelected}
                 onDocReady={setEditorDoc}
+                /* selected/onSelect are now the multi-select SET (§20). */
                 onEdit={handleSlideEdit}
                 reloadKey={editorReloadKey}
                 // Locked / mid-regen / comment mode / AI mode: keep the editor
@@ -3793,9 +3801,9 @@ export function DeckView({
             {/* I2 — contextual style pill over the selected element (Edit
                 studio-mode only; suppressed while generating, in AI mode,
                 comment mode, or while the slide is regenerating / locked). */}
-            {!generating && editMode && studioMode === "edit" && !commentMode && !editingDisabled && editorSelected ? (
+            {!generating && editMode && studioMode === "edit" && !commentMode && !editingDisabled && editorSelected.length > 0 ? (
               <StylePill
-                target={editorSelected}
+                targets={editorSelected}
                 slideId={focusedSlide!.slideId}
                 onCommit={handleSlideEdit}
                 onDismiss={dismissEditorSelection}

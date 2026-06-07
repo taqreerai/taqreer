@@ -29,8 +29,11 @@ type Props = {
   width: number;
   height: number;
   scale: number;
-  selected: HTMLElement | null;
-  onSelect: (el: HTMLElement | null) => void;
+  // The current selection set. Single-click → one element; a marquee drag → the
+  // intersected set; bg-click / Esc → empty. Length-1 preserves ALL the
+  // single-select behaviour (hover, click-again-to-edit a lone text leaf).
+  selected: HTMLElement[];
+  onSelect: (els: HTMLElement[]) => void;
   onDocReady: (doc: Document | null) => void;
   // Fired when a text edit settles (blur) and actually changed the slide — the
   // parent persists it. Carries the slide's id (so a save lands on the right
@@ -53,18 +56,32 @@ export function SlideEditor({
   selected, onSelect, onDocReady, onEdit, reloadKey = 0, disabled = false,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const selBoxRef = useRef<HTMLElement | null>(null);
+  // Pool of selection boxes — one per selected element. The first is the
+  // canonical `.tqe-sel` the StylePill anchors to (single-select keeps exactly
+  // one); a marquee adds more, all sharing the same class so the rAF / pill
+  // machinery is unchanged. Created lazily in syncSelBoxes.
+  const selBoxesRef = useRef<HTMLElement[]>([]);
   const hoverBoxRef = useRef<HTMLElement | null>(null);
+  // The marquee (rubber-band) overlay box, drawn inside the iframe while dragging.
+  const marqueeBoxRef = useRef<HTMLElement | null>(null);
   // Keep the latest onSelect without re-attaching iframe listeners every render.
   const onSelectRef = useRef(onSelect);
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
-  // Latest selection, read by the (once-attached) iframe hover handler.
+  // Latest selection set, read by the (once-attached) iframe handlers.
   const selectedRef = useRef(selected);
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+  // The lone selected element when exactly ONE is selected, else null. The hover
+  // skip and the click-again-to-edit gate operate on a single element only — a
+  // marquee set (length > 1) never hovers-skips or enters text edit.
+  const soleSelected = selected.length === 1 ? selected[0] : null;
+  const soleSelectedRef = useRef<HTMLElement | null>(soleSelected);
+  useEffect(() => {
+    soleSelectedRef.current = soleSelected;
+  }, [soleSelected]);
   // Keep onEdit current without re-attaching iframe listeners.
   const onEditRef = useRef(onEdit);
   useEffect(() => {
@@ -183,6 +200,10 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   .tqe-ov{position:fixed;pointer-events:none;z-index:2147483646;box-sizing:border-box;display:none}
   .tqe-hover{border:2px solid #10B981}
   .tqe-sel{border:2px solid #15B04F}
+  /* Rubber-band marquee — a subtle brand-violet rect (--tq-violet at low opacity,
+     1px border), never a hardcoded blue. Brand RGB is mirrored here because the
+     iframe doesn't load the app stylesheet. */
+  .tqe-marquee{border:1px solid rgba(125,45,255,0.55);background:rgba(125,45,255,0.12)}
   .tqe-caret{position:fixed;width:2px;pointer-events:none;z-index:2147483646;display:none;animation:tqe-caret-blink 1.06s infinite}
   @keyframes tqe-caret-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
   [contenteditable="true"]{outline:none}
@@ -232,13 +253,20 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       // Overlay boxes (drawn inside the iframe → perfectly aligned, scale with it).
       const hover = doc.createElement("div");
       hover.className = "tqe-ov tqe-hover";
+      // The canonical first selection box (the StylePill anchors to `.tqe-sel`;
+      // single-select uses exactly this one). A marquee adds siblings via
+      // syncSelBoxes — all `.tqe-sel`, so the existing pill/rAF code is unchanged.
       const selBox = doc.createElement("div");
       selBox.className = "tqe-ov tqe-sel";
+      // The rubber-band marquee box, hidden until a drag starts.
+      const marquee = doc.createElement("div");
+      marquee.className = "tqe-ov tqe-marquee";
       const caret = doc.createElement("div");
       caret.className = "tqe-caret";
-      doc.body.append(hover, selBox, caret);
+      doc.body.append(hover, selBox, marquee, caret);
       hoverBoxRef.current = hover;
-      selBoxRef.current = selBox;
+      selBoxesRef.current = [selBox];
+      marqueeBoxRef.current = marquee;
 
       // Draw the custom caret at the collapsed selection, sized to the VISIBLE text
       // (~font-size) rather than the native caret's font-em box (which is ~2x the
@@ -279,7 +307,9 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         // overflow (e.g. a huge headline's glyphs spilling over a small label) never
         // steals the hover, and empty space hovers nothing.
         const unit = resolveHit(sec, e.clientX, e.clientY);
-        const target = unit && unit !== selectedRef.current ? unit : null;
+        // Don't hover the element that's already the lone selection (its sel box
+        // is already drawn). A marquee SET still hovers individual members.
+        const target = unit && unit !== soleSelectedRef.current ? unit : null;
         if (target === lastHover) return;
         lastHover = target;
         place(hover, target);
@@ -333,7 +363,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         // Keep the selection box wrapping the text + the custom caret tracking the
         // insertion point as the text grows/shrinks while typing (the controlled
         // `selected` doesn't change mid-edit, so its place() effect won't re-run).
-        const onInput = () => { place(selBoxRef.current, t); placeCaret(t); };
+        const onInput = () => { place(selBoxesRef.current[0] ?? null, t); placeCaret(t); };
         // selectionchange (document-level) covers caret moves from clicks + arrows.
         const onSelChange = () => placeCaret(t);
         // One-shot. Removing `contenteditable` from a FOCUSED element fires a
@@ -369,17 +399,22 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
 
       const onClick = (e: MouseEvent) => {
         if (disabledRef.current) return; // locked/regen → no selection
+        // A marquee drag JUST ended (mouseup fires a click too) — it already
+        // committed the selection set; swallow this click so it doesn't collapse
+        // it back to a single element or a deselect.
+        if (marqueeConsumedClick) { marqueeConsumedClick = false; return; }
         if ((e.target as HTMLElement | null)?.isContentEditable) return;
         const unit = resolveHit(sec, e.clientX, e.clientY);
-        if (!unit) { onSelectRef.current(null); return; } // empty / bg → deselect
+        if (!unit) { onSelectRef.current([]); return; } // empty / bg → deselect
         e.preventDefault();
-        // First click on a text leaf SELECTS it; clicking it AGAIN (now selected)
-        // drops into edit mode — like Figma/Canva. A double-click is just two clicks,
-        // so it lands in edit too (onDbl is the belt-and-braces shortcut below).
-        if (unit === selectedRef.current && isTextEditable(unit)) {
+        // First click on a text leaf SELECTS it; clicking it AGAIN (when it's the
+        // SOLE selection) drops into edit mode — like Figma/Canva. Text edit is
+        // single-element only, so a marquee set never enters edit on re-click. A
+        // double-click is just two clicks, so it lands in edit too (onDbl below).
+        if (unit === soleSelectedRef.current && isTextEditable(unit)) {
           enterEdit(unit);
         } else {
-          onSelectRef.current(unit);
+          onSelectRef.current([unit]);
         }
       };
       const onDbl = (e: MouseEvent) => {
@@ -389,6 +424,79 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         if (unit) { e.preventDefault(); enterEdit(unit); }
       };
 
+      // ── Marquee (rubber-band) multi-select. A mousedown on EMPTY canvas (no
+      // ink leaf under the cursor) arms a drag; once the pointer travels past a
+      // small threshold the marquee box appears and every [data-tq-cc] whose ink
+      // bounds intersect it is selected on mouseup. A press that never passes the
+      // threshold disarms and falls through UNTOUCHED to the single-click path. ──
+      const MARQUEE_THRESHOLD = 4; // px of travel before a drag becomes a marquee
+      let marqueeStart: { x: number; y: number } | null = null;
+      let marqueeActive = false;
+      let marqueeConsumedClick = false;
+      const drawMarquee = (x0: number, y0: number, x1: number, y1: number) => {
+        const box = marqueeBoxRef.current;
+        if (!box) return;
+        box.style.display = "block";
+        box.style.left = `${Math.min(x0, x1)}px`;
+        box.style.top = `${Math.min(y0, y1)}px`;
+        box.style.width = `${Math.abs(x1 - x0)}px`;
+        box.style.height = `${Math.abs(y1 - y0)}px`;
+      };
+      const endMarquee = () => {
+        marqueeStart = null;
+        marqueeActive = false;
+        if (marqueeBoxRef.current) marqueeBoxRef.current.style.display = "none";
+        doc.removeEventListener("mousemove", onMarqueeMove);
+        doc.removeEventListener("mouseup", onMarqueeUp);
+      };
+      const onMarqueeMove = (e: MouseEvent) => {
+        if (!marqueeStart) return;
+        const dx = e.clientX - marqueeStart.x;
+        const dy = e.clientY - marqueeStart.y;
+        if (!marqueeActive && Math.hypot(dx, dy) < MARQUEE_THRESHOLD) return;
+        marqueeActive = true;
+        place(hover, null); // drop the hover box while marqueeing
+        drawMarquee(marqueeStart.x, marqueeStart.y, e.clientX, e.clientY);
+      };
+      const onMarqueeUp = (e: MouseEvent) => {
+        const start = marqueeStart;
+        const wasActive = marqueeActive;
+        endMarquee();
+        if (!start || !wasActive) return; // never passed threshold → let click run
+        // A real marquee happened → claim the trailing click so it can't reset the
+        // selection, then collect every leaf whose ink intersects the rubber-band.
+        marqueeConsumedClick = true;
+        const rect = {
+          left: Math.min(start.x, e.clientX),
+          top: Math.min(start.y, e.clientY),
+          right: Math.max(start.x, e.clientX),
+          bottom: Math.max(start.y, e.clientY),
+        };
+        const hits: HTMLElement[] = [];
+        for (const el of sec.querySelectorAll<HTMLElement>("[data-tq-cc]")) {
+          const b = inkBounds(el);
+          if (!b) continue;
+          if (b.left <= rect.right && b.right >= rect.left &&
+              b.top <= rect.bottom && b.bottom >= rect.top) {
+            hits.push(el);
+          }
+        }
+        onSelectRef.current(hits);
+      };
+      const onMouseDown = (e: MouseEvent) => {
+        if (disabledRef.current) return; // locked/regen → no marquee
+        if (e.button !== 0) return; // primary button only
+        if ((e.target as HTMLElement | null)?.isContentEditable) return;
+        // Only start on EMPTY canvas — a press on a leaf's ink belongs to the
+        // click→select / click-again→edit path, untouched.
+        if (resolveHit(sec, e.clientX, e.clientY)) return;
+        marqueeStart = { x: e.clientX, y: e.clientY };
+        marqueeActive = false;
+        doc.addEventListener("mousemove", onMarqueeMove);
+        doc.addEventListener("mouseup", onMarqueeUp);
+      };
+
+      doc.addEventListener("mousedown", onMouseDown);
       doc.addEventListener("mousemove", onMove);
       doc.addEventListener("mouseleave", onLeave);
       doc.addEventListener("click", onClick);
@@ -419,24 +527,43 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
     );
   }, [fillScale, srcDoc]);
 
-  // Reposition the selection box whenever the controlled `selected` changes, AND
-  // keep it glued to the element through two distinct kinds of change:
+  // Reposition the selection box(es) whenever the controlled `selected` set
+  // changes — ONE `.tqe-sel` box per selected element. The pool grows/shrinks to
+  // match the set (the first box is the canonical one the StylePill anchors to).
+  // Each box stays glued to its element through two distinct kinds of change:
   //   • ResizeObserver — the element's BOX changes size (font-size bump, bold,
   //     web-font swap-in, container reflow).
   //   • MutationObserver on `style` — a text-align flip MOVES the glyphs inside
   //     an unchanged box, so it never triggers a resize. Watching the inline
   //     style attribute re-inks the box on align (and on any other pill write).
   useEffect(() => {
-    // When disabled (locked/regen) the selection box is hidden too — the editor
-    // is inert, so nothing should look selected.
-    const sel = disabled ? null : selected;
-    place(selBoxRef.current, sel);
-    if (!sel) return;
-    const replace = () => place(selBoxRef.current, sel);
+    // When disabled (locked/regen) the selection boxes are hidden too — the
+    // editor is inert, so nothing should look selected.
+    const els = disabled ? [] : selected;
+    const doc =
+      selBoxesRef.current[0]?.ownerDocument ??
+      iframeRef.current?.contentDocument ??
+      null;
+    if (!doc) return;
+    const pool = selBoxesRef.current;
+    // Grow the pool to cover every selected element.
+    while (pool.length < els.length) {
+      const extra = doc.createElement("div");
+      extra.className = "tqe-ov tqe-sel";
+      doc.body.appendChild(extra);
+      pool.push(extra);
+    }
+    // Draw/hide each box for its element (extras beyond the set are hidden, not
+    // removed — kept so box[0] is always the stable StylePill anchor).
+    pool.forEach((box, i) => place(box, els[i] ?? null));
+    if (!els.length) return;
+    const replace = () => pool.forEach((box, i) => place(box, els[i] ?? null));
     const ro = new ResizeObserver(replace);
-    ro.observe(sel);
     const mo = new MutationObserver(replace);
-    mo.observe(sel, { attributes: true, attributeFilter: ["style"] });
+    for (const el of els) {
+      ro.observe(el);
+      mo.observe(el, { attributes: true, attributeFilter: ["style"] });
+    }
     return () => {
       ro.disconnect();
       mo.disconnect();
