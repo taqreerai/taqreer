@@ -1074,8 +1074,8 @@ body {
      `overflow:hidden`; the JSX moves the clip down to the slide wrapper. */
   inset: -6px;
   border-radius: 0;
-  /* 1 px stroke, ~5 px gap (user direction). */
-  padding: 1px;
+  /* 2 px stroke, ~4 px gap (user direction). */
+  padding: 2px;
   background:
     radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
