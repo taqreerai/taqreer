@@ -1124,6 +1124,10 @@ body {
   position: relative;
   isolation: isolate;
   border-radius: 6px;
+  /* Dim scrim behind the mesh so the gradient stays legible on ANY slide
+     brightness — the element background paints below the `::after` mesh fill
+     (which sits at z-index:-1, above the background), so: dim → mesh → content. */
+  background: rgba(0, 0, 0, 0.4);
   animation:
     mx1 2.5s ease-in-out infinite alternate,
     my1 4.0s ease-in-out infinite alternate,
