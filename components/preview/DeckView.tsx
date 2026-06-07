@@ -2663,15 +2663,12 @@ export function DeckView({
   // source) so it fires on navigation; focusedSlide itself is computed after
   // the early returns below.
   useEffect(() => {
-    if (studioMode !== "ai" && pendingAiBounds !== null) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPendingAiBounds(null);
-    }
-  }, [studioMode, pendingAiBounds]);
-  useEffect(() => {
+    // setState(null) is a no-op when already null (React bails on identical
+    // value), so this needn't guard on the current value — and dropping
+    // `pendingAiBounds` from the deps stops it re-running on every draw.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingAiBounds(null);
-  }, [currentSlideIndex]);
+  }, [studioMode, currentSlideIndex]);
 
   const handleToggleCommentMode = useCallback(() => {
     setCommentMode((v) => !v);
