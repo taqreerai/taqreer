@@ -1126,8 +1126,15 @@ body {
   border-radius: 6px;
   /* Dim scrim behind the mesh so the gradient stays legible on ANY slide
      brightness — the element background paints below the `::after` mesh fill
-     (which sits at z-index:-1, above the background), so: dim → mesh → content. */
-  background: rgba(0, 0, 0, 0.4);
+     (which sits at z-index:-1, above the background), so: dim → mesh → content.
+     Radial so it's masked clear in the MIDDLE (the slide peeks through the
+     centre of the drawn region) and dims toward the edges where the gradient
+     border sits — softer than a flat block. */
+  background: radial-gradient(
+    ellipse at center,
+    transparent 30%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
   animation:
     mx1 2.5s ease-in-out infinite alternate,
     my1 4.0s ease-in-out infinite alternate,
