@@ -17,6 +17,7 @@ import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { isVisualLeaf, isTextEditable, resolveSelectable } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
+import { slideRootBackground } from "@/components/slides/SlideRenderer";
 import { buildDeckFontHead } from "@/lib/export/font-head";
 import { googleFontLinkTags } from "@/lib/editor/font-search";
 
@@ -133,6 +134,13 @@ export function SlideEditor({
   useEffect(() => {
     scaleRef.current = fillScale;
   }, [fillScale]);
+  // Slide's own root background (falls back to the deck theme) — painted on the
+  // iframe element so it doesn't flash white before the srcDoc loads (the reload
+  // FOUC). Same helper + rationale as SlideRenderer's wrapper.
+  const iframeBg = useMemo(
+    () => slideRootBackground(slide.html, theme.background),
+    [slide.html, theme.background],
+  );
   const srcDoc = useMemo(() => {
     const vars = themeToCssVars(theme) as Record<string, string>;
     const rootVars = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(";");
@@ -438,7 +446,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
           display: "block",
           width: `${dispW}px`,
           height: `${dispH}px`,
-          background: theme.background,
+          background: iframeBg,
         }}
       />
     </div>

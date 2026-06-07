@@ -36,6 +36,38 @@ type SlideRendererProps = {
   scale?: number;
 };
 
+// The renderer's FIRST paint is intentionally empty (sanitisation runs in a
+// post-mount effect — see the trust-model note at the top), so on every mount
+// the outer wrapper shows for one frame before the slide HTML lands. Painting
+// the deck `theme.background` there flashes WHITE under a dark slide in a light
+// deck — the FOUC the user saw on reload + tab-switch. Resolve the slide's OWN
+// root background from its <style> so that first frame is the slide's colour and
+// the flash vanishes. Best-effort with a safe fallback to the deck theme bg, so
+// a slide we can't parse just keeps today's behaviour (no regression).
+export function slideRootBackground(html: string, fallback: string): string {
+  const style = html.match(/<style[\s\S]*?<\/style>/i)?.[0];
+  if (!style) return fallback;
+  const vars: Record<string, string> = {};
+  // Stop at `;` OR `}` (lookahead, non-consuming) — the LAST declaration in a
+  // rule has no trailing semicolon (e.g. `.tq-canvas{--paper:#FFF}`), which a
+  // `;`-terminated pattern would miss and fall back to the deck theme.
+  for (const m of style.matchAll(/(--[\w-]+)\s*:\s*([^;{}]+?)\s*(?=[;}])/g)) {
+    vars[m[1].trim()] = m[2].trim();
+  }
+  // Root rule(s): `.tq-canvas`, `.tq-canvas.s`, `.tq-canvas.<rootclass>` (compound,
+  // NOT a descendant `.tq-canvas .x`) carrying a background. Last one wins.
+  let bg: string | null = null;
+  for (const m of style.matchAll(/\.tq-canvas(?:\.[\w-]+)*\s*\{([^}]*)\}/gi)) {
+    const decl = m[1].match(/(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/i);
+    if (!decl) continue;
+    let val = decl[1].trim();
+    const v = val.match(/var\(\s*(--[\w-]+)/);
+    if (v && vars[v[1]]) val = vars[v[1]].trim();
+    if (val && val !== "transparent" && !val.startsWith("var(")) bg = val;
+  }
+  return bg ?? fallback;
+}
+
 function SlideRendererImpl({
   slide,
   theme,
@@ -45,6 +77,13 @@ function SlideRendererImpl({
   height = 1080,
   scale = 1,
 }: SlideRendererProps) {
+  // The slide's own root background (falls back to the deck theme) — painted on
+  // the wrapper so the empty first-paint frame doesn't flash white. See
+  // slideRootBackground above.
+  const rootBg = useMemo(
+    () => slideRootBackground(slide.html, theme.background),
+    [slide.html, theme.background],
+  );
   // Shared helper returns a `Record<string, string>` so the html-document
   // export can reuse the same source of truth. Cast to CSSProperties for
   // the inline-style API — React accepts string keys prefixed with `--`.
@@ -190,7 +229,7 @@ function SlideRendererImpl({
         // the visual clip (hero canvas + thumbnail button both wrap
         // SlideRenderer in their own overflow-hidden box).
         flexShrink: 0,
-        background: theme.background,
+        background: rootBg,
       }}
     >
       <div
