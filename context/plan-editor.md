@@ -845,8 +845,11 @@ salt for "regenerate with the identical prompt" is a future add, noted at the en
   existing "Replace" button. `kindOf(target)` (~39-43) = IMG. `target` is the selected
   `HTMLElement` (passed from DeckView ~3875). The `<img>` carries `data-genid` (box id),
   `data-genimage` (the PROMPT), `data-tq-cc="1"`. Replace handler `onPickImage` (~442-469):
-  upload → POST /api/storage/upload-image → `setAttribute("src",url)` → `dirty.current=true`
-  → commit-on-deselect (`onCommit` ~368-376 serializes the slide HTML).
+  upload → POST /api/storage/upload-image → `setAttribute("src",url)` → strip the gen
+  metadata (`removeAttribute` data-genid/data-genimage/data-genrole/data-genaspect) so the
+  replaced box becomes a PLAIN image and the Regenerate button (chunk 2, gated on
+  data-genid && data-genimage) no longer shows → `dirty.current=true` → commit-on-deselect
+  (`onCommit` ~368-376 serializes the slide HTML without gen attrs).
 - **Pipeline:** `deck.image.warm` (inngest/functions/deck-image-warm.ts) generates ONE box.
   Payload `{ projectId, slideKey, box{genid, prompt, aspect, hash}, idemKey }` (~68-73).
   Emits `slide.image.ready` broadcast (~84). Client: DeckView listens → GenImageFills
