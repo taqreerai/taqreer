@@ -26,7 +26,9 @@ export function StudioHeader({
 }: {
   projectId: string;
   projectTitle: string;
-  manifest: SlideManifest;
+  // Null during the generation phase (no completed deck yet) — the bar then
+  // renders just the back button; export/share appear once the deck exists.
+  manifest: SlideManifest | null;
   formatFallback?: SlideFormat;
   role: ProjectRole;
 }) {
@@ -52,15 +54,19 @@ export function StudioHeader({
           </span>
         </Link>
 
-        {/* Trailing (left): export + share. */}
+        {/* Trailing (left): export + share — only once the deck exists. During
+            generation `manifest` is null (nothing to export/share yet), so the
+            bar shows just the back button. */}
         <div className="flex items-center gap-2">
-          <ExportMenu
-            projectId={projectId}
-            projectTitle={projectTitle}
-            manifest={manifest}
-            formatFallback={formatFallback}
-          />
-          {isOwner ? (
+          {manifest ? (
+            <ExportMenu
+              projectId={projectId}
+              projectTitle={projectTitle}
+              manifest={manifest}
+              formatFallback={formatFallback}
+            />
+          ) : null}
+          {isOwner && manifest ? (
             <button
               type="button"
               onClick={() => setShareOpen(true)}
@@ -76,7 +82,7 @@ export function StudioHeader({
         </div>
       </header>
 
-      {isOwner ? (
+      {isOwner && manifest ? (
         <ShareDialog
           open={shareOpen}
           projectId={projectId}

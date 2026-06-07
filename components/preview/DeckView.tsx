@@ -3203,6 +3203,16 @@ export function DeckView({
     const genHeroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
     return (
       <GenImageProvider value={filledImages}>
+      {/* Same top chrome as the completed editor (plan §18) so the shell doesn't
+          appear/reflow on completion. manifest=null → back button only; export +
+          share light up once the deck finishes generating. */}
+      <StudioHeader
+        projectId={projectId}
+        projectTitle={projectTitle}
+        manifest={null}
+        formatFallback={initialFormat}
+        role={role}
+      />
       <section
         // `dir={streamingDirection}` (was hardcoded "rtl") so an EN
         // deck's generating layout flows LTR — the previous hardcoded
