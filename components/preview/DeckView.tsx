@@ -2346,6 +2346,30 @@ export function DeckView({
           return;
         }
 
+        // 2b. SUPERSEDED / abandoned — `applying` pins a REAL version that is no
+        // longer the active one (the status route now reports a different,
+        // newer version). Every other terminal branch gates on `isPinned`
+        // (data.versionId === applying.versionId), so a pinned-but-superseded
+        // version can NEVER resolve through the poll and the overlay strands
+        // forever — e.g. Inngest is killed mid-regen and a later regen runs, or
+        // a peer's regen supersedes this one. Treat it as terminal and drop the
+        // overlay (the visible deck is already on the newer version; the route
+        // creates the new version row BEFORE we pin its id, so a freshly-fired
+        // regen always matches and never trips this). reported 2026-06-07.
+        if (
+          applying.versionId !== "__pending__" &&
+          typeof data.versionId === "string" &&
+          data.versionId.length > 0 &&
+          data.versionId !== applying.versionId
+        ) {
+          edbg("regen", "SUPERSEDED — pinned version no longer active, clearing", {
+            pinned: applying.versionId,
+            active: data.versionId,
+          });
+          setApplying(null);
+          return;
+        }
+
         // Update progress watermark if it advanced. Three signals
         // qualify as "the run is alive":
         //   (a) `currentSlide` ticked up — a slide closed in the stream
