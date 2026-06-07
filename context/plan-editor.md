@@ -906,3 +906,61 @@ NEW `app/api/projects/[id]/slides/[slideKey]/images/[genid]/regen/route.ts`;
 broadcast swap — mostly reuse); `inngest/functions/deck-image-warm.ts` (fire standalone — it's
 already per-box); `lib/images/store.ts` (genImageHash — reuse); `lib/images/slide-images.ts`
 (scanGenImages — src derivation, unchanged).
+
+## 20. Multi-select + multi-element editing in the studio editor (2026-06-07, fresh-session ready)
+
+Goal: drag a marquee on the editor canvas to select MULTIPLE elements; if every
+selected element is TEXT, show ONE StylePill that edits them all at once.
+
+### Verified surface (do NOT re-derive)
+- Selection is SINGLE today: `SlideEditor` (the srcdoc iframe, components/preview/
+  editor/SlideEditor.tsx) takes `selected: HTMLElement | null` + `onSelect(el|null)`
+  (~32-33). Selectable units = `[data-tq-cc="1"]` leaves (stamped by `isVisualLeaf`,
+  ~229). Click handler (~374): click a unit → `onSelect(unit)`; click an
+  already-selected TEXT leaf again → contenteditable edit. Selection overlay = a
+  `.tqe-sel` box drawn INSIDE the iframe (repositioned on the controlled `selected`,
+  ~422). Hover via `mousemove` (~392), select via `click` (~394).
+- DeckView holds `editorSelected` and renders `<StylePill target={editorSelected}>`
+  (~3417 / ~3797).
+- StylePill (components/preview/editor/StylePill.tsx): `target: HTMLElement` (~29),
+  `kindOf(target)` → Kind (~50, IMG→"image" / text leaf→"text"), edits live
+  (setAttribute/style) + `dirty.current` + `onCommit(slideId, html)` serializes the
+  slide ON DESELECT (~16). Positions over `.tqe-sel` / target rect.
+
+### Build chunks
+1. **Marquee in SlideEditor.** On `mousedown` over EMPTY canvas (target not inside a
+   `[data-tq-cc]` — the slide bg), start a rubber-band: track a rect mousedown→
+   mousemove, draw a `.tqe-marquee` box in the iframe; on `mouseup`, select every
+   `[data-tq-cc]` whose rect intersects the marquee. A mousedown that doesn't pass a
+   small drag threshold falls through to the EXISTING single-click path (don't break
+   it). Optional: shift-click to add/remove from the set.
+2. **Multi-selection state.** `onSelect(el|null)` → `onSelect(els: HTMLElement[])`
+   (single-click = `[el]`, marquee = `[..]`, bg/Esc = `[]`). DeckView
+   `editorSelected: HTMLElement[]`. Draw one `.tqe-sel` box PER selected element.
+   Keep all single-select behavior when `length === 1` (incl. click-again-to-edit a
+   lone text leaf).
+3. **StylePill → multi.** `target` → `targets: HTMLElement[]`. GATE: render the pill
+   only when `targets.length >= 1 && targets.every(t => kindOf(t) === "text")` (the
+   "all text" rule); a mixed / non-text multi-selection shows NO pill (or a disabled
+   hint). Controls (font, size, weight, italic, color, align): DISPLAY the first
+   target's value, show a "mixed" indicator when targets differ, and APPLY to ALL
+   (loop the existing per-element mutation), set `dirty`, and on deselect serialize +
+   `onCommit` every slide whose elements changed. Position the pill over the UNION
+   bounding box of the targets.
+4. **Edges.** contenteditable text-edit only when exactly ONE text leaf is selected.
+   Esc / bg-click clears the set. Locked slide / non-edit role → no marquee. Marquee
+   must not start on the pill or chrome.
+
+### Guardrails
+Extend the existing selection-overlay + StylePill machinery — don't fork. The
+serialize/commit path already exists; just loop it over the changed targets +
+dedupe by slide. Design system, RTL, Latin numerals, spring 500/35. tsc + eslint;
+UI-only → security skippable. Live-verify: marquee-select 3 text blocks → one pill →
+change size → all 3 update → deselect → reload → persists; a mixed selection shows
+no pill.
+
+### Key files
+`components/preview/editor/SlideEditor.tsx` (marquee + multi `onSelect` + per-element
+overlay), `components/preview/DeckView.tsx` (`editorSelected` → array, thread to
+StylePill), `components/preview/editor/StylePill.tsx` (`targets[]` + all-text gate +
+apply-to-all + union positioning + multi-slide commit).
