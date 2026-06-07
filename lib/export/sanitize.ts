@@ -137,7 +137,9 @@ export function sanitizeSlideHtml(html: string): string {
         rewriteRtlImagePanelSide(
           rewriteRtlMarginAutoEnd(
             rewriteRtlRowFlexOrder(
-              rewriteRtlFlexEndToFlexStart(rewriteGridAutoFlowDense(clean)),
+              rewriteRtlFlexEndToFlexStart(
+                rewriteRtlLtrNumericAlign(rewriteGridAutoFlowDense(clean)),
+              ),
             ),
           ),
         ),
@@ -224,6 +226,57 @@ function withRtlStyledElements(
       const closestDir = el.closest("[dir]");
       if (closestDir && closestDir.getAttribute("dir") !== "rtl") return;
       if (visit(el, slideRoot)) changed = true;
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// RTL rewriter — Latin-numeral blocks that left-align because of `dir="ltr"`.
+//
+// To isolate a Latin numeral (so "01" reads left-to-right, not "10"), Claude
+// puts `dir="ltr"` on the whole NUMBER BLOCK. That also flips the element's
+// default `text-align: start` to LEFT, so in an RTL slide the number sits on the
+// visual LEFT instead of the RTL start (visual RIGHT). The other rewriters can't
+// reach it — `withRtlStyledElements` deliberately OPTS OUT `dir="ltr"` subtrees.
+//
+// Fix: for a `dir="ltr"` element whose text is a bare index-style number (1-3
+// ASCII digits, nothing else) with NO explicit inline `text-align` on it OR any
+// ancestor up to the slide root, set `text-align: right` — restoring the RTL
+// start the block would have had without the dir override. Digit ORDER is
+// untouched (`dir` stays "ltr"). Any explicit inline alignment up the chain
+// (author intent, a manual left, a centred parent, an already-right root) opts
+// the number out.
+//
+// Limitation: reads INLINE text-align only — the detached parse has no CSS
+// cascade — so a number aligned by a CLASS rule isn't detected. Scoped tight
+// (bare ≤3-digit numbers) to keep that edge rare.
+function rewriteRtlLtrNumericAlign(html: string): string {
+  if (typeof window === "undefined") return html;
+  try {
+    const doc = new DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    const slideRoot = root.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    let changed = false;
+    slideRoot.querySelectorAll<HTMLElement>('[dir="ltr"]').forEach((el) => {
+      const text = (el.textContent ?? "").trim();
+      if (!/^\d{1,3}$/.test(text)) return; // bare index-style number only
+      // Opt out if any inline text-align is set on the element or an ancestor.
+      for (
+        let anc: HTMLElement | null = el;
+        anc && anc !== slideRoot.parentElement;
+        anc = anc.parentElement
+      ) {
+        if (anc.style && anc.style.textAlign) return;
+      }
+      el.style.setProperty("text-align", "right");
+      changed = true;
     });
     return changed ? root.innerHTML : html;
   } catch {
