@@ -1132,8 +1132,8 @@ body {
      border sits — softer than a flat block. */
   background: radial-gradient(
     ellipse at center,
-    transparent 30%,
-    rgba(0, 0, 0, 0.55) 100%
+    transparent 0%,
+    rgba(0, 0, 0, 0.22) 120%
   );
   animation:
     mx1 2.5s ease-in-out infinite alternate,
