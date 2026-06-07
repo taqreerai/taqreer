@@ -645,6 +645,30 @@ export function DeckView({
   // bump it — the iframe already shows the user's edit, so rebuilding would wipe
   // their place. See SlideEditor's pinned bodyHtml effect.
   const [editorReloadKey, setEditorReloadKey] = useState(0);
+  // Bump the editor reload key ONLY when the FOCUSED slide's html actually
+  // changed between the current manifest and `next`. The status poll / peer
+  // broadcasts re-fetch the whole manifest on visibility refresh or a peer's
+  // regen on ANOTHER slide; an unconditional bump there remounts the focused
+  // SlideEditor and wipes the user's selection + unsaved iframe state even
+  // though nothing on their slide moved. Reads the focused slide id from the
+  // refs (same clamp as `focusedIndex`) so it sees the latest value inside
+  // async callbacks without a stale closure. Helpers fire post-mount, so the
+  // refs are always populated by call time.
+  const bumpEditorIfFocusedChanged = useCallback((next: SlideManifest) => {
+    const prev = manifestRef.current;
+    if (!prev) return;
+    const idx = Math.min(
+      Math.max(slideIndexRef.current, 0),
+      prev.slides.length - 1,
+    );
+    const focusedId = prev.slides[idx]?.slideId;
+    if (!focusedId) return;
+    const prevHtml = prev.slides.find((s) => s.slideId === focusedId)?.html;
+    const nextHtml = next.slides.find((s) => s.slideId === focusedId)?.html;
+    // Slide gone from the new manifest (shouldn't happen) → leave the editor be.
+    if (nextHtml == null) return;
+    if (nextHtml !== prevHtml) setEditorReloadKey((k) => k + 1);
+  }, []);
   // Per-slide mutation counter. Edit (save) and restore (undo/redo) are async
   // and target the same slide; their server responses can resolve OUT OF ORDER
   // (e.g. a save in flight when the user hits ⌘Z), which would let an older
@@ -1259,12 +1283,15 @@ export function DeckView({
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) {
+              // Bump the editor reload key BEFORE the swap (reads the pre-swap
+              // manifest from the ref) and ONLY when the FOCUSED slide's html
+              // changed — a whole-manifest poll/peer refresh otherwise remounts
+              // the focused SlideEditor and drops the user's selection +
+              // unsaved iframe state on every tick. SlideEditor is pinned to
+              // slide IDENTITY (slideId), not slide.html, so a real regen
+              // (same id, new html) still needs the bump to re-read slide.html.
+              bumpEditorIfFocusedChanged(parsed.data);
               setManifestStable(parsed.data);
-              // Reload the editor iframe from the new slide.html. SlideEditor is
-              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
-              // (same id, new html) would otherwise only show after a manual
-              // refresh. Bumping reloadKey re-reads the latest slide.html now.
-              setEditorReloadKey((k) => k + 1);
             }
           }
           if (Array.isArray(data.slideStates)) {
@@ -1539,12 +1566,15 @@ export function DeckView({
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) {
+              // Bump the editor reload key BEFORE the swap (reads the pre-swap
+              // manifest from the ref) and ONLY when the FOCUSED slide's html
+              // changed — a whole-manifest poll/peer refresh otherwise remounts
+              // the focused SlideEditor and drops the user's selection +
+              // unsaved iframe state on every tick. SlideEditor is pinned to
+              // slide IDENTITY (slideId), not slide.html, so a real regen
+              // (same id, new html) still needs the bump to re-read slide.html.
+              bumpEditorIfFocusedChanged(parsed.data);
               setManifestStable(parsed.data);
-              // Reload the editor iframe from the new slide.html. SlideEditor is
-              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
-              // (same id, new html) would otherwise only show after a manual
-              // refresh. Bumping reloadKey re-reads the latest slide.html now.
-              setEditorReloadKey((k) => k + 1);
             }
           }
           if (Array.isArray(data.slideStates)) {
@@ -2059,12 +2089,15 @@ export function DeckView({
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) {
+              // Bump the editor reload key BEFORE the swap (reads the pre-swap
+              // manifest from the ref) and ONLY when the FOCUSED slide's html
+              // changed — a whole-manifest poll/peer refresh otherwise remounts
+              // the focused SlideEditor and drops the user's selection +
+              // unsaved iframe state on every tick. SlideEditor is pinned to
+              // slide IDENTITY (slideId), not slide.html, so a real regen
+              // (same id, new html) still needs the bump to re-read slide.html.
+              bumpEditorIfFocusedChanged(parsed.data);
               setManifestStable(parsed.data);
-              // Reload the editor iframe from the new slide.html. SlideEditor is
-              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
-              // (same id, new html) would otherwise only show after a manual
-              // refresh. Bumping reloadKey re-reads the latest slide.html now.
-              setEditorReloadKey((k) => k + 1);
             }
           }
           // Mirror the realtime path (which sets versionStatus on the row
@@ -2309,12 +2342,15 @@ export function DeckView({
           if (data.manifest) {
             const parsed = SlideManifestSchema.safeParse(data.manifest);
             if (parsed.success) {
+              // Bump the editor reload key BEFORE the swap (reads the pre-swap
+              // manifest from the ref) and ONLY when the FOCUSED slide's html
+              // changed — a whole-manifest poll/peer refresh otherwise remounts
+              // the focused SlideEditor and drops the user's selection +
+              // unsaved iframe state on every tick. SlideEditor is pinned to
+              // slide IDENTITY (slideId), not slide.html, so a real regen
+              // (same id, new html) still needs the bump to re-read slide.html.
+              bumpEditorIfFocusedChanged(parsed.data);
               setManifestStable(parsed.data);
-              // Reload the editor iframe from the new slide.html. SlideEditor is
-              // pinned to slide IDENTITY (slideId), not slide.html, so a regen
-              // (same id, new html) would otherwise only show after a manual
-              // refresh. Bumping reloadKey re-reads the latest slide.html now.
-              setEditorReloadKey((k) => k + 1);
             }
           }
           // Mirror the peer-broadcast handler: refresh slideStates +
@@ -2333,12 +2369,20 @@ export function DeckView({
             setSlideStates(nextStates);
             setHistoryVersions(nextVersions);
           }
-          setApplying(null);
-          // The AI comments were consumed (applied) by this regen; the user /
+          // The AI comments were consumed (applied) by THIS regen; the user /
           // collaboration comments were carried forward to the new version
           // server-side (regenerate-partial tx). Drop only the applied AI ones
           // locally so the user comments stay visible without a refresh.
-          setComments((prev) => prev.filter((c) => !c.forAi));
+          // Scope the drop to the regenerated slide set (`applying.targetSlideIds`)
+          // — a plain single-slide /regen shares this `applying` path, and an
+          // unscoped `!c.forAi` filter would wipe AI drafts on OTHER slides it
+          // never consumed. Captured `applying` here is still the pinned job
+          // (setApplying(null) only schedules the next render's state).
+          const consumedSlideIds = new Set(applying.targetSlideIds);
+          setComments((prev) =>
+            prev.filter((c) => !(c.forAi && consumedSlideIds.has(c.slideId))),
+          );
+          setApplying(null);
           setCommentMode(false);
           return;
         }

@@ -54,6 +54,7 @@ function ToolButton({
   active,
   gradient,
   iconFilled,
+  buttonProps,
 }: {
   icon: string;
   // Optional custom icon node — overrides the material-symbols icon
@@ -86,6 +87,15 @@ function ToolButton({
   // animated gradient ring. The font URL in layout.tsx loads
   // FILL@0..1 so this toggle is a no-extra-network swap.
   iconFilled?: boolean;
+  // Extra attributes spread onto the underlying <button>. Used by the
+  // History trigger to carry `data-history-trigger="true"` so
+  // HistoryPopover's outside-click handler skips the trigger
+  // (otherwise the popover closes-then-reopens on the trigger click).
+  // The `data-*` intersection lets callers pass custom data attributes,
+  // which TS's strict object-literal check rejects on a bare
+  // ButtonHTMLAttributes type (they're only inferred through JSX).
+  buttonProps?: React.ButtonHTMLAttributes<HTMLButtonElement> &
+    Record<`data-${string}`, string>;
 }) {
   const isDisabled = disabled || running;
   const tooltipHorizontal = useContext(ToolbarHorizontalContext);
@@ -113,6 +123,7 @@ function ToolButton({
     <div className="group relative">
       <button
         type="button"
+        {...buttonProps}
         onClick={onClick}
         disabled={isDisabled}
         aria-label={label}
@@ -607,7 +618,7 @@ export function PreviewActionBar({
                         placeholder={
                           hasAiRegion
                             ? "اكتب تعديلاتك للذكاء"
-                            : "حدد على منطقة للتعديل بالذكاء"
+                            : "اكتب تعديلاتك، أو حدد منطقة أولاً"
                         }
                         disabled={focusedSlideLocked}
                         className="w-[250px] bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
@@ -699,6 +710,7 @@ export function PreviewActionBar({
                 onClick={(e) =>
                   onOpenHistory(e.currentTarget.getBoundingClientRect())
                 }
+                buttonProps={{ "data-history-trigger": "true" }}
               />
             ) : null}
             {onToggleLock ? (

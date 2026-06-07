@@ -12,7 +12,6 @@ import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
-import { edbg } from "@/lib/debug/editor-debug";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
@@ -393,25 +392,6 @@ function extractSlideHtml(raw: string): string {
   return text;
 }
 
-// [editor-debug] Extract the CSS rules that size svgs / icons, WITH their full
-// selector, so a trace can distinguish a properly-scoped rule
-// (`.tq-canvas .bul svg{width:30px}`) from a bare global one (`svg{width:100%}`)
-// that bleeds onto every icon. The plain `svg{…}` regex used elsewhere strips
-// the selector and is blind to exactly this difference.
-function iconCssRules(html: string): string[] {
-  const style = (html.match(/<style[\s\S]*?<\/style>/i) ?? [""])[0];
-  const out: string[] = [];
-  const re = /([^{}]+)\{([^}]*)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(style)) !== null) {
-    const sel = m[1].trim().replace(/\s+/g, " ");
-    if (/svg|uc-ic|\bbul\b|\bic\b/i.test(sel)) {
-      out.push(`${sel} { ${m[2].trim().slice(0, 70)} }`);
-    }
-  }
-  return out;
-}
-
 type RegenPartialEvent = {
   projectId: string;
   presentationId: string;
@@ -630,22 +610,6 @@ export const deckRegeneratePartial = inngest.createFunction(
         step.run(`regen-slide-${slideId}`, async () => {
           const client = getClient();
           const userMessage = buildPartialUserMessage(source, slideId, comments);
-          // [editor-debug] What the model RECEIVES for this slide — the region
-          // box(es) it's told to change + the svg sizing rules already in the
-          // INPUT html. Compare against the OUTPUT log below to see if the model
-          // ADDS a bad `svg{width:100%}` or inherits one.
-          {
-            const inHtml =
-              source.slides.find((s) => s.slideId === slideId)?.html ?? "";
-            const slideComments = comments.filter((c) => c.slideId === slideId);
-            edbg("server:partial-regen", `INPUT slide=${slideId}`, {
-              mode: pickRegenMode(comments, slideId),
-              regions: slideComments.map((c) => c.boundsJson),
-              instructions: slideComments.map((c) => c.content),
-              // full selectors — scoped (`.bul svg{…}`) vs bare (`svg{…}`)
-              inputIconRules: iconCssRules(inHtml),
-            });
-          }
           // Mode mirrors what buildPartialUserMessage picks internally:
           // a slide with comments → apply-comments (strict preservation);
           // a slide without → redesign (variation required). Keeps the
@@ -704,12 +668,6 @@ export const deckRegeneratePartial = inngest.createFunction(
             (_m, css: string) =>
               `<style>${scopeDeckCss(unscopeDeckCss(css))}</style>`,
           );
-          // [editor-debug] icon rules AFTER the re-scope — should now carry both
-          // the compound and descendant forms for every class.
-          edbg("server:partial-regen", `OUTPUT slide=${slideId}`, {
-            outputIconRules: iconCssRules(html),
-            outputLen: html.length,
-          });
           completedSlides += 1;
           // Push the heartbeat promise into the queue (NOT fire-and-
           // forget). We don't await here — that would serialise the
