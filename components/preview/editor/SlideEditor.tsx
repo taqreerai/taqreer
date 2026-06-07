@@ -448,7 +448,15 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         if (marqueeBoxRef.current) marqueeBoxRef.current.style.display = "none";
         doc.removeEventListener("mousemove", onMarqueeMove);
         doc.removeEventListener("mouseup", onMarqueeUp);
+        window.removeEventListener("mouseup", onWindowMarqueeCancel);
       };
+      // A release OUTSIDE the iframe never reaches `doc`'s mouseup, so the
+      // marquee would otherwise stay armed and its listeners leak. The parent
+      // window only sees the up-event when the pointer left the iframe (events
+      // don't cross the frame boundary), so here we simply cancel — no
+      // cross-frame coordinate translation, and in-frame drags still finalize
+      // via `onMarqueeUp` (CodeRabbit, PR #53).
+      const onWindowMarqueeCancel = () => endMarquee();
       const onMarqueeMove = (e: MouseEvent) => {
         if (!marqueeStart) return;
         const dx = e.clientX - marqueeStart.x;
@@ -494,6 +502,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         marqueeActive = false;
         doc.addEventListener("mousemove", onMarqueeMove);
         doc.addEventListener("mouseup", onMarqueeUp);
+        window.addEventListener("mouseup", onWindowMarqueeCancel);
       };
 
       doc.addEventListener("mousedown", onMouseDown);

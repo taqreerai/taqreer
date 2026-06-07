@@ -857,6 +857,17 @@ export function DeckView({
       prompt: string;
       aspect: GenImageAspect;
     }) => {
+      // Drop the stale fill for this box immediately — matches the StylePill's
+      // optimistic `src` removal. Otherwise `exportManifest` keeps baking the
+      // OLD asset, and the iframe-sync effect below can re-inject the old `src`
+      // (re-painting the box the StylePill just blanked) on the next
+      // filledImages change. The fresh URL re-populates on `slide.image.ready`.
+      setFilledImages((prev) => {
+        if (!(input.genid in prev)) return prev;
+        const next = { ...prev };
+        delete next[input.genid];
+        return next;
+      });
       try {
         const res = await fetch(
           `/api/projects/${projectId}/slides/${encodeURIComponent(

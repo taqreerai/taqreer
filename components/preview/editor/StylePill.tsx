@@ -542,6 +542,15 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
         // srcset so the browser can't keep serving the old image.
         target.removeAttribute("srcset");
         target.setAttribute("src", data.url);
+        // Replacing an AI image with an uploaded one makes it a PLAIN image:
+        // drop the gen metadata so the §19 Regenerate button hides (it gates on
+        // data-genid + data-genimage) and the live-fill / hash-derivation paths
+        // stop targeting this box. Otherwise Regenerate would discard the user's
+        // upload and re-generate from the stale prompt (CodeRabbit, PR #53).
+        target.removeAttribute("data-genid");
+        target.removeAttribute("data-genimage");
+        target.removeAttribute("data-genrole");
+        target.removeAttribute("data-genaspect");
         dirty.current = true;
         force((n) => n + 1);
       } catch (err) {
