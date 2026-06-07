@@ -1066,13 +1066,15 @@ body {
 .canvas-gradient-border::after {
   content: '';
   position: absolute;
-  /* Just OUTSIDE the canvas — extends 1 px past every edge so the
-     mesh ring hugs the slide as a thin halo, not a band inset into
-     it. The parent must NOT have `overflow:hidden` for this to
-     render; the JSX moves the clip down to the slide wrapper. */
-  inset: -1px;
-  border-radius: inherit;
-  /* 1 px stroke (user direction). */
+  /* Floats OUTSIDE the canvas with a GAP. The ::after extends 6 px past every
+     edge; with `padding:1px` the visible 1 px ring lands at that outer edge —
+     so a 1 px stroke sitting ~5 px CLEAR of the slide. The gap keeps the thin
+     stroke on the dark editor backdrop, so it stays visible even on bright
+     slides (hugging the edge washed it out). Parent must NOT have
+     `overflow:hidden`; the JSX moves the clip down to the slide wrapper. */
+  inset: -6px;
+  border-radius: 10px;
+  /* 1 px stroke, ~5 px gap (user direction). */
   padding: 1px;
   background:
     radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
