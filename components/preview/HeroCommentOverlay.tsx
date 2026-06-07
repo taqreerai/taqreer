@@ -17,17 +17,6 @@ import { formatRelativeArabic } from "@/lib/util/relative-time";
 // opening empty editors.
 const MIN_DRAG_SIZE = 40;
 
-// Arabic quick-action prompts. Click a chip to append its `text` to
-// the textarea. Order: most-common edit → least-common.
-const QUICK_CHIPS: { label: string; text: string }[] = [
-  { label: "اجعل النص أكبر", text: "اجعل النص أكبر بحوالي 1.3× مع الحفاظ على باقي تخطيط الشريحة." },
-  { label: "اجعل النص أصغر", text: "صغّر حجم النص بحوالي 1.3×." },
-  { label: "غيّر اللون", text: "غيّر لون العنصر المحدد إلى لون أكثر تباينًا ووضوحًا من نفس اللوحة." },
-  { label: "احذف هذا", text: "احذف هذا العنصر بالكامل من الشريحة." },
-  { label: "بسّط", text: "بسّط المحتوى المرئي — عدد أقل من العناصر، مساحة بيضاء أكثر، تسلسل هرمي أوضح." },
-  { label: "أضف أيقونة", text: "أضف أيقونة SVG ذات صلة لتعزيز معنى المحتوى." },
-];
-
 type EditorState =
   | { kind: "new"; bounds: CommentBounds; content: string }
   | { kind: "existing"; commentId: string; bounds: CommentBounds; content: string }
@@ -53,7 +42,8 @@ export function HeroCommentOverlay({
   commentMode,
   onRequestCommentMode,
   forAi = false,
-  onApply,
+  pendingAiBounds = null,
+  onAiBoundsChange,
 }: {
   slideId: string;
   // ALL drafts — filtered to this slide internally so the caller
@@ -93,15 +83,20 @@ export function HeroCommentOverlay({
   // `commentMode` propagates back as `isInteractive`. Optional —
   // omitting it disables the Edit affordance in the popup.
   onRequestCommentMode?: () => void;
-  // True when the active studio mode is AI (the comment being authored feeds
-  // the model on apply). Drives the AI-specific composer copy (placeholder),
-  // drops the quick-suggestion chips (AI users write freeform instructions),
-  // and surfaces the in-canvas "apply to AI" button. §16 Chunk 4.
+  // True when the active studio mode is AI (§17). In AI mode there is NO inline
+  // composer: a finished drag reports its region up via `onAiBoundsChange`, the
+  // instruction is typed in the bottom-bar AI input, and the drawn region shows
+  // a corner-sparkle marker (not the old `.ai-comment-box`). Drag-to-draw is
+  // always armed in AI mode (the `commentMode` gate only governs Edit-mode user
+  // comments).
   forAi?: boolean;
-  // Fires the partial regen (apply AI comments). Wired to handleFirePartialRegen
-  // in DeckView; the in-canvas apply button calls it so the toolbar no longer
-  // needs the non-obvious morph button.
-  onApply?: () => void;
+  // The committed AI region (DeckView-owned). Rendered as a corner-sparkle
+  // marker while in AI mode; cleared via the bottom-bar scope chip's ✕ or on
+  // send. `null` = whole-slide (no region drawn).
+  pendingAiBounds?: CommentBounds | null;
+  // Reports a freshly-drawn AI region up to DeckView. `null` when a drag was
+  // too small (a misfired click) so it doubles as "clear the region".
+  onAiBoundsChange?: (bounds: CommentBounds | null) => void;
 }) {
   // Defaults true so the historical callers that gated the whole
   // mount on `{commentMode ? <HeroCommentOverlay /> : null}` keep
@@ -193,20 +188,33 @@ export function HeroCommentOverlay({
       );
     };
     const onUp = () => {
-      setDrag((prev) => {
-        if (!prev) return null;
-        const x = Math.min(prev.startSlide.x, prev.currentSlide.x);
-        const y = Math.min(prev.startSlide.y, prev.currentSlide.y);
-        const w = Math.abs(prev.currentSlide.x - prev.startSlide.x);
-        const h = Math.abs(prev.currentSlide.y - prev.startSlide.y);
-        if (w < MIN_DRAG_SIZE || h < MIN_DRAG_SIZE) return null;
-        setEditor({
-          kind: "new",
-          bounds: { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) },
-          content: "",
-        });
-        return null;
-      });
+      // Read the drag from the effect closure — this effect re-runs on every
+      // `drag` change (it's in the deps), so `drag` here is always the latest
+      // currentSlide. Side effects run OUTSIDE any state updater: `setEditor`
+      // would be tolerated (same component) but `onAiBoundsChange` updates
+      // DeckView, and firing a parent setState from inside our setDrag updater
+      // is a setState-during-render violation. Compute → act → clear.
+      if (!drag) return;
+      const x = Math.min(drag.startSlide.x, drag.currentSlide.x);
+      const y = Math.min(drag.startSlide.y, drag.currentSlide.y);
+      const w = Math.abs(drag.currentSlide.x - drag.startSlide.x);
+      const h = Math.abs(drag.currentSlide.y - drag.startSlide.y);
+      const tooSmall = w < MIN_DRAG_SIZE || h < MIN_DRAG_SIZE;
+      const bounds = {
+        x: Math.round(x),
+        y: Math.round(y),
+        w: Math.round(w),
+        h: Math.round(h),
+      };
+      // AI mode (§17): a finished drag scopes the region for the bottom-bar
+      // composer — report it up; a too-small drag clears the region (so a bare
+      // click on empty canvas resets to whole-slide). NO inline editor.
+      if (forAi) {
+        onAiBoundsChange?.(tooSmall ? null : bounds);
+      } else if (!tooSmall) {
+        setEditor({ kind: "new", bounds, content: "" });
+      }
+      setDrag(null);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -214,7 +222,7 @@ export function HeroCommentOverlay({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [drag, toSlideCoords]);
+  }, [drag, toSlideCoords, forAi, onAiBoundsChange]);
 
   // Pin click → open editor on an existing comment.
   const handlePinClick = (comment: CommentRow) => {
@@ -343,6 +351,13 @@ export function HeroCommentOverlay({
           width: b.w * scale,
           height: b.h * scale,
         };
+        // AI instruction region (§17): a read-only corner-sparkle marker.
+        // No editor / preview / apply affordance — the instruction lives in
+        // the bottom-bar composer and this is just the scoped box. Same
+        // treatment as the freshly-drawn pending region rendered below.
+        if (c.forAi) {
+          return <AiRegionMarker key={c.id} style={style} />;
+        }
         if (!isInteractive) {
           // Read-only marker — clickable to open the preview popup
           // (avatar / name / time / content / edit+delete). The
@@ -369,47 +384,9 @@ export function HeroCommentOverlay({
                 setPreviewState({ commentId: c.id, x: localX, y: localY });
               }}
               aria-label="عرض التعليق"
-              className={
-                c.forAi
-                  ? "ai-comment-box pointer-events-auto absolute transition-opacity hover:opacity-80"
-                  : "pointer-events-auto absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
-              }
+              className="pointer-events-auto absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
               style={style}
             />
-          );
-        }
-        // AI comment box: the brand mesh-gradient ring (the same one as the
-        // canvas halo) for the purple "shimmer", a violet tint fill, and the
-        // apply button INSIDE the box. User comments stay orange + flat.
-        if (c.forAi) {
-          return (
-            <div
-              key={c.id}
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePinClick(c);
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              aria-label="تعديل تعليق الذكاء"
-              className="ai-comment-box pointer-events-auto absolute flex items-center justify-center"
-              style={style}
-            >
-              {onApply ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onApply();
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  className="pointer-events-auto rounded-full bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg transition-colors hover:bg-violet-500"
-                >
-                  تطبيق
-                </button>
-              ) : null}
-            </div>
           );
         }
         return (
@@ -428,36 +405,59 @@ export function HeroCommentOverlay({
         );
       })}
 
-      {/* Live drag rect — dashed while the user is dragging.
-          Skipped entirely in read-only mode (no drag state can
-          exist there anyway, but explicit guard reads cleaner). */}
-      {isInteractive && liveBounds ? (
-        <div
-          className={`pointer-events-none absolute rounded-md border border-dashed ${
-            forAi
-              ? "border-violet-400 bg-violet-500/10"
-              : "border-orange-400 bg-orange-400/10"
-          }`}
+      {/* Committed AI region (§17) — the drawn-but-not-yet-sent box that the
+          bottom-bar composer will scope its instruction to. Dims everything
+          outside it (spotlight). Rendered only in AI mode; cleared via the
+          scope chip's ✕ or on send. Hidden WHILE dragging (the live rect below
+          owns the dim then) so the two spotlights never stack. */}
+      {forAi && pendingAiBounds && !drag ? (
+        <AiRegionMarker
+          dim
           style={{
-            left: liveBounds.x * scale,
-            top: liveBounds.y * scale,
-            width: liveBounds.w * scale,
-            height: liveBounds.h * scale,
+            left: pendingAiBounds.x * scale,
+            top: pendingAiBounds.y * scale,
+            width: pendingAiBounds.w * scale,
+            height: pendingAiBounds.h * scale,
           }}
         />
       ) : null}
 
-      {/* Editor anchor rect — solid box around the active editor.
-          Same guard as the drag rect — `editor` state can't be set
-          in read-only mode but the explicit check makes intent
-          obvious. */}
+      {/* Live drag rect — dashed while the user is dragging. In AI mode it
+          carries the corner sparkle so the region reads as "AI scope" the
+          moment it starts growing (§17 drawing state). Skipped entirely in
+          read-only mode (no drag state can exist there anyway, but explicit
+          guard reads cleaner). */}
+      {isInteractive && liveBounds ? (
+        forAi ? (
+          <AiRegionMarker
+            dashed
+            dim
+            style={{
+              left: liveBounds.x * scale,
+              top: liveBounds.y * scale,
+              width: liveBounds.w * scale,
+              height: liveBounds.h * scale,
+            }}
+          />
+        ) : (
+          <div
+            className="pointer-events-none absolute rounded-md border border-dashed border-orange-400 bg-orange-400/10"
+            style={{
+              left: liveBounds.x * scale,
+              top: liveBounds.y * scale,
+              width: liveBounds.w * scale,
+              height: liveBounds.h * scale,
+            }}
+          />
+        )
+      ) : null}
+
+      {/* Editor anchor rect — solid box around the active editor. Edit-mode
+          (user comments) only now: AI mode never opens the editor (§17), so
+          this is always the orange user-comment box. */}
       {isInteractive && editor ? (
         <div
-          className={
-            forAi
-              ? "ai-comment-box pointer-events-none absolute"
-              : "pointer-events-none absolute rounded-md border border-orange-400 bg-orange-400/15"
-          }
+          className="pointer-events-none absolute rounded-md border border-orange-400 bg-orange-400/15"
           style={{
             left: editor.bounds.x * scale,
             top: editor.bounds.y * scale,
@@ -489,7 +489,6 @@ export function HeroCommentOverlay({
             canvasW={canvasW}
             canvasH={canvasH}
             direction={direction}
-            forAi={forAi}
             error={editorError}
             onContentChange={(content) => {
               if (editorError) setEditorError(null);
@@ -572,6 +571,48 @@ export function HeroCommentOverlay({
   );
 }
 
+// AI region marker (§17) — the scoped box for a bottom-bar AI instruction.
+// A clean light frame + a glass `auto_awesome` sparkle chip pinned to the
+// top-trailing corner (the overlay is `dir="ltr"`, so `-top/-right` = visual
+// top-right). `dim` paints a spotlight: a massive spread box-shadow darkens
+// everything OUTSIDE the box — clipped to the overlay's `overflow-hidden`,
+// i.e. the canvas — leaving the selected region clear (the crop-tool look).
+// Uses `var(--tq-bg-dim)` (the same scrim the regen overlay uses) so the dim
+// reads consistently on any slide background. `dashed` marks the live drag.
+// Purely visual: `pointer-events-none` so it never blocks a re-draw.
+function AiRegionMarker({
+  style,
+  dashed,
+  dim,
+}: {
+  style: React.CSSProperties;
+  dashed?: boolean;
+  dim?: boolean;
+}) {
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none absolute rounded-[6px] border-[1.5px] ${
+        dashed ? "border-dashed" : ""
+      }`}
+      style={{
+        ...style,
+        borderColor: "var(--tq-violet)",
+        boxShadow: dim ? "0 0 0 9999px var(--tq-bg-dim)" : undefined,
+      }}
+    >
+      <span className="ai-marker-chip absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full shadow-lg">
+        {/* Size owned by `.ai-marker-chip .material-symbols-outlined` in
+            globals.css — a Tailwind text-[…] utility loses to the font's own
+            24px rule. */}
+        <span className="material-symbols-outlined leading-none text-white">
+          magic_button
+        </span>
+      </span>
+    </div>
+  );
+}
+
 // Glass icon button — same neutral surface language as the toolbar.
 // `loading` swaps the icon for a spinner AND disables the click —
 // universal pattern for "anything that writes to the database shows
@@ -626,9 +667,11 @@ function GlassIconButton({
   );
 }
 
-// Floating editor — textarea + quick chips + save/cancel/delete.
-// Positioned just BELOW the bounds; flips ABOVE if clipping the
-// hero's bottom edge. Width is fixed (360 px in hero-space) so the
+// Floating editor — textarea + save/cancel/delete. Edit-mode (user /
+// collaboration) comments ONLY: AI instructions are authored in the bottom-bar
+// composer now (§17), so this popover no longer carries the AI placeholder or
+// the quick-suggestion chips. Positioned just BELOW the bounds; flips ABOVE if
+// clipping the hero's bottom edge. Width is fixed (360 px in hero-space) so the
 // popover doesn't change shape based on the drag-box size.
 function CommentEditor({
   editor,
@@ -646,7 +689,6 @@ function CommentEditor({
   error,
   saving,
   deleting,
-  forAi,
 }: {
   editor: NonNullable<EditorState>;
   scale: number;
@@ -665,7 +707,6 @@ function CommentEditor({
   // as "nothing happened" and double-fires.
   saving?: boolean;
   deleting?: boolean;
-  forAi: boolean;
 }) {
   const POPOVER_W = 360;
   const POPOVER_GAP = 8;
@@ -689,13 +730,6 @@ function CommentEditor({
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
-
-  const appendChip = (text: string) => {
-    const current = editor.content.trim();
-    const next = current ? `${current} ${text}` : text;
-    onContentChange(next);
-    textareaRef.current?.focus();
-  };
 
   return (
     <div
@@ -743,25 +777,6 @@ function CommentEditor({
           {error}
         </div>
       ) : null}
-      {/* Quick-suggestion chips: AI comments only (instructions to the model).
-          User / collaboration comments are freeform notes — no chips. */}
-      {forAi ? (
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {QUICK_CHIPS.map((chip) => (
-          <button
-            type="button"
-            key={chip.label}
-            onClick={() => appendChip(chip.text)}
-            style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
-            }}
-            className="backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-full border border-white/15 px-2.5 py-1 text-xs text-white/60 transition-colors hover:border-white/40 hover:text-white"
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
-      ) : null}
       <textarea
         ref={textareaRef}
         value={editor.content}
@@ -776,7 +791,7 @@ function CommentEditor({
           }
         }}
         rows={3}
-        placeholder={forAi ? "اكتب تغييراتك للذكاء" : "اكتب تعليقك هنا..."}
+        placeholder="اكتب تعليقك هنا..."
         style={{
           background: "rgba(255, 255, 255, var(--glass-opacity))",
           borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",

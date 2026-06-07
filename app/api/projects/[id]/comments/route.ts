@@ -30,7 +30,12 @@ const CreateCommentSchema = z.object({
   // `.min(1)` lets all-space strings through and persists effectively
   // empty comments — they look like ghosts on the slide.
   content: z.string().trim().min(1).max(2000),
-  boundsJson: BoundsSchema,
+  // Nullable: a `null` region means a whole-slide comment (no drawn box).
+  // The AI composer (§17) sends `null` when the user types an instruction
+  // without first dragging a region on the canvas; the partial-regen worker
+  // renders null bounds as "Whole-slide comment". User (Edit-mode) comments
+  // always carry a drawn box, so this only relaxes the AI-instruction path.
+  boundsJson: BoundsSchema.nullable(),
   // True = AI instruction (created in AI mode → fed to the model on
   // partial regen). False/omitted = normal collaboration comment that
   // never reaches Claude. Optional for back-compat with older clients.

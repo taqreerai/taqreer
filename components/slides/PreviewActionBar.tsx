@@ -231,11 +231,12 @@ export function PreviewActionBar({
   commentMode,
   onToggleCommentMode,
   draftCommentCount,
-  aiCommentCount,
   focusedSlideLocked,
   onOpenHistory,
   onToggleLock,
   onRegenSlide,
+  hasAiRegion,
+  onAiSubmit,
   historyOpen,
   applying,
   currentVersionId,
@@ -259,10 +260,9 @@ export function PreviewActionBar({
   commentMode: boolean;
   onToggleCommentMode: () => void;
   // User (collaboration) comment count — badges the Edit-mode Comment
-  // button. AI comments are counted separately by `aiCommentCount`.
+  // button. AI comments are ephemeral (§17 — created on send, cleared on
+  // regen completion) so they no longer carry a persistent count badge.
   draftCommentCount: number;
-  // AI-comment (forAi) draft count — badges the AI-mode comment button.
-  aiCommentCount: number;
   // True when the currently-focused slide is locked. Disables the
   // Comment button entry-point — a locked slide refuses new comment
   // markers (server enforces with 423, overlay suppresses click-to-
@@ -283,6 +283,14 @@ export function PreviewActionBar({
   onOpenHistory?: (rect: DOMRect) => void;
   onToggleLock?: () => void;
   onRegenSlide?: () => void;
+  // AI composer (§17) — the persistent bottom-bar instruction input. The user
+  // scopes a region by dragging on the canvas (its on-canvas marker is the
+  // only indicator now); submitting hands the typed instruction to `onAiSubmit`,
+  // which creates the forAi comment + fires the partial regen. `hasAiRegion`
+  // (a region is drawn) only flips the placeholder copy from "select a region"
+  // to "write your edits".
+  hasAiRegion?: boolean;
+  onAiSubmit?: (text: string) => Promise<void> | void;
   historyOpen?: boolean;
   // Partial regen in flight. Locks the toolbar buttons so the user
   // can't kick off a second job while one is running.
@@ -320,6 +328,34 @@ export function PreviewActionBar({
   const aiSlotRef = useRef<HTMLDivElement>(null);
   const [modeWidth, setModeWidth] = useState<number>();
   const [widthAnimatable, setWidthAnimatable] = useState(false);
+
+  // AI composer (§17) — the bottom-bar instruction input. Local text state;
+  // `aiSending` covers the brief POST window before `applying` (the optimistic
+  // partial-regen flag) takes over, so the busy treatment never flickers off
+  // between the two. `aiBusy` drives the "يُطبّق…" collapse.
+  const [aiInput, setAiInput] = useState("");
+  const [aiSending, setAiSending] = useState(false);
+  // True only while the mode-content width is mid-spring. Drives `overflow-x:
+  // clip` so the active content REVEALS (expands open) as the slot grows; at
+  // rest we revert to `visible` so the count-badge + tooltips aren't clipped.
+  const [widthAnimating, setWidthAnimating] = useState(false);
+  const aiBusy = applying || aiSending;
+  const handleAiSend = async () => {
+    const text = aiInput.trim();
+    if (!text || aiBusy || !onAiSubmit) return;
+    setAiSending(true);
+    try {
+      await onAiSubmit(text);
+      // Clear only on success; a thrown submit keeps the text so the user can
+      // retry without re-typing. DeckView's optimistic `applying` keeps the
+      // bar busy from here until the regen settles.
+      setAiInput("");
+    } catch (err) {
+      console.error("AI submit failed", err);
+    } finally {
+      setAiSending(false);
+    }
+  };
 
   // Capability flags from role (Phase 15.B). Edit/owner sees all
   // mutation buttons. Comment sees only the Comment toggle (flat,
@@ -493,63 +529,105 @@ export function PreviewActionBar({
             <ToolbarDivider horizontal={horizontal} />
           </div>
         ) : null}
-        {/* Mode content — Edit (Comment) ↔ AI (regen pair). The two contents are
-            absolutely STACKED and cross-FADE (so the icons fade in place, never
-            slide), while the slot's WIDTH animates between their measured pixel
-            widths via a CSS transition. Only the active content is interactive;
-            no overflow-hidden, so the count-badge + hover tooltips stay visible. */}
+        {/* Mode content — Edit (Comment) ↔ AI (composer). The two contents are
+            absolutely STACKED and right-anchored; the slot's WIDTH springs
+            between their measured pixel widths (spring 500/35, the design-
+            system motion). `overflow-x: clip` makes the active content REVEAL
+            as the slot widens — it expands open from the leading (right) edge
+            rather than fading in. `overflow-y: visible` lets the count-badge +
+            hover tooltips still escape upward. The INCOMING content snaps to
+            opacity 1 (revealed by the clip, not a fade); the OUTGOING one fades
+            out fast so the two never overlap mid-reveal. */}
         {canComment ? (
-          <div
+          <motion.div
             className="relative h-9 shrink-0"
+            animate={{ width: modeWidth }}
+            transition={
+              widthAnimatable
+                ? { type: "spring", stiffness: 500, damping: 35 }
+                : { duration: 0 }
+            }
+            onAnimationStart={() => setWidthAnimating(true)}
+            onAnimationComplete={() => setWidthAnimating(false)}
+            // Clip ONLY while springing (the reveal); visible at rest so the
+            // edit button's count-badge + the regen-button tooltips show.
             style={{
-              width: modeWidth,
-              // Delayed so the outgoing icon (below) finishes its fast fade-out
-              // BEFORE the bar starts moving — no icon is ever visible mid-resize.
-              transition: widthAnimatable
-                ? "width 140ms 60ms cubic-bezier(0.16, 1, 0.3, 1)"
-                : undefined,
+              overflowX: widthAnimating ? "clip" : "visible",
+              overflowY: "visible",
             }}
           >
-            {/* AI — regen pair. Owners/edit only. */}
+            {/* AI — composer + regen. Owners/edit only. */}
             {canEdit ? (
               <motion.div
                 ref={aiSlotRef}
                 aria-hidden={effectiveMode !== "ai"}
                 animate={{ opacity: effectiveMode === "ai" ? 1 : 0 }}
-                // Entering: delayed fade-in, AFTER the bar has resized (so it
-                // appears at its final spot, not mid-move). Leaving: quick
-                // fade-out BEFORE the resize, so it's gone before the bar moves.
-                transition={
-                  effectiveMode === "ai"
-                    ? { duration: 0.11, delay: 0.16 }
-                    : { duration: 0.07 }
-                }
+                // Incoming: snap opaque (duration 0) so the width-clip reveal
+                // does the work — it expands open, never fades. Outgoing: a
+                // quick fade so it clears before the incoming content reveals
+                // over the same right-anchored spot.
+                transition={{ duration: effectiveMode === "ai" ? 0 : 0.12 }}
                 className="absolute inset-y-0 right-0 flex items-center gap-1"
                 style={{
                   pointerEvents: effectiveMode === "ai" ? "auto" : "none",
                 }}
               >
-                {/* AI comment — draw a region + tell the model what to change.
-                    Same draw-box comment flow as the Edit-mode button, but
-                    authored in AI mode so DeckView tags it forAi → it feeds the
-                    partial regen (§16 Chunk 4). `assistant` = the comment+sparkle
-                    glyph (AI comment). */}
-                <ToolButton
-                  icon="assistant"
-                  label={
-                    focusedSlideLocked && !commentMode
-                      ? "الشريحة مقفلة — أعد فتح القفل لإضافة تعليق"
-                      : commentMode
-                        ? "إنهاء وضع التعليقات"
-                        : "علّق للذكاء"
-                  }
-                  iconFilled={commentMode}
-                  onClick={onToggleCommentMode}
-                  active={commentMode}
-                  disabled={applying || (focusedSlideLocked && !commentMode)}
-                  countBadge={aiCommentCount}
-                />
-                {/* Regenerate THIS slide — folds into the composer's Generate (Chunk 5). */}
+                {/* AI composer (§17) — scope chip · sparkle · instruction input
+                    · send. The region is scoped by dragging on the canvas (→
+                    `pendingAiBounds`); the instruction is typed here. The mesh
+                    gradient lives ONLY on this AI hero (the sparkle + the send
+                    button), per the frontend consult. */}
+                <div className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) flex h-9 items-center gap-1.5 rounded-full px-1.5">
+                  {aiBusy ? (
+                    // Submitting — collapse to a compact running label, the mesh
+                    // ring spinning, until the regen settles (§17 states).
+                    <div className="flex items-center gap-2 px-2 text-xs text-white/80">
+                      <span className="btn-gradient-anim flex h-5 w-5 items-center justify-center rounded-full">
+                        <span className="spinner h-3 w-3 rounded-full border-2 border-white/30 border-t-white" />
+                      </span>
+                      يُطبّق…
+                    </div>
+                  ) : (
+                    <>
+                      {/* Instruction input — single line; Enter submits. No scope
+                          chip / sparkle: the drawn region's on-canvas marker is
+                          enough signal, so the composer stays a clean input +
+                          send (user direction — don't over-explain). */}
+                      <input
+                        type="text"
+                        dir="rtl"
+                        value={aiInput}
+                        onChange={(e) => setAiInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleAiSend();
+                          }
+                        }}
+                        placeholder={
+                          hasAiRegion
+                            ? "اكتب تعديلاتك للذكاء"
+                            : "حدد على منطقة للتعديل بالذكاء"
+                        }
+                        disabled={focusedSlideLocked}
+                        className="w-[250px] bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                      />
+                      {/* Send (توليد) — the one mesh button; needs an instruction. */}
+                      <button
+                        type="button"
+                        onClick={() => void handleAiSend()}
+                        disabled={!aiInput.trim() || focusedSlideLocked}
+                        aria-label="توليد"
+                        className="btn-gradient-anim flex h-7 w-7 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+                      >
+                        <span className="material-symbols-outlined text-[16px] leading-none">
+                          arrow_upward
+                        </span>
+                      </button>
+                    </>
+                  )}
+                </div>
+                {/* Regenerate THIS slide — clean, no-instruction redesign. */}
                 {onRegenSlide ? (
                   <ToolButton
                     icon="auto_fix_high"
@@ -578,13 +656,9 @@ export function PreviewActionBar({
               ref={editSlotRef}
               aria-hidden={effectiveMode !== "edit"}
               animate={{ opacity: effectiveMode === "edit" ? 1 : 0 }}
-              // Entering: delayed fade-in after the resize; leaving: quick
-              // fade-out before it — see the AI group above.
-              transition={
-                effectiveMode === "edit"
-                  ? { duration: 0.11, delay: 0.16 }
-                  : { duration: 0.07 }
-              }
+              // Incoming snaps opaque (revealed by the width-clip), outgoing
+              // fades fast — see the AI group above.
+              transition={{ duration: effectiveMode === "edit" ? 0 : 0.12 }}
               className="absolute inset-y-0 right-0 flex items-center gap-1"
               style={{
                 pointerEvents: effectiveMode === "edit" ? "auto" : "none",
@@ -608,7 +682,7 @@ export function PreviewActionBar({
                 countBadge={draftCommentCount}
               />
             </motion.div>
-          </div>
+          </motion.div>
         ) : null}
 
         {/* Shared cluster (§16) — divider + History + Lock + Save, visible in

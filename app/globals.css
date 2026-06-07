@@ -1032,6 +1032,21 @@ body {
   .btn-gradient-anim { animation: none; }
 }
 
+/* ─── AI region-marker corner chip (§17) ──────────────────────────────
+   The small circle pinned to the AI scope box's corner — a solid deep
+   brand indigo (`--tq-blue`) disc with a white sparkle. The selection box
+   border is `--tq-violet`; the two read as one purple/blue family. */
+.ai-marker-chip {
+  background: var(--tq-blue);
+}
+/* Chained selector (0,2,0) so it beats the Material Symbols font's own
+   unlayered `.material-symbols-outlined { font-size: 24px }` rule — a plain
+   Tailwind `text-[…]` utility is layered and loses to it. Same trick as
+   `.tq-icon-sm`. Small sparkle inside the 24px chip. */
+.ai-marker-chip .material-symbols-outlined {
+  font-size: 17px;
+}
+
 /* ─── Canvas gradient border ──────────────────────────────────────────
    Same animated mesh-gradient ring concept as `.btn-gradient-anim`, but:
      • Thicker padding (3 px) for visibility at canvas scale.
@@ -1111,80 +1126,12 @@ body {
   .canvas-gradient-border { animation: none; }
 }
 
-/* ─── AI comment box ──────────────────────────────────────────────────
-   The drawn box for an AI comment (+ its saved marker). A thin (1px)
-   brand-gradient border that shimmers, over a faint gradient wash fill —
-   reuses `--tq-gradient-full` so it stays on-brand and reads distinct from
-   the orange user-comment box. The 1px border uses the same border-box vs
-   content-box mask trick as `.btn-gradient-anim` (padding == stroke).      */
-/* The drift animation lives on the element so the inherited `--mesh-*` vars
-   feed BOTH pseudo-elements (border + fill) — same mechanism as
-   `.canvas-gradient-border`. Random-feeling blob motion, NOT a linear sweep. */
-.ai-comment-box {
-  position: relative;
-  isolation: isolate;
-  border-radius: 6px;
-  /* Dim scrim behind the mesh so the gradient stays legible on ANY slide
-     brightness — the element background paints below the `::after` mesh fill
-     (which sits at z-index:-1, above the background), so: dim → mesh → content.
-     Radial so it's masked clear in the MIDDLE (the slide peeks through the
-     centre of the drawn region) and dims toward the edges where the gradient
-     border sits — softer than a flat block. */
-  background: radial-gradient(
-    ellipse at center,
-    transparent 0%,
-    rgba(0, 0, 0, 0.22) 120%
-  );
-  animation:
-    mx1 2.5s ease-in-out infinite alternate,
-    my1 4.0s ease-in-out infinite alternate,
-    mx2 4.8s ease-in-out infinite alternate,
-    my2 3.3s ease-in-out infinite alternate,
-    mx3 6.2s ease-in-out infinite alternate,
-    my3 1.8s ease-in-out infinite alternate,
-    mx4 3.0s ease-in-out infinite alternate,
-    my4 4.5s ease-in-out infinite alternate,
-    mx5 2.3s ease-in-out infinite alternate,
-    my5 3.8s ease-in-out infinite alternate,
-    mx6 5.0s ease-in-out infinite alternate,
-    my6 5.8s ease-in-out infinite alternate;
-}
-.ai-comment-box::after {        /* faint mesh wash fill — low opacity */
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #7D2DFF 0%, transparent 70%);
-  opacity: 0.26;
-  pointer-events: none;
-}
-.ai-comment-box::before {       /* 1px mesh-gradient border */
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background:
-    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #7D2DFF 0%, transparent 70%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ai-comment-box { animation: none; }
-}
+/* `.ai-comment-box` (the animated mesh box + radial scrim) was removed with
+   §17 (2026-06-07). AI instructions are no longer authored as an in-canvas
+   box: the region is a quiet corner-sparkle marker (`AiRegionMarker` in
+   HeroCommentOverlay) and the instruction lives in the bottom-bar composer.
+   The shared `--mesh-*` @property vars + keyframes above still drive
+   `.btn-gradient-anim` (incl. the composer's send button + sparkle). */
 
 /* ─── Standard secondary pill ─────────────────────────────────────────
    The default style for all non-CTA buttons across the dashboard:

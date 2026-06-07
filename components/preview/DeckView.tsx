@@ -613,6 +613,11 @@ export function DeckView({
   // Studio mode (Edit ⇄ AI) — the bottom command bar's toggle. Edit = manual
   // scalpel + user comments; AI = generative. Defaults to Edit (§16).
   const [studioMode, setStudioMode] = useState<StudioMode>("edit");
+  // AI composer scope (§17) — the region drawn on the canvas in AI mode that
+  // the bottom-bar instruction applies to. `null` = whole slide. Drawn via
+  // HeroCommentOverlay (`onAiBoundsChange`), cleared by the toolbar scope
+  // chip's ✕, on submit, on slide change, and when leaving AI mode.
+  const [pendingAiBounds, setPendingAiBounds] = useState<CommentBounds | null>(null);
   // Slide-nav tab (§16) — Slides (the thumbnail grid) vs Comments (the embedded
   // CommentsPanel) for REVIEWING comments outside comment mode. In comment mode
   // BOTH side panels hide (the canvas is the comment surface), so there's no
@@ -2460,7 +2465,13 @@ export function DeckView({
   };
 
   const handleCreateComment = useCallback(
-    async (input: { slideId: string; bounds: CommentBounds; content: string }) => {
+    async (input: {
+      slideId: string;
+      // `null` = whole-slide (the AI composer's no-region case, §17). Edit-mode
+      // user comments always pass a drawn box.
+      bounds: CommentBounds | null;
+      content: string;
+    }) => {
       const res = await fetch(`/api/projects/${projectId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2546,18 +2557,31 @@ export function DeckView({
   // regen on every slide that has draft comments. Optimistic
   // `applying` state surfaces the per-slide overlay within one frame;
   // authoritative versionId arrives when the API resolves.
-  const handleFirePartialRegen = useCallback(async () => {
+  const handleFirePartialRegen = useCallback(async (
+    // §17: the AI composer fires this right after POSTing its forAi comment.
+    // That comment isn't in the client `comments` state yet (setComments hasn't
+    // re-rendered), so the comments-derived guard below would wrongly bail —
+    // the caller passes the focused slide's id explicitly instead. The server
+    // (regenerate-partial) is the source of truth for which slides regenerate;
+    // these ids only seed the optimistic overlay.
+    explicitTargetIds?: string[],
+  ) => {
     if (applying) return;
     // Only AI comments are applied (§16 Chunk 4) — scope the guard + the
     // optimistic overlay to forAi slides so they match what the server promotes.
-    const aiComments = comments.filter((c) => c.forAi);
-    if (aiComments.length === 0) return;
-    const optimisticTargetIds = Array.from(
-      new Set(aiComments.map((c) => c.slideId)),
-    );
+    let optimisticTargetIds: string[];
+    if (explicitTargetIds && explicitTargetIds.length > 0) {
+      optimisticTargetIds = explicitTargetIds;
+    } else {
+      const aiComments = comments.filter((c) => c.forAi);
+      if (aiComments.length === 0) return;
+      optimisticTargetIds = Array.from(
+        new Set(aiComments.map((c) => c.slideId)),
+      );
+    }
     edbg("regen", "partial-regen FIRE (apply AI comments)", {
-      aiCommentCount: aiComments.length,
       targetSlides: optimisticTargetIds,
+      explicit: !!explicitTargetIds,
     });
     setApplying({ versionId: "__pending__", targetSlideIds: optimisticTargetIds });
     try {
@@ -2589,6 +2613,65 @@ export function DeckView({
       setApplying(null);
     }
   }, [applying, comments, projectId]);
+
+  // AI composer submit (§17) — the bottom-bar send. Creates the forAi comment
+  // (drawn region as bounds, or null = whole slide) via the existing /comments
+  // POST, then fires the partial regen scoped to the focused slide. forAi is
+  // derived from `studioMode` inside handleCreateComment, so we only supply
+  // content + bounds. The explicit target id is REQUIRED: the freshly-created
+  // comment isn't in the client `comments` state yet (setComments hasn't
+  // re-rendered), so handleFirePartialRegen's comments-derived guard would
+  // wrongly bail — the server reads the comment from the DB regardless. The
+  // focused slide is recomputed here (not via the late `focusedSlide`, which is
+  // declared after this component's early returns) from manifest +
+  // currentSlideIndex. On a thrown create/regen the error propagates so
+  // PreviewActionBar keeps the typed text for a retry.
+  const handleAiSubmit = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || applying) return;
+      const slides = manifest?.slides;
+      if (!slides || slides.length === 0) return;
+      const idx = Math.min(Math.max(currentSlideIndex, 0), slides.length - 1);
+      const target = slides[idx];
+      if (!target) return;
+      const targetId = target.slideId;
+      if (slideStates[targetId]?.lockedAt != null) return;
+      await handleCreateComment({
+        slideId: targetId,
+        bounds: pendingAiBounds,
+        content: trimmed,
+      });
+      // Region consumed — clear it; the optimistic regen overlay takes over.
+      setPendingAiBounds(null);
+      await handleFirePartialRegen([targetId]);
+    },
+    [
+      applying,
+      manifest,
+      currentSlideIndex,
+      slideStates,
+      pendingAiBounds,
+      handleCreateComment,
+      handleFirePartialRegen,
+    ],
+  );
+
+  // Drop the drawn AI region when the user leaves AI mode or the focused slide
+  // changes — a region only means something for the slide it was drawn on while
+  // the AI composer is showing. Keyed on currentSlideIndex (the focused-slide
+  // source) so it fires on navigation; focusedSlide itself is computed after
+  // the early returns below.
+  useEffect(() => {
+    if (studioMode !== "ai" && pendingAiBounds !== null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPendingAiBounds(null);
+    }
+  }, [studioMode, pendingAiBounds]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPendingAiBounds(null);
+  }, [currentSlideIndex]);
 
   const handleToggleCommentMode = useCallback(() => {
     setCommentMode((v) => !v);
@@ -3292,6 +3375,7 @@ export function DeckView({
   // editable.
   const isFocusedLocked = slideStates[focusedSlide.slideId]?.lockedAt != null;
   const editingDisabled = isFocusedRegenerating || isFocusedLocked;
+
   // Hero width clamp — two candidates, smallest wins:
   //   • viewport-height-derived width (so hero never exceeds the
   //     remaining vertical space given its aspect ratio)
@@ -3472,7 +3556,12 @@ export function DeckView({
                   draftCommentCount={
                     comments.filter((c) => !c.forAi).length
                   }
-                  aiCommentCount={comments.filter((c) => c.forAi).length}
+                  // AI composer (§17) — the instruction send. The drawn region
+                  // (pendingAiBounds) lives on the canvas marker; the bar just
+                  // collects + submits the instruction. `hasAiRegion` flips the
+                  // input placeholder once a region is drawn.
+                  hasAiRegion={pendingAiBounds != null}
+                  onAiSubmit={handleAiSubmit}
                   // Locked focused slide → PreviewActionBar disables
                   // the Comment button (only the toggle-out path
                   // stays live if commentMode is already on; see
@@ -3671,15 +3760,13 @@ export function DeckView({
           // for the SlideRenderer's scaled content moved down to
           // the inner wrapper below.
           className={`canvas-gradient-border group/canvas relative p-0 shadow-2xl${
-            commentMode ? " cursor-crosshair" : ""
+            commentMode || studioMode === "ai" ? " cursor-crosshair" : ""
           }`}
-          // The gradient halo is the "you're instructing the AI" indicator —
-          // only while commenting in AI mode. Normal (Edit-mode) user comments
-          // are collaboration, not AI input, so they get the crosshair cursor
-          // but no halo (§16 Chunk 4).
-          data-active={
-            commentMode && studioMode === "ai" ? "true" : "false"
-          }
+          // The gradient halo is the "you're instructing the AI" indicator.
+          // §17: AI mode is always a draw-to-scope surface (no commentMode
+          // toggle), so the halo is on for the whole of AI mode. Edit-mode user
+          // comments are collaboration, not AI input — crosshair, but no halo.
+          data-active={studioMode === "ai" ? "true" : "false"}
         >
           {/* Slide content. `overflow-hidden` clips the scaled
               SlideRenderer so it can't bleed past the canvas while
@@ -3705,11 +3792,13 @@ export function DeckView({
                 onDocReady={setEditorDoc}
                 onEdit={handleSlideEdit}
                 reloadKey={editorReloadKey}
-                // Locked / mid-regen / comment mode: keep the editor mounted
-                // (no SlideEditor→SlideRenderer swap → no canvas flash) but
-                // inert. The StylePill is suppressed below; the comment overlay
-                // sits on top and owns the draw interaction.
-                disabled={editingDisabled || commentMode}
+                // Locked / mid-regen / comment mode / AI mode: keep the editor
+                // mounted (no SlideEditor→SlideRenderer swap → no canvas flash)
+                // but inert. The StylePill is suppressed below; the comment /
+                // AI-region overlay sits on top and owns the draw interaction.
+                // §17: AI mode is a draw-to-scope surface, so the editor is
+                // inert there too even though commentMode is false.
+                disabled={editingDisabled || commentMode || studioMode === "ai"}
               />
             ) : (
               <SlideRenderer
@@ -3722,9 +3811,10 @@ export function DeckView({
                 scale={gridScale}
               />
             )}
-            {/* I2 — contextual style pill over the selected element (edit mode only;
-                suppressed while the slide is regenerating or locked). */}
-            {editMode && !commentMode && !editingDisabled && editorSelected ? (
+            {/* I2 — contextual style pill over the selected element (Edit
+                studio-mode only; suppressed in AI mode, comment mode, or while
+                the slide is regenerating / locked). */}
+            {editMode && studioMode === "edit" && !commentMode && !editingDisabled && editorSelected ? (
               <StylePill
                 target={editorSelected}
                 slideId={focusedSlide.slideId}
@@ -3807,17 +3897,16 @@ export function DeckView({
               // owner / edit see delete on everything (moderation).
               canModerate={canEdit}
               currentUserId={currentUserId}
-              // Locked slides are "finalised" per the product
-              // contract — no new comment markers are allowed on
-              // them. We override `commentMode` to false on the
-              // focused slide when it's locked so the overlay stays
-              // in its read-only mode (existing markers still visible
-              // + clickable for the preview popup; click-to-create is
-              // suppressed). Switching to an unlocked slide restores
-              // interactivity without leaving / re-entering comment
-              // mode on the toolbar.
+              // This prop is the overlay's interaction gate ("armed"):
+              //   • AI mode (§17) → ALWAYS armed (drag-to-scope needs no
+              //     commentMode toggle), unless the slide is locked.
+              //   • Edit mode → armed only while the user is in commentMode.
+              // Locked slides are "finalised" per the product contract — no new
+              // markers — so a locked focused slide forces the overlay into its
+              // read-only mode (existing markers still visible + clickable for
+              // the preview popup; draw-to-create suppressed) in both modes.
               commentMode={
-                commentMode &&
+                (studioMode === "ai" ? true : commentMode) &&
                 slideStates[focusedSlide.slideId]?.lockedAt == null
               }
               // Fires when the user clicks "Edit" inside the read-
@@ -3829,12 +3918,13 @@ export function DeckView({
               onRequestCommentMode={
                 canComment ? () => setCommentMode(true) : undefined
               }
-              // AI mode → the composer drops the suggestion chips, swaps to the
-              // "write your changes for the AI" placeholder, and the overlay
-              // surfaces the in-canvas apply button (onApply fires the partial
-              // regen). Mirrors handleCreateComment's `forAi: studioMode==="ai"`.
+              // AI mode (§17): a finished drag reports its region up via
+              // onAiBoundsChange (no inline composer); the committed region is
+              // rendered as a corner-sparkle marker from pendingAiBounds. The
+              // instruction is typed in the bottom-bar AI input.
               forAi={studioMode === "ai"}
-              onApply={handleFirePartialRegen}
+              pendingAiBounds={pendingAiBounds}
+              onAiBoundsChange={setPendingAiBounds}
             />
           ) : null}
         </motion.div>
