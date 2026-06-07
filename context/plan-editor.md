@@ -822,3 +822,87 @@ new shell with slides streaming in, and completion still `router.replace`s to /p
 `components/slides/PreviewActionBar.tsx`, `components/preview/SlideNavSidebar.tsx`,
 `components/preview/CancelGenerationDialog.tsx`. The two page files
 (`app/(app)/{project,preview}/[projectId]/page.tsx`) likely need NO change.
+
+## 19. Regenerate an AI image from the editor pill (2026-06-07, fresh-session ready)
+
+Add a "regenerate" action to the image pill: user selects an AI image → pill shows
+Regenerate (next to Replace) → opens a prompt editor pre-filled with the box's prompt
+→ edits it → confirm → the image re-generates in place. User decisions (locked):
+**editable prompt** (not one-click), and reuse the existing `deck.image.warm` pipeline.
+
+### Why editable-prompt simplifies the hard part (READ THIS FIRST)
+The image identity is `genid + hash`, `hash = genImageHash(prompt) = sha256(prompt)[:12]`
+(lib/images/store.ts:33), path `${projectId}/gen/${genid}-${hash}.png`. The pipeline is
+bill-once: `deck.image.warm` dedups per (projectId, genid, promptHash) for 24h + skips if
+the file already exists. Because the user EDITS the prompt, the new prompt → a NEW hash →
+a NEW path → the warm function generates fresh there with NO dedup collision and NO
+existence collision. So we do NOT need to force past the dedup or invent a rev/nonce for
+v1. (Same-prompt-no-edit just re-shows the current image — acceptable; a `data-genrev`
+salt for "regenerate with the identical prompt" is a future add, noted at the end.)
+
+### Verified surface (Explore map, do NOT re-derive)
+- **Pill:** `components/preview/editor/StylePill.tsx` — image block ~lines 654-676, the
+  existing "Replace" button. `kindOf(target)` (~39-43) = IMG. `target` is the selected
+  `HTMLElement` (passed from DeckView ~3875). The `<img>` carries `data-genid` (box id),
+  `data-genimage` (the PROMPT), `data-tq-cc="1"`. Replace handler `onPickImage` (~442-469):
+  upload → POST /api/storage/upload-image → `setAttribute("src",url)` → `dirty.current=true`
+  → commit-on-deselect (`onCommit` ~368-376 serializes the slide HTML).
+- **Pipeline:** `deck.image.warm` (inngest/functions/deck-image-warm.ts) generates ONE box.
+  Payload `{ projectId, slideKey, box{genid, prompt, aspect, hash}, idemKey }` (~68-73).
+  Emits `slide.image.ready` broadcast (~84). Client: DeckView listens → GenImageFills
+  context (genid→url) → SlideRenderer injects src before sanitise. `scanGenImages`/
+  `injectImgSrc` in lib/images/slide-images.ts; hash/path in lib/images/store.ts.
+- **Persistence model (KEY):** the slide HTML stores `data-genimage` (prompt) + `data-genid`;
+  the src is DERIVED from (genid, hash(prompt)) at render. So persisting a regen = updating
+  `data-genimage` to the new prompt (a slide edit, committed like Replace) — the derived
+  path then resolves to the freshly-generated image.
+- **No single-image regen route exists** — must build one.
+
+### Build chunks
+1. **Regen API route** — `POST /api/projects/[id]/slides/[slideKey]/images/[genid]/regen`,
+   body `{ prompt: string, aspect?: GenImageAspect }`. Gate `resolveProjectAccess(id,"edit")`
+   (owner/edit only). Validate prompt (non-empty, max len). Fire `deck.image.warm` for the
+   one box: `{ projectId, slideKey, box: { genid, prompt, aspect, hash: genImageHash(prompt) },
+   idemKey: \`regen:${genid}:${hash}\` }`. Return 202. (Aspect: pass from client — read the
+   img's intrinsic/declared aspect — or default "landscape".)
+2. **Pill UI** (StylePill image block) — add a "إعادة توليد" (Regenerate) button next to
+   Replace, rendered ONLY when `data-genid && data-genimage` are present (an AI image, not an
+   uploaded/replaced one). Clicking opens a small **glass-popover prompt editor** (reuse the
+   glass-popover recipe): RTL textarea pre-filled with `data-genimage`, a confirm button
+   (disabled while empty), Esc/click-out cancels. Latin numerals; Cairo; --tq-* tokens.
+3. **Client wiring** (StylePill + DeckView/gen-image-context) — on confirm:
+   (a) `target.setAttribute("data-genimage", newPrompt)` + `dirty.current=true` (persists on
+   deselect, like Replace); (b) mark a PENDING state for that genid so the image shows the
+   same loading shimmer the streaming fill uses (reuse GenImageFills' pending path); (c) POST
+   the regen route. On the `slide.image.ready` broadcast for that genid → GenImageFills swaps
+   the new URL in live → clear pending. (If the user navigates away before it lands, the
+   committed `data-genimage` means a reload derives the new path anyway.)
+4. **Loading affordance** — spinner/overlay on the regenerating image (reuse the gen-image
+   placeholder UI). Optional: a tiny "1 image credit" cue on the confirm, since each regen is
+   a paid gpt-image call.
+
+### Guardrails
+- **Billing:** each confirmed regen = ONE paid image generation (new prompt → new path). The
+  confirm step makes it explicit. Same prompt re-confirmed = deduped (bill-once) — fine.
+- Access: owner/edit only (route gate + hide the button for view/comment roles).
+- Idempotency: idemKey `regen:${genid}:${promptHash}` so a double-click on the same new
+  prompt fires once.
+- **Orphaned images:** the previous-prompt PNG stays in storage (a different hash/path). Not
+  cleaned up here — note a future GC sweep (orphaned `${projectId}/gen/*` not referenced by
+  any current slide's `data-genimage`).
+- Reuse glass-popover, StylePill patterns, the gen-image loading UI — never fork. RTL, Cairo,
+  Latin numerals, --tq-* only, spring 500/35. Run tsc + eslint + **/security-review** (new
+  API route + a write path).
+
+### Future (not v1)
+"Regenerate with the IDENTICAL prompt for a different result" → add a `data-genrev` salt to
+the hash (`genImageHash(prompt, rev)`), bump rev per regen, persist `data-genrev` on the img.
+Touches store.ts + slide-images.ts + the warm/generate read sites. Deferred.
+
+### Key files
+NEW `app/api/projects/[id]/slides/[slideKey]/images/[genid]/regen/route.ts`;
+`components/preview/editor/StylePill.tsx` (button + prompt-editor popover + wiring);
+`components/slides/gen-image-context.tsx` + `components/preview/DeckView.tsx` (pending state +
+broadcast swap — mostly reuse); `inngest/functions/deck-image-warm.ts` (fire standalone — it's
+already per-box); `lib/images/store.ts` (genImageHash — reuse); `lib/images/slide-images.ts`
+(scanGenImages — src derivation, unchanged).
