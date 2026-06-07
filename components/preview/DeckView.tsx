@@ -1154,6 +1154,11 @@ export function DeckView({
   // would re-open the channel on every navigation).
   const slideIndexRef = useRef(currentSlideIndex);
   useEffect(() => {
+    // Standard latest-value ref sync (manifestRef above does the same). The
+    // immutability rule only trips here now that a memoized reader
+    // (bumpEditorIfFocusedChanged) was added — this is the React-sanctioned
+    // ref-mutation pattern, not a real violation.
+    // eslint-disable-next-line react-hooks/immutability
     slideIndexRef.current = currentSlideIndex;
   }, [currentSlideIndex]);
 
