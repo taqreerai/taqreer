@@ -364,6 +364,12 @@ async function readActiveRegen(
       projectId,
       type: "deck.regenerate.partial",
       status: { in: ["queued", "processing", "running"] },
+      // Ignore DEAD jobs. A partial regen finishes in well under a minute; a job
+      // still "active" after 15 min is orphaned — e.g. the worker was killed
+      // before its onFailure hook could mark it failed. Without this guard such
+      // a row re-arms the regen overlay on EVERY page load, forever (the client
+      // superseded-clear then has to mop it up each load). reported 2026-06-07.
+      createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
     },
     orderBy: { createdAt: "desc" },
     select: { inputJson: true },
