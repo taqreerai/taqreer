@@ -695,3 +695,60 @@ Slides tab = today's grid (unchanged). Comments tab = today's CommentsPanel body
 `components/slides/PreviewActionBar.tsx` (the bottom bar — restructure), NEW
 `StudioHeader` + `ExportMenu`, `components/preview/{DeckView,SlidePill,CommentsPanel,
 SlideNavSidebar,HeroCommentOverlay}.tsx`, `lib/preview/use-export-actions.ts`.
+
+## 17. Bottom-toolbar AI input — execution spec (2026-06-07, fresh-session ready)
+
+Replaces the in-box AI composer (the `.ai-comment-box` mesh box + textarea popup)
+with a **persistent AI input in the bottom bar**. User decisions (locked):
+- **Scope by dragging on the canvas** — in AI mode, click-drag on the slide draws
+  the region box. No "select region" button.
+- **Marker = an AI icon (auto_awesome sparkle) at a CORNER of the drawn box** — not
+  the mesh box, not a quiet frame. A small sparkle chip pinned to one corner.
+- **No box drawn → whole-slide** regen (boundsJson = null). Same pipeline.
+
+### Grounded wiring (verified 2026-06-07 — do NOT re-guess)
+- Text already becomes a `forAi` comment. `HeroCommentOverlay` `onCreate({slideId,
+  bounds, content})` → DeckView (~line 2464) `POST /api/projects/{id}/comments`
+  with `{ boundsJson: input.bounds, content, forAi: studioMode === "ai" }`; result
+  pushed to `setComments`.
+- `handleFirePartialRegen` (passed as `onApply` to HeroCommentOverlay) fires the
+  partial regen; `deck-regenerate-partial.ts` reads the `forAi` comments + their
+  `boundsJson`. Completion path clears AI comments: `setComments(prev =>
+  prev.filter(c => !c.forAi))` (~2336).
+- Draw bounds currently live in HeroCommentOverlay's local `editor` state (slide-
+  space 0..canvasW × 0..canvasH).
+- `studioMode` ("edit"|"ai") + `commentMode` live in DeckView (~612-615). In AI
+  mode the bottom bar shows a slide-regen button (PreviewActionBar).
+
+### Chunks (smallest-risk → most-coupled)
+1. **Lift draw bounds.** HeroCommentOverlay: in AI mode, finishing a drag reports
+   `onAiBoundsChange(bounds | null)` up instead of opening the inline textarea.
+   The corner-sparkle marker renders on the box; NO inline composer. DeckView holds
+   `pendingAiBounds`. Drag-on-canvas is always armed in AI mode (no commentMode gate).
+2. **Toolbar AI input** (PreviewActionBar, AI-mode cluster). Glass capsule
+   (`glass-popover` recipe, RTL): leading **scope chip** — `pendingAiBounds ?
+   "هذه المنطقة" (✕ clears it) : "الشريحة كاملة"` (muted) — · `auto_awesome`
+   sparkle (brand-gradient fill) · growing single-line input (placeholder
+   "اكتب تغييراتك للذكاء…") · trailing send = `.btn-gradient-anim` circular button.
+   Enter or send → DeckView `onAiSubmit(text)`: build `forAi` comment
+   `{content: text, boundsJson: pendingAiBounds ?? null}` via the EXISTING /comments
+   POST → fire `handleFirePartialRegen` → clear input + pendingAiBounds. The mesh
+   gradient lives ONLY here (the one AI hero), per the frontend consult.
+3. **Remove old composer + box.** HeroCommentOverlay: delete the AI `CommentEditor`
+   (textarea + chips + in-box apply button) and the full `.ai-comment-box` marker
+   path; replace with the corner-sparkle marker. globals.css: remove `.ai-comment-box`
+   (mesh box + radial scrim) — now unused. Keep the orange USER-comment box untouched.
+
+### States (frontend lens, inside the system)
+idle (AI mode, no box): input focused, chip = "الشريحة كاملة". drawing: box grows
+with the corner sparkle. submitting: input → compact "يُطبّق…" with the mesh ring
+spinning; box sparkle pulses. done: clears (handleFirePartialRegen completion path).
+
+### Key files + anchors
+`components/preview/HeroCommentOverlay.tsx` (drop AI composer, add corner-sparkle
+marker, `onAiBoundsChange`), `components/slides/PreviewActionBar.tsx` (AI input +
+scope chip), `components/preview/DeckView.tsx` (`pendingAiBounds` state, `onAiSubmit`,
+wire HeroCommentOverlay + PreviewActionBar; reuse the ~2464 /comments POST +
+`handleFirePartialRegen`), `app/globals.css` (remove `.ai-comment-box`). Latin
+numerals only; spring 500/35; `--tq-*` tokens only. Run `/security-review` after
+(touches a comment-creation path). RTL throughout.
