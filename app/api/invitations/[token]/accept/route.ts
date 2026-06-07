@@ -134,6 +134,6 @@ export async function GET(
 
   // Land them inside the deck.
   return NextResponse.redirect(
-    new URL(`/preview/${share.projectId}`, url.origin),
+    new URL(`/project/${share.projectId}`, url.origin),
   );
 }

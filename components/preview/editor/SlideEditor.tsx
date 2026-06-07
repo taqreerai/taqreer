@@ -186,6 +186,15 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   .tqe-caret{position:fixed;width:2px;pointer-events:none;z-index:2147483646;display:none;animation:tqe-caret-blink 1.06s infinite}
   @keyframes tqe-caret-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
   [contenteditable="true"]{outline:none}
+  /* §19 — gen-image placeholder shimmer + live-patch fade, mirrored from
+     globals.css so a regenerating image box reads as "loading" inside this
+     iframe (which doesn't load the app stylesheet). A box whose src was dropped
+     for a regen shows the shimmer; the patched src adds .tq-genimg-in to fade. */
+  @keyframes tq-genimg-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  img[data-genimage]:not([src]){background-color:var(--tq-bg-dim,rgba(12,12,12,0.55))!important;background-image:linear-gradient(110deg,rgba(255,255,255,0.05) 30%,rgba(255,255,255,0.18) 50%,rgba(255,255,255,0.05) 70%)!important;background-size:200% 100%!important;background-repeat:no-repeat!important;animation:tq-genimg-shimmer 1.4s ease-in-out infinite}
+  @keyframes tq-genimg-fadein{from{opacity:0}to{opacity:1}}
+  img[data-genimage].tq-genimg-in{animation:tq-genimg-fadein 450ms ease both}
+  @media (prefers-reduced-motion:reduce){img[data-genimage]:not([src]){animation:none;background-position:50% 0}img[data-genimage].tq-genimg-in{animation:none}}
 </style></head><body><div id="tqe-stage">${bodyHtml}</div></body></html>`;
     // scale intentionally excluded — it's presentation, applied live via the
     // --tqe-scale var + the iframe element's dispW×dispH size, so a resize never

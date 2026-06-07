@@ -318,7 +318,7 @@ export function HeaderSearch() {
       setOpen(false);
       setQuery("");
       inputRef.current?.blur();
-      router.push(`/preview/${project.id}`);
+      router.push(`/project/${project.id}`);
     },
     [router],
   );

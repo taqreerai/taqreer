@@ -10,7 +10,7 @@ function GeneratingRedirect() {
 
   useEffect(() => {
     if (projectId) {
-      router.replace(`/preview/${projectId}`);
+      router.replace(`/project/${projectId}`);
     } else {
       router.replace("/create");
     }

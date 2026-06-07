@@ -192,7 +192,7 @@ function formatNotificationRow(row: {
       );
       title = FINISHED_TITLE[flow] ?? "اكتمل انشاء العرض";
       desc = `${project} جاهز للعرض، اضغط للاطّلاع عليه`;
-      href = isProject ? `/preview/${row.projectId}` : undefined;
+      href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
     case "deck.generate.failed":
@@ -202,7 +202,7 @@ function formatNotificationRow(row: {
         typeof payload.reason === "string" && payload.reason
           ? payload.reason
           : `تعذّر توليد ${project}، يمكنك المحاولة مجدداً`;
-      href = isProject ? `/preview/${row.projectId}` : undefined;
+      href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "share.invited": {
       const level = typeof payload.accessLevel === "string" ? payload.accessLevel : null;

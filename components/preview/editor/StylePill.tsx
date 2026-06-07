@@ -23,6 +23,7 @@ import { MorePopover } from "./MorePopover";
 import { FontControl } from "./FontControl";
 import { canonicalFamily, googleFontUrl } from "@/lib/editor/font-search";
 import { serializeSlideSection } from "@/lib/editor/serialize";
+import type { GenImageAspect } from "@/lib/images/slide-images";
 
 type Props = {
   target: HTMLElement;
@@ -33,6 +34,16 @@ type Props = {
   onDismiss: () => void;
   // Deck language — drives the ⋯ inspector's localized labels (Arabic-first).
   language?: "en" | "ar";
+  // §19 — regenerate an AI image box with an edited prompt. The pill shows the
+  // Regenerate button only for an AI image (data-genid + data-genimage); on
+  // confirm it updates the box's data-genimage (committed like Replace) and
+  // calls this, which fires the regen route + drives the live swap (DeckView).
+  onRegenImage?: (input: {
+    genid: string;
+    slideId: string;
+    prompt: string;
+    aspect: GenImageAspect;
+  }) => void;
 };
 
 type Kind = "text" | "image" | "svg";
@@ -47,6 +58,14 @@ function kindOf(el: HTMLElement): Kind {
 // edit a gradient/background from the Layers panel), so the pill SUPPRESSES for
 // them: selecting a تدرّج (or any fill) shows nothing on the canvas.
 function isDecorativeFill(el: HTMLElement): boolean {
+  // An <img>/<svg> IS the content leaf, never a decorative fill — even when it
+  // carries a `background` placeholder. Gen-image boxes ship with an inline
+  // `background: linear-gradient(…)` (Claude's pre-load placeholder), so the
+  // `backgroundImage` test below would otherwise mis-classify the image as a
+  // fill and suppress the whole pill (no Replace / §19 Regenerate). The
+  // `querySelector("img, svg")` check only catches a WRAPPER containing one,
+  // not the element itself — this guards the element-is-the-img/svg case.
+  if (el.tagName === "IMG" || el.tagName.toLowerCase() === "svg") return false;
   if ((el.textContent ?? "").trim() !== "") return false;
   if (el.querySelector("img, svg")) return false;
   const cs = getComputedStyle(el);
@@ -202,13 +221,17 @@ function Chevron({ up = false }: { up?: boolean }) {
   );
 }
 
-export function StylePill({ target, slideId, onCommit, onDismiss, language = "ar" }: Props) {
+export function StylePill({ target, slideId, onCommit, onDismiss, onRegenImage, language = "ar" }: Props) {
   const kind = kindOf(target);
   const pillRef = useRef<HTMLDivElement>(null);
   const [, force] = useState(0);
   const [colorOpen, setColorOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [fontOpen, setFontOpen] = useState(false);
+  // §19 — the regenerate-image prompt editor (open state + draft prompt). The
+  // draft is seeded from the box's data-genimage when the popover opens.
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenPrompt, setRegenPrompt] = useState("");
   // Whether the OPEN popover (colour picker / ⋯ menu) opens upward — set the
   // moment a popover opens, purely from which side of the pill the element is on
   // (see the layout effect below).
@@ -381,8 +404,8 @@ export function StylePill({ target, slideId, onCommit, onDismiss, language = "ar
   // current target, which a state-driven effect can't do race-free.) Mirror the
   // "editing" flag into a ref the rAF reads (can't write a ref during render).
   useEffect(() => {
-    editingRef.current = colorOpen || moreOpen || fontOpen || pillActive;
-  }, [colorOpen, moreOpen, fontOpen, pillActive]);
+    editingRef.current = colorOpen || moreOpen || fontOpen || pillActive || regenOpen;
+  }, [colorOpen, moreOpen, fontOpen, pillActive, regenOpen]);
 
   // Pointer released anywhere ends the "pressing the pill" state.
   useEffect(() => {
@@ -468,10 +491,54 @@ export function StylePill({ target, slideId, onCommit, onDismiss, language = "ar
     [target],
   );
 
+  // §19 — confirm the regenerate prompt. Persist the new prompt onto the box
+  // (data-genimage; commits on deselect like Replace), drop the current image
+  // so the box shows the gen-image shimmer until the new one lands, derive the
+  // aspect from the box's own shape, then hand off to DeckView (route + swap).
+  const regenPopoverRef = useRef<HTMLDivElement>(null);
+  const handleRegenConfirm = useCallback(() => {
+    const newPrompt = regenPrompt.trim();
+    if (!newPrompt) return;
+    const genid = target.getAttribute("data-genid");
+    if (!genid) return;
+    target.setAttribute("data-genimage", newPrompt);
+    target.removeAttribute("srcset");
+    target.removeAttribute("src");
+    dirty.current = true;
+    const r = target.getBoundingClientRect();
+    const ratio = r.height > 0 ? r.width / r.height : 1;
+    const aspect: GenImageAspect =
+      ratio >= 1.15 ? "landscape" : ratio <= 0.87 ? "portrait" : "square";
+    onRegenImage?.({ genid, slideId, prompt: newPrompt, aspect });
+    setRegenOpen(false);
+    force((n) => n + 1);
+  }, [regenPrompt, target, slideId, onRegenImage]);
+
+  // Click outside the prompt popover (but not on its toggle, which handles its
+  // own open/close) closes it. Capture phase so it beats nested handlers.
+  useEffect(() => {
+    if (!regenOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (regenPopoverRef.current?.contains(t as Node)) return;
+      if (t?.closest?.("[data-regen-toggle]")) return;
+      setRegenOpen(false);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [regenOpen]);
+
   if (!target.isConnected) return null;
   // A decorative fill (a gradient scrim, a colour block) has no useful pill — you
   // edit it from the Layers panel. Suppress the canvas pill entirely.
   if (isDecorativeFill(target)) return null;
+
+  // An AI-generated image box (vs an uploaded/replaced one) carries both
+  // data-genid and a non-empty data-genimage prompt — only those can regen.
+  const isAiImage =
+    kind === "image" &&
+    !!target.getAttribute("data-genid") &&
+    !!(target.getAttribute("data-genimage") ?? "").trim();
 
   const cs = getComputedStyle(target);
   const fontPx = Math.round(parseFloat(cs.fontSize) || 16);
@@ -672,6 +739,75 @@ export function StylePill({ target, slideId, onCommit, onDismiss, language = "ar
             hidden
             onChange={onPickImage}
           />
+          {/* §19 — Regenerate an AI image with an edited prompt. Only for AI
+              boxes (data-genid + data-genimage). Opens a glass-popover prompt
+              editor pre-filled with the box's prompt. */}
+          {isAiImage && onRegenImage && (
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                data-regen-toggle="true"
+                aria-label="إعادة توليد الصورة بالذكاء"
+                onClick={() => {
+                  setRegenPrompt(target.getAttribute("data-genimage") ?? "");
+                  setRegenOpen((o) => !o);
+                  setColorOpen(false);
+                  setMoreOpen(false);
+                  setFontOpen(false);
+                }}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white"
+                style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
+              >
+                <RegenImageIcon />
+                إعادة توليد
+              </button>
+              {regenOpen && (
+                <div
+                  ref={regenPopoverRef}
+                  dir="rtl"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-20 rounded-xl p-2.5 text-white shadow-2xl"
+                  style={{
+                    width: 300,
+                    right: 0,
+                    top: popoverFlipUp ? "auto" : "calc(100% + 8px)",
+                    bottom: popoverFlipUp ? "calc(100% + 8px)" : "auto",
+                  }}
+                >
+                  <textarea
+                    autoFocus
+                    dir="auto"
+                    rows={3}
+                    value={regenPrompt}
+                    onChange={(e) => setRegenPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setRegenOpen(false);
+                      } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        handleRegenConfirm();
+                      }
+                    }}
+                    placeholder="صف الصورة التي تريد توليدها…"
+                    className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] leading-relaxed text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/40"
+                    style={{ borderColor: "var(--tq-border-glass)", background: "var(--tq-bg-glass)" }}
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-white/40">تُحتسب صورة واحدة</span>
+                    <button
+                      type="button"
+                      onClick={handleRegenConfirm}
+                      disabled={!regenPrompt.trim()}
+                      className="btn-gradient-anim inline-flex h-7 items-center rounded-full px-3.5 text-[12px] font-medium text-white disabled:opacity-40"
+                    >
+                      توليد
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
       {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
@@ -739,6 +875,26 @@ function ReplaceIcon() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="17 8 12 3 7 8" />
       <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+// Regenerate glyph (circular refresh arrows) for the §19 AI-image regen button.
+function RegenImageIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <polyline points="21 3 21 9 15 9" />
     </svg>
   );
 }

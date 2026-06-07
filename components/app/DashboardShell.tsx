@@ -116,11 +116,15 @@ export function DashboardShell({
   // same horizontal real estate.
   const isFullWidthRoute =
     pathname.startsWith("/preview/") || pathname.startsWith("/project/");
-  // The working editor (/project) is the full-screen "Studio": no app Header
-  // or Sidebar, no page padding — DeckView paints its own dotted canvas,
-  // floating panels, and a back-to-dashboard control. (Earlier attempt to make
-  // the chrome TOGGLABLE was reverted — this is permanent full-bleed.)
-  const isStudioRoute = pathname.startsWith("/project/");
+  // BOTH the working editor (/project) and the generation phase (/preview) are
+  // the full-screen "Studio": no app Header or Sidebar, no page padding —
+  // DeckView paints its own StudioHeader, floating panels, and dotted canvas.
+  // (§18 unified the generation phase into the editor shell, so /preview must
+  // be chrome-less too — otherwise the dashboard Header + Sidebar render on top
+  // of DeckView's own shell, doubling the header. Earlier attempt to make the
+  // chrome TOGGLABLE was reverted — this is permanent full-bleed.)
+  const isStudioRoute =
+    pathname.startsWith("/project/") || pathname.startsWith("/preview/");
 
   // Share-revoked listener — `notificationStore` dispatches
   // `taqreer:share-revoked` on its window when the user channel

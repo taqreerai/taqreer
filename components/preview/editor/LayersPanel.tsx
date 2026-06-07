@@ -13,6 +13,7 @@ import { Reorder, useDragControls } from "framer-motion";
 import { buildLayerTree, type LayerNode } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { SLIDE_NAV_WIDTH } from "@/components/preview/SlideNavSidebar";
+import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 
 // Snappier than the house 500/35 so a dropped row settles into its new slot
@@ -242,9 +243,19 @@ export function LayersPanel({
       </header>
 
       {order.length === 0 && !bgNode ? (
-        <p className="px-2 py-4 text-[12px] text-white/40">
-          {isEn ? "No layers" : "لا توجد طبقات"}
-        </p>
+        doc == null ? (
+          // No editor document yet = the deck is still generating (the panel is
+          // shown disabled in the unified shell). Show the same branded
+          // paragraph-write animation the streaming slide thumbnails use, so the
+          // empty Layers panel reads as "designing…" rather than "nothing here".
+          <div className="flex flex-1 items-center justify-center py-8">
+            <ParagraphWriteIcon rtl={!isEn} size={28} className="text-white/40" />
+          </div>
+        ) : (
+          <p className="px-2 py-4 text-[12px] text-white/40">
+            {isEn ? "No layers" : "لا توجد طبقات"}
+          </p>
+        )
       ) : (
         <>
           <Reorder.Group

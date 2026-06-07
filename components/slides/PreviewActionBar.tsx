@@ -254,6 +254,7 @@ export function PreviewActionBar({
   isSaved,
   onSaved,
   horizontal = false,
+  disabled = false,
 }: {
   projectId: string;
   // Phase 15.B — viewer's role on this project. Drives which toolbar
@@ -322,6 +323,11 @@ export function PreviewActionBar({
   // Studio bottom-bar mode — lay the cluster out as a horizontal row (pill +
   // dividers rotate) instead of the default vertical left-rail strip.
   horizontal?: boolean;
+  // Generation phase (§unify): render the full bar but inert + dimmed — every
+  // control is present (so the shell doesn't reflow on completion) and just
+  // enables when the deck finishes. Applied as `pointer-events-none` + opacity
+  // on the pill so we don't have to thread it through every button.
+  disabled?: boolean;
 }) {
   const router = useRouter();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
@@ -499,7 +505,12 @@ export function PreviewActionBar({
       // future re-layouts won't accidentally trip the click handler
       // into killing comment mode on toolbar clicks.
       data-preview-toolbar="true"
-      className={`flex items-center gap-3 ${horizontal ? "flex-row" : "flex-col"}`}
+      aria-disabled={disabled || undefined}
+      // Generation phase: the whole bar is present but inert + dimmed; it lights
+      // up the moment the deck completes (no reflow).
+      className={`flex items-center gap-3 transition-opacity duration-300 ${
+        horizontal ? "flex-row" : "flex-col"
+      } ${disabled ? "pointer-events-none opacity-50" : ""}`}
     >
       {/* Toolbar column — Photoshop-style icon stack, grouped into
           three visual categories by horizontal dividers. Categories

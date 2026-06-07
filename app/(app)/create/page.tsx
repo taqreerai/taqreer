@@ -601,7 +601,7 @@ export default function CreatePage() {
       }
 
       const data = (await response.json()) as { projectId: string };
-      router.push(`/preview/${data.projectId}`);
+      router.push(`/project/${data.projectId}`);
     } catch (caughtError) {
       console.error("[create] generate failed:", caughtError);
       setError(

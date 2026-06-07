@@ -21,9 +21,9 @@
 // reorg and doesn't change route semantics.
 
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { DeckView } from "@/components/preview/DeckView";
-import { loadProject, isDeckReady } from "@/lib/project/load-project";
+import { loadProject } from "@/lib/project/load-project";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { prisma } from "@/lib/prisma";
 
@@ -51,13 +51,11 @@ export default async function ProjectPage({
   const data = await loadProject(projectId);
   if (!data) notFound();
 
-  // Inverse of /preview's gate — anything not completed gets
-  // bounced to the generation-phase route. Covers: bookmarking
-  // /project/<id> before save completes, an old-URL share that
-  // outpaced generation, a partial-regen mid-stream.
-  if (!isDeckReady(data)) {
-    redirect(`/preview/${projectId}`);
-  }
+  // Single-URL Studio (2026-06-07): /project serves EVERY deck state —
+  // generating, completed, mid-regen. DeckView renders one shell that flips
+  // from a disabled "generating" editor to the live editor in place, so there's
+  // no route hop / remount on completion. (/preview now just redirects here for
+  // back-compat with old links.) No redirect-when-not-ready anymore.
 
   const cookieStore = await cookies();
   const isCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";

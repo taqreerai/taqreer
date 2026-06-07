@@ -29,7 +29,7 @@ import {
   GenImageProvider,
   type GenImageFills,
 } from "@/components/slides/gen-image-context";
-import { scanGenImages, injectImgSrc } from "@/lib/images/slide-images";
+import { scanGenImages, injectImgSrc, type GenImageAspect } from "@/lib/images/slide-images";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
 import type { InitialSlideState } from "@/lib/project/load-project";
@@ -840,6 +840,61 @@ export function DeckView({
       }),
     };
   }, [manifest, filledImages]);
+
+  // §19 — fire the single-image regen route. The StylePill already wrote the
+  // new prompt onto the box (data-genimage, committed on deselect) and dropped
+  // its src (→ shimmer); the regenerated image arrives via `slide.image.ready`
+  // → filledImages → the iframe-patch effect below swaps it in. Fire-and-forget
+  // with an error log (the box keeps its shimmer; the user can retry).
+  const handleRegenImage = useCallback(
+    async (input: {
+      genid: string;
+      slideId: string;
+      prompt: string;
+      aspect: GenImageAspect;
+    }) => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/slides/${encodeURIComponent(
+            input.slideId,
+          )}/images/${encodeURIComponent(input.genid)}/regen`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: input.prompt, aspect: input.aspect }),
+          },
+        );
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(data?.error ?? `regen image: ${res.status}`);
+        }
+      } catch (err) {
+        console.error("[image-regen] failed", err);
+      }
+    },
+    [projectId],
+  );
+
+  // Keep the editor iframe's gen-image <img>s in sync with `filledImages`
+  // (genid → url). The iframe is a SEPARATE document — not a GenImageProvider
+  // consumer like SlideRenderer — so when a regenerated (§19) or streamed image
+  // lands we patch its src directly + add the one-shot fade. Persistence is
+  // owned by the committed `data-genimage` (the status route derives the URL by
+  // hash); this is purely the live in-editor swap. Re-runs on an iframe rebuild
+  // (editorDoc changes) so a refilled box survives the rebuild.
+  useEffect(() => {
+    if (!editorDoc) return;
+    for (const [genid, url] of Object.entries(filledImages)) {
+      const img = editorDoc.querySelector<HTMLImageElement>(
+        `img[data-genid="${genid}"][data-genimage]`,
+      );
+      if (!img || img.getAttribute("src") === url) continue;
+      img.setAttribute("src", url);
+      img.classList.add("tq-genimg-in");
+    }
+  }, [filledImages, editorDoc]);
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
   // throttles backgrounded / out-of-focus WebSockets and occasionally
   // drops broadcast frames entirely — symptom: the spinner overlay
@@ -3085,23 +3140,30 @@ export function DeckView({
     );
   }
 
-  // ─── Generating ────────────────────────────────────────────────────────────
-  if (status === "generating") {
-    // Card state machine — drives the per-slot UI in the cascade:
-    //   done    → green checkmark, card no longer pulses
-    //   current → spinner + label, card pulses
-    //   pending → empty pulse
-    // When stage is validating/saving, all visible slides count as done.
-    const cardStatus = (idx: number): "done" | "current" | "pending" => {
-      if (!progress) return "pending";
-      if (progress.stage === "validating" || progress.stage === "saving") return "done";
-      if (progress.currentSlide === 0) return "pending";
-      if (idx + 1 < progress.currentSlide) return "done";
-      if (idx + 1 === progress.currentSlide) return "current";
-      return "pending";
-    };
+  // ─── Generating + Completed: ONE unified Studio shell ───────────────────────
+  // The generation phase is the editor with disabled controls + a streaming
+  // canvas; completion just enables the controls + swaps in the editable canvas
+  // — same render tree, so nothing remounts. (Routing serves both at /project,
+  // so there's no route hop either.) These generation-phase derived values are
+  // hoisted out of the old early-return so the unified return below can read
+  // them. Cheap to compute always — they read the streaming state, empty when
+  // not generating.
+  const generating = status === "generating";
+  // Card state machine — drives the per-slot UI in the cascade:
+  //   done    → green checkmark, card no longer pulses
+  //   current → spinner + label, card pulses
+  //   pending → empty pulse
+  // When stage is validating/saving, all visible slides count as done.
+  const cardStatus = (idx: number): "done" | "current" | "pending" => {
+    if (!progress) return "pending";
+    if (progress.stage === "validating" || progress.stage === "saving") return "done";
+    if (progress.currentSlide === 0) return "pending";
+    if (idx + 1 < progress.currentSlide) return "done";
+    if (idx + 1 === progress.currentSlide) return "current";
+    return "pending";
+  };
 
-    const percent = progressPercent(progress);
+  const percent = progressPercent(progress);
     // Slot count switches on the user's slide-count mode:
     //   • custom (user picked N) → fixed-N tiles. Today's behavior.
     //   • auto                   → reserve a slot per slide Claude COMMITTED
@@ -3122,321 +3184,101 @@ export function DeckView({
     // The `Math.max(..., 1)` guarantees at least one tile so an empty
     // sidebar doesn't flash on initial paint before Claude's first
     // slide closes — the user sees the writing icon immediately.
-    const autoTotalHint =
-      progress && progress.estimatedTotal > 0 ? progress.estimatedTotal : 0;
-    const slotCount = initialSlideCountAuto
-      ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
-      : placeholders.length;
-    // Mix real streamed slides (kind:"slide") into the head of the
-    // nav row, padded with placeholders for slots Claude hasn't
-    // closed yet. Once `streamingTheme` is null we can't render a
-    // thumbnail (SlideRenderer needs theme CSS vars), so fall back
-    // to placeholder pulse with the right state. Comment count is
-    // hard-coded to 0 during streaming — comments don't exist yet.
-    //
-    // Auto-mode tail: the LAST slot (index === streamingPreview.length)
-    // is forced to state:"current" so the paragraph-write icon shows
-    // even before progress.currentSlide ticks past it.
-    const navItems: NavItem[] = Array.from({ length: slotCount }).map(
-      (_, idx) => {
-        const previewSlide = streamingPreview[idx];
-        if (previewSlide && streamingTheme) {
-          return {
-            kind: "slide",
-            index: idx,
-            slide: previewSlide,
-            commentCount: 0,
-          };
-        }
-        // The slot Claude is writing NEXT (one past the last closed
-        // slide) always shows the paragraph-write animation — in BOTH
-        // auto AND custom (e.g. /enhance) modes. Previously this was
-        // auto-only, so a fixed-count nav showed a dead pulse on the
-        // next slide instead of the "writing this one" affordance: the
-        // `cardStatus` "current" lands on `idx+1===currentSlide`, but
-        // that tile already has its preview slide so it renders as a
-        // real thumbnail — leaving the genuinely-next slot inert.
-        const isNextSlot = idx === streamingPreview.length;
+  const autoTotalHint =
+    progress && progress.estimatedTotal > 0 ? progress.estimatedTotal : 0;
+  const slotCount = initialSlideCountAuto
+    ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
+    : placeholders.length;
+  // Mix real streamed slides (kind:"slide") into the head of the nav row,
+  // padded with placeholders for slots Claude hasn't closed yet. Auto-mode
+  // tail: the LAST slot (index === streamingPreview.length) is forced to
+  // state:"current" so the paragraph-write icon shows even before
+  // progress.currentSlide ticks past it.
+  const genNavItems: NavItem[] = Array.from({ length: slotCount }).map(
+    (_, idx) => {
+      const previewSlide = streamingPreview[idx];
+      if (previewSlide && streamingTheme) {
         return {
-          kind: "placeholder",
+          kind: "slide",
           index: idx,
-          state: isNextSlot ? "current" : cardStatus(idx),
+          slide: previewSlide,
+          commentCount: 0,
         };
-      },
-    );
-    // Synthetic manifest shell so SlideNavSidebar's `manifest.theme`
-    // / `manifest.direction` / `manifest.language` reads work without
-    // the canonical manifest existing yet. Only the fields the nav +
-    // SlideRenderer actually consume are populated; the rest stay
-    // structurally valid but empty.
-    const previewManifestForNav: SlideManifest | null = streamingTheme
-      ? ({
-          version: "2.0",
-          // `presentationId` and `title` are non-null in the canonical
-          // schema. The preview manifest is a structural shim — empty
-          // strings keep the type contract honoured and the nav doesn't
-          // surface either field while generating, so the value is
-          // never read.
-          presentationId: presentationId ?? "",
-          title: projectTitle ?? "",
-          language: streamingLanguage,
-          direction: streamingDirection,
-          format: initialFormat ?? "16:9",
-          theme: streamingTheme,
-          slides: streamingPreview,
-        } satisfies SlideManifest)
-      : null;
-    // The slide focused in the hero — user click overrides the
-    // auto-tracked latest. Clamp to a slot that actually has a
-    // preview slide; out-of-range falls back to the latest closed
-    // slide so the hero never shows a blank canvas when there's
-    // *something* to show.
-    const previewHeroIdx =
-      streamingPreview.length === 0
-        ? -1
-        : Math.min(currentSlideIndex, streamingPreview.length - 1);
-    const previewHeroSlide =
-      previewHeroIdx >= 0 ? streamingPreview[previewHeroIdx] : null;
-    // Slide-nav is fixed-positioned outside the row, so the row has
-    // no internal reservation while generating (no comments yet,
-    // either). Hero centers in the remaining width.
-    const genHeroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
-    return (
-      <GenImageProvider value={filledImages}>
-      {/* Same top chrome as the completed editor (plan §18) so the shell doesn't
-          appear/reflow on completion. manifest=null → back button only; export +
-          share light up once the deck finishes generating. */}
-      <StudioHeader
-        projectId={projectId}
-        projectTitle={projectTitle}
-        manifest={null}
-        formatFallback={initialFormat}
-        role={role}
-      />
-      <section
-        // `dir={streamingDirection}` (was hardcoded "rtl") so an EN
-        // deck's generating layout flows LTR — the previous hardcoded
-        // RTL produced thumbnails that read right-aligned inside the
-        // hero canvas and got visually clipped against the LTR slide
-        // content. The completed-state branch below already uses
-        // `dir={manifest!.direction}`; this brings the generating
-        // branch into parity.
-        dir={streamingDirection}
-        className="relative"
-        style={{ marginRight: SLIDE_NAV_WIDTH }}
-      >
-        {/* Load the brand fonts DURING streaming — the streaming hero +
-            nav thumbnails reference them by name, and without these tags the
-            font only swapped in when the completed branch took over. */}
-        {fontAssets}
-        <SlideNavSidebar
-          items={navItems}
-          currentIndex={previewHeroIdx >= 0 ? previewHeroIdx : null}
-          onSelect={(idx) => {
-            // First user click in the streaming phase locks the hero
-            // away from auto-advance for the rest of the run. They
-            // can re-sync by clicking the latest thumbnail manually
-            // (auto-advance won't override their next click — it's
-            // already disabled).
-            previewManualClickRef.current = true;
-            setCurrentSlideIndex(idx);
-          }}
-          manifest={previewManifestForNav}
-          format={initialFormat ?? "16:9"}
-          mainSidebarWidth={mainSidebarWidth}
-          // Generating-branch language signal — sourced from the
-          // brief (streamLanguage) up-thread, NOT the manifest
-          // (which doesn't exist yet). EN decks need this so the
-          // sidebar reads LTR even before the first slide closes.
-          language={streamingLanguage}
-          viewersBySlide={viewersBySlide}
-          // Cancel pill — only wired in the generating branch.
-          // Confirmation modal handled below by CancelGenerationDialog;
-          // we just open it here. Role gate: only owner / editor see
-          // the pill — view / comment / public-view roles get nothing.
-          // The API route enforces the gate again, but hiding it from
-          // non-editors keeps the UI honest.
-          onCancelGeneration={
-            canEdit ? () => setCancelOpen(true) : undefined
-          }
-          cancelDisabled={cancelBusy}
-        />
-        {/* Canvas row — hero centered in the remaining width. Same
-            shape as the completed branch so the shell doesn't reflow
-            when generation finishes. */}
-        <div
-          dir="ltr"
-          className="flex items-center justify-center"
-          // Full-viewport row so the canvas (sized to 100vh − padding) centers
-        // vertically with equal breathing top/bottom — clearing the back pill
-        // and the bottom toolbar.
-        style={{ minHeight: "100vh" }}
-        >
-          <div
-            ref={gridRef}
-            className="glass-card relative flex items-center justify-center overflow-hidden"
-            style={{ aspectRatio, width: genHeroWidthCss }}
-          >
-            {/* Live preview hero — renders whichever slide the user is
-                currently focused on (default: the latest streamed
-                slide). Falls back to a blank canvas + caption until the
-                first slide closes in Claude's buffer. SlideRenderer
-                runs its own sanitize pass so the raw preview HTML is
-                XSS-safe before it paints. */}
-            {previewHeroSlide && streamingTheme ? (
-              <div className="absolute inset-0 transition-opacity duration-300">
-                <SlideRenderer
-                  slide={previewHeroSlide}
-                  theme={streamingTheme}
-                  direction={streamingDirection}
-                  language={streamingLanguage}
-                  width={canvasW}
-                  height={canvasH}
-                  scale={gridScale}
-                />
-              </div>
-            ) : null}
-            {/* Caption overlay — ONLY shown when there's nothing
-                rendered on the canvas yet (no streamed slide AND no
-                theme to wire it). Once a real slide is visible behind,
-                the thumbnail row + the rendered slide itself
-                communicate progress; layering the caption on top is
-                noisy and obscures content. The "stuck" banner stays
-                visible since it's a different signal class.
-
-                When this branch IS active, `dir="rtl"` so the spinner
-                sits to the START of the Arabic caption (visual right)
-                and the meta line reads in RTL order. */}
-            {!(previewHeroSlide && streamingTheme) ? (
-              <div
-                dir="rtl"
-                className="flex flex-col items-center gap-4 px-6 text-center text-white"
-              >
-                <h1 className="font-headline-lg text-[28px] font-bold">
-                  جارٍ تصميم عرضك...
-                </h1>
-                {/* Live progress caption — thinking-token counter
-                    during silent thinking, "extracting" during the
-                    designing stage (this caption is only visible when
-                    NO real slide has rendered in the hero, so "designing
-                    slide X of Y" was misleading — the design hasn't
-                    landed yet; we're still preparing), validating /
-                    saving on the tail. /create's fast slide streaming
-                    swaps in a real hero slide before this branch is
-                    ever shown, so this copy is in practice an /enhance
-                    (long-thinking-then-burst) message. */}
-                <div className="text-muted flex items-center justify-center gap-3 text-sm">
-                  <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
-                  <span>
-                    {progress?.stage === "thinking"
-                      ? "التفكير..."
-                      : progress?.stage === "validating"
-                        ? "التحقق من المخرجات..."
-                        : progress?.stage === "saving"
-                          ? "حفظ العرض..."
-                          : progress?.currentSlide
-                            ? // Stage copy switches on the source kind so the
-                              // message reflects what Claude is actually doing.
-                              // /enhance reads the PDF (extracts text + brand),
-                              // /datasheet reads parsed markdown (analyzes data
-                              // — no PDF extraction), /mimic reads both source
-                              // + design ref, /create scratch starts from text
-                              // or an uploaded reference doc.
-                              initialSourceKind === "data"
-                              ? "جارٍ تحليل البيانات..."
-                              : initialSourceKind === "mimic"
-                                ? "جارٍ قراءة المصدر وأسلوب التصميم..."
-                                : initialSourceKind === "enhance"
-                                  ? "جارٍ استخراج النص والهوية البصرية..."
-                                  : // scratch / null = /create — nothing to
-                                    // extract; Claude is composing the deck
-                                    // from the idea text.
-                                    "جارٍ كتابة المحتوى وتصميم الشرائح..."
-                            : "بدء التصميم..."}
-                  </span>
-                </div>
-                <div className="w-full max-w-md">
-                  <div
-                    className="progress-track"
-                    role="progressbar"
-                    aria-valuenow={percent}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <div className="progress-bar" style={{ width: `${percent}%` }} />
-                  </div>
-                  <p className="text-muted mt-2 text-xs">{percent}%</p>
-                </div>
-                {isSlow && (
-                  <span className="text-[11px] leading-relaxed text-white/60">
-                    {slowCaption}
-                  </span>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </div>
-        {/* Cancel-confirmation modal — portal'd to body so the
-            backdrop-blur escapes the section's positioning context.
-            Only mounts when the user clicks the cancel pill; the
-            in-flight `cancelBusy` flag locks the modal during the
-            POST to prevent double-fire. */}
-        <CancelGenerationDialog
-          open={cancelOpen}
-          onClose={() => {
-            if (!cancelBusy) setCancelOpen(false);
-          }}
-          onConfirm={handleCancel}
-          busy={cancelBusy}
-        />
-      </section>
-      </GenImageProvider>
-    );
-  }
-
-  // ─── Completed ─────────────────────────────────────────────────────────────
-  // Currently-focused slide. Clamped here so we don't blow up if the
-  // index outpaces a freshly-shrunk manifest (e.g. after a partial regen
-  // dropped a slide — shouldn't happen, but defensive).
-  const focusedIndex = Math.min(
-    Math.max(currentSlideIndex, 0),
-    manifest!.slides.length - 1,
+      }
+      const isNextSlot = idx === streamingPreview.length;
+      return {
+        kind: "placeholder",
+        index: idx,
+        state: isNextSlot ? "current" : cardStatus(idx),
+      };
+    },
   );
-  const focusedSlide = manifest!.slides[focusedIndex];
+  // Synthetic manifest shell so the nav's `manifest.theme`/`.direction`/
+  // `.language` reads work before the canonical manifest exists. Only the
+  // fields the nav + SlideRenderer consume are populated. Null until a theme
+  // streams (the canvas shows the thinking screen until then).
+  const previewManifestForNav: SlideManifest | null = streamingTheme
+    ? ({
+        version: "2.0",
+        presentationId: presentationId ?? "",
+        title: projectTitle ?? "",
+        language: streamingLanguage,
+        direction: streamingDirection,
+        format: initialFormat ?? "16:9",
+        theme: streamingTheme,
+        slides: streamingPreview,
+      } satisfies SlideManifest)
+    : null;
+  // The slide focused in the hero while streaming — clamp to a slot that has a
+  // preview slide; -1 when nothing has streamed yet.
+  const previewHeroIdx =
+    streamingPreview.length === 0
+      ? -1
+      : Math.min(currentSlideIndex, streamingPreview.length - 1);
+  const previewHeroSlide =
+    previewHeroIdx >= 0 ? streamingPreview[previewHeroIdx] : null;
 
-  const navItems: NavItem[] = manifest!.slides.map((slide, idx) => ({
-    kind: "slide",
-    index: idx,
-    slide,
-    commentCount: commentsBySlideId.get(slide.slideId)?.length ?? 0,
-    regenerating:
-      !!applying?.targetSlideIds.includes(slide.slideId) ||
-      peerRegenInProgress.has(slide.slideId),
-    locked: slideStates[slide.slideId]?.lockedAt != null,
-  }));
-  // Phase 16.D revised (re-revised 2026-05-24) — observers now ALSO see
-  // the dim+spinner overlay for peer regens. Unioning `applying`
-  // (actor's own slides) with `peerRegenInProgress` (slides a peer
-  // started regenerating, set/cleared by the project channel started+
-  // finished broadcasts) keeps a single overlay path for both cases.
-  // User accepted the friction trade-off: the live spinner is the
-  // most legible "someone is changing this — don't start your own
-  // edit yet" cue, worth the visual cost for the regen window.
+  // ─── Unified view values (generating OR completed) ──────────────────────────
+  // `viewManifest` is the real manifest once completed, or the streaming shim
+  // while generating — null only in the earliest "thinking" moment before a
+  // theme streams (the canvas shows the thinking screen then). Everything below
+  // reads from it so the SAME return renders both states.
+  const viewManifest = manifest ?? previewManifestForNav;
+  const viewSlides = viewManifest?.slides ?? [];
+  // Currently-focused slide. Clamped so the index can't outpace a freshly
+  // shrunk manifest. Null only when nothing has rendered yet (early generation);
+  // the editable canvas + its overlays are suppressed while generating, so the
+  // null case only ever feeds the streaming/thinking canvas.
+  const focusedIndex = viewSlides.length
+    ? Math.min(Math.max(currentSlideIndex, 0), viewSlides.length - 1)
+    : 0;
+  const focusedSlide: SlideType | null = viewSlides[focusedIndex] ?? null;
+
+  // Nav items: streaming placeholders while generating, real slides once done.
+  const navItems: NavItem[] = generating
+    ? genNavItems
+    : (manifest?.slides ?? []).map((slide, idx) => ({
+        kind: "slide",
+        index: idx,
+        slide,
+        commentCount: commentsBySlideId.get(slide.slideId)?.length ?? 0,
+        regenerating:
+          !!applying?.targetSlideIds.includes(slide.slideId) ||
+          peerRegenInProgress.has(slide.slideId),
+        locked: slideStates[slide.slideId]?.lockedAt != null,
+      }));
+  // Peer/own regen overlay for the focused slide (completed only — no focused
+  // slide identity to key on while generating).
   const isFocusedRegenerating =
-    !!applying?.targetSlideIds.includes(focusedSlide.slideId) ||
-    peerRegenInProgress.has(focusedSlide.slideId);
-  // Editing is disabled for the focused slide while it's being (partial-)
-  // regenerated OR while it's locked — the editor falls back to the read-only
-  // renderer and the style pill is suppressed. Per-slide: other slides stay
-  // editable.
-  const isFocusedLocked = slideStates[focusedSlide.slideId]?.lockedAt != null;
-  const editingDisabled = isFocusedRegenerating || isFocusedLocked;
+    !!focusedSlide &&
+    (!!applying?.targetSlideIds.includes(focusedSlide.slideId) ||
+      peerRegenInProgress.has(focusedSlide.slideId));
+  const isFocusedLocked =
+    !!focusedSlide && slideStates[focusedSlide.slideId]?.lockedAt != null;
+  // Editing is disabled while generating (controls aren't live yet), or when
+  // the focused slide is mid-regen / locked.
+  const editingDisabled = generating || isFocusedRegenerating || isFocusedLocked;
 
-  // Hero width clamp — two candidates, smallest wins:
-  //   • viewport-height-derived width (so hero never exceeds the
-  //     remaining vertical space given its aspect ratio)
-  //   • the row's full width (side panels are fixed-positioned
-  //     outside the section, so the row reserves nothing).
   const heroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
 
   // Saved-state comparator. Two halves, both required for "saved":
@@ -3471,7 +3313,7 @@ export function DeckView({
   return (
     <GenImageProvider value={filledImages}>
     <section
-      dir={manifest!.direction}
+      dir={viewManifest?.direction ?? streamingDirection}
       className="relative"
       // Studio: the slide centers between the two floating panels (Slides on
       // the right, Layers on the left). Symmetric gutters reserve their space;
@@ -3484,12 +3326,12 @@ export function DeckView({
       {fontAssets}
 
       {/* Studio top header — back + project title (leading/right) · Export ▾ +
-          Share (trailing/left). Replaced the standalone back pill; the document
-          chrome lives here so the bottom pill is a pure composer (§16). */}
+          Share (trailing/left). While generating, manifest=null → back + title
+          only; export/share light up on completion. */}
       <StudioHeader
         projectId={projectId}
         projectTitle={projectTitle}
-        manifest={exportManifest!}
+        manifest={generating ? null : exportManifest}
         formatFallback={initialFormat}
         role={role}
       />
@@ -3507,37 +3349,47 @@ export function DeckView({
         items={navItems}
         currentIndex={focusedIndex}
         onSelect={(idx) => setCurrentSlideIndex(idx)}
-        manifest={manifest}
-        format={manifest!.format ?? initialFormat ?? "16:9"}
-        title={manifest!.title}
+        manifest={viewManifest}
+        format={viewManifest?.format ?? initialFormat ?? "16:9"}
+        title={viewManifest?.title ?? projectTitle}
         mainSidebarWidth={mainSidebarWidth}
         // Sidebar reading direction follows the deck's language —
         // EN decks flip to LTR so the visual #1 lands on the left
         // (user feedback 2026-05-20). Defaults to "ar" if missing.
-        language={manifest!.language === "en" ? "en" : "ar"}
-        // Bulk lock pill is hidden for non-edit roles (SlideNavSidebar
-        // already auto-hides when both callbacks are omitted). Same
-        // gating logic as the per-slide lock toggle in NavItem.
-        onLockAll={canEdit ? () => bulkSetLock(true) : undefined}
-        onUnlockAll={canEdit ? () => bulkSetLock(false) : undefined}
+        language={
+          (viewManifest?.language ?? streamingLanguage) === "en" ? "en" : "ar"
+        }
+        // Bulk lock pill is hidden for non-edit roles + while generating
+        // (nothing to lock yet). Same gating as the per-slide lock toggle.
+        onLockAll={canEdit && !generating ? () => bulkSetLock(true) : undefined}
+        onUnlockAll={
+          canEdit && !generating ? () => bulkSetLock(false) : undefined
+        }
         viewersBySlide={viewersBySlide}
         floating
-        // Slides ⇄ Comments tab (§16). Comment-capable roles get the Comments
-        // tab; entering comment mode auto-selects it (effect above). The badge
-        // counts the focused slide's comments.
-        tab={navTab}
-        // Switching to Slides also exits comment mode — the embedded panel
-        // dropped its "finish commenting" button, so the Slides tab (and
-        // clicking outside the canvas, and Esc) is how you leave.
-        onTabChange={(t) => {
-          setNavTab(t);
-          if (t === "slides") setCommentMode(false);
-        }}
+        // Cancel pill (generating only). Confirmation modal below.
+        onCancelGeneration={
+          generating && canEdit ? () => setCancelOpen(true) : undefined
+        }
+        cancelDisabled={cancelBusy}
+        // Slides ⇄ Comments tab (§16) — completed only (no comments while
+        // generating). The badge counts the focused slide's comments.
+        tab={generating ? undefined : navTab}
+        onTabChange={
+          generating
+            ? undefined
+            : (t) => {
+                setNavTab(t);
+                if (t === "slides") setCommentMode(false);
+              }
+        }
         commentCount={
-          comments.filter((c) => c.slideId === focusedSlide.slideId).length
+          generating
+            ? 0
+            : comments.filter((c) => c.slideId === focusedSlide?.slideId).length
         }
         commentsSlot={
-          canComment ? (
+          !generating && canComment && focusedSlide ? (
             <CommentsPanel
               embedded
               comments={comments}
@@ -3565,8 +3417,12 @@ export function DeckView({
             selected={editorSelected}
             onSelect={setEditorSelected}
             onCommit={handleSlideEdit}
-            slideId={focusedSlide.slideId}
-            language={manifest!.language === "en" ? "en" : "ar"}
+            slideId={focusedSlide?.slideId ?? ""}
+            language={
+              (viewManifest?.language ?? streamingLanguage) === "en"
+                ? "en"
+                : "ar"
+            }
           />
         </motion.div>
       ) : null}
@@ -3603,6 +3459,8 @@ export function DeckView({
               <div className="pointer-events-auto">
                 <PreviewActionBar
                   horizontal
+                  // Generating: present but inert + dimmed; enables on completion.
+                  disabled={generating}
                   projectId={projectId}
                   role={role}
                   studioMode={studioMode}
@@ -3626,7 +3484,7 @@ export function DeckView({
                   // surfaced in the toolbar too so the user knows
                   // why "+ comment" doesn't work before clicking.
                   focusedSlideLocked={
-                    slideStates[focusedSlide.slideId]?.lockedAt != null
+                    slideStates[focusedSlide?.slideId ?? ""]?.lockedAt != null
                   }
                   // Armed = drafts exist, user has exited comment
                   // mode, and no apply is in flight → the regen
@@ -3636,7 +3494,7 @@ export function DeckView({
                   // anchor; its popover flips up from the bottom bar.
                   historyOpen={
                     historyAnchor != null &&
-                    historySlideKey === focusedSlide.slideId
+                    historySlideKey === focusedSlide?.slideId
                   }
                   onOpenHistory={async (rect) => {
                     if (historyAnchor != null) {
@@ -3801,7 +3659,7 @@ export function DeckView({
           variants={slideCardVariants}
           initial="hidden"
           animate="visible"
-          aria-label={`الشريحة ${focusedIndex + 1} من ${manifest!.slides.length}`}
+          aria-label={`الشريحة ${focusedIndex + 1} من ${Math.max(viewSlides.length, 1)}`}
           style={{ aspectRatio, width: heroWidthCss }}
           // Animated mesh-gradient ring — class is always present so
           // CSS owns the fade in/out via `data-active`. When false,
@@ -3834,7 +3692,72 @@ export function DeckView({
               flat dim gives the spinner readable contrast against
               any slide background without an extra chrome chip. */}
           <div className="h-full w-full overflow-hidden">
-            {editMode ? (
+            {generating ? (
+              // ── Generation canvas: the streaming hero (once a slide closes)
+              // or the thinking screen + progress bar until then. Same wrapper
+              // as the editor canvas, so completion only swaps the INNER
+              // content — the frame never remounts.
+              previewHeroSlide && streamingTheme ? (
+                <SlideRenderer
+                  slide={previewHeroSlide}
+                  theme={streamingTheme}
+                  direction={streamingDirection}
+                  language={streamingLanguage}
+                  width={canvasW}
+                  height={canvasH}
+                  scale={gridScale}
+                />
+              ) : (
+                <div
+                  dir="rtl"
+                  className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-white"
+                >
+                  <h1 className="font-headline-lg text-[28px] font-bold">
+                    جارٍ تصميم عرضك...
+                  </h1>
+                  <div className="text-muted flex items-center justify-center gap-3 text-sm">
+                    <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+                    <span>
+                      {progress?.stage === "thinking"
+                        ? "التفكير..."
+                        : progress?.stage === "validating"
+                          ? "التحقق من المخرجات..."
+                          : progress?.stage === "saving"
+                            ? "حفظ العرض..."
+                            : progress?.currentSlide
+                              ? initialSourceKind === "data"
+                                ? "جارٍ تحليل البيانات..."
+                                : initialSourceKind === "mimic"
+                                  ? "جارٍ قراءة المصدر وأسلوب التصميم..."
+                                  : initialSourceKind === "enhance"
+                                    ? "جارٍ استخراج النص والهوية البصرية..."
+                                    : "جارٍ كتابة المحتوى وتصميم الشرائح..."
+                              : "بدء التصميم..."}
+                    </span>
+                  </div>
+                  <div className="w-full max-w-md">
+                    <div
+                      className="progress-track"
+                      role="progressbar"
+                      aria-valuenow={percent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
+                      <div
+                        className="progress-bar"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <p className="text-muted mt-2 text-xs">{percent}%</p>
+                  </div>
+                  {isSlow && (
+                    <span className="text-[11px] leading-relaxed text-white/60">
+                      {slowCaption}
+                    </span>
+                  )}
+                </div>
+              )
+            ) : editMode ? (
               <SlideEditor
                 slide={focusedSlide}
                 theme={manifest!.theme}
@@ -3868,14 +3791,15 @@ export function DeckView({
               />
             )}
             {/* I2 — contextual style pill over the selected element (Edit
-                studio-mode only; suppressed in AI mode, comment mode, or while
-                the slide is regenerating / locked). */}
-            {editMode && studioMode === "edit" && !commentMode && !editingDisabled && editorSelected ? (
+                studio-mode only; suppressed while generating, in AI mode,
+                comment mode, or while the slide is regenerating / locked). */}
+            {!generating && editMode && studioMode === "edit" && !commentMode && !editingDisabled && editorSelected ? (
               <StylePill
                 target={editorSelected}
-                slideId={focusedSlide.slideId}
+                slideId={focusedSlide!.slideId}
                 onCommit={handleSlideEdit}
                 onDismiss={dismissEditorSelection}
+                onRegenImage={handleRegenImage}
                 language={manifest!.language === "en" ? "en" : "ar"}
               />
             ) : null}
@@ -3890,7 +3814,7 @@ export function DeckView({
               behind it. Replaces the previous filter:blur(20px) on
               the slide content + dim-chip combo (direction
               2026-05-23). */}
-          {isFocusedRegenerating ? (
+          {!generating && isFocusedRegenerating ? (
             <div
               // `dir="rtl"` so the trailing ASCII `...` lands on the
               // visual LEFT (end of an RTL line) instead of the
@@ -3937,9 +3861,9 @@ export function DeckView({
               regenerating slide. The blur + spinner own the visual
               during that window; markers come back as soon as the
               new version lands and `isFocusedRegenerating` clears. */}
-          {canComment && !isFocusedRegenerating ? (
+          {!generating && canComment && !isFocusedRegenerating ? (
             <HeroCommentOverlay
-              slideId={focusedSlide.slideId}
+              slideId={focusedSlide!.slideId}
               comments={comments}
               scale={gridScale}
               canvasW={canvasW}
@@ -4017,6 +3941,18 @@ export function DeckView({
           await restoreToVersion(targetSlideKey, versionNumber);
         }}
       />
+      {/* Cancel-confirmation modal (generation only) — portal'd to body so the
+          backdrop-blur escapes the section's positioning context. */}
+      {generating ? (
+        <CancelGenerationDialog
+          open={cancelOpen}
+          onClose={() => {
+            if (!cancelBusy) setCancelOpen(false);
+          }}
+          onConfirm={handleCancel}
+          busy={cancelBusy}
+        />
+      ) : null}
     </section>
     </GenImageProvider>
   );

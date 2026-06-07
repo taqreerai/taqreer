@@ -778,7 +778,7 @@ export default function EnhanceContentPage() {
       sessionStorage.removeItem("taqreer:create:output");
       clearSource();
 
-      router.push(`/preview/${data.projectId}`);
+      router.push(`/project/${data.projectId}`);
     } catch (err) {
       console.error("[enhance] generate failed:", err);
       setError(

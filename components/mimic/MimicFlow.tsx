@@ -705,7 +705,7 @@ export default function MimicFlow({
       }
 
       const data = (await response.json()) as { projectId: string };
-      router.push(`/preview/${data.projectId}`);
+      router.push(`/project/${data.projectId}`);
     } catch (err) {
       console.error("[mimic] generate failed:", err);
       setError(
