@@ -21,7 +21,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SegmentedToggle } from "@/components/create/controls";
-import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { SlideRenderer, slideRootBackground } from "@/components/slides/SlideRenderer";
 import { SlidePresenceStack } from "@/components/preview/SlidePresenceStack";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
@@ -454,7 +454,14 @@ export function SlideNavSidebar({
                     ) : null}
                   </div>
                 ) : manifest ? (
-                  <div className="h-full w-full" style={{ background: manifest.theme.background }}>
+                  <div
+                    className="h-full w-full"
+                    // Match the SlideRenderer's own wrapper: the slide's resolved
+                    // root bg, else TRANSPARENT (not the deck theme white) so a
+                    // dark/child-bg slide's empty first-paint frame shows the dark
+                    // nav panel, not a white flash.
+                    style={{ background: slideRootBackground(item.slide.html, "transparent") }}
+                  >
                     <SlideRenderer
                       slide={item.slide}
                       theme={manifest.theme}

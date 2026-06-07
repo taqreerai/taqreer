@@ -134,12 +134,15 @@ export function SlideEditor({
   useEffect(() => {
     scaleRef.current = fillScale;
   }, [fillScale]);
-  // Slide's own root background (falls back to the deck theme) — painted on the
-  // iframe element so it doesn't flash white before the srcDoc loads (the reload
-  // FOUC). Same helper + rationale as SlideRenderer's wrapper.
+  // Slide's own root background — painted on the iframe element so it doesn't
+  // flash white before the srcDoc loads (the reload FOUC). Fallback TRANSPARENT
+  // (not the deck theme): decks that paint their visible bg on a CHILD leave the
+  // root white, so a theme fallback would still flash white — transparent lets
+  // the dark editor canvas behind show through that one frame. Same helper +
+  // rationale as SlideRenderer's wrapper.
   const iframeBg = useMemo(
-    () => slideRootBackground(slide.html, theme.background),
-    [slide.html, theme.background],
+    () => slideRootBackground(slide.html, "transparent"),
+    [slide.html],
   );
   const srcDoc = useMemo(() => {
     const vars = themeToCssVars(theme) as Record<string, string>;

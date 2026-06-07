@@ -81,8 +81,13 @@ function SlideRendererImpl({
   // the wrapper so the empty first-paint frame doesn't flash white. See
   // slideRootBackground above.
   const rootBg = useMemo(
-    () => slideRootBackground(slide.html, theme.background),
-    [slide.html, theme.background],
+    // Fallback TRANSPARENT (not the deck theme): many decks paint the visible
+    // background on a CHILD element and leave the root white, so falling back to
+    // the (white) theme bg would still flash white before the child paints.
+    // Transparent lets the dark editor/nav panel show through that one frame
+    // instead. Slides that DO set a resolvable root bg still get it exactly.
+    () => slideRootBackground(slide.html, "transparent"),
+    [slide.html],
   );
   // Shared helper returns a `Record<string, string>` so the html-document
   // export can reuse the same source of truth. Cast to CSSProperties for
