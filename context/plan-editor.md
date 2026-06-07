@@ -772,3 +772,53 @@ Deferred quality cleanups (from /simplify, safe but behavior-touching — do wit
   the ~750-line PreviewActionBar.
 - `.ai-marker-chip .material-symbols-outlined` 17px override → reuse the `.tq-icon-sm`
   utility pattern (add `.tq-icon-md` if 17px is a new common size).
+
+## 18. Unify the generation-phase (preview) shell with the editor shell (2026-06-07, fresh-session ready)
+
+Right now the COMPLETED deck (`/project/[id]`) has the new Studio shell (StudioHeader
+top bar + Edit⇄AI bottom command bar + floating Layers/Slides panels + dotted canvas),
+but the GENERATION phase (`/preview/[id]` — the "Claude is working" / streaming view)
+still renders the OLD chrome. Goal: the generating state renders inside the SAME shell,
+with the streaming slides filling the canvas as they arrive. NOT a new page — a
+render-branch unification inside DeckView.
+
+### Verified architecture (do NOT re-derive)
+- `/preview/[projectId]` = GENERATION-PHASE route; `/project/[projectId]` = COMPLETED route.
+  Lifecycle pair with inverse SSR redirects (`isDeckReady` → /project; not-ready → /preview).
+  Client: DeckView `router.replace("/project/<id>")` fires on stream-complete.
+- The two page files are NEAR-IDENTICAL (`diff` shows only the redirect direction +
+  comments differ): both render the SAME `<DeckView>` with the same role props
+  (`resolveProjectAccess(id, "view")` → role; `loadProject`; presence profile;
+  `deckKey = versionId:status:hasManifest`; `initialMainSidebarWidth` from the sidebar
+  cookie). So the page layer needs NO change — the divergence is inside DeckView.
+- `components/preview/DeckView.tsx` (~3500 lines) derives `status`
+  ("generating"|"completed"|"failed"|"cancelled", ~line 1647) and `editMode = canEdit`
+  (role owner/edit). `<StudioHeader>` renders at ~line 3479; `<PreviewActionBar>` is the
+  bottom command bar. Streaming slides live in `streamingPreview` state.
+
+### STEP 1 (confirm before editing — the one unknown)
+Locate DeckView's generating-vs-completed render branch: grep the RETURN/JSX region
+(lines ~3000+) for `status === "generating"`, `streamingPreview`, and any early returns.
+Determine whether the StudioHeader shell (3479) wraps BOTH states or only the completed
+one — that tells you whether to hoist the shell or just feed the generating content into it.
+
+### Approach (once the branch is found)
+- Hoist the shell (StudioHeader + canvas/slide-nav framing) so it wraps BOTH states.
+- GENERATING state inside the shell: streaming-preview slides fill the canvas (reuse
+  `streamingPreview`); NO Edit⇄AI toggle / editing controls; the bottom bar shows
+  generation progress + Cancel (reuse the existing progress + CancelGenerationDialog),
+  not the editor controls. Header = back + (maybe) a "generating…" affordance.
+- COMPLETED state: unchanged (current editor shell).
+- Keep role/editMode gating — viewers never see edit controls.
+
+### Guardrails
+Reuse StudioHeader / PreviewActionBar / SlideNavSidebar — never fork. `--tq-*` tokens,
+Cairo, RTL, Latin numerals (0-9), glass primitives, spring 500/35. Likely UI-only →
+tsc + eslint clean; security review skippable. Verify live: a generating deck shows the
+new shell with slides streaming in, and completion still `router.replace`s to /project.
+
+### Key files
+`components/preview/DeckView.tsx` (the render branch — the whole change), `StudioHeader.tsx`,
+`components/slides/PreviewActionBar.tsx`, `components/preview/SlideNavSidebar.tsx`,
+`components/preview/CancelGenerationDialog.tsx`. The two page files
+(`app/(app)/{project,preview}/[projectId]/page.tsx`) likely need NO change.
