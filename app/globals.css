@@ -1073,7 +1073,7 @@ body {
      slides (hugging the edge washed it out). Parent must NOT have
      `overflow:hidden`; the JSX moves the clip down to the slide wrapper. */
   inset: -6px;
-  border-radius: 10px;
+  border-radius: 0;
   /* 1 px stroke, ~5 px gap (user direction). */
   padding: 1px;
   background:
