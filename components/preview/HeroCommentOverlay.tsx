@@ -766,7 +766,7 @@ function CommentEditor({
       // backdrop-filter compositor sees a fully-resolved background
       // colour — inline `var()` references kept rendering transparent
       // for both popovers on Safari despite valid token definitions.
-      className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      className="in-slide-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
       style={{ left, top, width: POPOVER_W }}
     >
       {error ? (
@@ -966,7 +966,7 @@ function MarkerPreviewPopup({
       // backdrop-filter compositor sees a fully-resolved background
       // colour — inline `var()` references kept rendering transparent
       // for both popovers on Safari despite valid token definitions.
-      className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      className="in-slide-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
       style={{ left, top, width: POPOVER_W }}
     >
       {/* Header — avatar visual-right, name+time stacked visual-left

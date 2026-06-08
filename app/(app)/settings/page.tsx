@@ -17,14 +17,6 @@ type PlanUsageData = {
   renewalDate: string | null;
 };
 
-const glassPresets = {
-  off:    { label: 'لا يوجد', desc: 'بدون تأثير', opacity: '0',    blur: '0px',  borderOpacity: '0.08', saturation: '100%' },
-  subtle: { label: 'خفيف',    desc: 'تأثير ناعم',  opacity: '0.02', blur: '16px', borderOpacity: '0.06', saturation: '110%' },
-  normal: { label: 'معتدل',   desc: 'الافتراضي',   opacity: '0.04', blur: '24px', borderOpacity: '0.09', saturation: '130%' },
-  strong: { label: 'قوي',     desc: 'تأثير قوي',   opacity: '0.07', blur: '32px', borderOpacity: '0.12', saturation: '160%' },
-} as const;
-type GlassPreset = keyof typeof glassPresets;
-
 function StatusMsg({ msg }: { msg: Msg }) {
   if (!msg) return null;
   return (
@@ -53,22 +45,6 @@ export default function SettingsPage() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [glassPreset, setGlassPreset] = useState<GlassPreset>(() => {
-    if (typeof window === 'undefined') return 'normal';
-    const stored = localStorage.getItem('taqreer_glass_preset') as GlassPreset | null;
-    return (stored && stored in glassPresets) ? stored : 'normal';
-  });
-
-  const applyGlassPreset = (preset: GlassPreset) => {
-    const p = glassPresets[preset];
-    const root = document.documentElement;
-    root.style.setProperty('--glass-opacity', p.opacity);
-    root.style.setProperty('--glass-blur', p.blur);
-    root.style.setProperty('--glass-border-opacity', p.borderOpacity);
-    root.style.setProperty('--glass-saturation', p.saturation);
-    localStorage.setItem('taqreer_glass_preset', preset);
-    setGlassPreset(preset);
-  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -188,6 +164,9 @@ export default function SettingsPage() {
 
   return (
     <div className="page-container">
+      {/* §settings (2026-06-09): one centered column — cards stacked a row each
+          at a comfortable reading width, instead of the old 2-col grid. */}
+      <div className="mx-auto flex w-full max-w-2xl flex-col">
       {/* Plan banner — full width at top */}
       {planUsage ? (
         <PlanUsage
@@ -201,10 +180,10 @@ export default function SettingsPage() {
       {/* Page title */}
       <h1 className="tq-h1 mt-8 mb-6">الإعدادات</h1>
 
-      {/* 2-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+      {/* Stacked cards — one per row. */}
+      <div className="flex flex-col gap-6">
 
-        {/* ── Col 1 Row 1: Profile ── */}
+        {/* ── Profile ── */}
         <div className="settings-card glass-card rounded-xl">
           <h2 className="settings-card-title">الملف الشخصي</h2>
           <div className="settings-divider" />
@@ -260,7 +239,7 @@ export default function SettingsPage() {
           </form>
         </div>
 
-        {/* ── Col 2 Row 1: Password ── */}
+        {/* ── Password ── */}
         <div className="settings-card glass-card rounded-xl">
           <h2 className="settings-card-title">تغيير كلمة المرور</h2>
           <div className="settings-divider" />
@@ -293,7 +272,7 @@ export default function SettingsPage() {
           </form>
         </div>
 
-        {/* ── Col 1 Row 2: Delete Account ── */}
+        {/* ── Delete Account ── */}
         <div className="settings-card glass-card-danger rounded-xl">
           <h2 className="settings-card-title text-red-400">حذف الحساب</h2>
           <div className="settings-divider" />
@@ -306,35 +285,7 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* ── Col 2 Row 2: Glass Theme Settings ── */}
-        <div className="settings-card glass-card rounded-xl">
-          <div className="flex items-center gap-3 mb-1">
-            <h2 className="settings-card-title mb-0">مظهر التطبيق</h2>
-            <span className="badge-purple text-[10px]">زجاجي</span>
-          </div>
-          <div className="settings-divider" />
-          <p className="text-muted text-sm mb-4">اضبط شدة تأثير الزجاج المطفي على البطاقات والواجهة</p>
-          <div className="grid grid-cols-2 gap-2">
-            {(Object.entries(glassPresets) as [GlassPreset, typeof glassPresets.normal][]).map(([key, val]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => applyGlassPreset(key)}
-                className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border text-center transition-all duration-200 cursor-pointer ${
-                  glassPreset === key
-                    ? 'border-[rgba(var(--tq-blue-rgb),0.7)] bg-[rgba(var(--tq-blue-rgb),0.15)] text-white'
-                    : 'border-white/[0.08] bg-white/[0.03] text-muted hover:border-white/20 hover:text-white'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  {key === 'off' ? 'blur_off' : key === 'subtle' ? 'blur_linear' : key === 'normal' ? 'blur_on' : 'filter_drama'}
-                </span>
-                <span className="text-[13px] font-semibold leading-none">{val.label}</span>
-                <span className="text-[10px] opacity-60">{val.desc}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      </div>
       </div>
 
       {/* ── Delete Modal ── */}

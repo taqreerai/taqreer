@@ -228,7 +228,9 @@ export function LayersPanel({
       }`}
       style={{
         left: 16,
-        top: 76,
+        // §22: moved up now that the StudioHeader is gone (was 76). Left edge
+        // is clear of the app rail (rail sits on the RTL right).
+        top: 16,
         bottom: 100,
         width: SLIDE_NAV_WIDTH,
         background: "var(--tq-bg-glass)",

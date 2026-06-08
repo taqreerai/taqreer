@@ -93,6 +93,10 @@ export function SlideNavSidebar({
   onTabChange,
   commentsSlot,
   commentCount,
+  // §22: document actions (Export ▾ + Share) relocated from the removed
+  // StudioHeader into the slide-nav footer. The parent (DeckView) builds them
+  // (it owns the manifest + ShareDialog) and passes them as a slot.
+  actionsSlot,
 }: {
   items: NavItem[];
   currentIndex: number | null;
@@ -115,6 +119,7 @@ export function SlideNavSidebar({
   onTabChange?: (tab: "slides" | "comments") => void;
   commentsSlot?: ReactNode;
   commentCount?: number;
+  actionsSlot?: ReactNode;
   language?: "ar" | "en";
   // Fires when the user clicks the bulk pill. Parent owns the
   // network call + optimistic state update so it can fan the result
@@ -275,8 +280,10 @@ export function SlideNavSidebar({
       style={
         floating
           ? {
+              // §22: no app rail in the editor — sits 16px off the viewport
+              // edge. Moved up now that the StudioHeader is gone (top 76→16).
               right: 16,
-              top: 76,
+              top: 16,
               bottom: 100,
               width: SLIDE_NAV_WIDTH,
               background: "var(--tq-bg-glass)",
@@ -552,13 +559,24 @@ export function SlideNavSidebar({
       </div>
       )}
 
+      {/* §22: document actions (Export ▾ + Share) — relocated here from the
+          removed StudioHeader. Slides tab only; the parent gates content
+          (owner / manifest ready). */}
+      {actionsSlot && tab === "slides" ? (
+        <footer className="border-t border-white/[0.08] pt-3 px-1">
+          {actionsSlot}
+        </footer>
+      ) : null}
+
       {/* Footer — Lock all / Unlock all bulk pill. Label flips
           based on the global locked state across the deck. Hidden
           during generation (placeholders don't have lock state),
           when the parent didn't wire either handler, AND on the
           Comments tab (the embedded panel owns the footer there). */}
       {showBulkPill && tab === "slides" ? (
-        <footer className="border-t border-white/[0.08] pt-3 px-1">
+        // §22: no top border — sits flush under the Export/Share footer (user:
+        // "remove the separator under export and share").
+        <footer className="pt-2 px-1">
           <button
             type="button"
             onClick={handleBulkClick}

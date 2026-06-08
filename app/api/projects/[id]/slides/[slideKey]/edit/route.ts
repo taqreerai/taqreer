@@ -22,7 +22,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { recordSlideManualEdit } from "@/lib/db/slide-versioning";
+import { updateSlideContentInPlace } from "@/lib/db/slide-versioning";
 import { sanitizeSlideHtmlServer } from "@/lib/export/sanitize-server";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
@@ -75,14 +75,14 @@ export async function POST(
 
   let result;
   try {
-    result = await recordSlideManualEdit(
+    result = await updateSlideContentInPlace(
       prisma,
       project.presentation.id,
       slideKey,
       clean,
     );
   } catch (err) {
-    console.error("[slides/edit] recordSlideManualEdit failed:", err);
+    console.error("[slides/edit] updateSlideContentInPlace failed:", err);
     return NextResponse.json({ error: "Failed to save edit" }, { status: 500 });
   }
   if (!result) {
@@ -104,8 +104,7 @@ export async function POST(
     console.error("[slides/edit] broadcast failed:", err);
   });
 
-  return NextResponse.json({
-    currentVersionNumber: result.currentVersionNumber,
-    slide: result.slide,
-  });
+  // In-place content update — no version row, so no currentVersionNumber. The
+  // client undo/redo stack is local; history checkpoints come from /checkpoint.
+  return NextResponse.json({ slide: result.slide });
 }

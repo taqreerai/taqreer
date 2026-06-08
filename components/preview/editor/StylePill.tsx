@@ -744,7 +744,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
             <div className="relative flex h-8 items-center justify-center px-1.5">
               <button
                 type="button"
-                aria-label="Text colour"
+                aria-label={colorMixed ? "Text colour (mixed)" : "Text colour"}
                 onClick={() => {
                   setColorOpen((o) => !o);
                   setMoreOpen(false);
@@ -756,11 +756,16 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                   height: 16,
                   borderRadius: "50%",
                   border: "1px solid var(--tq-border-glass)",
-                  background: color,
+                  // MIXED set (selected elements have DIFFERENT colours) → a
+                  // multi-hue wheel so the user can tell at a glance they picked
+                  // different colours, instead of a single (misleading) swatch
+                  // showing only the first element's colour. A uniform set shows
+                  // the actual colour. (conic-gradient is fine here — pill chrome,
+                  // never exported.)
+                  background: colorMixed
+                    ? "conic-gradient(from 90deg, #ef4444, #f59e0b, #facc15, #22c55e, #3b82f6, #8b5cf6, #ec4899, #ef4444)"
+                    : color,
                   cursor: "pointer",
-                  // A mixed colour set reads as a faint dashed ring rather than a
-                  // single (misleading) swatch colour.
-                  boxShadow: colorMixed ? "0 0 0 1.5px var(--tq-violet)" : undefined,
                 }}
               />
               <ColorPickerPopover

@@ -30,18 +30,21 @@ export function ServerStatusBanner({
 
   const copy = COPY[status.level];
   return (
+    // §24: compact pill pinned to the top of the viewport so it never pushes the
+    // flow cards down. Centered between the top-bar's edge icons (search / theme
+    // / language), which sit at the corners.
     <div
       dir="rtl"
       role="status"
-      className={`mx-auto flex w-full max-w-3xl items-center gap-2 rounded-xl border px-4 py-2.5 text-sm ${copy.cls} ${className}`}
+      className={`fixed left-1/2 top-2 z-40 flex max-w-[min(94vw,560px)] -translate-x-1/2 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs shadow-lg ${copy.cls} ${className}`}
     >
       <span
-        className="material-symbols-outlined shrink-0 text-[18px]"
+        className="material-symbols-outlined shrink-0 text-[15px]"
         aria-hidden
       >
         warning
       </span>
-      <span className="flex-1 leading-relaxed">{copy.text}</span>
+      <span className="leading-snug">{copy.text}</span>
       <a
         href="https://status.claude.com"
         target="_blank"

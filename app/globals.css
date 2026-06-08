@@ -1,4 +1,5 @@
 @import "tailwindcss";
+/* §22 revert: Stitch interactive dots + animated aurora removed; static glow restored. */
 
 /*
  * ═══════════════════════════════════════════════════════════════════
@@ -160,29 +161,31 @@
   /* `*-rgb` variants are kept only where consumed in `rgba(var(...), α)`
      expressions; `--tq-magenta-rgb` had zero consumers app-wide and
      was dropped 2026-05-22. */
-  --tq-blue:        #370BF4;
-  --tq-blue-rgb:    55, 11, 244;
-  --tq-magenta:     #E036B8;
-  /* Bright neon magenta, hotter than `--tq-magenta`. Added 2026-05-23
-     for the SlideNavSidebar active-thumbnail ring; available for any
-     other "selected" indicator that needs to read brighter than the
-     muted brand-magenta. */
-  --tq-magenta-hot: #F900FF;
+  /* §21 flat redesign — the brand palette collapses to a SINGLE purple.
+     `--tq-purple` is the one accent (solid buttons, toggles, sliders,
+     active / selected states). The legacy names (`--tq-blue / -violet /
+     -lavender / -magenta`) are kept as ALIASES pointing at the same
+     purple so the ~26 files that still reference them recolour with no
+     edits. The multi-colour AI mesh gradient does NOT use these tokens
+     (it hardcodes its own hexes) — so the AI buttons keep their gradient. */
+  --tq-purple:       #8B5CF6;
+  --tq-purple-rgb:   139, 92, 246;
+  --tq-purple-hover: #7C3AED;
+  --tq-blue:        var(--tq-purple);
+  --tq-blue-rgb:    139, 92, 246;
+  --tq-magenta:     var(--tq-purple);
+  --tq-magenta-hot: var(--tq-purple);
+  --tq-violet:      var(--tq-purple);
+  --tq-violet-rgb:  139, 92, 246;
+  --tq-lavender:    var(--tq-purple);
 
-  /* Per-format export-icon accent tints — used by the Export tab in
-     ShareDialog (and any future "pick a file format" surface) to
-     colour the small icon tile next to each format name. Picked to
-     evoke each app's brand chip without literally cloning their
-     palettes: muted, glassy, low-alpha so the surrounding glass
-     chrome still reads as part of our system. Lifted out of TSX
-     literals on 2026-05-23. */
+  /* Per-format export-icon accent tints — file-type semantics
+     (PDF = red, PPTX = orange, …), NOT brand chrome, so they stay
+     multi-colour. */
   --tq-export-pdf:        rgba(239, 68, 68, 0.18);   /* PDF — red */
   --tq-export-pptx:       rgba(255, 159, 64, 0.20);  /* PowerPoint — orange */
   --tq-export-html:       rgba(125, 45, 255, 0.22);  /* HTML — violet */
   --tq-export-png:        rgba(147, 38, 201, 0.20);  /* PNGs — magenta */
-  --tq-violet:      #7D2DFF;
-  --tq-violet-rgb:  125, 45, 255;
-  --tq-lavender:    #9326C9;
 
   /* 2. Surfaces */
   /* Page base — a slightly-lighter dark than near-black so the
@@ -191,7 +194,9 @@
      `#03030D` until 2026-05-22 (felt too oppressive once we lit
      the brand blobs at lower saturation; both layers dropped one
      stop together). */
-  --tq-bg:              #0E0E18;
+  /* §21: flat neutral near-black (was #0E0E18, a blue-cast dark). No aurora
+     blobs or page glow layer on top anymore — the page is a single flat tone. */
+  --tq-bg:              #0A0A0A;
   /* RGB triplet — kept for any future `rgba(var(--tq-bg-rgb), …)`
      consumer in NON-Safari contexts. Direct use in `rgba()` (via the
      `rgba(var(--rgb-triplet), <alpha>)` pattern) is BROKEN on Safari:
@@ -199,7 +204,7 @@
      back into rgba's three numeric arguments, the whole declaration
      is invalid, and the bg falls back to transparent. For dim
      surfaces consume `--tq-bg-dim` below instead. */
-  --tq-bg-rgb:          14, 14, 24;
+  --tq-bg-rgb:          10, 10, 10;
   /* Pre-composed 55 %-alpha dim. Used by `.in-slide-dim` AND by
      inline `style={{ backgroundColor: "var(--tq-bg-dim)" }}` on the
      comment editor + marker preview popovers — both surfaces float
@@ -226,6 +231,10 @@
 
   /* 4. Borders */
   --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
+  /* §21: canonical hairline for the flat system. Same value as
+     --tq-border-glass (kept as an alias for legacy consumers) but named for
+     what it now is — a crisp 1px edge, no glass involved. */
+  --tq-border-hairline: rgba(255, 255, 255, var(--glass-border-opacity));
   --tq-border-danger: rgba(239, 68, 68, 0.22);
 
   /* 4b. Status feedback — operational / degraded / down. One canonical
@@ -252,7 +261,23 @@
      Lets consumers reference the same fill via a single token
      instead of re-typing the rgba inline. Added 2026-05-23 when
      SlideNavSidebar called this out as a hardcoded CSS smell. */
-  --tq-bg-glass: rgba(255, 255, 255, var(--glass-opacity));
+  /* §22 elevation scale (flat, opaque — no glass). Lowest → highest:
+       --tq-bg     #0A0A0A  page gutter (behind the rounded content panel)
+       --tq-panel  #161616  the rounded content panel (gray pages)
+       --tq-surface #1E1E1E cards/chrome raised on the panel
+       --glass-fill #262626 floating popovers / dropdowns / modals (top)
+     A 3-step ladder so cards read as raised on the panel and popovers above
+     cards. `--tq-bg-glass` (dropdowns + editor side-panels) tracks the
+     floating level. */
+  --tq-panel:    #161616;
+  /* Card / chrome surface — matched to the shadcn `bbWjxCq` dark preset's
+     `--card` (user reference). Drives every `.glass-card` (dashboard cards AND
+     the editor toolbox). */
+  --tq-surface:  oklch(0.205 0 0);
+  /* §22: floating panels (dropdowns + editor side panels) share the card
+     surface — the old lighter `#262626` read as a "bright gray" that stood out
+     on the editor sidebars + popups (user). One unified dark surface now. */
+  --tq-bg-glass: var(--tq-surface);
   /* Dark dim fill for in-slide popovers (comment editor, marker preview,
      bell popup). UNLIKE `--tq-bg-glass` (faint white, for the dark
      dashboard chrome) this is a neutral DARK tint, because these surfaces
@@ -310,13 +335,27 @@
      the flat-button + clear-glass redesigns of the same date. */
   --tq-radius-md:   12px;
 
-  /* 8. Glass System — overridden at runtime by layout.tsx <script> + Settings page */
-  --glass-opacity:            0.04;
-  --glass-blur:               8px;
-  --glass-border-opacity:     0.09;
-  --glass-saturation:         130%;
-  --glass-hover-opacity-add:  0.03;
+  /* 8. (ex-)Glass System — §21 flattened to a SOLID, blur-free system.
+     `--glass-blur: 0` is the master kill-switch: the `backdrop-blur-glass`
+     Tailwind utility (76+ call sites) is `calc(--glass-blur * 2.5)` and every
+     in-class `backdrop-filter` reads `--glass-blur`, so zeroing it removes ALL
+     blur app-wide with no per-file edits. Saturation drops to 100% (no boost).
+     `--glass-opacity` (0.05) is now just a flat white-alpha tint for inline
+     CARDS on the uniform near-black page — with no blur it reads as a solid
+     ~#151515 gray, matching the reference. Border is a crisp hairline.
+     The glass ENGINE (GlassPreflight + Settings preset) was removed in §21, so
+     these values are authoritative — nothing re-injects them at runtime. */
+  --glass-opacity:            0.05;
+  --glass-blur:               0px;
+  /* Border alpha — white/10%, matched to the shadcn `bbWjxCq` dark `--border`.
+     Feeds `--tq-border-glass` + `--tq-border-hairline` (card + chrome edges). */
+  --glass-border-opacity:     0.1;
+  --glass-saturation:         100%;
+  --glass-hover-opacity-add:  0.04;
   --glass-hover-border-add:   0.06;
+  /* §22: floating popovers / dropdowns / modals share the card surface (was a
+     lighter `#262626` that read too bright). One dark surface everywhere. */
+  --glass-fill:               var(--tq-surface);
 
   /* 9. Background Blobs */
   --bg-blob-opacity-1: 0.28;
@@ -404,8 +443,6 @@ button, a, [role="button"] {
      and responds to the preset toggle in real time. Was
      hardcoded `rgba(...,0.05)` + `blur(8px)` before 2026-05-27. */
   background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
   color: white;
   /* Fully rounded ends — visual rhyme with `.btn-pill` so inputs +
@@ -563,7 +600,10 @@ textarea.input-dark {
    output or unset --tw-* properties will wipe out the filter at
    browser-compute time. */
 @utility backdrop-blur-glass-boost {
-  --tw-backdrop-blur: blur(calc(var(--glass-blur) * 7));
+  /* 2026-06-08: dropped 7× → 1× — the default frost for floating popovers +
+     dialogs is now crisper. The auth modal keeps the heavy 7× via its
+     `.auth-modal` override below (it reads through a busy marquee wall). */
+  --tw-backdrop-blur: blur(calc(var(--glass-blur) * 1));
   -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
   backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
 }
@@ -577,6 +617,18 @@ textarea.input-dark {
    shared by the dashboard modals too and they keep their own control
    sizing. Per user direction 2026-05-28: matches the Google login
    button's visual weight across the form. */
+/* Auth modal is EXCLUDED from the 2026-06-08 glass refresh (dark fill + 1×
+   boost): it keeps the faint white tint + the heavy 7× frost so it reads
+   through the busy marquee wall behind it. Selector is `.auth-modal.glass-modal`
+   (0,2,0) so the fill beats `.glass-modal` (0,1,0) regardless of source order;
+   the same rule overrides the boost utility's `--tw-backdrop-blur` (the
+   backdrop-filter chain rides on the element from the boost class + reads this
+   value). The auth panel always carries both classes. */
+.auth-modal.glass-modal {
+  background: var(--tq-bg-glass);
+  --tw-backdrop-blur: blur(calc(var(--glass-blur) * 7));
+}
+
 .auth-modal .input-dark,
 .auth-modal .btn-pill,
 .auth-modal .btn-gradient {
@@ -593,19 +645,20 @@ textarea.input-dark {
   --color-brand-gray-800: #1F2937;
   --color-brand-gray-900: #111827;
 
-  /* Dashboard Theme Variables */
-  --color-background: #0A0A0F;
-  --color-on-background: #dce3f0;
-  --color-surface: #110D1A;
-  --color-on-surface: #dce3f0;
-  --color-surface-variant: #2A1F35;
+  /* Dashboard Theme Variables — §21: neutral flat grays (were blue/purple-cast).
+     Single uniform dark scale, no hue. */
+  --color-background: #0A0A0A;
+  --color-on-background: #ECECEC;
+  --color-surface: #161616;
+  --color-on-surface: #ECECEC;
+  --color-surface-variant: #202020;
   --color-on-surface-variant: #ffffff;
-  --color-surface-container-low: #151c25;
-  --color-surface-container: #192029;
-  --color-surface-container-high: #1A1423;
-  --color-surface-container-highest: #2e353f;
+  --color-surface-container-low: #141414;
+  --color-surface-container: #181818;
+  --color-surface-container-high: #1C1C1C;
+  --color-surface-container-highest: #242424;
 
-  --color-primary: var(--color-brand-purple-400);
+  --color-primary: var(--tq-purple);
   --color-on-primary: #490080;
   --color-primary-container: var(--color-brand-purple-900);
   --color-on-primary-container: var(--color-brand-purple-400);
@@ -679,11 +732,27 @@ textarea.input-dark {
    backdrop is identical for every existing page. */
 html {
   background-color: var(--tq-bg);
-  overflow-y: scroll;
+  /* §24: BODY (not html) is the page scroll container so the scrollbar lands on
+     the LEFT. Blink pins the ROOT scrollbar to the right regardless of `dir`,
+     but a non-root rtl scroller honours direction. html stops scrolling; body
+     takes over below. */
+  overflow: hidden;
 }
 
 body {
   color: #ffffff;
+  /* Body is the scroller (see html above). `overflow-y: scroll` keeps the track
+     reserved on every page → no horizontal jolt when navigating between a
+     scrolling and a non-scrolling page (replaces the old html rule). Its
+     inherited `direction: rtl` puts the scrollbar on the left. */
+  height: 100vh;
+  overflow-y: scroll;
+  /* Reserve the scrollbar gutter so it stays put when a modal locks the page
+     with `overflow: hidden` (ShareDialog et al. set body overflow hidden on
+     open). Without this, hiding overflow drops the left scrollbar and the page
+     reflows ~scrollbar-width wider. `stable` keeps the gutter even for the
+     hidden state, so there's no shift. */
+  scrollbar-gutter: stable;
 }
 
 .material-symbols-outlined {
@@ -761,47 +830,43 @@ body {
 
 /* ─── Cards ─── */
 .glass-card {
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-card:hover {
-  background: rgba(255, 255, 255, calc(var(--glass-opacity) + var(--glass-hover-opacity-add)));
-  border-color: rgba(255, 255, 255, calc(var(--glass-border-opacity) + var(--glass-hover-border-add)));
+  /* §21: opaque solid surface (reads correctly over ANY background incl. the
+     studio canvas). NO :hover — cards are static; hover affordance lives on
+     buttons + links only (user direction). */
+  background: var(--tq-surface);
+  border: 1px solid var(--tq-border-hairline);
 }
 
 .qa-card {
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  background: var(--tq-surface);
   /* No CSS `border` at all — the idle ring is drawn by ::before, the
      hover mesh ring by ::after. Two pseudo-elements that cross-fade,
      nothing else underneath that could bleed through the mesh's
      transparent gaps. */
   border-radius: 14px;
+  /* Slow zoom on hover (user direction 2026-06-09) — gentle scale-up eased over
+     0.5s. transform is GPU-composited so it doesn't reflow the grid. */
   transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   /* Same animated mesh used on the regen button — paused when not hovered
      so a row of QuickAction cards isn't constantly animating 6 radials
      each. Reuses the @property + keyframes registered for
-     `.btn-gradient-anim` below (mx1..my6). */
+     `.btn-gradient-anim` below (mx1..my6). Durations are ~2× the AI button's
+     so the flow-card stroke drifts slowly (user direction 2026-06-09). */
   animation:
-    mx1 1.0s ease-in-out infinite alternate,
-    my1 1.6s ease-in-out infinite alternate,
-    mx2 1.9s ease-in-out infinite alternate,
-    my2 1.3s ease-in-out infinite alternate,
-    mx3 2.5s ease-in-out infinite alternate,
-    my3 0.7s ease-in-out infinite alternate,
-    mx4 1.2s ease-in-out infinite alternate,
-    my4 1.8s ease-in-out infinite alternate,
-    mx5 0.9s ease-in-out infinite alternate,
-    my5 1.5s ease-in-out infinite alternate,
-    mx6 2.0s ease-in-out infinite alternate,
-    my6 2.3s ease-in-out infinite alternate;
+    mx1 2.2s ease-in-out infinite alternate,
+    my1 3.4s ease-in-out infinite alternate,
+    mx2 4.0s ease-in-out infinite alternate,
+    my2 2.8s ease-in-out infinite alternate,
+    mx3 5.2s ease-in-out infinite alternate,
+    my3 1.6s ease-in-out infinite alternate,
+    mx4 2.6s ease-in-out infinite alternate,
+    my4 3.8s ease-in-out infinite alternate,
+    mx5 2.0s ease-in-out infinite alternate,
+    my5 3.2s ease-in-out infinite alternate,
+    mx6 4.4s ease-in-out infinite alternate,
+    my6 4.8s ease-in-out infinite alternate;
   animation-play-state: paused;
 }
 
@@ -854,6 +919,7 @@ body {
 
 .qa-card:hover {
   animation-play-state: running;
+  transform: scale(1.03);
 }
 
 .qa-card:hover::after {
@@ -866,7 +932,9 @@ body {
 
 /* ─── Buttons ─── */
 .btn-gradient {
-  background: var(--tq-gradient-brand);
+  /* §21: solid purple, NOT a gradient (the brand gradient is reserved for AI
+     buttons only now). Name kept so the ~24 CTA call sites don't need edits. */
+  background: var(--tq-purple);
   color: var(--tq-text-primary);
   /* No `box-shadow` and no shadow transition — the button system
      was de-shadowed app-wide on 2026-05-22 (user feedback: flat
@@ -884,12 +952,13 @@ body {
      re-stating the radius. */
   border-radius: 9999px;
   font-weight: 500;
+  transition: background 0.2s ease;
 }
 
-/* No :hover shadow — see resting-state comment above. The hover
-   feedback still reads through the background gradient's contrast
-   shift on darker browsers; on lighter ones we lean on the cursor
-   change. */
+/* §21: solid hover — a slightly deeper purple. */
+.btn-gradient:hover:not(:disabled) {
+  background: var(--tq-purple-hover);
+}
 
 /* ─── Animated Mesh-Gradient Button ─────────────────────────────────
    Multiple radial-gradient colour blobs (the full brand palette: blue,
@@ -948,8 +1017,6 @@ body {
   position: relative;
   isolation: isolate;
   background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   color: white;
   /* No shadow transition — the button system is flat app-wide
      (2026-05-22). Background transition stays so the hover fill
@@ -1126,6 +1193,21 @@ body {
   .canvas-gradient-border { animation: none; }
 }
 
+/* Generation-canvas backdrop tint. The unified studio frame
+   (`.canvas-gradient-border`) has NO fill of its own, so the empty/thinking
+   canvas — before any slide streams — was a transparent void over the dark
+   studio gradient. This restores the pre-§18 `.glass-card` frosted look DURING
+   GENERATION only. Just the background tint here (same `--glass-opacity` token
+   as `.glass-card`, no hardcoded value); the BLUR is applied on the element via
+   the `backdrop-blur-glass` + `backdrop-saturate` Tailwind utilities — the app's
+   glass convention, because Lightning CSS strips a bare `backdrop-filter` from
+   plain rules (see `.glass-card`, which gets its blur the same way). No
+   border/radius, so removing it on completion (when the opaque slide already
+   covers it) causes no edge shift and the canvas frame never remounts. */
+.canvas-gen-glass {
+  background: var(--tq-surface);
+}
+
 /* `.ai-comment-box` (the animated mesh box + radial scrim) was removed with
    §17 (2026-06-07). AI instructions are no longer authored as an in-canvas
    box: the region is a quiet corner-sparkle marker (`AiRegionMarker` in
@@ -1174,19 +1256,22 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.6);
+  /* §21: solid subtle gray surface (was a transparent ghost outline) so
+     secondary buttons read as filled chips like the reference. */
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--tq-border-hairline);
+  color: rgba(255, 255, 255, 0.75);
   border-radius: 9999px;
   padding: 0.375rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.2s ease, border-color 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .btn-pill:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
   color: white;
 }
 
@@ -1207,8 +1292,9 @@ body {
    applied on the <aside> element so the panel responds to the
    user's Settings → glass-preset like every other glass surface. */
 .sidebar-bg {
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  border-color: rgba(255, 255, 255, var(--glass-border-opacity));
+  /* §22: the rail is transparent — it floats on the dark gutter with no fill
+     and no separator border (the <aside> drops its border-l too). */
+  background: transparent;
 }
 
 /* Active nav item — subtle raised-glass tint instead of the loud
@@ -1255,7 +1341,9 @@ body {
 
 /* ─── Toggle Switch (on state) ─── */
 .tq-switch-on {
-  background-image: var(--tq-gradient-brand);
+  /* §21: solid purple (was the brand gradient). */
+  background-image: none;
+  background-color: var(--tq-purple);
 }
 
 /* ─── Progress Bar ─── */
@@ -1268,17 +1356,18 @@ body {
 }
 
 .progress-bar {
-  background: var(--tq-gradient-brand);
-  box-shadow: 0 0 12px rgba(var(--tq-violet-rgb), 0.7);
+  /* §21: solid purple, no glow (flat system). */
+  background: var(--tq-purple);
   border-radius: 9999px;
   height: 100%;
 }
 
 /* ─── Badges ─── */
 .badge-purple {
-  background: rgba(125, 45, 255, 0.15);
-  border: 1px solid rgba(125, 45, 255, 0.3);
-  color: #A67FFF;
+  /* §21: aligned to the single accent purple (#8B5CF6). */
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #C4B5FD;
   border-radius: 9999px;
   font-size: 10px;
   padding: 2px 8px;
@@ -1287,18 +1376,14 @@ body {
 
 /* ─── Empty State Card (no gradient border) ─── */
 .glass-empty-state {
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  background: var(--tq-surface);
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
 }
 
 /* ─── Plan Banner ─── */
 .plan-banner {
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  background: var(--tq-surface);
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
   position: relative;
@@ -1311,7 +1396,8 @@ body {
   inset: 0;
   border-radius: 14px;
   padding: 1px;
-  background: var(--tq-gradient-full);
+  /* §21: solid purple edge (was the multi-colour brand gradient stroke). */
+  background: var(--tq-purple);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1585,8 +1671,6 @@ body {
   color: white;
   background: rgba(255, 255, 255, var(--glass-opacity));
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1620,15 +1704,18 @@ body {
 }
 
 /* ─── Sidebar Tooltip ─── */
+/* One tooltip look across the app — matches the editor toolbox's inline
+   tooltip (PreviewActionBar: bg-black/90, rounded-md, px-3 py-1.5) so the
+   sidebar, toolbox, and every other tooltip read identically (user direction
+   2026-06-09). */
 .sidebar-tooltip {
-  background: var(--color-surface-container-high);
-  border: 1px solid var(--tq-border);
+  background: var(--glass-fill);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: white;
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 6px 12px;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* ─── Dashboard background ───
@@ -1659,17 +1746,53 @@ body {
   position: relative;
   min-height: 100vh;
   isolation: isolate;
+  /* §22: the dark gutter that shows around the rounded content panel + behind
+     the transparent sidebar rail. */
+  background-color: var(--tq-bg);
 }
 
-/* Bottom-anchored brand-violet glow. Recipe uses `--tq-violet-rgb`
-   to stay in lock-step with the landing's `.glow-effect` color
-   token. The element is full-width and positioned at `top: 145%`
-   so its top edge sits well below the viewport — only the upper
-   sliver of the ellipse reads, giving the page a soft violet
-   wash rising from the bottom edge (user direction 2026-05-30). */
-.dashboard-bg::before {
+/* §22: rounded content panel (Lovable-style). The page chrome is just the thin
+   transparent sidebar rail + this panel floating on the dark gutter. */
+.tq-content-panel {
+  position: relative;
+  border-radius: 18px;
+  /* equal 8px gutter on all four sides — the left edge now matches the top
+     (user direction 2026-06-09). */
+  margin: 8px;
+  min-height: calc(100vh - 16px);
+  overflow: hidden;            /* clips the glow + keeps the rounded corners */
+  isolation: isolate;
+}
+
+/* Flat gray panel — every page except home + the 4 creation flows. */
+.tq-panel-gray {
+  background-color: var(--tq-panel);
+}
+
+/* Glow panel — home dashboard + the 4 flows. The animated blue+purple glow is
+   rendered on a CANVAS (components/app/MagneticGlow.tsx, z-index:-1 behind the
+   content) so it can react to the cursor like a magnetic field; the panel just
+   supplies the dark base. Canvas blobs fade radially → no hard edge to blend. */
+.tq-panel-glow {
+  background-color: var(--tq-panel);
+}
+
+/* §24: flow pages (create / enhance / mimic / datasheet / use-template) — the
+   interactive DOT field (MagneticGlow with aurora=false) plus this STATIC
+   bottom glow, the same brand-violet wash the editor uses
+   (`.studio-canvas::before`). Absolute (not fixed) so the panel's
+   `overflow:hidden` clips it to the rounded corners; z:0 keeps it below the
+   page content (which has no z-index) but above the dot canvas (-z). */
+.tq-panel-flow {
+  background-color: var(--tq-panel);
+}
+.tq-panel-flow::before {
   content: "";
-  position: fixed;
+  /* Exact copy of `.studio-canvas::before` (the editor's bottom glow), but
+     `absolute` (relative to the panel) instead of `fixed`, so the panel's
+     overflow:hidden clips it. Flow panels are ~viewport-tall, so top:145%
+     lands the glow at the same spot as the editor (user: same as editor). */
+  position: absolute;
   top: 145%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -1717,7 +1840,10 @@ body {
   position: relative;
   min-height: 100vh;
   isolation: isolate;
-  background-color: var(--tq-bg);
+  /* Match the dashboard content-panel surface (#161616) rather than the darker
+     gutter, so the editor reads as the same shell colour as the rest of the app
+     (user direction 2026-06-09). */
+  background-color: var(--tq-panel);
   background-image:
     radial-gradient(
       ellipse 78% 78% at 50% 46%,
@@ -1797,17 +1923,18 @@ body {
 }
 
 .glass-modal {
-  background: var(--tq-bg-glass);
+  /* Floating modals/dialogs share the popover's dark fill (2026-06-08) so they
+     read as solid frosted glass over any backdrop. The auth modal overrides back
+     to the faint white tint (see `.auth-modal`). */
+  background: var(--glass-fill);
   border: 1px solid var(--tq-border-glass);
 }
 
 .glass-popover {
   /* Dark fill over the backdrop blur so a popover stays legible on ANY contrast
-     (a faint white fill washed out over light slides / surfaces). User direction
-     2026-06-05: 0.2 → 0.3, a touch darker so the pill + colour picker read as
-     solid frosted glass over bright slides (paired with the modal-strength
-     backdrop-blur-glass-boost the pill + picker now carry). */
-  background: rgb(0 0 0 / 30%);
+     (a faint white fill washed out over light slides / surfaces). Centralised in
+     `--glass-fill` (2026-06-08: 30% → 45%, shared with floating modals). */
+  background: var(--glass-fill);
   border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
 }
 
@@ -1870,16 +1997,11 @@ body {
    "never hardcode in TSX" rule is preserved by NOT inlining these
    in the popover's React style prop. */
 .in-slide-popover {
-  /* Dark neutral dim via the `--tq-bg-popover-dim` token (= rgba(12,12,12,
-     0.45)). Stays DARK, not `--tq-bg-glass`, because this floats over
-     slides that can be white — a faint-white fill would vanish there.
-     Equal RGB channels (no hue) keep it neutral on the gray-black
-     dashboard (neutralized 2026-05-24 from a faintly-blue 14,14,24).
-     Token, not the old literal — the Safari caveat in the header above
-     only applies to INLINE `style={{…}}` usage, not a class rule (cf.
-     `.glass-popover`, which also uses a `--tq-bg-glass` var under the
-     backdrop-filter without issue). */
-  background-color: var(--tq-bg-popover-dim);
+  /* Shares the floating-glass dark fill `--glass-fill` (2026-06-08) so the
+     comment editor / marker preview match every other popover + modal. Stays
+     DARK (not `--tq-bg-glass`) because this floats over slides that can be white
+     — a faint-white fill would vanish there. */
+  background-color: var(--glass-fill);
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
@@ -1921,9 +2043,7 @@ body {
 
 /* ─── Card Danger Variant ─── */
 .glass-card-danger {
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  background: var(--tq-surface);
   border: 1px solid var(--tq-border-danger);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }

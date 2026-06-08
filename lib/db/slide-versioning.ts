@@ -384,29 +384,25 @@ export async function restoreSlideToVersion(
 }
 
 /**
- * Records a manual (hand-edited) slide as a new SlideVersion and splices it into
- * the active manifest — the synchronous twin of restoreSlideToVersion, but the
- * target is brand-new HTML the user typed/styled in the in-canvas editor rather
- * than a stored version. Mirrors recordSlidePartialRegen's bump + prune, scoped
- * to one slide, with no Inngest / Claude in the loop (a manual edit is cheap).
+ * Persists a hand-edit to a slide's CONTENT in place — splices the new HTML into
+ * the active manifest (PresentationVersion.slideJson) and writes NO history (no
+ * SlideVersion, no pointer bump). This is the per-edit path: undo/redo is now a
+ * client-side stack, and history "checkpoints" are made separately on Save + the
+ * 10-min idle timer (recordSlideCheckpoint). Splitting the two means an edit
+ * never churns the version log, while content is still saved immediately (no
+ * data loss on reload).
  *
- * `newHtml` MUST already be sanitised by the caller (sanitizeSlideHtmlServer) —
- * we never store unsanitised client HTML. The slide's `role` is preserved from
- * the currently-active slide; only `html` changes.
- *
- * Returns null if the slide isn't in the active manifest. Returns the existing
- * (unchanged) slide WITHOUT writing a version when `newHtml` is byte-identical to
- * what's already active — a no-op-save guard so re-saving an untouched slide (or
- * a stray duplicate POST) never churns the 5-deep history.
+ * `newHtml` MUST already be sanitised by the caller (sanitizeSlideHtmlServer).
+ * The slide's `role` is preserved from the active slide; only `html` changes.
+ * Returns null if the slide isn't in the active manifest; the existing slide on
+ * a byte-identical no-op.
  */
-export async function recordSlideManualEdit(
+export async function updateSlideContentInPlace(
   prisma: PrismaClient,
   presentationId: string,
   slideKey: string,
   newHtml: string,
-): Promise<RestoreResult | null> {
-  // Read the active slide first: it's the existence check, the source of the
-  // preserved `role`, and the baseline for the no-op guard.
+): Promise<{ slide: SlideType } | null> {
   const presentation = await prisma.presentation.findUnique({
     where: { id: presentationId },
     select: { currentVersionId: true },
@@ -424,16 +420,8 @@ export async function recordSlideManualEdit(
     (s) => s.slideId === slideKey,
   );
   if (!existing) return null;
-
-  const state = await prisma.slideState.findUnique({
-    where: { presentationId_slideKey: { presentationId, slideKey } },
-    select: { id: true, currentVersionNumber: true },
-  });
-
-  // No-op: identical HTML already active → keep history clean.
-  if (existing.html === newHtml && state) {
-    return { slide: existing, currentVersionNumber: state.currentVersionNumber };
-  }
+  // No-op: identical HTML already active.
+  if (existing.html === newHtml) return { slide: existing };
 
   // Only `html` changes; role/slideId carry over from the live slide.
   const newSlide: SlideType = { ...existing, html: newHtml };
@@ -443,48 +431,106 @@ export async function recordSlideManualEdit(
       `Edited slide failed validation: ${JSON.stringify(validated.error.issues).slice(0, 400)}`,
     );
   }
+  await spliceSlideIntoActiveManifest(
+    prisma,
+    presentationId,
+    slideKey,
+    validated.data,
+  );
+  return { slide: validated.data };
+}
 
-  // Legacy project with no SlideState yet → this edit seeds v1 (same lazy-create
-  // trade as recordSlidePartialRegen: prior content isn't recoverable for those).
+/**
+ * Creates a history CHECKPOINT: snapshots the slide's CURRENT active content as a
+ * new SlideVersion + bumps the pointer. Called on Save + the 10-min idle autosave
+ * — NOT per edit (edits persist in place via updateSlideContentInPlace, which
+ * writes no history). No splice needed (the content is already live). No-op when
+ * the active content already matches the latest stored version (nothing changed
+ * since the last checkpoint), so a redundant Save never churns the log.
+ *
+ * Returns null if the slide isn't in the active manifest; mirrors
+ * recordSlidePartialRegen's bump + prune, scoped to one slide.
+ */
+export async function recordSlideCheckpoint(
+  prisma: PrismaClient,
+  presentationId: string,
+  slideKey: string,
+): Promise<RestoreResult | null> {
+  const presentation = await prisma.presentation.findUnique({
+    where: { id: presentationId },
+    select: { currentVersionId: true },
+  });
+  if (!presentation?.currentVersionId) return null;
+  const activeVersion = await prisma.presentationVersion.findUnique({
+    where: { id: presentation.currentVersionId },
+    select: { slideJson: true },
+  });
+  const manifestParsed = activeVersion
+    ? SlideManifestSchema.safeParse(activeVersion.slideJson)
+    : null;
+  if (!manifestParsed?.success) return null;
+  const existing = manifestParsed.data.slides.find(
+    (s) => s.slideId === slideKey,
+  );
+  if (!existing) return null;
+  const validated = SlideSchema.safeParse(existing);
+  if (!validated.success) {
+    throw new Error(
+      `Checkpoint slide failed validation: ${JSON.stringify(validated.error.issues).slice(0, 400)}`,
+    );
+  }
+
+  const state = await prisma.slideState.findUnique({
+    where: { presentationId_slideKey: { presentationId, slideKey } },
+    select: { id: true, currentVersionNumber: true },
+  });
+
+  // Legacy project with no SlideState yet → this checkpoint seeds v1.
   if (!state) {
-    await prisma.$transaction(async (tx) => {
-      await tx.slideState.create({
-        data: {
-          presentationId,
-          slideKey,
-          currentVersionNumber: 1,
-          versions: {
-            create: {
-              versionNumber: 1,
-              slideJson: slideToJson(validated.data),
-              source: "manual_edit",
-            },
-          },
-        },
-      });
-      await spliceSlideIntoActiveManifest(
-        tx,
+    await prisma.slideState.create({
+      data: {
         presentationId,
         slideKey,
-        validated.data,
-      );
+        currentVersionNumber: 1,
+        versions: {
+          create: {
+            versionNumber: 1,
+            slideJson: slideToJson(validated.data),
+            source: "manual_edit",
+          },
+        },
+      },
     });
     return { slide: validated.data, currentVersionNumber: 1 };
   }
 
-  // Append a new version, race-safe. Two concurrent saves can both read the same
-  // max versionNumber and try to write max+1 → P2002. retryOnP2002 re-reads the
-  // max each attempt, so the loser simply picks the next free number. Atomic per
-  // attempt: version row + pointer + manifest splice commit together (same
-  // rationale as restoreSlideToVersion — no half-applied edit).
+  // No-op: active content already matches the latest stored version → nothing
+  // changed since the last checkpoint, so don't churn the log.
   const stateId = state.id;
+  const latest = await prisma.slideVersion.findFirst({
+    where: { slideStateId: stateId },
+    orderBy: { versionNumber: "desc" },
+    select: { versionNumber: true, slideJson: true },
+  });
+  if (latest) {
+    const latestParsed = SlideSchema.safeParse(latest.slideJson);
+    if (latestParsed.success && latestParsed.data.html === existing.html) {
+      return {
+        slide: existing,
+        currentVersionNumber: state.currentVersionNumber,
+      };
+    }
+  }
+
+  // Append a new version, race-safe (mirrors restoreSlideToVersion / the old
+  // recordSlideManualEdit). No splice — the content is already active.
   const newVersionNumber = await retryOnP2002(async () => {
-    const latest = await prisma.slideVersion.findFirst({
+    const cur = await prisma.slideVersion.findFirst({
       where: { slideStateId: stateId },
       orderBy: { versionNumber: "desc" },
       select: { versionNumber: true },
     });
-    const next = (latest?.versionNumber ?? 0) + 1;
+    const next = (cur?.versionNumber ?? 0) + 1;
     await prisma.$transaction(async (tx) => {
       await tx.slideVersion.create({
         data: {
@@ -498,12 +544,6 @@ export async function recordSlideManualEdit(
         where: { id: stateId },
         data: { currentVersionNumber: next },
       });
-      await spliceSlideIntoActiveManifest(
-        tx,
-        presentationId,
-        slideKey,
-        validated.data,
-      );
     });
     return next;
   });

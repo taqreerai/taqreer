@@ -1,139 +1,52 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/app/Sidebar";
-import { Header } from "@/components/app/Header";
+import { BellDropdown } from "@/components/app/BellDropdown";
+import { MagneticGlow } from "@/components/app/MagneticGlow";
+import { TopUtilityBar } from "@/components/app/TopUtilityBar";
 
-const sidebarStorageKey = "taqreer_sidebar_collapsed";
-const sidebarStorageEvent = "taqreer_sidebar_collapsed_changed";
-// Same key as the cookie the server layout reads. Mirroring the
-// state into a cookie lets SSR pick the right `initialIsCollapsed`
-// value — without it we'd render the sidebar expanded on the server,
-// then snap to collapsed once the client read localStorage, giving
-// the user a brief expand-then-collapse flash on every navigation.
-const sidebarCookieKey = "tq_sidebar_collapsed";
-
-function getStoredSidebarState(fallback: boolean) {
-  if (typeof window === "undefined") return fallback;
-
-  try {
-    return parseSidebarState(
-      window.localStorage.getItem(sidebarStorageKey),
-      fallback
-    );
-  } catch {
-    return fallback;
-  }
-}
-
-function parseSidebarState(value: string | null | undefined, fallback: boolean) {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return fallback;
-}
-
-function setSidebarCollapsed(isCollapsed: boolean) {
-  try {
-    window.localStorage.setItem(sidebarStorageKey, JSON.stringify(isCollapsed));
-  } catch {
-    // If storage is blocked, keep the in-memory state for this session.
-  }
-  // Cookie persists across requests so the next SSR render starts
-  // with the right value. 1-year max-age keeps it sticky;
-  // SameSite=Lax is fine — sidebar state is not security-sensitive.
-  try {
-    const oneYearSeconds = 60 * 60 * 24 * 365;
-    document.cookie = `${sidebarCookieKey}=${isCollapsed ? "1" : "0"}; path=/; max-age=${oneYearSeconds}; samesite=lax`;
-  } catch {
-    /* cookies disabled — fall back to localStorage-only sync */
-  }
-  window.dispatchEvent(new CustomEvent(sidebarStorageEvent, { detail: isCollapsed }));
-}
+// §22: the sidebar is a fixed-width, always-collapsed thin rail (no expand) —
+// one chrome across the whole app. Keep this in sync with the rail's `w-[60px]`
+// in Sidebar.tsx.
+const SIDEBAR_WIDTH = 60;
 
 export function DashboardShell({
   children,
-  initialIsCollapsed,
 }: {
   children: React.ReactNode;
-  initialIsCollapsed: boolean;
+  // §22: collapse/expand was removed (rail is always collapsed). The prop is
+  // kept optional so the server layout can still pass its cookie value without
+  // a type error; it's intentionally ignored.
+  initialIsCollapsed?: boolean;
 }) {
-  // Initial state comes from the server (cookie-derived) so the SSR
-  // render already matches the user's preference — no expand-then-
-  // collapse flash on navigation or refresh.
-  const [isCollapsed, setIsCollapsed] = useState(initialIsCollapsed);
-  // `isReady` gates the transition class: false on first paint so
-  // the sidebar doesn't animate into its initial position; flipped
-  // true after mount so subsequent toggles animate normally.
-  const [isReady, setIsReady] = useState(false);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsReady(true);
-  }, []);
-
-  useEffect(() => {
-    function handleSidebarChange(event: Event) {
-      if (event instanceof CustomEvent && typeof event.detail === "boolean") {
-        setIsCollapsed(event.detail);
-        return;
-      }
-
-      setIsCollapsed(getStoredSidebarState(initialIsCollapsed));
-    }
-
-    window.addEventListener("storage", handleSidebarChange);
-    window.addEventListener(sidebarStorageEvent, handleSidebarChange);
-
-    return () => {
-      window.removeEventListener("storage", handleSidebarChange);
-      window.removeEventListener(sidebarStorageEvent, handleSidebarChange);
-    };
-  }, [initialIsCollapsed]);
-
-  const toggleSidebar = () => {
-    const nextIsCollapsed = !isCollapsed;
-    setIsCollapsed(nextIsCollapsed);
-    setSidebarCollapsed(nextIsCollapsed);
-  };
-
-  const sidebarWidth = isCollapsed ? 80 : 260;
-  const transitionClass = isReady ? "transition-all duration-300 ease-in-out" : "transition-none";
-
-  // Preview routes use a full-width canvas layout (hero + side panels
-  // must fit a 16:9 slide at viewport height — ~1850 px wide — which
-  // doesn't survive the dashboard's 1280 max-width clamp). Wrapper
-  // paddings here reserve breathing room around the canvas:
-  //   • pt-[120px] = Header (80) + 40 px above the hero
-  //   • pb-[40px]  = 40 px below the hero
-  //   • pl-[120px] = clears the fixed toolbar (16 + ~80 + 24 gap)
-  //   • pr-[40px]  = 40 px gap to the slide-nav's left edge
-  // Must match DeckView's HERO_VERTICAL_PADDING_PX (160 total).
   const pathname = usePathname() ?? "";
   const router = useRouter();
-  // Post route-split: both /preview (generation) and /project
-  // (working session) use the same full-width chrome — the
-  // generating placeholder grid and the live DeckView need the
-  // same horizontal real estate.
-  const isFullWidthRoute =
-    pathname.startsWith("/preview/") || pathname.startsWith("/project/");
+
   // BOTH the working editor (/project) and the generation phase (/preview) are
-  // the full-screen "Studio": no app Header or Sidebar, no page padding —
-  // DeckView paints its own StudioHeader, floating panels, and dotted canvas.
-  // (§18 unified the generation phase into the editor shell, so /preview must
-  // be chrome-less too — otherwise the dashboard Header + Sidebar render on top
-  // of DeckView's own shell, doubling the header. Earlier attempt to make the
-  // chrome TOGGLABLE was reverted — this is permanent full-bleed.)
+  // the full-screen "Studio": full-bleed dotted canvas, no rounded content
+  // panel. §22: the app sidebar rail now renders here too (one chrome
+  // everywhere) and DeckView offsets its own panels for it.
   const isStudioRoute =
     pathname.startsWith("/project/") || pathname.startsWith("/preview/");
 
+  // The deck-creation flows + the template "use" surface keep their centered
+  // 1280 layout; every other dashboard page runs edge-to-edge.
+  const isFlowRoute =
+    pathname.startsWith("/create") ||
+    pathname.startsWith("/enhance") ||
+    pathname.startsWith("/mimic") ||
+    pathname.startsWith("/datasheet") ||
+    pathname.startsWith("/use-template");
+
+  // §22: home + the 4 flows get the dot field; every other page is flat gray.
+  const isGlowRoute = pathname === "/dashboard" || isFlowRoute;
+
   // Share-revoked listener — `notificationStore` dispatches
-  // `taqreer:share-revoked` on its window when the user channel
-  // delivers the broadcast. If we're currently looking at the
-  // revoked project (either `/project/{id}` or `/preview/{id}`),
-  // hard-redirect to /dashboard so the user isn't left staring at
-  // a page they no longer have access to. Mounted in the shell so
-  // it covers BOTH route shapes without duplicating handlers per
-  // page.
+  // `taqreer:share-revoked` on its window when the user channel delivers the
+  // broadcast. If we're currently viewing the revoked project, hard-redirect to
+  // /dashboard. Mounted in the shell so it covers BOTH route shapes.
   useEffect(() => {
     const onRevoked = (event: Event) => {
       const detail = (event as CustomEvent<{ projectId?: string }>).detail;
@@ -142,8 +55,6 @@ export function DashboardShell({
       const onProject = pathname.startsWith(`/project/${revokedId}`);
       const onPreview = pathname.startsWith(`/preview/${revokedId}`);
       if (onProject || onPreview) {
-        // `replace` (not `push`) so the back button doesn't return
-        // them to the now-forbidden URL.
         router.replace("/dashboard");
       }
     };
@@ -152,44 +63,58 @@ export function DashboardShell({
       window.removeEventListener("taqreer:share-revoked", onRevoked);
   }, [pathname, router]);
 
-  // Width policy (user direction 2026-06-01): every dashboard page runs
-  // EDGE-TO-EDGE — same symmetric padding as the home dashboard — so the
-  // card grids / tables spread across wide monitors. The ONLY exceptions
-  // are the deck-creation flows (create / enhance / mimic / datasheet)
-  // and the template "use" surface, whose centered 3-card layouts are
-  // designed around 1280px and stay capped. (Preview / project routes
-  // keep their own left-heavy canvas chrome via `isFullWidthRoute`.)
-  const isFlowRoute =
-    pathname.startsWith("/create") ||
-    pathname.startsWith("/enhance") ||
-    pathname.startsWith("/mimic") ||
-    pathname.startsWith("/datasheet") ||
-    pathname.startsWith("/use-template");
-  const contentClasses = isFullWidthRoute
-    ? "pt-[120px] pb-[40px] pl-[120px] pr-[40px]"
-    : isFlowRoute
-      ? "mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16"
-      : "pt-28 px-8 pb-8 space-y-16";
+  const contentClasses = isFlowRoute
+    ? "mx-auto max-w-[1280px] pt-10 px-8 pb-8 space-y-16"
+    : "pt-10 px-8 pb-8 space-y-16";
 
+  // Panel background variant: flows get the static bottom glow (dots only), home
+  // (+ any other glow route) gets the animated aurora, everything else is flat gray.
+  let panelVariant = "tq-panel-gray";
+  if (isFlowRoute) {
+    panelVariant = "tq-panel-flow";
+  } else if (isGlowRoute) {
+    panelVariant = "tq-panel-glow";
+  }
+
+  // Studio (editor / generation) is full-bleed and chrome-less — NO app rail
+  // (user direction: keep the editor uncluttered). DeckView paints its own
+  // dotted canvas + floating panels; getting back to the dashboard is the
+  // home button in the bottom toolbox.
   if (isStudioRoute) {
     return (
-      <div className="studio-canvas text-on-background">{children}</div>
+      <div className="studio-canvas text-on-background min-h-screen">
+        {children}
+      </div>
     );
   }
 
   return (
     <div className="dashboard-bg min-h-screen relative opacity-100">
-      <Sidebar isCollapsed={isCollapsed} transitionClass={transitionClass} />
+      <Sidebar />
+
+      {/* Headless notification runtime (§20) — boots the store (setUser via
+          /api/me) + renders the live toast stack on every page. */}
+      <BellDropdown headless />
 
       <main
-        className={`min-h-screen text-on-background relative ${transitionClass}`}
-        style={{ marginRight: `${sidebarWidth}px`, marginLeft: 0, zIndex: 1 }}
+        className="min-h-screen text-on-background relative"
+        // +8: the rail floats 8px off the right edge (Sidebar `right-2`), so the
+        // content clears the rail AND that gap.
+        style={{ marginRight: `${SIDEBAR_WIDTH + 8}px`, marginLeft: 0, zIndex: 1 }}
       >
-        <Header
-          isCollapsed={isCollapsed}
-          onToggleSidebar={toggleSidebar}
-        />
-        <div className={contentClasses}>{children}</div>
+        {/* §22/§24: rounded content panel floating on the dark gutter. Home gets
+            the animated JS aurora + dots (tq-panel-glow); the flows get the dots
+            only + a static editor-style bottom glow (tq-panel-flow); every other
+            page is flat gray. */}
+        <div className={`tq-content-panel ${panelVariant}`}>
+          {isGlowRoute ? (
+            <MagneticGlow glowYOffset={0.1} aurora={!isFlowRoute} />
+          ) : null}
+          {/* §24: search + theme + language cluster, pinned to the panel's
+              top-start corner. */}
+          <TopUtilityBar />
+          <div className={contentClasses}>{children}</div>
+        </div>
       </main>
     </div>
   );

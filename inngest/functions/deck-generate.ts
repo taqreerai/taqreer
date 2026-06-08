@@ -142,6 +142,7 @@ OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, n
 2. THEN the slides, each a top-level \`<section data-label="<short Arabic name>" data-role="cover|content|section|stats|quote|image|closing">\`.
 
 - The FIRST character of your response is \`<\` (your \`<style>\`).
+- The COVER \`<section>\` carries \`data-deck-title="…"\` — the deck's title, 3–8 words, in the deck's language (a real title, not a placeholder). Becomes the project name.
 - Slides are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed slide frame).
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
@@ -755,7 +756,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
             `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
           ]
         : [
-            `LANGUAGE: Arabic. Produce every visible slide string in Arabic by default; preserve any inline English (URLs, brand names, version numbers) verbatim — don't translate it away.`,
+            `LANGUAGE: Arabic — every visible string, chrome and labels included, is Arabic; never invent or translate English. Latin digits only. Keep inline English the source wrote verbatim (URLs, versions, a brand spelled Latin).`,
           ]),
     // Location-aware cast for generated lifestyle images. ONLY for
     // images-mode decks AND only when /api/projects resolved a region from
@@ -782,11 +783,18 @@ function buildUserMessage(event: DeckGenerateEvent) {
     );
   }
 
-  // CONTENT FIDELITY block removed for the create test (user direction
-  // 2026-06-03: "verbatim completely off" — zero content constraint on the
-  // typed-text create path; Claude may rewrite/condense/restructure freely,
-  // with NO guard against inventing facts or dropping info). To restore, re-add
-  // the two hard limits (never invent / never drop) gated on typed-text create.
+  // CONTENT FIDELITY (soft) — typed-text create / scratch ONLY. Re-added
+  // 2026-06-08 (user direction: "keep the content as is, don't drift unless it
+  // was necessary to paraphrase for the visual direction") — softer than the
+  // strict-verbatim block removed 2026-06-03. Scoped to scratch: enhance/mimic
+  // already preserve their SOURCE deck, and datasheet has its own data-fidelity
+  // path; only the user's typed text needs this guard.
+  if ((readSource(event)?.kind ?? "scratch") === "scratch" && event.type !== "enhance") {
+    lines.push(
+      ``,
+      `CONTENT FIDELITY — this is the user's own writing. Keep their wording, points, and order; condense only to fit the frame. Never invent or drop content — you design how it's presented, not what it says.`,
+    );
+  }
 
   lines.push(...ruleLines(rules));
 
@@ -1914,8 +1922,25 @@ export const deckGenerate = inngest.createFunction(
           );
         }
 
+        // Claude tags the COVER <section> with data-deck-title (3–8 words, the
+        // deck's language). Prefer it; fall back to the brief's truncated paste,
+        // then a generic default. Quote-bounded + trimmed + capped (it flows to
+        // Project.title and the export filename, promoted at completion below).
+        const coverSlide = slides.find((s) => s.role === "cover") ?? slides[0];
+        const coverTitleMatch = coverSlide
+          ? /\bdata-deck-title\s*=\s*("([^"]*)"|'([^']*)')/i.exec(coverSlide.html)
+          : null;
+        const claudeTitle = (coverTitleMatch?.[2] ?? coverTitleMatch?.[3] ?? "")
+          .trim()
+          .slice(0, 160);
         const briefTitle = (data.brief as { title?: string } | null)?.title
           ?.trim();
+        const deckTitle =
+          claudeTitle.length > 0
+            ? claudeTitle
+            : briefTitle && briefTitle.length > 0
+              ? briefTitle
+              : "عرض تقديمي";
         // Enhance / mimic preserve the SOURCE's language (per their directive +
         // the LANGUAGE block), so the saved top-level language/direction must
         // follow the produced content, NOT the brief (which can default to ar/rtl
@@ -1930,7 +1955,7 @@ export const deckGenerate = inngest.createFunction(
         const manifest = {
           version: "2.0" as const,
           presentationId: data.presentationId,
-          title: briefTitle && briefTitle.length > 0 ? briefTitle : "عرض تقديمي",
+          title: deckTitle,
           language: langDir.language,
           direction: langDir.direction,
           theme,

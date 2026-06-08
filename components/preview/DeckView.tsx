@@ -44,7 +44,7 @@ import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
 import { edbg } from "@/lib/debug/editor-debug";
 import { PreviewActionBar, type StudioMode } from "@/components/slides/PreviewActionBar";
-import { StudioHeader } from "./StudioHeader";
+import { StudioActions } from "./StudioActions";
 import { createClient } from "@/lib/supabase/client";
 import { cssFontFamilyName } from "@/lib/export/theme-css-vars";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
@@ -248,8 +248,25 @@ function progressPercent(progress: Progress | null): number {
   }
 }
 
+// ░░░░░░░░░░ TQ-FLOW-TRACKER — TEMPORARY debug instrument (remove after testing) ░░░░░░░░░░
+// Console-only tracer for the unified generation→editor flow. grep "TQ-FLOW-TRACKER"
+// to strip every line of this instrument in one pass.
+function flog(tag: string, data?: Record<string, unknown>) {
+  console.log(
+    `%c[flow]%c ${tag}`,
+    "background:#7D2DFF;color:#fff;padding:1px 6px;border-radius:4px;font-weight:700",
+    "color:#7D2DFF;font-weight:600",
+    data ? JSON.parse(JSON.stringify(data)) : "",
+  );
+}
+// ░░░░░░░░░░ /TQ-FLOW-TRACKER ░░░░░░░░░░
+
 // Fallback scale used while ResizeObserver is wiring up to the hero.
 const FALLBACK_SCALE = 0.18;
+
+// Editor undo/redo + checkpointing.
+const UNDO_DEPTH = 100; // cap the per-slide local undo stack (bounds memory)
+const CHECKPOINT_IDLE_MS = 10 * 60 * 1000; // idle-autosave a history checkpoint
 
 // Hero canvas layout constants. Kept here (rather than inline) so the
 // width-clamp and the symmetric height-clamp we pass to the side
@@ -641,6 +658,23 @@ export function DeckView({
   // The editor iframe's document — captured via SlideEditor.onDocReady so the
   // Studio Layers panel can build its tree from the live slide DOM.
   const [editorDoc, setEditorDoc] = useState<Document | null>(null);
+  // Client-side undo/redo stacks, per slide. `past` holds prior HTML states,
+  // `future` the redone-away ones; the live state is the manifest's slide.html.
+  // An edit pushes the pre-edit html to `past` and clears `future` (standard
+  // truncate-on-new-edit). This REPLACES version-based undo — edits no longer
+  // create SlideVersions (those are now coarse checkpoints from Save + the
+  // 10-min idle timer), so the stack is the accurate fine-grained undo.
+  const [undoStacks, setUndoStacks] = useState<
+    Record<string, { past: string[]; future: string[] }>
+  >({});
+  const undoStacksRef = useRef(undoStacks);
+  useEffect(() => {
+    undoStacksRef.current = undoStacks;
+  }, [undoStacks]);
+  // Slides edited since the last checkpoint — flushed to SlideVersions on Save
+  // and on the 10-min idle timer. The timer re-arms on every edit/undo/redo.
+  const dirtySlidesRef = useRef<Set<string>>(new Set());
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Stable reference so StylePill's outside-click `mousedown` listener isn't
   // re-attached on every DeckView render (`setEditorSelected` is itself stable).
   const dismissEditorSelection = useCallback(() => setEditorSelected([]), []);
@@ -690,14 +724,12 @@ export function DeckView({
       slideMutationSeqRef.current[slideKey] === seq,
     [],
   );
-  // Save a manual edit from the in-canvas editor (Editor I3): POST → new
-  // SlideVersion (see /slides/[slideKey]/edit), then update state IN PLACE — the
-  // manifest html (for thumbnails/export; the pinned editor iframe ignores it),
-  // the version pointer, and the cached history rows (dropped so the popover
-  // re-fetches). Stored behind SlideEditor's onEditRef, so identity is harmless.
-  const handleSlideEdit = useCallback(
+  // Persist a slide's CONTENT in place (no history row) — POST /edit, which
+  // splices into the active manifest server-side. Fire-and-forget: the manifest
+  // + iframe already reflect the change locally; a failed write only misses the
+  // DB (the next save/reload reconciles).
+  const persistContentInPlace = useCallback(
     async (slideKey: string, html: string) => {
-      const seq = nextSlideMutationSeq(slideKey);
       try {
         const res = await fetch(
           `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/edit`,
@@ -708,31 +740,187 @@ export function DeckView({
           },
         );
         if (!res.ok) throw new Error(`edit: ${res.status}`);
-        const data = (await res.json()) as {
-          currentVersionNumber: number;
-          slide: SlideType;
-        };
-        // A newer edit/restore for this slide started while we were in flight →
-        // its result is the source of truth; drop ours rather than clobber it.
-        if (!isLatestSlideMutation(slideKey, seq)) return;
-        // Mirror the new version into the manifest + pill state — identical to a
-        // restore (the edit IS a new SlideVersion the pointer now targets).
-        applyRestoredSlide(slideKey, data);
-        // ...but unlike a restore, an edit CREATES a version row, so drop this
-        // slide's cached history list; the popover refetches on next open.
-        setHistoryVersions((prev) => {
-          if (!(slideKey in prev)) return prev;
-          const next = { ...prev };
-          delete next[slideKey];
-          return next;
-        });
       } catch (err) {
         console.error("[edit] save failed", err);
-        // The iframe keeps the user's edit; only the DB write missed. (Toast = I5.)
       }
     },
-    [projectId, applyRestoredSlide, nextSlideMutationSeq, isLatestSlideMutation],
+    [projectId],
   );
+
+  // Flush a history CHECKPOINT for every slide edited since the last one — POST
+  // /checkpoint snapshots the live content as a SlideVersion. Called by the
+  // 10-min idle timer and by Save. Moves each slide's version pointer to the new
+  // checkpoint and drops its cached history list so the popover refetches.
+  const flushCheckpoints = useCallback(async () => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+    const keys = Array.from(dirtySlidesRef.current);
+    if (keys.length === 0) return;
+    dirtySlidesRef.current.clear();
+    await Promise.all(
+      keys.map(async (slideKey) => {
+        try {
+          const res = await fetch(
+            `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/checkpoint`,
+            { method: "POST" },
+          );
+          if (!res.ok) return;
+          const data = (await res.json()) as { currentVersionNumber: number };
+          setSlideVersionPointer(slideKey, data.currentVersionNumber);
+          setHistoryVersions((prev) => {
+            if (!(slideKey in prev)) return prev;
+            const next = { ...prev };
+            delete next[slideKey];
+            return next;
+          });
+        } catch (err) {
+          console.error("[checkpoint] failed", err);
+        }
+      }),
+    );
+  }, [projectId, setSlideVersionPointer]);
+
+  // Mark a slide dirty + (re)arm the 10-min idle autosave. Every edit/undo/redo
+  // pushes the timer out, so a checkpoint lands 10 min after the user stops.
+  const markDirtyAndArmIdle = useCallback(
+    (slideKey: string) => {
+      dirtySlidesRef.current.add(slideKey);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        void flushCheckpoints();
+      }, CHECKPOINT_IDLE_MS);
+    },
+    [flushCheckpoints],
+  );
+
+  // Apply a slide's new html: splice into the manifest (thumbnails/export reflect
+  // now), optionally rebuild the editor iframe (undo/redo change content the
+  // iframe DOESN'T already show — an in-canvas edit does, so it skips the
+  // reload), mark dirty, and persist in place.
+  const applyContentLocally = useCallback(
+    (slideKey: string, html: string, opts?: { reload?: boolean }) => {
+      setManifest((prev) =>
+        prev
+          ? {
+              ...prev,
+              slides: prev.slides.map((s) =>
+                s.slideId === slideKey ? { ...s, html } : s,
+              ),
+            }
+          : prev,
+      );
+      if (opts?.reload) setEditorReloadKey((k) => k + 1);
+      markDirtyAndArmIdle(slideKey);
+      void persistContentInPlace(slideKey, html);
+    },
+    [markDirtyAndArmIdle, persistContentInPlace],
+  );
+
+  // Push the pre-edit html onto a slide's undo stack and clear its redo branch
+  // (standard truncate-on-new-edit), capped at UNDO_DEPTH.
+  const pushUndo = useCallback((slideKey: string, prevHtml: string) => {
+    setUndoStacks((prev) => {
+      const cur = prev[slideKey] ?? { past: [], future: [] };
+      return {
+        ...prev,
+        [slideKey]: {
+          past: [...cur.past, prevHtml].slice(-UNDO_DEPTH),
+          future: [],
+        },
+      };
+    });
+  }, []);
+
+  // In-canvas edit committed (blur). Record the prior html for undo, then apply.
+  // No version row is created (history is now Save + 10-min checkpoints); the
+  // iframe already shows the edit, so no reload. Behind SlideEditor.onEditRef.
+  const handleSlideEdit = useCallback(
+    (slideKey: string, html: string) => {
+      const prevHtml = manifestRef.current?.slides.find(
+        (s) => s.slideId === slideKey,
+      )?.html;
+      if (prevHtml === html) return; // no-op
+      if (prevHtml != null) pushUndo(slideKey, prevHtml);
+      applyContentLocally(slideKey, html, { reload: false });
+    },
+    [pushUndo, applyContentLocally],
+  );
+
+  // Undo / redo over the focused slide's LOCAL stack. The focused slide is read
+  // from refs so these work identically from the toolbar buttons and the
+  // ⌘Z / ⌘⇧Z keydown handler. Both rebuild the iframe (reload: true) since the
+  // restored html isn't what the iframe currently shows.
+  const focusedSlideKeyFromRefs = useCallback((): string | null => {
+    const m = manifestRef.current;
+    if (!m || m.slides.length === 0) return null;
+    const idx = Math.min(
+      Math.max(slideIndexRef.current, 0),
+      m.slides.length - 1,
+    );
+    return m.slides[idx]?.slideId ?? null;
+  }, []);
+  const handleLocalUndo = useCallback(() => {
+    const slideKey = focusedSlideKeyFromRefs();
+    if (!slideKey) return;
+    const stack = undoStacksRef.current[slideKey];
+    if (!stack || stack.past.length === 0) return;
+    const curHtml = manifestRef.current?.slides.find(
+      (s) => s.slideId === slideKey,
+    )?.html;
+    if (curHtml == null) return;
+    const prevHtml = stack.past[stack.past.length - 1]!;
+    setUndoStacks((prev) => {
+      const s = prev[slideKey];
+      if (!s || s.past.length === 0) return prev;
+      return {
+        ...prev,
+        [slideKey]: {
+          past: s.past.slice(0, -1),
+          future: [...s.future, curHtml].slice(-UNDO_DEPTH),
+        },
+      };
+    });
+    applyContentLocally(slideKey, prevHtml, { reload: true });
+  }, [focusedSlideKeyFromRefs, applyContentLocally]);
+  const handleLocalRedo = useCallback(() => {
+    const slideKey = focusedSlideKeyFromRefs();
+    if (!slideKey) return;
+    const stack = undoStacksRef.current[slideKey];
+    if (!stack || stack.future.length === 0) return;
+    const curHtml = manifestRef.current?.slides.find(
+      (s) => s.slideId === slideKey,
+    )?.html;
+    if (curHtml == null) return;
+    const nextHtml = stack.future[stack.future.length - 1]!;
+    setUndoStacks((prev) => {
+      const s = prev[slideKey];
+      if (!s || s.future.length === 0) return prev;
+      return {
+        ...prev,
+        [slideKey]: {
+          past: [...s.past, curHtml].slice(-UNDO_DEPTH),
+          future: s.future.slice(0, -1),
+        },
+      };
+    });
+    applyContentLocally(slideKey, nextHtml, { reload: true });
+  }, [focusedSlideKeyFromRefs, applyContentLocally]);
+
+  // On unmount/navigation: clear the idle timer (so it can't fire into a dead
+  // component) and best-effort flush any pending edits into a checkpoint. The
+  // content itself is already persisted in place, so a dropped flush only defers
+  // the history snapshot — never loses work.
+  useEffect(() => {
+    return () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      void flushCheckpoints();
+    };
+  }, [flushCheckpoints]);
 
   // Move the slide's version pointer + splice that version into the manifest.
   // Shared by the History popover and undo/redo (⌘Z / ⌘⇧Z — the SlideVersion
@@ -857,6 +1045,7 @@ export function DeckView({
       prompt: string;
       aspect: GenImageAspect;
     }) => {
+      flog("EVENT regen:request", { genid: input.genid, slideId: input.slideId, aspect: input.aspect }); // TQ-FLOW-TRACKER
       // Drop the stale fill for this box immediately — matches the StylePill's
       // optimistic `src` removal. Otherwise `exportManifest` keeps baking the
       // OLD asset, and the iframe-sync effect below can re-inject the old `src`
@@ -1431,6 +1620,7 @@ export function DeckView({
       // real image in place, live, while the deck is still generating.
       localHandle.on("slide.image.ready", (payload) => {
         if (cancelled) return;
+        flog("EVENT broadcast:slide.image.ready", { genid: payload.genid, url: payload.url }); // TQ-FLOW-TRACKER
         setFilledImages((prev) =>
           prev[payload.genid] === payload.url
             ? prev
@@ -1861,10 +2051,11 @@ export function DeckView({
 
     const handleKey = (e: KeyboardEvent) => {
       if (isNavBlocked()) return;
-      // ⌘Z / ⌘⇧Z in edit mode → undo / redo by hopping the SlideVersion pointer
-      // (the history IS the undo stack). isNavBlocked already excluded comment
-      // mode, in-flight regen, and typing in a field, so this is safe. Runs
-      // before the modifier-key bail below.
+      // ⌘Z / ⌘⇧Z in edit mode → undo / redo on the focused slide's LOCAL stack
+      // (the accurate fine-grained history; SlideVersions are now coarse Save /
+      // 10-min checkpoints). isNavBlocked already excluded comment mode,
+      // in-flight regen, and typing in a field, so this is safe. Runs before the
+      // modifier-key bail below.
       if (
         editMode &&
         (e.metaKey || e.ctrlKey) &&
@@ -1872,13 +2063,8 @@ export function DeckView({
         e.key.toLowerCase() === "z"
       ) {
         e.preventDefault();
-        const slideKey =
-          manifest?.slides[
-            Math.min(Math.max(slideIndexRef.current, 0), totalSlides - 1)
-          ]?.slideId;
-        if (!slideKey) return;
-        const cur = slideStates[slideKey]?.currentVersionNumber ?? 1;
-        void restoreToVersion(slideKey, e.shiftKey ? cur + 1 : cur - 1);
+        if (e.shiftKey) handleLocalRedo();
+        else handleLocalUndo();
         return;
       }
       // Modifier keys → leave for native shortcuts (refresh, devtools, etc.)
@@ -1935,8 +2121,8 @@ export function DeckView({
     applying,
     historyAnchor,
     editMode,
-    slideStates,
-    restoreToVersion,
+    handleLocalUndo,
+    handleLocalRedo,
   ]);
 
   // Realtime — Inngest writes the version → Supabase emits → we parse + render.
@@ -1990,6 +2176,7 @@ export function DeckView({
             }
             if (record.status === "completed") {
               const parsed = SlideManifestSchema.safeParse(slideJson);
+              flog("EVENT realtime:postgres → completed", { manifestParsed: parsed.success, slides: parsed.success ? parsed.data.slides.length : 0 }); // TQ-FLOW-TRACKER
               if (parsed.success) {
                 setManifestStable(parsed.data);
                 setProgress(null);
@@ -2153,6 +2340,7 @@ export function DeckView({
           return;
         }
         if (data.status === "completed" || data.status === "complete") {
+          flog("EVENT poll → completed", { hasManifest: !!data.manifest }); // TQ-FLOW-TRACKER
           // Swap manifest in-place if the server attached it (it
           // does so when latestVersion?.status === "completed"),
           // then flip the local `polledCompleted` flag so the
@@ -2793,18 +2981,25 @@ export function DeckView({
     setCommentMode((v) => !v);
   }, []);
 
-  // Esc handler — exits comment mode when active.
+  // Esc cancels the active commenting mode — normal comment mode OR §17 AI mode.
+  // The HeroCommentOverlay's own capture-phase Esc handler runs FIRST for an open
+  // comment editor / live drag / marker preview and stops propagation, so this
+  // only fires once those inner layers are clear (the Esc cascade): an in-progress
+  // AI drag is cancelled by the overlay; a committed region (or none) backs all
+  // the way out here. Leaving AI mode drops `pendingAiBounds` via the studioMode
+  // effect above, so we just flip the mode.
   useEffect(() => {
-    if (!commentMode) return;
+    const inAi = studioMode === "ai";
+    if (!commentMode && !inAi) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setCommentMode(false);
-      }
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (commentMode) setCommentMode(false);
+      if (inAi) setStudioMode("edit");
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [commentMode]);
+  }, [commentMode, studioMode]);
 
   // Click-outside handler — exits comment mode when the user clicks
   // anywhere that isn't the hero canvas, the CommentsPanel, the
@@ -2835,6 +3030,91 @@ export function DeckView({
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
   }, [commentMode]);
+
+  // ░░░░░░░░░░ TQ-FLOW-TRACKER — TEMPORARY (remove after testing) ░░░░░░░░░░
+  // Snapshots the unified gen→editor state on every meaningful change and logs
+  // the salient TRANSITION (status flip / manifest arrival / image fill) plus a
+  // full snapshot. Mirrors the real `editingDisabled` math so the disabled→
+  // enabled handoff at completion is visible. Placed BEFORE the failed/cancelled
+  // early-returns so the hook order is stable.
+  const flowPrevRef = useRef<{
+    status?: string;
+    hasManifest?: boolean;
+    filled?: number;
+    editable?: boolean;
+  }>({});
+  useEffect(() => {
+    const hasManifest = manifest != null;
+    const slides = manifest?.slides ?? streamingPreview;
+    const slideCountNow = slides.length;
+    const filled = Object.keys(filledImages).length;
+    // Recompute editingDisabled exactly as the render path does (lines ~3287).
+    const fIdx = slideCountNow
+      ? Math.min(Math.max(currentSlideIndex, 0), slideCountNow - 1)
+      : 0;
+    const fSlide = slides[fIdx];
+    const fRegen =
+      !!fSlide &&
+      (!!applying?.targetSlideIds.includes(fSlide.slideId) ||
+        peerRegenInProgress.has(fSlide.slideId));
+    const fLock = !!fSlide && slideStates[fSlide.slideId]?.lockedAt != null;
+    const editingDisabled = status === "generating" || fRegen || fLock;
+    const editable = !editingDisabled;
+    const lockedCount = Object.values(slideStates).filter(
+      (s) => s?.lockedAt != null,
+    ).length;
+
+    const snap: Record<string, unknown> = {
+      status,
+      phase: status === "generating" ? "GENERATING" : "EDITOR",
+      manifest: hasManifest ? `${slideCountNow} slides` : "null",
+      streaming: streamingPreview.length,
+      filledImages: filled,
+      focusedIdx: currentSlideIndex,
+      editable,
+      progress: progress
+        ? {
+            stage: progress.stage,
+            slide: progress.currentSlide,
+            total: progress.estimatedTotal,
+            pct: progressPercent(progress),
+          }
+        : null,
+      locks: {
+        applying: applying?.targetSlideIds.length ?? 0,
+        peerRegen: peerRegenInProgress.size,
+        locked: lockedCount,
+      },
+    };
+
+    const prev = flowPrevRef.current;
+    if (prev.status !== status) {
+      flog(`STATUS  ${prev.status ?? "∅"} → ${status}`, snap);
+    } else if (prev.hasManifest !== hasManifest) {
+      flog(
+        `MANIFEST  ${prev.hasManifest ? "present" : "null"} → ${hasManifest ? `present(${slideCountNow})` : "null"}`,
+        snap,
+      );
+    } else if (prev.editable !== editable) {
+      flog(`EDITABLE  ${prev.editable ? "on" : "off"} → ${editable ? "ON" : "OFF"}`, snap);
+    } else if (prev.filled !== filled) {
+      flog(`FILL  +${filled - (prev.filled ?? 0)} (now ${filled})`, snap);
+    } else {
+      flog("update", snap);
+    }
+    flowPrevRef.current = { status, hasManifest, filled, editable };
+  }, [
+    status,
+    manifest,
+    filledImages,
+    streamingPreview,
+    currentSlideIndex,
+    progress,
+    applying,
+    peerRegenInProgress,
+    slideStates,
+  ]);
+  // ░░░░░░░░░░ /TQ-FLOW-TRACKER ░░░░░░░░░░
 
   // Per-slide draft comment counts. Drives the dim affordance in the grid
   // and the Apply button badge.
@@ -3294,6 +3574,15 @@ export function DeckView({
   // the focused slide is mid-regen / locked.
   const editingDisabled = generating || isFocusedRegenerating || isFocusedLocked;
 
+  // Undo / redo enabled-state for the toolbar buttons — driven by the focused
+  // slide's LOCAL stack (the same one ⌘Z / ⌘⇧Z + handleLocalUndo/Redo drive).
+  const focusedSlideKey = focusedSlide?.slideId;
+  const focusedStack = focusedSlideKey ? undoStacks[focusedSlideKey] : undefined;
+  const canUndo =
+    !editingDisabled && (focusedStack?.past.length ?? 0) > 0;
+  const canRedo =
+    !editingDisabled && (focusedStack?.future.length ?? 0) > 0;
+
   const heroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
 
   // Saved-state comparator. Two halves, both required for "saved":
@@ -3333,23 +3622,20 @@ export function DeckView({
       // Studio: the slide centers between the two floating panels (Slides on
       // the right, Layers on the left). Symmetric gutters reserve their space;
       // the panels themselves are fixed overlays so this only drives centering.
+      // The panels sit 16px off each edge (width SLIDE_NAV_WIDTH), so a margin
+      // of SLIDE_NAV_WIDTH + 56 leaves a comfortable ~40px breathing gap
+      // between the canvas and each panel (was +24 → only ~8px, too tight).
       style={{
-        marginLeft: SLIDE_NAV_WIDTH + 24,
-        marginRight: SLIDE_NAV_WIDTH + 24,
+        marginLeft: SLIDE_NAV_WIDTH + 56,
+        marginRight: SLIDE_NAV_WIDTH + 56,
       }}
     >
       {fontAssets}
 
-      {/* Studio top header — back + project title (leading/right) · Export ▾ +
-          Share (trailing/left). While generating, manifest=null → back + title
-          only; export/share light up on completion. */}
-      <StudioHeader
-        projectId={projectId}
-        projectTitle={projectTitle}
-        manifest={generating ? null : exportManifest}
-        formatFallback={initialFormat}
-        role={role}
-      />
+      {/* §22: the StudioHeader bar was removed — the app sidebar rail is the
+          only chrome now. Its Export ▾ + Share actions moved into the slide-nav
+          footer (see `actionsSlot` below); back-to-dashboard is the sidebar
+          logo. */}
 
       {/* Right-edge slot: the Slides nav (with a Comments tab for reviewing
           comments). FADED OUT (not unmounted) while commenting — both side
@@ -3412,6 +3698,19 @@ export function DeckView({
               onClose={handleToggleCommentMode}
               onApply={handleApplyComments}
               mainSidebarWidth={mainSidebarWidth}
+            />
+          ) : undefined
+        }
+        // §22: Export ▾ + Share live in the slide-nav footer now (the
+        // StudioHeader is gone). Only once a completed deck exists.
+        actionsSlot={
+          !generating && exportManifest ? (
+            <StudioActions
+              projectId={projectId}
+              projectTitle={projectTitle}
+              manifest={exportManifest}
+              formatFallback={initialFormat}
+              role={role}
             />
           ) : undefined
         }
@@ -3510,6 +3809,12 @@ export function DeckView({
                   // deleted canvas pill, plus the AI-mode single-slide regen.
                   // The History button is a TOGGLE relative to the current
                   // anchor; its popover flips up from the bottom bar.
+                  // Undo / redo — the focused slide's local stack (mirrors ⌘Z /
+                  // ⌘⇧Z). Greyed at the ends via canUndo / canRedo.
+                  onUndo={handleLocalUndo}
+                  onRedo={handleLocalRedo}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
                   historyOpen={
                     historyAnchor != null &&
                     historySlideKey === focusedSlide?.slideId
@@ -3653,6 +3958,8 @@ export function DeckView({
                     setSavedVersionId(payload.savedVersionId);
                     setSavedSlideVersions(payload.savedSlideVersions);
                   }}
+                  // Save first snapshots pending edits as history checkpoints.
+                  onBeforeSave={flushCheckpoints}
                 />
               </div>
             </motion.div>,
@@ -3667,10 +3974,12 @@ export function DeckView({
       <div
         dir="ltr"
         className="flex items-center justify-center"
-        // Full-viewport row so the canvas (sized to 100vh − padding) centers
-        // vertically with equal breathing top/bottom — clearing the back pill
-        // and the bottom toolbar.
-        style={{ minHeight: "100vh" }}
+        // §22: center the canvas within the SAME vertical band as the side
+        // panels (Layers / slide-nav sit top:16 → bottom:100), not the raw
+        // viewport — otherwise the slide centers ~42px below the panels' midline
+        // and reads misaligned. Matching their top/bottom insets lines all three
+        // up on one centerline.
+        style={{ minHeight: "100vh", paddingTop: 16, paddingBottom: 100 }}
       >
         <motion.div
           ref={gridRef}
@@ -3709,7 +4018,13 @@ export function DeckView({
               required a separate dark chip behind the spinner; a
               flat dim gives the spinner readable contrast against
               any slide background without an extra chrome chip. */}
-          <div className="h-full w-full overflow-hidden">
+          <div
+            className={`h-full w-full overflow-hidden${
+              generating
+                ? " canvas-gen-glass backdrop-blur-glass backdrop-saturate-(--glass-saturation)"
+                : ""
+            }`}
+          >
             {generating ? (
               // ── Generation canvas: the streaming hero (once a slide closes)
               // or the thinking screen + progress bar until then. Same wrapper

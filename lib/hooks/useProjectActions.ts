@@ -1,11 +1,9 @@
 "use client";
 
 // Shared project actions — the menu/rename/favorite/delete/share/
-// use-as-template logic used by BOTH the project cards (ProjectThumbnail)
-// and the dashboard table rows (ProjectTableRow). Only the LAYOUT differs
-// between those two surfaces; the action state + handlers + the four
-// portalled dialogs are identical, so they live here + in the
-// `<ProjectActionsDialogs>` companion.
+// use-as-template logic used by the project cards (ProjectThumbnail). The
+// action state + handlers + the four portalled dialogs live here + in the
+// `<ProjectActionsDialogs>` companion so any future surface can reuse them.
 //
 // The consumer owns its own 3-dots trigger (it positions it differently)
 // and its own title/rename UI; it wires them to the refs + handlers

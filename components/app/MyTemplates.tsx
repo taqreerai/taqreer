@@ -39,8 +39,12 @@ export type MyTemplatesTemplate = TemplateTileData & {
 
 export function MyTemplates({
   templates,
+  // §22: when embedded (inside HomeLibrary's toggle), render only the grid +
+  // lightbox — no card wrapper, no header (the host card owns those).
+  embedded = false,
 }: {
   templates: MyTemplatesTemplate[];
+  embedded?: boolean;
 }) {
   // null = lightbox closed; a template object = open at that template.
   const [preview, setPreview] = useState<MyTemplatesTemplate | null>(null);
@@ -91,18 +95,8 @@ export function MyTemplates({
   const previewFormat: SlideFormat =
     preview?.brand.format === "9:16" ? "9:16" : "16:9";
 
-  return (
-    <div className="glass-card rounded-2xl p-5 sm:p-6" dir="rtl">
-      <header className="mb-5 flex items-start justify-between">
-        <div>
-          <h2 className="tq-widget-title">ابدأ من قالب</h2>
-          <p className="mt-1 text-xs text-muted">ما تراه هو ما تحصل عليه</p>
-        </div>
-        <Link href="/templates" className="tq-widget-link no-underline">
-          عرض الكل
-        </Link>
-      </header>
-
+  const body = (
+    <>
       {templates.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted">
           لا توجد قوالب محفوظة — عند حفظ عرض كقالب سيظهر هنا لتبدأ منه.
@@ -134,6 +128,26 @@ export function MyTemplates({
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}
       />
+    </>
+  );
+
+  // Embedded (inside HomeLibrary's toggle): grid + lightbox only.
+  if (embedded) {
+    return <div dir="rtl">{body}</div>;
+  }
+
+  return (
+    <div className="glass-card rounded-2xl p-5 sm:p-6" dir="rtl">
+      <header className="mb-5 flex items-start justify-between">
+        <div>
+          <h2 className="tq-widget-title">ابدأ من قالب</h2>
+          <p className="mt-1 text-xs text-muted">ما تراه هو ما تحصل عليه</p>
+        </div>
+        <Link href="/templates" className="tq-widget-link no-underline">
+          عرض الكل
+        </Link>
+      </header>
+      {body}
     </div>
   );
 }

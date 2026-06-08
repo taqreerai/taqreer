@@ -576,6 +576,21 @@ export default function CreatePage() {
           ? { kind: "scratch" as const, anthropicFileId: contentAnthropicFileId }
           : null;
 
+      // TQ-FLOW-TRACKER — TEMPORARY (remove after testing; grep TQ-FLOW-TRACKER)
+      console.log(
+        "%c[flow]%c EVENT create:POST /api/projects",
+        "background:#370BF4;color:#fff;padding:1px 6px;border-radius:4px;font-weight:700",
+        "color:#370BF4;font-weight:600",
+        JSON.parse(
+          JSON.stringify({
+            language,
+            slideCount: slideCountMode === "custom" ? slideCountValue : "auto",
+            quality,
+            imagesMode,
+            hasSource: !!source,
+          }),
+        ),
+      );
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -601,6 +616,13 @@ export default function CreatePage() {
       }
 
       const data = (await response.json()) as { projectId: string };
+      // TQ-FLOW-TRACKER — TEMPORARY (remove after testing)
+      console.log(
+        `%c[flow]%c EVENT create:handoff → /project/${data.projectId}`,
+        "background:#370BF4;color:#fff;padding:1px 6px;border-radius:4px;font-weight:700",
+        "color:#370BF4;font-weight:600",
+        { projectId: data.projectId },
+      );
       router.push(`/project/${data.projectId}`);
     } catch (caughtError) {
       console.error("[create] generate failed:", caughtError);

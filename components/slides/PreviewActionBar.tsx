@@ -8,6 +8,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { SegmentedToggle } from "@/components/create/controls";
 
 // Toolbar orientation → drives where each ToolButton's tooltip pops. Vertical
 // (left rail): to the right, toward content. Horizontal (Studio bottom bar):
@@ -17,9 +20,6 @@ const ToolbarHorizontalContext = createContext(false);
 // the server (no-op, avoids the SSR warning).
 const useIsoLayoutEffect =
   typeof document !== "undefined" ? useLayoutEffect : useEffect;
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { SegmentedToggle } from "@/components/create/controls";
 
 // Studio editor mode — Edit (manual scalpel + user comments) vs AI (generative).
 export type StudioMode = "edit" | "ai";
@@ -200,16 +200,19 @@ function ToolButton({
           the wrong side of the Arabic word. With dir="auto" the
           tooltip reads RTL for Arabic labels and LTR for any pure-
           Latin label, no per-button decision needed. */}
+      {/* §24: bordered dark-surface tooltip (matches the sidebar's). Slides in
+          on hover — UP for the bottom bar (down→up), in-from-the-side for the
+          left rail. Positioning + transform live in classes (not inline style)
+          so `group-hover` can animate the slide. */}
       <div
         dir="auto"
-        className="pointer-events-none absolute whitespace-nowrap rounded-md bg-black/90 px-3 py-1.5 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-        style={
+        className={`pointer-events-none absolute z-50 whitespace-nowrap rounded-lg border border-white/[0.12] bg-[var(--glass-fill)] px-3 py-1.5 text-xs text-white opacity-0 transition-all duration-200 group-hover:opacity-100 ${
           tooltipHorizontal
-            ? // Bottom bar → pop ABOVE the button, centered.
-              { bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: "10px" }
-            : // Left rail → pop to the right, toward content.
-              { top: "50%", left: "100%", transform: "translateY(-50%)", marginLeft: "12px" }
-        }
+            ? // Bottom bar → pop ABOVE the button, centered, sliding up.
+              "bottom-full left-1/2 mb-2.5 -translate-x-1/2 translate-y-1.5 group-hover:translate-y-0"
+            : // Left rail → pop to the right (toward content), sliding in.
+              "left-full top-1/2 ml-3 -translate-y-1/2 translate-x-1.5 group-hover:translate-x-0"
+        }`}
       >
         {label}
         {badge ? <span className="badge-purple ms-2">{badge}</span> : null}
@@ -243,6 +246,10 @@ export function PreviewActionBar({
   onToggleCommentMode,
   draftCommentCount,
   focusedSlideLocked,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
   onOpenHistory,
   onToggleLock,
   onRegenSlide,
@@ -253,6 +260,7 @@ export function PreviewActionBar({
   currentVersionId,
   isSaved,
   onSaved,
+  onBeforeSave,
   horizontal = false,
   disabled = false,
 }: {
@@ -285,6 +293,12 @@ export function PreviewActionBar({
   // off the locked slide flips the button back without leaving /
   // re-entering the deck.
   focusedSlideLocked: boolean;
+  // Undo / redo over the focused slide's version log (same stack as ⌘Z / ⌘⇧Z).
+  // `canUndo` / `canRedo` grey the buttons at the ends of history.
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
   // True when there are unsent drafts ready to be fired. Drives the
   // autorenew → assistant icon morph + swaps the click handler
   // from full regen to partial regen.
@@ -320,6 +334,9 @@ export function PreviewActionBar({
     savedVersionId: string;
     savedSlideVersions: Record<string, number>;
   }) => void;
+  // Flush pending edits to history checkpoints (SlideVersions) BEFORE pinning the
+  // saved version, so the saved snapshot reflects the just-checkpointed numbers.
+  onBeforeSave?: () => Promise<void>;
   // Studio bottom-bar mode — lay the cluster out as a horizontal row (pill +
   // dividers rotate) instead of the default vertical left-rail strip.
   horizontal?: boolean;
@@ -443,6 +460,9 @@ export function PreviewActionBar({
     }
     setSaveProject({ status: "running", message: "جارٍ حفظ المشروع..." });
     try {
+      // Snapshot pending edits as history checkpoints first, so the pinned
+      // saved version captures the new per-slide version numbers.
+      await onBeforeSave?.();
       const response = await fetch(`/api/projects/${projectId}/save`, {
         method: "POST",
       });
@@ -488,11 +508,14 @@ export function PreviewActionBar({
   // button's spinner + save→check icon morph is enough signal on its
   // own; the extra toast read as noise. Errors still bubble up so the
   // user sees auth / 4xx failures.
-  const visibleMessage =
-    regen.status === "error" ? { text: regen.message, kind: "error" as const } :
-    saveProject.status === "error" ? { text: saveProject.message, kind: "error" as const } :
-    regen.status === "running" ? { text: regen.message, kind: "info" as const } :
-    null;
+  let visibleMessage: { text?: string; kind: "error" | "info" } | null = null;
+  if (regen.status === "error") {
+    visibleMessage = { text: regen.message, kind: "error" };
+  } else if (saveProject.status === "error") {
+    visibleMessage = { text: saveProject.message, kind: "error" };
+  } else if (regen.status === "running") {
+    visibleMessage = { text: regen.message, kind: "info" };
+  }
 
   return (
     <ToolbarHorizontalContext.Provider value={horizontal}>
@@ -686,6 +709,25 @@ export function PreviewActionBar({
                 pointerEvents: effectiveMode === "edit" ? "auto" : "none",
               }}
             >
+              {/* Undo / redo — edit-mode only (they do nothing in AI mode), so
+                  they live in this edit slot beside the comment button rather
+                  than the always-visible shared cluster. */}
+              {onUndo ? (
+                <ToolButton
+                  icon="undo"
+                  label="تراجع"
+                  onClick={onUndo}
+                  disabled={applying || !canUndo}
+                />
+              ) : null}
+              {onRedo ? (
+                <ToolButton
+                  icon="redo"
+                  label="إعادة"
+                  onClick={onRedo}
+                  disabled={applying || !canRedo}
+                />
+              ) : null}
               <ToolButton
                 icon="chat_bubble_outline"
                 label={
@@ -760,7 +802,21 @@ export function PreviewActionBar({
             />
           </div>
         ) : null}
-        {/* Export + Share moved to the StudioHeader (§16). */}
+        {/* Export + Share live in the slide-nav footer (§22). */}
+
+        {/* Home / back to dashboard (§22) — the editor has no app sidebar, so
+            this is the way out. Visible to ALL roles. The leading divider only
+            shows when there's a cluster before it (owner/edit/comment). */}
+        <div className="flex items-center gap-1">
+          {canEdit || canComment ? (
+            <ToolbarDivider horizontal={horizontal} />
+          ) : null}
+          <ToolButton
+            icon="home"
+            label="الرجوع إلى لوحة التحكم"
+            onClick={() => router.push("/dashboard")}
+          />
+        </div>
       </div>
 
       {/* Status toast below the toolbar — error (red) or info (muted).

@@ -216,12 +216,18 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   @keyframes tq-genimg-fadein{from{opacity:0}to{opacity:1}}
   img[data-genimage].tq-genimg-in{animation:tq-genimg-fadein 450ms ease both}
   @media (prefers-reduced-motion:reduce){img[data-genimage]:not([src]){animation:none;background-position:50% 0}img[data-genimage].tq-genimg-in{animation:none}}
-</style></head><body><div id="tqe-stage">${bodyHtml}</div></body></html>`;
+</style></head><body><div id="tqe-stage">${bodyHtml}</div><!--r:${reloadKey}--></body></html>`;
     // scale intentionally excluded — it's presentation, applied live via the
     // --tqe-scale var + the iframe element's dispW×dispH size, so a resize never
     // rebuilds (reloads) this document. The memo bakes the initial scale.
+    //
+    // `reloadKey` IS baked in (as an invisible comment): an undo/redo can revert
+    // to html that EQUALS the current (stale) bodyHtml — the edit path leaves
+    // bodyHtml untouched to preserve the caret — so setBodyHtml is a no-op and
+    // srcDoc wouldn't otherwise change. The reloadKey token forces a fresh srcDoc
+    // (→ iframe reload from bodyHtml) on every restore/undo/redo/peer bump.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bodyHtml, theme, direction, language, width, height]);
+  }, [bodyHtml, theme, direction, language, width, height, reloadKey]);
 
   // Wire the iframe document once it loads (and on every srcDoc change → reload).
   useEffect(() => {
@@ -405,6 +411,20 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         if (marqueeConsumedClick) { marqueeConsumedClick = false; return; }
         if ((e.target as HTMLElement | null)?.isContentEditable) return;
         const unit = resolveHit(sec, e.clientX, e.clientY);
+        // Shift+click TOGGLES the clicked leaf in/out of the current selection
+        // (additive multi-select, complements the marquee). Shift on empty
+        // canvas is a no-op — it must NOT clear the set.
+        if (e.shiftKey) {
+          if (!unit) return;
+          e.preventDefault();
+          const cur = selectedRef.current;
+          onSelectRef.current(
+            cur.includes(unit)
+              ? cur.filter((el) => el !== unit)
+              : [...cur, unit],
+          );
+          return;
+        }
         if (!unit) { onSelectRef.current([]); return; } // empty / bg → deselect
         e.preventDefault();
         // First click on a text leaf SELECTS it; clicking it AGAIN (when it's the

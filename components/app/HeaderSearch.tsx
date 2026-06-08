@@ -193,11 +193,28 @@ function ResultRow({
   );
 }
 
-export function HeaderSearch() {
+export function HeaderSearch({
+  autoFocus = false,
+  // `palette` (§24): command-palette layout — input + inline results + footer
+  // hint rendered as one contiguous panel (used by the ⌘K overlay). The default
+  // `input` variant is the bare field + portal'd dropdown (the legacy header).
+  variant = "input",
+}: {
+  autoFocus?: boolean;
+  variant?: "input" | "palette";
+} = {}) {
   const router = useRouter();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
+
+  // `autoFocus` (§20): when the search field is opened from the sidebar
+  // profile menu's "بحث" row it lives in a freshly-mounted overlay, so we
+  // pull focus to the input on mount. Focusing fires the input's onFocus →
+  // setOpen(true), so the results panel is primed once the user types.
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchProject[]>([]);
@@ -349,6 +366,82 @@ export function HeaderSearch() {
       }
     }
   };
+
+  // ─── Palette variant ───────────────────────────────────────────
+  // Command-palette layout: search row + inline results + footer hint, all in
+  // one panel (the parent overlay supplies the surface/border). Matches the
+  // shadcn command-dialog look the user referenced.
+  if (variant === "palette") {
+    return (
+      <div ref={wrapperRef} className="flex flex-col">
+        {/* Input row */}
+        <div className="flex items-center gap-3 border-b border-[var(--tq-border-hairline)] px-4">
+          <span
+            className="material-symbols-outlined text-muted text-[20px]"
+            aria-hidden
+          >
+            search
+          </span>
+          <input
+            ref={inputRef}
+            className="min-w-0 flex-1 bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-muted"
+            placeholder="ابحث في مشاريعك..."
+            type="text"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              if (!open) setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={handleKeyDown}
+            aria-autocomplete="list"
+            aria-expanded={hasQuery}
+            aria-controls={hasQuery ? listboxId : undefined}
+            aria-activedescendant={
+              hasQuery && activeIndex >= 0
+                ? `${listboxId}-${results[activeIndex]?.id ?? ""}`
+                : undefined
+            }
+            role="combobox"
+          />
+        </div>
+        {/* Results / empty state */}
+        <div
+          className="max-h-[52vh] overflow-y-auto hide-scrollbar"
+          id={listboxId}
+          role="listbox"
+          aria-label="نتائج البحث في المشاريع"
+        >
+          {hasQuery ? (
+            <PanelBody
+              loading={loading}
+              results={results}
+              trimmed={trimmed}
+              activeIndex={activeIndex}
+              listboxId={listboxId}
+              setActiveIndex={setActiveIndex}
+              navigateTo={navigateTo}
+            />
+          ) : (
+            <p className="px-4 py-8 text-center text-xs text-muted">
+              ابدأ بالكتابة للبحث في مشاريعك
+            </p>
+          )}
+        </div>
+        {/* Footer hint */}
+        <div className="flex items-center gap-1.5 border-t border-[var(--tq-border-hairline)] px-4 py-2.5 text-[11px] text-muted">
+          <kbd className="rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
+            ↵
+          </kbd>
+          <span>للفتح</span>
+          <kbd className="ms-3 rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
+            esc
+          </kbd>
+          <span>للإغلاق</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapperRef} className="relative w-full">

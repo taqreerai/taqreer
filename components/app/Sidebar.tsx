@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@/hooks/useUser";
@@ -12,6 +12,10 @@ import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { NewProjectDialog } from "@/components/app/NewProjectDialog";
+import { AllNotificationsModal } from "@/components/app/AllNotificationsModal";
+import { ServerStatusChip } from "@/components/app/ServerStatusChip";
+import { notificationStore, useNotifications } from "@/lib/notifications/store";
 
 // One sidebar nav link. Each instance owns its own icon ref so the
 // pill's mouseenter / mouseleave can drive the animated icon
@@ -35,21 +39,48 @@ function SidebarNavLink({
   comingSoon?: boolean;
 }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  // §24: the tooltip is PORTALLED to <body> with fixed positioning. The rail's
+  // scroll container is `overflow-x-hidden`, which clipped the old in-flow
+  // `right-full` tooltip so it never actually appeared — that's why the rail
+  // looked like it had no tooltips. null = hidden.
+  const [tipPos, setTipPos] = useState<{ top: number; right: number } | null>(
+    null,
+  );
+
+  const handleEnter = () => {
+    iconRef.current?.startAnimation();
+    if (!isCollapsed) return;
+    const r = linkRef.current?.getBoundingClientRect();
+    if (r) {
+      setTipPos({
+        top: r.top + r.height / 2,
+        // gap from the rail (the tooltip shouldn't look glued to the icons)
+        right: window.innerWidth - r.left + 14,
+      });
+    }
+  };
+  const handleLeave = () => {
+    iconRef.current?.stopAnimation();
+    setTipPos(null);
+  };
+
   return (
-    <div className="relative group w-full">
+    <div className="relative w-full">
       <Link
+        ref={linkRef}
         href={href}
-        onMouseEnter={() => iconRef.current?.startAnimation()}
-        onMouseLeave={() => iconRef.current?.stopAnimation()}
-        className={`flex items-center mx-[18px] w-[calc(100%-36px)] h-[44px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full relative ${
+        onMouseEnter={handleEnter}
+        onMouseLeave={handleLeave}
+        className={`flex items-center mx-[10px] w-[calc(100%-20px)] h-[40px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full relative ${
           isActive ? 'nav-active' : 'nav-item'
         }`}
       >
         <div
-          className="flex items-center justify-center w-[44px] h-[44px] flex-shrink-0 nav-icon transition-colors duration-200"
+          className="flex items-center justify-center w-[40px] h-[40px] flex-shrink-0 nav-icon transition-colors duration-200"
           style={{ color: isActive ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
         >
-          <AnimatedIcon ref={iconRef} name={icon} size={20} />
+          <AnimatedIcon ref={iconRef} name={icon} size={16} />
         </div>
         <span className={`font-medium text-sm transition-all duration-300 ${
           isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
@@ -62,26 +93,36 @@ function SidebarNavLink({
           </span>
         )}
       </Link>
-      <Tooltip
-        isCollapsed={isCollapsed}
-        text={comingSoon ? `${label} (قريباً)` : label}
-      />
-    </div>
-  );
-}
-
-function Tooltip({ isCollapsed, text }: { isCollapsed: boolean; text: string }) {
-  if (!isCollapsed) return null;
-  return (
-    <div className="sidebar-tooltip absolute right-full top-1/2 -translate-y-1/2 mr-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-      {text}
+      {typeof document !== "undefined"
+        ? createPortal(
+            <AnimatePresence>
+              {tipPos ? (
+                <motion.div
+                  key="sidebar-tip"
+                  className="sidebar-tooltip pointer-events-none fixed z-[9999]"
+                  style={{ top: tipPos.top, right: tipPos.right }}
+                  // Slide in right→left (emerges from the rail toward content).
+                  initial={{ opacity: 0, x: 10, y: "-50%" }}
+                  animate={{ opacity: 1, x: 0, y: "-50%" }}
+                  exit={{ opacity: 0, x: 10, y: "-50%" }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  {comingSoon ? `${label} (قريباً)` : label}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
 
 export function Sidebar({
-  isCollapsed = false,
-  transitionClass = "transition-all duration-300 ease-in-out"
+  // §22: the rail is ALWAYS collapsed (no expand). The prop is kept (defaulting
+  // true) so the existing collapsed-branch rendering + tooltips just work.
+  isCollapsed = true,
+  transitionClass = "transition-all duration-300 ease-in-out",
 }: {
   isCollapsed?: boolean;
   transitionClass?: string;
@@ -97,6 +138,24 @@ export function Sidebar({
   const [mounted, setMounted] = useState(false);
   const profileBtnRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // §20: header chrome moved into this profile menu. These overlays are
+  // opened by their menu rows below and render via their own body portals.
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Unread badge for the "الإشعارات" row + the avatar dot. Mirror the bell's
+  // filter (hide premature "deck finished" rows) so the count matches what
+  // the modal lists. The store boot/toasts live in the headless BellDropdown
+  // mounted by DashboardShell — this only reads the shared snapshot.
+  const allNotifications = useNotifications();
+  const notifications = useMemo(
+    () => allNotifications.filter((n) => n.type !== "deck.generate.finished"),
+    [allNotifications],
+  );
+  const unread = notifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0);
+  // Clamped label shared by the avatar dot + the notifications menu-row badge.
+  const unreadLabel = unread > 9 ? "9+" : unread;
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -197,17 +256,13 @@ export function Sidebar({
   return (
     <aside
       aria-label="Sidebar"
-      // `backdrop-blur-glass backdrop-saturate-(--glass-saturation)`
-      // tracks the user's Settings → glass preset; `sidebar-bg`
-      // owns the (now-transparent) tint + border color. Tailwind
-      // composes backdrop-filter — raw `backdrop-filter` in the
-      // class would lose to it (memory: feedback_tw_glass_system).
-      className={`sidebar-bg backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed right-0 top-0 h-screen z-50 flex flex-col border-l ${transitionClass} ${
-        isCollapsed ? "w-[80px]" : "w-[260px]"
-      }`}
+      // §22: thin transparent icon rail (always collapsed). No fill, no blur,
+      // no separator border — it floats on the dark gutter as the single chrome
+      // across the whole app. Labels are hidden; hover shows a tooltip.
+      className={`sidebar-bg fixed right-2 top-0 h-screen z-50 flex flex-col w-[60px] ${transitionClass}`}
     >
       {/* ── Logo ── */}
-      <div className="h-20 flex items-center px-[18px] flex-shrink-0 border-b border-white/[0.08]">
+      <div className="h-20 flex items-center px-[10px] flex-shrink-0">
         <div className="relative flex items-center h-full w-full">
           {/* Collapsed: icon only — wrapped in a Link to /dashboard so
               clicking the brand mark always returns home, and animated
@@ -219,14 +274,14 @@ export function Sidebar({
           <Link
             href="/dashboard"
             aria-label="الرئيسية"
-            className={`pw-hover-trigger absolute right-0 flex items-center justify-center w-[44px] h-[44px] transition-opacity duration-300 ${
+            className={`pw-hover-trigger absolute right-0 flex items-center justify-center w-[40px] h-[40px] transition-opacity duration-300 ${
               isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           >
-            <ParagraphWriteIcon mode="hover" size={30} />
+            <ParagraphWriteIcon mode="hover" size={26} />
           </Link>
           {/* Expanded: full logo */}
-          <div className={`absolute right-0 flex items-center h-[44px] transition-opacity duration-300 ${
+          <div className={`absolute right-0 flex items-center h-[40px] transition-opacity duration-300 ${
             isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}>
             <Image src="/logo-light.svg" alt="Taqreer Logo" width={110} height={28} className="object-contain" />
@@ -252,9 +307,6 @@ export function Sidebar({
           />
         </div>
 
-        {/* Divider */}
-        <div className="divider-dark flex-shrink-0" />
-
         {/* ── Action Buttons ──
             Active vs. idle uses the same `.nav-active` / `.nav-item`
             classes as the lower nav links so every sidebar item shares
@@ -276,9 +328,6 @@ export function Sidebar({
           ))}
         </div>
 
-        {/* Divider */}
-        <div className="divider-dark flex-shrink-0" />
-
         {/* ── Nav Links ── */}
         <nav className="flex flex-col py-3 gap-1 flex-1 w-full">
           {navLinks.map((item) => (
@@ -293,33 +342,24 @@ export function Sidebar({
           ))}
         </nav>
 
-        {/* Divider — hidden with usage bar when collapsed */}
-        <div className={`divider-dark flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'opacity-0 h-0' : ''}`} />
-
-        {/* ── Usage Bar ── */}
-        <div className={`sidebar-usage flex-shrink-0 transition-all duration-300 overflow-hidden px-[18px] ${
-          isCollapsed ? 'h-0 opacity-0 py-0 border-0' : 'h-[56px] opacity-100 py-3'
-        }`}>
-          <div className="flex justify-between text-xs mb-1.5 font-medium text-muted">
-            <span>الاستخدام</span>
-            <span>3 من 30 عرضًا</span>
-          </div>
-          <div className="progress-track">
-            <div className="progress-bar" style={{ width: '10%' }} />
-          </div>
-        </div>
-
-        {/* ── Divider ── */}
-        <div className="divider-dark flex-shrink-0" />
-
-        {/* ── Profile Area ── */}
+        {/* ── Profile Area ── (§22: usage bar + dividers removed — the rail is
+            just icons on the gutter, no separators) */}
         <div className="flex-shrink-0 py-2">
           <button
             ref={profileBtnRef}
             onClick={handleProfileClick}
-            className="flex items-center mx-[18px] w-[calc(100%-36px)] h-[56px] rounded-xl transition-colors cursor-pointer"
+            className="flex items-center mx-[10px] w-[calc(100%-20px)] h-[56px] rounded-xl transition-colors cursor-pointer"
           >
-            <div className="w-[44px] h-[44px] flex justify-center items-center flex-shrink-0">
+            <div className="relative w-[40px] h-[40px] flex justify-center items-center flex-shrink-0">
+              {/* Unread-notifications badge (§20). With the header bell gone,
+                  this is the only always-visible unread cue — anchored to the
+                  avatar's top-start corner. Sky-blue chip, same vocabulary as
+                  the old bell badge. */}
+              {unread > 0 ? (
+                <span className="absolute -top-0.5 right-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
+                  {unreadLabel}
+                </span>
+              ) : null}
               {avatarUrl ? (
                 <Image
                   src={avatarUrl}
@@ -391,13 +431,66 @@ export function Sidebar({
                 // these utilities the dropdown is completely see-through
                 // (no blur), since the CSS class only sets border. See
                 // globals.css `.glass-dropdown` for full reasoning.
-                className="glass-dropdown backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl shadow-2xl p-2"
+                // max-height + scroll so the now-taller menu (§20: header
+                // controls live here) never runs off the top of short
+                // viewports — it opens upward from the bottom-anchored profile
+                // button.
+                className="glass-dropdown backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl shadow-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
               >
                 <div className="px-3 py-2">
                   <p className="font-semibold text-white text-sm truncate">{name}</p>
                   <p className="text-muted text-xs truncate">{email}</p>
                 </div>
                 <div className="divider-dark my-1" />
+
+                {/* ── Header chrome, relocated (§20) ──
+                    The dashboard header is hidden app-wide; its controls live
+                    here as menu rows. Action rows close the menu, then open
+                    their own (body-portalled) overlay. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    setNewProjectOpen(true);
+                  }}
+                  className="dropdown-item"
+                >
+                  <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                  <span>مشروع جديد</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    // Match the bell's "all-read on open" rule so the badge
+                    // clears the moment the list is surfaced.
+                    notificationStore.markAllRead();
+                    setNotificationsOpen(true);
+                  }}
+                  className="dropdown-item"
+                >
+                  <span className="material-symbols-outlined text-[18px]">notifications</span>
+                  <span>الإشعارات</span>
+                  {unread > 0 ? (
+                    <span className="ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white">
+                      {unreadLabel}
+                    </span>
+                  ) : null}
+                </button>
+
+                <div className="divider-dark my-1" />
+
+                {/* Server status — display only (non-interactive). The inline
+                    chip's label IS the status ("كل الأنظمة تعمل" / "أداء منخفض
+                    حالياً" / …), so it doubles as the row label; it renders
+                    nothing while the status is unknown/loading. */}
+                <div className="dropdown-item cursor-default hover:bg-transparent! hover:text-[var(--tq-text-muted)]!">
+                  <span className="material-symbols-outlined text-[18px]">monitor_heart</span>
+                  <ServerStatusChip inline />
+                </div>
+
+                <div className="divider-dark my-1" />
+
                 <Link
                   href="/settings"
                   onClick={() => setProfileOpen(false)}
@@ -407,6 +500,7 @@ export function Sidebar({
                   <span>الإعدادات</span>
                 </Link>
                 <button
+                  type="button"
                   onClick={handleLogout}
                   className="dropdown-item"
                 >
@@ -419,6 +513,19 @@ export function Sidebar({
           document.body
         )}
       </div>
+
+      {/* ── Header-chrome overlays, relocated (§20) ──
+          Opened from the profile-menu rows above. Each renders via its own
+          body portal, so its position in this tree is irrelevant. */}
+      <NewProjectDialog
+        open={newProjectOpen}
+        onClose={() => setNewProjectOpen(false)}
+      />
+      <AllNotificationsModal
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        items={notifications}
+      />
     </aside>
   );
 }

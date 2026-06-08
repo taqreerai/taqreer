@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Cairo, Poppins } from "next/font/google";
-import { GlassPreflight } from "@/components/glass-preflight";
 import "./globals.css";
+import { ScrollReset } from "@/components/app/ScrollReset";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -66,7 +66,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap" rel="stylesheet" />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
-        <GlassPreflight />
+        <ScrollReset />
         {children}
       </body>
     </html>

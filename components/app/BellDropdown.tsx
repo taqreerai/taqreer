@@ -50,7 +50,7 @@ const TOAST_AUTO_DISMISS_MS = 15_000;
 // popover. Tuned so the popover floats clear of the header chrome.
 const BELL_ANCHOR_GAP_PX = 25;
 
-export function BellDropdown() {
+export function BellDropdown({ headless = false }: { headless?: boolean } = {}) {
   const router = useRouter();
   // Hide "deck finished" from the BELL only (its list, its toast pop, AND the
   // unread badge — all derive from `items` below). For images decks it fires
@@ -179,6 +179,16 @@ export function BellDropdown() {
     const needsRect = open || toasts.length > 0;
     if (!needsRect) return;
     const measure = () => {
+      // Headless mode (dashboard pages post-§20: the bell button moved
+      // into the sidebar profile menu, so there's no button to anchor
+      // to). Toasts still fire — pin them to the top-START corner
+      // (visual LEFT in RTL, clear of the right-hand sidebar). centerX
+      // is chosen so the column's left math (`centerX - 160`) clamps to
+      // the 12 px left gutter.
+      if (headless) {
+        setBellRect({ top: 24, centerX: 172 });
+        return;
+      }
       const el = bellRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -196,7 +206,7 @@ export function BellDropdown() {
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
-  }, [open, toasts.length]);
+  }, [open, toasts.length, headless]);
 
   // Dev-only console helper: run `__pushTestNotif()` in devtools to fire
   // a fresh notification (createdAt = now) so the toast layer can be
@@ -409,6 +419,14 @@ export function BellDropdown() {
 
   return (
     <div ref={wrapperRef} className="relative">
+      {/* Trigger + popover + "see all" modal render only when the bell
+          owns its own UI (the header). In `headless` mode (dashboard
+          pages, §20) the sidebar profile menu owns the unread badge +
+          AllNotificationsModal; this component is mounted only to keep
+          the store boot (setUser via /api/me) + the live toast stack
+          alive. */}
+      {!headless && (
+      <>
       <button
         type="button"
         ref={bellRef}
@@ -550,6 +568,8 @@ export function BellDropdown() {
         onClose={() => setSeeAllOpen(false)}
         items={items}
       />
+      </>
+      )}
 
       {/* Toast stack — portal'd to body so positioning isn't trapped by
           the header's stacking context. Anchored under the bell at the

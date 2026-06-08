@@ -106,7 +106,9 @@ export function ExportMenu({
         ),
       )
     : 0;
-  const top = rect ? rect.bottom + ANCHOR_GAP_PX : 0;
+  // §22: the trigger now lives at the BOTTOM of the slide-nav, so the menu opens
+  // UPWARD — anchor its bottom edge just above the trigger's top.
+  const bottom = rect ? window.innerHeight - rect.top + ANCHOR_GAP_PX : 0;
 
   return (
     <>
@@ -143,12 +145,12 @@ export function ExportMenu({
                   dir="rtl"
                   role="menu"
                   aria-label="تصدير العرض"
-                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                   className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
-                  style={{ top, left, width: MENU_WIDTH }}
+                  style={{ bottom, left, width: MENU_WIDTH }}
                 >
                   <ul className="flex flex-col p-1.5">
                     {FORMATS.map((f) => {

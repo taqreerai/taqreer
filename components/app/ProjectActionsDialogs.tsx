@@ -4,8 +4,7 @@
 // save-as-template / trash-confirm / share dialogs — driven by a
 // `useProjectActions` instance. Layout-independent (the consumer renders
 // its own 3-dots trigger + title/rename UI); this just wires the shared
-// menu + dialogs. Reused by ProjectThumbnail (card) + ProjectTableRow
-// (dashboard table row).
+// menu + dialogs. Used by ProjectThumbnail (project cards).
 
 import { ProjectActionsMenu } from "@/components/app/ProjectActionsMenu";
 import { TrashConfirmDialog } from "@/components/app/TrashConfirmDialog";

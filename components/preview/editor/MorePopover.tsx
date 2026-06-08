@@ -20,16 +20,18 @@ const WIDTH = 232;
 
 // Localized in the render via `isEn`. Symbol-based controls (transform /
 // decoration) are language-neutral, so they carry no Arabic variant.
-const WEIGHTS: { value: string; label: string; ar: string }[] = [
-  { value: "100", label: "Thin", ar: "رفيع" },
-  { value: "200", label: "Extra Light", ar: "خفيف جداً" },
-  { value: "300", label: "Light", ar: "خفيف" },
-  { value: "400", label: "Regular", ar: "عادي" },
-  { value: "500", label: "Medium", ar: "متوسط" },
-  { value: "600", label: "Semi Bold", ar: "نصف عريض" },
-  { value: "700", label: "Bold", ar: "عريض" },
-  { value: "800", label: "Extra Bold", ar: "عريض جداً" },
-  { value: "900", label: "Black", ar: "أسود" },
+// Weight names stay in English for every deck language (user direction) —
+// they're typographic terms, like the font-family name, not translatable chrome.
+const WEIGHTS: { value: string; label: string }[] = [
+  { value: "100", label: "Thin" },
+  { value: "200", label: "Extra Light" },
+  { value: "300", label: "Light" },
+  { value: "400", label: "Regular" },
+  { value: "500", label: "Medium" },
+  { value: "600", label: "Semi Bold" },
+  { value: "700", label: "Bold" },
+  { value: "800", label: "Extra Bold" },
+  { value: "900", label: "Black" },
 ];
 
 const TRANSFORMS: { value: string; label: string }[] = [
@@ -75,7 +77,7 @@ export function MorePopover({
   onClose: () => void;
 }) {
   const t = (k: keyof typeof ROW) => (isEn ? ROW[k].en : ROW[k].ar);
-  const weightOptions = WEIGHTS.map((w) => ({ value: w.value, label: isEn ? w.label : w.ar }));
+  const weightOptions = WEIGHTS; // English names regardless of deck language
   // Close on Esc only. Outside-click is intentionally NOT handled here: clicking
   // outside the pill deselects it → the pill (and this popover, which is its
   // child) unmounts together. A separate outside-click listener here used to
@@ -108,7 +110,9 @@ export function MorePopover({
   // instant `open` flips false; the entrance (initial→animate) still plays.
   return (
     <motion.div
-      dir="ltr"
+      // Follow the deck language: Arabic decks flow RTL (label on the right,
+      // control on the left) — the chrome is Arabic-first. English decks stay LTR.
+      dir={isEn ? "ltr" : "rtl"}
       className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 rounded-2xl px-3.5 py-3.5 shadow-2xl ${
         flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
       }`}
