@@ -253,8 +253,8 @@ export function MagneticGlow({
       mouse.active =
         e.clientX >= rect.left &&
         e.clientX <= rect.right &&
-        e.clientY >= 0 &&
-        e.clientY <= window.innerHeight;
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
     };
     const onLeave = () => {
       mouse.active = false;

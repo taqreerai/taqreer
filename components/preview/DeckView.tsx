@@ -674,6 +674,11 @@ export function DeckView({
   // Slides edited since the last checkpoint — flushed to SlideVersions on Save
   // and on the 10-min idle timer. The timer re-arms on every edit/undo/redo.
   const dirtySlidesRef = useRef<Set<string>>(new Set());
+  // Per-slide /edit write queue. Edits for a slide are chained so they POST in
+  // ORDER (a slow earlier write can't land after a newer one), and the tail
+  // promise is what flushCheckpoints awaits before snapshotting — so a
+  // checkpoint never versions stale server html (CodeRabbit PR #53).
+  const editChainsRef = useRef<Record<string, Promise<void>>>({});
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Stable reference so StylePill's outside-click `mousedown` listener isn't
   // re-attached on every DeckView render (`setEditorSelected` is itself stable).
@@ -729,20 +734,28 @@ export function DeckView({
   // + iframe already reflect the change locally; a failed write only misses the
   // DB (the next save/reload reconciles).
   const persistContentInPlace = useCallback(
-    async (slideKey: string, html: string) => {
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/edit`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ html }),
-          },
-        );
-        if (!res.ok) throw new Error(`edit: ${res.status}`);
-      } catch (err) {
-        console.error("[edit] save failed", err);
-      }
+    (slideKey: string, html: string) => {
+      // Chain onto this slide's previous write so edits land in order. The inner
+      // work swallows its own errors, so the chain never rejects; the tail is
+      // stored for flushCheckpoints to await before checkpointing.
+      const prev = editChainsRef.current[slideKey] ?? Promise.resolve();
+      const next = prev.then(async () => {
+        try {
+          const res = await fetch(
+            `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/edit`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ html }),
+            },
+          );
+          if (!res.ok) throw new Error(`edit: ${res.status}`);
+        } catch (err) {
+          console.error("[edit] save failed", err);
+        }
+      });
+      editChainsRef.current[slideKey] = next;
+      return next;
     },
     [projectId],
   );
@@ -758,15 +771,22 @@ export function DeckView({
     }
     const keys = Array.from(dirtySlidesRef.current);
     if (keys.length === 0) return;
-    dirtySlidesRef.current.clear();
+    // Remove the flushing keys up front so a concurrent edit re-adds its own key
+    // (and re-arms the idle timer) instead of being swallowed; failures re-add
+    // the key below so the checkpoint is retried next flush.
+    keys.forEach((k) => dirtySlidesRef.current.delete(k));
     await Promise.all(
       keys.map(async (slideKey) => {
         try {
+          // Wait for this slide's latest /edit write to LAND first — /checkpoint
+          // snapshots server state, so checkpointing before the edit persists
+          // would version stale html (CodeRabbit PR #53).
+          await editChainsRef.current[slideKey];
           const res = await fetch(
             `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/checkpoint`,
             { method: "POST" },
           );
-          if (!res.ok) return;
+          if (!res.ok) throw new Error(`checkpoint: ${res.status}`);
           const data = (await res.json()) as { currentVersionNumber: number };
           setSlideVersionPointer(slideKey, data.currentVersionNumber);
           setHistoryVersions((prev) => {
@@ -777,6 +797,8 @@ export function DeckView({
           });
         } catch (err) {
           console.error("[checkpoint] failed", err);
+          // Leave the slide dirty so the next flush retries it.
+          dirtySlidesRef.current.add(slideKey);
         }
       }),
     );

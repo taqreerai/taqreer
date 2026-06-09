@@ -574,9 +574,11 @@ export function SlideNavSidebar({
           when the parent didn't wire either handler, AND on the
           Comments tab (the embedded panel owns the footer there). */}
       {showBulkPill && tab === "slides" ? (
-        // §22: no top border — sits flush under the Export/Share footer (user:
-        // "remove the separator under export and share").
-        <footer className="pt-2 px-1">
+        // §22: flush (no top border) when it sits under the Export/Share footer
+        // (user: "remove the separator under export and share"); but when that
+        // footer is absent (no actionsSlot — e.g. during generation / no
+        // manifest), keep a top border so the pill doesn't float borderless.
+        <footer className={actionsSlot ? "pt-2 px-1" : "border-t border-white/[0.08] pt-3 px-1"}>
           <button
             type="button"
             onClick={handleBulkClick}

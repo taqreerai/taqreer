@@ -600,9 +600,9 @@ textarea.input-dark {
    output or unset --tw-* properties will wipe out the filter at
    browser-compute time. */
 @utility backdrop-blur-glass-boost {
-  /* 2026-06-08: dropped 7× → 1× — the default frost for floating popovers +
-     dialogs is now crisper. The auth modal keeps the heavy 7× via its
-     `.auth-modal` override below (it reads through a busy marquee wall). */
+  /* 2026-06-08: dropped 7× → 1×. §21 then flattened all blur (`--glass-blur:0`),
+     so this multiplier currently resolves to 0 — kept as the structural hook in
+     case blur is ever reintroduced. */
   --tw-backdrop-blur: blur(calc(var(--glass-blur) * 1));
   -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
   backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
@@ -617,16 +617,13 @@ textarea.input-dark {
    shared by the dashboard modals too and they keep their own control
    sizing. Per user direction 2026-05-28: matches the Google login
    button's visual weight across the form. */
-/* Auth modal is EXCLUDED from the 2026-06-08 glass refresh (dark fill + 1×
-   boost): it keeps the faint white tint + the heavy 7× frost so it reads
-   through the busy marquee wall behind it. Selector is `.auth-modal.glass-modal`
-   (0,2,0) so the fill beats `.glass-modal` (0,1,0) regardless of source order;
-   the same rule overrides the boost utility's `--tw-backdrop-blur` (the
-   backdrop-filter chain rides on the element from the boost class + reads this
-   value). The auth panel always carries both classes. */
+/* §21: the auth modal is FLAT like the rest of the app — the old heavy 7× frost
+   override is gone (it was a no-op once `--glass-blur` went to 0). The selector
+   (`.auth-modal.glass-modal`, specificity 0,2,0) now just pins its fill so it
+   beats `.glass-modal` regardless of source order; the auth panel carries both
+   classes. */
 .auth-modal.glass-modal {
   background: var(--tq-bg-glass);
-  --tw-backdrop-blur: blur(calc(var(--glass-blur) * 7));
 }
 
 .auth-modal .input-dark,
