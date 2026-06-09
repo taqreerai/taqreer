@@ -99,16 +99,21 @@ export function SegmentedToggle<T extends string>({
   // toggle (text-[10px]); "comfortable" bumps up to text-xs + py-1.5
   // for higher-stakes choices like language where the pill needs
   // to read clearly at a glance.
-  size?: "default" | "comfortable";
+  // "large" bumps to text-sm + roomier px-4/py-1.5 for prominent standalone
+  // toggles (e.g. the landing pricing billing-period switch) where longer
+  // labels otherwise crowd the segment edges.
+  size?: "default" | "comfortable" | "large";
   // Stretch to fill the container, splitting width evenly between the
   // segments (the slide-nav's Slides|Comments tab). Default false keeps
   // the content-sized pill the other consumers rely on.
   fullWidth?: boolean;
 }) {
   const segCls =
-    size === "comfortable"
-      ? "px-3 py-1 text-xs font-semibold"
-      : "px-2.5 py-1 text-[10px] font-semibold";
+    size === "large"
+      ? "px-4 py-1.5 text-sm font-semibold"
+      : size === "comfortable"
+        ? "px-3 py-1 text-xs font-semibold"
+        : "px-2.5 py-1 text-[10px] font-semibold";
   const activeBgCls =
     variant === "primary" ? "bg-[var(--tq-blue)]" : "bg-white";
   const activeTextCls = variant === "primary" ? "text-white" : "text-black";

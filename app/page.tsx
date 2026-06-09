@@ -15,19 +15,18 @@
 // it).
 
 import Image from "next/image";
-import Link from "next/link";
 import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { Hero } from "@/components/marketing/Hero";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
-import { TemplatesCard } from "@/components/marketing/TemplatesCard";
+import { BidiExtractionDemo } from "@/components/marketing/BidiExtractionDemo";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
-import {
-  getMarqueeColumns,
-  getLandingTemplates,
-} from "@/lib/auth/marquee-projects";
+import { MagneticGlow } from "@/components/app/MagneticGlow";
+import { PricingTiers } from "@/components/marketing/PricingTiers";
+import { FaqAccordion } from "@/components/marketing/FaqAccordion";
+import { LandingNav } from "@/components/marketing/LandingNav";
+import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 
 // Platform-wide "decks created" counter shown in the Hero status chip.
@@ -48,70 +47,6 @@ const getProjectCount = unstable_cache(
   { revalidate: 300, tags: ["landing-project-count"] }
 );
 
-type Tier = {
-  name: string;
-  description: string;
-  // `enabled: false` rows render muted — the "this plan doesn't
-  // include X" affordance.
-  features: { label: string; enabled: boolean }[];
-  price: string;
-  cadence?: string;
-  priceFootnote: string;
-  cta: string;
-  popular?: boolean;
-};
-
-const TIERS: Tier[] = [
-  {
-    name: "مجاني",
-    description: "للتجربة وإنشاء عروض\nبسيطة بسرعة.",
-    features: [
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: false },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: false },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: false },
-    ],
-    price: "$0",
-    priceFootnote: "يمكنك الترقية في أي وقت",
-    cta: "ابدأ مجانًا",
-  },
-  {
-    name: "احترافي",
-    description: "للمستخدمين الذين ينشئون\nعروضًا وتقارير بشكل مستمر.",
-    features: [
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: false },
-    ],
-    price: "$196",
-    cadence: "/ شهرياً",
-    priceFootnote: "يمكنك ترقية أو تخفيض خطتك في أي وقت",
-    cta: "ابدأ مجانًا",
-    popular: true,
-  },
-  {
-    name: "شركة",
-    description: "للفرق والشركات التي تحتاج إلى تعاون،\nهوية موحدة، ومشاريع أكبر.",
-    features: [
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-      { label: "إنشاء عروض بالذكاء الاصطناعي", enabled: true },
-    ],
-    price: "$499",
-    cadence: "/ شهرياً",
-    priceFootnote: "تواصل معنا للأسعار المخصصة",
-    cta: "تواصل مع المبيعات",
-  },
-];
-
 // Text-mark logos. Duplicated 6× in the JSX for a seamless marquee loop.
 const TRUSTED_LOGOS = ["TED", "Lattice", "NCR", "PACIFIC FUNDS", "Rakuten", "zendesk", "DELL"];
 
@@ -122,6 +57,15 @@ const FOOTER_GROUPS: { title: string; links: string[] }[] = [
   { title: "قانوني", links: ["سياسة الخصوصية", "الشروط والأحكام"] },
 ];
 
+// In-page anchors for the footer link labels that map to a section; anything
+// not listed stays a placeholder "#".
+const FOOTER_LINK_HREFS: Record<string, string> = {
+  المميزات: "#features",
+  الأسعار: "#pricing",
+  القوالب: "#templates",
+  "الأسئلة الشائعة": "#faq",
+};
+
 export default async function LandingPage() {
   const supabase = await createClient();
   // `getUser()` round-trips to Supabase for a verified check;
@@ -129,65 +73,20 @@ export default async function LandingPage() {
   const [
     { data: { user } },
     projectCount,
-    marqueeColumns,
     landingTemplates,
   ] = await Promise.all([
     supabase.auth.getUser(),
     getProjectCount(),
-    getMarqueeColumns(),
     getLandingTemplates(),
   ]);
 
   return (
     <SmoothScrollProvider>
     <main>
-      <nav className="header-bg backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed top-0 left-0 right-0 z-50 border-b border-[var(--tq-border-glass)]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="relative flex h-20 items-center justify-between">
-            <a className="flex flex-shrink-0 items-center gap-2" href="#">
-              <Image
-                src="/logo-light.svg"
-                alt="Taqreer Logo"
-                width={140}
-                height={32}
-                className="h-8 w-auto object-contain"
-              />
-            </a>
-
-            <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-8 md:flex">
-              <a className="cursor-pointer text-sm text-muted transition-colors hover:text-white" href="#">
-                الرئيسية
-              </a>
-              <a className="cursor-pointer text-sm text-muted transition-colors hover:text-white" href="#features">
-                المميزات
-              </a>
-              <a className="cursor-pointer text-sm text-muted transition-colors hover:text-white" href="#pricing">
-                الأسعار
-              </a>
-              <a className="cursor-pointer text-sm text-muted transition-colors hover:text-white" href="#templates">
-                القوالب
-              </a>
-            </div>
-
-            <div className="hidden items-center gap-3 md:flex">
-              {user ? (
-                <Link href="/dashboard" className="btn-gradient px-5 py-2 text-xs">
-                  لوحة التحكم
-                </Link>
-              ) : (
-                <>
-                  <Link href="/login" className="btn-pill px-4 py-2 text-xs">
-                    تسجيل الدخول
-                  </Link>
-                  <Link href="/signup" className="btn-gradient px-5 py-2 text-xs">
-                    إنشاء حساب
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* §24: the dashboard's interactive dot field + animated aurora, pinned to
+          the viewport (fixed) so it stays as a backdrop while the page scrolls. */}
+      <MagneticGlow fixed glowYOffset={0.2} dots={false} />
+      <LandingNav isAuthed={!!user} />
 
       <Hero projectCount={projectCount} />
 
@@ -216,23 +115,23 @@ export default async function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal direction="up">
             <div className="mb-16 text-center">
-              <h2 className="mb-8 text-3xl font-medium md:text-4xl">
-                كل ما تحتاجه لإنشاء عرض <br /> تقديمي احترافي
+              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
+                المميزات
+              </span>
+              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
+                كل ما تحتاجه لإنشاء عرض تقديمي احترافي
               </h2>
-              <p className="mb-8 text-lg text-muted">
-                ابدأ من محتوى خام، طوّر عرضًا موجودًا، أو استخدم قالبًا جاهزًا.
-                <br />
-                تقرير يساعدك في كل مرحلة من مراحل إنشاء العرض.
+              <p className="mx-auto max-w-2xl text-lg text-muted">
+                ابدأ من محتوى خام، طوّر عرضًا موجودًا، أو استخدم قالبًا جاهزًا. تقرير يساعدك في كل مرحلة من مراحل إنشاء العرض.
               </p>
             </div>
           </ScrollReveal>
 
-          {/* Four animated flow cards (2 × 2), sharing the same glass
-              chrome (content LEFT, visual RIGHT). The templates card +
-              grid now live in their own #templates section below. */}
-          <ScrollReveal direction="up" delay={0.1}>
-            <FeatureFlowCards />
-          </ScrollReveal>
+          {/* Interactive BiDi extraction demo (replaces the old 4 flow cards) —
+              a slide whose broken Arabic/Latin/number bidi reorders into correct
+              RTL when Taqreer's extraction tech is toggled on. Owns its own
+              scroll-reveal (no ScrollReveal wrapper). */}
+          <BidiExtractionDemo />
         </div>
       </section>
 
@@ -247,22 +146,16 @@ export default async function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal direction="up">
             <div className="mb-16 text-center">
-              <h2 className="mb-8 text-3xl font-medium md:text-4xl">
-                ابدأ من قالب، <br /> ما تراه هو ما تحصل عليه.
+              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
+                القوالب
+              </span>
+              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
+                ابدأ من قالب، ما تراه هو ما تحصل عليه.
               </h2>
-              <p className="mb-8 text-lg text-muted">
-                استكشف قوالبنا الجاهزة المناسبة لمشروعك دون الاعتماد على
-                <br />
-                توجيه التصميم من الذكاء الاصطناعي.
+              <p className="mx-auto max-w-2xl text-lg text-muted">
+                استكشف قوالبنا الجاهزة المناسبة لمشروعك دون الاعتماد على توجيه التصميم من الذكاء الاصطناعي.
               </p>
             </div>
-          </ScrollReveal>
-
-          {/* Wide "قوالب جاهزة" card (moved here from the features
-              band) — content + a live marquee of curator-public
-              template thumbnails. */}
-          <ScrollReveal direction="up" delay={0.1}>
-            <TemplatesCard thumbnails={marqueeColumns.flat()} />
           </ScrollReveal>
 
           {/* Full-wrapper-width 2 × 4 grid of public template covers —
@@ -283,27 +176,40 @@ export default async function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal direction="up">
             <div className="mb-16 text-center">
-              <h2 className="mb-8 text-3xl font-medium md:text-4xl">
-                خطط بسيطة حسب <br /> احتياجك
+              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
+                الأسعار
+              </span>
+              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
+                خطط بسيطة حسب احتياجك
               </h2>
-              <p className="mb-8 text-lg text-muted">
+              <p className="mx-auto max-w-2xl text-lg text-muted">
                 ابدأ مجانًا، أو اختر خطة شهرية تناسب حجم عروضك وعدد الشرائح التي تحتاجها.
               </p>
             </div>
           </ScrollReveal>
 
-          <div className="mx-auto grid max-w-5xl gap-6 pt-4 md:grid-cols-3">
-            {TIERS.map((tier, idx) => (
-              <ScrollReveal
-                key={tier.name}
-                direction={pricingRevealDirection(idx)}
-                delay={0.1 * (idx + 1)}
-                className={`flex ${tier.popular ? "relative pt-3" : ""}`}
-              >
-                <PricingCard tier={tier} />
-              </ScrollReveal>
-            ))}
-          </div>
+          {/* Monthly/yearly toggle + the 4 tier cards (client — needs the
+              billing-period state). */}
+          <PricingTiers />
+        </div>
+      </section>
+
+      <section id="faq" className="relative py-32">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <ScrollReveal direction="up">
+            <div className="mb-16 text-center">
+              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
+                مساعدة
+              </span>
+              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
+                الأسئلة الشائعة
+              </h2>
+              <p className="mx-auto max-w-2xl text-lg text-muted">
+                كل ما تريد معرفته عن تقرير قبل أن تبدأ.
+              </p>
+            </div>
+          </ScrollReveal>
+          <FaqAccordion />
         </div>
       </section>
 
@@ -316,7 +222,10 @@ export default async function LandingPage() {
                 <ul className="space-y-3 text-sm text-muted">
                   {group.links.map((link) => (
                     <li key={link}>
-                      <a className="transition-colors hover:text-white" href="#">
+                      <a
+                        className="transition-colors hover:text-white"
+                        href={FOOTER_LINK_HREFS[link] ?? "#"}
+                      >
                         {link}
                       </a>
                     </li>
@@ -341,87 +250,5 @@ export default async function LandingPage() {
       </footer>
     </main>
     </SmoothScrollProvider>
-  );
-}
-
-// ─── Local helpers ──────────────────────────────────────────────
-
-// Outer tiers fly in from the side; the middle (popular) tier rises.
-// Load-bearing for the pricing-row animation choreography.
-function pricingRevealDirection(idx: number): "right" | "left" | "up" {
-  switch (idx) {
-    case 0:
-      return "right";
-    case 2:
-      return "left";
-    default:
-      return "up";
-  }
-}
-
-// Pricing tier card. The popular tier gets a violet glow + the
-// .badge-purple "الأكثر شعبية" chip; every tier's CTA stays on
-// .btn-gradient.
-function PricingCard({ tier }: { tier: Tier }) {
-  return (
-    <>
-      {tier.popular && (
-        <div className="badge-purple absolute -top-3 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold">
-          الأكثر شعبية
-        </div>
-      )}
-      <div
-        className={`plan-banner feature-card-glow relative flex w-full flex-col p-8 transition-colors ${
-          tier.popular ? "md:-translate-y-4" : ""
-        }`}
-        style={
-          tier.popular
-            ? { boxShadow: "0 0 40px rgba(var(--tq-violet-rgb), 0.20)" }
-            : undefined
-        }
-      >
-        <h3 className="mb-4 text-center text-xl font-medium">{tier.name}</h3>
-        <p className="mb-8 h-10 whitespace-pre-line text-center text-sm text-muted">
-          {tier.description}
-        </p>
-
-        <div className="mb-8 flex-grow space-y-4">
-          {tier.features.map((feature, i) => (
-            <div
-              key={i}
-              className={`flex items-center gap-3 text-sm ${
-                feature.enabled ? "" : "text-muted opacity-60"
-              }`}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{
-                  fontSize: 18,
-                  color: feature.enabled ? "var(--tq-violet)" : undefined,
-                  opacity: feature.enabled ? 1 : 0.5,
-                }}
-                aria-hidden
-              >
-                check
-              </span>
-              {feature.label}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-auto text-center">
-          <div className="mb-2 flex items-end justify-center gap-1">
-            <span className="text-4xl font-bold">{tier.price}</span>
-            {tier.cadence && (
-              <span className="mb-1 text-muted">{tier.cadence}</span>
-            )}
-          </div>
-          <div className="mb-6 text-xs text-muted">{tier.priceFootnote}</div>
-          <Link href="/signup" className="btn-gradient block w-full py-3 text-sm">
-            {tier.cta}
-          </Link>
-        </div>
-      </div>
-    </>
   );
 }

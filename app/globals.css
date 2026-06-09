@@ -729,26 +729,33 @@ textarea.input-dark {
    backdrop is identical for every existing page. */
 html {
   background-color: var(--tq-bg);
-  /* §24: BODY (not html) is the page scroll container so the scrollbar lands on
-     the LEFT. Blink pins the ROOT scrollbar to the right regardless of `dir`,
-     but a non-root rtl scroller honours direction. html stops scrolling; body
-     takes over below. */
-  overflow: hidden;
+  /* Always render the viewport scrollbar (track reserved) so opening a modal
+     that locks `body { overflow: hidden }` (TemplateLightbox etc.) doesn't drop
+     the scrollbar and widen the page. On the landing the viewport scrollbar
+     propagates from <body>, so without this the lock shifts the layout. The
+     dashboard overrides to `overflow: hidden` (body becomes the scroller) via
+     `.app-shell-scroll` below. */
+  overflow-y: scroll;
 }
 
 body {
   color: #ffffff;
-  /* Body is the scroller (see html above). `overflow-y: scroll` keeps the track
-     reserved on every page → no horizontal jolt when navigating between a
-     scrolling and a non-scrolling page (replaces the old html rule). Its
-     inherited `direction: rtl` puts the scrollbar on the left. */
+}
+
+/* §24 (scoped 2026-06-09): the DASHBOARD makes BODY the scroll container so the
+   page scrollbar lands on the LEFT in RTL (Blink pins the ROOT scrollbar right
+   regardless of `dir`; a non-root rtl scroller honours direction). This is
+   GATED on `html.app-shell-scroll`, toggled by DashboardShell, so the public
+   pages (landing / auth) keep normal <html>/window scroll — the landing's Lenis
+   smooth-scroll drives the window and breaks if html can't scroll.
+   `scrollbar-gutter: stable` keeps the gutter reserved when a modal locks the
+   page with `overflow: hidden` (no width jolt). */
+html.app-shell-scroll {
+  overflow: hidden;
+}
+html.app-shell-scroll body {
   height: 100vh;
   overflow-y: scroll;
-  /* Reserve the scrollbar gutter so it stays put when a modal locks the page
-     with `overflow: hidden` (ShareDialog et al. set body overflow hidden on
-     open). Without this, hiding overflow drops the left scrollbar and the page
-     reflows ~scrollbar-width wider. `stable` keeps the gutter even for the
-     hidden state, so there's no shift. */
   scrollbar-gutter: stable;
 }
 
@@ -930,8 +937,10 @@ body {
 /* ─── Buttons ─── */
 .btn-gradient {
   /* §21: solid purple, NOT a gradient (the brand gradient is reserved for AI
-     buttons only now). Name kept so the ~24 CTA call sites don't need edits. */
-  background: var(--tq-purple);
+     buttons only now). Name kept so the ~24 CTA call sites don't need edits.
+     §24: colours FLIPPED — rest = the deeper purple, hover = the lighter one
+     (user direction: make the inverted pricing-CTA style the app-wide default). */
+  background: var(--tq-purple-hover);
   color: var(--tq-text-primary);
   /* No `box-shadow` and no shadow transition — the button system
      was de-shadowed app-wide on 2026-05-22 (user feedback: flat
@@ -952,9 +961,9 @@ body {
   transition: background 0.2s ease;
 }
 
-/* §21: solid hover — a slightly deeper purple. */
+/* §24: hover = the lighter purple (flipped — see `.btn-gradient` above). */
 .btn-gradient:hover:not(:disabled) {
-  background: var(--tq-purple-hover);
+  background: var(--tq-purple);
 }
 
 /* ─── Animated Mesh-Gradient Button ─────────────────────────────────
@@ -1326,13 +1335,11 @@ body {
    the popover / modal panels. Keeps all elevated surfaces in lock-step
    under the user's glass-preset. */
 .header-bg {
-  /* Header chrome — background tint removed 2026-05-28 (user
-     direction) so the header reads as pure glass: backdrop blur +
-     saturation only, no white-alpha fill on top. Blur + saturation
-     are still applied via the Tailwind `backdrop-blur-glass` +
-     `backdrop-saturate-(--glass-saturation)` utilities on the
-     <header> element so the panel responds to the Settings glass
-     preset. Only the hairline border remains as visible chrome. */
+  /* §24: the §21 flat redesign zeroed `--glass-blur`, so the old "pure glass"
+     header (blur-only, no fill) rendered fully transparent. Give it a SOLID
+     near-black fill (100% opaque — user direction) so the fixed nav fully
+     occludes content scrolling beneath it (matches the dark dashboard chrome). */
+  background-color: var(--tq-bg);
   border-bottom: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
 }
 
@@ -1772,6 +1779,82 @@ body {
    supplies the dark base. Canvas blobs fade radially → no hard edge to blend. */
 .tq-panel-glow {
   background-color: var(--tq-panel);
+}
+
+/* §25: CSS background-glow (replaces the MagneticGlow canvas). Outer = blur +
+   bottom-band mask (fixed position of the glow band); inner = the drifting
+   brand-colour blobs (GPU transform, no main-thread RAF). */
+.tq-aurora {
+  filter: blur(55px) saturate(1.25);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 40%,
+    #000 54%,
+    #000 60%,
+    transparent 72%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 40%,
+    #000 54%,
+    #000 60%,
+    transparent 72%
+  );
+}
+/* Two colour groups (brand blue/violet/indigo + purple/deep-purple) drift in
+   OPPOSITE directions at different speeds → an organic flowing aurora. `screen`
+   blends the gradients in each layer and the two layers together (like the old
+   canvas `lighter` compositing). `--yo` (glowYOffset) nudges them down. */
+.tq-aurora-a {
+  background:
+    radial-gradient(60% 72% at 25% 100%, rgba(55, 11, 244, 0.7) 0%, transparent 100%),
+    radial-gradient(66% 78% at 50% 103%, rgba(124, 58, 237, 0.72) 0%, transparent 100%),
+    radial-gradient(52% 64% at 40% 95%, rgba(79, 70, 229, 0.6) 0%, transparent 100%);
+  background-blend-mode: screen;
+  transform-origin: 50% 100%;
+  animation: tq-aurora-a 13s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.tq-aurora-b {
+  background:
+    radial-gradient(60% 72% at 78% 100%, rgba(147, 51, 234, 0.68) 0%, transparent 100%),
+    radial-gradient(52% 64% at 62% 96%, rgba(109, 40, 217, 0.6) 0%, transparent 100%);
+  background-blend-mode: screen;
+  mix-blend-mode: screen;
+  transform-origin: 50% 100%;
+  animation: tq-aurora-b 17s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+/* Big opposite horizontal sweeps + scale + opacity "breathing" so the bottom
+   glow visibly flows. transform-origin is the bottom so the scale rises into
+   the masked band. */
+@keyframes tq-aurora-a {
+  0%,
+  100% {
+    transform: translate3d(-9%, var(--yo, 0%), 0) scale(1.04);
+    opacity: 0.68;
+  }
+  50% {
+    transform: translate3d(9%, calc(var(--yo, 0%) - 3%), 0) scale(1.22);
+    opacity: 1;
+  }
+}
+@keyframes tq-aurora-b {
+  0%,
+  100% {
+    transform: translate3d(9%, var(--yo, 0%), 0) scale(1.16);
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(-9%, var(--yo, 0%), 0) scale(1);
+    opacity: 0.62;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tq-aurora-a,
+  .tq-aurora-b {
+    animation: none;
+  }
 }
 
 /* §24: flow pages (create / enhance / mimic / datasheet / use-template) — the

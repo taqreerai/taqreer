@@ -99,7 +99,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
 
           <motion.p
             variants={itemVariants}
-            className="mx-auto mb-12 w-full max-w-2xl text-lg leading-relaxed text-muted md:text-xl"
+            className="mx-auto mb-12 w-full max-w-xl text-lg leading-relaxed text-muted md:text-xl"
           >
             taqreer.ai يحوّل محتواك إلى عروض تقديمية مصممة بالكامل، يدعم العربية
             والإنجليزية. يحافظ على هويتك البصرية، ويمنحك محررًا متقدمًا لتعديل
@@ -124,11 +124,9 @@ export function Hero({ projectCount }: { projectCount?: number }) {
           </div>
         </motion.div>
 
-        {/* Tilted dashboard preview. The leftover brand-gradient
-            blur layer that used to sit behind the placeholder was
-            removed 2026-05-28 — the page-level violet glow +
-            `HeroImageGlow` light-bar stack already provide the
-            chrome, the extra back layer was just doubling up. */}
+        {/* Tilted dashboard preview. All back glow layers were removed (the
+            §24 stacked light-bar halo + the older blur layer) — the preview
+            sits flat over the page background. */}
         <div className="relative mx-auto max-w-5xl" style={{ perspective: "1000px" }}>
           <motion.div
             // Entrance: image starts low + pulled toward the camera
@@ -162,17 +160,6 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             // the viewer. User direction 2026-05-28.
             className="relative origin-center"
           >
-            {/* Glow stack — 4 layered radial-gradient bars sitting at
-                the image's top edge to build a "light source above
-                the dashboard" halo. Recipe lifted from
-                crypton-template.framer.website (2026-05-28); the
-                hero's brand-violet `rgb(119, 51, 255)` was retargeted
-                to our `--tq-violet` token (#7D2DFF — same hue, one
-                shade off). Each bar is absolutely positioned at
-                `bottom-full` of the image so they stack just above
-                the rounded corners without being clipped by the
-                image's `overflow-hidden`. */}
-            <HeroImageGlow />
 
             {/* Browser-chrome frame (traffic dots + URL pill showing
                 https://taqreer.ai/dashboard) wrapped around an
@@ -185,20 +172,9 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 be uploaded — dropzones are visual chrome only.
 
                 The chrome bar + preview pane stack inside one outer
-                `rounded-2xl` border with a shared bottom-fade
-                `mask-image` (opaque from top → transparent at the
-                bottom) — so the lower edge dissolves into the page
-                background instead of sitting on a hard rectangular
-                line. Top + sides stay crisp. */}
-            <div
-              className="relative mx-auto w-full overflow-hidden rounded-2xl border border-[var(--tq-border-glass)]"
-              style={{
-                maskImage:
-                  "linear-gradient(to bottom, #000 60%, transparent 100%)",
-                WebkitMaskImage:
-                  "linear-gradient(to bottom, #000 60%, transparent 100%)",
-              }}
-            >
+                `rounded-2xl` border — a complete browser window with
+                crisp edges (no bottom-fade mask). */}
+            <div className="relative mx-auto w-full overflow-hidden rounded-2xl border border-[var(--tq-border-glass)]">
               {/* Browser chrome — Mac Safari recipe: colored traffic
                   lights, paired ‹ › nav arrows, shield, URL pill with
                   lock + domain + refresh, and a right-side action
@@ -352,89 +328,3 @@ function BrowserChromeBar({ path }: { path: string }) {
     </div>
   );
 }
-
-// ─── Glow stack ──────────────────────────────────────────────────
-// Four layered radial-gradient bars sitting at the image's top edge.
-// Per-bar widths + blurs + opacities lifted verbatim from the
-// crypton-template Framer hero — together they build a "light source
-// above the dashboard" effect (a bright thin core, a wider halo,
-// and a wide ambient diffusion behind it). All bars share the same
-// brand `--tq-violet` (or pure white for the topmost highlight line)
-// so the glow stays one-token.
-
-const VIOLET_RADIAL =
-  "radial-gradient(50% 50%, rgba(var(--tq-violet-rgb), 1) 0%, rgba(var(--tq-violet-rgb), 0.4) 100%)";
-
-const WHITE_RADIAL =
-  "radial-gradient(50% 50%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%)";
-
-// Bar specs in stacking order (visually back → front). Each bar
-// anchors to `bottom-full` of the image wrapper and centers via
-// `left-1/2 -translate-x-1/2`, so widths are relative to the
-// image's width. Heights are fixed px since they read as light
-// bars regardless of viewport size.
-const GLOW_BARS: Array<{
-  width: string;
-  height: number;
-  blur: number;
-  opacity: number;
-  bg: string;
-  /** Vertical offset from the wrapper's bottom edge (negative = push
-   *  the bar down, so it overlaps the top of the dashboard image). */
-  offset?: number;
-}> = [
-  // L1 — wide ambient diffusion. Empty bg + heavy blur acts as a
-  // soft "page-light" that the lower bars sit on top of. Offset
-  // pulls it down behind the top edge of the dashboard so the
-  // diffuse halo wraps the chrome rather than floating above it.
-  { width: "100%", height: 155, blur: 64, opacity: 0.1, bg: VIOLET_RADIAL, offset: -60 },
-  // L2 — widened bar that sits behind the top edge of the dashboard
-  // for a corner-halo effect (user direction 2026-05-28). The
-  // negative `offset` pulls the bar down past the wrapper's bottom
-  // edge so most of it overlaps the dashboard's chrome bar.
-  // Custom gradient (`50% 60%` ellipse + `120 %` stop) extends the
-  // soft violet falloff vertically past the bar's box.
-  {
-    width: "103%",
-    height: 92,
-    blur: 20,
-    opacity: 0.2,
-    bg: "radial-gradient(50% 60%, rgba(var(--tq-violet-rgb), 1) 0%, rgba(var(--tq-violet-rgb), 0.4) 120%)",
-    offset: -70,
-  },
-  // L3 — crisp violet core line just above the dashboard edge.
-  { width: "42%",  height: 3,  blur: 8,  opacity: 0.8, bg: VIOLET_RADIAL },
-  // L4 — the bright thin white line that visually grounds the
-  // halo. Sits at zero blur and full opacity so it reads crisp.
-  { width: "57%",  height: 2,  blur: 0,  opacity: 1,   bg: WHITE_RADIAL },
-];
-
-function HeroImageGlow() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute bottom-full left-0 right-0"
-    >
-      {GLOW_BARS.map((bar, i) => (
-        <div
-          key={i}
-          className="absolute left-1/2 -translate-x-1/2"
-          style={{
-            // `bottom: 0` anchors the bar to the wrapper's bottom
-            // edge (which sits exactly at the dashboard image's top
-            // edge, since the wrapper is `bottom-full` of the
-            // image). A negative `offset` pushes the bar down past
-            // that edge so it overlaps the dashboard chrome.
-            bottom: bar.offset ?? 0,
-            width: bar.width,
-            height: bar.height,
-            background: bar.bg,
-            filter: bar.blur > 0 ? `blur(${bar.blur}px)` : undefined,
-            opacity: bar.opacity,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-

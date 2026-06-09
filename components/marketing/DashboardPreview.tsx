@@ -117,15 +117,6 @@ const RECENT_PROJECTS = [
   { title: "نتائج الحملة", subtitle: "6 شرائح" },
 ];
 
-const TEMPLATES = [
-  { title: "قالب احترافي", subtitle: "16:9" },
-  { title: "قالب إبداعي", subtitle: "16:9" },
-  { title: "قالب تقني", subtitle: "16:9" },
-  { title: "قالب تسويقي", subtitle: "16:9" },
-  { title: "قالب تعليمي", subtitle: "16:9" },
-  { title: "قالب مالي", subtitle: "16:9" },
-];
-
 // Three glass tints cycled across placeholder tiles. All driven from
 // the user's `--glass-opacity` preset so they scale with the same
 // Settings → glass slider that controls every other surface — no
@@ -189,17 +180,32 @@ export function DashboardPreview({
         backgroundColor: "var(--tq-bg)",
       }}
     >
-      {/* ── Sidebar (collapsed, icon-only) ── */}
+      {/* §24: thin always-collapsed icon rail (mirrors the real Sidebar). */}
       <DemoSidebar view={view} onNavigate={setView} />
 
-      {/* ── Main content column ── */}
-      <div className="flex flex-1 flex-col">
-        <DemoHeader
-          view={view}
-          onBack={() => setView("dashboard")}
-        />
+      {/* Main column — the rounded content panel floats on the dark gutter,
+          exactly like the real DashboardShell `.tq-content-panel`. No header
+          anymore (the app dropped it); chrome is the rail + the top cluster. */}
+      <div className="flex flex-1 flex-col p-2">
+        <div
+          className="relative flex-1 overflow-hidden rounded-2xl"
+          style={{ backgroundColor: "var(--tq-panel)" }}
+        >
+          {/* Dot field — same tiled grid as the real dashboard panel. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle, rgba(236,238,245,0.14) 0.9px, transparent 1.1px)",
+              backgroundSize: "23px 23px",
+            }}
+          />
 
-        <div className="relative flex-1 overflow-hidden">
+          {/* Top utility cluster — search (⌘K) on the start/right, theme +
+              language on the end/left (mirrors the §24 TopUtilityBar). */}
+          <DemoTopBar />
+
           <AnimatePresence mode="wait">
             {view === "dashboard" ? (
               <motion.div
@@ -256,32 +262,25 @@ function DemoSidebar({
   return (
     <aside
       aria-label="Sidebar (demo)"
-      // 64 px wide — shrunk one rung from the real 80 px collapsed
-      // sidebar so the preview's inner content has more horizontal
-      // room inside the hero's 3:2 frame.
-      className="sidebar-bg flex h-full w-[64px] shrink-0 flex-col border-l border-[var(--tq-border-glass)]"
+      // §24: thin transparent icon rail — no fill, no border, no dividers (the
+      // real rail floats on the gutter). Groups are separated by spacing only.
+      className="sidebar-bg flex h-full w-[54px] shrink-0 flex-col items-center"
     >
-      {/* Logo — icon-only (matches the real Sidebar's collapsed state).
-          Animated `ParagraphWriteIcon` in "hover" mode: idle static
-          rest state by default, infinite write-loop only while the
-          button is hovered. Clicking returns the demo to the
-          dashboard view. `pw-hover-trigger` is the CSS hook the
-          icon's hover-mode rules gate on. User direction 2026-05-28. */}
-      <div className="flex h-14 flex-shrink-0 items-center justify-center border-b border-white/[0.05]">
+      {/* Logo — icon-only, animated ParagraphWriteIcon in hover mode. Clicking
+          returns the demo to the dashboard view. */}
+      <div className="flex h-12 flex-shrink-0 items-center justify-center">
         <button
           type="button"
           onClick={() => onNavigate("dashboard")}
           aria-label="الرئيسية"
-          // No background-on-hover — the icon's hover-mode write
-          // animation IS the hover feedback (user direction 2026-05-28).
           className="pw-hover-trigger flex h-8 w-8 items-center justify-center"
         >
-          <ParagraphWriteIcon mode="hover" size={30} />
+          <ParagraphWriteIcon mode="hover" size={22} />
         </button>
       </div>
 
-      {/* Body */}
-      <div className="flex flex-1 flex-col">
+      {/* Body — home · actions · library groups, separated by spacing. */}
+      <div className="flex flex-1 flex-col items-center">
         <div className="flex flex-col items-center py-1">
           {groupedItems.home.map((item) => (
             <SidebarDot
@@ -296,7 +295,7 @@ function DemoSidebar({
           ))}
         </div>
 
-        <div className="divider-dark" />
+        <div className="h-2" />
 
         <div className="flex flex-col items-center py-1">
           {groupedItems.actions.map((item) => (
@@ -319,9 +318,9 @@ function DemoSidebar({
           ))}
         </div>
 
-        <div className="divider-dark" />
+        <div className="h-2" />
 
-        <nav className="flex flex-1 flex-col items-center py-1">
+        <nav className="flex flex-col items-center py-1">
           {groupedItems.library.map((item) => (
             <SidebarDot
               key={item.id}
@@ -334,14 +333,15 @@ function DemoSidebar({
             />
           ))}
         </nav>
+      </div>
 
-        <div className="flex items-center justify-center py-2">
-          <div
-            className="h-8 w-8 rounded-full"
-            style={{ backgroundImage: "var(--tq-gradient-brand)" }}
-            aria-hidden
-          />
-        </div>
+      {/* Profile avatar pinned to the bottom. */}
+      <div className="flex items-center justify-center py-2">
+        <div
+          className="h-7 w-7 rounded-full"
+          style={{ backgroundImage: "var(--tq-gradient-brand)" }}
+          aria-hidden
+        />
       </div>
     </aside>
   );
@@ -375,7 +375,7 @@ function SidebarDot({
       onMouseLeave={() => iconRef.current?.stopAnimation()}
       aria-label={item.label}
       aria-current={active ? "page" : undefined}
-      className={`my-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 ${
+      className={`my-1 flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
         active ? "nav-active" : "nav-item"
       } ${interactive ? "cursor-pointer" : "cursor-default"}`}
     >
@@ -384,7 +384,7 @@ function SidebarDot({
           color: active ? "var(--tq-text-primary)" : "var(--tq-text-muted)",
         }}
       >
-        <AnimatedIcon ref={iconRef} name={item.icon} size={18} />
+        <AnimatedIcon ref={iconRef} name={item.icon} size={16} />
       </div>
     </button>
   );
@@ -409,26 +409,28 @@ function DemoQACard({
       onClick={() => onNavigate(card.id)}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
-      className="qa-card group flex flex-col gap-2 p-3 text-right transition-all duration-200"
+      className="qa-card group relative flex min-h-[104px] flex-col gap-1.5 overflow-hidden rounded-xl p-3.5 text-right transition-all duration-200"
       dir="rtl"
       aria-label={card.title}
     >
+      {/* Icon at the top; title + desc pinned to the bottom. Demo cards show the
+          FULL text (no truncation — user direction) and wrap as needed. */}
       <div
-        className="transition-colors"
+        className="shrink-0 transition-colors group-hover:text-white"
         style={{ color: "var(--tq-text-muted)" }}
       >
         <AnimatedIcon
           ref={iconRef}
           name={card.icon}
-          size={27}
+          size={22}
           strokeWidth={1.5}
         />
       </div>
-      <div>
-        <h3 className="mb-0.5 text-[12px] font-semibold leading-snug text-white">
+      <div className="mt-auto w-full">
+        <h3 className="text-[11px] font-semibold leading-snug text-white">
           {card.title}
         </h3>
-        <p className="text-[10px] leading-relaxed text-[var(--tq-text-muted)]">
+        <p className="mt-0.5 text-[9px] leading-relaxed text-[var(--tq-text-muted)]">
           {card.desc}
         </p>
       </div>
@@ -436,74 +438,35 @@ function DemoQACard({
   );
 }
 
-// ─── Header ─────────────────────────────────────────────────────────
-// User direction 2026-05-28: drop the Taqreer wordmark + احترافي badge
-// from the dashboard header permanently. The visual-right slot is empty
-// on the dashboard view and holds the "العودة للوحة التحكم" back chip
-// when a flow view is active — replacing the in-flow body's local back
-// button. Search + bell + avatar stay on the visual-left side.
-function DemoHeader({
-  view,
-  onBack,
-}: {
-  view: View;
-  onBack: () => void;
-}) {
+// ─── Top utility cluster (§24) ───────────────────────────────────────
+// Mirrors the real TopUtilityBar: search (icon + ⌘K hint) pinned to the start
+// (visual right in RTL), theme + language icons to the end (visual left).
+// Static / non-interactive in the demo.
+function DemoTopBar() {
   return (
-    <header className="header-bg flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--tq-border-glass)] px-4">
-      {/* Right side (RTL: visually right) — back chip on flow views,
-          empty on dashboard view. AnimatePresence-free fade since the
-          whole pane swaps on view change anyway. */}
-      <div className="flex shrink-0 items-center">
-        {view !== "dashboard" ? (
-          <button
-            type="button"
-            onClick={onBack}
-            // Back chip mirrors `.btn-pill` so the affordance reads as
-            // native. Arrow_forward is the RTL "back" glyph (right-
-            // pointing arrow = "go back" in an RTL reading order).
-            className="btn-pill flex items-center gap-1.5 px-3 text-xs"
-            style={{ height: 32 }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 14 }}
-            >
-              arrow_forward
-            </span>
-            <span>العودة للوحة التحكم</span>
-          </button>
-        ) : null}
+    <div
+      dir="rtl"
+      className="pointer-events-none absolute inset-x-0 top-2.5 z-20 flex items-center justify-between px-4"
+    >
+      {/* Search — start (visual right) */}
+      <div className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[var(--tq-text-muted)]">
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+          search
+        </span>
+        <kbd className="rounded border border-white/15 bg-white/[0.04] px-1 py-0.5 text-[8px] font-medium leading-none">
+          ⌘K
+        </kbd>
       </div>
-
-      {/* Search field — static, non-interactive */}
-      <div className="hidden flex-1 justify-center md:flex">
-        <div className="flex h-8 w-full max-w-xs items-center gap-2 rounded-full bg-[var(--tq-bg-glass)] px-3 text-xs text-[var(--tq-text-muted)]">
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-            search
-          </span>
-          <span>ابحث في مشاريعك...</span>
-        </div>
+      {/* Theme + language — end (visual left) */}
+      <div className="flex items-center gap-2 text-[var(--tq-text-muted)]">
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+          light_mode
+        </span>
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+          translate
+        </span>
       </div>
-
-      {/* Left side (RTL: visually left) — bell + avatar */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="الإشعارات"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--tq-bg-glass)] text-[var(--tq-text-muted)]"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-            notifications
-          </span>
-        </button>
-        <div
-          className="h-8 w-8 rounded-full"
-          style={{ backgroundImage: "var(--tq-gradient-brand)" }}
-          aria-hidden
-        />
-      </div>
-    </header>
+    </div>
   );
 }
 
@@ -520,84 +483,43 @@ function DashboardBody({
   onNavigate: (v: Exclude<View, "dashboard">) => void;
 }) {
   return (
-    <div className="relative z-10 flex h-full flex-col overflow-y-auto px-6 py-8">
-      {/* QuickActions grid — same 4-card row the real dashboard uses,
-          shrunk one rung (gap-3 / p-3 instead of gap-4 / p-4) so the
-          row fits inside the preview's 1024 px frame at 3:2. */}
-      <section>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="relative z-10 flex h-full flex-col overflow-hidden px-5 pt-11 pb-3">
+      {/* Centered launcher — the 4 flow cards, vertically centered (Lovable-
+          style), exactly like the real dashboard's `min-h items-center` block. */}
+      <section className="flex flex-1 items-center justify-center">
+        <div className="grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
           {QUICK_ACTIONS.map((card) => (
-            <DemoQACard
-              key={card.id}
-              card={card}
-              onNavigate={onNavigate}
-            />
+            <DemoQACard key={card.id} card={card} onNavigate={onNavigate} />
           ))}
         </div>
       </section>
 
-      {/* Two-widget row — `flex-1` so the row stretches to fill all
-          leftover vertical space, and each widget inside it stretches
-          via `h-full` + `flex flex-col`. The tile grid grows to match
-          the widget's height (`flex-1` on the grid itself). 3 cols × 2
-          rows = 6 placeholders per widget, mirroring the real
-          RecentProjects.tsx `grid-cols-1 sm:grid-cols-2 lg:grid-cols-
-          3` layout. */}
-      <div className="mt-10 grid flex-1 grid-cols-1 gap-10 lg:grid-cols-2">
-        <PlaceholderSection title="أحدث المشاريع" items={RECENT_PROJECTS} />
-        <PlaceholderSection title="قوالبي" items={TEMPLATES} />
-      </div>
-
-      {/* Plan usage strip — pinned to the bottom of the column via
-          `mt-auto` so it sits hard against the bottom-fade mask
-          regardless of how tall the widgets above grew. Latin
-          numerals per project rule. */}
-      <section className="mt-auto pt-4">
-        <div className="glass-card rounded-2xl p-3">
-          <div className="flex items-center justify-between gap-3 text-xs text-[var(--tq-text-muted)]">
-            <span className="font-semibold text-white">خطة الاحتراف</span>
-            <div className="flex flex-1 items-center gap-2">
-              <div className="progress-track flex-1">
-                <div className="progress-bar" style={{ width: "20%" }} />
-              </div>
-            </div>
-            <span>6 / 30 عرضًا</span>
+      {/* Bottom "library" card — a segmented toggle (مشاريعي ⇄ القوالب) over a
+          peeking row of project tiles (mirrors the real HomeLibrary). */}
+      <section className="glass-card shrink-0 rounded-2xl p-3">
+        <div className="mb-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-0.5 rounded-full bg-[var(--tq-bg-glass)] p-0.5 text-[9px]">
+            <span className="rounded-full bg-white/10 px-2.5 py-1 font-medium text-white">
+              مشاريعي
+            </span>
+            <span className="px-2.5 py-1 text-[var(--tq-text-muted)]">
+              القوالب
+            </span>
           </div>
+          <span className="text-[9px] text-[var(--tq-text-muted)]">عرض الكل</span>
+        </div>
+        <div className="grid grid-cols-5 gap-2">
+          {RECENT_PROJECTS.slice(0, 5).map((item, i) => (
+            <PlaceholderTile
+              key={i}
+              title={item.title}
+              subtitle={item.subtitle}
+              tint={PLACEHOLDER_TINTS[i % PLACEHOLDER_TINTS.length]}
+            />
+          ))}
         </div>
       </section>
     </div>
-  );
-}
-
-function PlaceholderSection({
-  title,
-  items,
-}: {
-  title: string;
-  items: { title: string; subtitle: string }[];
-}) {
-  return (
-    // `flex flex-col` so the grid below can grow to fill the widget's
-    // vertical space via `flex-1`. The h2 sits at the top, the grid
-    // takes everything else.
-    <section className="flex flex-col">
-      <h2 className="mb-2 text-right text-sm font-semibold text-white">
-        {title}
-      </h2>
-      {/* 3 cols × 2 rows = 6 tiles, same as the real RecentProjects /
-          MyTemplates widget. `gap-x-3 gap-y-3` is tighter than the real
-          `gap-x-10 gap-y-8` so the cluster fits in the preview frame. */}
-      <div className="grid flex-1 grid-cols-3 gap-x-3 gap-y-3 content-start">
-        {items.slice(0, 6).map((item, i) => (
-          <PlaceholderTile
-            key={i}
-            title={item.title}
-            subtitle={item.subtitle}
-            tint={PLACEHOLDER_TINTS[i % PLACEHOLDER_TINTS.length]}
-          />
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -737,7 +659,10 @@ function FlowBody({
           flow's natural shape comes through. Each card uses the
           shared `.glass-card` chrome + same header icon + bottom
           hairline pattern as the real flows. */}
-      <div className={`grid gap-3 ${flow.gridCols}`}>
+      {/* Fixed-width cards in a centered row — same width across flows
+          (regardless of 2 vs 3 cards), mirroring the real flows' `w-[360px]`
+          columns. `items-stretch` makes them all match the tallest height. */}
+      <div className="flex flex-wrap items-stretch justify-center gap-3">
         {flow.cards.map((card, idx) => (
           <FlowCard key={idx} card={card} />
         ))}
@@ -771,7 +696,6 @@ type FlowSpec = {
   title: string;
   subtitle: string;
   cta: string;
-  gridCols: string;
   cards: FlowCardSpec[];
 };
 
@@ -895,17 +819,6 @@ function FakeToggle({ on }: { on: boolean }) {
   );
 }
 
-function FakePositionDropdown({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-1 rounded-full border border-[var(--tq-border-glass)] bg-black/25 px-2 py-0.5 text-[10px] text-white">
-      <span>{label}</span>
-      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
-        expand_more
-      </span>
-    </div>
-  );
-}
-
 function FakeFontSlot({
   label,
   family,
@@ -947,7 +860,7 @@ function CardSeparator() {
 
 function FlowCard({ card }: { card: FlowCardSpec }) {
   return (
-    <div className="glass-card flex min-h-[230px] flex-col gap-2.5 rounded-2xl p-3">
+    <div className="glass-card flex w-[210px] min-h-[300px] shrink-0 flex-col gap-2.5 rounded-2xl p-3">
       {/* Card header — icon + title + hairline separator. Matches the
           real `CardHeader` primitive: `<span class="material-symbols-
           outlined"> + bold title + border-b`. */}
@@ -968,13 +881,16 @@ function FlowCard({ card }: { card: FlowCardSpec }) {
 // ─── Per-flow card specs ────────────────────────────────────────────
 // Icons + titles + Arabic copy track the real flow pages verbatim:
 //
-//   • /create     →  subject (المحتوى) / palette (الخطوط والألوان)
-//                    / image (الشعار)  / settings (إعدادات الإخراج)
+// Each flow now mirrors the current real pages: MAX 3 cards, with one
+// consolidated "الهوية البصرية" card (colors + fonts + logo) — not the old
+// split fonts/logo cards.
+//   • /create     →  subject (المحتوى) / palette (الهوية البصرية)
+//                    / settings (إعدادات الإخراج)
 //   • /enhance    →  subject (الملف الأصلي) / palette (الهوية البصرية)
 //   • /mimic      →  subject (المحتوى) / palette (الهوية البصرية)
 //                    / auto_awesome (ما الذي نُحاكيه)
-//   • /datasheet  →  dataset (البيانات) / palette (الخطوط والألوان)
-//                    / image (الشعار)  / settings (إعدادات الإخراج)
+//   • /datasheet  →  dataset (البيانات) / palette (الهوية البصرية)
+//                    / settings (إعدادات الإخراج)
 
 const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
   create: {
@@ -982,7 +898,6 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
     subtitle:
       "اكتب محتواك أو ارفع ملفاً، اختر هويتك البصرية، وسنبني عرضاً يحاكي ذوقك.",
     cta: "إنشاء العرض",
-    gridCols: "grid-cols-2 lg:grid-cols-4",
     cards: [
       {
         icon: "subject",
@@ -1004,44 +919,24 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
       },
       {
         icon: "palette",
-        title: "الخطوط والألوان",
+        title: "الهوية البصرية",
         body: (
           <>
             <FieldRow label="الألوان">
               <FakePalette
-                colors={[
-                  "var(--tq-violet)",
-                  "var(--tq-magenta)",
-                  "var(--tq-blue)",
-                ]}
+                // Our brand-gradient colours (blue → violet → purple). Literal
+                // hexes on purpose: the --tq-blue/violet/magenta tokens are all
+                // aliased to one purple after §21, so tokens here read monochrome.
+                colors={["#370BF4", "#7D2DFF", "#8B5CF6"]}
               />
             </FieldRow>
             <CardSeparator />
-            <FieldRow label="خط العناوين">
+            <FieldRow label="الخط">
               <FakeSegmented options={["ملف", "Google"]} active={1} />
             </FieldRow>
             <FakeFontSlot label="Aa" family="Cairo" />
-            <FieldRow label="خط النص">
-              <FakeSegmented options={["ملف", "Google"]} active={1} />
-            </FieldRow>
-            <FakeFontSlot label="Aa" family="Cairo" />
-          </>
-        ),
-      },
-      {
-        icon: "image",
-        title: "الشعار",
-        body: (
-          <>
-            <FakeDropzone
-              icon="image"
-              title="ارفع شعارك"
-              hint="SVG فقط"
-            />
             <CardSeparator />
-            <FieldRow label="موضع الشعار">
-              <FakePositionDropdown label="أعلى يمين" />
-            </FieldRow>
+            <FakeDropzone icon="image" title="ارفع شعارك" hint="SVG فقط" />
             <FieldRow label="حفظ كهوية افتراضية">
               <FakeToggle on={false} />
             </FieldRow>
@@ -1065,8 +960,8 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
               <FakeToggle on={true} />
             </FieldRow>
             <CardSeparator />
-            <FieldRow label="عنصر ثابت">
-              <FakePositionDropdown label="أسفل وسط" />
+            <FieldRow label="نمط التصميم">
+              <FakeSegmented options={["تلقائي", "احترافي", "إبداعي"]} active={0} />
             </FieldRow>
           </>
         ),
@@ -1078,7 +973,6 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
     subtitle:
       "ارفع عرضاً موجوداً وسنعيد تصميمه بهويتك البصرية مع الحفاظ على محتواك.",
     cta: "تحسين العرض",
-    gridCols: "grid-cols-1 sm:grid-cols-2",
     cards: [
       {
         icon: "subject",
@@ -1099,9 +993,6 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
               title="ارفع شعارك (اختياري)"
               hint="SVG فقط"
             />
-            <FieldRow label="موضع الشعار">
-              <FakePositionDropdown label="أعلى يمين" />
-            </FieldRow>
           </>
         ),
       },
@@ -1111,16 +1002,10 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
         body: (
           <>
             <FieldRow label="الألوان">
-              <FakePalette
-                colors={["var(--tq-blue)", "var(--tq-lavender)"]}
-              />
+              <FakePalette colors={["#370BF4", "#8B5CF6"]} />
             </FieldRow>
             <CardSeparator />
-            <FieldRow label="خط العناوين">
-              <FakeSegmented options={["ملف", "Google"]} active={1} />
-            </FieldRow>
-            <FakeFontSlot label="Aa" family="Cairo" />
-            <FieldRow label="خط النص">
+            <FieldRow label="الخط">
               <FakeSegmented options={["ملف", "Google"]} active={1} />
             </FieldRow>
             <FakeFontSlot label="Aa" family="Cairo" />
@@ -1138,7 +1023,6 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
     subtitle:
       "أرفق عرضاً مرجعياً وسنطبّق أسلوبه على محتواك الجديد.",
     cta: "إنشاء العرض",
-    gridCols: "grid-cols-1 md:grid-cols-3",
     cards: [
       {
         icon: "subject",
@@ -1157,21 +1041,23 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
         title: "الهوية البصرية",
         body: (
           <>
-            <FakeDropzone
-              icon="image"
-              title="ارفع شعارك (اختياري)"
-              hint="SVG فقط"
-            />
-            <CardSeparator />
-            <FieldRow label="موضع الشعار">
-              <FakePositionDropdown label="أعلى يمين" />
+            <FieldRow label="الألوان">
+              <FakePalette
+                // Our brand-gradient colours (blue → violet → purple). Literal
+                // hexes on purpose: the --tq-blue/violet/magenta tokens are all
+                // aliased to one purple after §21, so tokens here read monochrome.
+                colors={["#370BF4", "#7D2DFF", "#8B5CF6"]}
+              />
             </FieldRow>
             <CardSeparator />
-            <FieldRow label="مقاس الشريحة">
-              <FakeSegmented options={["16:9", "9:16"]} active={0} />
+            <FieldRow label="الخط">
+              <FakeSegmented options={["ملف", "Google"]} active={1} />
             </FieldRow>
-            <FieldRow label="عدد الشرائح">
-              <FakeSegmented options={["تلقائي", "مخصص"]} active={0} />
+            <FakeFontSlot label="Aa" family="Cairo" />
+            <CardSeparator />
+            <FakeDropzone icon="image" title="ارفع شعارك" hint="SVG فقط" />
+            <FieldRow label="حفظ كهوية افتراضية">
+              <FakeToggle on={false} />
             </FieldRow>
           </>
         ),
@@ -1203,7 +1089,6 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
     subtitle:
       "حوّل ملف Excel أو CSV إلى عرض احترافي مع الرسوم البيانية المناسبة.",
     cta: "إنشاء العرض",
-    gridCols: "grid-cols-2 lg:grid-cols-4",
     cards: [
       {
         icon: "dataset",
@@ -1227,44 +1112,24 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
       },
       {
         icon: "palette",
-        title: "الخطوط والألوان",
+        title: "الهوية البصرية",
         body: (
           <>
             <FieldRow label="الألوان">
               <FakePalette
-                colors={[
-                  "var(--tq-violet)",
-                  "var(--tq-magenta)",
-                  "var(--tq-blue)",
-                ]}
+                // Our brand-gradient colours (blue → violet → purple). Literal
+                // hexes on purpose: the --tq-blue/violet/magenta tokens are all
+                // aliased to one purple after §21, so tokens here read monochrome.
+                colors={["#370BF4", "#7D2DFF", "#8B5CF6"]}
               />
             </FieldRow>
             <CardSeparator />
-            <FieldRow label="خط العناوين">
+            <FieldRow label="الخط">
               <FakeSegmented options={["ملف", "Google"]} active={1} />
             </FieldRow>
             <FakeFontSlot label="Aa" family="Cairo" />
-            <FieldRow label="خط النص">
-              <FakeSegmented options={["ملف", "Google"]} active={1} />
-            </FieldRow>
-            <FakeFontSlot label="Aa" family="Cairo" />
-          </>
-        ),
-      },
-      {
-        icon: "image",
-        title: "الشعار",
-        body: (
-          <>
-            <FakeDropzone
-              icon="image"
-              title="ارفع شعارك"
-              hint="SVG فقط"
-            />
             <CardSeparator />
-            <FieldRow label="موضع الشعار">
-              <FakePositionDropdown label="أعلى يمين" />
-            </FieldRow>
+            <FakeDropzone icon="image" title="ارفع شعارك" hint="SVG فقط" />
             <FieldRow label="حفظ كهوية افتراضية">
               <FakeToggle on={false} />
             </FieldRow>

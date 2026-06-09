@@ -43,6 +43,16 @@ export function DashboardShell({
   // §22: home + the 4 flows get the dot field; every other page is flat gray.
   const isGlowRoute = pathname === "/dashboard" || isFlowRoute;
 
+  // §24: make BODY the scroll container ONLY while the dashboard shell is
+  // mounted, so the page scrollbar lands on the left (RTL). Scoped via this
+  // class so public pages (landing / auth) keep normal window scroll — the
+  // landing's Lenis smooth-scroll needs <html>/window to scroll (it broke when
+  // this was global). See `html.app-shell-scroll` in globals.css.
+  useEffect(() => {
+    document.documentElement.classList.add("app-shell-scroll");
+    return () => document.documentElement.classList.remove("app-shell-scroll");
+  }, []);
+
   // Share-revoked listener — `notificationStore` dispatches
   // `taqreer:share-revoked` on its window when the user channel delivers the
   // broadcast. If we're currently viewing the revoked project, hard-redirect to
