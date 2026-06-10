@@ -66,7 +66,7 @@ function InlineSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
       style={{
         verticalAlign: "-0.06em",
         background: on ? "var(--tq-gradient-brand)" : "var(--tq-card)",
-        border: "1px solid rgba(255,255,255,0.14)",
+        border: "1px solid var(--tq-border-glass)",
         boxShadow: on ? "0 0 18px rgba(var(--tq-violet-rgb),0.5)" : "none",
       }}
     >
