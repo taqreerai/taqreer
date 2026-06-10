@@ -4046,7 +4046,7 @@ export function DeckView({
           <div
             className={`h-full w-full overflow-hidden${
               generating
-                ? " canvas-gen-glass"
+                ? " canvas-gen-surface"
                 : ""
             }`}
           >

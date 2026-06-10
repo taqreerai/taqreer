@@ -268,7 +268,7 @@ export default function NewBrandKitPage() {
 
             {/* Single brand font — one Google family (Claude varies
                 weights) OR up to 5 uploaded families (Claude pairs). */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <BrandFontPicker
                 value={brandFont}
                 onChange={setBrandFont}
@@ -281,7 +281,7 @@ export default function NewBrandKitPage() {
                 the deck flows); gap-4 unifies the title→zone gap with الخطوط.
                 No save toggle here — this page IS the save — so the logo zone
                 runs to the card's bottom edge. */}
-            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>

@@ -727,9 +727,9 @@ export default function CreatePage() {
               inert={hasText}
             >
               <div className="flex items-center gap-2 text-[11px] text-white/40">
-                <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
                 <span>{t.or}</span>
-                <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
               </div>
               <ContentDropzone
                 file={contentFile}
@@ -745,7 +745,7 @@ export default function CreatePage() {
             {/* Persistent footer element — text input only (position
                 picker removed 2026-06-02; Claude places it). No cover/
                 closing exclude — it's on every slide by definition. */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <PersistentRow
                 text={persistentText}
                 language={language}
@@ -835,7 +835,7 @@ export default function CreatePage() {
 
             {/* Single brand font — one Google family (Claude varies
                 weights) OR up to 5 uploaded families (Claude pairs). */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <BrandFontPicker
                 value={brandFont}
                 onChange={setBrandFont}
@@ -848,7 +848,7 @@ export default function CreatePage() {
             {/* Logo — flex-1 so the dropzone grows to absorb the card's
                 leftover height (LogoRow's zone is flex-1 + min-h-20), filling
                 the gap above the save toggle instead of leaving dead space. */}
-            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 {t.logo}
               </span>
@@ -869,7 +869,7 @@ export default function CreatePage() {
             {/* Save brand kit — present on BOTH branding cards
                 (fonts+colors AND logo), backed by the same state,
                 so the user can flip the toggle from either card. */}
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
               <span className="text-xs font-semibold text-white/70">
                 {t.saveAsDefault}
               </span>
@@ -898,7 +898,7 @@ export default function CreatePage() {
               onSlideSize={setSlideSize}
             />
 
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <div className="flex min-h-[24px] items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
                   {t.slideCount}
@@ -967,7 +967,7 @@ export default function CreatePage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="text-xs font-semibold text-white/70">
                 {t.slideNumbering}
               </span>
@@ -982,7 +982,7 @@ export default function CreatePage() {
                 context/images.md. The visual-direction (mimic) panel that
                 sat above it was removed 2026-06-03; this slot will host the
                 design-style picker. */}
-            <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-hairline)] pt-3">
               {/* Design-style picker (Part B.3) — inline pills for now;
                   picking an image-leaning style auto-enables the panel below.
                   Polished modal UX comes later. */}

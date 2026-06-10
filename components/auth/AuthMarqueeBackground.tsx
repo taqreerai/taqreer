@@ -166,7 +166,7 @@ function MarqueeColumn({
                   // column so the mosaic isn't visually monotone.
                   // Border removed per user direction 2026-05-28 — the
                   // tiles were carrying a 1 px white-glass ring
-                  // (`--glass-border-opacity`) that read as a grid of
+                  // (`--tq-border-opacity`) that read as a grid of
                   // cells against the heavy modal blur. Plain edges
                   // let the mosaic feel like a single canvas.
                   aspectRatio: thumb.format === "9:16" ? "9 / 16" : "16 / 9",

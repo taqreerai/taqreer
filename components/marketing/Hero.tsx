@@ -84,7 +84,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 تم إنشاء {formattedCount} عرض تقديمي حتى الآن
               </span>
             )}
-            <span className="rounded-full border border-[var(--tq-border-glass)] bg-[var(--tq-surface)] px-4 py-1.5 text-xs font-medium text-muted">
+            <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-4 py-1.5 text-xs font-medium text-muted">
               مدعوم بتقنية Claude Design
             </span>
           </motion.div>
@@ -174,7 +174,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 The chrome bar + preview pane stack inside one outer
                 `rounded-2xl` border — a complete browser window with
                 crisp edges (no bottom-fade mask). */}
-            <div className="relative mx-auto w-full overflow-hidden rounded-2xl border border-[var(--tq-border-glass)]">
+            <div className="relative mx-auto w-full overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)]">
               {/* Browser chrome — Mac Safari recipe: colored traffic
                   lights, paired ‹ › nav arrows, shield, URL pill with
                   lock + domain + refresh, and a right-side action
@@ -183,8 +183,8 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                   inside an RTL page; traffic lights stay anchored to
                   the visual left as users expect from real browsers.
                   All surfaces (nav buttons, URL pill, right cluster)
-                  use the design-system tokens (`--tq-bg-glass`,
-                  `--tq-border-glass`, `--tq-text-muted`) so the bar
+                  use the design-system tokens (`--tq-surface`,
+                  `--tq-border-hairline`, `--tq-text-muted`) so the bar
                   inherits the same glass language as the rest of the
                   app — no hardcoded surface colors. */}
               <BrowserChromeBar path={demoPath} />
@@ -209,7 +209,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
 // ─── Browser chrome bar ─────────────────────────────────────────
 // Mac Safari recipe (replicated from the user-supplied reference
 // screenshot 2026-05-28). All chrome surfaces use the design-system
-// tokens (`--tq-bg-glass`, `--tq-border-glass`, `--tq-text-muted`)
+// tokens (`--tq-surface`, `--tq-border-hairline`, `--tq-text-muted`)
 // so the bar inherits the same glass language as the dashboard
 // header below it — no hardcoded surface colors.
 //
@@ -222,7 +222,7 @@ function BrowserChromeBar({ path }: { path: string }) {
   return (
     <div
       dir="ltr"
-      className="relative flex h-11 items-center border-b border-[var(--tq-border-glass)] bg-[var(--tq-card)] px-4"
+      className="relative flex h-11 items-center border-b border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-4"
     >
       {/* macOS traffic lights — same as the BiDi canvas window header. */}
       <div className="flex shrink-0 items-center gap-2">
@@ -233,7 +233,7 @@ function BrowserChromeBar({ path }: { path: string }) {
 
       {/* Address bar only — centered, no icons inside (just the URL). */}
       <div className="absolute left-1/2 w-full max-w-[300px] -translate-x-1/2 px-4">
-        <div className="truncate rounded-md border border-[var(--tq-border-glass)] bg-black/25 px-3 py-1 text-center font-mono text-[11px] text-[var(--tq-text-muted)]">
+        <div className="truncate rounded-md border border-[var(--tq-border-hairline)] bg-black/25 px-3 py-1 text-center font-mono text-[11px] text-[var(--tq-text-muted)]">
           taqreer.ai{path}
         </div>
       </div>

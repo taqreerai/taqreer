@@ -623,7 +623,7 @@ export default function DatasheetPage() {
                 (2026-06-01). The footer that rides on every slide
                 belongs with the data input. PersistentRow self-labels
                 via its placeholder (matches /create). */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <PersistentRow
                 text={persistentText}
                 language={language}
@@ -705,7 +705,7 @@ export default function DatasheetPage() {
 
             {/* Single brand font — one Google family (Claude varies
                 weights) OR up to 5 uploaded families (Claude pairs). */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <BrandFontPicker
                 value={brandFont}
                 onChange={setBrandFont}
@@ -718,7 +718,7 @@ export default function DatasheetPage() {
             {/* Logo — flex-1 so the dropzone grows to fill the card's
                 leftover height (matches /create); gap-4 unifies the
                 title→zone gap with الخطوط. */}
-            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>
@@ -736,7 +736,7 @@ export default function DatasheetPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
               <span className="text-xs font-semibold text-white/70">
                 حفظ كهوية افتراضية
               </span>
@@ -761,7 +761,7 @@ export default function DatasheetPage() {
               onSlideSize={setSlideSize}
             />
 
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <div className="flex min-h-[24px] items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
                   عدد الشرائح
@@ -804,7 +804,7 @@ export default function DatasheetPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="text-xs font-semibold text-white/70">
                 ترقيم الشرائح
               </span>
@@ -818,7 +818,7 @@ export default function DatasheetPage() {
             {/* Extra instructions — moved here from البيانات (2026-06-01)
                 to take the persistent element's old spot. Optional
                 steering text, forwarded as source.userContext. */}
-            <div className="space-y-1.5 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="space-y-1.5 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 تعليمات إضافية
               </span>

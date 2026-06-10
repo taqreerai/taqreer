@@ -188,7 +188,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         marginInline: 6,
         paddingInlineStart: 8,
         paddingInlineEnd: 3,
-        borderColor: "var(--tq-border-glass)",
+        borderColor: "var(--tq-border-hairline)",
         background: "var(--tq-surface)",
       }}
     >
@@ -755,7 +755,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                   width: 16,
                   height: 16,
                   borderRadius: "50%",
-                  border: "1px solid var(--tq-border-glass)",
+                  border: "1px solid var(--tq-border-hairline)",
                   // MIXED set (selected elements have DIFFERENT colours) → a
                   // multi-hue wheel so the user can tell at a glance they picked
                   // different colours, instead of a single (misleading) swatch
@@ -813,7 +813,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                 width: 16,
                 height: 16,
                 borderRadius: "50%",
-                border: "1px solid var(--tq-border-glass)",
+                border: "1px solid var(--tq-border-hairline)",
                 background: svgColor,
                 cursor: "pointer",
               }}
@@ -845,7 +845,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
             className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
-            style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-glass)" }}
+            style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
           >
             <ReplaceIcon />
             {uploading ? "Uploading…" : "Replace"}
@@ -874,7 +874,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                   setFontOpen(false);
                 }}
                 className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white"
-                style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-glass)" }}
+                style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
               >
                 <RegenImageIcon />
                 إعادة توليد
@@ -909,7 +909,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                     }}
                     placeholder="صف الصورة التي تريد توليدها…"
                     className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] leading-relaxed text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/40"
-                    style={{ borderColor: "var(--tq-border-glass)", background: "var(--tq-surface)" }}
+                    style={{ borderColor: "var(--tq-border-hairline)", background: "var(--tq-surface)" }}
                   />
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span className="text-[10px] text-white/40">تُحتسب صورة واحدة</span>
@@ -1068,7 +1068,7 @@ function Btn({
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 22, background: "var(--tq-border-glass)" }} />;
+  return <div style={{ width: 1, height: 22, background: "var(--tq-border-hairline)" }} />;
 }
 
 // Compact "mixed" chip — a small brand-violet dot shown beside a control whose

@@ -49,7 +49,7 @@ export async function NotFoundView({
     <main>
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <LandingNav isAuthed={false} />
-      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center gap-8 border-x border-[var(--tq-border-glass)] px-6 text-center">
+      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center gap-8 border-x border-[var(--tq-border-hairline)] px-6 text-center">
         <NotFoundContent recovery="home" />
       </div>
     </main>

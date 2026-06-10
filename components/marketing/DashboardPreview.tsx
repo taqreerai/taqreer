@@ -15,7 +15,7 @@
 //     to the real protected routes
 //   • Recent projects + templates render as the SAME layout as the real
 //     dashboard (3 cols × 2 rows = 6 tiles per widget), but as plain
-//     glass surfaces with varied --glass-opacity — no AI-slop gradients
+//     glass surfaces with varied --tq-tint-opacity — no AI-slop gradients
 //   • Sidebar shows COLLAPSED (icon-only) state; hover hits are
 //     CIRCULAR (not elongated pills)
 //   • Top icon on the sidebar uses `/icon-white.svg` (monochrome) —
@@ -33,7 +33,7 @@
 // `.sidebar-bg`, `.btn-pill`, `.input-dark`, `.divider-dark`,
 // `.badge-purple`, `.progress-track`, `.progress-bar`) and brand
 // tokens (`--tq-violet`, `--tq-blue`, `--tq-magenta`, `--tq-lavender`,
-// `--tq-bg-glass`, `--tq-border-glass`, `--glass-opacity`, etc.) —
+// `--tq-surface`, `--tq-border-hairline`, `--tq-tint-opacity`, etc.) —
 // no hardcoded hex.
 //
 // The component sits inside the browser-chrome frame in
@@ -118,13 +118,13 @@ const RECENT_PROJECTS = [
 ];
 
 // Three glass tints cycled across placeholder tiles. All driven from
-// the user's `--glass-opacity` preset so they scale with the same
+// the user's `--tq-tint-opacity` preset so they scale with the same
 // Settings → glass slider that controls every other surface — no
 // hardcoded numbers, no random rgba.
 const PLACEHOLDER_TINTS = [
-  "rgba(255, 255, 255, var(--glass-opacity))",
-  "rgba(255, 255, 255, calc(var(--glass-opacity) * 1.8))",
-  "rgba(255, 255, 255, calc(var(--glass-opacity) * 0.6))",
+  "rgba(255, 255, 255, var(--tq-tint-opacity))",
+  "rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 1.8))",
+  "rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 0.6))",
 ];
 
 // View → path mapping. Used by the demo to report the "current URL"
@@ -543,7 +543,7 @@ function PlaceholderTile({
           left-edge anchored) regardless of page direction — slides
           themselves aren't inherently RTL. */}
       <div
-        className="aspect-video w-full overflow-hidden rounded-[10px] border border-[var(--tq-border-glass)] p-2"
+        className="aspect-video w-full overflow-hidden rounded-[10px] border border-[var(--tq-border-hairline)] p-2"
         style={{ background: tint }}
       >
         <SlideWireframe />
@@ -568,7 +568,7 @@ function PlaceholderTile({
 // Mini slide layout drawn inside each PlaceholderTile. Mirrors the
 // user-supplied screenshot: a thick title bar at top + a thinner
 // subhead bar below + a row of 3 small shape blocks underneath.
-// Everything driven by `--glass-opacity` calc multipliers so the
+// Everything driven by `--tq-tint-opacity` calc multipliers so the
 // wireframe scales with the user's Settings → glass preset — no
 // hardcoded rgba.
 function SlideWireframe() {
@@ -580,14 +580,14 @@ function SlideWireframe() {
           className="h-1.5 w-2/3 rounded-sm"
           style={{
             background:
-              "rgba(255, 255, 255, calc(var(--glass-opacity) * 3))",
+              "rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 3))",
           }}
         />
         <div
           className="h-1 w-1/2 rounded-sm"
           style={{
             background:
-              "rgba(255, 255, 255, calc(var(--glass-opacity) * 1.6))",
+              "rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 1.6))",
           }}
         />
       </div>
@@ -599,18 +599,18 @@ function SlideWireframe() {
           className="h-3 flex-1 rounded-sm"
           style={{
             background:
-              "rgba(255, 255, 255, calc(var(--glass-opacity) * 2.4))",
+              "rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 2.4))",
           }}
         />
         <div
           className="h-3 flex-1 rounded-sm"
           style={{
             background:
-              "rgba(255, 255, 255, calc(var(--glass-opacity) * 1.4))",
+              "rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 1.4))",
           }}
         />
         <div
-          className="h-3 flex-1 rounded-sm border border-[var(--tq-border-glass)]"
+          className="h-3 flex-1 rounded-sm border border-[var(--tq-border-hairline)]"
           // Outline-only tile (matches the right-most rectangle in the
           // user-supplied screenshot: a "ghost" shape rendered as a
           // border with transparent fill).
@@ -787,7 +787,7 @@ function FakeSegmented({
   active: number;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-full border border-[var(--tq-border-glass)] bg-black/25 p-0.5">
+    <div className="flex items-center gap-0.5 rounded-full border border-[var(--tq-border-hairline)] bg-black/25 p-0.5">
       {options.map((label, i) => (
         <span
           key={i}
@@ -828,7 +828,7 @@ function FakeFontSlot({
 }) {
   return (
     <div
-      className="flex items-center justify-between rounded-md border border-[var(--tq-border-glass)] bg-black/20 px-2"
+      className="flex items-center justify-between rounded-md border border-[var(--tq-border-hairline)] bg-black/20 px-2"
       style={{ height: 28 }}
     >
       <span className="text-[10px] text-[var(--tq-text-muted)]">{label}</span>
@@ -855,7 +855,7 @@ function FieldRow({
 }
 
 function CardSeparator() {
-  return <div className="border-t border-[var(--tq-border-glass)]" />;
+  return <div className="border-t border-[var(--tq-border-hairline)]" />;
 }
 
 function FlowCard({ card }: { card: FlowCardSpec }) {
@@ -864,7 +864,7 @@ function FlowCard({ card }: { card: FlowCardSpec }) {
       {/* Card header — icon + title + hairline separator. Matches the
           real `CardHeader` primitive: `<span class="material-symbols-
           outlined"> + bold title + border-b`. */}
-      <div className="flex items-center gap-2 border-b border-[var(--tq-border-glass)] pb-2">
+      <div className="flex items-center gap-2 border-b border-[var(--tq-border-hairline)] pb-2">
         <span
           className="material-symbols-outlined text-white"
           style={{ fontSize: 14 }}
@@ -909,9 +909,9 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
             </FieldRow>
             <FakeTextarea rows={3} />
             <div className="flex items-center gap-2 text-[10px] text-white/40">
-              <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
               <span>أو</span>
-              <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
             </div>
             <FakeDropzone />
           </>

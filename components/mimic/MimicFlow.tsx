@@ -820,9 +820,9 @@ export default function MimicFlow({
               inert={contentTextReady}
             >
               <div className="flex items-center gap-2 text-[11px] text-white/40">
-                <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
                 <span>أو</span>
-                <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
               </div>
               <FileDropzone
                 file={contentFile}
@@ -839,7 +839,7 @@ export default function MimicFlow({
 
             {/* Slide size (ratio) — lives in the content card so the
                 branding card matches the other flows' height. */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <SlideSizeFields
                 slideSize={slideSize}
                 onSlideSize={setSlideSize}
@@ -928,7 +928,7 @@ export default function MimicFlow({
                       weights) OR up to 5 uploaded families (Claude pairs).
                       Replaces the heading + body two-slot UI; identical to
                       /create's BrandFontPicker. */}
-                  <div className="border-t border-[var(--tq-border-glass)] pt-3">
+                  <div className="border-t border-[var(--tq-border-hairline)] pt-3">
                     <BrandFontPicker
                       value={brandFont}
                       onChange={setBrandFont}
@@ -943,7 +943,7 @@ export default function MimicFlow({
                   {/* Logo — flex-1 so the dropzone grows to fill the card's
                       leftover height (matches /create); gap-4 unifies the
                       title→zone gap with الخطوط. */}
-                  <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
+                  <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
                     <span className="block text-xs font-semibold text-white/70">
                       الشعار
                     </span>
@@ -964,7 +964,7 @@ export default function MimicFlow({
                   {/* Save brand kit — the logo section's flex-1 pushes this
                       to the bottom, so no mt-auto (it would eat the slack
                       and stop the logo zone from growing). */}
-                  <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+                  <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
                     <span className="text-xs font-semibold text-white/70">
                       حفظ كهوية افتراضية
                     </span>
@@ -1071,7 +1071,7 @@ export default function MimicFlow({
                   rhythm). The dropzone itself is `compact` + h-full
                   so it claims whatever vertical space is left after
                   the header + toggle + slide-count rows. */}
-              <div className="flex flex-1 flex-col border-t border-[var(--tq-border-glass)] pt-3">
+              <div className="flex flex-1 flex-col border-t border-[var(--tq-border-hairline)] pt-3">
                 {isTemplate ? (
                   // Template mode — the design reference is the chosen
                   // template (locked, no upload). Reuses the dropzone's

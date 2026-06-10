@@ -115,7 +115,7 @@ export function FontControl({
         className="flex h-8 items-center overflow-hidden rounded-full"
         style={{
           background: "var(--tq-surface)",
-          border: "1px solid var(--tq-border-glass)",
+          border: "1px solid var(--tq-border-hairline)",
           width: collapsedW == null ? "max-content" : undefined,
         }}
         animate={collapsedW == null ? undefined : { width: open ? WIDTH : collapsedW }}

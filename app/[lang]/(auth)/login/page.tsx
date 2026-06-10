@@ -157,10 +157,10 @@ export default function LoginPage() {
 
       <motion.div {...fadeUp(0.15)} className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[var(--tq-border-glass)]" />
+          <div className="w-full border-t border-[var(--tq-border-hairline)]" />
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-3 py-0.5 rounded-full bg-[var(--tq-surface)] border border-[var(--tq-border-glass)] text-xs text-muted">
+          <span className="px-3 py-0.5 rounded-full bg-[var(--tq-surface)] border border-[var(--tq-border-hairline)] text-xs text-muted">
             {t.or}
           </span>
         </div>

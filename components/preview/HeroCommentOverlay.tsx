@@ -635,8 +635,8 @@ function GlassIconButton({
   onClick: () => void;
 }) {
   const baseBg = active
-    ? "rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6))"
-    : "rgba(255, 255, 255, var(--glass-opacity))";
+    ? "rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 2.6))"
+    : "rgba(255, 255, 255, var(--tq-tint-opacity))";
   const colorClasses = active
     ? "border-white/40 text-white"
     : "border-white/15 text-white/60 hover:border-white/40 hover:text-white";
@@ -758,7 +758,7 @@ function CommentEditor({
       // has a long-standing bug where a `var()` holding a comma-
       // separated value fails to split back into `rgba()`'s argument
       // list, the whole declaration becomes invalid, and the bg
-      // falls back to transparent. Border uses `--tq-border-glass`
+      // falls back to transparent. Border uses `--tq-border-hairline`
       // (single token, no nested function), which Safari handles
       // cleanly.
       // `.in-slide-popover` carries the dim + hairline border. Class-
@@ -793,8 +793,8 @@ function CommentEditor({
         rows={3}
         placeholder="اكتب تعليقك هنا..."
         style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
-          borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
+          background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
+          borderColor: "rgba(255, 255, 255, var(--tq-border-opacity))",
         }}
         className=" w-full resize-none rounded-xl border px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/40"
       />
@@ -958,7 +958,7 @@ function MarkerPreviewPopup({
       // has a long-standing bug where a `var()` holding a comma-
       // separated value fails to split back into `rgba()`'s argument
       // list, the whole declaration becomes invalid, and the bg
-      // falls back to transparent. Border uses `--tq-border-glass`
+      // falls back to transparent. Border uses `--tq-border-hairline`
       // (single token, no nested function), which Safari handles
       // cleanly.
       // `.in-slide-popover` carries the dim + hairline border. Class-

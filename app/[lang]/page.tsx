@@ -78,7 +78,7 @@ function SectionHeader({
   );
 }
 
-const RULE = "border-t border-[var(--tq-border-glass)]";
+const RULE = "border-t border-[var(--tq-border-hairline)]";
 const PX = "px-4 sm:px-6 lg:px-8";
 
 export default async function LandingPage() {
@@ -103,7 +103,7 @@ export default async function LandingPage() {
 
       {/* FRAME — left/right vertical hairlines wrapping the whole page; every
           horizontal rule below spans this width and meets them. */}
-      <div className="relative mx-auto max-w-7xl border-x border-[var(--tq-border-glass)]">
+      <div className="relative mx-auto max-w-7xl border-x border-[var(--tq-border-hairline)]">
         <Hero projectCount={projectCount} />
 
         {/* Trusted-by — animated full-width marquee, no edge fade (the frame
@@ -134,7 +134,7 @@ export default async function LandingPage() {
               subtitle="ابدأ من محتوى خام، طوّر عرضًا موجودًا، حاكِ أسلوب عرضٍ مرجعي، أو حوّل بياناتك — تقرير يساعدك في كل مرحلة."
             />
           </ScrollReveal>
-          <ScrollReveal direction="up" className="border-y border-[var(--tq-border-glass)]">
+          <ScrollReveal direction="up" className="border-y border-[var(--tq-border-hairline)]">
             <FeatureFlowCards />
           </ScrollReveal>
         </section>
@@ -191,7 +191,7 @@ export default async function LandingPage() {
 
         {/* Footer — line separators, no background block. */}
         <footer className={`${RULE} ${PX} pt-20 pb-8`}>
-          <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-0 md:divide-x md:divide-[var(--tq-border-glass)]">
+          <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-0 md:divide-x md:divide-[var(--tq-border-hairline)]">
             {FOOTER_GROUPS.map((group) => (
               <div key={group.title} className="md:px-8 md:first:pr-0">
                 <h4 className="mb-6 font-medium text-white">{group.title}</h4>
@@ -210,7 +210,7 @@ export default async function LandingPage() {
               </div>
             ))}
           </div>
-          <div className="flex flex-col items-center justify-between border-t border-[var(--tq-border-glass)] pt-8 text-sm text-muted md:flex-row">
+          <div className="flex flex-col items-center justify-between border-t border-[var(--tq-border-hairline)] pt-8 text-sm text-muted md:flex-row">
             <div className="mb-4 flex items-center gap-2 md:mb-0">
               <Image
                 src="/logo-light.svg"

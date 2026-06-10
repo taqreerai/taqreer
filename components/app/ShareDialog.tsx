@@ -792,7 +792,7 @@ function TabPill({
           className="absolute inset-0 rounded-full"
           style={{
             background: "var(--tq-surface)",
-            border: "1px solid var(--tq-border-glass)",
+            border: "1px solid var(--tq-border-hairline)",
           }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         />
@@ -872,7 +872,7 @@ function ShareTabContent({
             className="flex items-stretch gap-2 rounded-full p-1"
             style={{
               background: "var(--tq-surface)",
-              border: "1px solid var(--tq-border-glass)",
+              border: "1px solid var(--tq-border-hairline)",
             }}
           >
             <input
@@ -1011,7 +1011,7 @@ function PersonRow({
       className="flex items-center gap-3 rounded-full px-4 py-2"
       style={{
         background: "var(--tq-surface)",
-        border: "1px solid var(--tq-border-glass)",
+        border: "1px solid var(--tq-border-hairline)",
       }}
     >
       <Avatar
@@ -1120,7 +1120,7 @@ function ExportTabSkeleton() {
           <li
             key={i}
             className="flex h-[60px] items-center gap-3 rounded-xl px-3 py-2.5"
-            style={{ border: "1px solid var(--tq-border-glass)" }}
+            style={{ border: "1px solid var(--tq-border-hairline)" }}
           >
             <span className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-white/[0.05]" />
             <div className="flex-1 space-y-1.5">
@@ -1239,7 +1239,7 @@ function ExportRow({
         disabled={disabled || running}
         className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-white/[0.04] disabled:opacity-50"
         style={{
-          border: "1px solid var(--tq-border-glass)",
+          border: "1px solid var(--tq-border-hairline)",
         }}
       >
         <span

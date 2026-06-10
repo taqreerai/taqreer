@@ -50,7 +50,7 @@ export function FaqAccordion() {
         {FAQS.map((item, i) => {
           const isOpen = open === i;
           return (
-            <div key={i} className="border-b border-[var(--tq-border-glass)] px-4 sm:px-6 lg:px-8">
+            <div key={i} className="border-b border-[var(--tq-border-hairline)] px-4 sm:px-6 lg:px-8">
               <button
                 type="button"
                 onClick={() => setOpen(isOpen ? null : i)}

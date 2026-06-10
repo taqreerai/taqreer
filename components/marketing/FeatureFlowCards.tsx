@@ -41,7 +41,7 @@ const FEATURES: { icon: string; title: string; description: string }[] = [
 
 export function FeatureFlowCards() {
   return (
-    <div className="grid grid-cols-1 divide-y divide-[var(--tq-border-glass)] lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+    <div className="grid grid-cols-1 divide-y divide-[var(--tq-border-hairline)] lg:grid-cols-4 lg:divide-x lg:divide-y-0">
       {FEATURES.map((feature) => (
         <FlowColumn key={feature.title} feature={feature} />
       ))}

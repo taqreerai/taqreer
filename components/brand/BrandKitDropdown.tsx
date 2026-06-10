@@ -53,7 +53,7 @@ export function BrandKitDropdown({
         className={` flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
         }`}
-        style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
+        style={{ background: "rgba(255, 255, 255, var(--tq-tint-opacity))" }}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
           bookmark
@@ -70,7 +70,7 @@ export function BrandKitDropdown({
       </button>
       {open ? (
         <div
-          className="absolute end-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
+          className="absolute end-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           role="listbox"
           aria-label="الهويات المحفوظة"
         >

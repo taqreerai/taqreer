@@ -77,7 +77,7 @@ export function CommentsPanel({
               width: COMMENTS_PANEL_WIDTH,
               background: "var(--tq-surface)",
               borderLeftColor:
-                "rgba(255, 255, 255, var(--glass-border-opacity))",
+                "rgba(255, 255, 255, var(--tq-border-opacity))",
             }
       }
     >

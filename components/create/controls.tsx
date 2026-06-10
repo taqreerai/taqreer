@@ -127,9 +127,9 @@ export function SegmentedToggle<T extends string>({
     <div
       // One canonical track everywhere (user direction 2026-06-10: every
       // SegmentedToggle matches the landing yearly/monthly toggle): the flat
-      // shadcn look — solid --tq-card fill + a hairline --tq-border-glass
+      // shadcn look — solid --tq-card fill + a hairline --tq-border-hairline
       // stroke, no glass/blur. The white sliding pill rides on top.
-      className={`relative flex items-center gap-0.5 rounded-full border border-[var(--tq-border-glass)] bg-[var(--tq-card)] p-0.5 ${fullWidth ? "w-full" : ""}`}
+      className={`relative flex items-center gap-0.5 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-0.5 ${fullWidth ? "w-full" : ""}`}
       role="radiogroup"
       aria-label={ariaLabel}
     >
@@ -217,10 +217,10 @@ export function Pill({
           : "text-white/60 hover:text-white"
       }`}
       style={{
-        background: "rgba(255, 255, 255, var(--glass-opacity))",
+        background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
         borderColor: active
           ? "rgba(255, 255, 255, 1)"
-          : "rgba(255, 255, 255, var(--glass-border-opacity))",
+          : "rgba(255, 255, 255, var(--tq-border-opacity))",
       }}
     >
       {children}
@@ -299,7 +299,7 @@ export function PositionDropdown({
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
         }`}
         style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
+          background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
         }}
       >
         <span
@@ -318,9 +318,9 @@ export function PositionDropdown({
           // popover (see components/brand/GoogleFontSlot.tsx) so the
           // two read as the same chrome family:
           // for the frosted-blur, bg-[var(--tq-surface)] for the
-          // translucent fill, border-[var(--tq-border-glass)] for
+          // translucent fill, border-[var(--tq-border-hairline)] for
           // the hairline, for the lift off the page.
-          className="absolute top-full z-30 mt-1 min-w-[140px] overflow-hidden rounded-xl border p-2 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
+          className="absolute top-full z-30 mt-1 min-w-[140px] overflow-hidden rounded-xl border p-2 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           role="listbox"
           aria-label="موضع"
         >
@@ -351,7 +351,7 @@ export function PositionDropdown({
                       : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
                   }`}
                   style={{
-                    background: "rgba(255, 255, 255, var(--glass-opacity))",
+                    background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
                   }}
                 >
                   <span
@@ -425,10 +425,10 @@ export function PositionPicker({
               active ? "text-white" : "text-white/60 hover:text-white"
             }`}
             style={{
-              background: "rgba(255, 255, 255, var(--glass-opacity))",
+              background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
               borderColor: active
                 ? "rgba(255, 255, 255, 1)"
-                : "rgba(255, 255, 255, var(--glass-border-opacity))",
+                : "rgba(255, 255, 255, var(--tq-border-opacity))",
             }}
           >
             <span
@@ -646,7 +646,7 @@ export function ExclusionDropdown({
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
         }`}
         style={{
-          background: "rgba(255, 255, 255, var(--glass-opacity))",
+          background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
         }}
       >
         <span
@@ -671,7 +671,7 @@ export function ExclusionDropdown({
           // into announcing one-of-many semantics. Switched to
           // `group` so the inner `checkbox`-role buttons read as
           // independent toggles (CR #41 finding, 2026-05-28).
-          className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
+          className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           role="group"
           aria-label="استثناء"
         >

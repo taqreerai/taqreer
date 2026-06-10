@@ -271,7 +271,7 @@ function Select({
       onChange={(e) => onChange(e.target.value)}
       className="w-full cursor-pointer appearance-none rounded-md border px-2 py-1.5 text-[12px] text-white outline-none"
       style={{
-        borderColor: "var(--tq-border-glass)",
+        borderColor: "var(--tq-border-hairline)",
         background: "var(--tq-surface)",
       }}
     >

@@ -1067,7 +1067,7 @@ export default function EnhanceContentPage() {
                 weights) OR up to 5 uploaded families (Claude pairs).
                 Replaces the old heading + body two-slot UI; identical to
                 /create's BrandFontPicker. */}
-            <div className="border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <BrandFontPicker
                 value={brandFont}
                 onChange={setBrandFont}
@@ -1082,7 +1082,7 @@ export default function EnhanceContentPage() {
             {/* Logo — flex-1 so the dropzone grows to fill the card's
                 leftover height (matches /create); gap-4 unifies the
                 title→zone gap with الخطوط. */}
-            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
+            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
                 الشعار
               </span>
@@ -1104,7 +1104,7 @@ export default function EnhanceContentPage() {
                 section's flex-1 absorbs the slack and pushes this to the
                 bottom, so no mt-auto (it would otherwise eat the slack and
                 stop the logo zone from growing). */}
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
               <span className="text-xs font-semibold text-white/70">
                 حفظ كهوية افتراضية
               </span>

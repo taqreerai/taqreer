@@ -76,7 +76,7 @@ export function LogoRow({
 
       {activeUrl ? (
         <div
-          className={`relative flex w-full items-center justify-center rounded-xl border bg-[var(--tq-surface)] border-[var(--tq-border-glass)] px-3 ${ZONE_H}`}
+          className={`relative flex w-full items-center justify-center rounded-xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)] px-3 ${ZONE_H}`}
         >
           {/* Logo only — no filename label. object-contain keeps the aspect
               ratio; max-h fills the zone, max-w caps very wide marks. */}

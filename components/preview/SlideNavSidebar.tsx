@@ -255,7 +255,7 @@ export function SlideNavSidebar({
       // Glass surface — built from primitives (no `.surface-card`
       // because that class carries a hover transition we don't want
       // on a sidebar panel). Bg + border come from the canonical
-      // design tokens `--tq-bg-glass` + `--tq-border-glass`
+      // design tokens `--tq-surface` + `--tq-border-hairline`
       // (globals.css) — same recipe `.surface-card` / `.qa-card` /
       // `.surface-popover` consume. Position values stay inline
       // because they're runtime-dynamic (`mainSidebarWidth` toggles
@@ -287,13 +287,13 @@ export function SlideNavSidebar({
               bottom: 100,
               width: SLIDE_NAV_WIDTH,
               background: "var(--tq-surface)",
-              borderColor: "var(--tq-border-glass)",
+              borderColor: "var(--tq-border-hairline)",
             }
           : {
               right: mainSidebarWidth,
               width: SLIDE_NAV_WIDTH,
               background: "var(--tq-surface)",
-              borderLeftColor: "var(--tq-border-glass)",
+              borderLeftColor: "var(--tq-border-hairline)",
             }
       }
     >

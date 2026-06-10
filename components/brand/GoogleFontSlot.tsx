@@ -129,7 +129,7 @@ export function GoogleFontSlot({
       </div>
       {open ? (
         <div
-          className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
+          className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           // `top: 100%` would stack on the sample line; anchor at the
           // input's actual height — 44 px regular, 30 px compact — so
           // the menu sits directly under the field in both modes.
@@ -141,7 +141,7 @@ export function GoogleFontSlot({
           // /create/summary: translucent-white fill at glass-opacity
           // over the dark backdrop, glass-border-opacity hairline,
           // blur token — all via the
-          // --tq-bg-glass / --tq-border-glass tokens.
+          // --tq-surface / --tq-border-hairline tokens.
           style={{
             top: compact ? 30 : 44,
             maxHeight: 240,

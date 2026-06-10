@@ -234,7 +234,7 @@ export function LayersPanel({
         bottom: 100,
         width: SLIDE_NAV_WIDTH,
         background: "var(--tq-surface)",
-        borderColor: "var(--tq-border-glass)",
+        borderColor: "var(--tq-border-hairline)",
       }}
     >
       <header className="border-b border-white/[0.08] px-1 pb-3 pt-1">
@@ -306,7 +306,7 @@ export function LayersPanel({
                     // closes and serializes, else a live recolor is dropped.
                     onClick={() => (bgPickerOpen ? commitBg() : setBgPickerOpen(true))}
                     className="block h-[18px] w-[18px] rounded-full border transition-transform hover:scale-110"
-                    style={{ borderColor: "var(--tq-border-glass)", background: bgRgb }}
+                    style={{ borderColor: "var(--tq-border-hairline)", background: bgRgb }}
                   />
                   {/* align="start" so the 182px popover opens RIGHTWARD into the
                       panel from the left-edge swatch instead of off the edge. */}
@@ -370,7 +370,7 @@ function LayerRow({
         // Opaque + bordered while dragging so the floating chip reads solidly
         // once it leaves the panel over the canvas.
         background: dragging ? "rgba(var(--tq-bg-rgb), 0.96)" : undefined,
-        border: dragging ? "1px solid var(--tq-border-glass)" : undefined,
+        border: dragging ? "1px solid var(--tq-border-hairline)" : undefined,
       }}
       className={`tq-layer-row group/row flex items-center gap-1 rounded-xl pr-1 ${
         dragging

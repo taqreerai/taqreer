@@ -16,7 +16,7 @@
  *  ‼️ CURRENT SYSTEM (2026-06): flat + SOLID (shadcn-style). Surfaces are solid
  *  `--tq-surface` with a hairline border (`.surface-card/-popover/-menu/-modal`);
  *  NO blur, NO shadow, NO transparency — do not add `shadow-*` /
- *  `backdrop-blur-glass`. One accent `--tq-purple #8B5CF6`; the only gradient is
+ *  `backdrop-blur`. One accent `--tq-purple #8B5CF6`; the only gradient is
  *  `.btn-gradient-anim` (AI). Toggles mirror with `dir`. The landing is the ref.
  *
  *
@@ -50,11 +50,11 @@
  *  │    SOLID surface + hairline border. NO blur, NO shadow,     │
  *  │    NO transparency. Recipe (= what `.surface-menu` does): │
  *  │      background:  var(--tq-surface)   (solid ≈ #1E1E1E)     │
- *  │      border:      1px solid var(--tq-border-glass)          │
+ *  │      border:      1px solid var(--tq-border-hairline)          │
  *  │    Use `.surface-menu` for portal menus (matches the      │
  *  │    sidebar profile menu), `.surface-card` for cards,          │
  *  │    `.surface-modal` for dialogs. Do NOT add `shadow-*` or     │
- *  │    `backdrop-blur-glass` — legacy no-ops that read wrong.   │
+ *  │    `backdrop-blur` — the app is flat/solid, no blur.       │
  *  └─────────────────────────────────────────────────────────────┘
  *  ┌─────────────────────────────────────────────────────────────┐
  *  │ 4. AI BUTTONS — Generate, Regen, Apply Comments             │
@@ -77,35 +77,31 @@
  *  1. Brand Palette    raw colors          --tq-blue, --tq-magenta …
  *  2. Surfaces         semantic BGs        --tq-surface-*, --tq-bg
  *  3. Text             semantic text       --tq-text-primary, --tq-text-muted
- *  4. Borders          semantic borders    --tq-border-glass, --tq-border-*
+ *  4. Borders          semantic borders    --tq-border-hairline, --tq-border-*
  *  5. Gradients        reusable gradients  --tq-gradient-*
  *  6. Shadows          box-shadows         --tq-shadow-*
  *  7. Radii            border-radius       --tq-radius-*
- *  8. Glass System     VESTIGIAL          --glass-* (flattened; see below)
+ *  8. Surface scalars  tint + border alpha --tq-tint-opacity, --tq-border-opacity
  *
- *  GLASS SYSTEM  (REMOVED 2026-06 — kept only as no-op aliases so the legacy
- *  `glass-*` classes resolve to SOLID values; do NOT reintroduce blur/fill)
- *  ─────────────────────────────────────────────────────────────────
- *  --glass-blur: 0          Kills the `backdrop-blur-glass` utility everywhere.
- *  --glass-fill             = --tq-surface (SOLID; not a white-alpha fill).
- *  --glass-border-opacity   Hairline border alpha (~0.1) → --tq-border-glass.
- *  There is no Settings glass-preset card anymore.
+ *  (The old glass blur/fill/saturation engine was REMOVED 2026-06 — §21: no blur,
+ *  no Settings preset. Only --tq-tint-opacity (0.05, the inline card-tint alpha)
+ *  and --tq-border-opacity (0.1, → --tq-border-hairline) survive.)
  *
  *
  *  CLASS INDEX
  *  ────────────
  *  Cards
- *    .surface-card             Standard card  (glass bg + border, preset-responsive)
- *    .surface-empty-state      Empty-state card (same glass, no gradient stroke)
- *    .surface-card-danger      Danger variant (glass bg + red border)
+ *    .surface-card             Standard card  (solid bg + hairline border)
+ *    .surface-empty-state      Empty-state card (same surface, no gradient stroke)
+ *    .surface-card-danger      Danger variant (solid bg + red border)
  *
  *  Surfaces — popovers / menus / pickers (see PATTERN 3 above)
  *    .surface-popover          Re-usable popover (matches PATTERN 3 recipe)
- *    .surface-menu         Portal dropdowns (dark glass, NOT preset-responsive)
- *    .surface-modal            Modal dialogs (darker, NOT preset-responsive)
+ *    .surface-menu             Portal dropdowns (dark solid surface)
+ *    .surface-modal            Modal dialogs (darker solid surface)
  *
  *  Buttons (see PATTERNS 1, 2, 4 above)
- *    .btn-pill               Normal button surface (pill + glass + white text)
+ *    .btn-pill               Normal button surface (pill + solid fill + white text)
  *    .btn-gradient           CTA surface (pill + brand gradient + shadow)
  *    .btn-gradient-anim      AI button (animated mesh-stroke + hover fill)
  *    .canvas-gradient-border AI surface ring (non-button equivalent)
@@ -232,11 +228,8 @@
   --tq-text-muted:   #b4b4b4;
 
   /* 4. Borders */
-  --tq-border-glass:  rgba(255, 255, 255, var(--glass-border-opacity));
-  /* §21: canonical hairline for the flat system. Same value as
-     --tq-border-glass (kept as an alias for legacy consumers) but named for
-     what it now is — a crisp 1px edge, no glass involved. */
-  --tq-border-hairline: rgba(255, 255, 255, var(--glass-border-opacity));
+  /* §21: canonical hairline for the flat system — a crisp 1px edge. */
+  --tq-border-hairline: rgba(255, 255, 255, var(--tq-border-opacity));
   --tq-border-danger: rgba(239, 68, 68, 0.22);
 
   /* 4b. Status feedback — operational / degraded / down. One canonical
@@ -258,43 +251,32 @@
   --tq-status-down-text:   #fca5a5;
   --tq-status-down-bg:     rgba(239, 68, 68, 0.12);
   --tq-status-down-border: rgba(239, 68, 68, 0.30);
-  /* Glass surface fill — matches `.surface-card` / `.qa-card` /
-     `.surface-popover` bg recipe (white at `--glass-opacity` alpha).
-     Lets consumers reference the same fill via a single token
-     instead of re-typing the rgba inline. Added 2026-05-23 when
-     SlideNavSidebar called this out as a hardcoded CSS smell. */
   /* §22 elevation scale (flat, opaque — no glass). Lowest → highest:
-       --tq-bg     #0A0A0A  page gutter (behind the rounded content panel)
-       --tq-panel  #161616  the rounded content panel (gray pages)
-       --tq-surface #1E1E1E cards/chrome raised on the panel
-       --glass-fill #262626 floating popovers / dropdowns / modals (top)
-     A 3-step ladder so cards read as raised on the panel and popovers above
-     cards. `--tq-bg-glass` (dropdowns + editor side-panels) tracks the
-     floating level. */
+       --tq-bg      #0A0A0A  page gutter (behind the rounded content panel)
+       --tq-panel   #161616  the rounded content panel (gray pages)
+       --tq-card    #111111  inset/inactive surfaces (BiDi canvas, toggle track)
+       --tq-surface #1E1E1E  cards/chrome + floating panels (dropdowns, popovers)
+     Cards read as raised on the panel; dropdowns + editor side-panels share the
+     same --tq-surface so floating chrome stays one unified dark surface. */
   --tq-panel:    #161616;
   /* Inset card surface — one shade darker than --tq-panel so a card / canvas /
      inactive control reads as distinct from the panel background (used by the
      BiDi demo canvas, pricing cards, the inactive segmented-toggle fill). */
   --tq-card:     #111111;
   /* Card / chrome surface — matched to the shadcn `bbWjxCq` dark preset's
-     `--card` (user reference). Drives every `.surface-card` (dashboard cards AND
-     the editor toolbox). */
+     `--card` (user reference). Drives every `.surface-card` (dashboard cards,
+     the editor toolbox) AND every floating panel (dropdowns, popovers, modals). */
   --tq-surface:  oklch(0.205 0 0);
-  /* §22: floating panels (dropdowns + editor side panels) share the card
-     surface — the old lighter `#262626` read as a "bright gray" that stood out
-     on the editor sidebars + popups (user). One unified dark surface now. */
-  --tq-bg-glass: var(--tq-surface);
   /* Dark dim fill for in-slide popovers (comment editor, marker preview,
-     bell popup). UNLIKE `--tq-bg-glass` (faint white, for the dark
-     dashboard chrome) this is a neutral DARK tint, because these surfaces
-     float over SLIDES that can be any colour incl. white — a white fill
-     would be invisible there. Equal RGB channels (no hue) so it reads
-     neutral on the v17 gray-black background. Tuned 2026-05-24; see
+     bell popup). UNLIKE --tq-surface (the dashboard chrome surface) this is a
+     neutral DARK tint, because these surfaces float over SLIDES that can be any
+     colour incl. white — a white fill would be invisible there. Equal RGB
+     channels (no hue) so it reads neutral. Tuned 2026-05-24; see
      `.in-slide-popover`. */
   --tq-bg-popover-dim: rgba(12, 12, 12, 0.45);
   /* Studio (full-screen editor) dotted canvas. The dot is a faint white at
-     a fraction of a glass alpha so it reads as texture, never noise; the gap
-     sets the grid density. Token-driven so it tracks the glass system rather
+     a low alpha so it reads as texture, never noise; the gap
+     sets the grid density. Token-driven so it tracks the surface system rather
      than living as a hardcoded rgba in `.studio-canvas`. */
   --tq-studio-dot:     rgba(255, 255, 255, 0.09);
   --tq-studio-dot-gap: 26px;
@@ -346,27 +328,16 @@
      the flat-button + clear-glass redesigns of the same date. */
   --tq-radius-md:   12px;
 
-  /* 8. (ex-)Glass System — §21 flattened to a SOLID, blur-free system.
-     `--glass-blur: 0` is the master kill-switch: the `backdrop-blur-glass`
-     Tailwind utility (76+ call sites) is `calc(--glass-blur * 2.5)` and every
-     in-class `backdrop-filter` reads `--glass-blur`, so zeroing it removes ALL
-     blur app-wide with no per-file edits. Saturation drops to 100% (no boost).
-     `--glass-opacity` (0.05) is now just a flat white-alpha tint for inline
-     CARDS on the uniform near-black page — with no blur it reads as a solid
-     ~#151515 gray, matching the reference. Border is a crisp hairline.
-     The glass ENGINE (GlassPreflight + Settings preset) was removed in §21, so
-     these values are authoritative — nothing re-injects them at runtime. */
-  --glass-opacity:            0.05;
-  --glass-blur:               0px;
-  /* Border alpha — white/10%, matched to the shadcn `bbWjxCq` dark `--border`.
-     Feeds `--tq-border-glass` + `--tq-border-hairline` (card + chrome edges). */
-  --glass-border-opacity:     0.1;
-  --glass-saturation:         100%;
-  --glass-hover-opacity-add:  0.04;
-  --glass-hover-border-add:   0.06;
-  /* §22: floating popovers / dropdowns / modals share the card surface (was a
-     lighter `#262626` that read too bright). One dark surface everywhere. */
-  --glass-fill:               var(--tq-surface);
+  /* 8. Surface tint + border alpha — §21 flattened the old glass system to a
+     SOLID, blur-free look; these are the two scalars that survived (the blur /
+     saturation / hover-add / fill tokens were all retired here, and nothing
+     re-injects them at runtime).
+     --tq-tint-opacity (0.05) is a flat white-alpha tint for inline cards on the
+     near-black page — with no blur it reads as a solid ~#151515 gray.
+     --tq-border-opacity (0.1, matched to the shadcn `bbWjxCq` dark `--border`)
+     feeds the crisp --tq-border-hairline edge. */
+  --tq-tint-opacity:     0.05;
+  --tq-border-opacity:   0.1;
 
   /* 9. Background Blobs */
   --bg-blob-opacity-1: 0.28;
@@ -448,14 +419,13 @@ button, a, [role="button"] {
 }
 
 .input-dark {
-  /* Glass-preset-linked surface — fill + blur + saturation all
-     ride the user's Settings → glass preset (`--glass-opacity`,
-     `--glass-blur`, `--glass-saturation`) so this input reads as
-     the same family as `.input-search` + every `.glass-*` card
-     and responds to the preset toggle in real time. Was
+  /* Solid surface — fill + border ride the shared surface scalars
+     (`--tq-tint-opacity`, `--tq-border-opacity`) so this input reads as
+     the same family as `.input-search` + every surface card.
+     §21 flattened this: no blur, no Settings preset. Was
      hardcoded `rgba(...,0.05)` + `blur(8px)` before 2026-05-27. */
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  background: rgba(255, 255, 255, var(--tq-tint-opacity));
+  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
   color: white;
   /* Fully rounded ends — visual rhyme with `.btn-pill` so inputs +
      buttons read as the same family. Padding bumped horizontally
@@ -479,7 +449,7 @@ textarea.input-dark {
 }
 
 /* Strip the native `<input type="number">` spinner so step controls
-   can be rendered as proper `−` / `+` glass buttons instead of the
+   can be rendered as proper `−` / `+` surface buttons instead of the
    tiny default OS arrows that never match the surrounding chrome. */
 .no-spinner::-webkit-outer-spin-button,
 .no-spinner::-webkit-inner-spin-button {
@@ -494,9 +464,9 @@ textarea.input-dark {
 .input-dark:focus {
   /* Neutral lighter border instead of the brand-violet rgba(55,11,244,
      0.7) — user feedback 2026-05-21: the violet focus ring read
-     as "warning" / off-brand against the otherwise-neutral glass
+     as "warning" / off-brand against the otherwise-neutral surface
      system. `var(--tq-border-focus)` is white at 0.4 alpha,
-     visibly brighter than the resting `--glass-border-opacity`
+     visibly brighter than the resting `--tq-border-opacity`
      (~0.09) so the focus signal is still clear, just neutral. */
   border-color: var(--tq-border-focus);
   background: rgba(255, 255, 255, 0.07);
@@ -508,7 +478,7 @@ textarea.input-dark {
    state and switch the cursor to the default arrow. */
 .input-dark[readonly]:focus,
 .input-dark[readonly] {
-  border-color: rgba(255, 255, 255, var(--glass-border-opacity));
+  border-color: rgba(255, 255, 255, var(--tq-border-opacity));
   background: rgba(255, 255, 255, 0.05);
   cursor: default;
 }
@@ -556,82 +526,21 @@ textarea.input-dark {
   cursor: not-allowed;
 }
 
-/* Preset-linked backdrop-blur token. Tailwind v4 generates a utility
-   `backdrop-blur-glass` from this token; the utility sets
-   `--tw-backdrop-blur: blur(var(--backdrop-blur-glass))` which composes
-   into the standard Tailwind backdrop-filter. Because the value
-   references `--glass-blur` via calc, the utility responds to the
-   user's preset at runtime (no rebuild needed).
-
-   Why a custom token: setting `backdrop-filter` directly in a CSS class
-   gets out-competed by Tailwind v4's compositional backdrop-filter rule
-   on any element that has ANY backdrop-* utility (or even via a
-   universal reset that initialises the --tw-backdrop-* variables). The
-   reliable path is to participate in the composition. */
-@theme {
-  --backdrop-blur-glass: calc(var(--glass-blur) * 2.5);
-}
-
-/* Boosted backdrop-blur variant — 1.5× the standard glass blur.
-   Used on the auth-modal so it reads heavier through the busy
-   marquee wall while still tracking the user's Settings glass
-   preset (chain: `--backdrop-blur-glass` is calc'd from
-   `--glass-blur`).
-
-   Why a plain CSS class instead of an @theme addition: Turbopack +
-   Tailwind v4 don't reliably hot-reload new `@theme` token additions
-   (verified 2026-05-28 — added `--backdrop-blur-glass-auth` to
-   @theme and the compiled chunk never picked it up even after touch
-   + page-request triggers). A regular CSS class sidesteps the JIT
-   utility pipeline entirely and recompiles on every globals.css
-   edit.
-
-   Why it works despite Tailwind's compositional `backdrop-filter`
-   rule: this class sets `--tw-backdrop-blur` (the same variable the
-   `backdrop-blur-glass` utility writes), so it PARTICIPATES in the
-   compositional chain rather than fighting it. The universal
-   `* { backdrop-filter: var(--tw-backdrop-blur) … }` rule reads
-   whatever the last writer left there.
-
-   Why this is unlayered: Tailwind v4 puts its utilities in a
-   `utilities` cascade layer; unlayered rules beat layered rules per
-   CSS spec regardless of source order, so this class reliably wins
-   over `backdrop-blur-glass` even when both are on the same element. */
-/* Custom utility for the auth-modal's heavy backdrop blur.
-   Multiplier `7` on `--glass-blur` (tracks the user's Settings
-   glass preset).
-
-   Why this shape: Lightning CSS in this codebase strips standard
-   `backdrop-filter: blur(…)` from custom classes (keeps only the
-   `-webkit-` prefix variant, breaking Chrome/Firefox). The
-   workaround is to participate in Tailwind v4's `--tw-backdrop-*`
-   composition chain — Lightning CSS preserves the chain form
-   (var(--tw-…)…) because it matches Tailwind's own utility output.
-   So we set `--tw-backdrop-blur` AND restate the full chain. The
-   chain MUST be byte-identical to Tailwind's built-in utility
-   output or unset --tw-* properties will wipe out the filter at
-   browser-compute time. */
-@utility backdrop-blur-glass-boost {
-  /* 2026-06-08: dropped 7× → 1×. §21 then flattened all blur (`--glass-blur:0`),
-     so this multiplier currently resolves to 0 — kept as the structural hook in
-     case blur is ever reintroduced. */
-  --tw-backdrop-blur: blur(calc(var(--glass-blur) * 1));
-  -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
-  backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
-}
+/* §21 removed the glass blur engine entirely: the `backdrop-blur-glass`
+   utility (generated from a `--backdrop-blur-glass` theme token) and the
+   `backdrop-blur-glass-boost` auth-modal variant were both no-ops once
+   `--glass-blur` went to 0, and had no remaining call sites — deleted. The app
+   is flat/solid; reintroducing blur means adding a fresh utility, not reviving
+   these. */
 
 /* Auth-modal control sizing — every input + pill button + gradient
    button inside the auth modal is locked to 48 px tall
    (`calc(var(--spacing) * 12)` — Tailwind v4's 4 px spacing base ×
    12 = 48 px, no hardcoded values). Scoped via the `.auth-modal`
-   marker class (on the auth panel only) — NOT via
-   `.backdrop-blur-glass-boost`, since that heavy-frost blur is now
-   shared by the dashboard modals too and they keep their own control
-   sizing. Per user direction 2026-05-28: matches the Google login
-   button's visual weight across the form. */
-/* §21: the auth modal is FLAT like the rest of the app — the old heavy 7× frost
-   override is gone (it was a no-op once `--glass-blur` went to 0). The selector
-   (`.auth-modal.surface-modal`, specificity 0,2,0) now just pins its fill so it
+   marker class on the auth panel only. Per user direction 2026-05-28:
+   matches the Google login button's visual weight across the form. */
+/* §21: the auth modal is FLAT like the rest of the app. The selector
+   (`.auth-modal.surface-modal`, specificity 0,2,0) just pins its fill so it
    beats `.surface-modal` regardless of source order; the auth panel carries both
    classes. */
 .auth-modal.surface-modal {
@@ -886,7 +795,7 @@ html.app-shell-scroll body {
   animation-play-state: paused;
 }
 
-/* Idle 1px white-glass border ring — rendered via ::before with the same
+/* Idle 1px white hairline border ring — rendered via ::before with the same
    mask-composite trick as ::after so it cross-fades cleanly with the mesh
    on hover. No actual CSS `border-color` involved, so nothing bleeds. */
 .qa-card::before {
@@ -895,7 +804,7 @@ html.app-shell-scroll body {
   inset: 0;
   border-radius: 14px;
   padding: 1px;
-  background: rgba(255, 255, 255, var(--glass-border-opacity));
+  background: rgba(255, 255, 255, var(--tq-border-opacity));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -914,7 +823,7 @@ html.app-shell-scroll body {
   border-radius: 14px;
   padding: 1px;
   /* Same recipe as the regen button's border ring: bright blobs on top
-     of a solid base that equals the idle/neutral glass border colour.
+     of a solid base that equals the idle/neutral hairline border colour.
      The ring never dips below the normal-state tone, so the page
      background can never bleed through. */
   background:
@@ -923,7 +832,7 @@ html.app-shell-scroll body {
     radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
-    rgba(255, 255, 255, var(--glass-border-opacity));
+    rgba(255, 255, 255, var(--tq-border-opacity));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -956,7 +865,7 @@ html.app-shell-scroll body {
   color: var(--tq-text-primary);
   /* No `box-shadow` and no shadow transition — the button system
      was de-shadowed app-wide on 2026-05-22 (user feedback: flat
-     surfaces only, the shadows competed with the glass chrome and
+     surfaces only, the shadows competed with the chrome and
      made the brand surface feel like a bevelled overlay). The
      `--tq-shadow-brand` token still exists for any future non-button
      consumer that needs it. */
@@ -986,7 +895,7 @@ html.app-shell-scroll body {
 
    IDLE: animated mesh is rendered ONLY on the 1px border ring (mask
    trick — the ::before fill is excluded from its content-box, leaving
-   only the padding edge visible). Body stays neutral glass.
+   only the padding edge visible). Body stays neutral surface.
 
    HOVER: ::before fades out; the button's body becomes the same mesh
    gradient (full fill) + raised brand glow + sped-up drift.
@@ -1001,7 +910,7 @@ html.app-shell-scroll body {
    smoothly between keyframes.
 
    Used ONLY on the regenerate icon (the deck's primary CTA) so it
-   stands out against the otherwise-neutral glass toolbar.            */
+   stands out against the otherwise-neutral toolbar.            */
 /* Six blobs covering the full brand palette + white. Each blob's X and Y
    oscillate independently — prime-ish durations push the LCM into minutes
    so the eye reads it as never-repeating. */
@@ -1034,7 +943,7 @@ html.app-shell-scroll body {
 .btn-gradient-anim {
   position: relative;
   isolation: isolate;
-  background: rgba(255, 255, 255, var(--glass-opacity));
+  background: rgba(255, 255, 255, var(--tq-tint-opacity));
   color: white;
   /* No shadow transition — the button system is flat app-wide
      (2026-05-22). Background transition stays so the hover fill
@@ -1066,7 +975,7 @@ html.app-shell-scroll body {
   inset: 0;
   border-radius: inherit;
   padding: 2px;
-  /* Solid base = the idle/neutral glass border colour. Bright blobs sit
+  /* Solid base = the idle/neutral hairline border colour. Bright blobs sit
      on top as moving highlights, so the ring never dips below the
      normal-state border tone. */
   background:
@@ -1075,7 +984,7 @@ html.app-shell-scroll body {
     radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
-    rgba(255, 255, 255, var(--glass-border-opacity));
+    rgba(255, 255, 255, var(--tq-border-opacity));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1182,7 +1091,7 @@ html.app-shell-scroll body {
     radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
-    rgba(255, 255, 255, var(--glass-border-opacity));
+    rgba(255, 255, 255, var(--tq-border-opacity));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1211,18 +1120,14 @@ html.app-shell-scroll body {
   .canvas-gradient-border { animation: none; }
 }
 
-/* Generation-canvas backdrop tint. The unified studio frame
+/* Generation-canvas backdrop fill. The unified studio frame
    (`.canvas-gradient-border`) has NO fill of its own, so the empty/thinking
    canvas — before any slide streams — was a transparent void over the dark
-   studio gradient. This restores the pre-§18 `.surface-card` frosted look DURING
-   GENERATION only. Just the background tint here (same `--glass-opacity` token
-   as `.surface-card`, no hardcoded value); the BLUR is applied on the element via
-   the `backdrop-blur-glass` + `backdrop-saturate` Tailwind utilities — the app's
-   glass convention, because Lightning CSS strips a bare `backdrop-filter` from
-   plain rules (see `.surface-card`, which gets its blur the same way). No
+   studio gradient. This gives it a solid fill DURING GENERATION only: the same
+   solid `--tq-surface` as `.surface-card` (§21 is flat — no blur). No
    border/radius, so removing it on completion (when the opaque slide already
    covers it) causes no edge shift and the canvas frame never remounts. */
-.canvas-gen-glass {
+.canvas-gen-surface {
   background: var(--tq-surface);
 }
 
@@ -1235,7 +1140,7 @@ html.app-shell-scroll body {
 
 /* ─── Standard secondary pill ─────────────────────────────────────────
    The default style for all non-CTA buttons across the dashboard:
-   glass surface, dim border + muted text idle, bright border + white
+   solid surface, dim border + muted text idle, bright border + white
    text on hover. Same shape and behaviour as the comment editor's
    quick-action chips. Use `.btn-gradient` / `.btn-gradient-anim` for
    CTAs (primary actions); everything else is `.btn-pill`. */
@@ -1261,14 +1166,10 @@ html.app-shell-scroll body {
   }
 }
 
-/* Normal-button surface (Pattern 1). Transparent — buttons sit on
-   top of glass surfaces (.surface-card, .surface-popover, .surface-modal,
-   .surface-menu) and inherit the tint from the surface. Stacking
-   the button's own glass over the surface's glass reads as a solid
-   chip, which is wrong (user feedback 2026-05-20). Affordance comes
-   from the muted border + text colour fading to bright on hover.
-   If a future button needs to sit on a non-glass area, add a
-   variant class with bg rather than putting glass back on the base. */
+/* Normal-button surface (Pattern 1). Buttons sit on
+   top of surfaces (.surface-card, .surface-popover, .surface-modal,
+   .surface-menu) and read against the surface tint. Affordance comes
+   from the muted border + text colour fading to bright on hover. */
 .btn-pill {
   display: inline-flex;
   align-items: center;
@@ -1299,30 +1200,25 @@ html.app-shell-scroll body {
 }
 
 /* ─── Sidebar ─── */
-/* Sidebar glass surface — matches the SlideNavSidebar / .surface-card
+/* Sidebar surface — matches the SlideNavSidebar / .surface-card
    recipe so all three vertical panels (main sidebar, slide-nav,
-   comments) share one visual language. Background is the canonical
-   white-tint at the preset's --glass-opacity, NOT a 72%-solid dark
-   override (that was visually opaque against `--tq-bg` and read as
-   "no glass" — user feedback 2026-05-21).
-   Backdrop blur + saturation come from the Tailwind utilities
-   `backdrop-blur-glass backdrop-saturate-(--glass-saturation)`
-   applied on the <aside> element so the panel responds to the
-   user's Settings → glass-preset like every other glass surface. */
+   comments) share one visual language. §21/§22 are flat: no blur,
+   no Settings preset. (The rail itself is now transparent — see the
+   `.sidebar-bg` note below.) */
 .sidebar-bg {
   /* §22: the rail is transparent — it floats on the dark gutter with no fill
      and no separator border (the <aside> drops its border-l too). */
   background: transparent;
 }
 
-/* Active nav item — subtle raised-glass tint instead of the loud
+/* Active nav item — subtle raised tint instead of the loud
    solid brand-blue block. Mirrors the toolbar's active-state recipe
-   (rgba(255,255,255, calc(--glass-opacity * 2.6))) so every active
+   (rgba(255,255,255, calc(--tq-tint-opacity * 2.6))) so every active
    surface in the app reads with one vocabulary. Icon + text bump to
    `--tq-text-primary` is owned by the JSX (`nav-icon` colour swap)
    so this class only needs to paint the surface. */
 .nav-active {
-  background: rgba(255, 255, 255, calc(var(--glass-opacity) * 2.6));
+  background: rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 2.6));
   color: var(--tq-text-primary);
 }
 
@@ -1341,18 +1237,16 @@ html.app-shell-scroll body {
 }
 
 /* ─── Header ─── */
-/* Header glass — bg + border only. Blur via Tailwind `backdrop-blur-glass`
-   utility on the <header> element (see `components/app/Header.tsx`) so
-   the header participates in the same compositional backdrop-filter as
-   the popover / modal panels. Keeps all elevated surfaces in lock-step
-   under the user's glass-preset. */
+/* Header surface — solid bg + border only (§21 is flat, no blur). Keeps
+   all elevated surfaces in lock-step. See the §24 note below for why the
+   fill is fully opaque. */
 .header-bg {
   /* §24: the §21 flat redesign zeroed `--glass-blur`, so the old "pure glass"
      header (blur-only, no fill) rendered fully transparent. Give it a SOLID
      near-black fill (100% opaque — user direction) so the fixed nav fully
      occludes content scrolling beneath it (matches the dark dashboard chrome). */
   background-color: var(--tq-bg);
-  border-bottom: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  border-bottom: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
 }
 
 /* ─── Toggle Switch (on state) ─── */
@@ -1394,14 +1288,14 @@ html.app-shell-scroll body {
 .surface-empty-state {
   background: var(--tq-surface);
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
 }
 
 /* ─── Plan Banner ─── */
 .plan-banner {
   background: var(--tq-surface);
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
   position: relative;
   isolation: isolate;
 }
@@ -1546,7 +1440,7 @@ html.app-shell-scroll body {
 }
 
 /* Slower variants used by the auth-marquee background (6-column wall
-   behind the signup/login glass modal). 600 s is a third dial-back
+   behind the signup/login modal). 600 s is a third dial-back
    (90 s → 200 s → 400 s → 600 s, user direction 2026-05-28): each
    tile takes ~20 s to traverse a column at this rate — the wall
    reads as nearly-static with a faint hint of life. User reported
@@ -1667,7 +1561,7 @@ html.app-shell-scroll body {
   /* Neutralized 2026-05-24: was rgba(55, 11, 244, 0.18) (brand
      Royal Blue) which read as a blue wash inside modals after the
      v17 background switched to a neutral gray-black gradient.
-     White-at-low-alpha matches the modal panel's pure-glass
+     White-at-low-alpha matches the modal panel's solid surface
      aesthetic and keeps the hover signal subtle. */
   background: rgba(255, 255, 255, 0.08);
 }
@@ -1685,8 +1579,8 @@ html.app-shell-scroll body {
   border-radius: 9999px;
   padding: 0.5rem 2.5rem 0.5rem 1rem;
   color: white;
-  background: rgba(255, 255, 255, var(--glass-opacity));
-  border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
+  background: rgba(255, 255, 255, var(--tq-tint-opacity));
+  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1752,12 +1646,12 @@ html.app-shell-scroll body {
    noise, gray-radial baseline) lived here for visual experiments
    that the brand chrome ultimately superseded.
 
-   The `background-attachment: fixed` trap: some browsers (Safari +
-   Chromium under certain GPU pipelines) won't let a child with
-   backdrop-filter blur a `background-attachment: fixed` ancestor.
-   Using a fixed-position pseudo-element instead keeps the glow in
-   its own paint layer, so the sidebar's glass effect still works
-   over it (user-reported 2026-05-21). */
+   The `background-attachment: fixed` trap (historical, from when the
+   chrome still used backdrop-filter — §21 is now flat/solid, no blur):
+   some browsers (Safari + Chromium under certain GPU pipelines) wouldn't
+   let a child with backdrop-filter blur a `background-attachment: fixed`
+   ancestor. Using a fixed-position pseudo-element instead keeps the glow
+   in its own paint layer (user-reported 2026-05-21). */
 .dashboard-bg {
   position: relative;
   min-height: 100vh;
@@ -1986,48 +1880,36 @@ html.app-shell-scroll body {
   flex-shrink: 0;
 }
 
-/* ─── Glass Overlays (elevated surfaces — one consistent blur level) ──
-   The header, dropdowns, modals, and popovers all share ONE multiplier
-   on the user's `--glass-blur` preset so the dashboard reads consistent:
-   pick a preset in Settings → every elevated surface responds in lock-
-   step. Cards (`.surface-card` family) stay at 1× for a subtler effect.
-   The dark base fill differs per role so visual hierarchy comes from
-   tint, not blur. */
+/* ─── Elevated Surfaces (solid chrome — one consistent fill) ──
+   The header, dropdowns, modals, and popovers all share ONE solid
+   `--tq-surface` fill so the dashboard reads consistent. §21 is flat:
+   no blur, no Settings preset. Visual hierarchy comes from tint +
+   hairline borders, not blur. */
 /* `.surface-menu`, `.surface-modal`, and `.surface-popover` all carry the
-   same faint white fill at the user's `--glass-opacity` (via the
-   documented `--tq-bg-glass` token) layered over the backdrop blur — a
-   touch of separation from the page while staying clearly glass. (They
-   were background-free until 2026-05-31; the pure-blur look read too
-   thin over busy pages, so the popover's subtle fill was promoted to
-   all three.) The earlier heavy dark tints (e.g. `rgba(10, 10, 20,
-   calc(0.4 + var(--glass-opacity) * 4))`) read as a charcoal wash and
-   are NOT what this is — `--tq-bg-glass` is white @ ~4%, not a dark
-   overlay.
-
-   These rely on Tailwind v4's compositional `backdrop-filter` (raw
-   `backdrop-filter:` in the CSS class loses to it); consumers MUST add
-   `backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)]` to
-   the className. The `--backdrop-blur-glass` theme token (top of file)
-   keeps the blur preset-linked. */
+   same solid `--tq-surface` fill — a clear separation from the page.
+   The earlier heavy dark tints (e.g. `rgba(10, 10, 20,
+   calc(0.4 + var(--tq-tint-opacity) * 4))`) read as a charcoal wash and
+   are NOT what this is — `--tq-surface` is the canonical dark card
+   surface, not a transparent overlay. */
 .surface-menu {
   background: var(--tq-surface);
-  border: 1px solid var(--tq-border-glass);
+  border: 1px solid var(--tq-border-hairline);
 }
 
 .surface-modal {
   /* Floating modals/dialogs share the popover's dark fill (2026-06-08) so they
-     read as solid frosted glass over any backdrop. The auth modal overrides back
+     read as a solid surface over any backdrop. The auth modal overrides back
      to the faint white tint (see `.auth-modal`). */
   background: var(--tq-surface);
-  border: 1px solid var(--tq-border-glass);
+  border: 1px solid var(--tq-border-hairline);
 }
 
 .surface-popover {
-  /* Dark fill over the backdrop blur so a popover stays legible on ANY contrast
+  /* Solid dark fill so a popover stays legible on ANY contrast
      (a faint white fill washed out over light slides / surfaces). Centralised in
-     `--glass-fill` (2026-06-08: 30% → 45%, shared with floating modals). */
+     `--tq-surface` (shared with floating modals). */
   background: var(--tq-surface);
-  border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
+  border: 1px solid rgba(255, 255, 255, calc(var(--tq-border-opacity) + 0.05));
 }
 
 /* ─── Slide overlay pill (in-slide chrome) ──────────────────────────
@@ -2052,15 +1934,11 @@ html.app-shell-scroll body {
    Shared darken recipe for any chrome that floats on top of the
    rendered slide canvas (per-slide pill, comment-editor popover).
    Slides can be any background — white templates would make a
-   transparent glass surface unreadable. Mix `--tq-bg` (the page
+   transparent surface unreadable. Mix `--tq-bg` (the page
    background token) at 55 % alpha against the underlying slide via
    oklab (the same colour space as the modal-dim) so the dim reads
-   neutral on any palette behind it.
-
-   Consumers add `backdrop-blur-glass` separately when they need
-   the blur — this class is dim-only so a component that wants the
-   tint without the blur (e.g. for performance on a long list)
-   doesn't pay for it. */
+   neutral on any palette behind it. This class is dim-only (§21 is
+   flat — no blur). */
 .in-slide-dim {
   /* Pre-composed token, not `rgba(var(--tq-bg-rgb), 0.55)` —
      Safari WebKit fails to split a comma-separated `var()` value
@@ -2073,13 +1951,8 @@ html.app-shell-scroll body {
 }
 
 /* Surface class for in-slide popovers (comment editor + read-only
-   marker preview). Mid-alpha dim (0.65) — strong enough to read
-   white text on white slides, light enough that the
-   backdrop-filter blur underneath still shows the slide as a
-   frosted-glass blur (the popovers also carry `backdrop-blur-
-   glass`). Tried 0.55: blurred white slides still showed too
-   bright. Tried 0.85: lost the glass effect entirely. 0.65 is the
-   sweet spot.
+   marker preview). Solid dark fill — strong enough to read
+   white text on white slides (§21 is flat — no blur).
    Literal `rgba(...)` values not `var(--tq-bg-dim)` because
    Safari's `backdrop-filter` compositor was leaving inline
    `style={{ backgroundColor: "var(--tq-bg-dim)" }}` rendered as
@@ -2089,9 +1962,9 @@ html.app-shell-scroll body {
    "never hardcode in TSX" rule is preserved by NOT inlining these
    in the popover's React style prop. */
 .in-slide-popover {
-  /* Shares the floating-glass dark fill `--glass-fill` (2026-06-08) so the
+  /* Shares the solid dark `--tq-surface` fill so the
      comment editor / marker preview match every other popover + modal. Stays
-     DARK (not `--tq-bg-glass`) because this floats over slides that can be white
+     DARK because this floats over slides that can be white
      — a faint-white fill would vanish there. */
   background-color: var(--tq-surface);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -2118,18 +1991,14 @@ html.app-shell-scroll body {
    brightness-50 / etc. variant — the dim contract is global, not
    per-modal.
 
-   No backdrop-filter is composed here. The dim is a flat tint, the
-   panel above provides the glass blur on its own surface; layering
-   filters here would compound darkening with the panel's blur and
-   wash out the brand visuals it's supposed to sample. */
+   No backdrop-filter is composed here — §21 is flat, so the panel
+   above is a solid surface with no blur. The dim is a flat tint. */
 .modal-dim {
-  /* Full-screen dim BEHIND the panel. Because it sits behind, the panel's
-     own backdrop-blur samples the DIMMED page — which keeps the panel
-     legible over ANY background, including a bright/white slide on the
-     canvas (a pure-glass panel samples white there and goes white-on-white
-     invisible — the reason this is behind-the-panel, not a box-shadow
-     spread around it; reverted 2026-05-31). Also the click-outside catcher
-     + fade target. Tint in `--tq-modal-dim`. */
+  /* Full-screen dim BEHIND the panel — darkens the page so the solid
+     panel reads against ANY background, including a bright/white slide on
+     the canvas. Behind-the-panel, not a box-shadow spread around it
+     (reverted 2026-05-31). Also the click-outside catcher + fade target.
+     Tint in `--tq-modal-dim`. */
   background-color: var(--tq-modal-dim);
 }
 
