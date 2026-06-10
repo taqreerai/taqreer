@@ -211,15 +211,16 @@ function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
   const LINES =
     align === "left"
       ? [
-          { y: 115, dir: "rtl", dur: 3.4, dots: [0, 1.2, 2.5] },
-          { y: 215, dir: "ltr", dur: 5.8, dots: [0.6, 3.4] },
-          { y: 315, dir: "rtl", dur: 4.3, dots: [0, 1.9, 3.1] },
-          { y: 415, dir: "ltr", dur: 6.2, dots: [1.1, 2.8, 4.9] },
+          { y: 115, dir: "rtl", dur: 6.5, dots: [0, 2.4] },
+          { y: 215, dir: "ltr", dur: 10, dots: [0.8, 4.5] },
+          { y: 315, dir: "rtl", dur: 8, dots: [0, 5.2] },
+          { y: 415, dir: "ltr", dur: 11.5, dots: [1.5, 5.5] },
         ].map((ln) => ({
+          // Span the full width so the stream reaches the canvas's left edge.
           d:
             ln.dir === "rtl"
-              ? `M1000,${ln.y} L 330,${ln.y}`
-              : `M330,${ln.y} L 1000,${ln.y}`,
+              ? `M1000,${ln.y} L 0,${ln.y}`
+              : `M0,${ln.y} L 1000,${ln.y}`,
           dur: ln.dur,
           dots: ln.dots,
         }))
