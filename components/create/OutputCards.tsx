@@ -20,6 +20,7 @@ import {
   PositionPicker,
   type CornerPosition,
 } from "@/components/create/controls";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export type SlideSize = "16:9" | "9:16";
 export type SlideCountMode = "auto" | "custom";
@@ -179,6 +180,7 @@ export function SlideCountStepper({
   max: number;
   size?: "default" | "compact";
 }) {
+  const dict = useDict();
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
   const compact = size === "compact";
   const stepBtnClasses = `flex ${
@@ -198,7 +200,7 @@ export function SlideCountStepper({
         type="button"
         onClick={() => onChange(clamp(value - 1))}
         disabled={value <= min}
-        aria-label="إنقاص"
+        aria-label={dict.flows.output.decrease}
         className={stepBtnClasses}
         style={stepBtnStyle}
       >
@@ -219,7 +221,7 @@ export function SlideCountStepper({
         // a11y: screen readers announce field purpose. Custom input
         // sits between − / + buttons with no visible <label>, so the
         // programmatic name comes from aria-label.
-        aria-label="عدد الشرائح"
+        aria-label={dict.flows.slideCount}
         className={`input-dark no-spinner text-center ${
           compact ? "text-xs" : "text-sm"
         }`}
@@ -229,7 +231,7 @@ export function SlideCountStepper({
         type="button"
         onClick={() => onChange(clamp(value + 1))}
         disabled={value >= max}
-        aria-label="زيادة"
+        aria-label={dict.flows.output.increase}
         className={stepBtnClasses}
         style={stepBtnStyle}
       >
@@ -269,6 +271,7 @@ export function InlineStepper({
   min: number;
   max: number;
 }) {
+  const dict = useDict();
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
   return (
     <div
@@ -286,7 +289,7 @@ export function InlineStepper({
         type="button"
         onClick={() => onChange(clamp(value - 1))}
         disabled={value <= min}
-        aria-label="إنقاص"
+        aria-label={dict.flows.output.decrease}
         className="flex h-5 w-5 items-center justify-center rounded-full text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
@@ -303,14 +306,14 @@ export function InlineStepper({
           const n = Number(event.target.value);
           onChange(Number.isFinite(n) ? clamp(n) : min);
         }}
-        aria-label="عدد الشرائح"
+        aria-label={dict.flows.slideCount}
         className="no-spinner w-6 bg-transparent text-center text-[11px] text-white outline-none"
       />
       <button
         type="button"
         onClick={() => onChange(clamp(value + 1))}
         disabled={value >= max}
-        aria-label="زيادة"
+        aria-label={dict.flows.output.increase}
         className="flex h-5 w-5 items-center justify-center rounded-full text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
@@ -352,15 +355,16 @@ export function SlideCountFields({
   min?: number;
   max?: number;
 }) {
+  const dict = useDict();
   return (
     <div className="space-y-2">
-      {hideLabel ? null : <SectionLabel>{label ?? "عدد الشرائح"}</SectionLabel>}
+      {hideLabel ? null : <SectionLabel>{label ?? dict.flows.slideCount}</SectionLabel>}
       <div className="flex items-center gap-1.5">
         <Pill active={mode === "auto"} onClick={() => onMode("auto")}>
-          تلقائي
+          {dict.flows.auto}
         </Pill>
         <Pill active={mode === "custom"} onClick={() => onMode("custom")}>
-          مخصص
+          {dict.flows.custom}
         </Pill>
         {mode === "custom" ? (
           <SlideCountStepper
@@ -455,22 +459,23 @@ export function SlideSizeFields({
   label?: string;
   hideLabel?: boolean;
 }) {
+  const dict = useDict();
   return (
     <div className="space-y-2">
-      {hideLabel ? null : <SectionLabel>{label ?? "حجم الشريحة"}</SectionLabel>}
+      {hideLabel ? null : <SectionLabel>{label ?? dict.flows.output.slideSize}</SectionLabel>}
       <div className={stacked ? "grid grid-cols-1 gap-2" : "grid grid-cols-2 gap-2"}>
         <SizeChoice
           active={slideSize === "16:9"}
           onClick={() => onSlideSize("16:9")}
           label="16:9"
-          sub="أفقي"
+          sub={dict.flows.output.landscape}
           ratio="16 / 9"
         />
         <SizeChoice
           active={slideSize === "9:16"}
           onClick={() => onSlideSize("9:16")}
           label="9:16"
-          sub="عمودي"
+          sub={dict.flows.output.portrait}
           ratio="9 / 16"
         />
       </div>
@@ -508,19 +513,20 @@ export function CanvasCard({
   onPersistentExcludeCover: (b: boolean) => void;
   onPersistentExcludeClosing: (b: boolean) => void;
 }) {
+  const dict = useDict();
   return (
-    <CardShell title="الشريحة" icon="aspect_ratio">
+    <CardShell title={dict.flows.output.slideCard} icon="aspect_ratio">
       <div className="space-y-2">
-        <SectionLabel>عنصر ثابت على كل الشرائح</SectionLabel>
+        <SectionLabel>{dict.flows.brand.persistentAria}</SectionLabel>
         <input
           type="text"
           value={persistentText}
           onChange={(e) => onPersistentText(e.target.value)}
-          placeholder="مثل: التاريخ، الموقع الإلكتروني"
+          placeholder={dict.flows.output.persistentPlaceholderShort}
           // a11y: SectionLabel above is visual only; programmatic
           // name comes from aria-label so screen readers announce
           // field purpose.
-          aria-label="نص ثابت على كل الشرائح"
+          aria-label={dict.flows.output.persistentText}
           // Direction follows the deck language pill so English
           // overlay text (e.g. "© 2026 · taqreer.ai") types LTR
           // and Arabic ("جميع الحقوق محفوظة") types RTL.
@@ -539,7 +545,7 @@ export function CanvasCard({
               onClick={() => onPersistentExcludeCover(!persistentExcludeCover)}
               disabled={!persistentText.trim()}
             >
-              استثناء الغلاف
+              {dict.flows.controls.excludeCover}
             </Pill>
             <Pill
               active={persistentExcludeClosing}
@@ -548,7 +554,7 @@ export function CanvasCard({
               }
               disabled={!persistentText.trim()}
             >
-              استثناء الشريحة الأخيرة
+              {dict.flows.controls.excludeLast}
             </Pill>
           </div>
         </div>
@@ -576,22 +582,23 @@ export function OutputContentCard({
   onSlideCountValue: (n: number) => void;
   onDesignStyle: (s: string | null) => void;
 }) {
+  const dict = useDict();
   return (
-    <CardShell title="المحتوى" icon="tune">
+    <CardShell title={dict.flows.contentCard} icon="tune">
       <div className="space-y-2">
-        <SectionLabel>عدد الشرائح</SectionLabel>
+        <SectionLabel>{dict.flows.slideCount}</SectionLabel>
         <div className="flex items-center gap-1.5">
           <Pill
             active={slideCountMode === "auto"}
             onClick={() => onSlideCountMode("auto")}
           >
-            تلقائي
+            {dict.flows.auto}
           </Pill>
           <Pill
             active={slideCountMode === "custom"}
             onClick={() => onSlideCountMode("custom")}
           >
-            مخصص
+            {dict.flows.custom}
           </Pill>
           {slideCountMode === "custom" ? (
             <SlideCountStepper
@@ -610,7 +617,7 @@ export function OutputContentCard({
           height density. Only the design-style pills + slide count
           live here now. */}
       <div className="border-t border-white/[0.06] pt-3">
-        <SectionLabel>قواعد التوليد</SectionLabel>
+        <SectionLabel>{dict.flows.output.generationRules}</SectionLabel>
         <div className="pt-2">
           <div className="flex flex-wrap gap-1.5">
             {DESIGN_STYLE_OPTIONS.map((option) => (
@@ -665,16 +672,17 @@ export function LogoPositionFields({
   // corners are available.
   reservedPositions?: LogoPosition[];
 }) {
+  const dict = useDict();
   return (
     <div className="space-y-2 border-t border-white/[0.06] pt-3">
-      <SectionLabel>موقع الشعار</SectionLabel>
+      <SectionLabel>{dict.flows.output.logoPosition}</SectionLabel>
       <div className="grid grid-cols-2 gap-3">
         <PositionPicker
           value={position}
           onChange={onPosition}
           disabled={disabled}
           disabledValues={reservedPositions}
-          disabledTooltip="محجوز للنص الثابت"
+          disabledTooltip={dict.flows.output.reservedForPersistent}
         />
         <div className="flex flex-col items-start gap-1.5">
           <Pill
@@ -682,14 +690,14 @@ export function LogoPositionFields({
             onClick={() => onExcludeCover(!excludeCover)}
             disabled={disabled}
           >
-            استثناء الغلاف
+            {dict.flows.controls.excludeCover}
           </Pill>
           <Pill
             active={excludeClosing}
             onClick={() => onExcludeClosing(!excludeClosing)}
             disabled={disabled}
           >
-            استثناء الشريحة الأخيرة
+            {dict.flows.controls.excludeLast}
           </Pill>
         </div>
       </div>

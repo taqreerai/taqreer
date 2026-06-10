@@ -192,6 +192,55 @@
       "aiImagesTitle": "AI images",
       "aiImagesDesc": "Generate AI photos for the deck"
     },
+    "output": {
+      "slideSize": "Slide size",
+      "landscape": "Landscape",
+      "portrait": "Portrait",
+      "slideCard": "Slide",
+      "decrease": "Decrease",
+      "increase": "Increase",
+      "persistentText": "Persistent text on all slides",
+      "persistentPlaceholderShort": "e.g. date, website",
+      "generationRules": "Generation rules",
+      "logoPosition": "Logo position",
+      "reservedForPersistent": "Reserved for persistent text"
+    },
+    "positions": {
+      "topLeft": "Top left",
+      "topCenter": "Top center",
+      "topRight": "Top right",
+      "bottomLeft": "Bottom left",
+      "bottomCenter": "Bottom center",
+      "bottomRight": "Bottom right",
+      "position": "Position"
+    },
+    "controls": {
+      "exclude": "Exclude",
+      "excludeCount": "Exclude ({count})",
+      "excludeCover": "Exclude cover",
+      "excludeLast": "Exclude last slide",
+      "colorN": "Color {n}",
+      "removeColor": "Remove color",
+      "colorHex": "Color code (HEX)"
+    },
+    "generate": {
+      "create": "Create",
+      "creating": "Creating...",
+      "closeQualityMenu": "Close quality menu",
+      "chooseQuality": "Choose quality",
+      "generationQuality": "Generation quality",
+      "thinking": "Thinking",
+      "fast": "Fast",
+      "etaMin": "~{eta} min"
+    },
+    "fonts": {
+      "fonts": "Fonts",
+      "orUpload": "or upload your fonts",
+      "uploadFonts": "Upload font families",
+      "weights": "{count} weights",
+      "maxFonts": "Max {max} fonts",
+      "fontFormats": "— up to {max} · WOFF / TTF / OTF"
+    },
     "create": {
       "title": "Create a new presentation",
       "subtitle": "Write your content or upload a file, pick your brand identity, and we'll build a deck that matches your taste."

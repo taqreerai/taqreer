@@ -22,6 +22,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 const PRESETS = [
   "#000000",
@@ -135,6 +136,7 @@ export function ColorPickerPopover({
   // `.surface-popover` (dark fill) so the picker matches the pill over a slide.
   surfaceClassName?: string;
 }) {
+  const dict = useDict();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svRef = useRef<HTMLDivElement>(null);
   const hueRef = useRef<HTMLDivElement>(null);
@@ -371,7 +373,7 @@ export function ColorPickerPopover({
               onChange={(event) => onHexChange(event.target.value)}
               spellCheck={false}
               maxLength={7}
-              aria-label="رمز اللون (HEX)"
+              aria-label={dict.flows.controls.colorHex}
               placeholder="#RRGGBB"
               className="input-dark min-w-0 flex-1 font-mono text-[13px]"
               style={{ padding: "4px 8px", height: 26 }}

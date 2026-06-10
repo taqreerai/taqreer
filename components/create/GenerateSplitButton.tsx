@@ -28,6 +28,7 @@ import {
   estimateMinutes,
   type Quality,
 } from "@/lib/types/quality";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function GenerateSplitButton({
   onGenerate,
@@ -39,11 +40,10 @@ export function GenerateSplitButton({
   slideCount,
   disabled = false,
   loading = false,
-  // Label override — defaults to "إنشاء" (the create-flow term).
-  // /enhance might want "إنشاء العرض" or just stick with "إنشاء"
-  // for consistency. Pass through.
-  label = "إنشاء",
-  loadingLabel = "جارٍ الإنشاء...",
+  // Label override — defaults to the localized "Create" (the create-flow term,
+  // dict.flows.generate.create). /enhance can pass its own copy. Pass through.
+  label,
+  loadingLabel,
 }: {
   onGenerate: () => void;
   quality: Quality;
@@ -54,6 +54,9 @@ export function GenerateSplitButton({
   label?: string;
   loadingLabel?: string;
 }) {
+  const dict = useDict();
+  const resolvedLabel = label ?? dict.flows.generate.create;
+  const resolvedLoadingLabel = loadingLabel ?? dict.flows.generate.creating;
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const splitButtonRef = useRef<HTMLDivElement>(null);
 
@@ -122,7 +125,7 @@ export function GenerateSplitButton({
               auto_awesome
             </span>
           )}
-          <span>{loading ? loadingLabel : label}</span>
+          <span>{loading ? resolvedLoadingLabel : resolvedLabel}</span>
         </motion.button>
         {/* 1 px divider between the two clickable areas. Muted via
             the glass-border opacity token (--tq-border-hairline). */}
@@ -134,7 +137,7 @@ export function GenerateSplitButton({
           type="button"
           onClick={() => setPresetMenuOpen((v) => !v)}
           disabled={disabled || loading}
-          aria-label={presetMenuOpen ? "إغلاق قائمة الجودة" : "اختيار جودة"}
+          aria-label={presetMenuOpen ? dict.flows.generate.closeQualityMenu : dict.flows.generate.chooseQuality}
           aria-expanded={presetMenuOpen}
           className="relative z-10 inline-flex w-10 items-center justify-center bg-transparent text-white disabled:cursor-not-allowed disabled:opacity-60"
           style={{ borderRadius: "0 9999px 9999px 0" }}
@@ -163,7 +166,7 @@ export function GenerateSplitButton({
             className=" absolute right-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           >
             <div className="px-3 py-2 text-[11px] text-white/40">
-              جودة التوليد
+              {dict.flows.generate.generationQuality}
             </div>
             {QUALITY_PRESETS.map((preset) => {
               const eta = estimateMinutes(preset.key, effectiveSlideCount);
@@ -208,15 +211,15 @@ export function GenerateSplitButton({
                   <span className="flex shrink-0 items-center gap-2">
                     {preset.thinking ? (
                       <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-emerald-200 bg-emerald-500/15">
-                        تفكير
+                        {dict.flows.generate.thinking}
                       </span>
                     ) : (
                       <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white/50 bg-[var(--tq-surface)]">
-                        سريع
+                        {dict.flows.generate.fast}
                       </span>
                     )}
                     <span className="text-[11px] text-white/40 tabular-nums" dir="ltr">
-                      ~{eta} د
+                      {dict.flows.generate.etaMin.replace("{eta}", String(eta))}
                     </span>
                   </span>
                 </button>

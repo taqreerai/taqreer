@@ -192,6 +192,55 @@
       "aiImagesTitle": "صور بالذكاء الاصطناعي",
       "aiImagesDesc": "أنشئ صورًا فوتوغرافية مولّدة للعرض"
     },
+    "output": {
+      "slideSize": "حجم الشريحة",
+      "landscape": "أفقي",
+      "portrait": "عمودي",
+      "slideCard": "الشريحة",
+      "decrease": "إنقاص",
+      "increase": "زيادة",
+      "persistentText": "نص ثابت على كل الشرائح",
+      "persistentPlaceholderShort": "مثل: التاريخ، الموقع الإلكتروني",
+      "generationRules": "قواعد التوليد",
+      "logoPosition": "موقع الشعار",
+      "reservedForPersistent": "محجوز للنص الثابت"
+    },
+    "positions": {
+      "topLeft": "أعلى يسار",
+      "topCenter": "أعلى الوسط",
+      "topRight": "أعلى يمين",
+      "bottomLeft": "أسفل يسار",
+      "bottomCenter": "أسفل الوسط",
+      "bottomRight": "أسفل يمين",
+      "position": "الموضع"
+    },
+    "controls": {
+      "exclude": "استثناء",
+      "excludeCount": "استثناء ({count})",
+      "excludeCover": "استثناء الغلاف",
+      "excludeLast": "استثناء الشريحة الأخيرة",
+      "colorN": "اللون {n}",
+      "removeColor": "إزالة اللون",
+      "colorHex": "رمز اللون (HEX)"
+    },
+    "generate": {
+      "create": "إنشاء",
+      "creating": "جارٍ الإنشاء...",
+      "closeQualityMenu": "إغلاق قائمة الجودة",
+      "chooseQuality": "اختيار جودة",
+      "generationQuality": "جودة التوليد",
+      "thinking": "تفكير",
+      "fast": "سريع",
+      "etaMin": "~{eta} د"
+    },
+    "fonts": {
+      "fonts": "الخطوط",
+      "orUpload": "أو ارفع خطوطك",
+      "uploadFonts": "رفع عائلات خطوط",
+      "weights": "{count} أوزان",
+      "maxFonts": "الحد الأقصى {max} خطوط",
+      "fontFormats": "— حتى {max} · WOFF / TTF / OTF"
+    },
     "create": {
       "title": "أنشئ عرضاً جديداً",
       "subtitle": "اكتب محتواك أو ارفع ملفاً، اختر هويتك البصرية، وسنبني عرضاً يحاكي ذوقك."

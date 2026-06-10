@@ -24,6 +24,7 @@ import {
   addUploadedFontFile,
   type BrandFontState,
 } from "@/lib/brand/fonts";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function BrandFontPicker({
   value,
@@ -37,6 +38,7 @@ export function BrandFontPicker({
   sampleText: string;
   sampleSizeClass?: string;
 }) {
+  const dict = useDict();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -72,7 +74,7 @@ export function BrandFontPicker({
       {/* pb-1 (4px) + the stack's space-y-3 (12px) = a 16px title→selector
           gap, unified with the logo section's gap-4 across every flow. */}
       <span className="block pb-1 text-xs font-semibold text-white/70">
-        الخطوط
+        {dict.flows.fonts.fonts}
       </span>
 
       <GoogleFontSlot
@@ -93,7 +95,7 @@ export function BrandFontPicker({
           chosen Google family. */}
       <div className="flex items-center gap-2" aria-hidden>
         <span className="h-px flex-1 bg-white/10" />
-        <span className="shrink-0 text-[10px] text-white/40">أو ارفع خطوطك</span>
+        <span className="shrink-0 text-[10px] text-white/40">{dict.flows.fonts.orUpload}</span>
         <span className="h-px flex-1 bg-white/10" />
       </div>
 
@@ -143,7 +145,7 @@ export function BrandFontPicker({
                 if (!atCap) inputRef.current?.click();
               }}
               disabled={atCap}
-              aria-label="رفع عائلات خطوط"
+              aria-label={dict.flows.fonts.uploadFonts}
               className="flex shrink-0 items-center justify-center text-white/70 transition-colors hover:text-white disabled:cursor-not-allowed disabled:text-white/30"
             >
               <span
@@ -171,7 +173,7 @@ export function BrandFontPicker({
                     <span className="max-w-[120px] truncate">{u.name}</span>
                     {u.faces.length > 1 ? (
                       <span className="text-[10px] text-white/40">
-                        {u.faces.length} أوزان
+                        {dict.flows.fonts.weights.replace("{count}", String(u.faces.length))}
                       </span>
                     ) : null}
                     <button
@@ -180,7 +182,7 @@ export function BrandFontPicker({
                         event.stopPropagation();
                         removeAt(index);
                       }}
-                      aria-label={`إزالة ${u.name}`}
+                      aria-label={dict.flows.brand.removeFont.replace("{label}", u.name)}
                       className="flex h-4 w-4 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
                     >
                       <span
@@ -197,12 +199,12 @@ export function BrandFontPicker({
               <>
                 <span className="text-xs font-semibold text-white">
                   {atCap
-                    ? `الحد الأقصى ${MAX_UPLOADED_FONTS} خطوط`
-                    : "رفع عائلات خطوط"}
+                    ? dict.flows.fonts.maxFonts.replace("{max}", String(MAX_UPLOADED_FONTS))
+                    : dict.flows.fonts.uploadFonts}
                 </span>
                 {atCap ? null : (
                   <span className="text-[10px] text-white/40">
-                    — حتى {MAX_UPLOADED_FONTS} · WOFF / TTF / OTF
+                    {dict.flows.fonts.fontFormats.replace("{max}", String(MAX_UPLOADED_FONTS))}
                   </span>
                 )}
               </>

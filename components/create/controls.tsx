@@ -12,7 +12,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
-import { useLocale } from "@/components/i18n/LocaleProvider";
+import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
 
 export type CornerPosition =
   | "top-left"
@@ -22,13 +22,22 @@ export type CornerPosition =
   | "bottom-center"
   | "bottom-right";
 
-const CORNER_OPTIONS: { value: CornerPosition; icon: string; label: string }[] = [
-  { value: "top-left", icon: "north_west", label: "أعلى يسار" },
-  { value: "top-center", icon: "north", label: "أعلى الوسط" },
-  { value: "top-right", icon: "north_east", label: "أعلى يمين" },
-  { value: "bottom-left", icon: "south_west", label: "أسفل يسار" },
-  { value: "bottom-center", icon: "south", label: "أسفل الوسط" },
-  { value: "bottom-right", icon: "south_east", label: "أسفل يمين" },
+// `labelKey` indexes dict.flows.positions — the visible label is resolved at
+// render time from the active locale (the value/icon stay constant).
+type PositionKey =
+  | "topLeft"
+  | "topCenter"
+  | "topRight"
+  | "bottomLeft"
+  | "bottomCenter"
+  | "bottomRight";
+const CORNER_OPTIONS: { value: CornerPosition; icon: string; labelKey: PositionKey }[] = [
+  { value: "top-left", icon: "north_west", labelKey: "topLeft" },
+  { value: "top-center", icon: "north", labelKey: "topCenter" },
+  { value: "top-right", icon: "north_east", labelKey: "topRight" },
+  { value: "bottom-left", icon: "south_west", labelKey: "bottomLeft" },
+  { value: "bottom-center", icon: "south", labelKey: "bottomCenter" },
+  { value: "bottom-right", icon: "south_east", labelKey: "bottomRight" },
 ];
 
 // Canonical corner ordering used by callers that need to walk the
@@ -256,10 +265,13 @@ export function PositionDropdown({
   disabledTooltip?: string;
   fullWidth?: boolean;
 }) {
+  const dict = useDict();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const currentLabel =
-    CORNER_OPTIONS.find((c) => c.value === value)?.label ?? "الموضع";
+  const currentOption = CORNER_OPTIONS.find((c) => c.value === value);
+  const currentLabel = currentOption
+    ? dict.flows.positions[currentOption.labelKey]
+    : dict.flows.positions.position;
 
   // Outside-click + ESC close. Same shape as the rest of the
   // popover-style controls in this file (ColorPickerPopover, etc).
@@ -322,7 +334,7 @@ export function PositionDropdown({
           // the hairline, for the lift off the page.
           className="absolute top-full z-30 mt-1 min-w-[140px] overflow-hidden rounded-xl border p-2 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           role="listbox"
-          aria-label="موضع"
+          aria-label={dict.flows.positions.position}
         >
           <div className="grid grid-cols-3 gap-1.5" dir="ltr">
             {CORNER_OPTIONS.map((option) => {
@@ -343,7 +355,7 @@ export function PositionDropdown({
                   title={
                     lockedByValue && disabledTooltip
                       ? disabledTooltip
-                      : option.label
+                      : dict.flows.positions[option.labelKey]
                   }
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     active
@@ -399,24 +411,26 @@ export function PositionPicker({
   // Lets the caller say WHY the corner is reserved.
   disabledTooltip?: string;
 }) {
+  const dict = useDict();
   return (
     <div className="grid grid-cols-3 gap-2" dir="ltr">
       {CORNER_OPTIONS.map((option) => {
         const active = value === option.value;
         const lockedByValue = disabledValues?.includes(option.value) ?? false;
         const isDisabled = disabled || lockedByValue;
+        const optionLabel = dict.flows.positions[option.labelKey];
         return (
           <button
             key={option.value}
             type="button"
             disabled={isDisabled}
             onClick={() => onChange(option.value)}
-            aria-label={option.label}
+            aria-label={optionLabel}
             // Per-button title: when value-locked + the caller passed
             // a tooltip, use it. Otherwise fall back to the corner's
             // own label (default behavior for all other states).
             title={
-              lockedByValue && disabledTooltip ? disabledTooltip : option.label
+              lockedByValue && disabledTooltip ? disabledTooltip : optionLabel
             }
             // Same idle/active vocabulary as `Pill`: glass surface
             // always, stroke + text bump to full-white when active
@@ -548,9 +562,9 @@ export function Toggle({
 // globals.css for a 2-button control.
 export type LanguageCode = "ar" | "en";
 
-const LANGUAGE_OPTIONS: ReadonlyArray<{ code: LanguageCode; label: string }> = [
-  { code: "ar", label: "العربية" },
-  { code: "en", label: "الإنجليزية" },
+const LANGUAGE_OPTIONS: ReadonlyArray<{ code: LanguageCode }> = [
+  { code: "ar" },
+  { code: "en" },
 ];
 
 export function LanguagePills({
@@ -560,14 +574,17 @@ export function LanguagePills({
   value: LanguageCode;
   onChange: (next: LanguageCode) => void;
 }) {
+  const dict = useDict();
   return (
     <div
       role="radiogroup"
-      aria-label="لغة المحتوى"
+      aria-label={dict.flows.contentLanguageAria}
       className="inline-flex items-center gap-1"
     >
       {LANGUAGE_OPTIONS.map((opt) => {
         const isActive = value === opt.code;
+        const optLabel =
+          opt.code === "ar" ? dict.flows.langArabic : dict.flows.langEnglish;
         return (
           <button
             key={opt.code}
@@ -581,7 +598,7 @@ export function LanguagePills({
                 : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
             }`}
           >
-            {opt.label}
+            {optLabel}
           </button>
         );
       })}
@@ -613,10 +630,14 @@ export function ExclusionDropdown({
   onClosingChange: (next: boolean) => void;
   disabled?: boolean;
 }) {
+  const dict = useDict();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const count = (excludeCover ? 1 : 0) + (excludeClosing ? 1 : 0);
-  const label = count > 0 ? `استثناء (${count})` : "استثناء";
+  const label =
+    count > 0
+      ? dict.flows.controls.excludeCount.replace("{count}", String(count))
+      : dict.flows.controls.exclude;
 
   useEffect(() => {
     if (!open) return;
@@ -673,15 +694,15 @@ export function ExclusionDropdown({
           // independent toggles (CR #41 finding, 2026-05-28).
           className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           role="group"
-          aria-label="استثناء"
+          aria-label={dict.flows.controls.exclude}
         >
           <ExclusionItem
-            label="استثناء الغلاف"
+            label={dict.flows.controls.excludeCover}
             checked={excludeCover}
             onChange={onCoverChange}
           />
           <ExclusionItem
-            label="استثناء الشريحة الأخيرة"
+            label={dict.flows.controls.excludeLast}
             checked={excludeClosing}
             onChange={onClosingChange}
           />
@@ -749,6 +770,7 @@ export function InlinePaletteSwatch({
   onChange: (next: string) => void;
   onRemove: () => void;
 }) {
+  const dict = useDict();
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <div className="relative">
@@ -757,13 +779,13 @@ export function InlinePaletteSwatch({
         onClick={() => setPickerOpen((v) => !v)}
         className="block h-7 w-7 shrink-0 rounded-md border border-white/15 transition-shadow hover:shadow-md"
         style={{ backgroundColor: value }}
-        aria-label={`اللون ${index + 1}`}
+        aria-label={dict.flows.controls.colorN.replace("{n}", String(index + 1))}
       />
       <button
         type="button"
         onClick={onRemove}
         disabled={!removable}
-        aria-label="إزالة اللون"
+        aria-label={dict.flows.controls.removeColor}
         className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
