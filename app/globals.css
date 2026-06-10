@@ -13,6 +13,25 @@
  *  manual, ADD it here first, give it a class, then consume the class
  *  from TSX.
  *
+ *  ‼️ CURRENT SYSTEM (2026-06, shadcn-style — supersedes the "glass" wording
+ *  throughout this header): FLAT + SOLID. No transparency on surfaces, NO
+ *  backdrop blur, NO box-shadows.
+ *   - Surfaces are SOLID colors: gutter --tq-bg #0A0A0A  <  panel --tq-panel
+ *     #161616  <  cards/menus/popovers --tq-surface ≈ #1E1E1E. The `--glass-*` /
+ *     `glass-*` names are VESTIGIAL: `--glass-blur: 0`, and `--glass-fill` /
+ *     `--tq-bg-glass` resolve to the SOLID `--tq-surface`. No class defines a
+ *     box-shadow.
+ *   - Do NOT add `shadow-*`, `backdrop-blur-glass`, `backdrop-saturate-*`, or
+ *     `rgba(255,255,255,var(--glass-opacity))` fills to new UI. Menus / popovers /
+ *     dropdowns use `.glass-dropdown` (solid `--tq-surface` + `--tq-border-glass`
+ *     hairline) — the SAME bg + border as the sidebar profile (user) menu, which
+ *     is the reference for every dropdown.
+ *   - ONE accent: `--tq-purple #8B5CF6` (`--tq-blue / -violet / -magenta /
+ *     -lavender` are ALIASES → purple). The ONLY gradient left is
+ *     `.btn-gradient-anim` (the AI-action signal).
+ *   - Toggles/switches mirror with the chrome direction (knob rests at the
+ *     inline-start). The landing page is the live reference for the new look.
+ *
  *
  *  UI PATTERN VOCABULARY  ← read this first
  *  ─────────────────────────────────────────
@@ -21,7 +40,7 @@
  *
  *  ┌─────────────────────────────────────────────────────────────┐
  *  │ 1. NORMAL BUTTON                                            │
- *  │    Pill, glass surface, white text. Used for secondary      │
+ *  │    Pill, SOLID subtle-gray fill, white text. Secondary      │
  *  │    actions (Previous, Cancel, mode toggles, segmented       │
  *  │    pills inside cards).                                     │
  *  │    Class:    .btn-pill   (composed via Pill or PillButton)  │
@@ -29,9 +48,11 @@
  *  └─────────────────────────────────────────────────────────────┘
  *  ┌─────────────────────────────────────────────────────────────┐
  *  │ 2. CTA                                                      │
- *  │    Pill, brand-gradient fill, white text, brand-coloured    │
- *  │    box-shadow. Used for the page's primary action (Next,    │
- *  │    Save, Use these colors, Open project).                   │
+ *  │    Pill, SOLID purple fill (--tq-purple-hover; hover →       │
+ *  │    lighter --tq-purple), white text, NO shadow. Page's      │
+ *  │    primary action (Next, Save, Open project). `.btn-gradient`│
+ *  │    is a SOLID fill now — the "gradient" in the name is       │
+ *  │    legacy.                                                  │
  *  │    Class:    .btn-gradient   (radius pinned to pill here)   │
  *  │    Primitive: <PillButton variant="primary" />              │
  *  └─────────────────────────────────────────────────────────────┘
@@ -39,18 +60,14 @@
  *  │ 3. LAYOUT SURFACES — popovers / menus / dropdowns /         │
  *  │    color pickers / quality picker / Google-fonts dropdown   │
  *  │                                                             │
- *  │    Glass tied to the user's preset, NOT hardcoded. Recipe:  │
- *  │      background:   rgba(255, 255, 255, var(--glass-opacity))│
- *  │      border-color: rgba(255, 255, 255, var(--glass-border-  │
- *  │                          opacity))                          │
- *  │      class:        backdrop-blur-glass  (Tailwind utility   │
- *  │                                          tied to the same   │
- *  │                                          --backdrop-blur-   │
- *  │                                          glass token)       │
- *  │    Do NOT use raw `backdrop-filter:blur(20px)` — it bypasses │
- *  │    the preset and gets composited differently by Tailwind. │
- *  │    Existing card classes (.glass-card, .glass-popover) all  │
- *  │    follow this pattern.                                     │
+ *  │    SOLID surface + hairline border. NO blur, NO shadow,     │
+ *  │    NO transparency. Recipe (= what `.glass-dropdown` does): │
+ *  │      background:  var(--tq-surface)   (solid ≈ #1E1E1E)     │
+ *  │      border:      1px solid var(--tq-border-glass)          │
+ *  │    Use `.glass-dropdown` for portal menus (matches the      │
+ *  │    sidebar profile menu), `.glass-card` for cards,          │
+ *  │    `.glass-modal` for dialogs. Do NOT add `shadow-*` or     │
+ *  │    `backdrop-blur-glass` — legacy no-ops that read wrong.   │
  *  └─────────────────────────────────────────────────────────────┘
  *  ┌─────────────────────────────────────────────────────────────┐
  *  │ 4. AI BUTTONS — Generate, Regen, Apply Comments             │
@@ -77,17 +94,15 @@
  *  5. Gradients        reusable gradients  --tq-gradient-*
  *  6. Shadows          box-shadows         --tq-shadow-*
  *  7. Radii            border-radius       --tq-radius-*
- *  8. Glass System     runtime blur/fill   --glass-* (see below)
+ *  8. Glass System     VESTIGIAL          --glass-* (flattened; see below)
  *
- *  GLASS SYSTEM  (runtime-controlled — responds to preset in Settings)
+ *  GLASS SYSTEM  (REMOVED 2026-06 — kept only as no-op aliases so the legacy
+ *  `glass-*` classes resolve to SOLID values; do NOT reintroduce blur/fill)
  *  ─────────────────────────────────────────────────────────────────
- *  --glass-opacity          Card fill alpha (0 = clear, 0.12 = strong)
- *  --glass-blur             Backdrop blur radius
- *  --glass-border-opacity   Border alpha (minimum 0.08 keeps cards visible)
- *  --glass-saturation       Color boost behind the glass
- *
- *  Presets are initialized before paint by the inline <script> in
- *  app/layout.tsx and toggled live from Settings → مظهر التطبيق.
+ *  --glass-blur: 0          Kills the `backdrop-blur-glass` utility everywhere.
+ *  --glass-fill             = --tq-surface (SOLID; not a white-alpha fill).
+ *  --glass-border-opacity   Hairline border alpha (~0.1) → --tq-border-glass.
+ *  There is no Settings glass-preset card anymore.
  *
  *
  *  CLASS INDEX
@@ -380,7 +395,8 @@ button, a, [role="button"] {
 /* ─── Page Container ─── */
 .page-container {
   width: 100%;
-  direction: rtl;
+  /* Direction follows the chrome locale via <html dir> (set per [lang]); it is
+     NOT hardcoded here, so English pages lay out LTR and Arabic pages RTL. */
 }
 
 /* ─── Settings Page Cards ─── */

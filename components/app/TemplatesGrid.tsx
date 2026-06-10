@@ -27,7 +27,7 @@
 
 import { motion } from "framer-motion";
 import { TemplateTile } from "@/components/app/TemplateTile";
-import type { TemplateForBrowse } from "@/app/(app)/templates/types";
+import type { TemplateForBrowse } from "@/app/[lang]/(app)/templates/types";
 
 type Props = {
   templates: TemplateForBrowse[];

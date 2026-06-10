@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 const fadeUp = (delay: number) => ({
   initial: { opacity: 0, y: 20 },
@@ -12,6 +14,10 @@ const fadeUp = (delay: number) => ({
 });
 
 export default function ForgotPasswordPage() {
+  const { locale } = useLocale();
+  const dict = useDict();
+  const t = dict.auth;
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,21 +31,18 @@ export default function ForgotPasswordPage() {
     setError(null);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        // Supabase verifies the recovery token, creates a recovery
-        // session, then redirects to this URL with the session in the
-        // URL hash. `/reset-password` renders a form that calls
-        // `auth.updateUser({ password })` against the recovery session.
-        // Path was `/auth/reset-password` before the auth-URL
-        // migration — corrected 2026-05-28.
+        // Supabase verifies the recovery token, creates a recovery session, then
+        // redirects to this URL with the session in the hash. `/reset-password`
+        // (unlocalized) is re-prefixed by the proxy to the user's locale.
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (resetError) {
-        setError("حدث خطأ. يرجى المحاولة مرة أخرى");
+        setError(t.errorGeneric);
       } else {
         setSuccess(true);
       }
     } catch {
-      setError("حدث خطأ. يرجى المحاولة مرة أخرى");
+      setError(t.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -56,16 +59,14 @@ export default function ForgotPasswordPage() {
         className="space-y-6 text-center"
       >
         <div>
-          <h1 className="text-3xl font-bold mb-2">✓ تحقق من بريدك</h1>
-          <p className="text-muted">أرسلنا لك رابط لاستعادة كلمة المرور</p>
+          <h1 className="text-3xl font-bold mb-2">{t.forgot.successTitle}</h1>
+          <p className="text-muted">{t.forgot.successSubtitle}</p>
         </div>
         <div className="bg-blue-500/20 border border-blue-500/40 rounded-xl p-4">
-          <p className="text-blue-200 text-sm">
-            تحقق من بريدك الإلكتروني لتلقي رابط استعادة كلمة المرور. قد يستغرق وصول الرسالة بضع دقائق.
-          </p>
+          <p className="text-blue-200 text-sm">{t.forgot.successBody}</p>
         </div>
-        <Link href="/login" className="text-white hover:underline cursor-pointer">
-          العودة إلى تسجيل الدخول
+        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+          {t.signup.backToLogin}
         </Link>
       </motion.div>
     );
@@ -80,11 +81,9 @@ export default function ForgotPasswordPage() {
       transition={{ duration: 0.2 }}
       className="space-y-5"
     >
-      {/* Heading + subtitle — same hierarchy as signup/login forms,
-          center-aligned, `text-2xl` per user direction 2026-05-28. */}
       <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-2xl font-bold mb-2">استعادة كلمة المرور</h1>
-        <p className="text-sm text-muted">سنرسل لك رابط استعادة على بريدك الإلكتروني.</p>
+        <h1 className="text-2xl font-bold mb-2">{t.forgot.title}</h1>
+        <p className="text-sm text-muted">{t.forgot.subtitle}</p>
       </motion.div>
 
       {error && (
@@ -95,7 +94,7 @@ export default function ForgotPasswordPage() {
 
       <motion.form {...fadeUp(0.1)} onSubmit={handleResetRequest} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">البريد الإلكتروني</label>
+          <label className="block text-sm font-medium mb-2">{t.emailLabel}</label>
           <input
             type="email"
             value={email}
@@ -110,14 +109,14 @@ export default function ForgotPasswordPage() {
           disabled={loading}
           className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
-          {loading ? "جاري الإرسال..." : "إرسال رابط الاستعادة"}
+          {loading ? t.forgot.submitting : t.forgot.submit}
         </button>
       </motion.form>
 
       <motion.p {...fadeUp(0.2)} className="text-sm text-muted">
-        تذكرت كلمة المرور؟{" "}
-        <Link href="/login" className="text-white hover:underline cursor-pointer">
-          تسجيل الدخول
+        {t.forgot.rememberedPassword}
+        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+          {t.forgot.login}
         </Link>
       </motion.p>
     </motion.div>

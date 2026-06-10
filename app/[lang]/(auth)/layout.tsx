@@ -13,17 +13,16 @@
 // The marquee is server-rendered — `getMarqueeColumns()` is a cached
 // (60 s) Prisma query so a fresh batch loads on each session but the
 // same session reuses it. Children rendered inside the modal still use
-// `AuthAnimations` for the existing route-change fade/slide. The
-// confirmed-email page is the one auth surface that does NOT need the
-// modal chrome — it intentionally renders the full-screen success
-// state. Children control their own outer wrapper; this layout only
-// supplies the background + the modal frame.
+// `AuthAnimations` for the existing route-change fade/slide.
 
 import Image from "next/image";
 import Link from "next/link";
 import { AuthAnimations } from "./AuthAnimations";
 import { AuthMarqueeBackground } from "@/components/auth/AuthMarqueeBackground";
 import { getMarqueeColumns } from "@/lib/auth/marquee-projects";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { localizedHref } from "@/lib/i18n/navigation";
+import type { Locale } from "@/lib/i18n/config";
 
 export const metadata = {
   title: "تقرير - المصادقة",
@@ -32,10 +31,19 @@ export const metadata = {
 
 export default async function AuthLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ lang: Locale }>;
 }) {
-  const columns = await getMarqueeColumns();
+  // `lang` is already validated by the parent [lang] layout (404s on an
+  // unknown locale), so it's safe to use directly here.
+  const { lang } = await params;
+  const [columns, dict] = await Promise.all([
+    getMarqueeColumns(),
+    getDictionary(lang),
+  ]);
+  const legal = dict.auth.legal;
 
   return (
     // `dashboard-bg` brings in the same chrome the app uses — `--tq-bg`
@@ -62,7 +70,7 @@ export default async function AuthLayout({
           className="auth-modal glass-modal backdrop-blur-glass-boost w-full max-w-md rounded-3xl p-8 shadow-2xl"
         >
           <Link
-            href="/"
+            href={localizedHref("/", lang)}
             className="mb-8 flex flex-shrink-0 justify-center cursor-pointer"
           >
             <Image
@@ -70,10 +78,6 @@ export default async function AuthLayout({
               alt="Taqreer"
               width={140}
               height={40}
-              // `h-6` = `calc(var(--spacing) * 6)` = 24 px height per
-              // user direction 2026-05-28. Lighter visual weight at
-              // the top of the modal so the heading carries the
-              // page identity, not the wordmark.
               className="h-6 w-auto"
               priority
             />
@@ -83,22 +87,22 @@ export default async function AuthLayout({
 
           {/* Fine print — Terms + Privacy. Routes don't exist yet
               (placeholder hrefs); the labels match the landing
-              footer's "قانوني" group so the wording reads consistent
+              footer's legal group so the wording reads consistent
               when the real pages ship. */}
           <p className="mt-8 text-center text-xs text-muted">
-            بإنشاء حساب فإنك توافق على{" "}
+            {legal.prefix}
             <Link
-              href="/#"
+              href={localizedHref("/#", lang)}
               className="underline transition-colors hover:text-white"
             >
-              شروط الاستخدام
-            </Link>{" "}
-            و{" "}
+              {legal.terms}
+            </Link>
+            {legal.and}
             <Link
-              href="/#"
+              href={localizedHref("/#", lang)}
               className="underline transition-colors hover:text-white"
             >
-              سياسة الخصوصية
+              {legal.privacy}
             </Link>
             .
           </p>

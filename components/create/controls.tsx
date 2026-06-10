@@ -12,6 +12,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 
 export type CornerPosition =
   | "top-left"
@@ -490,6 +491,7 @@ export function Toggle({
   // After the discriminated union both branches guarantee a non-empty
   // accessible name — ariaLabel when no label, label otherwise.
   const accessibleLabel = ariaLabel ?? label ?? "";
+  const { dir } = useLocale();
   const switchEl = (
     <button
       type="button"
@@ -502,16 +504,16 @@ export function Toggle({
         value ? "bg-[var(--tq-violet)]" : "bg-white/10"
       }`}
     >
-      {/* Knob — framer-motion spring matches the SegmentedToggle's
-          sliding indicator (stiffness 500, damping 35). `right` is
-          animated rather than `transform: translateX` because the
-          knob is positioned via the `right` CSS property in both
-          states (the track is LTR-positioned even inside an RTL
-          page so the visual travel is identical regardless of dir).
+      {/* Knob — framer-motion spring matches the SegmentedToggle's sliding
+          indicator (stiffness 500, damping 35). Positioned via the inline-start
+          edge so it mirrors with the chrome direction: OFF rests at the start
+          (left in LTR / right in RTL) and slides to the end when ON.
           `initial={false}` skips the first-paint slide. */}
       <motion.span
         initial={false}
-        animate={{ right: value ? 22 : 2 }}
+        animate={
+          dir === "rtl" ? { right: value ? 22 : 2 } : { left: value ? 22 : 2 }
+        }
         transition={{ type: "spring", stiffness: 500, damping: 35 }}
         className="absolute top-0.5 h-5 w-5 rounded-full bg-white"
       />

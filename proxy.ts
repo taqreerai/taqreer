@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/middleware";
+import { locales, defaultLocale, isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
+import { localeFromPathname, stripLocale } from "@/lib/i18n/navigation";
 
+// Logical (locale-agnostic) route prefixes. The pathname is locale-prefixed at
+// runtime (/ar/dashboard), so we match against the locale-STRIPPED path.
 const protectedRoutes = [
   "/dashboard",
   "/projects",
@@ -14,17 +18,39 @@ const protectedRoutes = [
 
 const authRoutes = ["/login", "/signup", "/forgot-password"];
 
-function getSafeRedirectPath(next: string | null, origin: string) {
-  if (!next) return "/dashboard";
-  if (!next.startsWith("/") || next.startsWith("//")) return "/dashboard";
+// Pick the UI locale for a bare URL: a saved cookie wins, otherwise the default
+// (Arabic). We deliberately do NOT sniff Accept-Language — the product is
+// Arabic-first, so anonymous/new users land on `ar` regardless of their browser
+// language; switching to `en` is an explicit choice (which sets the cookie).
+function pickLocale(request: NextRequest): string {
+  const cookie = request.cookies.get(LOCALE_COOKIE)?.value;
+  return isLocale(cookie) ? cookie : defaultLocale;
+}
+
+function hasLocalePrefix(pathname: string): boolean {
+  return locales.some(
+    (l) => pathname === `/${l}` || pathname.startsWith(`/${l}/`),
+  );
+}
+
+// Validate the post-auth `next` target and guarantee a locale prefix. Anything
+// off-origin / malformed falls back to the locale's dashboard.
+function getSafeRedirectPath(next: string | null, origin: string, locale: string) {
+  const fallback = `/${locale}/dashboard`;
+  if (!next) return fallback;
+  if (!next.startsWith("/") || next.startsWith("//")) return fallback;
 
   try {
     const redirectUrl = new URL(next, origin);
-    if (redirectUrl.origin !== origin) return "/dashboard";
-    if (!redirectUrl.pathname.startsWith("/")) return "/dashboard";
-    return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+    if (redirectUrl.origin !== origin) return fallback;
+    if (!redirectUrl.pathname.startsWith("/")) return fallback;
+    let path = `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+    // A `next` without a locale (e.g. from an external link) → prefix it so the
+    // user lands inside the active locale rather than bouncing through the gate.
+    if (!hasLocalePrefix(redirectUrl.pathname)) path = `/${locale}${path}`;
+    return path;
   } catch {
-    return "/dashboard";
+    return fallback;
   }
 }
 
@@ -45,44 +71,56 @@ function preserveAuthCookies(targetResponse: NextResponse, sourceResponse: NextR
 }
 
 export async function proxy(request: NextRequest) {
-  const { supabase, response } = await createClient(request);
   const { pathname, searchParams } = request.nextUrl;
   const origin = request.nextUrl.origin;
 
-  // Removed 2026-05-28: the localhost/dev rewrite `/` →
-  // `/preview?key=taqreer2025` was wired when the full landing
-  // lived behind a key-gate at /preview. Now `app/page.tsx` IS
-  // the public landing, so `/` should render it directly without
-  // any rewrite.
+  // API routes flow through for session refresh but are never locale-routed;
+  // file requests (icon.svg, robots.txt, sitemap.xml, images) are served as-is.
+  const isApi = pathname.startsWith("/api");
+  const isFile = /\.[^/]+$/.test(pathname);
 
-  // Get session
+  // ── Locale gate ──────────────────────────────────────────────────────────
+  // Chrome direction is URL-driven, so every page URL must carry a locale.
+  // Redirect bare URLs to a locale prefix before anything else. (The slide
+  // canvas direction is independent — it comes from the deck, not from here.)
+  if (!isApi && !isFile && !hasLocalePrefix(pathname)) {
+    const locale = pickLocale(request);
+    const url = request.nextUrl.clone();
+    url.pathname = pathname === "/" ? `/${locale}` : `/${locale}${pathname}`;
+    return NextResponse.redirect(url);
+  }
+
+  // Refresh the Supabase session (runs for both pages and API routes).
+  const { supabase, response } = await createClient(request);
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Anchored route matching — `startsWith` alone would match
-  // unrelated paths like `/login-help` or `/signup-banner` and
-  // (a) treat them as protected when they're not, (b) bounce
-  // authenticated users away from them as if they were auth pages.
-  // Match either the exact pathname or the route followed by a `/`
-  // so only true sub-trees count (CR #42 finding, 2026-05-28).
+  // The active locale for building redirects, and the locale-stripped path used
+  // for route matching (API paths carry no locale, so match them directly).
+  const locale = localeFromPathname(pathname) ?? defaultLocale;
+  const logicalPath = isApi ? pathname : stripLocale(pathname);
+
+  // Anchored route matching — `startsWith` alone would match unrelated paths
+  // like `/login-help` or `/signup-banner`. Match the exact path or the route
+  // followed by a `/` so only true sub-trees count (CR #42 finding, 2026-05-28).
   const matchesRoute = (route: string) =>
-    pathname === route || pathname.startsWith(`${route}/`);
+    logicalPath === route || logicalPath.startsWith(`${route}/`);
   const isProtectedRoute = protectedRoutes.some(matchesRoute);
   const isAuthRoute = authRoutes.some(matchesRoute);
 
-  // Redirect unauthenticated users to login
+  // Redirect unauthenticated users to login (preserving the locale + intent).
   if (isProtectedRoute && !session) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = new URL(`/${locale}/login`, request.url);
     loginUrl.searchParams.set("next", pathname + (searchParams.toString() ? `?${searchParams}` : ""));
     return preserveAuthCookies(NextResponse.redirect(loginUrl), response);
   }
 
-  // Redirect authenticated users away from auth pages
+  // Redirect authenticated users away from auth pages.
   if (isAuthRoute && session) {
     const next = searchParams.get("next");
     const template = searchParams.get("template");
-    const redirectPath = getSafeRedirectPath(next, origin);
+    const redirectPath = getSafeRedirectPath(next, origin, locale);
     const redirectUrl = new URL(redirectPath, request.url);
     if (template && !next) {
       redirectUrl.searchParams.set("template", template);

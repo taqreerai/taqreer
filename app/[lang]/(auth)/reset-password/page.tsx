@@ -6,18 +6,15 @@
 // redirects here with the session in the URL hash. The Supabase JS
 // client auto-detects the hash on mount and surfaces a
 // `PASSWORD_RECOVERY` auth event; from that point we can call
-// `auth.updateUser({ password })` to set the new password against the
-// recovery session.
-//
-// Renders inside the auth-layout glass modal — wordmark + Terms /
-// Privacy fine print are owned by `app/(auth)/layout.tsx`, this file
-// owns just the form.
+// `auth.updateUser({ password })` to set the new password.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 const fadeUp = (delay: number) => ({
   initial: { opacity: 0, y: 20 },
@@ -27,6 +24,10 @@ const fadeUp = (delay: number) => ({
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const { locale } = useLocale();
+  const dict = useDict();
+  const t = dict.auth;
+
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,11 +61,11 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError(null);
     if (password.length < 8) {
-      setError("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
+      setError(t.passwordMin);
       return;
     }
     if (password !== confirmPw) {
-      setError("كلمات المرور غير متطابقة");
+      setError(t.reset.passwordMismatch);
       return;
     }
     setLoading(true);
@@ -75,17 +76,17 @@ export default function ResetPasswordPage() {
       if (updateError) {
         // Most common cause: the recovery session expired or was
         // never established (stale link, manual URL paste).
-        setError("تعذّر تحديث كلمة المرور. قد يكون الرابط منتهي الصلاحية");
+        setError(t.reset.updateFailed);
       } else {
         setSuccess(true);
         // Brief affirmation, then land them on the dashboard. The
         // user's recovery session was upgraded to a full session by
         // `updateUser`, so /dashboard reads them as signed-in.
-        setTimeout(() => router.push("/dashboard"), 1500);
+        setTimeout(() => router.push(localizedHref("/dashboard", locale)), 1500);
       }
     } catch (err) {
       console.error("[reset-password] update error", err);
-      setError("حدث خطأ. يرجى المحاولة مرة أخرى");
+      setError(t.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -102,8 +103,8 @@ export default function ResetPasswordPage() {
         className="space-y-6 text-center"
       >
         <div>
-          <h1 className="text-2xl font-bold mb-2">✓ تم تحديث كلمة المرور</h1>
-          <p className="text-sm text-muted">جارٍ تحويلك إلى لوحة التحكم...</p>
+          <h1 className="text-2xl font-bold mb-2">{t.reset.successTitle}</h1>
+          <p className="text-sm text-muted">{t.reset.successSubtitle}</p>
         </div>
       </motion.div>
     );
@@ -124,8 +125,8 @@ export default function ResetPasswordPage() {
       className="space-y-5"
     >
       <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-2xl font-bold mb-2">تعيين كلمة مرور جديدة</h1>
-        <p className="text-sm text-muted">أدخل كلمة المرور الجديدة لحسابك.</p>
+        <h1 className="text-2xl font-bold mb-2">{t.reset.title}</h1>
+        <p className="text-sm text-muted">{t.reset.subtitle}</p>
       </motion.div>
 
       {showStaleLinkBanner && (
@@ -133,8 +134,11 @@ export default function ResetPasswordPage() {
           {...fadeUp(0.03)}
           className="bg-yellow-500/15 border border-yellow-500/40 rounded-xl p-3 text-yellow-200 text-sm"
         >
-          الرابط منتهي الصلاحية أو غير صالح. يرجى طلب رابط جديد من
-          صفحة <Link href="/forgot-password" className="text-white hover:underline">استعادة كلمة المرور</Link>.
+          {t.reset.staleLinkPrefix}
+          <Link href={localizedHref("/forgot-password", locale)} className="text-white hover:underline">
+            {t.reset.staleLinkLink}
+          </Link>
+          .
         </motion.div>
       )}
 
@@ -154,7 +158,7 @@ export default function ResetPasswordPage() {
       >
         <div>
           <label className="block text-sm font-medium mb-2">
-            كلمة المرور الجديدة
+            {t.reset.newPasswordLabel}
           </label>
           <input
             type="password"
@@ -164,11 +168,11 @@ export default function ResetPasswordPage() {
             required
             className="input-dark cursor-text"
           />
-          <p className="text-xs text-muted mt-1">8 أحرف على الأقل</p>
+          <p className="text-xs text-muted mt-1">{t.passwordMinHint}</p>
         </div>
         <div>
           <label className="block text-sm font-medium mb-2">
-            تأكيد كلمة المرور
+            {t.reset.confirmPasswordLabel}
           </label>
           <input
             type="password"
@@ -184,17 +188,17 @@ export default function ResetPasswordPage() {
           disabled={loading || hasRecoverySession === false}
           className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
-          {loading ? "جاري التحديث..." : "تحديث كلمة المرور"}
+          {loading ? t.reset.submitting : t.reset.submit}
         </button>
       </motion.form>
 
       <motion.p {...fadeUp(0.2)} className="text-sm text-muted text-center">
-        تذكرت كلمة المرور؟{" "}
+        {t.reset.rememberedPassword}
         <Link
-          href="/login"
+          href={localizedHref("/login", locale)}
           className="text-white hover:underline cursor-pointer"
         >
-          تسجيل الدخول
+          {t.reset.login}
         </Link>
       </motion.p>
     </motion.div>

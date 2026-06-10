@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { stripLocale } from "@/lib/i18n/navigation";
 import { motion, type Variants } from "framer-motion";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
@@ -356,7 +357,9 @@ export function DeckView({
   const canEdit = role === "owner" || role === "edit";
   const canComment = canEdit || role === "comment";
   const router = useRouter();
-  const pathname = usePathname();
+  // Locale-stripped so route checks compare against unprefixed paths (the
+  // pathname is /ar/preview/… after the [lang] move).
+  const pathname = stripLocale(usePathname() ?? "");
   // Initial state seeds from server props. The parent (re)keys this component
   // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);

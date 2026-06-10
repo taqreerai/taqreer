@@ -6,6 +6,8 @@ import { Sidebar } from "@/components/app/Sidebar";
 import { BellDropdown } from "@/components/app/BellDropdown";
 import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
+import { useLocale } from "@/components/i18n/LocaleProvider";
+import { stripLocale, localizedHref } from "@/lib/i18n/navigation";
 
 // §22: the sidebar is a fixed-width, always-collapsed thin rail (no expand) —
 // one chrome across the whole app. Keep this in sync with the rail's `w-[60px]`
@@ -21,7 +23,11 @@ export function DashboardShell({
   // a type error; it's intentionally ignored.
   initialIsCollapsed?: boolean;
 }) {
-  const pathname = usePathname() ?? "";
+  // pathname is locale-prefixed (/ar/dashboard); every route check below compares
+  // against unprefixed constants, so strip the locale first. Missing this is what
+  // silently dropped the home aurora + flow layouts after the [lang] move.
+  const { locale } = useLocale();
+  const pathname = stripLocale(usePathname() ?? "");
   const router = useRouter();
 
   // BOTH the working editor (/project) and the generation phase (/preview) are
@@ -65,17 +71,24 @@ export function DashboardShell({
       const onProject = pathname.startsWith(`/project/${revokedId}`);
       const onPreview = pathname.startsWith(`/preview/${revokedId}`);
       if (onProject || onPreview) {
-        router.replace("/dashboard");
+        router.replace(localizedHref("/dashboard", locale));
       }
     };
     window.addEventListener("taqreer:share-revoked", onRevoked);
     return () =>
       window.removeEventListener("taqreer:share-revoked", onRevoked);
-  }, [pathname, router]);
+  }, [pathname, router, locale]);
 
   const contentClasses = isFlowRoute
     ? "mx-auto max-w-[1280px] pt-10 px-8 pb-8 space-y-16"
-    : "pt-10 px-8 pb-8 space-y-16";
+    : isGlowRoute
+      // Home: content is vertically centered, so the top icons overlap empty
+      // space above it — no extra top padding needed.
+      ? "pt-10 px-8 pb-8 space-y-16"
+      // List pages (templates / projects / library / …): the headline sits at
+      // the top, so add enough top padding to clear the absolutely-positioned
+      // TopUtilityBar icons (search / theme / language).
+      : "pt-20 px-8 pb-8 space-y-16";
 
   // Panel background variant: flows get the static bottom glow (dots only), home
   // (+ any other glow route) gets the animated aurora, everything else is flat gray.
@@ -110,7 +123,7 @@ export function DashboardShell({
         className="min-h-screen text-on-background relative"
         // +8: the rail floats 8px off the right edge (Sidebar `right-2`), so the
         // content clears the rail AND that gap.
-        style={{ marginRight: `${SIDEBAR_WIDTH + 8}px`, marginLeft: 0, zIndex: 1 }}
+        style={{ marginInlineStart: `${SIDEBAR_WIDTH + 8}px`, marginInlineEnd: 0, zIndex: 1 }}
       >
         {/* §22/§24: rounded content panel floating on the dark gutter. Home gets
             the animated JS aurora + dots (tq-panel-glow); the flows get the dots

@@ -1,43 +1,29 @@
 // Canonical flow-card metadata shared by the dialog flow pickers
-// (`UseBrandKitDialog`, `NewProjectDialog`). Mirrors — and must stay
-// in sync with — the dashboard `QuickActions` tiles: same icon +
-// Arabic title + desc + slug for each of the four landing flows.
+// (`UseBrandKitDialog`, `NewProjectDialog`) and the dashboard
+// `QuickActions`: icon + slug for each of the four landing flows.
 //
-// Kept here (not in `lib/create/seed-from-brand-kit.ts`) so the
-// seed library stays pure logic — this file is UI copy only.
+// Copy (title/desc) is NOT stored here — it lives in the `quickActions`
+// dictionary, resolved per flow in the consuming components (datasheet → the
+// `fromData` key). That keeps all three surfaces in sync AND localized.
 
 import type { BrandKitTargetFlow } from "@/lib/create/seed-from-brand-kit";
 
 export type BrandFlowCard = {
   flow: BrandKitTargetFlow;
   icon: string;
-  title: string;
-  desc: string;
 };
 
 export const BRAND_FLOW_CARDS: BrandFlowCard[] = [
-  {
-    flow: "create",
-    icon: "add_circle",
-    title: "إنشاء عرض جديد",
-    desc: "ابدأ من الصفر بمحتواك",
-  },
-  {
-    flow: "enhance",
-    icon: "auto_fix_high",
-    title: "تحسين عرض موجود",
-    desc: "ارفع ملفك واحصل على نسخة محسّنة",
-  },
-  {
-    flow: "mimic",
-    icon: "content_copy",
-    title: "محاكاة أسلوب عرض",
-    desc: "انسخ أسلوب عرض آخر وطبّقه",
-  },
-  {
-    flow: "datasheet",
-    icon: "dataset",
-    title: "إنشاء من بيانات",
-    desc: "حوّل ملف Excel إلى عرض احترافي",
-  },
+  { flow: "create", icon: "add_circle" },
+  { flow: "enhance", icon: "auto_fix_high" },
+  { flow: "mimic", icon: "content_copy" },
+  { flow: "datasheet", icon: "dataset" },
 ];
+
+// Map a flow slug to its `quickActions` dictionary key (datasheet copy lives
+// under `fromData`).
+export function flowCopyKey(
+  flow: BrandKitTargetFlow,
+): "create" | "enhance" | "mimic" | "fromData" {
+  return flow === "datasheet" ? "fromData" : flow;
+}

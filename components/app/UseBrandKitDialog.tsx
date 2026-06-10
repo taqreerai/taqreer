@@ -17,8 +17,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { BRAND_FLOW_CARDS } from "@/components/app/brandFlowCards";
+import { BRAND_FLOW_CARDS, flowCopyKey } from "@/components/app/brandFlowCards";
 import type { BrandKitTargetFlow } from "@/lib/create/seed-from-brand-kit";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function UseBrandKitDialog({
   open,
@@ -45,6 +46,7 @@ export function UseBrandKitDialog({
   // shape the lint rule explicitly allows; the `if` guard makes
   // the call a no-op when picking is already null, so no
   // cascading-render risk.
+  const dict = useDict();
   const [picking, setPicking] = useState<BrandKitTargetFlow | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- internal-state reset on external prop change
@@ -87,7 +89,6 @@ export function UseBrandKitDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-4"
           >
             <motion.div
-              dir="rtl"
               role="dialog"
               aria-modal="true"
               aria-labelledby="use-brand-kit-title"
@@ -104,19 +105,19 @@ export function UseBrandKitDialog({
                     id="use-brand-kit-title"
                     className="mb-1 text-xl font-bold text-white"
                   >
-                    استخدام هوية الشركة
+                    {dict.useBrandKitDialog.title}
                   </h3>
                   <p className="text-sm text-muted">
                     {brandKitName
-                      ? `اختر التدفق الذي تريد استخدام "${brandKitName}" فيه. سيتم تعبئة الألوان والخطوط والشعار تلقائياً.`
-                      : "اختر التدفق الذي تريد استخدام الهوية فيه. سيتم تعبئة الألوان والخطوط والشعار تلقائياً."}
+                      ? dict.useBrandKitDialog.subtitleNamed.replace("{name}", brandKitName)
+                      : dict.useBrandKitDialog.subtitle}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={busy}
-                  aria-label="إغلاق"
+                  aria-label={dict.common.close}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
                 >
                   <span
@@ -131,6 +132,7 @@ export function UseBrandKitDialog({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {BRAND_FLOW_CARDS.map((card) => {
                   const isPicking = picking === card.flow;
+                  const copy = dict.quickActions[flowCopyKey(card.flow)];
                   return (
                     <button
                       key={card.flow}
@@ -144,7 +146,7 @@ export function UseBrandKitDialog({
                       // picker reads as a continuation of the four
                       // canonical landing tiles, not a generic dialog
                       // chooser.
-                      className="qa-card group relative flex cursor-pointer flex-col gap-3 p-4 text-right transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="qa-card group relative flex cursor-pointer flex-col gap-3 p-4 text-start transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <div>
                         <span
@@ -158,11 +160,11 @@ export function UseBrandKitDialog({
                         </span>
                       </div>
                       <div>
-                        <h4 className="mb-0.5 text-[13px] font-semibold leading-snug text-white">
-                          {card.title}
+                        <h4 className="mb-0.5 text-base font-semibold leading-snug text-white">
+                          {copy.title}
                         </h4>
-                        <p className="text-[11px] leading-relaxed text-muted">
-                          {isPicking ? "جارٍ التحويل..." : card.desc}
+                        <p className="text-[12px] leading-relaxed text-muted">
+                          {isPicking ? dict.useBrandKitDialog.converting : copy.desc}
                         </p>
                       </div>
                       {isPicking ? (

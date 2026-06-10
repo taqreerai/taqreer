@@ -1,0 +1,185 @@
+{
+  "nav": {
+    "home": "Home",
+    "create": "Create",
+    "enhance": "Enhance",
+    "mimic": "Mimic",
+    "fromData": "From data",
+    "comingSoon": "Soon",
+    "projects": "My projects",
+    "templates": "Templates",
+    "imageLibrary": "Image library",
+    "brandKits": "Brand kits",
+    "favorites": "Favorites",
+    "settings": "Settings"
+  },
+  "profileMenu": {
+    "newProject": "New project",
+    "notifications": "Notifications",
+    "settings": "Settings",
+    "signOut": "Sign out"
+  },
+  "topBar": {
+    "search": "Search",
+    "theme": "Theme"
+  },
+  "serverStatus": {
+    "operational": "All systems operational",
+    "degraded": "Degraded performance",
+    "down": "Service disruption"
+  },
+  "common": {
+    "pro": "Pro",
+    "close": "Close"
+  },
+  "newProjectDialog": {
+    "title": "Start a new project",
+    "subtitle": "Pick the flow that fits your content — your default brand kit fills in automatically if you've saved one."
+  },
+  "useBrandKitDialog": {
+    "title": "Use brand kit",
+    "subtitle": "Pick the flow to use the brand kit in. Colors, fonts, and logo are filled in automatically.",
+    "subtitleNamed": "Pick the flow to use \"{name}\" in. Colors, fonts, and logo are filled in automatically.",
+    "converting": "Converting..."
+  },
+  "homeLibrary": {
+    "toggleAria": "Projects or templates",
+    "viewAll": "View all",
+    "noProjects": "No projects yet — start from the cards above."
+  },
+  "quickActions": {
+    "create": { "title": "Create", "desc": "a new presentation" },
+    "enhance": { "title": "Enhance", "desc": "an existing presentation" },
+    "mimic": { "title": "Mimic", "desc": "a presentation's style" },
+    "fromData": { "title": "Datasheet", "desc": "into a presentation" }
+  },
+  "landingNav": {
+    "home": "Home",
+    "features": "Features",
+    "pricing": "Pricing",
+    "templates": "Templates",
+    "login": "Log in",
+    "signup": "Sign up",
+    "dashboard": "Dashboard"
+  },
+  "notFound": {
+    "messagePrefix": "This page isn't here.\nMaybe you'll find it one day.\nAnd if you do, ",
+    "reportLink": "tell us how you got here",
+    "backHome": "Back to home",
+    "backDashboard": "Back to the dashboard"
+  },
+  "globalError": {
+    "title": "Something went wrong",
+    "subtitle": "Our team has been notified automatically",
+    "retry": "Try again"
+  },
+  "auth": {
+    "or": "OR",
+    "continueWithGoogle": "Continue with Google",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "errorGeneric": "Something went wrong. Please try again",
+    "accountPrepFailed": "We couldn't set up your account. Please try again",
+    "passwordMin": "Password must be at least 8 characters",
+    "passwordMinHint": "At least 8 characters",
+    "login": {
+      "title": "Log in",
+      "subtitle": "Welcome back to Taqreer.",
+      "deletedSuccess": "Your account was deleted successfully",
+      "submit": "Log in",
+      "submitting": "Signing in...",
+      "noAccount": "Don't have an account? ",
+      "createAccount": "Create a new account",
+      "forgotPassword": "Forgot your password?",
+      "errInvalidCreds": "Incorrect email or password",
+      "errEmailNotConfirmed": "Please confirm your email first"
+    },
+    "signup": {
+      "title": "Create account",
+      "subtitle": "Start free. No credit card needed.",
+      "nameLabel": "Full name",
+      "namePlaceholder": "Ahmed Mohammed",
+      "submit": "Create account",
+      "submitting": "Creating...",
+      "haveAccount": "Already have an account? ",
+      "login": "Log in",
+      "errEmailInUse": "This email is already in use",
+      "successTitle": "✓ Account created",
+      "successSubtitle": "Thanks for signing up",
+      "successBody": "A confirmation link has been sent to your email. Please check your inbox",
+      "backToLogin": "Back to log in"
+    },
+    "forgot": {
+      "title": "Reset your password",
+      "subtitle": "We'll send a recovery link to your email.",
+      "submit": "Send recovery link",
+      "submitting": "Sending...",
+      "rememberedPassword": "Remembered your password? ",
+      "login": "Log in",
+      "successTitle": "✓ Check your email",
+      "successSubtitle": "We sent you a link to reset your password",
+      "successBody": "Check your email for the password reset link. It may take a few minutes to arrive."
+    },
+    "reset": {
+      "title": "Set a new password",
+      "subtitle": "Enter the new password for your account.",
+      "newPasswordLabel": "New password",
+      "confirmPasswordLabel": "Confirm password",
+      "submit": "Update password",
+      "submitting": "Updating...",
+      "passwordMismatch": "Passwords don't match",
+      "updateFailed": "Couldn't update the password. The link may have expired",
+      "staleLinkPrefix": "The link has expired or is invalid. Please request a new one from the ",
+      "staleLinkLink": "password recovery",
+      "rememberedPassword": "Remembered your password? ",
+      "login": "Log in",
+      "successTitle": "✓ Password updated",
+      "successSubtitle": "Redirecting you to the dashboard..."
+    },
+    "legal": {
+      "prefix": "By creating an account, you agree to the ",
+      "terms": "Terms of Use",
+      "and": " and ",
+      "privacy": "Privacy Policy"
+    }
+  },
+  "flows": {
+    "contentCard": "Content",
+    "language": "Language",
+    "contentLanguageAria": "Content language",
+    "langArabic": "Arabic",
+    "langEnglish": "English",
+    "contentPlaceholder": "Write your presentation content here...",
+    "or": "or",
+    "dropTitle": "Drag or click to choose a file",
+    "dropSubtitle": "PDF / PPTX / DOCX / TXT — up to 100 MB",
+    "removeFile": "Remove file",
+    "unitKB": "KB",
+    "unitMB": "MB",
+    "brandCard": "Brand identity",
+    "colors": "Colors",
+    "addColor": "Add color",
+    "logo": "Logo",
+    "saveAsDefault": "Save as default brand kit",
+    "outputCard": "Output settings",
+    "slideCount": "Slide count",
+    "auto": "Auto",
+    "custom": "Custom",
+    "slideNumbering": "Slide numbering",
+    "designStyle": "Design style",
+    "startFailed": "Couldn't start generation. Try again.",
+    "fileTypeError": "Please upload a PDF, PowerPoint, Word, or text file.",
+    "fileTooLarge": "The file exceeds the 100 MB max ({size}).",
+    "parseFailed": "Couldn't parse the content file. Try again.",
+    "createFailed": "Couldn't create the project",
+    "create": {
+      "title": "Create a new presentation",
+      "subtitle": "Write your content or upload a file, pick your brand identity, and we'll build a deck that matches your taste."
+    }
+  },
+  "language": {
+    "label": "Language",
+    "ar": "العربية",
+    "en": "English"
+  }
+}

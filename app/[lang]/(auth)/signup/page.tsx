@@ -1,25 +1,17 @@
 "use client";
 
 // Signup form — renders inside the auth-layout glass modal (logo +
-// terms-fine-print are owned by `app/(auth)/layout.tsx`, this file
-// just owns the form). Gamma-inspired hierarchy: big right-anchored
-// heading + subtitle, then Google primary at the top, then "أو"
-// divider, then email/password/name fields, then submit. The auth
-// modal layout supplies the legal fine print.
+// terms-fine-print are owned by `(auth)/layout.tsx`, this file just owns
+// the form). Gamma-inspired hierarchy: centered heading + subtitle, then
+// Google primary at the top, then the divider, then the fields, then submit.
 
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-
-function toArabicError(msg: string): string {
-  if (/already registered|already exists|User already registered/i.test(msg))
-    return "البريد الإلكتروني مستخدم بالفعل";
-  if (/Password should be at least|weak password/i.test(msg))
-    return "كلمة المرور يجب أن تكون 8 أحرف على الأقل";
-  return "حدث خطأ. يرجى المحاولة مرة أخرى";
-}
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 const fadeUp = (delay: number) => ({
   initial: { opacity: 0, y: 20 },
@@ -38,6 +30,10 @@ const googleIcon = (
 
 export default function SignupPage() {
   const router = useRouter();
+  const { locale } = useLocale();
+  const dict = useDict();
+  const t = dict.auth;
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,6 +42,14 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
 
   const supabase = createClient();
+  const dashboardHref = localizedHref("/dashboard", locale);
+
+  const mapError = (msg: string): string => {
+    if (/already registered|already exists|User already registered/i.test(msg))
+      return t.signup.errEmailInUse;
+    if (/Password should be at least|weak password/i.test(msg)) return t.passwordMin;
+    return t.errorGeneric;
+  };
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +57,7 @@ export default function SignupPage() {
     setError(null);
 
     if (password.length < 8) {
-      setError("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
+      setError(t.passwordMin);
       setLoading(false);
       return;
     }
@@ -64,18 +68,15 @@ export default function SignupPage() {
         password,
         options: {
           data: { full_name: name, name },
-          // After Supabase verifies the email-confirm token, send the
-          // user to our `/callback` handler (which exchanges the code,
-          // syncs the Prisma User row, and lands them on /dashboard).
-          // Without this option Supabase falls back to the project's
-          // Site URL — users would land on the marketing landing with
-          // a session sitting in the URL hash and no clear next step.
-          emailRedirectTo: `${window.location.origin}/callback?next=/dashboard`,
+          // After Supabase verifies the email-confirm token, send the user to our
+          // `/callback` handler (proxy re-prefixes the locale; it exchanges the
+          // code, syncs the Prisma User row, and lands them on `next`).
+          emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(dashboardHref)}`,
         },
       });
 
       if (signUpError) {
-        setError(toArabicError(signUpError.message));
+        setError(mapError(signUpError.message));
       } else if (data.session) {
         // Email confirmation disabled — session returned immediately.
         // user-sync upserts the Prisma User row; both transport AND
@@ -94,10 +95,10 @@ export default function SignupPage() {
           console.error("[signup] user-sync failed", err);
         }
         if (!syncOk) {
-          setError("تعذر تجهيز الحساب. يرجى المحاولة مرة أخرى");
+          setError(t.accountPrepFailed);
           return;
         }
-        router.push("/dashboard");
+        router.push(dashboardHref);
         router.refresh();
       } else {
         // Email confirmation required
@@ -105,7 +106,7 @@ export default function SignupPage() {
       }
     } catch (err) {
       console.error("[signup] sign-up error", err);
-      setError("حدث خطأ. يرجى المحاولة مرة أخرى");
+      setError(t.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -117,11 +118,11 @@ export default function SignupPage() {
     try {
       const { error: signUpError } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/callback?next=/dashboard` },
+        options: { redirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(dashboardHref)}` },
       });
-      if (signUpError) setError(toArabicError(signUpError.message));
+      if (signUpError) setError(mapError(signUpError.message));
     } catch {
-      setError("حدث خطأ. يرجى المحاولة مرة أخرى");
+      setError(t.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -138,16 +139,14 @@ export default function SignupPage() {
         className="space-y-6 text-center"
       >
         <div>
-          <h1 className="text-3xl font-bold mb-2">✓ تم إنشاء الحساب</h1>
-          <p className="text-muted">شكراً لك على التسجيل</p>
+          <h1 className="text-3xl font-bold mb-2">{t.signup.successTitle}</h1>
+          <p className="text-muted">{t.signup.successSubtitle}</p>
         </div>
         <div className="bg-green-500/20 border border-green-500/40 rounded-xl p-4">
-          <p className="text-green-200 text-sm">
-            تم إرسال رابط التأكيد إلى بريدك الإلكتروني. يرجى التحقق من صندوق الوارد
-          </p>
+          <p className="text-green-200 text-sm">{t.signup.successBody}</p>
         </div>
-        <Link href="/login" className="text-white hover:underline cursor-pointer">
-          العودة إلى تسجيل الدخول
+        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+          {t.signup.backToLogin}
         </Link>
       </motion.div>
     );
@@ -162,13 +161,9 @@ export default function SignupPage() {
       transition={{ duration: 0.2 }}
       className="space-y-5"
     >
-      {/* Heading + subtitle — center-aligned, `text-2xl` per user
-          direction 2026-05-28 (was text-4xl, scaled down to sit
-          closer to the body copy now that the smaller logo above
-          gives the wordmark room). */}
       <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-2xl font-bold mb-2">إنشاء حساب</h1>
-        <p className="text-sm text-muted">ابدأ مجاناً. لا حاجة لبطاقة ائتمان.</p>
+        <h1 className="text-2xl font-bold mb-2">{t.signup.title}</h1>
+        <p className="text-sm text-muted">{t.signup.subtitle}</p>
       </motion.div>
 
       {error && (
@@ -178,8 +173,7 @@ export default function SignupPage() {
       )}
 
       {/* Google primary — sits at the top of the form per Gamma's
-          single-CTA hierarchy. Uses `btn-gradient` so the OAuth path
-          reads as the recommended choice; email is the fallback. */}
+          single-CTA hierarchy. */}
       <motion.button
         {...fadeUp(0.1)}
         onClick={handleGoogleSignup}
@@ -187,7 +181,7 @@ export default function SignupPage() {
         className="btn-gradient w-full px-4 py-3 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
       >
         {googleIcon}
-        المتابعة بحساب جوجل
+        {t.continueWithGoogle}
       </motion.button>
 
       <motion.div {...fadeUp(0.15)} className="relative">
@@ -195,29 +189,26 @@ export default function SignupPage() {
           <div className="w-full border-t border-[var(--tq-border-glass)]" />
         </div>
         <div className="relative flex justify-center text-sm">
-          {/* "أو" pill sits over the divider — `--tq-bg-glass` so the
-              line breaks cleanly through the label without exposing
-              the marquee. */}
           <span className="px-3 py-0.5 rounded-full bg-[var(--tq-bg-glass)] border border-[var(--tq-border-glass)] text-xs text-muted">
-            أو
+            {t.or}
           </span>
         </div>
       </motion.div>
 
       <motion.form {...fadeUp(0.2)} onSubmit={handleEmailSignup} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">الاسم الكامل</label>
+          <label className="block text-sm font-medium mb-2">{t.signup.nameLabel}</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="أحمد محمد"
+            placeholder={t.signup.namePlaceholder}
             required
             className="input-dark cursor-text"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2">البريد الإلكتروني</label>
+          <label className="block text-sm font-medium mb-2">{t.emailLabel}</label>
           <input
             type="email"
             value={email}
@@ -228,7 +219,7 @@ export default function SignupPage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2">كلمة المرور</label>
+          <label className="block text-sm font-medium mb-2">{t.passwordLabel}</label>
           <input
             type="password"
             value={password}
@@ -237,21 +228,21 @@ export default function SignupPage() {
             required
             className="input-dark cursor-text"
           />
-          <p className="text-xs text-muted mt-1">8 أحرف على الأقل</p>
+          <p className="text-xs text-muted mt-1">{t.passwordMinHint}</p>
         </div>
         <button
           type="submit"
           disabled={loading}
           className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
-          {loading ? "جاري الإنشاء..." : "إنشاء الحساب"}
+          {loading ? t.signup.submitting : t.signup.submit}
         </button>
       </motion.form>
 
       <motion.p {...fadeUp(0.3)} className="text-sm text-muted">
-        هل لديك حساب بالفعل؟{" "}
-        <Link href="/login" className="text-white hover:underline cursor-pointer">
-          تسجيل الدخول
+        {t.signup.haveAccount}
+        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+          {t.signup.login}
         </Link>
       </motion.p>
     </motion.div>

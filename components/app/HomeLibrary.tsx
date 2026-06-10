@@ -9,6 +9,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { SegmentedToggle } from "@/components/create/controls";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import {
   ProjectsGrid,
   type ProjectsGridProject,
@@ -28,25 +30,27 @@ export function HomeLibrary({
   templates: MyTemplatesTemplate[];
 }) {
   const [tab, setTab] = useState<Tab>("projects");
+  const dict = useDict();
+  const { locale } = useLocale();
 
   return (
-    <div className="glass-card rounded-2xl p-5 sm:p-6" dir="rtl">
+    <div className="glass-card rounded-2xl p-5 sm:p-6">
       <header className="mb-5 flex items-center justify-between gap-3">
         <SegmentedToggle<Tab>
           options={[
-            { value: "projects", label: "مشاريعي" },
-            { value: "templates", label: "القوالب" },
+            { value: "projects", label: dict.nav.projects },
+            { value: "templates", label: dict.nav.templates },
           ]}
           value={tab}
           onChange={setTab}
-          ariaLabel="المشاريع أو القوالب"
+          ariaLabel={dict.homeLibrary.toggleAria}
           size="comfortable"
         />
         <Link
-          href={tab === "projects" ? "/projects" : "/templates"}
+          href={localizedHref(tab === "projects" ? "/projects" : "/templates", locale)}
           className="tq-widget-link no-underline"
         >
-          عرض الكل
+          {dict.homeLibrary.viewAll}
         </Link>
       </header>
 
@@ -56,7 +60,7 @@ export function HomeLibrary({
           gridClassName="grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
           emptyState={
             <p className="py-10 text-center text-sm text-muted">
-              لا توجد مشاريع بعد — ابدأ من البطاقات بالأعلى.
+              {dict.homeLibrary.noProjects}
             </p>
           }
         />

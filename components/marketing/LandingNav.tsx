@@ -1,24 +1,34 @@
+"use client";
+
 // Landing top nav — STATIC (Swiss-grid redesign): no scroll-reveal motion, no
 // background fill, just a bottom hairline. `absolute` so it sits at the top of
-// the hero and scrolls away (no sticky reveal). RTL: logo on the right (reading
-// start), nav links centred, auth CTAs on the left.
+// the hero and scrolls away (no sticky reveal). The flex order mirrors with the
+// chrome direction: in RTL the logo reads at the start (right); in LTR it leads
+// from the left. Strings come from the active-locale dictionary.
 
 import Link from "next/link";
 import Image from "next/image";
-
-const NAV_LINKS = [
-  { label: "الرئيسية", href: "#" },
-  { label: "المميزات", href: "#features" },
-  { label: "الأسعار", href: "#pricing" },
-  { label: "القوالب", href: "#templates" },
-];
+import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
+import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 
 export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
+  const { locale } = useLocale();
+  const dict = useDict();
+
+  // In-page anchor links — no locale prefix (they scroll within this page).
+  const navLinks = [
+    { label: dict.landingNav.home, href: "#" },
+    { label: dict.landingNav.features, href: "#features" },
+    { label: dict.landingNav.pricing, href: "#pricing" },
+    { label: dict.landingNav.templates, href: "#templates" },
+  ];
+
   return (
     <nav className="absolute top-0 right-0 left-0 z-50">
       <div className="mx-auto max-w-7xl border-b border-[var(--tq-border-glass)] px-4 sm:px-6 lg:px-8">
         <div className="flex h-20 items-center justify-between">
-          <Link href="/" className="flex flex-shrink-0 items-center gap-2">
+          <Link href={localizedHref("/", locale)} className="flex flex-shrink-0 items-center gap-2">
             <Image
               src="/logo-light.svg"
               alt="Taqreer Logo"
@@ -29,9 +39,9 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
           </Link>
 
           <div className="hidden items-center gap-8 md:flex">
-            {NAV_LINKS.map((l) => (
+            {navLinks.map((l) => (
               <a
-                key={l.label}
+                key={l.href}
                 href={l.href}
                 className="cursor-pointer text-sm text-muted transition-colors hover:text-white"
               >
@@ -41,17 +51,18 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
+            <LanguageMenu />
             {isAuthed ? (
-              <Link href="/dashboard" className="btn-gradient px-5 py-2 text-xs">
-                لوحة التحكم
+              <Link href={localizedHref("/dashboard", locale)} className="btn-gradient px-5 py-2 text-xs">
+                {dict.landingNav.dashboard}
               </Link>
             ) : (
               <>
-                <Link href="/login" className="btn-pill px-4 py-2 text-xs">
-                  تسجيل الدخول
+                <Link href={localizedHref("/login", locale)} className="btn-pill px-4 py-2 text-xs">
+                  {dict.landingNav.login}
                 </Link>
-                <Link href="/signup" className="btn-gradient px-5 py-2 text-xs">
-                  إنشاء حساب
+                <Link href={localizedHref("/signup", locale)} className="btn-gradient px-5 py-2 text-xs">
+                  {dict.landingNav.signup}
                 </Link>
               </>
             )}

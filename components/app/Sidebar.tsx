@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { stripLocale, localizedHref } from "@/lib/i18n/navigation";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { Tooltip } from "@/components/common/Tooltip";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -14,7 +17,6 @@ import type { AnimatedIconHandle } from "@/components/icons/types";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
 import { AllNotificationsModal } from "@/components/app/AllNotificationsModal";
-import { ServerStatusChip } from "@/components/app/ServerStatusChip";
 import { notificationStore, useNotifications } from "@/lib/notifications/store";
 
 // One sidebar nav link. Each instance owns its own icon ref so the
@@ -38,40 +40,24 @@ function SidebarNavLink({
   isCollapsed: boolean;
   comingSoon?: boolean;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const iconRef = useRef<AnimatedIconHandle>(null);
-  const linkRef = useRef<HTMLAnchorElement>(null);
-  // §24: the tooltip is PORTALLED to <body> with fixed positioning. The rail's
-  // scroll container is `overflow-x-hidden`, which clipped the old in-flow
-  // `right-full` tooltip so it never actually appeared — that's why the rail
-  // looked like it had no tooltips. null = hidden.
-  const [tipPos, setTipPos] = useState<{ top: number; right: number } | null>(
-    null,
-  );
 
-  const handleEnter = () => {
-    iconRef.current?.startAnimation();
-    if (!isCollapsed) return;
-    const r = linkRef.current?.getBoundingClientRect();
-    if (r) {
-      setTipPos({
-        top: r.top + r.height / 2,
-        // gap from the rail (the tooltip shouldn't look glued to the icons)
-        right: window.innerWidth - r.left + 14,
-      });
-    }
-  };
-  const handleLeave = () => {
-    iconRef.current?.stopAnimation();
-    setTipPos(null);
-  };
-
+  // The rail is icon-only, so each link carries the shared animated tooltip with
+  // its label. The pill points toward the content — left of the rail in RTL (rail
+  // on the right), right of it in LTR (rail on the left). The link's own mouse
+  // handlers still drive the hover icon animation.
   return (
-    <div className="relative w-full">
+    <Tooltip
+      placement={dir === "rtl" ? "left" : "right"}
+      className="relative block w-full"
+      label={comingSoon ? `${label} (${dict.nav.comingSoon})` : label}
+    >
       <Link
-        ref={linkRef}
         href={href}
-        onMouseEnter={handleEnter}
-        onMouseLeave={handleLeave}
+        onMouseEnter={() => iconRef.current?.startAnimation()}
+        onMouseLeave={() => iconRef.current?.stopAnimation()}
         className={`flex items-center mx-[10px] w-[calc(100%-20px)] h-[40px] overflow-hidden whitespace-nowrap transition-all duration-300 rounded-full relative ${
           isActive ? 'nav-active' : 'nav-item'
         }`}
@@ -88,33 +74,12 @@ function SidebarNavLink({
           {label}
         </span>
         {comingSoon && !isCollapsed && (
-          <span className="ml-auto mr-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
-            قريباً
+          <span className="ms-auto me-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+            {dict.nav.comingSoon}
           </span>
         )}
       </Link>
-      {typeof document !== "undefined"
-        ? createPortal(
-            <AnimatePresence>
-              {tipPos ? (
-                <motion.div
-                  key="sidebar-tip"
-                  className="sidebar-tooltip pointer-events-none fixed z-[9999]"
-                  style={{ top: tipPos.top, right: tipPos.right }}
-                  // Slide in right→left (emerges from the rail toward content).
-                  initial={{ opacity: 0, x: 10, y: "-50%" }}
-                  animate={{ opacity: 1, x: 0, y: "-50%" }}
-                  exit={{ opacity: 0, x: 10, y: "-50%" }}
-                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  {comingSoon ? `${label} (قريباً)` : label}
-                </motion.div>
-              ) : null}
-            </AnimatePresence>,
-            document.body,
-          )
-        : null}
-    </div>
+    </Tooltip>
   );
 }
 
@@ -127,13 +92,17 @@ export function Sidebar({
   isCollapsed?: boolean;
   transitionClass?: string;
 }) {
-  const pathname = usePathname();
+  // Locale-stripped so `pathname === item.path` (unprefixed) still marks the
+  // active nav item after the [lang] move (pathname is /ar/dashboard).
+  const pathname = stripLocale(usePathname() ?? "");
   const router = useRouter();
+  const { locale, dir } = useLocale();
+  const dict = useDict();
   const { user, avatarUrl, name, email } = useUser();
   const supabase = createClient();
   const [profileOpen, setProfileOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{
-    top?: number; bottom?: number; right: number; width: number;
+    top?: number; bottom?: number; left?: number; right?: number; width: number;
   } | null>(null);
   const [mounted, setMounted] = useState(false);
   const profileBtnRef = useRef<HTMLButtonElement>(null);
@@ -187,16 +156,23 @@ export function Sidebar({
   const handleProfileClick = () => {
     if (!profileBtnRef.current) return;
     const rect = profileBtnRef.current.getBoundingClientRect();
+    // The rail sits on the inline-start side (right in RTL, left in LTR), so the
+    // profile menu opens toward the content: left of the button in RTL, right of
+    // it in LTR.
     if (isCollapsed) {
       setDropdownPos({
         bottom: window.innerHeight - rect.top,
-        right: window.innerWidth - rect.left + 8,
+        ...(dir === "rtl"
+          ? { right: window.innerWidth - rect.left + 8 }
+          : { left: rect.right + 8 }),
         width: 224,
       });
     } else {
       setDropdownPos({
         bottom: window.innerHeight - rect.top + 8,
-        right: window.innerWidth - rect.right,
+        ...(dir === "rtl"
+          ? { right: window.innerWidth - rect.right }
+          : { left: rect.left }),
         width: rect.width,
       });
     }
@@ -205,7 +181,7 @@ export function Sidebar({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push(localizedHref("/login", locale));
     router.refresh();
   };
 
@@ -232,10 +208,10 @@ export function Sidebar({
     path: string;
     comingSoon?: boolean;
   }> = [
-    { label: 'إنشاء', icon: 'add_circle', path: '/create' },
-    { label: 'تحسين', icon: 'auto_fix_high', path: '/enhance' },
-    { label: 'محاكاة', icon: 'content_copy', path: '/mimic' },
-    { label: 'من بيانات', icon: 'dataset', path: '/datasheet', comingSoon: true },
+    { label: dict.nav.create, icon: 'add_circle', path: '/create' },
+    { label: dict.nav.enhance, icon: 'auto_fix_high', path: '/enhance' },
+    { label: dict.nav.mimic, icon: 'content_copy', path: '/mimic' },
+    { label: dict.nav.fromData, icon: 'dataset', path: '/datasheet', comingSoon: true },
   ];
 
   const navLinks = [
@@ -245,12 +221,12 @@ export function Sidebar({
     // `/templates` lives directly below /projects so the user's two
     // library surfaces sit as a paired group. Moved here from the
     // "Create" group on 2026-05-22 — see actionButtons docstring.
-    { path: '/projects', icon: 'folder_copy', label: 'مشاريعي' },
-    { path: '/templates', icon: 'grid_view', label: 'القوالب' },
-    { path: '/library', icon: 'photo_library', label: 'مكتبة الصور' },
-    { path: '/brand-kits', icon: 'id_card', label: 'هوية الشركة' },
-    { path: '/favorites', icon: 'star', label: 'المفضلة' },
-    { path: '/settings', icon: 'settings', label: 'الإعدادات' },
+    { path: '/projects', icon: 'folder_copy', label: dict.nav.projects },
+    { path: '/templates', icon: 'grid_view', label: dict.nav.templates },
+    { path: '/library', icon: 'photo_library', label: dict.nav.imageLibrary },
+    { path: '/brand-kits', icon: 'id_card', label: dict.nav.brandKits },
+    { path: '/favorites', icon: 'star', label: dict.nav.favorites },
+    { path: '/settings', icon: 'settings', label: dict.nav.settings },
   ];
 
   return (
@@ -259,7 +235,7 @@ export function Sidebar({
       // §22: thin transparent icon rail (always collapsed). No fill, no blur,
       // no separator border — it floats on the dark gutter as the single chrome
       // across the whole app. Labels are hidden; hover shows a tooltip.
-      className={`sidebar-bg fixed right-2 top-0 h-screen z-50 flex flex-col w-[60px] ${transitionClass}`}
+      className={`sidebar-bg fixed start-2 top-0 h-screen z-50 flex flex-col w-[60px] ${transitionClass}`}
     >
       {/* ── Logo ── */}
       <div className="h-20 flex items-center px-[10px] flex-shrink-0">
@@ -272,20 +248,20 @@ export function Sidebar({
               `pw-hover-trigger` is the CSS hook the icon's hover-mode
               rules gate on. User direction 2026-05-28. */}
           <Link
-            href="/dashboard"
-            aria-label="الرئيسية"
-            className={`pw-hover-trigger absolute right-0 flex items-center justify-center w-[40px] h-[40px] transition-opacity duration-300 ${
+            href={localizedHref("/dashboard", locale)}
+            aria-label={dict.nav.home}
+            className={`pw-hover-trigger absolute start-0 flex items-center justify-center w-[40px] h-[40px] transition-opacity duration-300 ${
               isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           >
             <ParagraphWriteIcon mode="hover" size={26} />
           </Link>
           {/* Expanded: full logo */}
-          <div className={`absolute right-0 flex items-center h-[40px] transition-opacity duration-300 ${
+          <div className={`absolute start-0 flex items-center h-[40px] transition-opacity duration-300 ${
             isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}>
             <Image src="/logo-light.svg" alt="Taqreer Logo" width={110} height={28} className="object-contain" />
-            <span className="badge-purple mr-3 mt-1">احترافي</span>
+            <span className="badge-purple me-3 mt-1">{dict.common.pro}</span>
           </div>
         </div>
       </div>
@@ -299,9 +275,9 @@ export function Sidebar({
         <div className="flex flex-col py-3 w-full">
           {/* Home */}
           <SidebarNavLink
-            href="/dashboard"
+            href={localizedHref("/dashboard", locale)}
             icon="home"
-            label="الرئيسية"
+            label={dict.nav.home}
             isActive={pathname === '/dashboard'}
             isCollapsed={isCollapsed}
           />
@@ -318,7 +294,7 @@ export function Sidebar({
           {actionButtons.map((btn) => (
             <SidebarNavLink
               key={btn.path}
-              href={btn.path}
+              href={localizedHref(btn.path, locale)}
               icon={btn.icon}
               label={btn.label}
               isActive={pathname === btn.path}
@@ -333,7 +309,7 @@ export function Sidebar({
           {navLinks.map((item) => (
             <SidebarNavLink
               key={item.path}
-              href={item.path}
+              href={localizedHref(item.path, locale)}
               icon={item.icon}
               label={item.label}
               isActive={pathname === item.path}
@@ -398,7 +374,7 @@ export function Sidebar({
                 </div>
               )}
             </div>
-            <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 text-right ${
+            <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 text-start ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pr-1'
             }`}>
               <span className="font-medium text-white text-sm leading-tight truncate">{name}</span>
@@ -421,6 +397,7 @@ export function Sidebar({
                   position: "fixed",
                   top: dropdownPos.top,
                   bottom: dropdownPos.bottom,
+                  left: dropdownPos.left,
                   right: dropdownPos.right,
                   width: dropdownPos.width,
                   zIndex: 9999,
@@ -456,7 +433,7 @@ export function Sidebar({
                   className="dropdown-item"
                 >
                   <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                  <span>مشروع جديد</span>
+                  <span>{dict.profileMenu.newProject}</span>
                 </button>
                 <button
                   type="button"
@@ -470,7 +447,7 @@ export function Sidebar({
                   className="dropdown-item"
                 >
                   <span className="material-symbols-outlined text-[18px]">notifications</span>
-                  <span>الإشعارات</span>
+                  <span>{dict.profileMenu.notifications}</span>
                   {unread > 0 ? (
                     <span className="ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white">
                       {unreadLabel}
@@ -480,24 +457,13 @@ export function Sidebar({
 
                 <div className="divider-dark my-1" />
 
-                {/* Server status — display only (non-interactive). The inline
-                    chip's label IS the status ("كل الأنظمة تعمل" / "أداء منخفض
-                    حالياً" / …), so it doubles as the row label; it renders
-                    nothing while the status is unknown/loading. */}
-                <div className="dropdown-item cursor-default hover:bg-transparent! hover:text-[var(--tq-text-muted)]!">
-                  <span className="material-symbols-outlined text-[18px]">monitor_heart</span>
-                  <ServerStatusChip inline />
-                </div>
-
-                <div className="divider-dark my-1" />
-
                 <Link
-                  href="/settings"
+                  href={localizedHref("/settings", locale)}
                   onClick={() => setProfileOpen(false)}
                   className="dropdown-item"
                 >
                   <span className="material-symbols-outlined text-[18px]">settings</span>
-                  <span>الإعدادات</span>
+                  <span>{dict.profileMenu.settings}</span>
                 </Link>
                 <button
                   type="button"
@@ -505,7 +471,7 @@ export function Sidebar({
                   className="dropdown-item"
                 >
                   <span className="material-symbols-outlined text-[18px]">logout</span>
-                  <span>تسجيل الخروج</span>
+                  <span>{dict.profileMenu.signOut}</span>
                 </button>
               </motion.div>
             )}

@@ -5,14 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-
-function toArabicError(msg: string): string {
-  if (/Invalid login credentials/i.test(msg))
-    return "البريد الإلكتروني أو كلمة المرور غير صحيحة";
-  if (/Email not confirmed/i.test(msg))
-    return "يرجى تأكيد بريدك الإلكتروني أولاً";
-  return "حدث خطأ. يرجى المحاولة مرة أخرى";
-}
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 const fadeUp = (delay: number) => ({
   initial: { opacity: 0, y: 20 },
@@ -32,9 +26,14 @@ const googleIcon = (
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextUrl = searchParams.get("next") || "/dashboard";
-  const templateId = searchParams.get("template");
+  const { locale } = useLocale();
+  const dict = useDict();
+  const t = dict.auth;
 
+  // `next` from the proxy is already locale-prefixed; the fallback isn't, so
+  // localize it.
+  const nextUrl = searchParams.get("next") || localizedHref("/dashboard", locale);
+  const templateId = searchParams.get("template");
   const deleted = searchParams.get("deleted") === "true";
 
   const [email, setEmail] = useState("");
@@ -44,6 +43,13 @@ export default function LoginPage() {
 
   const supabase = createClient();
 
+  // Map Supabase's English error strings to localized copy.
+  const mapError = (msg: string): string => {
+    if (/Invalid login credentials/i.test(msg)) return t.login.errInvalidCreds;
+    if (/Email not confirmed/i.test(msg)) return t.login.errEmailNotConfirmed;
+    return t.errorGeneric;
+  };
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -51,7 +57,7 @@ export default function LoginPage() {
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
-        setError(toArabicError(signInError.message));
+        setError(mapError(signInError.message));
       } else {
         // user-sync upserts the Prisma User row from the Supabase
         // session. Both branches matter:
@@ -76,7 +82,7 @@ export default function LoginPage() {
           console.error("[login] user-sync failed", err);
         }
         if (!syncOk) {
-          setError("تعذر تجهيز الحساب. يرجى المحاولة مرة أخرى");
+          setError(t.accountPrepFailed);
           return;
         }
         router.push(templateId ? `${nextUrl}?template=${templateId}` : nextUrl);
@@ -84,7 +90,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       console.error("[login] sign-in error", err);
-      setError("حدث خطأ. يرجى المحاولة مرة أخرى");
+      setError(t.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -97,12 +103,15 @@ export default function LoginPage() {
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
+          // `/callback` (unlocalized) is re-prefixed by the proxy, so Supabase's
+          // allowed-redirect list doesn't need a per-locale entry. `next` carries
+          // the (already locale-prefixed) post-login destination.
           redirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(nextUrl)}${templateId ? `&template=${templateId}` : ""}`,
         },
       });
-      if (signInError) setError(toArabicError(signInError.message));
+      if (signInError) setError(mapError(signInError.message));
     } catch {
-      setError("حدث خطأ. يرجى المحاولة مرة أخرى");
+      setError(t.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -117,16 +126,14 @@ export default function LoginPage() {
       transition={{ duration: 0.2 }}
       className="space-y-5"
     >
-      {/* Heading + subtitle — center-aligned, `text-2xl` per user
-          direction 2026-05-28. Matches the signup form's hierarchy. */}
       <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-2xl font-bold mb-2">تسجيل الدخول</h1>
-        <p className="text-sm text-muted">مرحباً بعودتك إلى تقرير.</p>
+        <h1 className="text-2xl font-bold mb-2">{t.login.title}</h1>
+        <p className="text-sm text-muted">{t.login.subtitle}</p>
       </motion.div>
 
       {deleted && (
         <motion.div {...fadeUp(0.03)} className="bg-green-500/20 border border-green-500/40 rounded-xl p-3 text-green-200 text-sm">
-          تم حذف حسابك بنجاح
+          {t.login.deletedSuccess}
         </motion.div>
       )}
 
@@ -137,7 +144,7 @@ export default function LoginPage() {
       )}
 
       {/* Google primary — top of the form for Gamma-style single-CTA
-          hierarchy. Email/password sits below the "أو" divider. */}
+          hierarchy. Email/password sits below the divider. */}
       <motion.button
         {...fadeUp(0.1)}
         onClick={handleGoogleLogin}
@@ -145,7 +152,7 @@ export default function LoginPage() {
         className="btn-gradient w-full px-4 py-3 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
       >
         {googleIcon}
-        المتابعة بحساب جوجل
+        {t.continueWithGoogle}
       </motion.button>
 
       <motion.div {...fadeUp(0.15)} className="relative">
@@ -154,14 +161,14 @@ export default function LoginPage() {
         </div>
         <div className="relative flex justify-center text-sm">
           <span className="px-3 py-0.5 rounded-full bg-[var(--tq-bg-glass)] border border-[var(--tq-border-glass)] text-xs text-muted">
-            أو
+            {t.or}
           </span>
         </div>
       </motion.div>
 
       <motion.form {...fadeUp(0.2)} onSubmit={handleEmailLogin} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">البريد الإلكتروني</label>
+          <label className="block text-sm font-medium mb-2">{t.emailLabel}</label>
           <input
             type="email"
             value={email}
@@ -172,12 +179,7 @@ export default function LoginPage() {
           />
         </div>
         <div>
-          {/* Password label sits alone now — the forgot-password
-              link used to live here on the right side of the row,
-              moved to the form footer next to the signup CTA per
-              user direction 2026-05-28 so both secondary navs
-              cluster together. */}
-          <label className="block text-sm font-medium mb-2">كلمة المرور</label>
+          <label className="block text-sm font-medium mb-2">{t.passwordLabel}</label>
           <input
             type="password"
             value={password}
@@ -192,32 +194,26 @@ export default function LoginPage() {
           disabled={loading}
           className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
-          {loading ? "جاري الدخول..." : "تسجيل الدخول"}
+          {loading ? t.login.submitting : t.login.submit}
         </button>
       </motion.form>
 
-      {/* Footer cluster — both secondary navs sit together at the
-          bottom of the form: signup CTA on the left of the row,
-          forgot-password on the right (or in RTL, signup at the
-          start of the inline axis, forgot-password at the end).
-          Single row with `justify-between` so they sit on opposite
-          ends. Forgot-password label kept its `text-xs` to read as
-          the smaller of the two secondaries. */}
+      {/* Footer cluster — signup CTA + forgot-password on opposite ends. */}
       <motion.div
         {...fadeUp(0.3)}
-        className="flex items-center justify-between gap-3 text-sm text-muted"
+        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm text-muted"
       >
-        <span>
-          ليس لديك حساب؟{" "}
-          <Link href="/signup" className="text-white hover:underline cursor-pointer">
-            إنشاء حساب جديد
+        <span className="whitespace-nowrap">
+          {t.login.noAccount}
+          <Link href={localizedHref("/signup", locale)} className="text-white hover:underline cursor-pointer">
+            {t.login.createAccount}
           </Link>
         </span>
         <Link
-          href="/forgot-password"
+          href={localizedHref("/forgot-password", locale)}
           className="text-xs text-white hover:underline cursor-pointer whitespace-nowrap"
         >
-          نسيت كلمة المرور؟
+          {t.login.forgotPassword}
         </Link>
       </motion.div>
     </motion.div>

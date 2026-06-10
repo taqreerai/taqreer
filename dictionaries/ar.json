@@ -1,0 +1,185 @@
+{
+  "nav": {
+    "home": "الرئيسية",
+    "create": "إنشاء",
+    "enhance": "تحسين",
+    "mimic": "محاكاة",
+    "fromData": "من بيانات",
+    "comingSoon": "قريباً",
+    "projects": "مشاريعي",
+    "templates": "القوالب",
+    "imageLibrary": "مكتبة الصور",
+    "brandKits": "هوية الشركة",
+    "favorites": "المفضلة",
+    "settings": "الإعدادات"
+  },
+  "profileMenu": {
+    "newProject": "مشروع جديد",
+    "notifications": "الإشعارات",
+    "settings": "الإعدادات",
+    "signOut": "تسجيل الخروج"
+  },
+  "topBar": {
+    "search": "بحث",
+    "theme": "السمة"
+  },
+  "serverStatus": {
+    "operational": "كل الأنظمة تعمل",
+    "degraded": "أداء منخفض حالياً",
+    "down": "انقطاع في الخدمة"
+  },
+  "common": {
+    "pro": "احترافي",
+    "close": "إغلاق"
+  },
+  "newProjectDialog": {
+    "title": "ابدأ مشروعاً جديداً",
+    "subtitle": "اختر التدفق المناسب لمحتواك — ستُعبأ هويتك البصرية الافتراضية تلقائياً إذا كانت محفوظة."
+  },
+  "useBrandKitDialog": {
+    "title": "استخدام هوية الشركة",
+    "subtitle": "اختر التدفق الذي تريد استخدام الهوية فيه. سيتم تعبئة الألوان والخطوط والشعار تلقائياً.",
+    "subtitleNamed": "اختر التدفق الذي تريد استخدام \"{name}\" فيه. سيتم تعبئة الألوان والخطوط والشعار تلقائياً.",
+    "converting": "جارٍ التحويل..."
+  },
+  "homeLibrary": {
+    "toggleAria": "المشاريع أو القوالب",
+    "viewAll": "عرض الكل",
+    "noProjects": "لا توجد مشاريع بعد — ابدأ من البطاقات بالأعلى."
+  },
+  "quickActions": {
+    "create": { "title": "إنشاء", "desc": "عرض تقديمي جديد" },
+    "enhance": { "title": "تحسين", "desc": "عرض تقديمي موجود" },
+    "mimic": { "title": "محاكاة", "desc": "أسلوب عرض تقديمي" },
+    "fromData": { "title": "بيانات", "desc": "إلى عرض تقديمي" }
+  },
+  "landingNav": {
+    "home": "الرئيسية",
+    "features": "المميزات",
+    "pricing": "الأسعار",
+    "templates": "القوالب",
+    "login": "تسجيل الدخول",
+    "signup": "إنشاء حساب",
+    "dashboard": "لوحة التحكم"
+  },
+  "notFound": {
+    "messagePrefix": "هذه الصفحة ليست هنا.\nربما تجدها يومًا ما.\nوإن وجدتها، ",
+    "reportLink": "أخبرنا كيف وصلت إليها",
+    "backHome": "العودة إلى الرئيسية",
+    "backDashboard": "العودة إلى لوحة التحكم"
+  },
+  "globalError": {
+    "title": "حدث خطأ غير متوقع",
+    "subtitle": "تم إبلاغ فريقنا تلقائياً",
+    "retry": "حاول مجدداً"
+  },
+  "auth": {
+    "or": "أو",
+    "continueWithGoogle": "المتابعة بحساب جوجل",
+    "emailLabel": "البريد الإلكتروني",
+    "passwordLabel": "كلمة المرور",
+    "errorGeneric": "حدث خطأ. يرجى المحاولة مرة أخرى",
+    "accountPrepFailed": "تعذر تجهيز الحساب. يرجى المحاولة مرة أخرى",
+    "passwordMin": "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
+    "passwordMinHint": "8 أحرف على الأقل",
+    "login": {
+      "title": "تسجيل الدخول",
+      "subtitle": "مرحباً بعودتك إلى تقرير.",
+      "deletedSuccess": "تم حذف حسابك بنجاح",
+      "submit": "تسجيل الدخول",
+      "submitting": "جاري الدخول...",
+      "noAccount": "ليس لديك حساب؟ ",
+      "createAccount": "إنشاء حساب جديد",
+      "forgotPassword": "نسيت كلمة المرور؟",
+      "errInvalidCreds": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+      "errEmailNotConfirmed": "يرجى تأكيد بريدك الإلكتروني أولاً"
+    },
+    "signup": {
+      "title": "إنشاء حساب",
+      "subtitle": "ابدأ مجاناً. لا حاجة لبطاقة ائتمان.",
+      "nameLabel": "الاسم الكامل",
+      "namePlaceholder": "أحمد محمد",
+      "submit": "إنشاء الحساب",
+      "submitting": "جاري الإنشاء...",
+      "haveAccount": "هل لديك حساب بالفعل؟ ",
+      "login": "تسجيل الدخول",
+      "errEmailInUse": "البريد الإلكتروني مستخدم بالفعل",
+      "successTitle": "✓ تم إنشاء الحساب",
+      "successSubtitle": "شكراً لك على التسجيل",
+      "successBody": "تم إرسال رابط التأكيد إلى بريدك الإلكتروني. يرجى التحقق من صندوق الوارد",
+      "backToLogin": "العودة إلى تسجيل الدخول"
+    },
+    "forgot": {
+      "title": "استعادة كلمة المرور",
+      "subtitle": "سنرسل لك رابط استعادة على بريدك الإلكتروني.",
+      "submit": "إرسال رابط الاستعادة",
+      "submitting": "جاري الإرسال...",
+      "rememberedPassword": "تذكرت كلمة المرور؟ ",
+      "login": "تسجيل الدخول",
+      "successTitle": "✓ تحقق من بريدك",
+      "successSubtitle": "أرسلنا لك رابط لاستعادة كلمة المرور",
+      "successBody": "تحقق من بريدك الإلكتروني لتلقي رابط استعادة كلمة المرور. قد يستغرق وصول الرسالة بضع دقائق."
+    },
+    "reset": {
+      "title": "تعيين كلمة مرور جديدة",
+      "subtitle": "أدخل كلمة المرور الجديدة لحسابك.",
+      "newPasswordLabel": "كلمة المرور الجديدة",
+      "confirmPasswordLabel": "تأكيد كلمة المرور",
+      "submit": "تحديث كلمة المرور",
+      "submitting": "جاري التحديث...",
+      "passwordMismatch": "كلمات المرور غير متطابقة",
+      "updateFailed": "تعذّر تحديث كلمة المرور. قد يكون الرابط منتهي الصلاحية",
+      "staleLinkPrefix": "الرابط منتهي الصلاحية أو غير صالح. يرجى طلب رابط جديد من صفحة ",
+      "staleLinkLink": "استعادة كلمة المرور",
+      "rememberedPassword": "تذكرت كلمة المرور؟ ",
+      "login": "تسجيل الدخول",
+      "successTitle": "✓ تم تحديث كلمة المرور",
+      "successSubtitle": "جارٍ تحويلك إلى لوحة التحكم..."
+    },
+    "legal": {
+      "prefix": "بإنشاء حساب فإنك توافق على ",
+      "terms": "شروط الاستخدام",
+      "and": " و ",
+      "privacy": "سياسة الخصوصية"
+    }
+  },
+  "flows": {
+    "contentCard": "المحتوى",
+    "language": "اللغة",
+    "contentLanguageAria": "لغة المحتوى",
+    "langArabic": "العربية",
+    "langEnglish": "الإنجليزية",
+    "contentPlaceholder": "اكتب محتوى عرضك هنا...",
+    "or": "أو",
+    "dropTitle": "اسحب أو انقر لاختيار ملف",
+    "dropSubtitle": "PDF / PPTX / DOCX / TXT — حتى 100 ميجابايت",
+    "removeFile": "إزالة الملف",
+    "unitKB": "ك.ب",
+    "unitMB": "م.ب",
+    "brandCard": "الهوية البصرية",
+    "colors": "الألوان",
+    "addColor": "إضافة لون",
+    "logo": "الشعار",
+    "saveAsDefault": "حفظ كهوية افتراضية",
+    "outputCard": "إعدادات الإخراج",
+    "slideCount": "عدد الشرائح",
+    "auto": "تلقائي",
+    "custom": "مخصص",
+    "slideNumbering": "ترقيم الشرائح",
+    "designStyle": "نمط التصميم",
+    "startFailed": "تعذر بدء الإنشاء. حاول مرة أخرى.",
+    "fileTypeError": "الرجاء رفع ملف PDF أو PowerPoint أو Word أو نص.",
+    "fileTooLarge": "الملف يتجاوز الحد الأقصى 100 ميجابايت ({size}).",
+    "parseFailed": "تعذر تحليل ملف المحتوى. حاول مرة أخرى.",
+    "createFailed": "تعذر إنشاء المشروع",
+    "create": {
+      "title": "أنشئ عرضاً جديداً",
+      "subtitle": "اكتب محتواك أو ارفع ملفاً، اختر هويتك البصرية، وسنبني عرضاً يحاكي ذوقك."
+    }
+  },
+  "language": {
+    "label": "اللغة",
+    "ar": "العربية",
+    "en": "English"
+  }
+}

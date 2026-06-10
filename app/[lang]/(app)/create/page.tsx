@@ -35,8 +35,9 @@
 // brand kit (sessionStorage or the user's default).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ServerStatusBanner } from "@/components/app/ServerStatusBanner";
 import { useRouter } from "next/navigation";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -111,14 +112,8 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // keep their fixed-width 360 px cards (fewer of them per row).
 const CARD_MIN_H_CLASS = "min-h-[540px]";
 
-const SLIDE_COUNT_OPTIONS = [
-  { value: "auto" as const, label: "تلقائي" },
-  { value: "custom" as const, label: "مخصص" },
-];
-const LANGUAGE_OPTIONS: { value: LanguageCode; label: string }[] = [
-  { value: "ar", label: "العربية" },
-  { value: "en", label: "الإنجليزية" },
-];
+// SLIDE_COUNT_OPTIONS + LANGUAGE_OPTIONS are built inside the component so their
+// labels can come from the active-locale dictionary.
 
 // ─── Helpers ──────────────────────────────────────────────────────
 // Trim a brand-kit title to its first few words for the compact dropdown
@@ -128,9 +123,9 @@ function fewWords(s: string, max = 3): string {
   return parts.length <= max ? s.trim() : `${parts.slice(0, max).join(" ")}…`;
 }
 
-function formatFileSize(size: number) {
-  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ك.ب`;
-  return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
+function formatFileSize(size: number, kb: string, mb: string) {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ${kb}`;
+  return `${(size / (1024 * 1024)).toFixed(1)} ${mb}`;
 }
 
 function readableFileName(raw: string): string {
@@ -156,6 +151,17 @@ type ResolvedFontField = {
 export default function CreatePage() {
   const router = useRouter();
   const contentInputRef = useRef<HTMLInputElement>(null);
+  const dict = useDict();
+  const { locale } = useLocale();
+  const t = dict.flows;
+  const SLIDE_COUNT_OPTIONS = [
+    { value: "auto" as const, label: t.auto },
+    { value: "custom" as const, label: t.custom },
+  ];
+  const LANGUAGE_OPTIONS: { value: LanguageCode; label: string }[] = [
+    { value: "ar", label: t.langArabic },
+    { value: "en", label: t.langEnglish },
+  ];
 
   // ─── Content state ─────────────────────────────────────────────
   const [contentText, setContentText] = useState<string>("");
@@ -334,12 +340,12 @@ export default function CreatePage() {
       lower.endsWith(".docx") ||
       lower.endsWith(".txt");
     if (!extOk) {
-      setError("الرجاء رفع ملف PDF أو PowerPoint أو Word أو نص.");
+      setError(t.fileTypeError);
       return null;
     }
     if (next.size > MAX_FILE_SIZE_BYTES) {
       setError(
-        `الملف يتجاوز الحد الأقصى 100 ميجابايت (${(next.size / 1024 / 1024).toFixed(1)} م.ب).`,
+        t.fileTooLarge.replace("{size}", `${(next.size / 1024 / 1024).toFixed(1)} ${t.unitMB}`),
       );
       return null;
     }
@@ -444,7 +450,7 @@ export default function CreatePage() {
         setError(
           err instanceof Error
             ? err.message
-            : "تعذر تحليل ملف المحتوى. حاول مرة أخرى.",
+            : t.parseFailed,
         );
         setContentFileStage("idle");
       }
@@ -612,7 +618,7 @@ export default function CreatePage() {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-        throw new Error(data?.error ?? "تعذر إنشاء المشروع");
+        throw new Error(data?.error ?? t.createFailed);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -623,28 +629,24 @@ export default function CreatePage() {
         "color:#370BF4;font-weight:600",
         { projectId: data.projectId },
       );
-      router.push(`/project/${data.projectId}`);
+      router.push(localizedHref(`/project/${data.projectId}`, locale));
     } catch (caughtError) {
       console.error("[create] generate failed:", caughtError);
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "تعذر بدء الإنشاء. حاول مرة أخرى.",
+          : t.startFailed,
       );
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="page-container flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center">
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
-        <ServerStatusBanner />
         <header className="text-center">
-          <h1 className="tq-h1">أنشئ عرضاً جديداً</h1>
-          <p className="tq-subhead mt-2">
-            اكتب محتواك أو ارفع ملفاً، اختر هويتك البصرية، وسنبني عرضاً يحاكي
-            ذوقك.
-          </p>
+          <h1 className="tq-h1">{t.create.title}</h1>
+          <p className="tq-subhead mt-2">{t.create.subtitle}</p>
         </header>
 
         {/* Responsive grid — explicit breakpoints (instead of
@@ -666,7 +668,7 @@ export default function CreatePage() {
           <div
             className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="subject" title="المحتوى" />
+            <CardHeader icon="subject" title={t.contentCard} />
 
             <input
               ref={contentInputRef}
@@ -687,13 +689,13 @@ export default function CreatePage() {
             <div className="flex flex-1 flex-col space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
-                  اللغة
+                  {t.language}
                 </span>
                 <SegmentedToggle
                   options={LANGUAGE_OPTIONS}
                   value={language}
                   onChange={setLanguage}
-                  ariaLabel="لغة المحتوى"
+                  ariaLabel={t.contentLanguageAria}
                 />
               </div>
 
@@ -704,7 +706,7 @@ export default function CreatePage() {
                   setContentText(next);
                   if (next.length > 0 && contentFile) removeContentFile();
                 }}
-                placeholder="اكتب محتوى عرضك هنا..."
+                placeholder={t.contentPlaceholder}
                 rows={2}
                 dir={language === "en" ? "ltr" : "rtl"}
                 disabled={submitting || hasFile}
@@ -726,7 +728,7 @@ export default function CreatePage() {
             >
               <div className="flex items-center gap-2 text-[11px] text-white/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
-                <span>أو</span>
+                <span>{t.or}</span>
                 <div className="h-px flex-1 bg-[var(--tq-border-glass)]" />
               </div>
               <ContentDropzone
@@ -777,7 +779,7 @@ export default function CreatePage() {
                   palette
                 </span>
                 <h3 className="text-sm font-semibold text-white">
-                  الهوية البصرية
+                  {t.brandCard}
                 </h3>
                 {kitOptions.length > 0 ? (
                   <motion.div
@@ -800,7 +802,7 @@ export default function CreatePage() {
                 cluster. */}
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-white/70">
-                الألوان
+                {t.colors}
               </span>
               <div className="flex items-center gap-1.5">
                 {colors.map((color, index) => (
@@ -817,7 +819,7 @@ export default function CreatePage() {
                   <button
                     type="button"
                     onClick={addColor}
-                    aria-label="إضافة لون"
+                    aria-label={t.addColor}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                   >
                     <span
@@ -848,7 +850,7 @@ export default function CreatePage() {
                 the gap above the save toggle instead of leaving dead space. */}
             <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
-                الشعار
+                {t.logo}
               </span>
               <LogoRow
                 file={logoFile}
@@ -869,10 +871,10 @@ export default function CreatePage() {
                 so the user can flip the toggle from either card. */}
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-2">
               <span className="text-xs font-semibold text-white/70">
-                حفظ كهوية افتراضية
+                {t.saveAsDefault}
               </span>
               <Toggle
-                ariaLabel="حفظ كهوية افتراضية"
+                ariaLabel={t.saveAsDefault}
                 value={saveBrandKit}
                 onChange={setSaveBrandKit}
               />
@@ -885,7 +887,7 @@ export default function CreatePage() {
           <div
             className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="settings" title="إعدادات الإخراج" />
+            <CardHeader icon="settings" title={t.outputCard} />
 
             {/* Each section wrapped in space-y-1.5 (label-to-content
                 gap consistent with the branding card). Sections
@@ -899,7 +901,7 @@ export default function CreatePage() {
             <div className="border-t border-[var(--tq-border-glass)] pt-3">
               <div className="flex min-h-[24px] items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
-                  عدد الشرائح
+                  {t.slideCount}
                 </span>
                 {/* `layout` on the controls container so the
                     SegmentedToggle slides smoothly when the stepper
@@ -926,7 +928,7 @@ export default function CreatePage() {
                     options={SLIDE_COUNT_OPTIONS}
                     value={slideCountMode}
                     onChange={setSlideCountMode}
-                    ariaLabel="عدد الشرائح"
+                    ariaLabel={t.slideCount}
                   />
                   <AnimatePresence initial={false}>
                     {slideCountMode === "custom" ? (
@@ -967,10 +969,10 @@ export default function CreatePage() {
 
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-glass)] pt-3">
               <span className="text-xs font-semibold text-white/70">
-                ترقيم الشرائح
+                {t.slideNumbering}
               </span>
               <Toggle
-                ariaLabel="ترقيم الشرائح"
+                ariaLabel={t.slideNumbering}
                 value={pagination}
                 onChange={setPagination}
               />
@@ -985,7 +987,7 @@ export default function CreatePage() {
                   picking an image-leaning style auto-enables the panel below.
                   Polished modal UX comes later. */}
               <div>
-                <SectionLabel>نمط التصميم</SectionLabel>
+                <SectionLabel>{t.designStyle}</SectionLabel>
                 <div className="flex flex-wrap gap-1.5 pt-2">
                   {DESIGN_STYLE_OPTIONS.map((style) => (
                     <Pill
@@ -1054,6 +1056,7 @@ function ContentDropzone({
   onDrop: (f?: File | null) => void;
   onRemove: () => void;
 }) {
+  const t = useDict().flows;
   return (
     <div className="relative flex-1">
       <button
@@ -1091,16 +1094,16 @@ function ContentDropzone({
               {readableFileName(file.name)}
             </p>
             <p className="mt-0.5 truncate text-xs text-white/60">
-              {formatFileSize(file.size)}
+              {formatFileSize(file.size, t.unitKB, t.unitMB)}
             </p>
           </div>
         ) : (
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-white">
-              اسحب أو انقر لاختيار ملف
+              {t.dropTitle}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-white/40">
-              PDF / PPTX / DOCX / TXT — حتى 100 ميجابايت
+              {t.dropSubtitle}
             </p>
           </div>
         )}
@@ -1113,7 +1116,7 @@ function ContentDropzone({
             event.stopPropagation();
             onRemove();
           }}
-          aria-label="إزالة الملف"
+          aria-label={t.removeFile}
           className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
         >
           <span

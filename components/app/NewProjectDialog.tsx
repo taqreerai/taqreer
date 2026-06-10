@@ -24,7 +24,9 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { BRAND_FLOW_CARDS } from "@/components/app/brandFlowCards";
+import { BRAND_FLOW_CARDS, flowCopyKey } from "@/components/app/brandFlowCards";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 export function NewProjectDialog({
   open,
@@ -33,6 +35,8 @@ export function NewProjectDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const dict = useDict();
+  const { locale } = useLocale();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -63,7 +67,6 @@ export function NewProjectDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-4"
           >
             <motion.div
-              dir="rtl"
               role="dialog"
               aria-modal="true"
               aria-labelledby="new-project-title"
@@ -80,17 +83,16 @@ export function NewProjectDialog({
                     id="new-project-title"
                     className="mb-1 text-xl font-bold text-white"
                   >
-                    ابدأ مشروعاً جديداً
+                    {dict.newProjectDialog.title}
                   </h3>
                   <p className="text-sm text-muted">
-                    اختر التدفق المناسب لمحتواك — ستُعبأ هويتك البصرية
-                    الافتراضية تلقائياً إذا كانت محفوظة.
+                    {dict.newProjectDialog.subtitle}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="إغلاق"
+                  aria-label={dict.common.close}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/5 hover:text-white"
                 >
                   <span
@@ -103,34 +105,37 @@ export function NewProjectDialog({
               </header>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {BRAND_FLOW_CARDS.map((card) => (
-                  // `next/link` for SPA routing — was a plain anchor
-                  // that forced a full page reload on every flow pick
-                  // (CR #41 finding).
-                  <Link
-                    key={card.flow}
-                    href={`/${card.flow}`}
-                    onClick={onClose}
-                    // Same `.qa-card` recipe the dashboard QuickActions
-                    // + UseBrandKitDialog use — keeps the picker
-                    // visually consistent across the three surfaces.
-                    className="qa-card group relative flex cursor-pointer flex-col gap-3 p-4 text-right no-underline transition-all duration-200"
-                  >
-                    <div>
-                      <span className="material-symbols-outlined text-[20px] text-muted transition-colors group-hover:text-white">
-                        {card.icon}
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="mb-0.5 text-[13px] font-semibold leading-snug text-white">
-                        {card.title}
-                      </h4>
-                      <p className="text-[11px] leading-relaxed text-muted">
-                        {card.desc}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
+                {BRAND_FLOW_CARDS.map((card) => {
+                  const copy = dict.quickActions[flowCopyKey(card.flow)];
+                  return (
+                    // `next/link` for SPA routing — was a plain anchor
+                    // that forced a full page reload on every flow pick
+                    // (CR #41 finding).
+                    <Link
+                      key={card.flow}
+                      href={localizedHref(`/${card.flow}`, locale)}
+                      onClick={onClose}
+                      // Same `.qa-card` recipe the dashboard QuickActions
+                      // + UseBrandKitDialog use — keeps the picker
+                      // visually consistent across the three surfaces.
+                      className="qa-card group relative flex cursor-pointer flex-col gap-3 p-4 text-start no-underline transition-all duration-200"
+                    >
+                      <div>
+                        <span className="material-symbols-outlined text-[20px] text-muted transition-colors group-hover:text-white">
+                          {card.icon}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="mb-0.5 text-base font-semibold leading-snug text-white">
+                          {copy.title}
+                        </h4>
+                        <p className="text-[12px] leading-relaxed text-muted">
+                          {copy.desc}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             </motion.div>
           </div>
