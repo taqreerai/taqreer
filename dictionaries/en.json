@@ -172,6 +172,26 @@
     "fileTooLarge": "The file exceeds the 100 MB max ({size}).",
     "parseFailed": "Couldn't parse the content file. Try again.",
     "createFailed": "Couldn't create the project",
+    "brand": {
+      "svgLogo": "SVG logo",
+      "svgOnly": "SVG only",
+      "svgLogoOnly": "SVG logo only",
+      "logoPreview": "Logo preview",
+      "removeLogo": "Remove logo",
+      "removeFont": "Remove {label}",
+      "persistentPlaceholder": "Persistent element. e.g. date, website",
+      "persistentAria": "Persistent element on all slides",
+      "googleFontPlaceholder": "Type or pick a Google font...",
+      "closeMenu": "Close menu",
+      "openMenu": "Open menu",
+      "noResults": "No results",
+      "scriptArabicLatin": "Arabic + Latin",
+      "scriptLatin": "Latin",
+      "savedKit": "Saved brand kit",
+      "savedKits": "Saved brand kits",
+      "aiImagesTitle": "AI images",
+      "aiImagesDesc": "Generate AI photos for the deck"
+    },
     "create": {
       "title": "Create a new presentation",
       "subtitle": "Write your content or upload a file, pick your brand identity, and we'll build a deck that matches your taste."

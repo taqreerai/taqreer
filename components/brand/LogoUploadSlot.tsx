@@ -35,6 +35,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 // Outer heights pinned to CompactUploadZone's two modes:
 //   • default → 100 px (matches CompactUploadZone's stacked default)
@@ -63,10 +64,11 @@ export function LogoUploadSlot({
   // CompactUploadZone. When true, `compact` is ignored — the parent
   // controls the height.
   fillHeight = false,
-  // Empty-state label override — defaults to "شعار SVG فقط" to match
-  // the Arabic-first chrome on every flow. Callers can pass an empty
-  // string or a flow-specific copy without rewriting the primitive.
-  emptyLabel = "شعار SVG فقط",
+  // Empty-state label override — defaults to the localized "SVG logo only"
+  // (dict.flows.brand.svgLogoOnly) to match the chrome on every flow. Callers
+  // can pass an empty string or a flow-specific copy without rewriting the
+  // primitive.
+  emptyLabel,
   // Optional remote preview URL — when set AND no `file` is picked,
   // render the picked-state preview using this URL instead of the
   // empty dropzone. Used by the four landing flows when hydrating
@@ -83,6 +85,8 @@ export function LogoUploadSlot({
   emptyLabel?: string;
   previewUrl?: string | null;
 }) {
+  const dict = useDict();
+  const resolvedEmptyLabel = emptyLabel ?? dict.flows.brand.svgLogoOnly;
   const slotHeightPx = compact ? SLOT_HEIGHT_COMPACT_PX : SLOT_HEIGHT_DEFAULT_PX;
   // Logo image's max height — leaves ~12 px breathing room above +
   // below inside the compact 72 px slot, ~20 px in the default 100 px.
@@ -165,7 +169,7 @@ export function LogoUploadSlot({
   if (!activePreviewUrl) {
     return (
       <CompactUploadZone
-        label={emptyLabel}
+        label={resolvedEmptyLabel}
         accept=".svg,image/svg+xml"
         file={null}
         onSelect={onSelect}
@@ -196,7 +200,7 @@ export function LogoUploadSlot({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={activePreviewUrl}
-        alt="معاينة الشعار"
+        alt={dict.flows.brand.logoPreview}
         // `brightness(0) invert(1)` flattens any color (mono OR
         // polychrome) to solid white. See file header for the
         // rationale — preview only, saved bytes untouched. max-w pins
@@ -210,7 +214,7 @@ export function LogoUploadSlot({
           event.stopPropagation();
           onRemove();
         }}
-        aria-label="إزالة الشعار"
+        aria-label={dict.flows.brand.removeLogo}
         // Top-start positioning (visual top-right in RTL, top-left
         // in LTR) — same corner /create's old logo card used for
         // the close button. start-2/top-2 = ~8 px inset from the

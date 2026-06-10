@@ -172,6 +172,26 @@
     "fileTooLarge": "الملف يتجاوز الحد الأقصى 100 ميجابايت ({size}).",
     "parseFailed": "تعذر تحليل ملف المحتوى. حاول مرة أخرى.",
     "createFailed": "تعذر إنشاء المشروع",
+    "brand": {
+      "svgLogo": "شعار SVG",
+      "svgOnly": "SVG فقط",
+      "svgLogoOnly": "شعار SVG فقط",
+      "logoPreview": "معاينة الشعار",
+      "removeLogo": "إزالة الشعار",
+      "removeFont": "إزالة {label}",
+      "persistentPlaceholder": "عنصر ثابت. مثل: التاريخ، الموقع الإلكتروني",
+      "persistentAria": "عنصر ثابت على كل الشرائح",
+      "googleFontPlaceholder": "اكتب أو اختر خط Google...",
+      "closeMenu": "إغلاق القائمة",
+      "openMenu": "فتح القائمة",
+      "noResults": "لا توجد نتائج",
+      "scriptArabicLatin": "عربي + لاتيني",
+      "scriptLatin": "لاتيني",
+      "savedKit": "هوية محفوظة",
+      "savedKits": "الهويات المحفوظة",
+      "aiImagesTitle": "صور بالذكاء الاصطناعي",
+      "aiImagesDesc": "أنشئ صورًا فوتوغرافية مولّدة للعرض"
+    },
     "create": {
       "title": "أنشئ عرضاً جديداً",
       "subtitle": "اكتب محتواك أو ارفع ملفاً، اختر هويتك البصرية، وسنبني عرضاً يحاكي ذوقك."

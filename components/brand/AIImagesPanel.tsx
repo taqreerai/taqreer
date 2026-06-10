@@ -8,6 +8,7 @@
 // row of fine print, so users don't miss the photography-led option.
 
 import { Toggle } from "@/components/create/controls";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function AIImagesPanel({
   value,
@@ -18,6 +19,7 @@ export function AIImagesPanel({
   onChange: (v: boolean) => void;
   disabled?: boolean;
 }) {
+  const dict = useDict();
   return (
     <div
       className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
@@ -36,14 +38,14 @@ export function AIImagesPanel({
       </span>
       <div className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-white">
-          صور بالذكاء الاصطناعي
+          {dict.flows.brand.aiImagesTitle}
         </span>
         <span className="block text-[11px] text-white/55">
-          أنشئ صورًا فوتوغرافية مولّدة للعرض
+          {dict.flows.brand.aiImagesDesc}
         </span>
       </div>
       <Toggle
-        ariaLabel="صور بالذكاء الاصطناعي"
+        ariaLabel={dict.flows.brand.aiImagesTitle}
         value={value}
         onChange={onChange}
         disabled={disabled}

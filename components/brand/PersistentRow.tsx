@@ -11,6 +11,8 @@
 // direction so an English footer ("© 2026 · taqreer.ai") types LTR and an
 // Arabic one types RTL.
 
+import { useDict } from "@/components/i18n/LocaleProvider";
+
 export function PersistentRow({
   text,
   language = "ar",
@@ -20,13 +22,14 @@ export function PersistentRow({
   language?: "ar" | "en";
   onText: (s: string) => void;
 }) {
+  const dict = useDict();
   return (
     <input
       type="text"
       value={text}
       onChange={(event) => onText(event.target.value)}
-      placeholder="عنصر ثابت. مثل: التاريخ، الموقع الإلكتروني"
-      aria-label="عنصر ثابت على كل الشرائح"
+      placeholder={dict.flows.brand.persistentPlaceholder}
+      aria-label={dict.flows.brand.persistentAria}
       dir={language === "en" ? "ltr" : "rtl"}
       className="input-dark w-full text-xs"
       style={{ height: 32 }}

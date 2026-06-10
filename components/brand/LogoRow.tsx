@@ -8,6 +8,7 @@
 // chrome (preview only — saved bytes untouched). SVG-only.
 
 import { useEffect, useRef, useState } from "react";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 // Logo dropzone / preview sizing. flex-1 + min-h lets the zone GROW to
 // absorb any extra height the parent card hands down (e.g. /create's brand
@@ -28,6 +29,7 @@ export function LogoRow({
   onSelect: (file: File) => void;
   onRemove: () => void;
 }) {
+  const dict = useDict();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -83,13 +85,13 @@ export function LogoRow({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={activeUrl}
-            alt="معاينة الشعار"
+            alt={dict.flows.brand.logoPreview}
             className="max-h-[80%] max-w-[80%] object-contain [filter:brightness(0)_invert(1)]"
           />
           <button
             type="button"
             onClick={onRemove}
-            aria-label="إزالة الشعار"
+            aria-label={dict.flows.brand.removeLogo}
             className="absolute end-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/40 text-white/70 transition-colors hover:bg-black/60 hover:text-white"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
@@ -123,8 +125,8 @@ export function LogoRow({
           >
             image
           </span>
-          <span className="text-xs font-semibold text-white">شعار SVG</span>
-          <span className="text-[10px] text-white/40">SVG فقط</span>
+          <span className="text-xs font-semibold text-white">{dict.flows.brand.svgLogo}</span>
+          <span className="text-[10px] text-white/40">{dict.flows.brand.svgOnly}</span>
         </button>
       )}
     </div>

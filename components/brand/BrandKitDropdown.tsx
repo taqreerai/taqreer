@@ -7,6 +7,7 @@
 // path). Presentational: the parent fetches the kits and passes them in.
 
 import { useEffect, useRef, useState } from "react";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export type BrandKitOption = { id: string; name: string };
 
@@ -20,6 +21,7 @@ export function BrandKitDropdown({
   onSelect: (id: string) => void;
   disabled?: boolean;
 }) {
+  const dict = useDict();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +60,7 @@ export function BrandKitDropdown({
         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
           bookmark
         </span>
-        <span>هوية محفوظة</span>
+        <span>{dict.flows.brand.savedKit}</span>
         <span
           className={`material-symbols-outlined transition-transform ${
             open ? "rotate-180" : ""
@@ -72,7 +74,7 @@ export function BrandKitDropdown({
         <div
           className="absolute end-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           role="listbox"
-          aria-label="الهويات المحفوظة"
+          aria-label={dict.flows.brand.savedKits}
         >
           {kits.map((kit) => (
             <button

@@ -25,6 +25,7 @@
 
 import { useRef, useState } from "react";
 import { FONT_ACCEPT_EXTS } from "@/lib/brand/fonts";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function FontUploadSlot({
   label,
@@ -64,6 +65,7 @@ export function FontUploadSlot({
   hideSample?: boolean;
   compact?: boolean;
 }) {
+  const dict = useDict();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -109,7 +111,7 @@ export function FontUploadSlot({
               if (inputRef.current) inputRef.current.value = "";
               onRemove();
             }}
-            aria-label={`إزالة ${label}`}
+            aria-label={dict.flows.brand.removeFont.replace("{label}", label)}
             className="flex h-6 w-6 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>

@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GOOGLE_FONTS } from "@/lib/brand/fonts";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function GoogleFontSlot({
   selected,
@@ -49,6 +50,7 @@ export function GoogleFontSlot({
   hideSample?: boolean;
   compact?: boolean;
 }) {
+  const dict = useDict();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -85,7 +87,7 @@ export function GoogleFontSlot({
           ref={inputRef}
           type="text"
           value={inputValue}
-          placeholder={showPlaceholder ? "اكتب أو اختر خط Google..." : ""}
+          placeholder={showPlaceholder ? dict.flows.brand.googleFontPlaceholder : ""}
           onFocus={() => {
             setOpen(true);
             setQuery("");
@@ -114,7 +116,7 @@ export function GoogleFontSlot({
               inputRef.current?.focus();
             }
           }}
-          aria-label={open ? "إغلاق القائمة" : "فتح القائمة"}
+          aria-label={open ? dict.flows.brand.closeMenu : dict.flows.brand.openMenu}
           className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center justify-center text-white/60 transition-colors hover:text-white"
         >
           <span
@@ -148,7 +150,7 @@ export function GoogleFontSlot({
           }}
         >
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-white/40">لا توجد نتائج</p>
+            <p className="px-3 py-2 text-xs text-white/40">{dict.flows.brand.noResults}</p>
           ) : (
             filtered.map((font) => {
               const isActive = selected === font.family;
@@ -184,7 +186,7 @@ export function GoogleFontSlot({
                     <span
                       className={`text-[10px] ${isActive ? "text-white/80" : "text-white/40"}`}
                     >
-                      {font.arabic ? "عربي + لاتيني" : "لاتيني"}
+                      {font.arabic ? dict.flows.brand.scriptArabicLatin : dict.flows.brand.scriptLatin}
                     </span>
                   </span>
                   <span
