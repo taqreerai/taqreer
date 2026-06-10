@@ -18,7 +18,7 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // One sentence, two arrangements of the SAME tokens. WRONG = logical order shown
 // left-to-right (Arabic reads backwards, the Latin word + number land wrong).
-// FIXED = correct RTL visual order — run order reverses, each run ("Taqreer",
+// FIXED = correct RTL visual order. Run order reverses, each run ("taqreer.ai",
 // "95%") stays intact, exactly what proper bidi does.
 const TOKENS: Record<string, { t: string; run?: boolean }> = {
   launch: { t: "إطلاق" },

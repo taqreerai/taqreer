@@ -234,7 +234,7 @@ export default async function LandingPage({
             <div className="mb-4 flex items-center gap-2 md:mb-0">
               <Image
                 src="/logo-light.svg"
-                alt="Taqreer Logo"
+                alt="taqreer.ai logo"
                 width={120}
                 height={28}
                 className="h-7 w-auto object-contain opacity-80"

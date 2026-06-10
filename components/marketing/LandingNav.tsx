@@ -31,7 +31,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
           <Link href={localizedHref("/", locale)} className="flex flex-shrink-0 items-center gap-2">
             <Image
               src="/logo-light.svg"
-              alt="Taqreer Logo"
+              alt="taqreer.ai logo"
               width={140}
               height={32}
               className="h-8 w-auto object-contain"

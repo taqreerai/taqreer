@@ -260,7 +260,7 @@ export function Sidebar({
           <div className={`absolute start-0 flex items-center h-[40px] transition-opacity duration-300 ${
             isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}>
-            <Image src="/logo-light.svg" alt="Taqreer Logo" width={110} height={28} className="object-contain" />
+            <Image src="/logo-light.svg" alt="taqreer.ai logo" width={110} height={28} className="object-contain" />
             <span className="badge-purple me-3 mt-1">{dict.common.pro}</span>
           </div>
         </div>

@@ -43,11 +43,14 @@ export default async function AuthLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ lang: Locale }>;
+  // Next's generated `LayoutProps<"/[lang]">` types `params` as `{ lang: string }`,
+  // so the prop annotation must be `string` (a narrower `Locale` here fails the
+  // typegen constraint). The parent [lang] layout already 404s on an unknown
+  // locale, so we just narrow back to `Locale` below for the typed helpers.
+  params: Promise<{ lang: string }>;
 }) {
-  // `lang` is already validated by the parent [lang] layout (404s on an
-  // unknown locale), so it's safe to use directly here.
-  const { lang } = await params;
+  const { lang: rawLang } = await params;
+  const lang: Locale = isLocale(rawLang) ? rawLang : "ar";
   const [columns, dict] = await Promise.all([
     getMarqueeColumns(),
     getDictionary(lang),
@@ -84,7 +87,7 @@ export default async function AuthLayout({
           >
             <Image
               src="/logo-light.svg"
-              alt="Taqreer"
+              alt="taqreer.ai"
               width={140}
               height={40}
               className="h-6 w-auto"
