@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // One sentence, two arrangements of the SAME tokens. WRONG = logical order shown
 // left-to-right (Arabic reads backwards, the Latin word + number land wrong).
@@ -22,7 +22,7 @@ import { useDict } from "@/components/i18n/LocaleProvider";
 // "95%") stays intact, exactly what proper bidi does.
 const TOKENS: Record<string, { t: string; run?: boolean }> = {
   launch: { t: "إطلاق" },
-  brand: { t: "Taqreer", run: true },
+  brand: { t: "taqreer.ai", run: true },
   rate: { t: "بنسبة" },
   success: { t: "نجاح" },
   num: { t: "95%", run: true },
@@ -37,6 +37,7 @@ export function BidiExtractionDemo({
 }: { fixed?: boolean; hideToggle?: boolean; align?: "center" | "left" | "right" } = {}) {
   const [internalFixed, setInternalFixed] = useState(false);
   const dict = useDict();
+  const { dir } = useLocale();
   const b = dict.landing.bidi;
   // Controlled (landing drives `fixed` from the section title) or uncontrolled
   // (the lab uses its own toggle below the canvas).
@@ -68,9 +69,11 @@ export function BidiExtractionDemo({
           <TitleBar title={b.windowTitle} />
 
           {/* Transparent slide — only the border + the (kept) title bar; the
-              flow-lines behind show through. */}
+              flow-lines behind show through. The slide chrome (header on the
+              reading-start edge, pagination on the reading-end edge) follows the
+              UI locale: RTL → header right / pagination left, LTR → flipped. */}
           <div className="relative aspect-video w-full overflow-hidden">
-            <div className="relative flex h-full flex-col p-6" dir="rtl">
+            <div className="relative flex h-full flex-col p-6" dir={dir}>
               <div className="flex items-center gap-2">
                 <span className="h-4 w-1.5 rounded-full bg-[var(--tq-violet)]" />
                 <span className="text-[14px] font-semibold text-white/90">
@@ -82,7 +85,7 @@ export function BidiExtractionDemo({
                 <Sentence fixed={fixed} />
               </div>
 
-              <div className="text-left text-[11px] font-medium tracking-wide text-white/20">
+              <div className="text-end text-[11px] font-medium tracking-wide text-white/20">
                 01 / 12
               </div>
             </div>

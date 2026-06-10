@@ -811,9 +811,11 @@ export function PreviewActionBar({
             this is the way out. Visible to ALL roles. The leading divider only
             shows when there's a cluster before it (owner/edit/comment). No
             inner `gap-1` here: the divider's own `mx-2` already spaces it from
-            the home button, so the button sits centered between the divider and
-            the pill's padding edge (an extra gap pushed it toward the edge). */}
-        <div className="flex items-center">
+            the home button. `pe-1` nudges the button off the pill's rounded
+            inline-end cap — the curved edge optically pulls the button toward
+            it, so a hair of extra inline-end clearance makes it read centered
+            between the divider and the pill edge (logical, so it mirrors in RTL). */}
+        <div className="flex items-center pe-1">
           {canEdit || canComment ? (
             <ToolbarDivider horizontal={horizontal} />
           ) : null}
