@@ -82,7 +82,6 @@ export function SegmentedToggle<T extends string>({
   variant = "default",
   size = "default",
   fullWidth = false,
-  surface = "glass",
 }: {
   options: ReadonlyArray<{ value: T; label: React.ReactNode; icon?: string }>;
   value: T;
@@ -109,10 +108,6 @@ export function SegmentedToggle<T extends string>({
   // segments (the slide-nav's Slides|Comments tab). Default false keeps
   // the content-sized pill the other consumers rely on.
   fullWidth?: boolean;
-  // Container surface — "glass" (default) blends into cards/panels; "card" uses
-  // the darker --tq-card fill + a hairline border so the track stays visible on
-  // the flat page background (landing pricing toggle).
-  surface?: "glass" | "card";
 }) {
   const segCls =
     size === "large"
@@ -130,11 +125,11 @@ export function SegmentedToggle<T extends string>({
   const indicatorId = useId();
   return (
     <div
-      className={`relative flex items-center gap-0.5 rounded-full p-0.5 ${
-        surface === "card"
-          ? "border border-white/10 bg-[var(--tq-card)]"
-          : "bg-[var(--tq-surface)]"
-      } ${fullWidth ? "w-full" : ""}`}
+      // One canonical track everywhere (user direction 2026-06-10: every
+      // SegmentedToggle matches the landing yearly/monthly toggle): the flat
+      // shadcn look — solid --tq-card fill + a hairline --tq-border-glass
+      // stroke, no glass/blur. The white sliding pill rides on top.
+      className={`relative flex items-center gap-0.5 rounded-full border border-[var(--tq-border-glass)] bg-[var(--tq-card)] p-0.5 ${fullWidth ? "w-full" : ""}`}
       role="radiogroup"
       aria-label={ariaLabel}
     >

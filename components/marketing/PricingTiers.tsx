@@ -135,7 +135,6 @@ export function PricingTiers() {
           onChange={setBilling}
           ariaLabel="دورة الفوترة"
           size="large"
-          surface="card"
         />
       </div>
 

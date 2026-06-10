@@ -13,26 +13,11 @@
  *  manual, ADD it here first, give it a class, then consume the class
  *  from TSX.
  *
- *  ‼️ CURRENT SYSTEM (2026-06, shadcn-style — supersedes the "glass" wording
- *  throughout this header): FLAT + SOLID. No transparency on surfaces, NO
- *  backdrop blur, NO box-shadows.
- *   - Surfaces are SOLID colors: gutter --tq-bg #0A0A0A  <  panel --tq-panel
- *     #161616  <  cards/menus/popovers --tq-surface ≈ #1E1E1E. Surface classes:
- *     `.surface-card` / `.surface-popover` / `.surface-menu` / `.surface-modal`
- *     — all SOLID `--tq-surface` + a hairline `--tq-border-glass`, NO blur, NO
- *     shadow. (The old `glass-*` class names were renamed to `surface-*`;
- *     `--glass-blur` stays 0 and a few `--glass-*` opacity/border tokens linger
- *     but render solid.)
- *   - Do NOT add `shadow-*`, `backdrop-blur-glass`, `backdrop-saturate-*`, or
- *     `rgba(255,255,255,var(--glass-opacity))` fills to new UI. Menus / popovers /
- *     dropdowns use `.surface-menu` (solid `--tq-surface` + `--tq-border-glass`
- *     hairline) — the SAME bg + border as the sidebar profile (user) menu, which
- *     is the reference for every dropdown.
- *   - ONE accent: `--tq-purple #8B5CF6` (`--tq-blue / -violet / -magenta /
- *     -lavender` are ALIASES → purple). The ONLY gradient left is
- *     `.btn-gradient-anim` (the AI-action signal).
- *   - Toggles/switches mirror with the chrome direction (knob rests at the
- *     inline-start). The landing page is the live reference for the new look.
+ *  ‼️ CURRENT SYSTEM (2026-06): flat + SOLID (shadcn-style). Surfaces are solid
+ *  `--tq-surface` with a hairline border (`.surface-card/-popover/-menu/-modal`);
+ *  NO blur, NO shadow, NO transparency — do not add `shadow-*` /
+ *  `backdrop-blur-glass`. One accent `--tq-purple #8B5CF6`; the only gradient is
+ *  `.btn-gradient-anim` (AI). Toggles mirror with `dir`. The landing is the ref.
  *
  *
  *  UI PATTERN VOCABULARY  ← read this first
