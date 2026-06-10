@@ -404,7 +404,13 @@ function DemoQACard({
       onClick={() => onNavigate(card.id)}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
-      className="qa-card group relative flex min-h-[104px] flex-col gap-1.5 overflow-hidden rounded-xl p-3.5 text-end transition-all duration-200"
+      // `text-start` matches the real QuickActions card (which computes
+      // text-align:start) so icon + title align to the leading edge — left in
+      // LTR, right in RTL. Explicit (not inherited) because the marketing hero
+      // wraps this demo in a `text-center` context: block-wrapped icons ignore
+      // it, but the inline-flex Copy (mimic) icon + the text would inherit
+      // center, reading as inconsistent direction against the other three.
+      className="qa-card group relative flex min-h-[104px] flex-col gap-1.5 overflow-hidden rounded-xl p-3.5 text-start transition-all duration-200"
       dir={dir}
       aria-label={copy.title}
     >
