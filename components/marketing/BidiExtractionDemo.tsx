@@ -192,22 +192,6 @@ function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
   // Straight horizontal lines streaming toward the window. Centred layout draws
   // them from both edges; left-aligned (landing) drops the left set and draws a
   // wider right set that flows from the title side toward the (left) window.
-  const PATHS =
-    align === "left"
-      ? [
-          "M1000,115 L 330,115",
-          "M1000,215 L 330,215",
-          "M1000,315 L 330,315",
-          "M1000,415 L 330,415",
-        ]
-      : [
-          "M0,180 L 250,180",
-          "M0,230 L 250,230",
-          "M0,280 L 250,280",
-          "M1000,180 L 750,180",
-          "M1000,230 L 750,230",
-          "M1000,280 L 750,280",
-        ];
   // Mixed brand dots — purple, the two brand-gradient stops, and muted white.
   const DOT_COLORS = [
     "var(--tq-violet)",
@@ -217,6 +201,40 @@ function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
     "rgba(255,255,255,0.4)",
     "var(--tq-violet)",
   ];
+
+  // Landing (left): 4 lines that ALTERNATE flow direction (rtl ⇄ ltr), each at
+  // its OWN speed, with irregularly-spaced dots — reads like bidirectional data
+  // transmission. Centred (lab): 6 lines from both edges, even 2-dot stream.
+  // `dur` drives both the dash drift + the dot speed; `dots` lists each dot's
+  // begin offset (uneven on purpose) — hardcoded (not Math.random) so SSR and
+  // client hydration match.
+  const LINES =
+    align === "left"
+      ? [
+          { y: 115, dir: "rtl", dur: 3.4, dots: [0, 1.2, 2.5] },
+          { y: 215, dir: "ltr", dur: 5.8, dots: [0.6, 3.4] },
+          { y: 315, dir: "rtl", dur: 4.3, dots: [0, 1.9, 3.1] },
+          { y: 415, dir: "ltr", dur: 6.2, dots: [1.1, 2.8, 4.9] },
+        ].map((ln) => ({
+          d:
+            ln.dir === "rtl"
+              ? `M1000,${ln.y} L 330,${ln.y}`
+              : `M330,${ln.y} L 1000,${ln.y}`,
+          dur: ln.dur,
+          dots: ln.dots,
+        }))
+      : [
+          "M0,180 L 250,180",
+          "M0,230 L 250,230",
+          "M0,280 L 250,280",
+          "M1000,180 L 750,180",
+          "M1000,230 L 750,230",
+          "M1000,280 L 750,280",
+        ].map((d, i) => {
+          const dur = 3 + (i % 3) * 0.5;
+          return { d, dur, dots: [0, dur / 2] };
+        });
+
   return (
     <svg
       className="absolute inset-0 h-full w-full"
@@ -225,22 +243,22 @@ function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
       preserveAspectRatio="xMidYMid meet"
       aria-hidden
     >
-      {PATHS.map((d, i) => (
+      {LINES.map((ln, i) => (
         <path
           key={`p${i}`}
           id={`tq-flow-${i}`}
-          d={d}
+          d={ln.d}
           stroke="rgba(var(--tq-violet-rgb),0.16)"
           strokeWidth="1.5"
           strokeDasharray="5 8"
-          style={{ animation: `tq-dash-flow ${3 + (i % 3) * 0.5}s linear infinite` }}
+          style={{ animation: `tq-dash-flow ${ln.dur}s linear infinite` }}
         />
       ))}
 
-      {/* crisp dots (no glow) — 2 per line, offset by half the duration, so the
-          flow reads as a continuous stream. */}
-      {PATHS.flatMap((d, i) =>
-        [0, 2].map((off, j) => (
+      {/* crisp dots (no glow) — fade in on enter, fade out on exit, synced with
+          each dot's motion. */}
+      {LINES.flatMap((ln, i) =>
+        ln.dots.map((begin, j) => (
           <circle
             key={`d${i}-${j}`}
             r="4"
@@ -248,19 +266,18 @@ function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
             opacity="0"
           >
             <animateMotion
-              dur="4s"
-              begin={`${i * 0.6 + off}s`}
+              dur={`${ln.dur}s`}
+              begin={`${begin}s`}
               repeatCount="indefinite"
             >
               <mpath href={`#tq-flow-${i}`} />
             </animateMotion>
-            {/* fade in on enter, fade out on exit (synced with the motion) */}
             <animate
               attributeName="opacity"
               values="0;1;1;0"
               keyTimes="0;0.12;0.88;1"
-              dur="4s"
-              begin={`${i * 0.6 + off}s`}
+              dur={`${ln.dur}s`}
+              begin={`${begin}s`}
               repeatCount="indefinite"
             />
           </circle>
