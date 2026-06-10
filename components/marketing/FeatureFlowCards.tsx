@@ -1,31 +1,29 @@
 "use client";
 
-// ─── Landing feature-flow cards ───────────────────────────────────
+// ─── Landing feature-flow columns ─────────────────────────────────
 //
-// The four flow cards (Create / Enhance / Mimic / Datasheet) in a 2 × 2 grid.
-// Each card shows the SAME animated icon used on the dashboard's QuickActions
-// buttons (add_circle / auto_fix_high / content_copy / dataset) — played on
-// card hover. Content LEFT, icon RIGHT (`dir="ltr"` locks the order; the Arabic
-// text block re-anchors rtl). Card hover also lifts/zooms the card + tints the
-// title violet.
+// The four flows (Create / Enhance / Mimic / Datasheet) as a 4-column, 1-row
+// band split by vertical hairlines — modeled on Stripe's "backbone of global
+// commerce" stat row. RTL: content right-aligned, columns flow right→left.
+// Hover (Stripe-style): the column gets a faint fill, its AnimatedIcon plays,
+// and the title tints violet.
 
 import { useRef } from "react";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
-import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 
 const FEATURES: { icon: string; title: string; description: string }[] = [
   {
     icon: "add_circle",
     title: "إنشاء عرض جديد",
     description:
-      "اكتب فكرتك أو ارفع ملفاً، وسيقوم تقرير ببناء عرض تقديمي كامل، بتصميم احترافي يحاكي ذوقك ومراعاة هويتك البصرية.",
+      "اكتب فكرتك أو ارفع ملفاً، وسيبني تقرير عرضاً تقديمياً كاملاً بتصميم احترافي يحاكي ذوقك وهويتك البصرية.",
   },
   {
     icon: "auto_fix_high",
     title: "تحسين عرض موجود",
     description:
-      "ارفع عرضك الحالي بصيغة PowerPoint أو PDF، وسنعيد تصميمه بهويتك البصرية الجديدة مع الحفاظ على المحتوى الأساسي.",
+      "ارفع عرضك الحالي بصيغة PowerPoint أو PDF، وسنعيد تصميمه بهويتك الجديدة مع الحفاظ على المحتوى الأساسي.",
   },
   {
     icon: "content_copy",
@@ -37,59 +35,36 @@ const FEATURES: { icon: string; title: string; description: string }[] = [
     icon: "dataset",
     title: "إنشاء من بيانات",
     description:
-      "حوّل ملف Excel أو CSV إلى عرض احترافي كامل، مع رسوم بيانية مناسبة وتنسيق احترافي لكل شريحة.",
+      "حوّل ملف Excel أو CSV إلى عرض احترافي كامل، مع رسوم بيانية مناسبة وتنسيق دقيق لكل شريحة.",
   },
 ];
 
 export function FeatureFlowCards() {
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-      {FEATURES.map((feature, i) => (
-        <ScrollReveal key={feature.title} direction="up" delay={0.05 + i * 0.05}>
-          <FeatureCard feature={feature} />
-        </ScrollReveal>
+    <div className="grid grid-cols-1 divide-y divide-[var(--tq-border-glass)] lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+      {FEATURES.map((feature) => (
+        <FlowColumn key={feature.title} feature={feature} />
       ))}
     </div>
   );
 }
 
-function FeatureCard({ feature }: { feature: (typeof FEATURES)[number] }) {
-  // Icon plays its hover animation when the CARD is hovered (per the rest of
-  // the app: button hover, not icon hover).
+function FlowColumn({ feature }: { feature: (typeof FEATURES)[number] }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
   return (
     <div
-      className="glass-card group max-h-[250px] self-start rounded-2xl px-6 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+      className="group flex flex-col gap-5 p-8 transition-colors duration-300 hover:bg-white/[0.02]"
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
     >
-      {/* `dir="ltr"` locks DOM order so text lands LEFT, icon RIGHT regardless
-          of the page's RTL flow; the text block re-anchors RTL. */}
-      <div dir="ltr" className="flex items-stretch gap-3 sm:gap-5">
-        <div
-          dir="rtl"
-          className="flex min-w-0 flex-1 flex-col justify-center sm:min-w-[160px]"
-        >
-          <h3 className="mb-2 text-xl font-medium leading-snug text-white transition-colors group-hover:text-[var(--tq-violet)]">
-            {feature.title}
-          </h3>
-          <p className="text-sm leading-relaxed text-muted">
-            {feature.description}
-          </p>
-        </div>
-        <div
-          className="flex aspect-square w-[180px] min-w-0 shrink-0 items-center justify-center sm:w-[250px]"
-          aria-hidden
-        >
-          <div className="text-[var(--tq-text-muted)] transition-colors group-hover:text-white">
-            <AnimatedIcon
-              ref={iconRef}
-              name={feature.icon}
-              size={84}
-              strokeWidth={1}
-            />
-          </div>
-        </div>
+      <div className="w-fit text-[var(--tq-text-muted)] transition-colors group-hover:text-white">
+        <AnimatedIcon ref={iconRef} name={feature.icon} size={40} strokeWidth={1.5} />
+      </div>
+      <div>
+        <h3 className="mb-2 text-lg font-medium text-white transition-colors group-hover:text-[var(--tq-violet)]">
+          {feature.title}
+        </h3>
+        <p className="text-sm leading-relaxed text-muted">{feature.description}</p>
       </div>
     </div>
   );

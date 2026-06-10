@@ -1,26 +1,21 @@
-// Public landing page (/). Hero + trust marquee + features + pricing
-// + footer. All surfaces use the dashboard's canonical primitives
-// (.glass-card, .plan-banner, .btn-gradient, .btn-pill, .text-muted)
-// and reference --tq-violet / --tq-border-glass tokens — see
-// globals.css for the design-system vocabulary.
+// Public landing page (/). Swiss-grid layout: the whole page sits in a centered
+// max-w-7xl FRAME with left/right vertical hairlines (border-x); every section
+// rule (border-t) and the flows band span that frame width, so all lines meet
+// the verticals. Single-column section headers are centered; only the 2-column
+// BiDi band is right-aligned. The only page motion left is the hero's own 3D
+// demo + the trusted-by marquee.
 //
-// Lives at `app/page.tsx` (NOT inside a route group) because Next.js
-// 16.2.6 + Turbopack had a route-resolution bug where
-// `(marketing)/page.tsx` would not register as `/`, even after
-// fresh cache + restart. Sub-routes of the same group worked fine
-// — only the root-of-group page was invisible. Moving the file
-// out of the group is the working fix; `SmoothScrollProvider` is
-// imported directly here instead of inheriting from the group's
-// layout (the old `(marketing)/layout.tsx` only existed to provide
-// it).
+// Lives at `app/page.tsx` (NOT inside a route group) because of a Next 16.2.6 +
+// Turbopack route-resolution bug with `(marketing)/page.tsx`.
 
 import Image from "next/image";
 import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { Hero } from "@/components/marketing/Hero";
+import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
+import { BidiSection } from "@/components/marketing/BidiSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import { BidiExtractionDemo } from "@/components/marketing/BidiExtractionDemo";
 import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
@@ -29,12 +24,8 @@ import { LandingNav } from "@/components/marketing/LandingNav";
 import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 
-// Platform-wide "decks created" counter shown in the Hero status chip.
-// Cached for 5 min so the landing page doesn't hit Postgres on every
-// request — the chip's purpose is social proof, not a live ticker, so
-// staleness in the low-single-digits range is fine. Wrapped in
-// try/catch so a transient DB error renders 0 instead of crashing the
-// whole landing page.
+// Platform-wide "decks created" counter shown in the Hero status chip. Cached 5
+// min; try/catch → 0 on error.
 const getProjectCount = unstable_cache(
   async () => {
     try {
@@ -47,7 +38,6 @@ const getProjectCount = unstable_cache(
   { revalidate: 300, tags: ["landing-project-count"] }
 );
 
-// Text-mark logos. Duplicated 6× in the JSX for a seamless marquee loop.
 const TRUSTED_LOGOS = ["TED", "Lattice", "NCR", "PACIFIC FUNDS", "Rakuten", "zendesk", "DELL"];
 
 const FOOTER_GROUPS: { title: string; links: string[] }[] = [
@@ -57,8 +47,6 @@ const FOOTER_GROUPS: { title: string; links: string[] }[] = [
   { title: "قانوني", links: ["سياسة الخصوصية", "الشروط والأحكام"] },
 ];
 
-// In-page anchors for the footer link labels that map to a section; anything
-// not listed stays a placeholder "#".
 const FOOTER_LINK_HREFS: Record<string, string> = {
   المميزات: "#features",
   الأسعار: "#pricing",
@@ -66,10 +54,35 @@ const FOOTER_LINK_HREFS: Record<string, string> = {
   "الأسئلة الشائعة": "#faq",
 };
 
+// Centered (single-column) section header.
+function SectionHeader({
+  eyebrow,
+  title,
+  subtitle,
+  align = "center",
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  align?: "center" | "right";
+}) {
+  const isCenter = align === "center";
+  return (
+    <div className={isCenter ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}>
+      <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
+        {eyebrow}
+      </span>
+      <h2 className="mb-4 text-balance text-3xl font-medium md:text-4xl">{title}</h2>
+      <p className="text-lg leading-relaxed text-muted">{subtitle}</p>
+    </div>
+  );
+}
+
+const RULE = "border-t border-[var(--tq-border-glass)]";
+const PX = "px-4 sm:px-6 lg:px-8";
+
 export default async function LandingPage() {
   const supabase = await createClient();
-  // `getUser()` round-trips to Supabase for a verified check;
-  // `getSession()` reads the cookie only and can be spoofed.
   const [
     { data: { user } },
     projectCount,
@@ -83,142 +96,109 @@ export default async function LandingPage() {
   return (
     <SmoothScrollProvider>
     <main>
-      {/* Panel-coloured base pinned behind everything, so the page reads as
-          --tq-panel while the MagneticGlow aurora still shows on top of it. */}
+      {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
       <LandingNav isAuthed={!!user} />
 
-      <Hero projectCount={projectCount} />
+      {/* FRAME — left/right vertical hairlines wrapping the whole page; every
+          horizontal rule below spans this width and meets them. */}
+      <div className="relative mx-auto max-w-7xl border-x border-[var(--tq-border-glass)]">
+        <Hero projectCount={projectCount} />
 
-      <section className="py-32">
-        <ScrollReveal direction="up">
-          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <h2 className="mb-12 text-3xl font-medium md:text-4xl">موثوق بنا من قبل</h2>
-            <div className="mask-edges relative w-full overflow-hidden" dir="ltr">
-              <div className="animate-marquee-rtl pause-on-hover flex w-max opacity-60 grayscale transition-all duration-500 hover:grayscale-0">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-16 px-8">
-                    {TRUSTED_LOGOS.map((logo) => (
-                      <span key={logo} className="text-xl font-bold tracking-wide">
-                        {logo}
-                      </span>
-                    ))}
-                  </div>
-                ))}
-              </div>
+        {/* Trusted-by — animated full-width marquee, no edge fade (the frame
+            verticals are the boundary). */}
+        <section className={`${RULE} py-16`}>
+          <ScrollReveal direction="up" className={PX}>
+            <h2 className="mb-10 text-center text-2xl font-medium md:text-3xl">
+              موثوق بنا من قِبل
+            </h2>
+          </ScrollReveal>
+          <div className="relative w-full overflow-hidden" dir="ltr">
+            <div className="animate-marquee-rtl pause-on-hover flex w-max opacity-50 grayscale">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-16 px-8">
+                  {TRUSTED_LOGOS.map((logo) => (
+                    <span key={logo} className="text-xl font-bold tracking-wide">
+                      {logo}
+                    </span>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
-        </ScrollReveal>
-      </section>
+        </section>
 
-      <section id="features" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <ScrollReveal direction="up">
-            <div className="mb-16 text-center">
-              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
-                المميزات
-              </span>
-              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
-                كل ما تحتاجه لإنشاء عرض تقديمي احترافي
-              </h2>
-              <p className="mx-auto max-w-2xl text-lg text-muted">
-                ابدأ من محتوى خام، طوّر عرضًا موجودًا، أو استخدم قالبًا جاهزًا. تقرير يساعدك في كل مرحلة من مراحل إنشاء العرض.
-              </p>
-            </div>
-          </ScrollReveal>
-
-          {/* Interactive BiDi extraction demo (replaces the old 4 flow cards) —
-              a slide whose broken Arabic/Latin/number bidi reorders into correct
-              RTL when Taqreer's extraction tech is toggled on. Owns its own
-              scroll-reveal (no ScrollReveal wrapper). */}
-          <BidiExtractionDemo />
-        </div>
-      </section>
-
-      {/* Templates section — its own band (the spacer the 4-card
-          feature grid needed) with a heading + subhead, then the
-          full-wrapper-width 2 × 4 grid of public template covers. Tiles
-          stay title-less + scrub their slides on hover like the
-          dashboard's Recent Projects; a click opens the shared
-          TemplateLightbox. `id="templates"` is the nav "القوالب"
-          anchor (py-32 top clears the fixed h-20 nav). */}
-      <section id="templates" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <ScrollReveal direction="up">
-            <div className="mb-16 text-center">
-              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
-                القوالب
-              </span>
-              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
-                ابدأ من قالب، ما تراه هو ما تحصل عليه.
-              </h2>
-              <p className="mx-auto max-w-2xl text-lg text-muted">
-                استكشف قوالبنا الجاهزة المناسبة لمشروعك دون الاعتماد على توجيه التصميم من الذكاء الاصطناعي.
-              </p>
-            </div>
-          </ScrollReveal>
-
-          {/* Full-wrapper-width 2 × 4 grid of public template covers —
-              title-less tiles that scrub their slides on hover; a click
-              opens the shared TemplateLightbox. The grid owns its own
-              per-tile scattered fade-in, so no wrapping ScrollReveal
-              here (that would reveal the whole block at once). */}
-          <div className="mt-6">
-            <LandingTemplatesGrid
-              templates={landingTemplates}
-              isAuthed={!!user}
+        {/* Flows — 4-column backbone band. The band's own border-y is the
+            section's bottom separator (so the next section adds no border-t). */}
+        <section id="features" className={RULE}>
+          <ScrollReveal direction="up" className={`${PX} pt-24 pb-12`}>
+            <SectionHeader
+              eyebrow="المميزات"
+              title="كل ما تحتاجه لإنشاء عرض تقديمي احترافي"
+              subtitle="ابدأ من محتوى خام، طوّر عرضًا موجودًا، حاكِ أسلوب عرضٍ مرجعي، أو حوّل بياناتك — تقرير يساعدك في كل مرحلة."
             />
+          </ScrollReveal>
+          <ScrollReveal direction="up" className="border-y border-[var(--tq-border-glass)]">
+            <FeatureFlowCards />
+          </ScrollReveal>
+        </section>
+
+        {/* BiDi band — asymmetric, inline-toggle title. NO border-t: the flows
+            band's bottom line is the separator above it. */}
+        <section className={`${PX} py-24`}>
+          <BidiSection />
+        </section>
+
+        {/* Templates */}
+        <section id="templates" className={`${RULE} ${PX} py-24`}>
+          <ScrollReveal direction="up">
+            <SectionHeader
+              eyebrow="القوالب"
+              title="ابدأ من قالب، ما تراه هو ما تحصل عليه"
+              subtitle="استكشف قوالبنا الجاهزة المناسبة لمشروعك دون الاعتماد على توجيه التصميم من الذكاء الاصطناعي."
+            />
+          </ScrollReveal>
+          <div className="mt-12">
+            <LandingTemplatesGrid templates={landingTemplates} isAuthed={!!user} />
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="pricing" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* Pricing */}
+        <section id="pricing" className={`${RULE} ${PX} py-24`}>
           <ScrollReveal direction="up">
-            <div className="mb-16 text-center">
-              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
-                الأسعار
-              </span>
-              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
-                خطط بسيطة حسب احتياجك
-              </h2>
-              <p className="mx-auto max-w-2xl text-lg text-muted">
-                ابدأ مجانًا، أو اختر خطة شهرية تناسب حجم عروضك وعدد الشرائح التي تحتاجها.
-              </p>
-            </div>
+            <SectionHeader
+              eyebrow="الأسعار"
+              title="خطط بسيطة حسب احتياجك"
+              subtitle="ابدأ مجانًا، أو اختر خطة شهرية تناسب حجم عروضك وعدد الشرائح التي تحتاجها."
+            />
           </ScrollReveal>
+          <ScrollReveal direction="up" className="mt-12">
+            <PricingTiers />
+          </ScrollReveal>
+        </section>
 
-          {/* Monthly/yearly toggle + the 4 tier cards (client — needs the
-              billing-period state). */}
-          <PricingTiers />
-        </div>
-      </section>
-
-      <section id="faq" className="relative py-32">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* FAQ — header right-aligned, accordion full-width so its row rules
+            meet the frame verticals. */}
+        <section id="faq" className={`${RULE} pt-24 pb-24`}>
+          <ScrollReveal direction="right" className={`${PX} mb-8`}>
+            <SectionHeader
+              align="right"
+              eyebrow="مساعدة"
+              title="الأسئلة الشائعة"
+              subtitle="كل ما تريد معرفته عن تقرير قبل أن تبدأ."
+            />
+          </ScrollReveal>
           <ScrollReveal direction="up">
-            <div className="mb-16 text-center">
-              <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
-                مساعدة
-              </span>
-              <h2 className="mx-auto mb-5 max-w-2xl text-balance text-3xl font-medium md:text-4xl">
-                الأسئلة الشائعة
-              </h2>
-              <p className="mx-auto max-w-2xl text-lg text-muted">
-                كل ما تريد معرفته عن تقرير قبل أن تبدأ.
-              </p>
-            </div>
+            <FaqAccordion />
           </ScrollReveal>
-          <FaqAccordion />
-        </div>
-      </section>
+        </section>
 
-      <footer className="border-t border-[var(--tq-border-glass)] bg-black/50 pt-20 pb-8">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
+        {/* Footer — line separators, no background block. */}
+        <footer className={`${RULE} ${PX} pt-20 pb-8`}>
+          <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-0 md:divide-x md:divide-[var(--tq-border-glass)]">
             {FOOTER_GROUPS.map((group) => (
-              <div key={group.title}>
+              <div key={group.title} className="md:px-8 md:first:pr-0">
                 <h4 className="mb-6 font-medium text-white">{group.title}</h4>
                 <ul className="space-y-3 text-sm text-muted">
                   {group.links.map((link) => (
@@ -247,8 +227,8 @@ export default async function LandingPage() {
             </div>
             <p>© {new Date().getFullYear()} taqreer.ai جميع الحقوق محفوظة.</p>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </main>
     </SmoothScrollProvider>
   );

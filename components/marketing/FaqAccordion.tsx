@@ -6,7 +6,6 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 
 const FAQS: { q: string; a: string }[] = [
   {
@@ -47,12 +46,11 @@ export function FaqAccordion() {
   return (
     // shadcn-style: no card pills — each row is just a question + a hairline
     // divider under it, with the answer expanding below.
-    <ScrollReveal direction="up">
-      <div className="mx-auto max-w-3xl" dir="rtl">
+    <div className="w-full" dir="rtl">
         {FAQS.map((item, i) => {
           const isOpen = open === i;
           return (
-            <div key={i} className="border-b border-[var(--tq-border-glass)]">
+            <div key={i} className="border-b border-[var(--tq-border-glass)] px-4 sm:px-6 lg:px-8">
               <button
                 type="button"
                 onClick={() => setOpen(isOpen ? null : i)}
@@ -94,7 +92,6 @@ export function FaqAccordion() {
             </div>
           );
         })}
-      </div>
-    </ScrollReveal>
+    </div>
   );
 }

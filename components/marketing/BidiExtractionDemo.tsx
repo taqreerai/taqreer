@@ -29,34 +29,39 @@ const TOKENS: Record<string, { t: string; run?: boolean }> = {
 const WRONG = ["launch", "brand", "rate", "success", "num"]; // visual L→R (broken)
 const FIXED = ["num", "success", "rate", "brand", "launch"]; // visual L→R (correct)
 
-export function BidiExtractionDemo() {
-  const [fixed, setFixed] = useState(false);
+export function BidiExtractionDemo({
+  fixed: controlledFixed,
+  hideToggle = false,
+  align = "center",
+}: { fixed?: boolean; hideToggle?: boolean; align?: "center" | "left" } = {}) {
+  const [internalFixed, setInternalFixed] = useState(false);
+  // Controlled (landing drives `fixed` from the section title) or uncontrolled
+  // (the lab uses its own toggle below the canvas).
+  const fixed = controlledFixed ?? internalFixed;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 48 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.35 }}
-      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className="mx-auto flex w-full max-w-[1000px] flex-col items-center gap-6"
-    >
+    <div className="mx-auto flex w-full max-w-[1000px] flex-col items-center gap-6">
       <style>{`@keyframes tq-dash-flow { to { stroke-dashoffset: -120; } }`}</style>
 
       {/* Scene block — flow-lines + the window, both centred, so the lines
           auto-centre on the window (no offset math needed). */}
       <div className="relative aspect-[1000/460] w-full">
-        <FlowLines />
+        <FlowLines align={align} />
 
         {/* Slide window. dir=ltr so the chrome (traffic lights left) reads LTR
-            while the slide content stays RTL. No shadow. */}
+            while the slide content stays RTL. No shadow. `align="left"` pins it
+            to the left edge (landing); otherwise centred (lab). */}
         <div
           dir="ltr"
-          className="absolute top-1/2 left-1/2 z-10 w-[min(540px,86%)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 bg-[var(--tq-card)]"
+          className={`absolute top-1/2 z-10 w-[min(540px,86%)] -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 ${
+            align === "left" ? "left-0" : "left-1/2 -translate-x-1/2"
+          }`}
         >
           <TitleBar />
 
-          {/* The dark slide (no glow — flat --tq-card fill). */}
-          <div className="relative aspect-video w-full overflow-hidden bg-[var(--tq-card)]">
+          {/* Transparent slide — only the border + the (kept) title bar; the
+              flow-lines behind show through. */}
+          <div className="relative aspect-video w-full overflow-hidden">
             <div className="relative flex h-full flex-col p-6" dir="rtl">
               <div className="flex items-center gap-2">
                 <span className="h-4 w-1.5 rounded-full bg-[var(--tq-violet)]" />
@@ -97,23 +102,26 @@ export function BidiExtractionDemo() {
         </div>
       </div>
 
-      {/* Extraction-tech label + the enable/disable toggle, below the canvas. */}
-      <div dir="rtl" className="flex items-center gap-4">
-        <span className="text-[15px] font-medium text-white/65">
-          تقنية Taqreer لتحسين الاستخراج
-        </span>
-        <SegmentedToggle
-          options={[
-            { value: "on", label: "تفعيل" },
-            { value: "off", label: "إلغاء" },
-          ]}
-          value={fixed ? "on" : "off"}
-          onChange={(v) => setFixed(v === "on")}
-          ariaLabel="تقنية الاستخراج"
-          size="large"
-        />
-      </div>
-    </motion.div>
+      {/* Lab-only inline toggle (on the landing, the section title drives
+          `fixed` instead, so this is hidden via `hideToggle`). */}
+      {!hideToggle && (
+        <div dir="rtl" className="flex items-center gap-4">
+          <span className="text-[15px] font-medium text-white/65">
+            تقنية Taqreer لتحسين الاستخراج
+          </span>
+          <SegmentedToggle
+            options={[
+              { value: "on", label: "تفعيل" },
+              { value: "off", label: "إلغاء" },
+            ]}
+            value={fixed ? "on" : "off"}
+            onChange={(v) => setInternalFixed(v === "on")}
+            ariaLabel="تقنية الاستخراج"
+            size="large"
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -180,17 +188,26 @@ function Glyph({ d }: { d: string }) {
   );
 }
 
-function FlowLines() {
-  // Straight horizontal lines centred on the window (scene centre = viewBox 230).
-  // Static (independent of the toggle) so flipping never restarts the dots.
-  const PATHS = [
-    "M0,180 L 250,180",
-    "M0,230 L 250,230",
-    "M0,280 L 250,280",
-    "M1000,180 L 750,180",
-    "M1000,230 L 750,230",
-    "M1000,280 L 750,280",
-  ];
+function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
+  // Straight horizontal lines streaming toward the window. Centred layout draws
+  // them from both edges; left-aligned (landing) drops the left set and draws a
+  // wider right set that flows from the title side toward the (left) window.
+  const PATHS =
+    align === "left"
+      ? [
+          "M1000,115 L 330,115",
+          "M1000,215 L 330,215",
+          "M1000,315 L 330,315",
+          "M1000,415 L 330,415",
+        ]
+      : [
+          "M0,180 L 250,180",
+          "M0,230 L 250,230",
+          "M0,280 L 250,280",
+          "M1000,180 L 750,180",
+          "M1000,230 L 750,230",
+          "M1000,280 L 750,280",
+        ];
   // Mixed brand dots — purple, the two brand-gradient stops, and muted white.
   const DOT_COLORS = [
     "var(--tq-violet)",
@@ -220,18 +237,35 @@ function FlowLines() {
         />
       ))}
 
-      {/* crisp dots (no glow) streaming along the lines */}
-      {PATHS.map((d, i) => (
-        <circle key={`d${i}`} r="4" fill={DOT_COLORS[i % DOT_COLORS.length]}>
-          <animateMotion
-            dur={`${3 + (i % 3) * 0.5}s`}
-            begin={`${i * 0.4}s`}
-            repeatCount="indefinite"
+      {/* crisp dots (no glow) — 2 per line, offset by half the duration, so the
+          flow reads as a continuous stream. */}
+      {PATHS.flatMap((d, i) =>
+        [0, 2].map((off, j) => (
+          <circle
+            key={`d${i}-${j}`}
+            r="4"
+            fill={DOT_COLORS[(i + j) % DOT_COLORS.length]}
+            opacity="0"
           >
-            <mpath href={`#tq-flow-${i}`} />
-          </animateMotion>
-        </circle>
-      ))}
+            <animateMotion
+              dur="4s"
+              begin={`${i * 0.6 + off}s`}
+              repeatCount="indefinite"
+            >
+              <mpath href={`#tq-flow-${i}`} />
+            </animateMotion>
+            {/* fade in on enter, fade out on exit (synced with the motion) */}
+            <animate
+              attributeName="opacity"
+              values="0;1;1;0"
+              keyTimes="0;0.12;0.88;1"
+              dur="4s"
+              begin={`${i * 0.6 + off}s`}
+              repeatCount="indefinite"
+            />
+          </circle>
+        ))
+      )}
     </svg>
   );
 }

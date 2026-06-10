@@ -119,12 +119,23 @@ export function PricingTiers() {
         <SegmentedToggle<Billing>
           options={[
             { value: "monthly", label: "شهري" },
-            { value: "yearly", label: "سنوي · وفّر 10%" },
+            {
+              value: "yearly",
+              label: (
+                <>
+                  سنوي{" "}
+                  <span className="text-xs font-normal text-[var(--tq-text-muted)]">
+                    وفّر 10%
+                  </span>
+                </>
+              ),
+            },
           ]}
           value={billing}
           onChange={setBilling}
           ariaLabel="دورة الفوترة"
           size="large"
+          surface="card"
         />
       </div>
 
