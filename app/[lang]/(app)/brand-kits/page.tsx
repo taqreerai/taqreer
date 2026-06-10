@@ -9,6 +9,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
 import { BrandKitsPageClient } from "./BrandKitsPageClient";
 import type { BrandKitTileData } from "@/components/app/BrandKitTile";
@@ -50,7 +51,13 @@ function readFontNames(value: unknown): {
   return { heading: pick(f.heading), body: pick(f.body) };
 }
 
-export default async function BrandKitsPage() {
+export default async function BrandKitsPage({
+  params,
+}: {
+  params: Promise<{ lang: "ar" | "en" }>;
+}) {
+  const { lang } = await params;
+  const dict = await getDictionary(lang);
   const supabase = await createClient();
   const {
     data: { user },
@@ -117,11 +124,8 @@ export default async function BrandKitsPage() {
     <div className="page-container">
       <header className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="tq-h1">هوية الشركة</h1>
-          <p className="tq-subhead">
-            هويات بصرية محفوظة. اضغط على أي بطاقة لاستخدامها في أحد التدفقات،
-            أو احذفها من قائمة الخيارات.
-          </p>
+          <h1 className="tq-h1">{dict.pages.brandKits.listTitle}</h1>
+          <p className="tq-subhead">{dict.pages.brandKits.listSubtitle}</p>
         </div>
         <Link
           href="/brand-kits/new"
@@ -134,7 +138,7 @@ export default async function BrandKitsPage() {
           >
             add
           </span>
-          هوية جديدة
+          {dict.pages.brandKits.newButton}
         </Link>
       </header>
       <BrandKitsPageClient kits={tiles} />

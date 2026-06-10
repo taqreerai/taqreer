@@ -48,6 +48,15 @@
     "share": "Share",
     "export": "Export"
   },
+  "meta": {
+    "siteTitle": "Taqreer AI — AI Presentations",
+    "siteDescription": "Turn your content into a professional deck in minutes. taqreer.ai builds fully designed presentations in Arabic and English.",
+    "ogDescription": "Turn your content into a professional deck in minutes with AI.",
+    "dashboardTitle": "Dashboard | Taqreer",
+    "dashboardDescription": "Manage your projects and presentations",
+    "authTitle": "Taqreer — Authentication",
+    "authDescription": "Sign in or create a new account"
+  },
   "newProjectDialog": {
     "title": "Start a new project",
     "subtitle": "Pick the flow that fits your content — your default brand kit fills in automatically if you've saved one."
@@ -188,6 +197,57 @@
     "fileTooLarge": "The file exceeds the 100 MB max ({size}).",
     "parseFailed": "Couldn't parse the content file. Try again.",
     "createFailed": "Couldn't create the project",
+    "create2": "Create",
+    "analyzing": "Analyzing…",
+    "ready": "Ready",
+    "removeFile2": "Remove file",
+    "prepStage": { "uploading": "Uploading the file", "converting": "Converting the file", "extracting": "Extracting content", "finishing": "Finishing up", "preparing": "Preparing" },
+    "enhance": {
+      "title": "Enhance your presentation",
+      "subtitle": "Upload a PDF or PowerPoint and we'll rebuild it with a professional design while keeping your content exactly.",
+      "originalFile": "Original file",
+      "dragDrop": "Drag and drop the file here",
+      "clickToSelect": "or click to choose a file",
+      "fileHint": "PDF or PowerPoint (.pptx, .ppt) — up to 100 MB",
+      "readyToCreate": " · ready to create",
+      "creating": " · creating…",
+      "extractFailed": "Couldn't analyze the file. Try again.",
+      "fileTypeError": "Please upload a PDF or PowerPoint file (.pptx, .ppt).",
+      "fileTooLarge": "The file exceeds the 100 MB max ({size})."
+    },
+    "datasheet": {
+      "title": "Turn your data into a deck",
+      "subtitle": "Upload a spreadsheet, pick your brand identity, and we'll turn it into a professional deck with clear charts.",
+      "data": "Data",
+      "dragOrClick": "Drag or click to upload a spreadsheet",
+      "fileHint": ".xlsx / .xls / .csv — up to 25 MB",
+      "analyzing": "Analyzing…",
+      "sheetUnit": "sheet", "rowUnit": "rows", "truncated": "truncated",
+      "fileTypeError": "Please upload an .xlsx, .xls, or .csv file.",
+      "fileTooLarge": "The file exceeds the 25 MB max ({size}).",
+      "extractFailed": "Couldn't analyze the file. Try again.",
+      "languageAria": "Deck language",
+      "instructions": "Extra instructions",
+      "instructionsPlaceholder": "e.g. focus on Q3, highlight the sales drop…"
+    },
+    "mimic": {
+      "title": "Mimic another deck's design",
+      "titleTemplate": "Use as template",
+      "subtitle": "Pick a design reference, add your content, and we'll build a new deck that mimics the reference's style while keeping your content verbatim.",
+      "subtitleTemplate": "Add your content and we'll build a new deck that mimics the chosen template's design while keeping your content verbatim.",
+      "whatToMimic": "What we're mimicking",
+      "templateReady": "Template ready",
+      "templateSelected": "Selected template · PDF",
+      "dragDrop": "Drag and drop the file here",
+      "dragOrClick": "Drag or click to choose a file",
+      "clickToSelect": "or click to choose a file",
+      "fileHint": "PDF or PowerPoint — up to 100 MB",
+      "extractRefFailed": "Couldn't parse the reference file. Try again.",
+      "extractContentFailed": "Couldn't parse the content file. Try again.",
+      "useTemplateFailed": "Couldn't use the template",
+      "backToTemplates": "Back to templates",
+      "preparingTemplate": "Preparing the template…"
+    },
     "brand": {
       "svgLogo": "SVG logo",
       "svgOnly": "SVG only",
@@ -393,6 +453,37 @@
       "mimic": { "title": "Mimic a deck's style", "subtitle": "Attach a reference deck and we'll apply its style to your new content.", "cta": "Create deck", "whatWeMimic": "What we're mimicking", "uploadReference": "Upload the reference deck", "extractNote": "We'll extract colors, fonts, and layout from the reference.", "copyText": "Copy text" },
       "datasheet": { "title": "Create a deck from your data", "subtitle": "Turn an Excel or CSV file into a professional deck with the right charts.", "cta": "Create deck", "data": "Data", "uploadData": "Upload the data file", "dropHint": "XLSX / CSV — up to 25 MB", "table": "Table", "chartType": "Chart type", "columns": "Columns", "line": "Line" }
     }
+  },
+  "pages": {
+    "settings": {
+      "title": "Settings", "loading": "Loading…",
+      "profile": { "title": "Profile", "fullName": "Full name", "fullNamePlaceholder": "Ahmed Mohammed", "email": "Email", "save": "Save changes", "saving": "Saving…", "errSave": "Something went wrong while saving", "saved": "Changes saved", "syncFailed": "Name updated, but it couldn't sync inside the app" },
+      "password": { "title": "Change password", "current": "Current password", "new": "New password", "confirm": "Confirm password", "change": "Change password", "add": "Add password", "saving": "Saving…", "googleHint": "You signed up with Google. You can add a password to sign in with email too.", "errShort": "Password must be at least 8 characters", "errMismatch": "Passwords don't match", "errGeneric": "Something went wrong. Please try again.", "changed": "Password changed" },
+      "deleteAccount": { "title": "Delete account", "warning": "This is irreversible and all your data will be permanently deleted.", "button": "Delete my account", "confirmTitle": "Delete account", "confirmBody": "Are you sure? This is irreversible — your account and all data will be permanently deleted.", "cancel": "Cancel", "confirm": "Permanently delete my account", "deleting": "Deleting…" }
+    },
+    "brandKits": {
+      "listTitle": "Brand kits", "listSubtitle": "Saved brand identities. Click any card to use it in a flow, or delete it from the options menu.", "newButton": "New brand kit",
+      "emptyTitle": "No saved brand kits", "emptyDesc": "Save your logo, colors, and fonts once, then use them with one click in any creation flow.", "createNew": "Create a brand kit",
+      "newTitle": "New brand kit", "newSubtitle": "Save your logo, colors, and fonts once, then use them with one click in any creation flow.", "nameLabel": "Brand kit name", "namePlaceholder": "e.g. Future Co.", "save": "Save brand kit", "saving": "Saving…",
+      "errSave": "Couldn't save the brand kit", "errSaveRetry": "Couldn't save the brand kit. Try again.", "errDelete": "Couldn't delete", "errDeleteKit": "Couldn't delete the brand kit", "errUpdate": "Couldn't update", "errSetDefault": "Couldn't set the default brand kit", "errRename": "Couldn't rename", "errRenameKit": "Couldn't rename the brand kit", "errUse": "Couldn't use the brand kit"
+    },
+    "library": {
+      "title": "Image library", "subtitle": "Every image generated by AI inside your decks — re-download any of them.",
+      "emptyTitle": "No images yet", "emptyDesc": "Images that AI generates inside your decks will show up here, and you can download any of them.", "createDeck": "Create a deck",
+      "searchLabel": "Search by project name", "searchPlaceholder": "Search by project name…", "sortBy": "Sort by", "sortAria": "Sort images", "sortRecent": "Most recent", "sortName": "Name",
+      "noResultsTitle": "No results", "noResultsDesc": "No images match your search."
+    },
+    "templates": {
+      "title": "Templates", "subtitle": "Your own templates and the community's. Filter by size or language, or pick a color from the swatch bar below.",
+      "emptyTitle": "No templates yet", "emptyDesc": "When you like a deck's design, save it as a template from the three-dot menu.",
+      "noResultsTitle": "No results match the filters", "noResultsDesc": "Try loosening the filters or reset to see all templates.", "resetFilters": "Reset filters"
+    },
+    "projects": {
+      "title": "My projects", "subtitle": "All your projects in one place. Search, sort, or pick a color from the swatch bar below.",
+      "emptyTitle": "No projects yet", "emptyDesc": "Create your first deck and it'll show up here as soon as you save it.", "createProject": "Create a project",
+      "noResultsTitle": "No results match the filters", "noResultsDesc": "Try loosening the filters or reset to see all projects.", "resetFilters": "Reset filters"
+    },
+    "favorites": { "title": "Favorites", "subtitle": "Projects you starred from the options menu." }
   },
   "dialogs": {
     "share": {

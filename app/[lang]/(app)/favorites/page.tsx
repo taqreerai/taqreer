@@ -13,13 +13,21 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 import { FavoritesGrid } from "./FavoritesGrid";
 
 // Same caching dance as /projects + /dashboard — fresh SSR plus
 // client-side refresh-when-thumbnails-missing in the grid component.
 export const dynamic = "force-dynamic";
 
-export default async function FavoritesPage() {
+export default async function FavoritesPage({
+  params,
+}: {
+  params: Promise<{ lang: "ar" | "en" }>;
+}) {
+  const { lang } = await params;
+  const dict = await getDictionary(lang);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -72,10 +80,8 @@ export default async function FavoritesPage() {
   return (
     <div className="page-container">
       <header className="mb-8">
-        <h1 className="tq-h1">المفضلة</h1>
-        <p className="tq-subhead">
-          مشاريعك التي وضعت عليها نجمة من قائمة الخيارات.
-        </p>
+        <h1 className="tq-h1">{dict.pages.favorites.title}</h1>
+        <p className="tq-subhead">{dict.pages.favorites.subtitle}</p>
       </header>
       <FavoritesGrid projects={projectsWithPending} />
     </div>

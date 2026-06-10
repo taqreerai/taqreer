@@ -23,38 +23,48 @@ const poppins = Poppins({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL("https://taqreer.ai"),
-  title: "Taqreer AI - Presentations | تقرير للذكاء الاصطناعي",
-  description: "حوّل محتواك إلى عرض احترافي خلال دقائق. taqreer.ai يحوّل محتواك إلى عروض تقديمية مصممة بالكامل، يدعم العربية والإنجليزية.",
-  keywords: ["presentations", "AI", "Arabic", "PowerPoint", "عروض تقديمية", "ذكاء اصطناعي", "تقرير", "Taqreer"],
-  authors: [{ name: "Taqreer Team" }],
-  openGraph: {
-    title: "Taqreer AI - Presentations | تقرير للذكاء الاصطناعي",
-    description: "حوّل محتواك إلى عرض احترافي خلال دقائق باستخدام الذكاء الاصطناعي.",
-    url: "https://taqreer.ai",
-    siteName: "Taqreer AI",
-    images: [
-      {
-        url: "/images/hero/og-image.jpg",
-        width: 1200,
-        height: 630,
-        alt: "Taqreer AI Presentations",
-      },
-    ],
-    locale: "ar_SA",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Taqreer AI - Presentations",
-    description: "حوّل محتواك إلى عرض احترافي خلال دقائق باستخدام الذكاء الاصطناعي.",
-    images: ["/images/hero/og-image.jpg"],
-  },
-  icons: {
-    icon: "/icon.svg",
-  },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}): Promise<Metadata> {
+  const { lang } = await params;
+  const locale = isLocale(lang) ? lang : "ar";
+  const dict = await getDictionary(locale);
+  return {
+    metadataBase: new URL("https://taqreer.ai"),
+    title: dict.meta.siteTitle,
+    description: dict.meta.siteDescription,
+    // Keywords target both languages regardless of UI locale (SEO).
+    keywords: ["presentations", "AI", "Arabic", "PowerPoint", "عروض تقديمية", "ذكاء اصطناعي", "تقرير", "Taqreer"],
+    authors: [{ name: "Taqreer Team" }],
+    openGraph: {
+      title: dict.meta.siteTitle,
+      description: dict.meta.ogDescription,
+      url: "https://taqreer.ai",
+      siteName: "Taqreer AI",
+      images: [
+        {
+          url: "/images/hero/og-image.jpg",
+          width: 1200,
+          height: 630,
+          alt: "Taqreer AI Presentations",
+        },
+      ],
+      locale: locale === "en" ? "en_US" : "ar_SA",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Taqreer AI - Presentations",
+      description: dict.meta.ogDescription,
+      images: ["/images/hero/og-image.jpg"],
+    },
+    icons: {
+      icon: "/icon.svg",
+    },
+  };
+}
 
 export default async function RootLayout({
   children,

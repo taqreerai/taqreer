@@ -332,7 +332,7 @@ export function Sidebar({
                   avatar's top-start corner. Sky-blue chip, same vocabulary as
                   the old bell badge. */}
               {unread > 0 ? (
-                <span className="absolute -top-0.5 right-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
+                <span className="absolute -top-0.5 end-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
                   {unreadLabel}
                 </span>
               ) : null}
@@ -375,7 +375,7 @@ export function Sidebar({
               )}
             </div>
             <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 text-start ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pr-1'
+              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pe-1'
             }`}>
               <span className="font-medium text-white text-sm leading-tight truncate">{name}</span>
               <span className="text-muted text-[11px] truncate">{email}</span>

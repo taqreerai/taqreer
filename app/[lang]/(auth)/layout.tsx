@@ -20,14 +20,23 @@ import Link from "next/link";
 import { AuthAnimations } from "./AuthAnimations";
 import { AuthMarqueeBackground } from "@/components/auth/AuthMarqueeBackground";
 import { getMarqueeColumns } from "@/lib/auth/marquee-projects";
+import type { Metadata } from "next";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { localizedHref } from "@/lib/i18n/navigation";
-import type { Locale } from "@/lib/i18n/config";
+import { isLocale, type Locale } from "@/lib/i18n/config";
 
-export const metadata = {
-  title: "تقرير - المصادقة",
-  description: "تسجيل الدخول أو إنشاء حساب جديد",
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}): Promise<Metadata> {
+  const { lang } = await params;
+  const dict = await getDictionary(isLocale(lang) ? lang : "ar");
+  return {
+    title: dict.meta.authTitle,
+    description: dict.meta.authDescription,
+  };
+}
 
 export default async function AuthLayout({
   children,

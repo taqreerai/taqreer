@@ -47,6 +47,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
@@ -104,19 +106,11 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // math; comment retained here for cross-file traceability.
 const CARD_MIN_H_CLASS = "min-h-[540px]";
 
-const SLIDE_COUNT_OPTIONS = [
-  { value: "auto" as const, label: "تلقائي" },
-  { value: "custom" as const, label: "مخصص" },
-];
-const LANGUAGE_OPTIONS: { value: LanguageCode; label: string }[] = [
-  { value: "ar", label: "العربية" },
-  { value: "en", label: "الإنجليزية" },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────
-function formatFileSize(size: number) {
-  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ك.ب`;
-  return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
+function formatFileSize(size: number, dict: Dictionary) {
+  if (size < 1024 * 1024)
+    return `${Math.max(1, Math.round(size / 1024))} ${dict.flows.unitKB}`;
+  return `${(size / (1024 * 1024)).toFixed(1)} ${dict.flows.unitMB}`;
 }
 
 function readableFileName(raw: string): string {
@@ -154,8 +148,19 @@ type DatasheetParseResponse = {
 };
 
 export default function DatasheetPage() {
+  const dict = useDict();
+  const { dir } = useLocale();
   const router = useRouter();
   const dataInputRef = useRef<HTMLInputElement>(null);
+
+  const SLIDE_COUNT_OPTIONS = [
+    { value: "auto" as const, label: dict.flows.auto },
+    { value: "custom" as const, label: dict.flows.custom },
+  ];
+  const LANGUAGE_OPTIONS: { value: LanguageCode; label: string }[] = [
+    { value: "ar", label: dict.flows.langArabic },
+    { value: "en", label: dict.flows.langEnglish },
+  ];
 
   // ─── Data state ────────────────────────────────────────────────
   // Replaces /create's `contentText` + `contentFile` + `contentFileStage`
@@ -307,12 +312,15 @@ export default function DatasheetPage() {
       lower.endsWith(".xls") ||
       lower.endsWith(".csv");
     if (!extOk) {
-      setError("الرجاء رفع ملف .xlsx أو .xls أو .csv.");
+      setError(dict.flows.datasheet.fileTypeError);
       return null;
     }
     if (next.size > MAX_FILE_SIZE_BYTES) {
       setError(
-        `الملف يتجاوز الحد الأقصى 25 ميجابايت (${(next.size / 1024 / 1024).toFixed(1)} م.ب).`,
+        dict.flows.datasheet.fileTooLarge.replace(
+          "{size}",
+          `${(next.size / 1024 / 1024).toFixed(1)} ${dict.flows.unitMB}`,
+        ),
       );
       return null;
     }
@@ -382,7 +390,7 @@ export default function DatasheetPage() {
         setError(
           err instanceof Error
             ? err.message
-            : "تعذر تحليل الملف. حاول مرة أخرى.",
+            : dict.flows.datasheet.extractFailed,
         );
         setDataFileStage("idle");
         // Also reset the hidden file input on parse-failure so the
@@ -396,7 +404,7 @@ export default function DatasheetPage() {
       isCurrent = false;
       controller.abort();
     };
-  }, [dataFile]);
+  }, [dataFile, dict]);
 
   // ─── Palette handlers (identical to /create) ───────────────────
   const updateColor = (index: number, next: string) =>
@@ -535,7 +543,7 @@ export default function DatasheetPage() {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-        throw new Error(data?.error ?? "تعذر إنشاء المشروع");
+        throw new Error(data?.error ?? dict.flows.createFailed);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -545,21 +553,18 @@ export default function DatasheetPage() {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "تعذر بدء الإنشاء. حاول مرة أخرى.",
+          : dict.flows.startFailed,
       );
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="page-container flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center" dir={dir}>
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
-          <h1 className="tq-h1">حوّل بياناتك إلى عرض</h1>
-          <p className="tq-subhead mt-2">
-            ارفع جدول بيانات، اختر هويتك البصرية، وسنحوّله إلى عرض احترافي
-            بمخططات واضحة.
-          </p>
+          <h1 className="tq-h1">{dict.flows.datasheet.title}</h1>
+          <p className="tq-subhead mt-2">{dict.flows.datasheet.subtitle}</p>
         </header>
 
         {/* 3-card row — flex-wrap + fixed-width cards, same as /create.
@@ -578,7 +583,7 @@ export default function DatasheetPage() {
           <div
             className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="dataset" title="البيانات" />
+            <CardHeader icon="dataset" title={dict.flows.datasheet.data} />
 
             <input
               ref={dataInputRef}
@@ -596,13 +601,13 @@ export default function DatasheetPage() {
             <div className="flex flex-1 flex-col space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
-                  اللغة
+                  {dict.flows.language}
                 </span>
                 <SegmentedToggle
                   options={LANGUAGE_OPTIONS}
                   value={language}
                   onChange={setLanguage}
-                  ariaLabel="لغة العرض"
+                  ariaLabel={dict.flows.datasheet.languageAria}
                 />
               </div>
 
@@ -616,6 +621,7 @@ export default function DatasheetPage() {
                 onOpen={() => dataInputRef.current?.click()}
                 onDrop={(f) => setDataFromInput(f)}
                 onRemove={removeDataFile}
+                dict={dict}
               />
             </div>
 
@@ -652,7 +658,7 @@ export default function DatasheetPage() {
                   palette
                 </span>
                 <h3 className="text-sm font-semibold text-white">
-                  الهوية البصرية
+                  {dict.flows.brandCard}
                 </h3>
                 {kitOptions.length > 0 ? (
                   <motion.div
@@ -672,7 +678,7 @@ export default function DatasheetPage() {
 
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-white/70">
-                الألوان
+                {dict.flows.colors}
               </span>
               <div className="flex items-center gap-1.5">
                 {colors.map((color, index) => (
@@ -683,13 +689,14 @@ export default function DatasheetPage() {
                     removable={colors.length > MIN_PALETTE}
                     onChange={(next) => updateColor(index, next)}
                     onRemove={() => removeColor(index)}
+                    dict={dict}
                   />
                 ))}
                 {colors.length < MAX_PALETTE ? (
                   <button
                     type="button"
                     onClick={addColor}
-                    aria-label="إضافة لون"
+                    aria-label={dict.flows.addColor}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                   >
                     <span
@@ -720,7 +727,7 @@ export default function DatasheetPage() {
                 title→zone gap with الخطوط. */}
             <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
-                الشعار
+                {dict.flows.logo}
               </span>
               <LogoRow
                 file={logoFile}
@@ -738,10 +745,10 @@ export default function DatasheetPage() {
 
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
               <span className="text-xs font-semibold text-white/70">
-                حفظ كهوية افتراضية
+                {dict.flows.saveAsDefault}
               </span>
               <Toggle
-                ariaLabel="حفظ كهوية افتراضية"
+                ariaLabel={dict.flows.saveAsDefault}
                 value={saveBrandKit}
                 onChange={setSaveBrandKit}
               />
@@ -754,7 +761,7 @@ export default function DatasheetPage() {
           <div
             className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="settings" title="إعدادات الإخراج" />
+            <CardHeader icon="settings" title={dict.flows.outputCard} />
 
             <SlideSizeFields
               slideSize={slideSize}
@@ -764,7 +771,7 @@ export default function DatasheetPage() {
             <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <div className="flex min-h-[24px] items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
-                  عدد الشرائح
+                  {dict.flows.slideCount}
                 </span>
                 <motion.div
                   layout
@@ -775,7 +782,7 @@ export default function DatasheetPage() {
                     options={SLIDE_COUNT_OPTIONS}
                     value={slideCountMode}
                     onChange={setSlideCountMode}
-                    ariaLabel="عدد الشرائح"
+                    ariaLabel={dict.flows.slideCount}
                   />
                   <AnimatePresence initial={false}>
                     {slideCountMode === "custom" ? (
@@ -806,10 +813,10 @@ export default function DatasheetPage() {
 
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="text-xs font-semibold text-white/70">
-                ترقيم الشرائح
+                {dict.flows.slideNumbering}
               </span>
               <Toggle
-                ariaLabel="ترقيم الشرائح"
+                ariaLabel={dict.flows.slideNumbering}
                 value={pagination}
                 onChange={setPagination}
               />
@@ -820,12 +827,12 @@ export default function DatasheetPage() {
                 steering text, forwarded as source.userContext. */}
             <div className="space-y-1.5 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
-                تعليمات إضافية
+                {dict.flows.datasheet.instructions}
               </span>
               <textarea
                 value={userContext}
                 onChange={(event) => setUserContext(event.target.value)}
-                placeholder="مثل: ركّز على الربع الثالث، أبرز الانخفاض في المبيعات…"
+                placeholder={dict.flows.datasheet.instructionsPlaceholder}
                 rows={2}
                 dir={language === "en" ? "ltr" : "rtl"}
                 disabled={submitting}
@@ -867,12 +874,14 @@ function InlinePaletteSwatch({
   removable,
   onChange,
   onRemove,
+  dict,
 }: {
   value: string;
   index: number;
   removable: boolean;
   onChange: (next: string) => void;
   onRemove: () => void;
+  dict: Dictionary;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
@@ -882,14 +891,14 @@ function InlinePaletteSwatch({
         onClick={() => setPickerOpen((v) => !v)}
         className="block h-7 w-7 shrink-0 rounded-md border border-white/15 transition-shadow hover:shadow-md"
         style={{ backgroundColor: value }}
-        aria-label={`اللون ${index + 1}`}
+        aria-label={dict.flows.controls.colorN.replace("{n}", String(index + 1))}
       />
       <button
         type="button"
         onClick={onRemove}
         disabled={!removable}
-        aria-label="إزالة اللون"
-        className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
+        aria-label={dict.flows.controls.removeColor}
+        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
           close
@@ -926,6 +935,7 @@ function DataDropzone({
   onOpen,
   onDrop,
   onRemove,
+  dict,
 }: {
   file: File | null;
   submitting: boolean;
@@ -936,6 +946,7 @@ function DataDropzone({
   onOpen: () => void;
   onDrop: (f?: File | null) => void;
   onRemove: () => void;
+  dict: Dictionary;
 }) {
   const ready = file !== null && parsed !== null && !parsing;
   return (
@@ -975,10 +986,10 @@ function DataDropzone({
               {readableFileName(file.name)}
             </p>
             <p className="mt-1 truncate text-[11px] text-white/60">
-              {parsed!.sheetCount.toLocaleString()} ورقة ·{" "}
-              {parsed!.totalRows.toLocaleString()} صف ·{" "}
-              {formatFileSize(file.size)}
-              {parsed!.truncated ? " · تم اقتطاع جزء" : ""}
+              {parsed!.sheetCount.toLocaleString()} {dict.flows.datasheet.sheetUnit}{" "}
+              · {parsed!.totalRows.toLocaleString()} {dict.flows.datasheet.rowUnit}{" "}
+              · {formatFileSize(file.size, dict)}
+              {parsed!.truncated ? ` · ${dict.flows.datasheet.truncated}` : ""}
             </p>
           </div>
         ) : parsing && file ? (
@@ -987,16 +998,16 @@ function DataDropzone({
               {readableFileName(file.name)}
             </p>
             <p className="mt-1 truncate text-[11px] text-white/60">
-              جارٍ التحليل…
+              {dict.flows.datasheet.analyzing}
             </p>
           </div>
         ) : (
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">
-              اسحب أو انقر لرفع جدول بيانات
+              {dict.flows.datasheet.dragOrClick}
             </p>
             <p className="mt-1 truncate text-[11px] text-white/40">
-              .xlsx / .xls / .csv — حتى 25 ميجابايت
+              {dict.flows.datasheet.fileHint}
             </p>
           </div>
         )}
@@ -1009,7 +1020,7 @@ function DataDropzone({
             event.stopPropagation();
             onRemove();
           }}
-          aria-label="إزالة الملف"
+          aria-label={dict.flows.removeFile}
           className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
         >
           <span

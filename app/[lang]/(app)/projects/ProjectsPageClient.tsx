@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import {
   ProjectsGrid,
   type ProjectsGridProject,
@@ -53,6 +54,8 @@ export function ProjectsPageClient({
 }: {
   projects: ProjectsPageProject[];
 }) {
+  const dict = useDict();
+  const t = dict.pages.projects;
   const [search, setSearch] = useState("");
   // null = no filter active on this dimension. Single non-null value
   // = filter to that one option. Chip clicks toggle between null and
@@ -225,16 +228,16 @@ export function ProjectsPageClient({
                 folder_open
               </span>
               <h3 className="mb-2 text-base font-semibold text-white">
-                لا توجد مشاريع بعد
+                {t.emptyTitle}
               </h3>
               <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
-                ابدأ بإنشاء أول عرض تقديمي وسيظهر هنا فور حفظه.
+                {t.emptyDesc}
               </p>
               <Link
                 className="btn-gradient inline-block px-4 py-1.5 text-xs no-underline"
                 href="/create"
               >
-                إنشاء مشروع
+                {t.createProject}
               </Link>
             </div>
           ) : (
@@ -245,10 +248,10 @@ export function ProjectsPageClient({
                 filter_alt_off
               </span>
               <h3 className="mb-2 text-base font-semibold text-white">
-                لا توجد نتائج تطابق الفلاتر
+                {t.noResultsTitle}
               </h3>
               <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
-                جرّب تخفيف الفلاتر أو إعادة التعيين لعرض كل المشاريع.
+                {t.noResultsDesc}
               </p>
               <button
                 type="button"
@@ -256,7 +259,7 @@ export function ProjectsPageClient({
                 className="btn-pill px-4 py-1.5 text-xs"
                 disabled={!filtersActive}
               >
-                إعادة تعيين الفلاتر
+                {t.resetFilters}
               </button>
             </div>
           )

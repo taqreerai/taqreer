@@ -14,6 +14,7 @@
 // and we never re-fetch.
 
 import { useMemo, useState } from "react";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import { TemplatesGrid } from "@/components/app/TemplatesGrid";
 import {
   TemplatesFilterBar,
@@ -48,6 +49,8 @@ export function TemplatesPageClient({
   ownCount: number;
   communityCount: number;
 }) {
+  const dict = useDict();
+  const t = dict.pages.templates;
   // Schedule router.refresh() at ~3s/~8s after the first pending tile
   // appears so freshly-saved templates pick up their showcase PNGs
   // without a manual reload. Hook is shared with /projects, /favorites,
@@ -173,11 +176,8 @@ export function TemplatesPageClient({
     <>
       <div className="page-container">
         <header className="mb-8">
-          <h1 className="tq-h1">القوالب</h1>
-          <p className="tq-subhead">
-            قوالبك الخاصة وقوالب المجتمع. صفّ حسب المقاس أو اللغة، أو اختر لوناً
-            من شريط الألوان أدناه.
-          </p>
+          <h1 className="tq-h1">{t.title}</h1>
+          <p className="tq-subhead">{t.subtitle}</p>
         </header>
 
         <TemplatesFilterBar
@@ -209,10 +209,10 @@ export function TemplatesPageClient({
                   dashboard_customize
                 </span>
                 <h3 className="mb-2 text-base font-semibold text-white">
-                  لا توجد قوالب بعد
+                  {t.emptyTitle}
                 </h3>
                 <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
-                  عندما يعجبك تصميم أحد عروضك، احفظه كقالب من قائمة النقاط الثلاث.
+                  {t.emptyDesc}
                 </p>
               </div>
             ) : (
@@ -223,10 +223,10 @@ export function TemplatesPageClient({
                   filter_alt_off
                 </span>
                 <h3 className="mb-2 text-base font-semibold text-white">
-                  لا توجد نتائج تطابق الفلاتر
+                  {t.noResultsTitle}
                 </h3>
                 <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
-                  جرّب تخفيف الفلاتر أو إعادة التعيين لعرض كل القوالب.
+                  {t.noResultsDesc}
                 </p>
                 <button
                   type="button"
@@ -234,7 +234,7 @@ export function TemplatesPageClient({
                   className="btn-pill px-4 py-1.5 text-xs"
                   disabled={!filtersActive}
                 >
-                  إعادة تعيين الفلاتر
+                  {t.resetFilters}
                 </button>
               </div>
             )

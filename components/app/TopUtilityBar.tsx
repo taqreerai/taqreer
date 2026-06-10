@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { HeaderSearch } from "@/components/app/HeaderSearch";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import { Tooltip } from "@/components/common/Tooltip";
 
@@ -124,6 +124,7 @@ function SearchOverlay({
   open: boolean;
   onClose: () => void;
 }) {
+  const { dir } = useLocale();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -163,7 +164,7 @@ function SearchOverlay({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
             <div
-              dir="rtl"
+              dir={dir}
               className="pointer-events-auto w-[min(92vw,580px)] overflow-hidden rounded-xl"
               style={{
                 background: "var(--tq-surface)",

@@ -12,6 +12,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { Pagination } from "@/components/app/Pagination";
 import { SegmentedToggle } from "@/components/create/controls";
 import { LibraryImageCard } from "@/components/app/LibraryImageCard";
@@ -25,12 +26,15 @@ const PAGE_SIZE = 15;
 
 type SortKey = "date" | "name";
 
-const SORT_OPTIONS: ReadonlyArray<{ value: SortKey; label: string }> = [
-  { value: "date", label: "الأحدث" },
-  { value: "name", label: "الاسم" },
-];
-
 export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
+  const dict = useDict();
+  const { dir } = useLocale();
+  const t = dict.pages.library;
+  const sortOptions: ReadonlyArray<{ value: SortKey; label: string }> = [
+    { value: "date", label: t.sortRecent },
+    { value: "name", label: t.sortName },
+  ];
+
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("date");
   const [page, setPage] = useState(0);
@@ -74,11 +78,8 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
   return (
     <div className="page-container">
       <header className="mb-8">
-        <h1 className="tq-h1">مكتبة الصور</h1>
-        <p className="tq-subhead">
-          كل الصور التي وُلّدت بالذكاء الاصطناعي داخل عروضك — حمّل أيّ صورة من
-          جديد.
-        </p>
+        <h1 className="tq-h1">{t.title}</h1>
+        <p className="tq-subhead">{t.subtitle}</p>
       </header>
 
       {images.length === 0 ? (
@@ -87,24 +88,23 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
             photo_library
           </span>
           <h3 className="mb-2 text-base font-semibold text-white">
-            لا توجد صور بعد
+            {t.emptyTitle}
           </h3>
           <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
-            ستظهر هنا الصور التي يولّدها الذكاء الاصطناعي داخل عروضك، ويمكنك
-            تحميل أيّ منها.
+            {t.emptyDesc}
           </p>
           <Link
             className="btn-gradient inline-block px-4 py-1.5 text-xs no-underline"
             href="/create"
           >
-            إنشاء عرض
+            {t.createDeck}
           </Link>
         </div>
       ) : (
         <>
           <div
             className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3"
-            dir="rtl"
+            dir={dir}
           >
             <div className="relative max-w-xs min-w-[200px] flex-1">
               <span
@@ -114,26 +114,26 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
                 search
               </span>
               <label htmlFor="lib-search" className="sr-only">
-                بحث باسم المشروع
+                {t.searchLabel}
               </label>
               <input
                 id="lib-search"
                 type="search"
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
-                placeholder="ابحث باسم المشروع…"
+                placeholder={t.searchPlaceholder}
                 className="input-search w-full rounded-full px-4 py-2 pe-10 text-sm"
               />
             </div>
 
             {/* Sort pushed to the visual-left (end) side, same row. */}
             <div className="ms-auto flex items-center gap-2">
-              <span className="text-xs text-muted">ترتيب حسب</span>
+              <span className="text-xs text-muted">{t.sortBy}</span>
               <SegmentedToggle
-                options={SORT_OPTIONS}
+                options={sortOptions}
                 value={sort}
                 onChange={handleSort}
-                ariaLabel="ترتيب الصور"
+                ariaLabel={t.sortAria}
                 size="comfortable"
               />
             </div>
@@ -145,10 +145,10 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
                 search_off
               </span>
               <h3 className="mb-2 text-base font-semibold text-white">
-                لا نتائج
+                {t.noResultsTitle}
               </h3>
               <p className="max-w-[320px] text-sm leading-7 text-muted">
-                لا توجد صور لمشروع يطابق بحثك.
+                {t.noResultsDesc}
               </p>
             </div>
           ) : (

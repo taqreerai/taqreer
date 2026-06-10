@@ -36,6 +36,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
@@ -114,9 +116,10 @@ type ExtractStatusResponse =
   | { status: "failed"; error: string; fileName?: string }
   | ExtractCompletedResponse;
 
-function formatFileSize(size: number) {
-  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ك.ب`;
-  return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
+function formatFileSize(size: number, dict: Dictionary) {
+  if (size < 1024 * 1024)
+    return `${Math.max(1, Math.round(size / 1024))} ${dict.flows.unitKB}`;
+  return `${(size / (1024 * 1024)).toFixed(1)} ${dict.flows.unitMB}`;
 }
 
 function readableFileName(raw: string): string {
@@ -132,20 +135,21 @@ function readableFileName(raw: string): string {
 // the XHR); the rest are the server milestones extract-source emits.
 type PrepStage = "uploading" | "converting" | "analyzing" | "finishing";
 
-// Arabic caption for the current prep phase. Latin numerals only — the
-// percentage is appended by the caller.
-function prepStageLabel(stage: PrepStage | null): string {
+// Localized caption for the current prep phase. Latin numerals only —
+// the percentage is appended by the caller.
+function prepStageLabel(stage: PrepStage | null, dict: Dictionary): string {
+  const s = dict.flows.prepStage;
   switch (stage) {
     case "uploading":
-      return "جارٍ رفع الملف";
+      return s.uploading;
     case "converting":
-      return "جارٍ تحويل الملف";
+      return s.converting;
     case "analyzing":
-      return "جارٍ استخراج المحتوى";
+      return s.extracting;
     case "finishing":
-      return "جارٍ الإنهاء";
+      return s.finishing;
     default:
-      return "جارٍ التحضير";
+      return s.preparing;
   }
 }
 
@@ -232,6 +236,8 @@ const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
 
 export default function EnhanceContentPage() {
+  const dict = useDict();
+  const { dir } = useLocale();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollCancelledRef = useRef(false);
@@ -413,12 +419,15 @@ export default function EnhanceContentPage() {
       lower.endsWith(".pptx") ||
       lower.endsWith(".ppt");
     if (!extOk) {
-      setError("الرجاء رفع ملف PDF أو PowerPoint (.pptx, .ppt).");
+      setError(dict.flows.enhance.fileTypeError);
       return null;
     }
     if (next.size > MAX_FILE_SIZE_BYTES) {
       setError(
-        `الملف يتجاوز الحد الأقصى 100 ميجابايت (${(next.size / 1024 / 1024).toFixed(1)} م.ب).`,
+        dict.flows.enhance.fileTooLarge.replace(
+          "{size}",
+          `${(next.size / 1024 / 1024).toFixed(1)} ${dict.flows.unitMB}`,
+        ),
       );
       return null;
     }
@@ -613,9 +622,7 @@ export default function EnhanceContentPage() {
         }
         console.error("[enhance] extraction failed:", err);
         setError(
-          err instanceof Error
-            ? err.message
-            : "تعذر تحليل الملف. حاول مرة أخرى.",
+          err instanceof Error ? err.message : dict.flows.enhance.extractFailed,
         );
         setStage("idle");
       }
@@ -626,7 +633,7 @@ export default function EnhanceContentPage() {
       pollCancelledRef.current = true;
       controller.abort();
     };
-  }, [file]);
+  }, [file, dict]);
 
   // ─── Submit ──────────────────────────────────────────────────
   // 1. Upload optional logo + font files (parallel) to brand-assets
@@ -766,7 +773,7 @@ export default function EnhanceContentPage() {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-        throw new Error(data?.error ?? "تعذر إنشاء المشروع");
+        throw new Error(data?.error ?? dict.flows.createFailed);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -781,7 +788,7 @@ export default function EnhanceContentPage() {
     } catch (err) {
       console.error("[enhance] generate failed:", err);
       setError(
-        err instanceof Error ? err.message : "تعذر إنشاء المشروع. حاول مرة أخرى.",
+        err instanceof Error ? err.message : dict.flows.startFailed,
       );
       setStage("ready");
     }
@@ -789,26 +796,23 @@ export default function EnhanceContentPage() {
 
   const generateDisabled = stage === "idle";
   const generateLoading = stage === "extracting" || stage === "submitting";
-  const generateLabel = "إنشاء";
+  const generateLabel = dict.flows.generate.create;
   // While preparing files, the button shows the live prep percentage
   // (instead of a static "analyzing…" string) so the CTA itself is the
   // progress readout. During the final POST it falls back to a label.
   const generateLoadingLabel =
-    stage === "extracting" ? `${prepPercent}%` : "جارٍ الإنشاء...";
+    stage === "extracting" ? `${prepPercent}%` : dict.flows.generate.creating;
 
 
   return (
     // Outer wrapper centered horizontally. Anchored toward top-third
     // so the 3-card row sits in the visual sweet-spot instead of
     // dead-center where it'd float low on tall screens.
-    <div className="page-container flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center" dir={dir}>
       <div className="mt-[6vh] flex w-full max-w-3xl flex-col items-center gap-6 px-4">
         <header className="text-center">
-          <h1 className="tq-h1">حسّن عرضك التقديمي</h1>
-          <p className="tq-subhead mt-2">
-            ارفع ملف PDF أو PowerPoint وسنعيد بناءه بتصميم احترافي مع الحفاظ
-            على محتواك بالضبط.
-          </p>
+          <h1 className="tq-h1">{dict.flows.enhance.title}</h1>
+          <p className="tq-subhead mt-2">{dict.flows.enhance.subtitle}</p>
         </header>
 
         {/* 2-card horizontal row. RTL flow: source/logo (start, visual
@@ -840,7 +844,7 @@ export default function EnhanceContentPage() {
               }
             />
 
-            <CardHeader icon="subject" title="الملف الأصلي" />
+            <CardHeader icon="subject" title={dict.flows.enhance.originalFile} />
 
             {/* File dropzone — primary action of the page.
                 When a file IS selected, the dropzone CONTENT swaps to
@@ -915,13 +919,13 @@ export default function EnhanceContentPage() {
                         {readableFileName(file.name)}
                       </p>
                       <p className="mt-0.5 text-xs text-white/60">
-                        {formatFileSize(file.size)}
+                        {formatFileSize(file.size, dict)}
                         {stage === "extracting"
-                          ? ` · ${prepStageLabel(prepStage)} ${prepPercent}%`
+                          ? ` · ${prepStageLabel(prepStage, dict)} ${prepPercent}%`
                           : stage === "ready"
-                            ? " · جاهز للإنشاء"
+                            ? dict.flows.enhance.readyToCreate
                             : stage === "submitting"
-                              ? " · جارٍ الإنشاء..."
+                              ? dict.flows.enhance.creating
                               : ""}
                       </p>
                       {stage === "extracting" ? (
@@ -944,14 +948,14 @@ export default function EnhanceContentPage() {
                     <>
                       <div>
                         <p className="text-sm font-semibold text-white">
-                          اسحب وأفلت الملف هنا
+                          {dict.flows.enhance.dragDrop}
                         </p>
                         <p className="mt-0.5 text-xs text-white/60">
-                          أو انقر لاختيار ملف
+                          {dict.flows.enhance.clickToSelect}
                         </p>
                       </div>
                       <p className="text-[10px] text-white/40">
-                        PDF أو PowerPoint (.pptx, .ppt) — حتى 100 ميجابايت
+                        {dict.flows.enhance.fileHint}
                       </p>
                     </>
                   )}
@@ -972,7 +976,7 @@ export default function EnhanceContentPage() {
                       event.stopPropagation();
                       removeFile();
                     }}
-                    aria-label="إزالة الملف"
+                    aria-label={dict.flows.removeFile}
                     className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
                   >
                     <span
@@ -1008,7 +1012,7 @@ export default function EnhanceContentPage() {
                   palette
                 </span>
                 <h3 className="text-sm font-semibold text-white">
-                  الهوية البصرية
+                  {dict.flows.brandCard}
                 </h3>
                 {kitOptions.length > 0 ? (
                   <motion.div
@@ -1032,7 +1036,7 @@ export default function EnhanceContentPage() {
                 add/remove/update handlers. */}
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-white/70">
-                الألوان
+                {dict.flows.colors}
               </span>
               <div className="flex items-center gap-1.5">
                 {colors.map((color, index) => (
@@ -1049,7 +1053,7 @@ export default function EnhanceContentPage() {
                   <button
                     type="button"
                     onClick={addColor}
-                    aria-label="إضافة لون"
+                    aria-label={dict.flows.addColor}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                   >
                     <span
@@ -1084,7 +1088,7 @@ export default function EnhanceContentPage() {
                 title→zone gap with الخطوط. */}
             <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
-                الشعار
+                {dict.flows.logo}
               </span>
               <LogoRow
                 file={logoFile}
@@ -1106,10 +1110,10 @@ export default function EnhanceContentPage() {
                 stop the logo zone from growing). */}
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
               <span className="text-xs font-semibold text-white/70">
-                حفظ كهوية افتراضية
+                {dict.flows.saveAsDefault}
               </span>
               <Toggle
-                ariaLabel="حفظ كهوية افتراضية"
+                ariaLabel={dict.flows.saveAsDefault}
                 value={saveBrandKit}
                 onChange={setSaveBrandKit}
               />

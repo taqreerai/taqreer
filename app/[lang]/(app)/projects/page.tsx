@@ -17,6 +17,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 import { ProjectsPageClient } from "./ProjectsPageClient";
 
 // Force a fresh server fetch on every navigation. Without this,
@@ -28,7 +29,14 @@ import { ProjectsPageClient } from "./ProjectsPageClient";
 // few seconds without a manual page reload.
 export const dynamic = "force-dynamic";
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  params,
+}: {
+  params: Promise<{ lang: "ar" | "en" }>;
+}) {
+  const { lang } = await params;
+  const dict = await getDictionary(lang);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -102,10 +110,8 @@ export default async function ProjectsPage() {
   return (
     <div className="page-container">
       <header className="mb-8">
-        <h1 className="tq-h1">مشاريعي</h1>
-        <p className="tq-subhead">
-          كل مشاريعك في مكان واحد. ابحث، صفّ، أو اختر لوناً من شريط الألوان أدناه.
-        </p>
+        <h1 className="tq-h1">{dict.pages.projects.title}</h1>
+        <p className="tq-subhead">{dict.pages.projects.subtitle}</p>
       </header>
       <ProjectsPageClient projects={projectsWithPending} />
     </div>

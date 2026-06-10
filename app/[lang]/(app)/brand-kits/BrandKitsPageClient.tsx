@@ -14,6 +14,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { BrandKitTile, type BrandKitTileData } from "@/components/app/BrandKitTile";
 import { BrandKitActionsMenu } from "@/components/app/BrandKitActionsMenu";
 import { BrandKitDeleteConfirmDialog } from "@/components/app/BrandKitDeleteConfirmDialog";
@@ -40,6 +41,8 @@ async function readApiError(res: Response, fallback: string): Promise<string> {
 
 export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
   const router = useRouter();
+  const dict = useDict();
+  const { dir } = useLocale();
   // Optimistic removal — flip a kit out of the rendered list as
   // soon as the delete confirms. router.refresh() also fires so
   // the SSR snapshot catches up; this just avoids the lag.
@@ -131,7 +134,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
         method: "DELETE",
       });
       if (!res.ok) {
-        throw new Error(await readApiError(res, "تعذر الحذف"));
+        throw new Error(await readApiError(res, dict.pages.brandKits.errDelete));
       }
       setRemovedIds((prev) => {
         const next = new Set(prev);
@@ -145,7 +148,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
       // Surface via alert for v1 — the project has no toast system
       // wired yet. Same fallback /templates uses for failed deletes.
       window.alert(
-        err instanceof Error ? err.message : "تعذر حذف هوية الشركة",
+        err instanceof Error ? err.message : dict.pages.brandKits.errDeleteKit,
       );
     } finally {
       setDeleting(false);
@@ -175,7 +178,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
         body: JSON.stringify({ isDefault: next }),
       });
       if (!res.ok) {
-        throw new Error(await readApiError(res, "تعذر التحديث"));
+        throw new Error(await readApiError(res, dict.pages.brandKits.errUpdate));
       }
       router.refresh();
     } catch (err) {
@@ -183,7 +186,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
       // Rollback by clearing the override; the SSR value takes over.
       setDefaultOverride(new Map());
       window.alert(
-        err instanceof Error ? err.message : "تعذر تعيين الهوية الافتراضية",
+        err instanceof Error ? err.message : dict.pages.brandKits.errSetDefault,
       );
     }
   };
@@ -199,7 +202,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
         body: JSON.stringify({ name: newName }),
       });
       if (!res.ok) {
-        throw new Error(await readApiError(res, "تعذر إعادة التسمية"));
+        throw new Error(await readApiError(res, dict.pages.brandKits.errRename));
       }
       // Optimistic: reflect the server-normalised name (trimmed +
       // capped at 120) immediately; router.refresh() reconciles the
@@ -218,7 +221,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
     } catch (err) {
       console.error("[brand-kits] rename failed", err);
       window.alert(
-        err instanceof Error ? err.message : "تعذر إعادة تسمية هوية الشركة",
+        err instanceof Error ? err.message : dict.pages.brandKits.errRenameKit,
       );
     } finally {
       setRenaming(false);
@@ -239,7 +242,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
       console.error("[brand-kits] seed failed", err);
       setSeeding(false);
       window.alert(
-        err instanceof Error ? err.message : "تعذر استخدام هوية الشركة",
+        err instanceof Error ? err.message : dict.pages.brandKits.errUse,
       );
     }
     // No `finally setSeeding(false)` on success — we're navigating
@@ -250,7 +253,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
   if (visibleKits.length === 0) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="surface-card flex flex-col items-center justify-center gap-3 p-12 text-center"
       >
         <span
@@ -260,11 +263,10 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
           id_card
         </span>
         <h2 className="text-lg font-semibold text-white">
-          لا توجد هويات محفوظة
+          {dict.pages.brandKits.emptyTitle}
         </h2>
         <p className="max-w-md text-sm leading-relaxed text-muted">
-          احفظ شعارك وألوانك وخطوطك مرة واحدة ثم استخدمها بضغطة زر في أي
-          تدفق إنشاء.
+          {dict.pages.brandKits.emptyDesc}
         </p>
         <Link
           href="/brand-kits/new"
@@ -277,7 +279,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
           >
             add
           </span>
-          إنشاء هوية جديدة
+          {dict.pages.brandKits.createNew}
         </Link>
       </div>
     );

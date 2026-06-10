@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import MimicFlow from "@/components/mimic/MimicFlow";
 import {
   fetchUse,
@@ -30,6 +31,8 @@ export default function UseTemplateClient({
   source: TemplateSource;
   id: string;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const router = useRouter();
   const [seed, setSeed] = useState<MimicTemplateSeed | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,15 +70,15 @@ export default function UseTemplateClient({
           return;
         }
         setError(
-          err instanceof Error ? err.message : "تعذر استخدام القالب",
+          err instanceof Error ? err.message : dict.flows.mimic.useTemplateFailed,
         );
       }
     })();
-  }, [source, id, router]);
+  }, [source, id, router, dict]);
 
   if (error) {
     return (
-      <div className="page-container flex w-full justify-center" dir="rtl">
+      <div className="page-container flex w-full justify-center" dir={dir}>
         <div className="mt-[20vh] flex flex-col items-center gap-4 text-center">
           <p className="tq-subhead text-red-400">{error}</p>
           <button
@@ -83,7 +86,7 @@ export default function UseTemplateClient({
             onClick={() => router.push("/templates")}
             className="btn-pill"
           >
-            العودة إلى القوالب
+            {dict.flows.mimic.backToTemplates}
           </button>
         </div>
       </div>
@@ -92,10 +95,10 @@ export default function UseTemplateClient({
 
   if (!seed) {
     return (
-      <div className="page-container flex w-full justify-center" dir="rtl">
+      <div className="page-container flex w-full justify-center" dir={dir}>
         <div className="mt-[20vh] flex flex-col items-center gap-4">
           <span className="spinner h-8 w-8 rounded-full border-2 border-white/20 border-t-white" />
-          <p className="tq-subhead">جارٍ تجهيز القالب...</p>
+          <p className="tq-subhead">{dict.flows.mimic.preparingTemplate}</p>
         </div>
       </div>
     );

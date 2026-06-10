@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
@@ -103,14 +104,10 @@ const CARD_W_CLASS = "w-[360px]";
 // is hidden the remaining 2 cards keep that exact height.
 const CARD_MIN_H_CLASS = "min-h-[540px]";
 
-// Segmented-toggle option lists — declared once so the SegmentedToggle
-// stays stable across re-renders (option-array identity is part of
-// the visual contract: a new array each render would still work but
-// would unnecessarily churn the radio child keys).
-const SLIDE_COUNT_OPTIONS = [
-  { value: "auto" as const, label: "تلقائي" },
-  { value: "custom" as const, label: "مخصص" },
-];
+// Segmented-toggle option values — the labels are resolved at render
+// from the dictionary (dict.flows.auto / dict.flows.custom) and mapped
+// onto these stable value tokens inside the component.
+const SLIDE_COUNT_VALUES = ["auto", "custom"] as const;
 
 type ExtractCompletedResult = {
   anthropicFileId: string;
@@ -133,9 +130,10 @@ type ExtractStatusResponse =
 
 type FileStage = "idle" | "extracting" | "ready";
 
-function formatFileSize(size: number) {
-  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ك.ب`;
-  return `${(size / (1024 * 1024)).toFixed(1)} م.ب`;
+function formatFileSize(size: number, unitKB: string, unitMB: string) {
+  if (size < 1024 * 1024)
+    return `${Math.max(1, Math.round(size / 1024))} ${unitKB}`;
+  return `${(size / (1024 * 1024)).toFixed(1)} ${unitMB}`;
 }
 
 function readableFileName(raw: string): string {
@@ -173,6 +171,16 @@ export default function MimicFlow({
   templateSeed?: MimicTemplateSeed | null;
 } = {}) {
   const isTemplate = mode === "template" && !!templateSeed;
+  const dict = useDict();
+  const { dir } = useLocale();
+  // Resolve the segmented-toggle labels from the dictionary, mapped onto
+  // the stable value tokens (SLIDE_COUNT_VALUES).
+  const slideCountLabels: Record<(typeof SLIDE_COUNT_VALUES)[number], string> =
+    { auto: dict.flows.auto, custom: dict.flows.custom };
+  const slideCountOptions = SLIDE_COUNT_VALUES.map((value) => ({
+    value,
+    label: slideCountLabels[value],
+  }));
   const router = useRouter();
   const designInputRef = useRef<HTMLInputElement>(null);
   const contentInputRef = useRef<HTMLInputElement>(null);
@@ -349,12 +357,15 @@ export default function MimicFlow({
       lower.endsWith(".pptx") ||
       lower.endsWith(".ppt");
     if (!extOk) {
-      setError("الرجاء رفع ملف PDF أو PowerPoint (.pptx, .ppt).");
+      setError(dict.flows.enhance.fileTypeError);
       return null;
     }
     if (next.size > MAX_FILE_SIZE_BYTES) {
       setError(
-        `الملف يتجاوز الحد الأقصى 100 ميجابايت (${(next.size / 1024 / 1024).toFixed(1)} م.ب).`,
+        dict.flows.enhance.fileTooLarge.replace(
+          "{size}",
+          `${(next.size / 1024 / 1024).toFixed(1)} ${dict.flows.unitMB}`,
+        ),
       );
       return null;
     }
@@ -474,7 +485,7 @@ export default function MimicFlow({
         setError(
           err instanceof Error
             ? err.message
-            : "تعذر تحليل الملف المرجعي. حاول مرة أخرى.",
+            : dict.flows.mimic.extractRefFailed,
         );
         setDesignStage("idle");
       }
@@ -483,7 +494,7 @@ export default function MimicFlow({
       isCurrent = false;
       controller.abort();
     };
-  }, [designFile]);
+  }, [designFile, dict]);
 
   // ─── Auto-extract: content file (only when a file is picked) ───
   // Stage("extracting") + error reset moved to setContentFromInput
@@ -530,7 +541,7 @@ export default function MimicFlow({
         setError(
           err instanceof Error
             ? err.message
-            : "تعذر تحليل ملف المحتوى. حاول مرة أخرى.",
+            : dict.flows.mimic.extractContentFailed,
         );
         setContentStage("idle");
       }
@@ -539,7 +550,7 @@ export default function MimicFlow({
       isCurrent = false;
       controller.abort();
     };
-  }, [contentFile]);
+  }, [contentFile, dict]);
 
   // ─── Derived page-level stage ──────────────────────────────────
   const designReady = designStage === "ready" && !!designExtracted;
@@ -700,7 +711,7 @@ export default function MimicFlow({
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-        throw new Error(data?.error ?? "تعذر إنشاء المشروع");
+        throw new Error(data?.error ?? dict.flows.createFailed);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -708,9 +719,7 @@ export default function MimicFlow({
     } catch (err) {
       console.error("[mimic] generate failed:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "تعذر إنشاء المشروع. حاول مرة أخرى.",
+        err instanceof Error ? err.message : dict.flows.startFailed,
       );
       setSubmitting(false);
     }
@@ -718,21 +727,24 @@ export default function MimicFlow({
 
   const generateDisabled = stage === "idle" || stage === "extracting";
   const generateLoading = stage === "extracting" || stage === "submitting";
-  const generateLabel = stage === "extracting" ? "جارٍ التحليل..." : "إنشاء";
+  const generateLabel =
+    stage === "extracting" ? dict.flows.analyzing : dict.flows.generate.create;
   const generateLoadingLabel =
-    stage === "extracting" ? "جارٍ التحليل..." : "جارٍ الإنشاء...";
+    stage === "extracting"
+      ? dict.flows.analyzing
+      : dict.flows.generate.creating;
 
   return (
-    <div className="page-container flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center" dir={dir}>
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">
-            {isTemplate ? "استخدام كقالب" : "حاكِ تصميم عرض آخر"}
+            {isTemplate ? dict.flows.mimic.titleTemplate : dict.flows.mimic.title}
           </h1>
           <p className="tq-subhead mt-2">
             {isTemplate
-              ? "أضف محتواك وسنبني عرضاً جديداً يحاكي تصميم القالب المختار ويحافظ على محتواك حرفياً."
-              : "اختر عرضاً مرجعياً للتصميم، أضف محتواك، وسنبني عرضاً جديداً يحاكي أسلوب المرجع ويحافظ على محتواك حرفياً."}
+              ? dict.flows.mimic.subtitleTemplate
+              : dict.flows.mimic.subtitle}
           </p>
         </header>
 
@@ -761,7 +773,7 @@ export default function MimicFlow({
               onChange={(event) => setContentFromInput(event.target.files?.[0])}
             />
 
-            <CardHeader icon="subject" title="المحتوى" />
+            <CardHeader icon="subject" title={dict.flows.contentCard} />
 
             {/* Textarea — primary content input. Disabled while a
                 file is picked; the two are mutually exclusive.
@@ -782,7 +794,7 @@ export default function MimicFlow({
                 setContentText(next);
                 if (next.length > 0 && contentFile) removeContentFile();
               }}
-              placeholder="اكتب محتوى عرضك هنا..."
+              placeholder={dict.flows.contentPlaceholder}
               rows={2}
               dir={detectStringLanguage(contentText) === "en" ? "ltr" : "rtl"}
               disabled={submitting || !!contentFile}
@@ -821,7 +833,7 @@ export default function MimicFlow({
             >
               <div className="flex items-center gap-2 text-[11px] text-white/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-                <span>أو</span>
+                <span>{dict.flows.or}</span>
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
               </div>
               <FileDropzone
@@ -870,7 +882,7 @@ export default function MimicFlow({
                         palette
                       </span>
                       <h3 className="text-sm font-semibold text-white">
-                        الهوية البصرية
+                        {dict.flows.brandCard}
                       </h3>
                       {kitOptions.length > 0 ? (
                         <motion.div
@@ -893,7 +905,7 @@ export default function MimicFlow({
                       single horizontal cluster (matches /create). */}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-white/70">
-                      الألوان
+                      {dict.flows.colors}
                     </span>
                     <div className="flex items-center gap-1.5">
                       {colors.map((color, index) => (
@@ -910,7 +922,7 @@ export default function MimicFlow({
                         <button
                           type="button"
                           onClick={addColor}
-                          aria-label="إضافة لون"
+                          aria-label={dict.flows.addColor}
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                         >
                           <span
@@ -945,7 +957,7 @@ export default function MimicFlow({
                       title→zone gap with الخطوط. */}
                   <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
                     <span className="block text-xs font-semibold text-white/70">
-                      الشعار
+                      {dict.flows.logo}
                     </span>
                     <LogoRow
                       file={logoFile}
@@ -966,10 +978,10 @@ export default function MimicFlow({
                       and stop the logo zone from growing). */}
                   <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
                     <span className="text-xs font-semibold text-white/70">
-                      حفظ كهوية افتراضية
+                      {dict.flows.saveAsDefault}
                     </span>
                     <Toggle
-                      ariaLabel="حفظ كهوية افتراضية"
+                      ariaLabel={dict.flows.saveAsDefault}
                       value={saveBrandKit}
                       onChange={setSaveBrandKit}
                     />
@@ -1000,7 +1012,7 @@ export default function MimicFlow({
                 }
               />
 
-              <CardHeader icon="auto_awesome" title="ما الذي نُحاكيه" />
+              <CardHeader icon="auto_awesome" title={dict.flows.mimic.whatToMimic} />
 
               {/* Slide count — unified with /create's animated layout
                   (2026-05-26, user direction "use the one at create
@@ -1019,7 +1031,7 @@ export default function MimicFlow({
                       indicator spring. */}
               <div className="flex min-h-[24px] items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-white/70">
-                  عدد الشرائح
+                  {dict.flows.slideCount}
                 </span>
                 <motion.div
                   layout
@@ -1027,10 +1039,10 @@ export default function MimicFlow({
                   className="flex items-center gap-1.5"
                 >
                   <SegmentedToggle
-                    options={SLIDE_COUNT_OPTIONS}
+                    options={slideCountOptions}
                     value={slideCountMode}
                     onChange={setSlideCountMode}
-                    ariaLabel="عدد الشرائح"
+                    ariaLabel={dict.flows.slideCount}
                   />
                   <AnimatePresence initial={false}>
                     {slideCountMode === "custom" ? (
@@ -1086,9 +1098,11 @@ export default function MimicFlow({
                       </span>
                     </span>
                     <p className="truncate px-2 text-sm font-semibold text-white">
-                      {templateSeed!.title?.trim() || "قالب جاهز"}
+                      {templateSeed!.title?.trim() || dict.flows.mimic.templateReady}
                     </p>
-                    <p className="text-xs text-white/60">قالب مختار · PDF</p>
+                    <p className="text-xs text-white/60">
+                      {dict.flows.mimic.templateSelected}
+                    </p>
                   </div>
                 ) : (
                   <FileDropzone
@@ -1152,6 +1166,7 @@ function PaletteSwatch({
   onChange: (next: string) => void;
   onRemove: () => void;
 }) {
+  const dict = useDict();
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <div className="relative">
@@ -1160,14 +1175,14 @@ function PaletteSwatch({
         onClick={() => setPickerOpen((v) => !v)}
         className="block h-7 w-7 shrink-0 rounded-md border border-white/15 transition-shadow hover:shadow-md"
         style={{ backgroundColor: value }}
-        aria-label={`اللون ${index + 1}`}
+        aria-label={dict.flows.controls.colorN.replace("{n}", String(index + 1))}
       />
       <button
         type="button"
         onClick={onRemove}
         disabled={!removable}
-        aria-label="إزالة اللون"
-        className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
+        aria-label={dict.flows.controls.removeColor}
+        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
           close
@@ -1217,6 +1232,7 @@ function FileDropzone({
   compact?: boolean;
   horizontal?: boolean;
 }) {
+  const dict = useDict();
   const disabled = stage === "extracting" || submitting;
   // Axis + min-height per mode:
   //   • horizontal — icon + text on one row, short pill height
@@ -1303,13 +1319,13 @@ function FileDropzone({
               {readableFileName(file.name)}
             </p>
             <p className="mt-0.5 truncate text-xs text-white/60">
-              {formatFileSize(file.size)}
+              {formatFileSize(file.size, dict.flows.unitKB, dict.flows.unitMB)}
               {stage === "extracting"
-                ? " · جارٍ التحليل..."
+                ? ` · ${dict.flows.analyzing}`
                 : stage === "ready"
-                  ? " · جاهز"
+                  ? ` · ${dict.flows.ready}`
                   : submitting
-                    ? " · جارٍ الإنشاء..."
+                    ? ` · ${dict.flows.generate.creating}`
                     : ""}
             </p>
           </div>
@@ -1317,8 +1333,8 @@ function FileDropzone({
           <div className={`min-w-0 ${horizontal ? "flex-1" : ""}`}>
             <p className="truncate text-sm font-semibold text-white">
               {horizontal
-                ? "اسحب أو انقر لاختيار ملف"
-                : "اسحب وأفلت الملف هنا"}
+                ? dict.flows.mimic.dragOrClick
+                : dict.flows.mimic.dragDrop}
             </p>
             {/* Muted second line — compatible-file hint + size cap.
                 Shown in BOTH horizontal and stacked empty states now
@@ -1327,15 +1343,15 @@ function FileDropzone({
                 it for the larger ref-file dropzone. */}
             {horizontal ? (
               <p className="mt-0.5 truncate text-[11px] text-white/40">
-                PDF أو PowerPoint — حتى 100 ميجابايت
+                {dict.flows.mimic.fileHint}
               </p>
             ) : (
               <>
                 <p className="mt-0.5 text-xs text-white/60">
-                  أو انقر لاختيار ملف
+                  {dict.flows.mimic.clickToSelect}
                 </p>
                 <p className="mt-1 text-[10px] text-white/40">
-                  PDF أو PowerPoint — حتى 100 ميجابايت
+                  {dict.flows.mimic.fileHint}
                 </p>
               </>
             )}
@@ -1350,7 +1366,7 @@ function FileDropzone({
             event.stopPropagation();
             onRemove();
           }}
-          aria-label="إزالة الملف"
+          aria-label={dict.flows.removeFile}
           className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
         >
           <span

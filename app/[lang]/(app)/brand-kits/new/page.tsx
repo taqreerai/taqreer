@@ -21,6 +21,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
 import {
@@ -62,6 +63,8 @@ type ResolvedFontField = {
 
 export default function NewBrandKitPage() {
   const router = useRouter();
+  const dict = useDict();
+  const { dir } = useLocale();
 
   // ─── Form state ────────────────────────────────────────────────
   const [name, setName] = useState<string>("");
@@ -155,7 +158,7 @@ export default function NewBrandKitPage() {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-        throw new Error(data?.error ?? "تعذر حفظ هوية الشركة");
+        throw new Error(data?.error ?? dict.pages.brandKits.errSave);
       }
 
       router.push("/brand-kits");
@@ -165,7 +168,7 @@ export default function NewBrandKitPage() {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "تعذر حفظ هوية الشركة. حاول مرة أخرى.",
+          : dict.pages.brandKits.errSaveRetry,
       );
       setSubmitting(false);
     }
@@ -184,18 +187,14 @@ export default function NewBrandKitPage() {
   };
 
   return (
-    <div className="page-container flex w-full justify-center" dir="rtl">
+    <div className="page-container flex w-full justify-center" dir={dir}>
       <form
         onSubmit={handleFormSubmit}
         className="flex w-full flex-col items-center gap-6"
       >
         <header className="text-center">
-          <h1 className="tq-h1">هوية جديدة</h1>
-          <p className="tq-subhead mt-2">
-            احفظ شعارك وألوانك وخطوطك مرة واحدة
-            <br />
-            ثم استخدمها بضغطة زر في أي تدفق إنشاء.
-          </p>
+          <h1 className="tq-h1">{dict.pages.brandKits.newTitle}</h1>
+          <p className="tq-subhead mt-2">{dict.pages.brandKits.newSubtitle}</p>
         </header>
 
         {/* Name field — capped to the brand card's width so the form
@@ -206,14 +205,14 @@ export default function NewBrandKitPage() {
             htmlFor="brand-kit-name"
             className="mb-1.5 block text-xs font-semibold text-white/70"
           >
-            اسم الهوية
+            {dict.pages.brandKits.nameLabel}
           </label>
           <input
             id="brand-kit-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="مثال: شركة المستقبل"
+            placeholder={dict.pages.brandKits.namePlaceholder}
             maxLength={120}
             className="input-dark w-full"
             style={{ height: 44, padding: "0 16px" }}
@@ -229,13 +228,13 @@ export default function NewBrandKitPage() {
           <div
             className={`surface-card flex ${CARD_W_CLASS} min-h-[540px] flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="palette" title="الهوية البصرية" />
+            <CardHeader icon="palette" title={dict.flows.brandCard} />
 
             {/* Palette row — label on the visual right, swatches + add
                 tile on the visual left (matches /create). */}
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-white/70">
-                الألوان
+                {dict.flows.colors}
               </span>
               <div className="flex items-center gap-1.5">
                 {colors.map((color, index) => (
@@ -252,7 +251,7 @@ export default function NewBrandKitPage() {
                   <button
                     type="button"
                     onClick={addColor}
-                    aria-label="إضافة لون"
+                    aria-label={dict.flows.addColor}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
                   >
                     <span
@@ -283,7 +282,7 @@ export default function NewBrandKitPage() {
                 runs to the card's bottom edge. */}
             <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-white/70">
-                الشعار
+                {dict.flows.logo}
               </span>
               <LogoRow
                 file={logoFile}
@@ -307,7 +306,7 @@ export default function NewBrandKitPage() {
               href="/brand-kits"
               className="rounded-full border border-white/15 px-5 py-2 text-sm text-white/70 transition-colors hover:border-white/30 hover:text-white"
             >
-              إلغاء
+              {dict.common.cancel}
             </Link>
             <button
               type="submit"
@@ -323,7 +322,7 @@ export default function NewBrandKitPage() {
                   >
                     progress_activity
                   </span>
-                  جارٍ الحفظ...
+                  {dict.pages.brandKits.saving}
                 </>
               ) : (
                 <>
@@ -334,7 +333,7 @@ export default function NewBrandKitPage() {
                   >
                     save
                   </span>
-                  حفظ الهوية
+                  {dict.pages.brandKits.save}
                 </>
               )}
             </button>
