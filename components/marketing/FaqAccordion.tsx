@@ -6,39 +6,12 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
-const FAQS: { q: string; a: string }[] = [
-  {
-    q: "ما هو تقرير؟",
-    a: "تقرير منصة ذكاء اصطناعي تحوّل محتواك — نصًا أو ملفًا أو فكرة — إلى عرض تقديمي احترافي كامل التصميم بالعربية والإنجليزية خلال دقائق.",
-  },
-  {
-    q: "هل يدعم اللغة العربية بشكل كامل؟",
-    a: "نعم، تقرير مصمم للعربية أولًا: اتجاه RTL صحيح، خطوط عربية أنيقة، وتنسيق ثنائي الاتجاه يتعامل مع الكلمات الإنجليزية والأرقام داخل النص العربي بدقة.",
-  },
-  {
-    q: "كيف يعمل نظام الأرصدة؟",
-    a: "كل عرض يستهلك أرصدة حسب عدد الشرائح والنموذج المستخدم. تحصل على رصيد شهري مع خطتك، إضافة إلى 400 رصيد مجاني عند التسجيل لتجربة المنصة.",
-  },
-  {
-    q: "هل يمكنني تعديل العرض بعد إنشائه؟",
-    a: "بالتأكيد. المحرر يتيح تعديل النصوص والألوان والشرائح وإعادة ترتيبها، مع حفظ تلقائي ونسخ سابقة (checkpoints) للرجوع إليها في أي وقت.",
-  },
-  {
-    q: "هل يمكنني تصدير العرض إلى PowerPoint؟",
-    a: "نعم، يمكنك تصدير عروضك بصيغة PPTX قابلة للتعديل في PowerPoint مع الحفاظ على التنسيق العربي واتجاه النص.",
-  },
-  {
-    q: "هل أستطيع تطبيق هويتي البصرية؟",
-    a: "نعم، ارفع شعارك وألوانك وخطوطك في قسم الهوية البصرية، ويطبّقها تقرير تلقائيًا على عروضك لتبقى متسقة مع علامتك التجارية.",
-  },
-  {
-    q: "هل يمكنني إلغاء الاشتراك في أي وقت؟",
-    a: "نعم، يمكنك الترقية أو التخفيض أو الإلغاء في أي وقت من إعدادات حسابك، دون أي التزام طويل الأجل.",
-  },
-];
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function FaqAccordion() {
+  const dict = useDict();
+  const { dir } = useLocale();
+
   // Single-open accordion; first item open initially. Clicking the open item
   // closes it.
   const [open, setOpen] = useState<number | null>(0);
@@ -46,8 +19,8 @@ export function FaqAccordion() {
   return (
     // shadcn-style: no card pills — each row is just a question + a hairline
     // divider under it, with the answer expanding below.
-    <div className="w-full" dir="rtl">
-        {FAQS.map((item, i) => {
+    <div className="w-full" dir={dir}>
+        {dict.landing.faq.map((item, i) => {
           const isOpen = open === i;
           return (
             <div key={i} className="border-b border-[var(--tq-border-hairline)] px-4 sm:px-6 lg:px-8">
@@ -55,7 +28,7 @@ export function FaqAccordion() {
                 type="button"
                 onClick={() => setOpen(isOpen ? null : i)}
                 aria-expanded={isOpen}
-                className="flex w-full items-center justify-between gap-4 py-5 text-right"
+                className="flex w-full items-center justify-between gap-4 py-5 text-end"
               >
                 <span
                   className={`text-base font-medium transition-colors ${

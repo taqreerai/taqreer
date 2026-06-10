@@ -6,6 +6,7 @@
 
 import { useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import { DashboardPreview } from "./DashboardPreview";
 
 const containerVariants = {
@@ -29,6 +30,8 @@ const itemVariants = {
 // Undefined / 0 falls back to a hidden chip so we never render
 // "تم إنشاء 0 عرض تقديمي حتى الآن" on a fresh DB.
 export function Hero({ projectCount }: { projectCount?: number }) {
+  const dict = useDict();
+
   // Tracks the demo dashboard's active view as a path string so the
   // browser-chrome URL pill stays in sync with whichever flow the
   // visitor clicked into (DashboardPreview emits the path, Hero
@@ -81,11 +84,11 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                   className="h-1.5 w-1.5 rounded-full"
                   style={{ background: "var(--tq-violet)" }}
                 />
-                تم إنشاء {formattedCount} عرض تقديمي حتى الآن
+                {dict.landing.hero.statusCount.replace("{count}", String(formattedCount))}
               </span>
             )}
             <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-4 py-1.5 text-xs font-medium text-muted">
-              مدعوم بتقنية Claude Design
+              {dict.landing.hero.poweredBy}
             </span>
           </motion.div>
 
@@ -93,17 +96,15 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             variants={itemVariants}
             className="mb-8 w-full text-4xl font-medium leading-tight md:text-6xl"
           >
-            حوّل محتواك إلى عرض <br />
-            <span className="text-gradient">احترافي خلال دقائق</span>
+            {dict.landing.hero.titleLine1} <br />
+            <span className="text-gradient">{dict.landing.hero.titleLine2}</span>
           </motion.h1>
 
           <motion.p
             variants={itemVariants}
             className="mx-auto mb-12 w-full max-w-xl text-lg leading-relaxed text-muted md:text-xl"
           >
-            taqreer.ai يحوّل محتواك إلى عروض تقديمية مصممة بالكامل، يدعم العربية
-            والإنجليزية. يحافظ على هويتك البصرية، ويمنحك محررًا متقدمًا لتعديل
-            كل شريحة مباشرة داخل المتصفح.
+            {dict.landing.hero.subtitle}
           </motion.p>
 
           <div className="mb-20 flex w-full justify-center">
@@ -119,7 +120,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
               variants={itemVariants}
               className="btn-gradient-anim rounded-full px-8 py-3 text-sm font-medium"
             >
-              ابدأ الآن مجاناً
+              {dict.landing.hero.cta}
             </motion.a>
           </div>
         </motion.div>
@@ -239,7 +240,7 @@ function BrowserChromeBar({ path }: { path: string }) {
       </div>
 
       {/* Right ghost glyphs — same two as the BiDi canvas header. */}
-      <div className="ml-auto flex items-center gap-3 text-white/25">
+      <div className="ms-auto flex items-center gap-3 text-white/25">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 12h16M4 6h16M4 18h16" />
         </svg>

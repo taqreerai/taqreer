@@ -25,6 +25,7 @@ import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 
 // Platform-wide "decks created" counter shown in the Hero status chip. Cached 5
 // min; try/catch → 0 on error.
@@ -42,18 +43,12 @@ const getProjectCount = unstable_cache(
 
 const TRUSTED_LOGOS = ["TED", "Lattice", "NCR", "PACIFIC FUNDS", "Rakuten", "zendesk", "DELL"];
 
-const FOOTER_GROUPS: { title: string; links: string[] }[] = [
-  { title: "تواصل", links: ["البريد الإلكتروني", "الدعم الفني", "نموذج التواصل"] },
-  { title: "روابط", links: ["المميزات", "الأسعار", "الأسئلة الشائعة"] },
-  { title: "التواصل الاجتماعي", links: ["Twitter", "LinkedIn", "Instagram"] },
-  { title: "قانوني", links: ["سياسة الخصوصية", "الشروط والأحكام"] },
-];
-
+// In-section anchor hrefs for the footer "links" group, keyed by the stable
+// dict key (NOT the localized label) so the mapping survives translation.
 const FOOTER_LINK_HREFS: Record<string, string> = {
-  المميزات: "#features",
-  الأسعار: "#pricing",
-  القوالب: "#templates",
-  "الأسئلة الشائعة": "#faq",
+  features: "#features",
+  pricing: "#pricing",
+  faq: "#faq",
 };
 
 // Centered (single-column) section header.
@@ -86,17 +81,37 @@ function SectionHeader({
 const RULE = "rule-top";
 const PX = "px-4 sm:px-6 lg:px-8";
 
-export default async function LandingPage() {
+export default async function LandingPage({
+  params,
+}: {
+  params: Promise<{ lang: "ar" | "en" }>;
+}) {
+  const { lang } = await params;
   const supabase = await createClient();
   const [
     { data: { user } },
     projectCount,
     landingTemplates,
+    dict,
   ] = await Promise.all([
     supabase.auth.getUser(),
     getProjectCount(),
     getLandingTemplates(),
+    getDictionary(lang),
   ]);
+
+  // Footer: build the column array from dict.landing.footer.groups so titles
+  // + link labels are localized. Hrefs for the in-page "links" group come from
+  // the stable dict keys (FOOTER_LINK_HREFS); other groups have no nav target.
+  const footer = dict.landing.footer.groups;
+  const footerGroups: { title: string; links: { label: string; href: string }[] }[] =
+    [footer.contact, footer.links, footer.social, footer.legal].map((group) => ({
+      title: group.title,
+      links: Object.entries(group.links).map(([key, label]) => ({
+        label: label as string,
+        href: FOOTER_LINK_HREFS[key] ?? "#",
+      })),
+    }));
 
   return (
     <SmoothScrollProvider>
@@ -134,9 +149,9 @@ export default async function LandingPage() {
         <section id="features" className={RULE}>
           <ScrollReveal direction="up" className={`${PX} pt-32 pb-12`}>
             <SectionHeader
-              eyebrow="المميزات"
-              title="كل ما تحتاجه لإنشاء عرض تقديمي احترافي"
-              subtitle="ابدأ من محتوى خام، طوّر عرضًا موجودًا، حاكِ أسلوب عرضٍ مرجعي، أو حوّل بياناتك — تقرير يساعدك في كل مرحلة."
+              eyebrow={dict.landing.sections.features.eyebrow}
+              title={dict.landing.sections.features.title}
+              subtitle={dict.landing.sections.features.subtitle}
             />
           </ScrollReveal>
           <ScrollReveal direction="up" className="rule-y">
@@ -154,9 +169,9 @@ export default async function LandingPage() {
         <section id="templates" className={`${RULE} ${PX} py-32`}>
           <ScrollReveal direction="up">
             <SectionHeader
-              eyebrow="القوالب"
-              title="ابدأ من قالب، ما تراه هو ما تحصل عليه"
-              subtitle="استكشف قوالبنا الجاهزة المناسبة لمشروعك دون الاعتماد على توجيه التصميم من الذكاء الاصطناعي."
+              eyebrow={dict.landing.sections.templates.eyebrow}
+              title={dict.landing.sections.templates.title}
+              subtitle={dict.landing.sections.templates.subtitle}
             />
           </ScrollReveal>
           <div className="mt-12">
@@ -168,9 +183,9 @@ export default async function LandingPage() {
         <section id="pricing" className={`${RULE} ${PX} py-32`}>
           <ScrollReveal direction="up">
             <SectionHeader
-              eyebrow="الأسعار"
-              title="خطط بسيطة حسب احتياجك"
-              subtitle="ابدأ مجانًا، أو اختر خطة شهرية تناسب حجم عروضك وعدد الشرائح التي تحتاجها."
+              eyebrow={dict.landing.sections.pricing.eyebrow}
+              title={dict.landing.sections.pricing.title}
+              subtitle={dict.landing.sections.pricing.subtitle}
             />
           </ScrollReveal>
           <ScrollReveal direction="up" className="mt-12">
@@ -184,9 +199,9 @@ export default async function LandingPage() {
           <ScrollReveal direction="right" className={`${PX} mb-8`}>
             <SectionHeader
               align="right"
-              eyebrow="مساعدة"
-              title="الأسئلة الشائعة"
-              subtitle="كل ما تريد معرفته عن تقرير قبل أن تبدأ."
+              eyebrow={dict.landing.sections.faq.eyebrow}
+              title={dict.landing.sections.faq.title}
+              subtitle={dict.landing.sections.faq.subtitle}
             />
           </ScrollReveal>
           <ScrollReveal direction="up">
@@ -197,17 +212,17 @@ export default async function LandingPage() {
         {/* Footer — line separators, no background block. */}
         <footer className={`${RULE} ${PX} pt-20 pb-8`}>
           <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-0 md:divide-x md:divide-[var(--tq-border-hairline)]">
-            {FOOTER_GROUPS.map((group) => (
-              <div key={group.title} className="md:px-8 md:first:pr-0">
+            {footerGroups.map((group) => (
+              <div key={group.title} className="md:px-8 md:first:pe-0">
                 <h4 className="mb-6 font-medium text-white">{group.title}</h4>
                 <ul className="space-y-3 text-sm text-muted">
                   {group.links.map((link) => (
-                    <li key={link}>
+                    <li key={link.label}>
                       <a
                         className="transition-colors hover:text-white"
-                        href={FOOTER_LINK_HREFS[link] ?? "#"}
+                        href={link.href}
                       >
-                        {link}
+                        {link.label}
                       </a>
                     </li>
                   ))}
@@ -225,7 +240,12 @@ export default async function LandingPage() {
                 className="h-7 w-auto object-contain opacity-80"
               />
             </div>
-            <p>© {new Date().getFullYear()} taqreer.ai جميع الحقوق محفوظة.</p>
+            <p>
+              {dict.landing.footer.copyright.replace(
+                "{year}",
+                String(new Date().getFullYear()),
+              )}
+            </p>
           </div>
         </footer>
       </div>

@@ -46,76 +46,57 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 type View = "dashboard" | "create" | "enhance" | "mimic" | "datasheet";
 
+// Quick-action card metadata. Copy (title/desc) is resolved from the
+// dictionary at render time via `dict.landing.preview.quickActions[id]`
+// so the cards follow the UI locale.
 const QUICK_ACTIONS: Array<{
   id: Exclude<View, "dashboard">;
   icon: string;
-  title: string;
-  desc: string;
 }> = [
-  {
-    id: "create",
-    icon: "add_circle",
-    title: "إنشاء عرض جديد",
-    desc: "ابدأ من الصفر بمحتواك",
-  },
-  {
-    id: "enhance",
-    icon: "auto_fix_high",
-    title: "تحسين عرض موجود",
-    desc: "ارفع ملفك واحصل على نسخة محسّنة",
-  },
-  {
-    id: "mimic",
-    icon: "content_copy",
-    title: "محاكاة أسلوب عرض",
-    desc: "انسخ أسلوب عرض آخر وطبّقه",
-  },
-  {
-    id: "datasheet",
-    icon: "dataset",
-    title: "إنشاء من بيانات",
-    desc: "حوّل ملف Excel إلى عرض احترافي",
-  },
+  { id: "create", icon: "add_circle" },
+  { id: "enhance", icon: "auto_fix_high" },
+  { id: "mimic", icon: "content_copy" },
+  { id: "datasheet", icon: "dataset" },
 ];
 
 // Sidebar icon list — mirrors `components/app/Sidebar.tsx` exactly so a
 // returning user reads the demo as "yes, this is the same app". `home`
 // is the active item on the dashboard view; flow views activate the
 // matching action button instead.
+// `labelKey` indexes `dict.landing.preview.sidebar.*` for the icon-only
+// nav dot's accessible name — resolved at render time so it follows the
+// UI locale.
 const SIDEBAR_ITEMS: Array<{
   id: View | "projects" | "templates" | "brand-kits" | "favorites" | "settings";
   icon: string;
   // Accessible name for the icon-only nav dot (no visible text label).
-  label: string;
+  labelKey: keyof Dictionary["landing"]["preview"]["sidebar"];
   group: "home" | "actions" | "library";
   comingSoon?: boolean;
 }> = [
-  { id: "dashboard", icon: "home", label: "الرئيسية", group: "home" },
-  { id: "create", icon: "add_circle", label: "إنشاء عرض جديد", group: "actions" },
-  { id: "enhance", icon: "auto_fix_high", label: "تحسين عرض موجود", group: "actions" },
-  { id: "mimic", icon: "content_copy", label: "محاكاة أسلوب عرض", group: "actions" },
-  { id: "datasheet", icon: "dataset", label: "إنشاء من بيانات", group: "actions", comingSoon: true },
-  { id: "projects", icon: "folder_copy", label: "المشاريع", group: "library" },
-  { id: "templates", icon: "grid_view", label: "القوالب", group: "library" },
-  { id: "brand-kits", icon: "id_card", label: "الهويات البصرية", group: "library" },
-  { id: "favorites", icon: "star", label: "المفضلة", group: "library" },
-  { id: "settings", icon: "settings", label: "الإعدادات", group: "library" },
+  { id: "dashboard", icon: "home", labelKey: "home", group: "home" },
+  { id: "create", icon: "add_circle", labelKey: "create", group: "actions" },
+  { id: "enhance", icon: "auto_fix_high", labelKey: "enhance", group: "actions" },
+  { id: "mimic", icon: "content_copy", labelKey: "mimic", group: "actions" },
+  { id: "datasheet", icon: "dataset", labelKey: "datasheet", group: "actions", comingSoon: true },
+  { id: "projects", icon: "folder_copy", labelKey: "projects", group: "library" },
+  { id: "templates", icon: "grid_view", labelKey: "templates", group: "library" },
+  { id: "brand-kits", icon: "id_card", labelKey: "brandKits", group: "library" },
+  { id: "favorites", icon: "star", labelKey: "favorites", group: "library" },
+  { id: "settings", icon: "settings", labelKey: "settings", group: "library" },
 ];
 
-// Six placeholder titles per widget — 3 cols × 2 rows mirrors the real
+// Six placeholder tiles per widget — 3 cols × 2 rows mirrors the real
 // dashboard's `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` layout
-// (RecentProjects.tsx). Latin numerals per project rule.
-const RECENT_PROJECTS = [
-  { title: "خطة عمل 2026", subtitle: "12 شريحة" },
-  { title: "تقرير المبيعات", subtitle: "8 شرائح" },
-  { title: "عرض المنتج الجديد", subtitle: "16 شريحة" },
-  { title: "ملخص الربع الثالث", subtitle: "10 شرائح" },
-  { title: "استراتيجية التسويق", subtitle: "14 شريحة" },
-  { title: "نتائج الحملة", subtitle: "6 شرائح" },
-];
+// (RecentProjects.tsx). Latin numerals per project rule. Titles come
+// from `dict.landing.preview.projects` (same order); the slide count is
+// formatted via `dict.landing.preview.slides` at render time.
+const RECENT_PROJECT_SLIDE_COUNTS = [12, 8, 16, 10, 14, 6];
 
 // Three glass tints cycled across placeholder tiles. All driven from
 // the user's `--tq-tint-opacity` preset so they scale with the same
@@ -148,6 +129,8 @@ export function DashboardPreview({
    */
   onPathChange?: (path: string) => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const [view, setViewRaw] = useState<View>("dashboard");
 
   // Wrap setView so every view change emits the new path to the
@@ -173,7 +156,7 @@ export function DashboardPreview({
     // — re-anchor here so the inner content direction doesn't
     // inherit from the chrome.
     <div
-      dir="rtl"
+      dir={dir}
       className="absolute inset-0 flex"
       style={{
         overflow: "hidden",
@@ -181,7 +164,7 @@ export function DashboardPreview({
       }}
     >
       {/* §24: thin always-collapsed icon rail (mirrors the real Sidebar). */}
-      <DemoSidebar view={view} onNavigate={setView} />
+      <DemoSidebar view={view} onNavigate={setView} dict={dict} />
 
       {/* Main column — the rounded content panel floats on the dark gutter,
           exactly like the real DashboardShell `.tq-content-panel`. No header
@@ -204,7 +187,7 @@ export function DashboardPreview({
 
           {/* Top utility cluster — search (⌘K) on the start/right, theme +
               language on the end/left (mirrors the §24 TopUtilityBar). */}
-          <DemoTopBar />
+          <DemoTopBar dir={dir} />
 
           <AnimatePresence mode="wait">
             {view === "dashboard" ? (
@@ -216,7 +199,7 @@ export function DashboardPreview({
                 transition={{ duration: 0.25 }}
                 className="absolute inset-0 overflow-hidden"
               >
-                <DashboardBody onNavigate={setView} />
+                <DashboardBody onNavigate={setView} dict={dict} dir={dir} />
               </motion.div>
             ) : (
               <motion.div
@@ -227,7 +210,7 @@ export function DashboardPreview({
                 transition={{ duration: 0.25 }}
                 className="absolute inset-0 overflow-hidden"
               >
-                <FlowBody view={view} />
+                <FlowBody view={view} dict={dict} dir={dir} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -241,9 +224,11 @@ export function DashboardPreview({
 function DemoSidebar({
   view,
   onNavigate,
+  dict,
 }: {
   view: View;
   onNavigate: (v: View) => void;
+  dict: Dictionary;
 }) {
   const interactiveIds = new Set<string>([
     "dashboard",
@@ -272,7 +257,7 @@ function DemoSidebar({
         <button
           type="button"
           onClick={() => onNavigate("dashboard")}
-          aria-label="الرئيسية"
+          aria-label={dict.landing.preview.sidebar.home}
           className="pw-hover-trigger flex h-8 w-8 items-center justify-center"
         >
           <ParagraphWriteIcon mode="hover" size={22} />
@@ -286,6 +271,7 @@ function DemoSidebar({
             <SidebarDot
               key={item.id}
               item={item}
+              dict={dict}
               active={view === item.id}
               interactive={interactiveIds.has(item.id)}
               onClick={() => {
@@ -302,6 +288,7 @@ function DemoSidebar({
             <SidebarDot
               key={item.id}
               item={item}
+              dict={dict}
               active={view === item.id}
               interactive={interactiveIds.has(item.id)}
               onClick={() => {
@@ -325,6 +312,7 @@ function DemoSidebar({
             <SidebarDot
               key={item.id}
               item={item}
+              dict={dict}
               active={false}
               interactive={false}
               onClick={() => {
@@ -349,11 +337,13 @@ function DemoSidebar({
 
 function SidebarDot({
   item,
+  dict,
   active,
   interactive,
   onClick,
 }: {
   item: (typeof SIDEBAR_ITEMS)[number];
+  dict: Dictionary;
   active: boolean;
   interactive: boolean;
   onClick: () => void;
@@ -373,7 +363,7 @@ function SidebarDot({
       onClick={onClick}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
-      aria-label={item.label}
+      aria-label={dict.landing.preview.sidebar[item.labelKey]}
       aria-current={active ? "page" : undefined}
       className={`my-1 flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
         active ? "nav-active" : "nav-item"
@@ -398,20 +388,25 @@ function SidebarDot({
 function DemoQACard({
   card,
   onNavigate,
+  dict,
+  dir,
 }: {
   card: (typeof QUICK_ACTIONS)[number];
   onNavigate: (v: Exclude<View, "dashboard">) => void;
+  dict: Dictionary;
+  dir: "rtl" | "ltr";
 }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
+  const copy = dict.landing.preview.quickActions[card.id];
   return (
     <button
       type="button"
       onClick={() => onNavigate(card.id)}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
-      className="qa-card group relative flex min-h-[104px] flex-col gap-1.5 overflow-hidden rounded-xl p-3.5 text-right transition-all duration-200"
-      dir="rtl"
-      aria-label={card.title}
+      className="qa-card group relative flex min-h-[104px] flex-col gap-1.5 overflow-hidden rounded-xl p-3.5 text-end transition-all duration-200"
+      dir={dir}
+      aria-label={copy.title}
     >
       {/* Icon at the top; title + desc pinned to the bottom. Demo cards show the
           FULL text (no truncation — user direction) and wrap as needed. */}
@@ -428,10 +423,10 @@ function DemoQACard({
       </div>
       <div className="mt-auto w-full">
         <h3 className="text-[11px] font-semibold leading-snug text-white">
-          {card.title}
+          {copy.title}
         </h3>
         <p className="mt-0.5 text-[9px] leading-relaxed text-[var(--tq-text-muted)]">
-          {card.desc}
+          {copy.desc}
         </p>
       </div>
     </button>
@@ -442,10 +437,10 @@ function DemoQACard({
 // Mirrors the real TopUtilityBar: search (icon + ⌘K hint) pinned to the start
 // (visual right in RTL), theme + language icons to the end (visual left).
 // Static / non-interactive in the demo.
-function DemoTopBar() {
+function DemoTopBar({ dir }: { dir: "rtl" | "ltr" }) {
   return (
     <div
-      dir="rtl"
+      dir={dir}
       className="pointer-events-none absolute inset-x-0 top-2.5 z-20 flex items-center justify-between px-4"
     >
       {/* Search — start (visual right) */}
@@ -479,9 +474,14 @@ function DemoTopBar() {
 // fix to "huge bottom margin" from 2026-05-28 user feedback).
 function DashboardBody({
   onNavigate,
+  dict,
+  dir,
 }: {
   onNavigate: (v: Exclude<View, "dashboard">) => void;
+  dict: Dictionary;
+  dir: "rtl" | "ltr";
 }) {
+  const lib = dict.landing.preview.library;
   return (
     <div className="relative z-10 flex h-full flex-col overflow-hidden px-5 pt-11 pb-3">
       {/* Centered launcher — the 4 flow cards, vertically centered (Lovable-
@@ -489,7 +489,13 @@ function DashboardBody({
       <section className="flex flex-1 items-center justify-center">
         <div className="grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
           {QUICK_ACTIONS.map((card) => (
-            <DemoQACard key={card.id} card={card} onNavigate={onNavigate} />
+            <DemoQACard
+              key={card.id}
+              card={card}
+              onNavigate={onNavigate}
+              dict={dict}
+              dir={dir}
+            />
           ))}
         </div>
       </section>
@@ -500,20 +506,20 @@ function DashboardBody({
         <div className="mb-2.5 flex items-center justify-between">
           <div className="flex items-center gap-0.5 rounded-full bg-[var(--tq-surface)] p-0.5 text-[9px]">
             <span className="rounded-full bg-white/10 px-2.5 py-1 font-medium text-white">
-              مشاريعي
+              {lib.myProjects}
             </span>
             <span className="px-2.5 py-1 text-[var(--tq-text-muted)]">
-              القوالب
+              {lib.templates}
             </span>
           </div>
-          <span className="text-[9px] text-[var(--tq-text-muted)]">عرض الكل</span>
+          <span className="text-[9px] text-[var(--tq-text-muted)]">{lib.viewAll}</span>
         </div>
         <div className="grid grid-cols-5 gap-2">
-          {RECENT_PROJECTS.slice(0, 5).map((item, i) => (
+          {RECENT_PROJECT_SLIDE_COUNTS.slice(0, 5).map((count, i) => (
             <PlaceholderTile
               key={i}
-              title={item.title}
-              subtitle={item.subtitle}
+              title={dict.landing.preview.projects[i]}
+              subtitle={dict.landing.preview.slides.replace("{n}", String(count))}
               tint={PLACEHOLDER_TINTS[i % PLACEHOLDER_TINTS.length]}
             />
           ))}
@@ -552,7 +558,7 @@ function PlaceholderTile({
           info row. Right-aligned per user direction 2026-05-28:
           "remember we are trying to replicate a miniature of the
           dashboard". */}
-      <div className="px-0.5 text-right">
+      <div className="px-0.5 text-end">
         <p className="truncate text-[10px] font-semibold leading-tight text-white">
           {title}
         </p>
@@ -632,10 +638,14 @@ function SlideWireframe() {
 
 function FlowBody({
   view,
+  dict,
+  dir,
 }: {
   view: Exclude<View, "dashboard">;
+  dict: Dictionary;
+  dir: "rtl" | "ltr";
 }) {
-  const flow = FLOWS[view];
+  const flow = getFlows(dict, dir)[view];
 
   return (
     // `pt-8` (vs the dashboard body's `pt-5`) so the flow title sits
@@ -700,10 +710,10 @@ type FlowSpec = {
 };
 
 function FakeTextarea({
-  placeholder = "اكتب محتوى عرضك هنا...",
+  placeholder,
   rows = 3,
 }: {
-  placeholder?: string;
+  placeholder: string;
   rows?: number;
 }) {
   // `.input-dark` sets `border-radius: 9999px` (fully rounded pill) to
@@ -731,12 +741,12 @@ function FakeTextarea({
 
 function FakeDropzone({
   icon = "cloud_upload",
-  title = "اسحب أو انقر لاختيار ملف",
-  hint = "PDF / PPTX / DOCX / TXT — حتى 100 ميجابايت",
+  title,
+  hint,
 }: {
   icon?: string;
-  title?: string;
-  hint?: string;
+  title: string;
+  hint: string;
 }) {
   return (
     <div
@@ -804,7 +814,12 @@ function FakeSegmented({
   );
 }
 
-function FakeToggle({ on }: { on: boolean }) {
+function FakeToggle({ on, dir }: { on: boolean; dir: "rtl" | "ltr" }) {
+  // The knob rests at the inline-start when off and the inline-end when
+  // on. Resolve that to a physical side so it mirrors with the locale:
+  // LTR → start=left/end=right (off=left, on=right); RTL flips both.
+  const start = dir === "rtl" ? "right" : "left";
+  const end = dir === "rtl" ? "left" : "right";
   return (
     <div
       className={`relative h-4 w-7 rounded-full transition-colors ${
@@ -813,7 +828,7 @@ function FakeToggle({ on }: { on: boolean }) {
     >
       <div
         className="absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all"
-        style={{ [on ? "left" : "right"]: 2 } as React.CSSProperties}
+        style={{ [on ? end : start]: 2 } as React.CSSProperties}
       />
     </div>
   );
@@ -892,269 +907,282 @@ function FlowCard({ card }: { card: FlowCardSpec }) {
 //   • /datasheet  →  dataset (البيانات) / palette (الهوية البصرية)
 //                    / settings (إعدادات الإخراج)
 
-const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
-  create: {
-    title: "أنشئ عرضاً جديداً",
-    subtitle:
-      "اكتب محتواك أو ارفع ملفاً، اختر هويتك البصرية، وسنبني عرضاً يحاكي ذوقك.",
-    cta: "إنشاء العرض",
-    cards: [
-      {
-        icon: "subject",
-        title: "المحتوى",
-        body: (
-          <>
-            <FieldRow label="اللغة">
-              <FakeSegmented options={["العربية", "الإنجليزية"]} active={0} />
-            </FieldRow>
-            <FakeTextarea rows={3} />
-            <div className="flex items-center gap-2 text-[10px] text-white/40">
-              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-              <span>أو</span>
-              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-            </div>
-            <FakeDropzone />
-          </>
-        ),
-      },
-      {
-        icon: "palette",
-        title: "الهوية البصرية",
-        body: (
-          <>
-            <FieldRow label="الألوان">
-              <FakePalette
-                // Our brand-gradient colours (blue → violet → purple). Literal
-                // hexes on purpose: the --tq-blue/violet/magenta tokens are all
-                // aliased to one purple after §21, so tokens here read monochrome.
-                colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
+// Builds the per-flow card specs from the dictionary so all copy follows
+// the UI locale. `dir` is threaded into every `FakeToggle` so the switch
+// knob mirrors with the locale. File-format / aspect-ratio tokens
+// ("16:9", "9:16", "Google", "Sheet 1", "PPTX / PDF") stay as-is.
+function getFlows(
+  dict: Dictionary,
+  dir: "rtl" | "ltr",
+): Record<Exclude<View, "dashboard">, FlowSpec> {
+  const p = dict.landing.preview;
+  const c = p.common;
+  return {
+    create: {
+      title: p.create.title,
+      subtitle: p.create.subtitle,
+      cta: p.create.cta,
+      cards: [
+        {
+          icon: "subject",
+          title: c.content,
+          body: (
+            <>
+              <FieldRow label={c.language}>
+                <FakeSegmented options={[c.arabic, c.english]} active={0} />
+              </FieldRow>
+              <FakeTextarea placeholder={c.textareaPlaceholder} rows={3} />
+              <div className="flex items-center gap-2 text-[10px] text-white/40">
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+                <span>{c.or}</span>
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+              </div>
+              <FakeDropzone title={c.dropTitle} hint={c.dropHintMain} />
+            </>
+          ),
+        },
+        {
+          icon: "palette",
+          title: c.brandIdentity,
+          body: (
+            <>
+              <FieldRow label={c.colors}>
+                <FakePalette
+                  // Our brand-gradient colours (blue → violet → purple). Literal
+                  // hexes on purpose: the --tq-blue/violet/magenta tokens are all
+                  // aliased to one purple after §21, so tokens here read monochrome.
+                  colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
+                />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.font}>
+                <FakeSegmented options={[c.file, "Google"]} active={1} />
+              </FieldRow>
+              <FakeFontSlot label="Aa" family="Cairo" />
+              <CardSeparator />
+              <FakeDropzone icon="image" title={c.uploadLogo} hint={c.logoHint} />
+              <FieldRow label={c.saveDefault}>
+                <FakeToggle on={false} dir={dir} />
+              </FieldRow>
+            </>
+          ),
+        },
+        {
+          icon: "settings",
+          title: c.outputSettings,
+          body: (
+            <>
+              <FieldRow label={c.slideSize}>
+                <FakeSegmented options={["16:9", "9:16"]} active={0} />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.numSlides}>
+                <FakeSegmented options={[c.auto, c.custom]} active={0} />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.slideNumbering}>
+                <FakeToggle on={true} dir={dir} />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={p.create.designStyle}>
+                <FakeSegmented
+                  options={[c.auto, p.create.professional, p.create.creative]}
+                  active={0}
+                />
+              </FieldRow>
+            </>
+          ),
+        },
+      ],
+    },
+    enhance: {
+      title: p.enhance.title,
+      subtitle: p.enhance.subtitle,
+      cta: p.enhance.cta,
+      cards: [
+        {
+          icon: "subject",
+          title: p.enhance.originalFile,
+          body: (
+            <>
+              <FakeDropzone
+                icon="upload_file"
+                title={p.enhance.dropTitle}
+                hint={p.enhance.dropHint}
               />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="الخط">
-              <FakeSegmented options={["ملف", "Google"]} active={1} />
-            </FieldRow>
-            <FakeFontSlot label="Aa" family="Cairo" />
-            <CardSeparator />
-            <FakeDropzone icon="image" title="ارفع شعارك" hint="SVG فقط" />
-            <FieldRow label="حفظ كهوية افتراضية">
-              <FakeToggle on={false} />
-            </FieldRow>
-          </>
-        ),
-      },
-      {
-        icon: "settings",
-        title: "إعدادات الإخراج",
-        body: (
-          <>
-            <FieldRow label="مقاس الشريحة">
-              <FakeSegmented options={["16:9", "9:16"]} active={0} />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="عدد الشرائح">
-              <FakeSegmented options={["تلقائي", "مخصص"]} active={0} />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="ترقيم الشرائح">
-              <FakeToggle on={true} />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="نمط التصميم">
-              <FakeSegmented options={["تلقائي", "احترافي", "إبداعي"]} active={0} />
-            </FieldRow>
-          </>
-        ),
-      },
-    ],
-  },
-  enhance: {
-    title: "حسّن عرضك الحالي",
-    subtitle:
-      "ارفع عرضاً موجوداً وسنعيد تصميمه بهويتك البصرية مع الحفاظ على محتواك.",
-    cta: "تحسين العرض",
-    cards: [
-      {
-        icon: "subject",
-        title: "الملف الأصلي",
-        body: (
-          <>
-            <FakeDropzone
-              icon="upload_file"
-              title="اسحب ملف العرض هنا"
-              hint="PPTX / PDF — حتى 100 ميجابايت"
-            />
-            <p className="text-[10px] leading-relaxed text-[var(--tq-text-muted)]">
-              سنستخرج النص والصور والخطوط من ملفك تلقائياً.
-            </p>
-            <CardSeparator />
-            <FakeDropzone
-              icon="image"
-              title="ارفع شعارك (اختياري)"
-              hint="SVG فقط"
-            />
-          </>
-        ),
-      },
-      {
-        icon: "palette",
-        title: "الهوية البصرية",
-        body: (
-          <>
-            <FieldRow label="الألوان">
-              <FakePalette colors={["var(--tq-brand-blue)", "var(--tq-violet)"]} />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="الخط">
-              <FakeSegmented options={["ملف", "Google"]} active={1} />
-            </FieldRow>
-            <FakeFontSlot label="Aa" family="Cairo" />
-            <CardSeparator />
-            <FieldRow label="حفظ كهوية افتراضية">
-              <FakeToggle on={false} />
-            </FieldRow>
-          </>
-        ),
-      },
-    ],
-  },
-  mimic: {
-    title: "حاكِ أسلوب عرض",
-    subtitle:
-      "أرفق عرضاً مرجعياً وسنطبّق أسلوبه على محتواك الجديد.",
-    cta: "إنشاء العرض",
-    cards: [
-      {
-        icon: "subject",
-        title: "المحتوى",
-        body: (
-          <>
-            <FieldRow label="اللغة">
-              <FakeSegmented options={["العربية", "الإنجليزية"]} active={0} />
-            </FieldRow>
-            <FakeTextarea rows={4} />
-          </>
-        ),
-      },
-      {
-        icon: "palette",
-        title: "الهوية البصرية",
-        body: (
-          <>
-            <FieldRow label="الألوان">
-              <FakePalette
-                // Our brand-gradient colours (blue → violet → purple). Literal
-                // hexes on purpose: the --tq-blue/violet/magenta tokens are all
-                // aliased to one purple after §21, so tokens here read monochrome.
-                colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
+              <p className="text-[10px] leading-relaxed text-[var(--tq-text-muted)]">
+                {p.enhance.extractNote}
+              </p>
+              <CardSeparator />
+              <FakeDropzone
+                icon="image"
+                title={p.enhance.uploadLogoOptional}
+                hint={c.logoHint}
               />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="الخط">
-              <FakeSegmented options={["ملف", "Google"]} active={1} />
-            </FieldRow>
-            <FakeFontSlot label="Aa" family="Cairo" />
-            <CardSeparator />
-            <FakeDropzone icon="image" title="ارفع شعارك" hint="SVG فقط" />
-            <FieldRow label="حفظ كهوية افتراضية">
-              <FakeToggle on={false} />
-            </FieldRow>
-          </>
-        ),
-      },
-      {
-        icon: "auto_awesome",
-        title: "ما الذي نُحاكيه",
-        body: (
-          <>
-            <FakeDropzone
-              icon="style"
-              title="ارفع العرض المرجعي"
-              hint="PPTX / PDF"
-            />
-            <p className="text-[10px] leading-relaxed text-[var(--tq-text-muted)]">
-              سنستخرج الألوان والخطوط والتخطيط من المرجع.
-            </p>
-            <CardSeparator />
-            <FieldRow label="نسخ النص">
-              <FakeToggle on={false} />
-            </FieldRow>
-          </>
-        ),
-      },
-    ],
-  },
-  datasheet: {
-    title: "أنشئ عرضاً من بياناتك",
-    subtitle:
-      "حوّل ملف Excel أو CSV إلى عرض احترافي مع الرسوم البيانية المناسبة.",
-    cta: "إنشاء العرض",
-    cards: [
-      {
-        icon: "dataset",
-        title: "البيانات",
-        body: (
-          <>
-            <FakeDropzone
-              icon="dataset"
-              title="ارفع ملف البيانات"
-              hint="XLSX / CSV — حتى 25 ميجابايت"
-            />
-            <CardSeparator />
-            <FieldRow label="الجدول">
-              <FakeSegmented options={["تلقائي", "Sheet 1"]} active={0} />
-            </FieldRow>
-            <FieldRow label="نوع الرسم">
-              <FakeSegmented options={["تلقائي", "أعمدة", "خطي"]} active={0} />
-            </FieldRow>
-          </>
-        ),
-      },
-      {
-        icon: "palette",
-        title: "الهوية البصرية",
-        body: (
-          <>
-            <FieldRow label="الألوان">
-              <FakePalette
-                // Our brand-gradient colours (blue → violet → purple). Literal
-                // hexes on purpose: the --tq-blue/violet/magenta tokens are all
-                // aliased to one purple after §21, so tokens here read monochrome.
-                colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
+            </>
+          ),
+        },
+        {
+          icon: "palette",
+          title: c.brandIdentity,
+          body: (
+            <>
+              <FieldRow label={c.colors}>
+                <FakePalette colors={["var(--tq-brand-blue)", "var(--tq-violet)"]} />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.font}>
+                <FakeSegmented options={[c.file, "Google"]} active={1} />
+              </FieldRow>
+              <FakeFontSlot label="Aa" family="Cairo" />
+              <CardSeparator />
+              <FieldRow label={c.saveDefault}>
+                <FakeToggle on={false} dir={dir} />
+              </FieldRow>
+            </>
+          ),
+        },
+      ],
+    },
+    mimic: {
+      title: p.mimic.title,
+      subtitle: p.mimic.subtitle,
+      cta: p.mimic.cta,
+      cards: [
+        {
+          icon: "subject",
+          title: c.content,
+          body: (
+            <>
+              <FieldRow label={c.language}>
+                <FakeSegmented options={[c.arabic, c.english]} active={0} />
+              </FieldRow>
+              <FakeTextarea placeholder={c.textareaPlaceholder} rows={4} />
+            </>
+          ),
+        },
+        {
+          icon: "palette",
+          title: c.brandIdentity,
+          body: (
+            <>
+              <FieldRow label={c.colors}>
+                <FakePalette
+                  // Our brand-gradient colours (blue → violet → purple). Literal
+                  // hexes on purpose: the --tq-blue/violet/magenta tokens are all
+                  // aliased to one purple after §21, so tokens here read monochrome.
+                  colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
+                />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.font}>
+                <FakeSegmented options={[c.file, "Google"]} active={1} />
+              </FieldRow>
+              <FakeFontSlot label="Aa" family="Cairo" />
+              <CardSeparator />
+              <FakeDropzone icon="image" title={c.uploadLogo} hint={c.logoHint} />
+              <FieldRow label={c.saveDefault}>
+                <FakeToggle on={false} dir={dir} />
+              </FieldRow>
+            </>
+          ),
+        },
+        {
+          icon: "auto_awesome",
+          title: p.mimic.whatWeMimic,
+          body: (
+            <>
+              <FakeDropzone
+                icon="style"
+                title={p.mimic.uploadReference}
+                hint="PPTX / PDF"
               />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="الخط">
-              <FakeSegmented options={["ملف", "Google"]} active={1} />
-            </FieldRow>
-            <FakeFontSlot label="Aa" family="Cairo" />
-            <CardSeparator />
-            <FakeDropzone icon="image" title="ارفع شعارك" hint="SVG فقط" />
-            <FieldRow label="حفظ كهوية افتراضية">
-              <FakeToggle on={false} />
-            </FieldRow>
-          </>
-        ),
-      },
-      {
-        icon: "settings",
-        title: "إعدادات الإخراج",
-        body: (
-          <>
-            <FieldRow label="مقاس الشريحة">
-              <FakeSegmented options={["16:9", "9:16"]} active={0} />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="عدد الشرائح">
-              <FakeSegmented options={["تلقائي", "مخصص"]} active={0} />
-            </FieldRow>
-            <CardSeparator />
-            <FieldRow label="ترقيم الشرائح">
-              <FakeToggle on={true} />
-            </FieldRow>
-          </>
-        ),
-      },
-    ],
-  },
-};
+              <p className="text-[10px] leading-relaxed text-[var(--tq-text-muted)]">
+                {p.mimic.extractNote}
+              </p>
+              <CardSeparator />
+              <FieldRow label={p.mimic.copyText}>
+                <FakeToggle on={false} dir={dir} />
+              </FieldRow>
+            </>
+          ),
+        },
+      ],
+    },
+    datasheet: {
+      title: p.datasheet.title,
+      subtitle: p.datasheet.subtitle,
+      cta: p.datasheet.cta,
+      cards: [
+        {
+          icon: "dataset",
+          title: p.datasheet.data,
+          body: (
+            <>
+              <FakeDropzone
+                icon="dataset"
+                title={p.datasheet.uploadData}
+                hint={p.datasheet.dropHint}
+              />
+              <CardSeparator />
+              <FieldRow label={p.datasheet.table}>
+                <FakeSegmented options={[c.auto, "Sheet 1"]} active={0} />
+              </FieldRow>
+              <FieldRow label={p.datasheet.chartType}>
+                <FakeSegmented
+                  options={[c.auto, p.datasheet.columns, p.datasheet.line]}
+                  active={0}
+                />
+              </FieldRow>
+            </>
+          ),
+        },
+        {
+          icon: "palette",
+          title: c.brandIdentity,
+          body: (
+            <>
+              <FieldRow label={c.colors}>
+                <FakePalette
+                  // Our brand-gradient colours (blue → violet → purple). Literal
+                  // hexes on purpose: the --tq-blue/violet/magenta tokens are all
+                  // aliased to one purple after §21, so tokens here read monochrome.
+                  colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
+                />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.font}>
+                <FakeSegmented options={[c.file, "Google"]} active={1} />
+              </FieldRow>
+              <FakeFontSlot label="Aa" family="Cairo" />
+              <CardSeparator />
+              <FakeDropzone icon="image" title={c.uploadLogo} hint={c.logoHint} />
+              <FieldRow label={c.saveDefault}>
+                <FakeToggle on={false} dir={dir} />
+              </FieldRow>
+            </>
+          ),
+        },
+        {
+          icon: "settings",
+          title: c.outputSettings,
+          body: (
+            <>
+              <FieldRow label={c.slideSize}>
+                <FakeSegmented options={["16:9", "9:16"]} active={0} />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.numSlides}>
+                <FakeSegmented options={[c.auto, c.custom]} active={0} />
+              </FieldRow>
+              <CardSeparator />
+              <FieldRow label={c.slideNumbering}>
+                <FakeToggle on={true} dir={dir} />
+              </FieldRow>
+            </>
+          ),
+        },
+      ],
+    },
+  };
+}

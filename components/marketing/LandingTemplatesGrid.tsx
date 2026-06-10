@@ -11,6 +11,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
@@ -124,6 +125,7 @@ function LandingTemplateTile({
   template: LandingTemplate;
   onOpen: () => void;
 }) {
+  const dict = useDict();
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const entryXRef = useRef<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -172,7 +174,7 @@ function LandingTemplateTile({
         onClick={onOpen}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        aria-label="معاينة القالب"
+        aria-label={dict.landing.templatesGrid.previewAria}
         className="absolute inset-0 block cursor-zoom-in"
       >
         {src ? (

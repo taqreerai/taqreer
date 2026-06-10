@@ -9,47 +9,40 @@
 // and the title tints violet.
 
 import { useRef } from "react";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
 
-const FEATURES: { icon: string; title: string; description: string }[] = [
-  {
-    icon: "add_circle",
-    title: "إنشاء عرض جديد",
-    description:
-      "اكتب فكرتك أو ارفع ملفاً، وسيبني تقرير عرضاً تقديمياً كاملاً بتصميم احترافي يحاكي ذوقك وهويتك البصرية.",
-  },
-  {
-    icon: "auto_fix_high",
-    title: "تحسين عرض موجود",
-    description:
-      "ارفع عرضك الحالي بصيغة PowerPoint أو PDF، وسنعيد تصميمه بهويتك الجديدة مع الحفاظ على المحتوى الأساسي.",
-  },
-  {
-    icon: "content_copy",
-    title: "محاكاة أسلوب عرض",
-    description:
-      "أرفق عرضاً مرجعياً تعجبك ألوانه وخطوطه وتخطيطه، وسنطبّق نفس الأسلوب البصري على محتواك الجديد.",
-  },
-  {
-    icon: "dataset",
-    title: "إنشاء من بيانات",
-    description:
-      "حوّل ملف Excel أو CSV إلى عرض احترافي كامل، مع رسوم بيانية مناسبة وتنسيق دقيق لكل شريحة.",
-  },
-];
+// Icons are presentational chrome (not localized copy) — kept in source order
+// matching the dictionary's `landing.flowCards` (create / enhance / mimic /
+// datasheet). Titles + descriptions come from the active locale's dictionary.
+const FLOW_ICONS = ["add_circle", "auto_fix_high", "content_copy", "dataset"];
 
 export function FeatureFlowCards() {
+  const dict = useDict();
   return (
     <div className="grid grid-cols-1 divide-y divide-[var(--tq-border-hairline)] lg:grid-cols-4 lg:divide-x lg:divide-y-0">
-      {FEATURES.map((feature) => (
-        <FlowColumn key={feature.title} feature={feature} />
+      {dict.landing.flowCards.map((card, i) => (
+        <FlowColumn
+          key={i}
+          icon={FLOW_ICONS[i]}
+          title={card.title}
+          description={card.description}
+        />
       ))}
     </div>
   );
 }
 
-function FlowColumn({ feature }: { feature: (typeof FEATURES)[number] }) {
+function FlowColumn({
+  icon,
+  title,
+  description,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+}) {
   const iconRef = useRef<AnimatedIconHandle>(null);
   return (
     <div
@@ -58,13 +51,13 @@ function FlowColumn({ feature }: { feature: (typeof FEATURES)[number] }) {
       onMouseLeave={() => iconRef.current?.stopAnimation()}
     >
       <div className="w-fit text-[var(--tq-text-muted)] transition-colors group-hover:text-white">
-        <AnimatedIcon ref={iconRef} name={feature.icon} size={40} strokeWidth={1.5} />
+        <AnimatedIcon ref={iconRef} name={icon} size={40} strokeWidth={1.5} />
       </div>
       <div>
         <h3 className="mb-2 text-lg font-medium text-white transition-colors group-hover:text-[var(--tq-violet)]">
-          {feature.title}
+          {title}
         </h3>
-        <p className="text-sm leading-relaxed text-muted">{feature.description}</p>
+        <p className="text-sm leading-relaxed text-muted">{description}</p>
       </div>
     </div>
   );

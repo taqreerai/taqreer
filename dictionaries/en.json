@@ -246,6 +246,138 @@
       "subtitle": "Write your content or upload a file, pick your brand identity, and we'll build a deck that matches your taste."
     }
   },
+  "landing": {
+    "hero": {
+      "statusCount": "{count} presentations created so far",
+      "poweredBy": "Powered by Claude Design",
+      "titleLine1": "Turn your content into a",
+      "titleLine2": "professional deck in minutes",
+      "subtitle": "taqreer.ai turns your content into fully designed presentations — Arabic and English. It keeps your brand identity and gives you an advanced editor to tweak every slide right in the browser.",
+      "cta": "Start free now"
+    },
+    "sections": {
+      "features": {
+        "eyebrow": "Features",
+        "title": "Everything you need to create a professional presentation",
+        "subtitle": "Start from raw content, enhance an existing deck, mimic a reference style, or turn your data into slides — Taqreer helps at every step."
+      },
+      "templates": {
+        "eyebrow": "Templates",
+        "title": "Start from a template — what you see is what you get",
+        "subtitle": "Explore our ready-made templates suited to your project, without relying on AI design direction."
+      },
+      "pricing": {
+        "eyebrow": "Pricing",
+        "title": "Simple plans for what you need",
+        "subtitle": "Start free, or pick a monthly plan that fits your deck volume and the slide count you need."
+      },
+      "faq": {
+        "eyebrow": "Help",
+        "title": "Frequently asked questions",
+        "subtitle": "Everything you want to know about Taqreer before you start."
+      }
+    },
+    "flowCards": [
+      { "title": "Create a new presentation", "description": "Write your idea or upload a file, and Taqreer builds a complete, professionally designed deck that matches your taste and brand identity." },
+      { "title": "Enhance an existing presentation", "description": "Upload your current deck as PowerPoint or PDF, and we'll redesign it with your new identity while preserving the core content." },
+      { "title": "Mimic a presentation's style", "description": "Attach a reference deck whose colors, fonts, and layout you like, and we'll apply the same visual style to your new content." },
+      { "title": "Create from data", "description": "Turn an Excel or CSV file into a complete professional deck, with the right charts and precise formatting on every slide." }
+    ],
+    "templatesCard": {
+      "title": "Ready-made templates with RTL support",
+      "description": "Start from templates designed for Arabic and English decks, with full right-to-left text support and proper formatting for headings, paragraphs, tables, and bilingual slides.",
+      "cta": "Start for free"
+    },
+    "templatesGrid": {
+      "previewAria": "Preview the template"
+    },
+    "pricing": {
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "discount": "Save 10%",
+      "billingAria": "Billing cycle",
+      "billedYearly": "Billed yearly",
+      "mostPopular": "Most popular",
+      "perMonth": "/ month",
+      "tiers": [
+        {
+          "name": "Free",
+          "description": "To try it out and make simple decks fast.",
+          "credits": "400 credits (signup gift)",
+          "features": ["Sonnet model", "Up to 10 slides per deck", "Images with the fastest model", "Enhance · Mimic · Data", "Opus models", "Premium templates"],
+          "footnote": "Upgrade anytime",
+          "cta": "Start free"
+        },
+        {
+          "name": "Starter",
+          "description": "To create decks regularly with every creation method.",
+          "credits": "2,000 credits / month",
+          "features": ["All creation methods", "Fast Opus model", "Images with the latest GPT models", "Up to 30 slides per deck", "Custom brand identity", "Premium templates"],
+          "footnote": "Upgrade or downgrade anytime",
+          "cta": "Start now"
+        },
+        {
+          "name": "Plus",
+          "description": "For pros who want top quality and premium templates.",
+          "credits": "5,000 credits / month",
+          "features": ["Opus thinking model", "Images with the latest GPT models", "Premium templates", "Up to 60 slides per deck", "Custom brand identity", "All creation methods"],
+          "footnote": "Upgrade or downgrade anytime",
+          "cta": "Start now"
+        },
+        {
+          "name": "Pro",
+          "description": "For heavy use, with maximum capacity and priority.",
+          "credits": "12,000 credits / month",
+          "features": ["All models and all methods", "Images with the latest GPT models", "Up to 75 slides per deck", "Premium templates", "Custom brand identity", "Processing priority"],
+          "footnote": "Contact us for custom team plans",
+          "cta": "Start now"
+        }
+      ]
+    },
+    "faq": [
+      { "q": "What is Taqreer?", "a": "Taqreer is an AI platform that turns your content — text, a file, or an idea — into a fully designed professional presentation in Arabic and English within minutes." },
+      { "q": "Does it fully support Arabic?", "a": "Yes. Taqreer is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
+      { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus 400 free credits at signup to try the platform." },
+      { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },
+      { "q": "Can I export the deck to PowerPoint?", "a": "Yes. You can export your decks as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." },
+      { "q": "Can I apply my own brand identity?", "a": "Yes. Upload your logo, colors, and fonts in the brand identity section, and Taqreer applies them automatically so your decks stay on-brand." },
+      { "q": "Can I cancel my subscription anytime?", "a": "Yes. You can upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." }
+    ],
+    "footer": {
+      "copyright": "© {year} taqreer.ai. All rights reserved.",
+      "groups": {
+        "contact": { "title": "Contact", "links": { "email": "Email", "support": "Support", "form": "Contact form" } },
+        "links": { "title": "Links", "links": { "features": "Features", "pricing": "Pricing", "faq": "FAQ" } },
+        "social": { "title": "Social", "links": { "twitter": "Twitter", "linkedin": "LinkedIn", "instagram": "Instagram" } },
+        "legal": { "title": "Legal", "links": { "privacy": "Privacy policy", "terms": "Terms & conditions" } }
+      }
+    },
+    "preview": {
+      "sidebar": { "home": "Home", "create": "Create new deck", "enhance": "Enhance existing deck", "mimic": "Mimic a style", "datasheet": "Create from data", "projects": "Projects", "templates": "Templates", "brandKits": "Brand kits", "favorites": "Favorites", "settings": "Settings" },
+      "quickActions": {
+        "create": { "title": "Create new deck", "desc": "Start from scratch with your content" },
+        "enhance": { "title": "Enhance existing deck", "desc": "Upload your file and get a polished version" },
+        "mimic": { "title": "Mimic a style", "desc": "Copy another deck's style and apply it" },
+        "datasheet": { "title": "Create from data", "desc": "Turn an Excel file into a professional deck" }
+      },
+      "library": { "myProjects": "My projects", "templates": "Templates", "viewAll": "View all" },
+      "projects": ["2026 Business Plan", "Sales Report", "New Product Launch", "Q3 Summary", "Marketing Strategy", "Campaign Results"],
+      "slides": "{n} slides",
+      "common": {
+        "content": "Content", "language": "Language", "arabic": "Arabic", "english": "English",
+        "textareaPlaceholder": "Write your deck content here…", "or": "or",
+        "dropTitle": "Drag or click to choose a file", "dropHintMain": "PDF / PPTX / DOCX / TXT — up to 100 MB",
+        "brandIdentity": "Brand identity", "colors": "Colors", "font": "Font", "file": "File",
+        "uploadLogo": "Upload your logo", "logoHint": "SVG only", "saveDefault": "Save as default kit",
+        "outputSettings": "Output settings", "slideSize": "Slide size", "numSlides": "Slide count",
+        "auto": "Auto", "custom": "Custom", "slideNumbering": "Slide numbering"
+      },
+      "create": { "title": "Create a new presentation", "subtitle": "Write your content or upload a file, pick your brand identity, and we'll build a deck that matches your taste.", "cta": "Create deck", "designStyle": "Design style", "professional": "Professional", "creative": "Creative" },
+      "enhance": { "title": "Enhance your current deck", "subtitle": "Upload an existing deck and we'll redesign it with your brand identity while preserving your content.", "cta": "Enhance deck", "originalFile": "Original file", "dropTitle": "Drag your deck file here", "dropHint": "PPTX / PDF — up to 100 MB", "extractNote": "We'll extract text, images, and fonts from your file automatically.", "uploadLogoOptional": "Upload your logo (optional)" },
+      "mimic": { "title": "Mimic a deck's style", "subtitle": "Attach a reference deck and we'll apply its style to your new content.", "cta": "Create deck", "whatWeMimic": "What we're mimicking", "uploadReference": "Upload the reference deck", "extractNote": "We'll extract colors, fonts, and layout from the reference.", "copyText": "Copy text" },
+      "datasheet": { "title": "Create a deck from your data", "subtitle": "Turn an Excel or CSV file into a professional deck with the right charts.", "cta": "Create deck", "data": "Data", "uploadData": "Upload the data file", "dropHint": "XLSX / CSV — up to 25 MB", "table": "Table", "chartType": "Chart type", "columns": "Columns", "line": "Line" }
+    }
+  },
   "editor": {
     "toolbar": {
       "edit": "Edit",

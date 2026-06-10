@@ -11,92 +11,77 @@ import { useState } from "react";
 import Link from "next/link";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { SegmentedToggle } from "@/components/create/controls";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 type Billing = "monthly" | "yearly";
 
 type Tier = {
-  name: string;
-  description: string;
-  // `enabled: false` rows render muted.
-  features: { label: string; enabled: boolean }[];
+  // Non-translatable structure only. Localized text (name, description,
+  // features, footnote, cta) comes from dict.landing.pricing.tiers[i] by index.
+  // `enabled: false` rows render muted. The features array order here drives the
+  // enabled booleans; row 0 maps to dict...tiers[i].credits, rows 1..6 map to
+  // dict...tiers[i].features[0..5].
+  features: { enabled: boolean }[];
   priceMonthly: string;
   priceYearly: string; // per-month price when billed yearly
   isFree?: boolean; // Free has no cadence / no yearly footnote
-  priceFootnote: string;
-  cta: string;
   popular?: boolean;
 };
 
 const TIERS: Tier[] = [
   {
-    name: "مجاني",
-    description: "للتجربة وإنشاء عروض\nبسيطة بسرعة.",
     features: [
-      { label: "400 رصيد (هدية تسجيل)", enabled: true },
-      { label: "نموذج Sonnet", enabled: true },
-      { label: "حتى 10 شرائح لكل عرض", enabled: true },
-      { label: "صور بأسرع نموذج", enabled: true },
-      { label: "تحسين · محاكاة · بيانات", enabled: false },
-      { label: "نماذج Opus", enabled: false },
-      { label: "القوالب المميزة", enabled: false },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: false },
+      { enabled: false },
+      { enabled: false },
     ],
     priceMonthly: "$0",
     priceYearly: "$0",
     isFree: true,
-    priceFootnote: "يمكنك الترقية في أي وقت",
-    cta: "ابدأ مجانًا",
   },
   {
-    name: "Starter",
-    description: "لإنشاء العروض بانتظام\nمع كل طرق الإنشاء.",
     features: [
-      { label: "2,000 رصيد شهريًا", enabled: true },
-      { label: "كل طرق الإنشاء", enabled: true },
-      { label: "نموذج Opus سريع", enabled: true },
-      { label: "صور بأحدث نماذج GPT", enabled: true },
-      { label: "حتى 30 شريحة لكل عرض", enabled: true },
-      { label: "هوية بصرية مخصصة", enabled: true },
-      { label: "القوالب المميزة", enabled: false },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: false },
     ],
     priceMonthly: "$15",
     priceYearly: "$13",
-    priceFootnote: "يمكنك الترقية أو التخفيض في أي وقت",
-    cta: "ابدأ الآن",
   },
   {
-    name: "Plus",
-    description: "للمحترفين الذين يريدون\nأعلى جودة وقوالب مميزة.",
     features: [
-      { label: "5,000 رصيد شهريًا", enabled: true },
-      { label: "نموذج Opus تفكير", enabled: true },
-      { label: "صور بأحدث نماذج GPT", enabled: true },
-      { label: "القوالب المميزة", enabled: true },
-      { label: "حتى 60 شريحة لكل عرض", enabled: true },
-      { label: "هوية بصرية مخصصة", enabled: true },
-      { label: "كل طرق الإنشاء", enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
     ],
     priceMonthly: "$30",
     priceYearly: "$27",
-    priceFootnote: "يمكنك الترقية أو التخفيض في أي وقت",
-    cta: "ابدأ الآن",
     popular: true,
   },
   {
-    name: "Pro",
-    description: "للاستخدام المكثّف\nبأقصى سعة وأولوية.",
     features: [
-      { label: "12,000 رصيد شهريًا", enabled: true },
-      { label: "كل النماذج وكل الطرق", enabled: true },
-      { label: "صور بأحدث نماذج GPT", enabled: true },
-      { label: "حتى 75 شريحة لكل عرض", enabled: true },
-      { label: "القوالب المميزة", enabled: true },
-      { label: "هوية بصرية مخصصة", enabled: true },
-      { label: "أولوية في المعالجة", enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
+      { enabled: true },
     ],
     priceMonthly: "$70",
     priceYearly: "$63",
-    priceFootnote: "تواصل معنا لخطط الفرق المخصصة",
-    cta: "ابدأ الآن",
   },
 ];
 
@@ -109,23 +94,26 @@ function pricingRevealDirection(idx: number): "right" | "left" | "up" {
 
 export function PricingTiers() {
   const [billing, setBilling] = useState<Billing>("monthly");
+  const dict = useDict();
+  const { dir } = useLocale();
+  const t = dict.landing.pricing;
 
   return (
     <>
       {/* Monthly / yearly toggle — the shared white animated SegmentedToggle
           (same control as the dashboard's مشاريعي ⇄ القوالب). The discount lives
           INSIDE the yearly segment's label (user direction). */}
-      <div className="mb-12 flex justify-center" dir="rtl">
+      <div className="mb-12 flex justify-center" dir={dir}>
         <SegmentedToggle<Billing>
           options={[
-            { value: "monthly", label: "شهري" },
+            { value: "monthly", label: t.monthly },
             {
               value: "yearly",
               label: (
                 <>
-                  سنوي{" "}
+                  {t.yearly}{" "}
                   <span className="text-xs font-normal text-[var(--tq-violet)]">
-                    وفّر 10%
+                    {t.discount}
                   </span>
                 </>
               ),
@@ -133,7 +121,7 @@ export function PricingTiers() {
           ]}
           value={billing}
           onChange={setBilling}
-          ariaLabel="دورة الفوترة"
+          ariaLabel={t.billingAria}
           size="large"
         />
       </div>
@@ -141,12 +129,12 @@ export function PricingTiers() {
       <div className="mx-auto grid max-w-6xl gap-6 pt-4 md:grid-cols-2 lg:grid-cols-4">
         {TIERS.map((tier, idx) => (
           <ScrollReveal
-            key={tier.name}
+            key={t.tiers[idx].name}
             direction={pricingRevealDirection(idx)}
             delay={0.1 * (idx + 1)}
             className={`flex ${tier.popular ? "relative" : ""}`}
           >
-            <PricingCard tier={tier} billing={billing} />
+            <PricingCard tier={tier} copy={t.tiers[idx]} pricing={t} billing={billing} />
           </ScrollReveal>
         ))}
       </div>
@@ -154,10 +142,27 @@ export function PricingTiers() {
   );
 }
 
-function PricingCard({ tier, billing }: { tier: Tier; billing: Billing }) {
+type PricingCopy = ReturnType<typeof useDict>["landing"]["pricing"];
+type TierCopy = PricingCopy["tiers"][number];
+
+function PricingCard({
+  tier,
+  copy,
+  pricing,
+  billing,
+}: {
+  tier: Tier;
+  copy: TierCopy;
+  pricing: PricingCopy;
+  billing: Billing;
+}) {
   const price = billing === "yearly" ? tier.priceYearly : tier.priceMonthly;
   const footnote =
-    billing === "yearly" && !tier.isFree ? "يُدفع سنويًا" : tier.priceFootnote;
+    billing === "yearly" && !tier.isFree ? pricing.billedYearly : copy.footnote;
+
+  // Row 0 is the credits line; rows 1..6 are copy.features[0..5]. The enabled
+  // booleans live on tier.features (structure), the labels come from copy.
+  const featureLabels = [copy.credits, ...copy.features];
 
   return (
     // Standard card border (hairline, same as our other cards). Hover = a gentle
@@ -178,13 +183,13 @@ function PricingCard({ tier, billing }: { tier: Tier; billing: Billing }) {
             className="h-1.5 w-1.5 rounded-full"
             style={{ background: "var(--tq-violet)" }}
           />
-          الأكثر شعبية
+          {pricing.mostPopular}
         </div>
       )}
 
-      <h3 className="mb-4 text-center text-xl font-medium">{tier.name}</h3>
+      <h3 className="mb-4 text-center text-xl font-medium">{copy.name}</h3>
       <p className="mb-8 h-10 whitespace-pre-line text-center text-sm text-muted">
-        {tier.description}
+        {copy.description}
       </p>
 
       <div className="mb-8 flex-grow space-y-4">
@@ -206,7 +211,7 @@ function PricingCard({ tier, billing }: { tier: Tier; billing: Billing }) {
             >
               check
             </span>
-            {feature.label}
+            {featureLabels[i]}
           </div>
         ))}
       </div>
@@ -214,11 +219,11 @@ function PricingCard({ tier, billing }: { tier: Tier; billing: Billing }) {
       <div className="mt-auto text-center">
         <div className="mb-2 flex items-end justify-center gap-1">
           <span className="text-4xl font-bold">{price}</span>
-          {!tier.isFree && <span className="mb-1 text-muted">/ شهريًا</span>}
+          {!tier.isFree && <span className="mb-1 text-muted">{pricing.perMonth}</span>}
         </div>
         <div className="mb-6 text-xs text-muted">{footnote}</div>
         <Link href="/signup" className="btn-gradient block w-full py-3 text-sm">
-          {tier.cta}
+          {copy.cta}
         </Link>
       </div>
     </div>
