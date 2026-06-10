@@ -22,7 +22,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 const PRESETS = [
   "#000000",
@@ -137,6 +137,10 @@ export function ColorPickerPopover({
   surfaceClassName?: string;
 }) {
   const dict = useDict();
+  // The popover wrapper is dir="ltr" for its color sliders, so logical insets
+  // wouldn't follow the chrome locale — derive the physical anchor from the
+  // chrome dir so align="start"/"end" mirror correctly in AR vs EN.
+  const { dir } = useLocale();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const svRef = useRef<HTMLDivElement>(null);
   const hueRef = useRef<HTMLDivElement>(null);
@@ -292,8 +296,10 @@ export function ColorPickerPopover({
   // surface's blur (the same trap that bit the Bell + History popovers). Pure
   // layout, no transform — blur intact.
   const positionStyle: React.CSSProperties = (() => {
-    if (align === "start") return { left: 0 };
-    if (align === "end") return { right: 0 };
+    const startEdge = dir === "rtl" ? "right" : "left";
+    const endEdge = dir === "rtl" ? "left" : "right";
+    if (align === "start") return { [startEdge]: 0 };
+    if (align === "end") return { [endEdge]: 0 };
     return { left: "50%", marginLeft: -POPOVER_WIDTH / 2 };
   })();
 

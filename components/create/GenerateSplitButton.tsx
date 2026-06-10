@@ -162,8 +162,7 @@ export function GenerateSplitButton({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 4 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.25 }}
-            dir="rtl"
-            className=" absolute right-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
+            className=" absolute start-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           >
             <div className="px-3 py-2 text-[11px] text-white/40">
               {dict.flows.generate.generationQuality}

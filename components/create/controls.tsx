@@ -786,7 +786,7 @@ export function InlinePaletteSwatch({
         onClick={onRemove}
         disabled={!removable}
         aria-label={dict.flows.controls.removeColor}
-        className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
+        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
           close

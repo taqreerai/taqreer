@@ -163,15 +163,13 @@ export function FontUploadSlot({
       )}
       {hideSample ? null : (
         <p
-          // `dir="auto"` + `text-start` so Latin sample text (when the
-          // picked font is Latin-only — added 2026-05-22) reads
-          // left-aligned + L→R, while Arabic samples keep their
-          // right-aligned RTL flow.
-          //
-          // alignStart=true forces RTL + text-right regardless of script.
+          // Default (`dir="auto"` + `text-start`): Latin samples read
+          // left-aligned L→R, Arabic samples keep right-aligned RTL flow.
+          // alignStart pins the sample to the chrome's reading edge instead
+          // (inherit dir + text-start → right in RTL, left in LTR).
           // hideSample=true skips this paragraph entirely (see prop doc).
-          dir={alignStart ? "rtl" : "auto"}
-          className={`${sampleSizeClass} ${alignStart ? "text-right" : "text-start"} text-white${family ? ` ${family}` : ""}`}
+          dir={alignStart ? undefined : "auto"}
+          className={`${sampleSizeClass} text-start text-white${family ? ` ${family}` : ""}`}
         >
           {sampleText}
         </p>

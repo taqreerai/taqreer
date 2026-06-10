@@ -97,14 +97,14 @@ export function GoogleFontSlot({
             if (!open) setOpen(true);
           }}
           // Inline padding + height pin so the combobox matches the
-          // FontUploadSlot button at 44 px EXACTLY — switching between
-          // "رفع ملف" and "Google Fonts" produces zero card height
-          // change. Padding override also makes room for the chevron
-          // on the start edge (RTL → left).
-          className={`input-dark text-right ${compact ? "text-xs" : "text-sm"}`}
+          // FontUploadSlot button at 44 px EXACTLY. Logical padding leaves room
+          // for the chevron on the inline-END edge (left in RTL, right in LTR);
+          // text-start keeps the typed family on the reading edge in both dirs.
+          className={`input-dark text-start ${compact ? "text-xs" : "text-sm"}`}
           style={{
             height: compact ? 30 : 44,
-            padding: compact ? "0 12px 0 30px" : "0 16px 0 40px",
+            paddingInlineStart: compact ? 12 : 16,
+            paddingInlineEnd: compact ? 30 : 40,
           }}
         />
         <button
@@ -117,7 +117,7 @@ export function GoogleFontSlot({
             }
           }}
           aria-label={open ? dict.flows.brand.closeMenu : dict.flows.brand.openMenu}
-          className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center justify-center text-white/60 transition-colors hover:text-white"
+          className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center justify-center text-white/60 transition-colors hover:text-white"
         >
           <span
             className={`material-symbols-outlined block leading-none transition-transform ${
@@ -205,8 +205,11 @@ export function GoogleFontSlot({
       ) : null}
       {hideSample ? null : (
         <p
-          dir={alignStart ? "rtl" : "auto"}
-          className={`mt-3 ${sampleSizeClass} ${alignStart ? "text-right" : "text-start"} text-white`}
+          // alignStart pins the sample to the chrome's reading edge (inherit
+          // dir + text-start → right in RTL, left in LTR); default is BiDi-aware
+          // (dir=auto picks direction from the sample's own script).
+          dir={alignStart ? undefined : "auto"}
+          className={`mt-3 ${sampleSizeClass} text-start text-white`}
           style={
             selected
               ? { fontFamily: `"${selected}", system-ui, sans-serif` }
