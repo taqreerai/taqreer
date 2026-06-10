@@ -124,7 +124,7 @@ export function PricingTiers() {
               label: (
                 <>
                   سنوي{" "}
-                  <span className="text-xs font-normal text-[var(--tq-text-muted)]">
+                  <span className="text-xs font-normal text-[var(--tq-violet)]">
                     وفّر 10%
                   </span>
                 </>

@@ -20,7 +20,7 @@ export function BidiSection() {
         <h2 className="text-balance text-4xl font-medium leading-tight md:text-5xl">
           تقنية Taqreer{" "}
           <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} />{" "}
-          لتحسين الاستخراج
+          لتحسين التصدير
         </h2>
         {/* Subtitle — only when the tech is toggled ON. */}
         <AnimatePresence>
@@ -60,7 +60,7 @@ function InlineSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
       type="button"
       role="switch"
       aria-checked={on}
-      aria-label="تفعيل تقنية الاستخراج"
+      aria-label="تفعيل تقنية التصدير"
       onClick={onToggle}
       className="relative mx-1 inline-block h-[0.72em] w-[1.4em] shrink-0 rounded-full transition-colors duration-300"
       style={{

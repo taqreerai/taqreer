@@ -108,12 +108,7 @@ export default async function LandingPage() {
 
         {/* Trusted-by — animated full-width marquee, no edge fade (the frame
             verticals are the boundary). */}
-        <section className={`${RULE} py-16`}>
-          <ScrollReveal direction="up" className={PX}>
-            <h2 className="mb-10 text-center text-2xl font-medium md:text-3xl">
-              موثوق بنا من قِبل
-            </h2>
-          </ScrollReveal>
+        <section className={`${RULE} py-8`}>
           <div className="relative w-full overflow-hidden" dir="ltr">
             <div className="animate-marquee-rtl pause-on-hover flex w-max opacity-50 grayscale">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -132,7 +127,7 @@ export default async function LandingPage() {
         {/* Flows — 4-column backbone band. The band's own border-y is the
             section's bottom separator (so the next section adds no border-t). */}
         <section id="features" className={RULE}>
-          <ScrollReveal direction="up" className={`${PX} pt-24 pb-12`}>
+          <ScrollReveal direction="up" className={`${PX} pt-32 pb-12`}>
             <SectionHeader
               eyebrow="المميزات"
               title="كل ما تحتاجه لإنشاء عرض تقديمي احترافي"
@@ -146,12 +141,12 @@ export default async function LandingPage() {
 
         {/* BiDi band — asymmetric, inline-toggle title. NO border-t: the flows
             band's bottom line is the separator above it. */}
-        <section className={`${PX} py-24`}>
+        <section className={`${PX} py-32`}>
           <BidiSection />
         </section>
 
         {/* Templates */}
-        <section id="templates" className={`${RULE} ${PX} py-24`}>
+        <section id="templates" className={`${RULE} ${PX} py-32`}>
           <ScrollReveal direction="up">
             <SectionHeader
               eyebrow="القوالب"
@@ -165,7 +160,7 @@ export default async function LandingPage() {
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className={`${RULE} ${PX} py-24`}>
+        <section id="pricing" className={`${RULE} ${PX} py-32`}>
           <ScrollReveal direction="up">
             <SectionHeader
               eyebrow="الأسعار"
@@ -180,7 +175,7 @@ export default async function LandingPage() {
 
         {/* FAQ — header right-aligned, accordion full-width so its row rules
             meet the frame verticals. */}
-        <section id="faq" className={`${RULE} pt-24 pb-24`}>
+        <section id="faq" className={`${RULE} pt-32 pb-32`}>
           <ScrollReveal direction="right" className={`${PX} mb-8`}>
             <SectionHeader
               align="right"

@@ -107,7 +107,7 @@ export function BidiExtractionDemo({
       {!hideToggle && (
         <div dir="rtl" className="flex items-center gap-4">
           <span className="text-[15px] font-medium text-white/65">
-            تقنية Taqreer لتحسين الاستخراج
+            تقنية Taqreer لتحسين التصدير
           </span>
           <SegmentedToggle
             options={[
@@ -116,7 +116,7 @@ export function BidiExtractionDemo({
             ]}
             value={fixed ? "on" : "off"}
             onChange={(v) => setInternalFixed(v === "on")}
-            ariaLabel="تقنية الاستخراج"
+            ariaLabel="تقنية التصدير"
             size="large"
           />
         </div>
