@@ -48,6 +48,24 @@
     "share": "Share",
     "export": "Export"
   },
+  "notifications": {
+    "actorFallback": "a collaborator",
+    "projectFallback": "a deck",
+    "finished": { "create": "Your deck is ready", "enhance": "Enhancement complete", "mimic": "Style mimic complete", "datasheet": "Your data deck is ready", "fallback": "Your deck is ready" },
+    "slide": { "one": "a slide", "count": "{n} slides", "slideN": "slide {n}", "slideTwo": "slides {a} and {b}", "slideMany": "slides {list}" },
+    "comment": { "title": "New comment", "desc": "{actor} commented on {target} in {project}" },
+    "slideRegen": { "title": "Redesign complete", "desc": "{actor} redesigned {target} in {project}" },
+    "deckRegen": { "title": "Redesign complete", "descOnce": "{actor} redesigned the whole deck in {project}", "descMany": "{actor} redesigned the deck {count} times in {project}" },
+    "generate": { "desc": "{project} is ready — tap to open it" },
+    "generateFailed": { "title": "Deck generation failed", "desc": "Couldn't generate {project} — you can try again" },
+    "share": { "roleEdit": "to edit", "roleComment": "to comment", "roleView": "to view", "invitedTitle": "New invitation", "invitedDesc": "{actor} invited you to join {project} {role}", "acceptedTitle": "Invitation accepted", "acceptedDesc": "{actor} accepted your invitation to join {project}" }
+  },
+  "defaults": {
+    "newDeck": "New deck",
+    "fallbackTitle": "Taqreer",
+    "brandKitNamed": "{title} — brand kit",
+    "brandKitDated": "Brand kit — {date}"
+  },
   "meta": {
     "siteTitle": "Taqreer AI — AI Presentations",
     "siteDescription": "Turn your content into a professional deck in minutes. taqreer.ai builds fully designed presentations in Arabic and English.",
@@ -225,6 +243,7 @@
       "sheetUnit": "sheet", "rowUnit": "rows", "truncated": "truncated",
       "fileTypeError": "Please upload an .xlsx, .xls, or .csv file.",
       "fileTooLarge": "The file exceeds the 25 MB max ({size}).",
+      "unreadable": "Couldn't read the file. Make sure it isn't password-protected.",
       "extractFailed": "Couldn't analyze the file. Try again.",
       "languageAria": "Deck language",
       "instructions": "Extra instructions",

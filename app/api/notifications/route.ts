@@ -26,18 +26,16 @@
 // round-trip per row. Cost: 1 LEFT JOIN per relation × 50 rows.
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { sourceKindToFlow } from "@/lib/project/flow";
+import { getDictionary, type Dictionary } from "@/lib/i18n/dictionaries";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
-// Flow-specific titles for a finished generation, keyed by the canonical
-// flow (`Project.type`). Mirrors the dashboard table's FLOW_LABEL.
-const FINISHED_TITLE: Record<string, string> = {
-  create: "اكتمل انشاء العرض",
-  enhance: "اكتمل تحسين العرض",
-  mimic: "اكتملت محاكاة القالب",
-  datasheet: "اكتمل الانشاء من بيانات",
-};
+// Notification copy is built at READ time from `type` + `payload`, so it
+// follows the VIEWER's UI locale (resolved from the locale cookie in GET).
+type NotifDict = Dictionary["notifications"];
 
 const MAX_LIST = 50;
 // Cap the number of ids per `?ids=` to bound the IN clause. Same
@@ -73,9 +71,9 @@ type FormattedRow = {
   read: boolean;
 };
 
-function formatActorName(actor: ActorJoin): string {
+function formatActorName(actor: ActorJoin, n: NotifDict): string {
   const full = actor?.name?.trim();
-  if (!full) return "أحد المتعاونين";
+  if (!full) return n.actorFallback;
   // First name only — "Osama El Khalfaoui" → "Osama".
   return full.split(/\s+/)[0];
 }
@@ -100,32 +98,41 @@ function parseSlideNumber(key: string): number | null {
 // Falls back to plain "شريحة" / "{N} شرائح" when slideKeys aren't
 // parseable — keeps the row legible even if we ever change the
 // slideKey convention without remembering to update this helper.
-function formatSlideTarget(slideKeys: readonly string[]): string {
+function formatSlideTarget(slideKeys: readonly string[], n: NotifDict): string {
   const nums = slideKeys
     .map(parseSlideNumber)
-    .filter((n): n is number => n !== null)
+    .filter((x): x is number => x !== null)
     .sort((a, b) => a - b);
+  const s = n.slide;
   if (nums.length === 0) {
     // Unparsable keys — keep the count-based fallback.
-    return slideKeys.length > 1 ? `${slideKeys.length} شرائح` : "شريحة";
+    return slideKeys.length > 1
+      ? s.count.replace("{n}", String(slideKeys.length))
+      : s.one;
   }
-  if (nums.length === 1) return `الشريحة ${nums[0]}`;
-  if (nums.length === 2) return `الشريحتين ${nums[0]} و ${nums[1]}`;
-  return `الشرائح ${nums.join("، ")}`;
+  if (nums.length === 1) return s.slideN.replace("{n}", String(nums[0]));
+  if (nums.length === 2)
+    return s.slideTwo
+      .replace("{a}", String(nums[0]))
+      .replace("{b}", String(nums[1]));
+  return s.slideMany.replace("{list}", nums.join(", "));
 }
 
-function formatNotificationRow(row: {
-  id: string;
-  type: string;
-  payload: unknown;
-  projectId: string | null;
-  createdAt: Date;
-  readAt: Date | null;
-  actor: ActorJoin;
-  project: ProjectJoin;
-}): FormattedRow {
-  const actor = formatActorName(row.actor);
-  const project = row.project?.title?.trim() || "أحد العروض";
+function formatNotificationRow(
+  row: {
+    id: string;
+    type: string;
+    payload: unknown;
+    projectId: string | null;
+    createdAt: Date;
+    readAt: Date | null;
+    actor: ActorJoin;
+    project: ProjectJoin;
+  },
+  n: NotifDict,
+): FormattedRow {
+  const actor = formatActorName(row.actor, n);
+  const project = row.project?.title?.trim() || n.projectFallback;
   const payload = (row.payload ?? {}) as Record<string, unknown>;
   // First-write payload has `slideKey` (singular); merged payload has
   // `slideKeys` (plural, deduped). Read plural first, fall back to
@@ -136,7 +143,7 @@ function formatNotificationRow(row: {
     : typeof payload.slideKey === "string"
       ? [payload.slideKey]
       : [];
-  const slideTarget = formatSlideTarget(slideKeys);
+  const slideTarget = formatSlideTarget(slideKeys, n);
   const isProject = row.projectId != null;
 
   let kind: FormattedRow["kind"] = "info";
@@ -152,11 +159,13 @@ function formatNotificationRow(row: {
   // half the userbase. New shape: "تم {verb} ... من طرف {actor} ...".
   switch (row.type) {
     case "comment.created":
-      // Title carries the actual slide NUMBER(s) — e.g.
-      // "تم التعليق على الشريحة 4 من طرف X في {project}" — so the
-      // recipient sees WHICH slide the actor touched.
-      title = "تعليق جديد";
-      desc = `تم التعليق على ${slideTarget} من طرف ${actor} في ${project}`;
+      // Title carries the actual slide NUMBER(s) so the recipient sees
+      // WHICH slide the actor touched.
+      title = n.comment.title;
+      desc = n.comment.desc
+        .replace("{target}", slideTarget)
+        .replace("{actor}", actor)
+        .replace("{project}", project);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     // `*.started` cases dropped 2026-05-27 — those notifications are
@@ -165,8 +174,11 @@ function formatNotificationRow(row: {
     // stale `*.started` rows still living in the DB until the cleanup
     // migration drops them.
     case "slide.regen.finished":
-      title = "اكتملت إعادة التصميم";
-      desc = `تمت إعادة تصميم ${slideTarget} من طرف ${actor} في ${project}`;
+      title = n.slideRegen.title;
+      desc = n.slideRegen.desc
+        .replace("{target}", slideTarget)
+        .replace("{actor}", actor)
+        .replace("{project}", project);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "deck.regen.finished": {
@@ -174,11 +186,16 @@ function formatNotificationRow(row: {
         typeof payload.count === "number" && payload.count > 1
           ? payload.count
           : 1;
-      title = "اكتملت إعادة التصميم";
+      title = n.deckRegen.title;
       desc =
         count > 1
-          ? `تمت إعادة تصميم العرض ${count} مرات من طرف ${actor} في ${project}`
-          : `تمت إعادة تصميم العرض كاملاً من طرف ${actor} في ${project}`;
+          ? n.deckRegen.descMany
+              .replace("{count}", String(count))
+              .replace("{actor}", actor)
+              .replace("{project}", project)
+          : n.deckRegen.descOnce
+              .replace("{actor}", actor)
+              .replace("{project}", project);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
@@ -190,42 +207,45 @@ function formatNotificationRow(row: {
       flow = sourceKindToFlow(
         typeof payload.kind === "string" ? payload.kind : undefined,
       );
-      title = FINISHED_TITLE[flow] ?? "اكتمل انشاء العرض";
-      desc = `${project} جاهز للعرض، اضغط للاطّلاع عليه`;
+      title =
+        n.finished[flow as keyof typeof n.finished] ?? n.finished.fallback;
+      desc = n.generate.desc.replace("{project}", project);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
     case "deck.generate.failed":
       kind = "error";
-      title = "فشل توليد العرض";
+      title = n.generateFailed.title;
       desc =
         typeof payload.reason === "string" && payload.reason
           ? payload.reason
-          : `تعذّر توليد ${project}، يمكنك المحاولة مجدداً`;
+          : n.generateFailed.desc.replace("{project}", project);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     case "share.invited": {
       const level = typeof payload.accessLevel === "string" ? payload.accessLevel : null;
-      const roleAr =
-        level === "edit" ? "للتعديل" : level === "comment" ? "للتعليق" : "للعرض";
-      // Updated wording 2026-05-26 per user direction: lead with
-      // "تمت دعوتك من طرف" + actor + project + role, so the
-      // recipient reads the action before the inviter's name.
-      // Phrasing is gender-neutral (تمت + من طرف) so it works
-      // regardless of the actor's gender, consistent with the
-      // rest of the notification copy.
-      title = "دعوة جديدة";
-      desc = `تمت دعوتك من طرف ${actor} للانضمام إلى ${project} ${roleAr}`;
+      const role =
+        level === "edit"
+          ? n.share.roleEdit
+          : level === "comment"
+            ? n.share.roleComment
+            : n.share.roleView;
+      // Lead with the action (passive, gender-neutral) so the recipient
+      // reads what happened before the inviter's name.
+      title = n.share.invitedTitle;
+      desc = n.share.invitedDesc
+        .replace("{actor}", actor)
+        .replace("{project}", project)
+        .replace("{role}", role);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     }
     case "share.accepted":
       kind = "success";
-      // Mirror the share.invited shape — passive lead-in + actor +
-      // project, gender-neutral. Was: "{actor} قبلت دعوتك للانضمام
-      // إلى {project}" (feminine "قبلت", read wrong for male actors).
-      title = "تم قبول الدعوة";
-      desc = `تم قبول دعوتك من طرف ${actor} للانضمام إلى ${project}`;
+      title = n.share.acceptedTitle;
+      desc = n.share.acceptedDesc
+        .replace("{actor}", actor)
+        .replace("{project}", project);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
     default:
@@ -260,6 +280,12 @@ export async function GET(request: Request) {
   if (!data?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Notification copy follows the VIEWER's UI locale (this GET is the
+  // recipient reading their own bell), resolved from the locale cookie.
+  const cookieStore = await cookies();
+  const localeRaw = cookieStore.get(LOCALE_COOKIE)?.value;
+  const dict = await getDictionary(isLocale(localeRaw) ? localeRaw : "ar");
+  const n = dict.notifications;
   // Resolve Prisma user — the notification table FKs on Prisma id,
   // not Supabase auth id. User-sync race tolerance: if the Prisma row
   // hasn't been provisioned yet (first login → row hasn't landed),
@@ -318,7 +344,7 @@ export async function GET(request: Request) {
     },
   });
 
-  const notifications = rows.map(formatNotificationRow);
+  const notifications = rows.map((r) => formatNotificationRow(r, n));
 
   return NextResponse.json({ notifications });
 }

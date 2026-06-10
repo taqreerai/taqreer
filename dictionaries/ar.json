@@ -48,6 +48,24 @@
     "share": "مشاركة",
     "export": "تصدير"
   },
+  "notifications": {
+    "actorFallback": "أحد المتعاونين",
+    "projectFallback": "أحد العروض",
+    "finished": { "create": "اكتمل انشاء العرض", "enhance": "اكتمل تحسين العرض", "mimic": "اكتملت محاكاة القالب", "datasheet": "اكتمل الانشاء من بيانات", "fallback": "اكتمل انشاء العرض" },
+    "slide": { "one": "شريحة", "count": "{n} شرائح", "slideN": "الشريحة {n}", "slideTwo": "الشريحتين {a} و {b}", "slideMany": "الشرائح {list}" },
+    "comment": { "title": "تعليق جديد", "desc": "تم التعليق على {target} من طرف {actor} في {project}" },
+    "slideRegen": { "title": "اكتملت إعادة التصميم", "desc": "تمت إعادة تصميم {target} من طرف {actor} في {project}" },
+    "deckRegen": { "title": "اكتملت إعادة التصميم", "descOnce": "تمت إعادة تصميم العرض كاملاً من طرف {actor} في {project}", "descMany": "تمت إعادة تصميم العرض {count} مرات من طرف {actor} في {project}" },
+    "generate": { "desc": "{project} جاهز للعرض، اضغط للاطّلاع عليه" },
+    "generateFailed": { "title": "فشل توليد العرض", "desc": "تعذّر توليد {project}، يمكنك المحاولة مجدداً" },
+    "share": { "roleEdit": "للتعديل", "roleComment": "للتعليق", "roleView": "للعرض", "invitedTitle": "دعوة جديدة", "invitedDesc": "تمت دعوتك من طرف {actor} للانضمام إلى {project} {role}", "acceptedTitle": "تم قبول الدعوة", "acceptedDesc": "تم قبول دعوتك من طرف {actor} للانضمام إلى {project}" }
+  },
+  "defaults": {
+    "newDeck": "عرض جديد",
+    "fallbackTitle": "تقرير",
+    "brandKitNamed": "{title} — هوية بصرية",
+    "brandKitDated": "هوية بصرية — {date}"
+  },
   "meta": {
     "siteTitle": "تقرير للذكاء الاصطناعي — عروض تقديمية",
     "siteDescription": "حوّل محتواك إلى عرض احترافي خلال دقائق. taqreer.ai يحوّل محتواك إلى عروض تقديمية مصممة بالكامل، يدعم العربية والإنجليزية.",
@@ -225,6 +243,7 @@
       "sheetUnit": "ورقة", "rowUnit": "صف", "truncated": "تم اقتطاع جزء",
       "fileTypeError": "الرجاء رفع ملف .xlsx أو .xls أو .csv.",
       "fileTooLarge": "الملف يتجاوز الحد الأقصى 25 ميجابايت ({size}).",
+      "unreadable": "تعذر قراءة الملف. تأكد من أنه ليس محمياً بكلمة مرور.",
       "extractFailed": "تعذر تحليل الملف. حاول مرة أخرى.",
       "languageAria": "لغة العرض",
       "instructions": "تعليمات إضافية",

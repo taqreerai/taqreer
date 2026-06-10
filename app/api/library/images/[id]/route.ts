@@ -16,8 +16,11 @@
 // it to the Supabase host before fetching.
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
 // Node runtime — streams the upstream image body through; the proxied
 // fetch can take a moment for a large PNG.
@@ -49,6 +52,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+
+  // UI locale → the fallback download title when a project has no title.
+  const localeRaw = (await cookies()).get(LOCALE_COOKIE)?.value;
+  const dict = await getDictionary(isLocale(localeRaw) ? localeRaw : "ar");
 
   const supabase = await createClient();
   const {
@@ -133,7 +140,8 @@ export async function GET(
       ? "webp"
       : "png";
   const projectTitle =
-    image.version.presentation.project.title?.trim() || "تقرير";
+    image.version.presentation.project.title?.trim() ||
+    dict.defaults.fallbackTitle;
   const fileName = `${projectTitle} - ${image.role}.${ext}`;
 
   // Stream the upstream body straight through — no full-image buffer.

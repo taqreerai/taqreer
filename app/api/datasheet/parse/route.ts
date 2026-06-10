@@ -27,8 +27,11 @@
 // fallback (same pattern /api/extract uses).
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { parseDatasheet } from "@/lib/extract/datasheet";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
 // Smaller than /api/extract's 100 MB — see note at top of file.
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
@@ -52,6 +55,11 @@ const ALLOWED_MIME = new Set([
 // no try/catch around orchestration logic — let unexpected throws
 // surface so genuine bugs aren't masked as "Failed to parse" 500s.
 export async function POST(request: Request) {
+  // Resolve the requester's UI locale so the 400-error copy matches the
+  // chrome they're looking at (Arabic default for anonymous / legacy).
+  const localeRaw = (await cookies()).get(LOCALE_COOKIE)?.value;
+  const dict = await getDictionary(isLocale(localeRaw) ? localeRaw : "ar");
+
   // ─── Auth ────────────────────────────────────────────────────────
   const supabase = await createClient();
   const {
@@ -68,9 +76,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "File is required" }, { status: 400 });
   }
   if (file.size > MAX_FILE_SIZE_BYTES) {
+    const sizeStr = `${(file.size / 1024 / 1024).toFixed(1)} ${dict.flows.unitMB}`;
     return NextResponse.json(
       {
-        error: `الملف يتجاوز الحد الأقصى 25 ميجابايت (${(file.size / 1024 / 1024).toFixed(1)} م.ب).`,
+        error: dict.flows.datasheet.fileTooLarge.replace("{size}", sizeStr),
       },
       { status: 400 },
     );
@@ -89,7 +98,7 @@ export async function POST(request: Request) {
   let resolvedMime = file.type;
   if (file.type === "text/plain" && !lower.endsWith(".csv")) {
     return NextResponse.json(
-      { error: "صيغة غير مدعومة. ارفع ملف .xlsx أو .xls أو .csv." },
+      { error: dict.flows.datasheet.fileTypeError },
       { status: 400 },
     );
   }
@@ -103,7 +112,7 @@ export async function POST(request: Request) {
       resolvedMime = "text/csv";
     } else {
       return NextResponse.json(
-        { error: "صيغة غير مدعومة. ارفع ملف .xlsx أو .xls أو .csv." },
+        { error: dict.flows.datasheet.fileTypeError },
         { status: 400 },
       );
     }
@@ -125,7 +134,7 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error("[datasheet] parse failed:", err);
     return NextResponse.json(
-      { error: "تعذر قراءة الملف. تأكد من أنه ليس محمياً بكلمة مرور." },
+      { error: dict.flows.datasheet.unreadable },
       { status: 400 },
     );
   }

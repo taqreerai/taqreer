@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -54,7 +57,10 @@ export async function POST(request: Request) {
 
   // `ar-u-nu-latn` keeps Arabic month names but forces Latin digits
   // — matches the dashboard's "every number is 0-9" standard.
-  const fallbackName = `هوية بصرية — ${new Date().toLocaleDateString("ar-u-nu-latn")}`;
+  const localeRaw = (await cookies()).get(LOCALE_COOKIE)?.value;
+  const dict = await getDictionary(isLocale(localeRaw) ? localeRaw : "ar");
+  const dateStr = new Date().toLocaleDateString("ar-u-nu-latn");
+  const fallbackName = dict.defaults.brandKitDated.replace("{date}", dateStr);
   const name = (body.name?.trim() || fallbackName).slice(0, 120);
 
   // AUTHORIZE the storage path before we persist it. The brand-assets

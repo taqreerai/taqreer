@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
@@ -14,6 +15,8 @@ import {
 } from "@/lib/types/quality";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import { detectImageRegion } from "@/lib/geo/image-region";
+import { getDictionary, type Dictionary } from "@/lib/i18n/dictionaries";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
 // Defence-in-depth strip list for user-uploaded SVG markup. Compiled
 // once at module load instead of being rebuilt on every request. The
@@ -212,7 +215,7 @@ function directionForLanguage(lang: ContentLanguage): "rtl" | "ltr" {
   return lang === "en" ? "ltr" : "rtl";
 }
 
-function buildProjectTitle(payload: CreateProjectPayload) {
+function buildProjectTitle(payload: CreateProjectPayload, dict: Dictionary) {
   if (payload.content?.type === "file" && payload.content.fileName) {
     let name = payload.content.fileName;
     // Decode URL-percent-encoded names (some file pickers hand them back
@@ -230,7 +233,7 @@ function buildProjectTitle(payload: CreateProjectPayload) {
   const text = payload.content?.text?.trim();
   if (text) return text.slice(0, 48);
 
-  return "عرض جديد";
+  return dict.defaults.newDeck;
 }
 
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -400,6 +403,11 @@ export async function POST(request: Request) {
   // (mark rows failed) that stays. Per project convention: only
   // wrap when there's something concrete to translate. (2026-05-27
   // simplifier pass.)
+  // Resolve the requester's UI locale once so any user-facing default
+  // names (project title, brand-kit name) match the chrome they see.
+  const localeRaw = (await cookies()).get(LOCALE_COOKIE)?.value;
+  const dict = await getDictionary(isLocale(localeRaw) ? localeRaw : "ar");
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -410,7 +418,7 @@ export async function POST(request: Request) {
   }
 
   const payload = (await request.json()) as CreateProjectPayload;
-  const title = buildProjectTitle(payload);
+  const title = buildProjectTitle(payload, dict);
   const projectType = payload.type === "enhance" ? "enhance" : "create";
 
   // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000
@@ -613,7 +621,7 @@ export async function POST(request: Request) {
       brandKit = await tx.brandKit.create({
         data: {
           userId: dbUser.id,
-          name: `${title} — هوية بصرية`,
+          name: dict.defaults.brandKitNamed.replace("{title}", title),
           logo: safeLogoForKit?.storageUrl ?? null,
           colors: toJson(payload.brand?.colors ?? null),
           // Persist the NORMALIZED font — the value already passed safeFontUrl +

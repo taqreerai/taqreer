@@ -16,7 +16,7 @@ import {
   previewCss2Url,
   type GoogleFontEntry,
 } from "@/lib/editor/font-search";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 const WIDTH = 252;
 const PREVIEW_LINK_ID = "tq-font-preview-link";
@@ -41,6 +41,7 @@ export function FontControl({
   onPick: (family: string | null) => void;
 }) {
   const dict = useDict();
+  const { dir } = useLocale();
   const t = dict.editor.fonts;
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -125,16 +126,16 @@ export function FontControl({
         transition={widthInited ? SPRING : { duration: 0 }}
       >
         {open ? (
-          <div dir="rtl" className="flex items-center gap-1.5 px-2.5" style={{ width: WIDTH }}>
+          <div dir={dir} className="flex items-center gap-1.5 px-2.5" style={{ width: WIDTH }}>
             <SearchIcon className="shrink-0 text-white/40" />
             <input
               ref={inputRef}
-              dir="rtl"
+              dir={dir}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t.searchPlaceholder}
               aria-label={t.searchAria}
-              className="min-w-0 flex-1 bg-transparent text-right text-[13px] text-white outline-none placeholder:text-white/40"
+              className="min-w-0 flex-1 bg-transparent text-start text-[13px] text-white outline-none placeholder:text-white/40"
             />
           </div>
         ) : (
@@ -156,7 +157,7 @@ export function FontControl({
       {/* Results dropdown — opens on the opposite side from the element (flipUp). */}
       {open ? (
         <motion.div
-          dir="rtl"
+          dir={dir}
           className={`surface-popover absolute z-30 overflow-hidden rounded-2xl ${
             flipUp ? "bottom-full mb-2.5" : "top-full mt-2.5"
           }`}
