@@ -1424,10 +1424,12 @@ html.app-shell-scroll body {
    a top hairline; `.rule-y` draws top + bottom. The page's <main> sets
    `overflow-x: clip` so the 100vw breakout never adds a horizontal scrollbar. */
 .rule-top,
+.rule-bottom,
 .rule-y {
   position: relative;
 }
 .rule-top::before,
+.rule-bottom::before,
 .rule-y::before,
 .rule-y::after {
   content: "";
@@ -1440,6 +1442,7 @@ html.app-shell-scroll body {
 .rule-y::before {
   top: 0;
 }
+.rule-bottom::before,
 .rule-y::after {
   bottom: 0;
 }

@@ -100,7 +100,7 @@ export default async function LandingPage() {
 
   return (
     <SmoothScrollProvider>
-    <main className="overflow-x-clip">
+    <main className="relative overflow-x-clip">
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
