@@ -1118,6 +1118,13 @@ html.app-shell-scroll body {
   transition: opacity 1s ease, visibility 0s linear 0s;
 }
 
+/* Rounded ring variant — the default ring is square (border-radius:0, for the
+   slide canvas). On a rounded-2xl (16px) card the -6px-inset ring needs a
+   concentric 22px radius (16 + 6) so its corners hug the card. */
+.canvas-gradient-border.gradient-ring-2xl::after {
+  border-radius: 22px;
+}
+
 /* Pause the drift while the ring is invisible — no point burning
    composite cycles on a 0-opacity overlay. The fade transition
    isn't affected (transition is on opacity, not animation). */

@@ -10,17 +10,21 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { BidiExtractionDemo } from "@/components/marketing/BidiExtractionDemo";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function BidiSection() {
   const [fixed, setFixed] = useState(false);
+  const dict = useDict();
+  const { dir } = useLocale();
+  const b = dict.landing.bidi;
   return (
     <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-12">
-      {/* Title — right column (order-1 = right in RTL). */}
+      {/* Title — order-1 = the reading-start column (right in RTL, left in LTR). */}
       <ScrollReveal direction="right" className="order-1 lg:col-span-5">
         <h2 className="text-balance text-4xl font-medium leading-tight md:text-5xl">
-          تقنية Taqreer{" "}
-          <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} />{" "}
-          لتحسين التصدير
+          {b.headingPre}{" "}
+          <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} ariaLabel={b.toggleAria} />{" "}
+          {b.headingPost}
         </h2>
         {/* Subtitle — fades in when the tech is toggled ON. Its space is
             ALWAYS reserved (no height animation): the grid is `items-center`, so
@@ -34,33 +38,38 @@ export function BidiSection() {
           transition={{ duration: 0.3, ease: "easeOut" }}
           className="text-lg leading-relaxed text-muted"
         >
-          <span className="mt-5 block">
-            نفس النص الذي تدخله للتصميم يصدر إلى
-            <br />
-            PowerPoint بدون مشاكل في الاتجاه
-          </span>
+          <span className="mt-5 block">{b.subtitle}</span>
         </motion.p>
       </ScrollReveal>
 
-      {/* Demo — left column (order-2 = left in RTL). */}
+      {/* Demo — order-2 = the reading-end column. The window hugs the OUTER edge
+          (away from the title): left in RTL, right in LTR. */}
       <ScrollReveal direction="left" className="order-2 lg:col-span-7">
-        <BidiExtractionDemo fixed={fixed} hideToggle align="left" />
+        <BidiExtractionDemo fixed={fixed} hideToggle align={dir === "rtl" ? "left" : "right"} />
       </ScrollReveal>
     </div>
   );
 }
 
-// Inline knob switch sized in `em` so it scales with the heading. Default (OFF)
-// rests the knob on the RIGHT; switching it LEFT turns it ON (brand gradient +
-// glow). Off-state fill is --tq-card (#111) + a hairline border so it stays
-// visible on the panel bg.
-function InlineSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+// Inline knob switch sized in `em` so it scales with the heading. The knob rests
+// at the inline-START when OFF and slides to the inline-END when ON — so it
+// mirrors with the chrome direction (start=right in RTL, left in LTR). Off-state
+// fill is --tq-card (#111) + a hairline border so it stays visible on the panel.
+function InlineSwitch({
+  on,
+  onToggle,
+  ariaLabel,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  ariaLabel: string;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
-      aria-label="تفعيل تقنية التصدير"
+      aria-label={ariaLabel}
       onClick={onToggle}
       className="relative mx-1 inline-block h-[0.72em] w-[1.4em] shrink-0 rounded-full transition-colors duration-300"
       style={{
@@ -71,8 +80,8 @@ function InlineSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
       }}
     >
       <span
-        className="absolute top-1/2 h-[0.5em] w-[0.5em] -translate-y-1/2 rounded-full bg-white transition-[left] duration-300"
-        style={{ left: on ? "0.11em" : "calc(100% - 0.5em - 0.11em)" }}
+        className="absolute top-1/2 h-[0.5em] w-[0.5em] -translate-y-1/2 rounded-full bg-white transition-[inset-inline-start] duration-300"
+        style={{ insetInlineStart: on ? "calc(100% - 0.5em - 0.11em)" : "0.11em" }}
       />
     </button>
   );

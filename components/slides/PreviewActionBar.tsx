@@ -809,8 +809,11 @@ export function PreviewActionBar({
 
         {/* Home / back to dashboard (§22) — the editor has no app sidebar, so
             this is the way out. Visible to ALL roles. The leading divider only
-            shows when there's a cluster before it (owner/edit/comment). */}
-        <div className="flex items-center gap-1">
+            shows when there's a cluster before it (owner/edit/comment). No
+            inner `gap-1` here: the divider's own `mx-2` already spaces it from
+            the home button, so the button sits centered between the divider and
+            the pill's padding edge (an extra gap pushed it toward the edge). */}
+        <div className="flex items-center">
           {canEdit || canComment ? (
             <ToolbarDivider horizontal={horizontal} />
           ) : null}

@@ -37,18 +37,18 @@ export async function generateMetadata({
     description: dict.meta.siteDescription,
     // Keywords target both languages regardless of UI locale (SEO).
     keywords: ["presentations", "AI", "Arabic", "PowerPoint", "عروض تقديمية", "ذكاء اصطناعي", "تقرير", "Taqreer"],
-    authors: [{ name: "Taqreer Team" }],
+    authors: [{ name: "taqreer.ai" }],
     openGraph: {
       title: dict.meta.siteTitle,
       description: dict.meta.ogDescription,
       url: "https://taqreer.ai",
-      siteName: "Taqreer AI",
+      siteName: "taqreer.ai",
       images: [
         {
           url: "/images/hero/og-image.jpg",
           width: 1200,
           height: 630,
-          alt: "Taqreer AI Presentations",
+          alt: "taqreer.ai presentations",
         },
       ],
       locale: locale === "en" ? "en_US" : "ar_SA",
@@ -56,7 +56,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title: "Taqreer AI - Presentations",
+      title: dict.meta.siteTitle,
       description: dict.meta.ogDescription,
       images: ["/images/hero/og-image.jpg"],
     },

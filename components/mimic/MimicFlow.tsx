@@ -999,7 +999,7 @@ export default function MimicFlow({
             className={`${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
           >
             <div
-              className="canvas-gradient-border surface-card flex h-full w-full flex-col gap-4 rounded-2xl p-4"
+              className="canvas-gradient-border gradient-ring-2xl surface-card flex h-full w-full flex-col gap-4 rounded-2xl p-4"
               data-active="true"
             >
               <input

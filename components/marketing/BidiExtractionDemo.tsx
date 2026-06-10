@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 // One sentence, two arrangements of the SAME tokens. WRONG = logical order shown
 // left-to-right (Arabic reads backwards, the Latin word + number land wrong).
@@ -33,8 +34,10 @@ export function BidiExtractionDemo({
   fixed: controlledFixed,
   hideToggle = false,
   align = "center",
-}: { fixed?: boolean; hideToggle?: boolean; align?: "center" | "left" } = {}) {
+}: { fixed?: boolean; hideToggle?: boolean; align?: "center" | "left" | "right" } = {}) {
   const [internalFixed, setInternalFixed] = useState(false);
+  const dict = useDict();
+  const b = dict.landing.bidi;
   // Controlled (landing drives `fixed` from the section title) or uncontrolled
   // (the lab uses its own toggle below the canvas).
   const fixed = controlledFixed ?? internalFixed;
@@ -49,15 +52,20 @@ export function BidiExtractionDemo({
         <FlowLines align={align} />
 
         {/* Slide window. dir=ltr so the chrome (traffic lights left) reads LTR
-            while the slide content stays RTL. No shadow. `align="left"` pins it
-            to the left edge (landing); otherwise centred (lab). */}
+            while the slide content stays RTL. No shadow. `align` pins it to the
+            outer edge: left (RTL chrome) or right (LTR chrome); otherwise
+            centred (lab). */}
         <div
           dir="ltr"
           className={`absolute top-1/2 z-10 w-[min(540px,86%)] -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 ${
-            align === "left" ? "left-0" : "left-1/2 -translate-x-1/2"
+            align === "left"
+              ? "left-0"
+              : align === "right"
+                ? "right-0"
+                : "left-1/2 -translate-x-1/2"
           }`}
         >
-          <TitleBar />
+          <TitleBar title={b.windowTitle} />
 
           {/* Transparent slide — only the border + the (kept) title bar; the
               flow-lines behind show through. */}
@@ -66,7 +74,7 @@ export function BidiExtractionDemo({
               <div className="flex items-center gap-2">
                 <span className="h-4 w-1.5 rounded-full bg-[var(--tq-violet)]" />
                 <span className="text-[14px] font-semibold text-white/90">
-                  أداء الربع الأول
+                  {b.slideHeader}
                 </span>
               </div>
 
@@ -105,18 +113,18 @@ export function BidiExtractionDemo({
       {/* Lab-only inline toggle (on the landing, the section title drives
           `fixed` instead, so this is hidden via `hideToggle`). */}
       {!hideToggle && (
-        <div dir="rtl" className="flex items-center gap-4">
+        <div className="flex items-center gap-4">
           <span className="text-[15px] font-medium text-white/65">
-            تقنية Taqreer لتحسين التصدير
+            {b.labLabel}
           </span>
           <SegmentedToggle
             options={[
-              { value: "on", label: "تفعيل" },
-              { value: "off", label: "إلغاء" },
+              { value: "on", label: b.on },
+              { value: "off", label: b.off },
             ]}
             value={fixed ? "on" : "off"}
             onChange={(v) => setInternalFixed(v === "on")}
-            ariaLabel="تقنية التصدير"
+            ariaLabel={b.labAria}
             size="large"
           />
         </div>
@@ -125,7 +133,7 @@ export function BidiExtractionDemo({
   );
 }
 
-function TitleBar() {
+function TitleBar({ title }: { title: string }) {
   return (
     <div className="relative flex h-11 items-center border-b border-white/[0.06] bg-[var(--tq-card)] px-4">
       {/* macOS traffic lights (universal OS chrome colors, like Hero.tsx). */}
@@ -135,7 +143,7 @@ function TitleBar() {
         <span className="h-3 w-3 rounded-full bg-[#28C840]" />
       </div>
       <span className="absolute left-1/2 -translate-x-1/2 text-[13px] font-medium text-[var(--tq-text-muted)]">
-        تقرير الربع الأول — Taqreer
+        {title}
       </span>
       <div className="ml-auto flex items-center gap-3 text-white/25">
         <Glyph d="M4 12h16M4 6h16M4 18h16" />
@@ -188,10 +196,10 @@ function Glyph({ d }: { d: string }) {
   );
 }
 
-function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
+function FlowLines({ align = "center" }: { align?: "center" | "left" | "right" }) {
   // Straight horizontal lines streaming toward the window. Centred layout draws
-  // them from both edges; left-aligned (landing) drops the left set and draws a
-  // wider right set that flows from the title side toward the (left) window.
+  // them from both edges; edge-aligned (landing — left in RTL, right in LTR)
+  // draws full-width lines that flow across toward the (edge-pinned) window.
   // Mixed brand dots — purple, the two brand-gradient stops, and muted white.
   const DOT_COLORS = [
     "var(--tq-violet)",
@@ -209,7 +217,7 @@ function FlowLines({ align = "center" }: { align?: "center" | "left" }) {
   // begin offset (uneven on purpose) — hardcoded (not Math.random) so SSR and
   // client hydration match.
   const LINES =
-    align === "left"
+    align === "left" || align === "right"
       ? [
           { y: 115, dir: "rtl", dur: 6.5, dots: [0, 2.4] },
           { y: 215, dir: "ltr", dur: 10, dots: [0.8, 4.5] },

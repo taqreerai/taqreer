@@ -56,28 +56,28 @@
     "comment": { "title": "New comment", "desc": "{actor} commented on {target} in {project}" },
     "slideRegen": { "title": "Redesign complete", "desc": "{actor} redesigned {target} in {project}" },
     "deckRegen": { "title": "Redesign complete", "descOnce": "{actor} redesigned the whole deck in {project}", "descMany": "{actor} redesigned the deck {count} times in {project}" },
-    "generate": { "desc": "{project} is ready — tap to open it" },
-    "generateFailed": { "title": "Deck generation failed", "desc": "Couldn't generate {project} — you can try again" },
+    "generate": { "desc": "{project} is ready, tap to open it" },
+    "generateFailed": { "title": "Deck generation failed", "desc": "Couldn't generate {project}. You can try again" },
     "share": { "roleEdit": "to edit", "roleComment": "to comment", "roleView": "to view", "invitedTitle": "New invitation", "invitedDesc": "{actor} invited you to join {project} {role}", "acceptedTitle": "Invitation accepted", "acceptedDesc": "{actor} accepted your invitation to join {project}" }
   },
   "defaults": {
     "newDeck": "New deck",
-    "fallbackTitle": "Taqreer",
-    "brandKitNamed": "{title} — brand kit",
-    "brandKitDated": "Brand kit — {date}"
+    "fallbackTitle": "taqreer.ai",
+    "brandKitNamed": "{title} · brand kit",
+    "brandKitDated": "Brand kit · {date}"
   },
   "meta": {
-    "siteTitle": "Taqreer AI — AI Presentations",
+    "siteTitle": "taqreer.ai · AI Presentations",
     "siteDescription": "Turn your content into a professional deck in minutes. taqreer.ai builds fully designed presentations in Arabic and English.",
     "ogDescription": "Turn your content into a professional deck in minutes with AI.",
-    "dashboardTitle": "Dashboard | Taqreer",
+    "dashboardTitle": "Dashboard | taqreer.ai",
     "dashboardDescription": "Manage your projects and presentations",
-    "authTitle": "Taqreer — Authentication",
+    "authTitle": "taqreer.ai · Authentication",
     "authDescription": "Sign in or create a new account"
   },
   "newProjectDialog": {
     "title": "Start a new project",
-    "subtitle": "Pick the flow that fits your content — your default brand kit fills in automatically if you've saved one."
+    "subtitle": "Pick the flow that fits your content, your default brand kit fills in automatically if you've saved one."
   },
   "useBrandKitDialog": {
     "title": "Use brand kit",
@@ -88,7 +88,7 @@
   "homeLibrary": {
     "toggleAria": "Projects or templates",
     "viewAll": "View all",
-    "noProjects": "No projects yet — start from the cards above."
+    "noProjects": "No projects yet. Start from the cards above."
   },
   "quickActions": {
     "create": { "title": "Create", "desc": "a new presentation" },
@@ -127,7 +127,7 @@
     "passwordMinHint": "At least 8 characters",
     "login": {
       "title": "Log in",
-      "subtitle": "Welcome back to Taqreer.",
+      "subtitle": "Welcome back to taqreer.ai.",
       "deletedSuccess": "Your account was deleted successfully",
       "submit": "Log in",
       "submitting": "Signing in...",
@@ -195,7 +195,7 @@
     "contentPlaceholder": "Write your presentation content here...",
     "or": "or",
     "dropTitle": "Drag or click to choose a file",
-    "dropSubtitle": "PDF / PPTX / DOCX / TXT — up to 100 MB",
+    "dropSubtitle": "PDF / PPTX / DOCX / TXT · up to 100 MB",
     "removeFile": "Remove file",
     "unitKB": "KB",
     "unitMB": "MB",
@@ -226,7 +226,7 @@
       "originalFile": "Original file",
       "dragDrop": "Drag and drop the file here",
       "clickToSelect": "or click to choose a file",
-      "fileHint": "PDF or PowerPoint (.pptx, .ppt) — up to 100 MB",
+      "fileHint": "PDF or PowerPoint (.pptx, .ppt) · up to 100 MB",
       "readyToCreate": " · ready to create",
       "creating": " · creating…",
       "extractFailed": "Couldn't analyze the file. Try again.",
@@ -238,7 +238,7 @@
       "subtitle": "Upload a spreadsheet, pick your brand identity, and we'll turn it into a professional deck with clear charts.",
       "data": "Data",
       "dragOrClick": "Drag or click to upload a spreadsheet",
-      "fileHint": ".xlsx / .xls / .csv — up to 25 MB",
+      "fileHint": ".xlsx / .xls / .csv · up to 25 MB",
       "analyzing": "Analyzing…",
       "sheetUnit": "sheet", "rowUnit": "rows", "truncated": "truncated",
       "fileTypeError": "Please upload an .xlsx, .xls, or .csv file.",
@@ -260,7 +260,7 @@
       "dragDrop": "Drag and drop the file here",
       "dragOrClick": "Drag or click to choose a file",
       "clickToSelect": "or click to choose a file",
-      "fileHint": "PDF or PowerPoint — up to 100 MB",
+      "fileHint": "PDF or PowerPoint · up to 100 MB",
       "extractRefFailed": "Couldn't parse the reference file. Try again.",
       "extractContentFailed": "Couldn't parse the content file. Try again.",
       "useTemplateFailed": "Couldn't use the template",
@@ -334,7 +334,7 @@
       "uploadFonts": "Upload font families",
       "weights": "{count} weights",
       "maxFonts": "Max {max} fonts",
-      "fontFormats": "— up to {max} · WOFF / TTF / OTF"
+      "fontFormats": "up to {max} · WOFF / TTF / OTF"
     },
     "create": {
       "title": "Create a new presentation",
@@ -347,18 +347,18 @@
       "poweredBy": "Powered by Claude Design",
       "titleLine1": "Turn your content into a",
       "titleLine2": "professional deck in minutes",
-      "subtitle": "taqreer.ai turns your content into fully designed presentations — Arabic and English. It keeps your brand identity and gives you an advanced editor to tweak every slide right in the browser.",
+      "subtitle": "taqreer.ai turns your content into fully designed presentations, Arabic and English. It keeps your brand identity and gives you an advanced editor to tweak every slide right in the browser.",
       "cta": "Start free now"
     },
     "sections": {
       "features": {
         "eyebrow": "Features",
         "title": "Everything you need to create a professional presentation",
-        "subtitle": "Start from raw content, enhance an existing deck, mimic a reference style, or turn your data into slides — Taqreer helps at every step."
+        "subtitle": "Start from raw content, enhance an existing deck, mimic a reference style, or turn your data into slides. taqreer.ai helps at every step."
       },
       "templates": {
         "eyebrow": "Templates",
-        "title": "Start from a template — what you see is what you get",
+        "title": "Start from a template, what you see is what you get",
         "subtitle": "Explore our ready-made templates suited to your project, without relying on AI design direction."
       },
       "pricing": {
@@ -369,11 +369,11 @@
       "faq": {
         "eyebrow": "Help",
         "title": "Frequently asked questions",
-        "subtitle": "Everything you want to know about Taqreer before you start."
+        "subtitle": "Everything you want to know about taqreer.ai before you start."
       }
     },
     "flowCards": [
-      { "title": "Create a new presentation", "description": "Write your idea or upload a file, and Taqreer builds a complete, professionally designed deck that matches your taste and brand identity." },
+      { "title": "Create a new presentation", "description": "Write your idea or upload a file, and taqreer.ai builds a complete, professionally designed deck that matches your taste and brand identity." },
       { "title": "Enhance an existing presentation", "description": "Upload your current deck as PowerPoint or PDF, and we'll redesign it with your new identity while preserving the core content." },
       { "title": "Mimic a presentation's style", "description": "Attach a reference deck whose colors, fonts, and layout you like, and we'll apply the same visual style to your new content." },
       { "title": "Create from data", "description": "Turn an Excel or CSV file into a complete professional deck, with the right charts and precise formatting on every slide." }
@@ -385,6 +385,18 @@
     },
     "templatesGrid": {
       "previewAria": "Preview the template"
+    },
+    "bidi": {
+      "headingPre": "taqreer.ai tech",
+      "headingPost": "for cleaner exports",
+      "subtitle": "The same text you type for the design exports to PowerPoint with no direction issues.",
+      "toggleAria": "Enable export tech",
+      "slideHeader": "Q1 performance",
+      "windowTitle": "Q1 report · taqreer.ai",
+      "labLabel": "taqreer.ai export tech",
+      "on": "On",
+      "off": "Off",
+      "labAria": "Export tech"
     },
     "pricing": {
       "monthly": "Monthly",
@@ -430,12 +442,12 @@
       ]
     },
     "faq": [
-      { "q": "What is Taqreer?", "a": "Taqreer is an AI platform that turns your content — text, a file, or an idea — into a fully designed professional presentation in Arabic and English within minutes." },
-      { "q": "Does it fully support Arabic?", "a": "Yes. Taqreer is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
+      { "q": "What is taqreer.ai?", "a": "taqreer.ai is an AI platform that turns your content, text, a file, or an idea, into a fully designed professional presentation in Arabic and English within minutes." },
+      { "q": "Does it fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
       { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus 400 free credits at signup to try the platform." },
       { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },
       { "q": "Can I export the deck to PowerPoint?", "a": "Yes. You can export your decks as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." },
-      { "q": "Can I apply my own brand identity?", "a": "Yes. Upload your logo, colors, and fonts in the brand identity section, and Taqreer applies them automatically so your decks stay on-brand." },
+      { "q": "Can I apply my own brand identity?", "a": "Yes. Upload your logo, colors, and fonts in the brand identity section, and taqreer.ai applies them automatically so your decks stay on-brand." },
       { "q": "Can I cancel my subscription anytime?", "a": "Yes. You can upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." }
     ],
     "footer": {
@@ -448,12 +460,12 @@
       }
     },
     "preview": {
-      "sidebar": { "home": "Home", "create": "Create new deck", "enhance": "Enhance existing deck", "mimic": "Mimic a style", "datasheet": "Create from data", "projects": "Projects", "templates": "Templates", "brandKits": "Brand kits", "favorites": "Favorites", "settings": "Settings" },
+      "sidebar": { "home": "Home", "create": "Create", "enhance": "Enhance", "mimic": "Mimic", "datasheet": "From data", "projects": "Projects", "templates": "Templates", "brandKits": "Brand kits", "favorites": "Favorites", "settings": "Settings" },
       "quickActions": {
-        "create": { "title": "Create new deck", "desc": "Start from scratch with your content" },
-        "enhance": { "title": "Enhance existing deck", "desc": "Upload your file and get a polished version" },
-        "mimic": { "title": "Mimic a style", "desc": "Copy another deck's style and apply it" },
-        "datasheet": { "title": "Create from data", "desc": "Turn an Excel file into a professional deck" }
+        "create": { "title": "Create", "desc": "a new presentation" },
+        "enhance": { "title": "Enhance", "desc": "an existing presentation" },
+        "mimic": { "title": "Mimic", "desc": "a presentation's style" },
+        "datasheet": { "title": "Datasheet", "desc": "into a presentation" }
       },
       "library": { "myProjects": "My projects", "templates": "Templates", "viewAll": "View all" },
       "projects": ["2026 Business Plan", "Sales Report", "New Product Launch", "Q3 Summary", "Marketing Strategy", "Campaign Results"],
@@ -461,16 +473,16 @@
       "common": {
         "content": "Content", "language": "Language", "arabic": "Arabic", "english": "English",
         "textareaPlaceholder": "Write your deck content here…", "or": "or",
-        "dropTitle": "Drag or click to choose a file", "dropHintMain": "PDF / PPTX / DOCX / TXT — up to 100 MB",
+        "dropTitle": "Drag or click to choose a file", "dropHintMain": "PDF / PPTX / DOCX / TXT · up to 100 MB",
         "brandIdentity": "Brand identity", "colors": "Colors", "font": "Font", "file": "File",
         "uploadLogo": "Upload your logo", "logoHint": "SVG only", "saveDefault": "Save as default kit",
         "outputSettings": "Output settings", "slideSize": "Slide size", "numSlides": "Slide count",
         "auto": "Auto", "custom": "Custom", "slideNumbering": "Slide numbering"
       },
       "create": { "title": "Create a new presentation", "subtitle": "Write your content or upload a file, pick your brand identity, and we'll build a deck that matches your taste.", "cta": "Create deck", "designStyle": "Design style", "professional": "Professional", "creative": "Creative" },
-      "enhance": { "title": "Enhance your current deck", "subtitle": "Upload an existing deck and we'll redesign it with your brand identity while preserving your content.", "cta": "Enhance deck", "originalFile": "Original file", "dropTitle": "Drag your deck file here", "dropHint": "PPTX / PDF — up to 100 MB", "extractNote": "We'll extract text, images, and fonts from your file automatically.", "uploadLogoOptional": "Upload your logo (optional)" },
+      "enhance": { "title": "Enhance your current deck", "subtitle": "Upload an existing deck and we'll redesign it with your brand identity while preserving your content.", "cta": "Enhance deck", "originalFile": "Original file", "dropTitle": "Drag your deck file here", "dropHint": "PPTX / PDF · up to 100 MB", "extractNote": "We'll extract text, images, and fonts from your file automatically.", "uploadLogoOptional": "Upload your logo (optional)" },
       "mimic": { "title": "Mimic a deck's style", "subtitle": "Attach a reference deck and we'll apply its style to your new content.", "cta": "Create deck", "whatWeMimic": "What we're mimicking", "uploadReference": "Upload the reference deck", "extractNote": "We'll extract colors, fonts, and layout from the reference.", "copyText": "Copy text" },
-      "datasheet": { "title": "Create a deck from your data", "subtitle": "Turn an Excel or CSV file into a professional deck with the right charts.", "cta": "Create deck", "data": "Data", "uploadData": "Upload the data file", "dropHint": "XLSX / CSV — up to 25 MB", "table": "Table", "chartType": "Chart type", "columns": "Columns", "line": "Line" }
+      "datasheet": { "title": "Create a deck from your data", "subtitle": "Turn an Excel or CSV file into a professional deck with the right charts.", "cta": "Create deck", "data": "Data", "uploadData": "Upload the data file", "dropHint": "XLSX / CSV · up to 25 MB", "table": "Table", "chartType": "Chart type", "columns": "Columns", "line": "Line" }
     }
   },
   "pages": {
@@ -478,7 +490,7 @@
       "title": "Settings", "loading": "Loading…",
       "profile": { "title": "Profile", "fullName": "Full name", "fullNamePlaceholder": "Ahmed Mohammed", "email": "Email", "save": "Save changes", "saving": "Saving…", "errSave": "Something went wrong while saving", "saved": "Changes saved", "syncFailed": "Name updated, but it couldn't sync inside the app" },
       "password": { "title": "Change password", "current": "Current password", "new": "New password", "confirm": "Confirm password", "change": "Change password", "add": "Add password", "saving": "Saving…", "googleHint": "You signed up with Google. You can add a password to sign in with email too.", "errShort": "Password must be at least 8 characters", "errMismatch": "Passwords don't match", "errGeneric": "Something went wrong. Please try again.", "changed": "Password changed" },
-      "deleteAccount": { "title": "Delete account", "warning": "This is irreversible and all your data will be permanently deleted.", "button": "Delete my account", "confirmTitle": "Delete account", "confirmBody": "Are you sure? This is irreversible — your account and all data will be permanently deleted.", "cancel": "Cancel", "confirm": "Permanently delete my account", "deleting": "Deleting…" }
+      "deleteAccount": { "title": "Delete account", "warning": "This is irreversible and all your data will be permanently deleted.", "button": "Delete my account", "confirmTitle": "Delete account", "confirmBody": "Are you sure? This is irreversible, your account and all data will be permanently deleted.", "cancel": "Cancel", "confirm": "Permanently delete my account", "deleting": "Deleting…" }
     },
     "brandKits": {
       "listTitle": "Brand kits", "listSubtitle": "Saved brand identities. Click any card to use it in a flow, or delete it from the options menu.", "newButton": "New brand kit",
@@ -487,7 +499,7 @@
       "errSave": "Couldn't save the brand kit", "errSaveRetry": "Couldn't save the brand kit. Try again.", "errDelete": "Couldn't delete", "errDeleteKit": "Couldn't delete the brand kit", "errUpdate": "Couldn't update", "errSetDefault": "Couldn't set the default brand kit", "errRename": "Couldn't rename", "errRenameKit": "Couldn't rename the brand kit", "errUse": "Couldn't use the brand kit"
     },
     "library": {
-      "title": "Image library", "subtitle": "Every image generated by AI inside your decks — re-download any of them.",
+      "title": "Image library", "subtitle": "Every image generated by AI inside your decks. Re-download any of them.",
       "emptyTitle": "No images yet", "emptyDesc": "Images that AI generates inside your decks will show up here, and you can download any of them.", "createDeck": "Create a deck",
       "searchLabel": "Search by project name", "searchPlaceholder": "Search by project name…", "sortBy": "Sort by", "sortAria": "Sort images", "sortRecent": "Most recent", "sortName": "Name",
       "noResultsTitle": "No results", "noResultsDesc": "No images match your search."
@@ -508,7 +520,7 @@
     "share": {
       "title": "Share", "invitePeople": "Invite people", "emailPlaceholder": "email@example.com", "enterEmail": "Enter an email", "sending": "Sending…", "invite": "Invite",
       "peopleWithAccess": "People with access", "you": "You", "awaitingAcceptance": "Awaiting acceptance", "noInvites": "No one's invited yet.", "fullOwnership": "Full ownership", "remove": "Remove",
-      "copyLink": "Copy share link", "copied": "Copied", "publicLinkAria": "Public link", "publicLinkEnabled": "Public link enabled — view only", "publicLinkDisabled": "Public link disabled",
+      "copyLink": "Copy share link", "copied": "Copied", "publicLinkAria": "Public link", "publicLinkEnabled": "Public link enabled · view only", "publicLinkDisabled": "Public link disabled",
       "exportPresentation": "Export presentation", "exportFormat": "Export format", "orShareOn": "Or share directly on:",
       "fmtPdf": "Multi-page PDF file", "fmtPptx": "Editable PPTX file", "fmtHtml": "Standalone HTML file", "fmtPng": "Zipped images folder",
       "errLoadShare": "Couldn't load share settings", "errLoadProject": "Couldn't load the project", "errSendInvite": "Couldn't send the invitation",
@@ -518,7 +530,7 @@
       "title": "Save as template", "description": "This deck's colors and fonts will be saved as a new template. Slide content and the logo won't be copied.",
       "shareCommunity": "Share with the community", "shareCommunityDesc": "Public templates appear on the community templates page for others to use. You can change this later.",
       "save": "Save template", "saving": "Saving…", "headingLabel": "Heading", "langArabic": "Arabic",
-      "errLoadPreview": "Couldn't load the preview", "errSave": "Couldn't save — try again."
+      "errLoadPreview": "Couldn't load the preview", "errSave": "Couldn't save, try again."
     },
     "notifications": {
       "title": "All notifications", "none": "No notifications", "noneToShow": "No notifications to show", "count": "{count} notifications", "clearAll": "Clear all",
@@ -542,10 +554,10 @@
     "search": { "searching": "Searching…", "noResults": "No results for \"{query}\"", "placeholder": "Search your projects…", "resultsAria": "Project search results", "emptyHint": "Start typing to search your projects", "toOpen": "to open", "toClose": "to close" },
     "pagination": { "aria": "Pagination", "previousPage": "Previous page", "nextPage": "Next page", "pageN": "Page {n}" },
     "recentProjects": { "title": "Recent projects", "emptyTitle": "No projects yet", "emptyDesc": "Create your first deck and it'll show up here once saved.", "createProject": "Create project" },
-    "myTemplates": { "empty": "No saved templates — save a deck as a template and it'll show up here to start from.", "header": "Start from a template", "subtitle": "What you see is what you get", "viewAll": "View all" },
+    "myTemplates": { "empty": "No saved templates. Save a deck as a template and it'll show up here to start from.", "header": "Start from a template", "subtitle": "What you see is what you get", "viewAll": "View all" },
     "templateTile": { "preparing": "Preparing template", "labelTemplate": "Template {format}", "premiumSuffix": " · Premium", "options": "Template options", "makePublic": "Make it public", "makePrivate": "Make it private" },
     "brandKitTile": { "use": "Use {name}", "default": "Default", "options": "Brand kit options", "colors": "Colors", "fonts": "Fonts" },
-    "projectThumbnail": { "open": "Open {title} — {count} slides", "slideOne": "slide", "slideMany": "slides", "creatingPreview": "Creating preview", "preparingTemplate": "Preparing template", "favorite": "Favorite project", "projectName": "Project name", "options": "Project options" },
+    "projectThumbnail": { "open": "Open {title} · {count} slides", "slideOne": "slide", "slideMany": "slides", "creatingPreview": "Creating preview", "preparingTemplate": "Preparing template", "favorite": "Favorite project", "projectName": "Project name", "options": "Project options" },
     "dashboardWidget": { "viewAll": "View all" },
     "lightbox": { "title": "Template preview", "slideOf": "Slide {n} of {total}", "slideN": "Slide {n}", "useAsTemplate": "Use as template" },
     "filterBar": { "projectFilters": "Project filters", "templateFilters": "Template filters", "searchTitles": "Search project titles", "searchPlaceholder": "Search by project name…", "favoritesOnly": "Favorites only", "langArabic": "Arabic", "langEnglish": "English", "ownerMine": "Mine", "ownerCommunity": "Community", "ownerAll": "All", "clearColor": "Clear color filter", "filterColor": "Filter by color {color}" },
@@ -564,7 +576,7 @@
       "redesignAll": "Redesign all",
       "undo": "Undo",
       "redo": "Redo",
-      "slideLockedComment": "Slide locked — unlock to comment",
+      "slideLockedComment": "Slide locked, unlock to comment",
       "exitComments": "Exit comment mode",
       "addComment": "Add comment",
       "versionHistory": "Version history",
@@ -591,8 +603,8 @@
       "showSlidesOrComments": "Show slides or comments",
       "slideAria": "Slide {n}",
       "slideOf": "Slide {n} of {total}",
-      "slideSelected": " — selected",
-      "slideLocked": " — locked",
+      "slideSelected": " · selected",
+      "slideLocked": " · locked",
       "unlockAll": "Unlock all",
       "lockAll": "Lock all",
       "cancelling": "Cancelling…",
@@ -703,17 +715,17 @@
       "startingDesign": "Starting design…"
     },
     "errors": {
-      "serverBusy": "Server is under heavy load — this may take a while",
-      "takingLonger": "Taking longer than usual — still working",
+      "serverBusy": "Server is under heavy load, this may take a while",
+      "takingLonger": "Taking longer than usual, still working",
       "failedApply": "Failed to apply comments",
       "cancelledOrFailed": "Operation cancelled or failed. You can try again.",
-      "stopped": "Operation stopped. It may have been cancelled — try again.",
+      "stopped": "Operation stopped. It may have been cancelled. Try again.",
       "tookLonger": "Operation took longer than expected. Try again.",
       "disconnected": "Disconnected from server. Check your connection and try again.",
       "applied": "Comments applied. No longer editable.",
       "sessionExpired": "Session expired. Please sign in again.",
       "commentNotFound": "Comment not found.",
-      "slideLocked": "This slide is locked — unlock it before adding comments.",
+      "slideLocked": "This slide is locked. Unlock it before adding comments.",
       "failedSaveComment": "Failed to save comment.",
       "failedUpdateComment": "Failed to update comment.",
       "failedDeleteComment": "Failed to delete comment.",
