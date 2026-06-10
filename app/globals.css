@@ -1099,14 +1099,23 @@ html.app-shell-scroll body {
   pointer-events: none;
   /* Above the SlideRenderer (auto-stacked at z:auto). */
   z-index: 2;
-  /* Default hidden — fade in when data-active flips on, fade out
-     when it flips off. 1 s ease so both transitions feel matched. */
+  /* Default hidden — fade in when data-active flips on, fade out when it flips
+     off. 1 s ease so both transitions feel matched. `visibility` is delayed to
+     the END of the fade-out (`0s linear 1s`) so the masked layer is fully
+     DROPPED once invisible. Without it, the paused-animation `mask-composite`
+     layer can leave a stale GPU tile (a sliver of the ring) painted on screen
+     after toggling back to edit mode — opacity reads 0 but the frozen tile is
+     never re-rasterized to transparent. */
   opacity: 0;
-  transition: opacity 1s ease;
+  visibility: hidden;
+  transition: opacity 1s ease, visibility 0s linear 1s;
 }
 
 .canvas-gradient-border[data-active="true"]::after {
   opacity: 1;
+  /* Flip visibility ON immediately (no delay) so the fade-IN is visible. */
+  visibility: visible;
+  transition: opacity 1s ease, visibility 0s linear 0s;
 }
 
 /* Pause the drift while the ring is invisible — no point burning
@@ -1406,6 +1415,33 @@ html.app-shell-scroll body {
 
 .pause-on-hover:hover {
   animation-play-state: paused;
+}
+
+/* ─── Landing full-bleed section rules ───────────────────────────────────────
+   The landing content sits in a centered max-w-7xl frame, but the horizontal
+   section separators span the FULL viewport width (laravel.com style) by
+   breaking out to 100vw via `inset-inline: calc(50% - 50vw)`. `.rule-top` draws
+   a top hairline; `.rule-y` draws top + bottom. The page's <main> sets
+   `overflow-x: clip` so the 100vw breakout never adds a horizontal scrollbar. */
+.rule-top,
+.rule-y {
+  position: relative;
+}
+.rule-top::before,
+.rule-y::before,
+.rule-y::after {
+  content: "";
+  position: absolute;
+  inset-inline: calc(50% - 50vw);
+  border-top: 1px solid var(--tq-border-hairline);
+  pointer-events: none;
+}
+.rule-top::before,
+.rule-y::before {
+  top: 0;
+}
+.rule-y::after {
+  bottom: 0;
 }
 
 /* ─── Template Scroll ─── */

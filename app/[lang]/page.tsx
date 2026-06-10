@@ -1,9 +1,11 @@
 // Public landing page (/). Swiss-grid layout: the whole page sits in a centered
-// max-w-7xl FRAME with left/right vertical hairlines (border-x); every section
-// rule (border-t) and the flows band span that frame width, so all lines meet
-// the verticals. Single-column section headers are centered; only the 2-column
-// BiDi band is right-aligned. The only page motion left is the hero's own 3D
-// demo + the trusted-by marquee.
+// max-w-7xl FRAME with left/right vertical hairlines (border-x), but the
+// horizontal section separators span the FULL viewport width (laravel.com
+// style) via the `.rule-top` / `.rule-y` utilities — so the horizontals cross
+// past the inner verticals out to the screen edges. <main> clips horizontal
+// overflow so the 100vw rules never add a scrollbar. Single-column section
+// headers are centered; only the 2-column BiDi band is right-aligned. The only
+// page motion left is the hero's own 3D demo + the trusted-by marquee.
 //
 // Lives at `app/page.tsx` (NOT inside a route group) because of a Next 16.2.6 +
 // Turbopack route-resolution bug with `(marketing)/page.tsx`.
@@ -78,7 +80,10 @@ function SectionHeader({
   );
 }
 
-const RULE = "border-t border-[var(--tq-border-hairline)]";
+// Full-bleed top hairline (spans the whole viewport, laravel.com style) even
+// though the section sits in the centered max-w-7xl frame. `.rule-y` adds a
+// matching bottom line — both defined in globals.css.
+const RULE = "rule-top";
 const PX = "px-4 sm:px-6 lg:px-8";
 
 export default async function LandingPage() {
@@ -95,7 +100,7 @@ export default async function LandingPage() {
 
   return (
     <SmoothScrollProvider>
-    <main>
+    <main className="overflow-x-clip">
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
@@ -134,7 +139,7 @@ export default async function LandingPage() {
               subtitle="ابدأ من محتوى خام، طوّر عرضًا موجودًا، حاكِ أسلوب عرضٍ مرجعي، أو حوّل بياناتك — تقرير يساعدك في كل مرحلة."
             />
           </ScrollReveal>
-          <ScrollReveal direction="up" className="border-y border-[var(--tq-border-hairline)]">
+          <ScrollReveal direction="up" className="rule-y">
             <FeatureFlowCards />
           </ScrollReveal>
         </section>
