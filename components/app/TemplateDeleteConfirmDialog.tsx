@@ -17,6 +17,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function TemplateDeleteConfirmDialog({
   open,
@@ -29,6 +30,8 @@ export function TemplateDeleteConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -70,7 +73,7 @@ export function TemplateDeleteConfirmDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-start justify-center p-4"
           >
             <motion.div
-              dir="rtl"
+              dir={dir}
               role="alertdialog"
               aria-modal="true"
               aria-labelledby="template-delete-title"
@@ -86,14 +89,13 @@ export function TemplateDeleteConfirmDialog({
                 id="template-delete-title"
                 className="mb-2 text-xl font-bold text-white"
               >
-                حذف القالب
+                {dict.dialogs.deleteTemplate.title}
               </h3>
               <p
                 id="template-delete-body"
                 className="mb-8 text-sm text-muted"
               >
-                سيتم حذف هذا القالب بشكل نهائي مع شرائحه. لا يمكن التراجع عن هذا
-                الإجراء.
+                {dict.dialogs.deleteTemplate.body}
               </p>
               <div className="flex gap-3">
                 <button
@@ -102,7 +104,7 @@ export function TemplateDeleteConfirmDialog({
                   disabled={busy}
                   className="btn-pill flex-1 px-4 py-3 text-sm"
                 >
-                  إلغاء
+                  {dict.common.cancel}
                 </button>
                 <button
                   type="button"
@@ -110,7 +112,7 @@ export function TemplateDeleteConfirmDialog({
                   disabled={busy}
                   className="btn-pill-danger flex-1 px-4 py-3 text-sm"
                 >
-                  {busy ? "جاري الحذف..." : "حذف نهائياً"}
+                  {busy ? dict.common.deleting : dict.common.deletePermanently}
                 </button>
               </div>
             </motion.div>

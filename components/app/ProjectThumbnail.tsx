@@ -60,6 +60,7 @@ import {
 } from "@/lib/hooks/useProjectActions";
 import { useSlideScrub } from "@/lib/hooks/useSlideScrub";
 import { ScrubCounter } from "@/components/app/ScrubCounter";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 type Props = {
   // Stable per-project — drives API calls + clipboard URL.
@@ -117,6 +118,8 @@ export function ProjectThumbnail({
   onFavoriteChange,
 }: Props) {
   const router = useRouter();
+  const dict = useDict();
+  const { dir } = useLocale();
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -189,8 +192,19 @@ export function ProjectThumbnail({
           onMouseLeave={scrub.handleMouseLeave}
           aria-label={
             hasSlides
-              ? `افتح ${actions.titleState} — ${slides.length} ${slides.length === 1 ? "شريحة" : "شرائح"}`
-              : `افتح ${actions.titleState}`
+              ? dict.components.projectThumbnail.open
+                  .replace("{title}", actions.titleState)
+                  .replace("{count}", String(slides.length))
+                  .replace(
+                    dict.components.projectThumbnail.slideMany,
+                    slides.length === 1
+                      ? dict.components.projectThumbnail.slideOne
+                      : dict.components.projectThumbnail.slideMany,
+                  )
+              : dict.components.projectThumbnail.open
+                  .replace("{title}", actions.titleState)
+                  .split("—")[0]
+                  .trimEnd()
           }
           className={`absolute inset-0 block ${
             onOpen ? "cursor-zoom-in" : "cursor-pointer"
@@ -218,7 +232,7 @@ export function ProjectThumbnail({
             // footprint inside the tile doesn't shift.
             <span
               role="status"
-              aria-label="جاري إنشاء المعاينة"
+              aria-label={dict.components.projectThumbnail.creatingPreview}
               className="flex h-full w-full items-center justify-center text-muted"
             >
               <ParagraphWriteIcon size={32} />
@@ -239,7 +253,7 @@ export function ProjectThumbnail({
         {actions.useTplBusy ? (
           <div
             role="status"
-            aria-label="جارٍ تجهيز القالب"
+            aria-label={dict.components.projectThumbnail.preparingTemplate}
             className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white"
           >
             <ParagraphWriteIcon size={32} />
@@ -261,7 +275,7 @@ export function ProjectThumbnail({
             without this the glyph would render as an outline. */}
         {actions.favoriteState ? (
           <span
-            aria-label="مشروع مفضّل"
+            aria-label={dict.components.projectThumbnail.favorite}
             className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-white"
           >
             star
@@ -276,7 +290,7 @@ export function ProjectThumbnail({
           with the thumbnail's visual-left edge (see button's `-me-3`
           for the offset that cancels the glyph's intrinsic padding).
           Same alignment as TemplateTile. */}
-      <div dir="rtl" className="flex items-start justify-between gap-2">
+      <div dir={dir} className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           {/* Title + 3-dots color is driven by INLINE style (not
               Tailwind `text-white`/`text-muted` utilities) because
@@ -304,7 +318,7 @@ export function ProjectThumbnail({
               }}
               disabled={actions.renameSaving}
               maxLength={MAX_TITLE_LENGTH}
-              aria-label="اسم المشروع"
+              aria-label={dict.components.projectThumbnail.projectName}
               className="w-full truncate rounded-md border border-white/15 bg-white/[0.04] px-1.5 py-0.5 text-xs font-semibold leading-tight text-white outline-none transition-colors focus:border-white/40 disabled:opacity-60"
             />
           ) : (
@@ -325,7 +339,7 @@ export function ProjectThumbnail({
         <button
           ref={menuBtnRef}
           type="button"
-          aria-label="خيارات المشروع"
+          aria-label={dict.components.projectThumbnail.options}
           aria-haspopup="menu"
           aria-expanded={actions.menuRect !== null}
           // The value (not just the attribute presence) carries the

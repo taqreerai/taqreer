@@ -19,6 +19,8 @@
 // Auto-hides when `totalPages <= 1` — callers can mount it
 // unconditionally; nothing renders if there's a single page.
 
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+
 type Props = {
   page: number; // zero-indexed
   pageCount: number;
@@ -59,6 +61,8 @@ function buildTokens(page: number, pageCount: number): Token[] {
 }
 
 export function Pagination({ page, pageCount, onChange }: Props) {
+  const dict = useDict();
+  const { dir } = useLocale();
   if (pageCount <= 1) return null;
   const tokens = buildTokens(page, pageCount);
   const atStart = page === 0;
@@ -66,13 +70,13 @@ export function Pagination({ page, pageCount, onChange }: Props) {
 
   return (
     <nav
-      aria-label="ترقيم الصفحات"
-      dir="rtl"
+      aria-label={dict.components.pagination.aria}
+      dir={dir}
       className="mt-10 flex items-center justify-center gap-2"
     >
       <button
         type="button"
-        aria-label="الصفحة السابقة"
+        aria-label={dict.components.pagination.previousPage}
         onClick={() => onChange(page - 1)}
         disabled={atStart}
         className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
@@ -99,7 +103,7 @@ export function Pagination({ page, pageCount, onChange }: Props) {
           <button
             key={t.n}
             type="button"
-            aria-label={`الصفحة ${t.n + 1}`}
+            aria-label={dict.components.pagination.pageN.replace("{n}", String(t.n + 1))}
             aria-current={isCurrent ? "page" : undefined}
             onClick={() => onChange(t.n)}
             // Active page wears the `btn-gradient` CTA recipe so the
@@ -116,7 +120,7 @@ export function Pagination({ page, pageCount, onChange }: Props) {
 
       <button
         type="button"
-        aria-label="الصفحة التالية"
+        aria-label={dict.components.pagination.nextPage}
         onClick={() => onChange(page + 1)}
         disabled={atEnd}
         className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"

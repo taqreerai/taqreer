@@ -28,6 +28,7 @@ import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { ScrubCounter } from "@/components/app/ScrubCounter";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 import { useSlideScrub } from "@/lib/hooks/useSlideScrub";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 export type TemplateTileBrand = {
   background: string;
@@ -71,6 +72,7 @@ export function TemplateTile({
   href?: string;
 }) {
   const router = useRouter();
+  const dict = useDict();
 
   // Optimistic copy of isPublic — the menu chip label flips
   // instantly on click for UX snappiness, even before router.refresh
@@ -261,7 +263,7 @@ export function TemplateTile({
       {useBusy ? (
         <div
           role="status"
-          aria-label="جارٍ تجهيز القالب"
+          aria-label={dict.components.templateTile.preparing}
           className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white"
         >
           <ParagraphWriteIcon size={32} />
@@ -276,7 +278,9 @@ export function TemplateTile({
   // screen-reader users at least some way to tell tiles apart. (A fully
   // unique name would need the tile's grid position, which isn't threaded
   // down here.)
-  const tileLabel = `قالب ${brand.format}${isPremium ? " · مميز" : ""}`;
+  const tileLabel =
+    dict.components.templateTile.labelTemplate.replace("{format}", brand.format) +
+    (isPremium ? dict.components.templateTile.premiumSuffix : "");
 
   // The clickable surface around the 16:9 tile body. Anchor or button
   // depending on whether the caller wants navigation or a callback.
@@ -313,7 +317,7 @@ export function TemplateTile({
           // from another tile's trigger when the user clicks across
           // tiles to swap menus.
           data-template-menu-trigger={id}
-          aria-label="خيارات القالب"
+          aria-label={dict.components.templateTile.options}
           onClick={(e) => {
             e.stopPropagation();
             // Toggle — click again to close.

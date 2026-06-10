@@ -27,6 +27,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 const MENU_WIDTH = 240;
 // Approximate menu height — 7 items × ~38 px + divider + 12 px
@@ -90,6 +91,8 @@ export function ProjectActionsMenu({
   // need it later).
   onExitComplete?: () => void;
 } & ProjectActionsMenuActions) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
   // Outside click + Esc to close. The OWN trigger is excluded so
@@ -183,9 +186,9 @@ export function ProjectActionsMenu({
         <motion.div
           key="project-actions-menu"
           ref={surfaceRef}
-          dir="rtl"
+          dir={dir}
           role="menu"
-          aria-label="خيارات المشروع"
+          aria-label={dict.menus.projectActions.aria}
           // Animation origin flips to match the menu's position:
           // when anchored ABOVE the trigger, the menu slides UP from
           // a y-offset of +6; when anchored BELOW, it slides DOWN
@@ -201,14 +204,14 @@ export function ProjectActionsMenu({
           <ul className="flex flex-col p-1.5">
             <MenuItem
               icon="share"
-              label="مشاركة"
+              label={dict.common.share}
               onClick={onShare}
               closeAfter
               onClose={onClose}
             />
             <MenuItem
               icon="edit"
-              label="إعادة تسمية"
+              label={dict.common.rename}
               onClick={onRename}
               closeAfter
               onClose={onClose}
@@ -216,14 +219,18 @@ export function ProjectActionsMenu({
             <MenuItem
               icon={isFavorite ? "star" : "star_outline"}
               iconFilled={isFavorite}
-              label={isFavorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"}
+              label={
+                isFavorite
+                  ? dict.menus.projectActions.removeFavorite
+                  : dict.menus.projectActions.addFavorite
+              }
               onClick={onToggleFavorite}
               closeAfter
               onClose={onClose}
             />
             <MenuItem
               icon="link"
-              label="نسخ الرابط"
+              label={dict.menus.projectActions.copyLink}
               onClick={onCopyLink}
               closeAfter
               onClose={onClose}
@@ -232,7 +239,7 @@ export function ProjectActionsMenu({
                 to /use-template/project/[id] (forked Mimic flow). */}
             <MenuItem
               icon="auto_awesome"
-              label="استخدام كقالب"
+              label={dict.menus.projectActions.useAsTemplate}
               onClick={onUseAsTemplate}
               closeAfter
               onClose={onClose}
@@ -243,7 +250,7 @@ export function ProjectActionsMenu({
                 POSTs save-as-template on confirm. */}
             <MenuItem
               icon="bookmark_add"
-              label="حفظ كقالب"
+              label={dict.menus.projectActions.saveAsTemplate}
               onClick={onSaveAsTemplate}
               closeAfter
               onClose={onClose}
@@ -256,7 +263,7 @@ export function ProjectActionsMenu({
             />
             <MenuItem
               icon="delete"
-              label="نقل إلى المهملات"
+              label={dict.menus.projectActions.sendToTrash}
               destructive
               onClick={onSendToTrash}
               closeAfter

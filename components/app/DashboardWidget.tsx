@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 type DashboardWidgetHeaderProps = {
   title: string;
@@ -18,7 +21,9 @@ type DashboardEmptyStateProps = {
   };
 };
 
-export function DashboardWidgetHeader({ title, href, actionLabel = "عرض الكل" }: DashboardWidgetHeaderProps) {
+export function DashboardWidgetHeader({ title, href, actionLabel }: DashboardWidgetHeaderProps) {
+  const dict = useDict();
+  const resolvedActionLabel = actionLabel ?? dict.components.dashboardWidget.viewAll;
   return (
     <div className="flex items-center justify-between">
       {/* `.tq-widget-title` is 18 px — smaller than the page-level
@@ -30,7 +35,7 @@ export function DashboardWidgetHeader({ title, href, actionLabel = "عرض ال�
       <h2 className="tq-widget-title">{title}</h2>
       {href ? (
         <Link className="tq-widget-link no-underline" href={href}>
-          {actionLabel}
+          {resolvedActionLabel}
         </Link>
       ) : null}
     </div>

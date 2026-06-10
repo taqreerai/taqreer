@@ -30,7 +30,23 @@
   },
   "common": {
     "pro": "احترافي",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "saving": "جاري الحفظ...",
+    "delete": "حذف",
+    "deleting": "جاري الحذف...",
+    "deletePermanently": "حذف نهائياً",
+    "edit": "تعديل",
+    "rename": "إعادة تسمية",
+    "previous": "السابق",
+    "next": "التالي",
+    "viewAll": "عرض الكل",
+    "download": "تحميل",
+    "premium": "مميز",
+    "default": "افتراضية",
+    "share": "مشاركة",
+    "export": "تصدير"
   },
   "newProjectDialog": {
     "title": "ابدأ مشروعاً جديداً",
@@ -377,6 +393,53 @@
       "mimic": { "title": "حاكِ أسلوب عرض", "subtitle": "أرفق عرضاً مرجعياً وسنطبّق أسلوبه على محتواك الجديد.", "cta": "إنشاء العرض", "whatWeMimic": "ما الذي نُحاكيه", "uploadReference": "ارفع العرض المرجعي", "extractNote": "سنستخرج الألوان والخطوط والتخطيط من المرجع.", "copyText": "نسخ النص" },
       "datasheet": { "title": "أنشئ عرضاً من بياناتك", "subtitle": "حوّل ملف Excel أو CSV إلى عرض احترافي مع الرسوم البيانية المناسبة.", "cta": "إنشاء العرض", "data": "البيانات", "uploadData": "ارفع ملف البيانات", "dropHint": "XLSX / CSV — حتى 25 ميجابايت", "table": "الجدول", "chartType": "نوع الرسم", "columns": "أعمدة", "line": "خطي" }
     }
+  },
+  "dialogs": {
+    "share": {
+      "title": "مشاركة", "invitePeople": "دعوة أشخاص", "emailPlaceholder": "email@example.com", "enterEmail": "أدخل البريد الإلكتروني", "sending": "جارٍ...", "invite": "دعوة",
+      "peopleWithAccess": "الأشخاص الذين لديهم وصول", "you": "أنت", "awaitingAcceptance": "بانتظار القبول", "noInvites": "لا يوجد أشخاص مدعوّون بعد.", "fullOwnership": "ملكية كاملة", "remove": "إزالة",
+      "copyLink": "نسخ رابط المشاركة", "copied": "تم النسخ", "publicLinkAria": "الرابط العام", "publicLinkEnabled": "الرابط العام مفعّل — للمشاهدة فقط", "publicLinkDisabled": "الرابط العام غير مفعّل",
+      "exportPresentation": "تصدير العرض", "exportFormat": "صيغة التصدير", "orShareOn": "أو شارك مباشرة على:",
+      "fmtPdf": "ملف PDF متعدد الصفحات", "fmtPptx": "ملف PPTX قابل للتحرير", "fmtHtml": "ملف HTML مستقل", "fmtPng": "مجلد صور مضغوط",
+      "errLoadShare": "تعذر تحميل إعدادات المشاركة", "errLoadProject": "تعذر تحميل المشروع", "errSendInvite": "تعذر إرسال الدعوة",
+      "errEnablePublic": "تعذر تفعيل الرابط العام", "errDisablePublic": "تعذر إيقاف الرابط العام"
+    },
+    "saveTemplate": {
+      "title": "حفظ كقالب", "description": "سيتم حفظ ألوان وخطوط هذا العرض كقالب جديد. لن يتم نسخ محتوى الشرائح أو الشعار.",
+      "shareCommunity": "مشاركة مع المجتمع", "shareCommunityDesc": "القوالب العامة تظهر في صفحة قوالب المجتمع ليستخدمها الآخرون. يمكنك تغيير ذلك لاحقاً.",
+      "save": "حفظ القالب", "saving": "جاري الحفظ...", "headingLabel": "العنوان الرئيسي", "langArabic": "عربي",
+      "errLoadPreview": "تعذر تحميل المعاينة", "errSave": "تعذر الحفظ، حاول مرة أخرى."
+    },
+    "notifications": {
+      "title": "جميع الإشعارات", "none": "لا توجد إشعارات", "noneToShow": "لا توجد إشعارات لعرضها", "count": "{count} إشعار", "clearAll": "مسح الكل",
+      "bellTitle": "الإشعارات", "bellNew": "{count} جديد", "seeAll": "عرض الكل", "delete": "حذف", "collapse": "طي", "showFull": "عرض النص الكامل",
+      "devTestTitle": "اختبار التنبيه #{counter}", "devTestDesc": "هذا تنبيه تجريبي للتأكد من ظهور التوست تحت الجرس"
+    },
+    "trashConfirm": { "title": "نقل المشروع إلى المهملات", "body": "سيتم حذف هذا المشروع بشكل نهائي مع جميع نسخه وتعليقاته. لا يمكن التراجع عن هذا الإجراء.", "bodyNamed": "سيتم حذف \"{title}\" بشكل نهائي مع جميع نسخه وتعليقاته. لا يمكن التراجع عن هذا الإجراء." },
+    "deleteTemplate": { "title": "حذف القالب", "body": "سيتم حذف هذا القالب بشكل نهائي مع شرائحه. لا يمكن التراجع عن هذا الإجراء." },
+    "renameKit": { "title": "إعادة تسمية الهوية", "nameLabel": "اسم الهوية" },
+    "deleteKit": { "title": "حذف هوية الشركة", "body": "سيتم حذف هذه الهوية بشكل نهائي. لن تتأثر العروض الموجودة التي استخدمتها.", "bodyNamed": "سيتم حذف \"{name}\" بشكل نهائي. لن تتأثر العروض الموجودة التي استخدمت هذه الهوية." },
+    "libraryImage": { "imageFrom": "صورة من {title}", "downloadImage": "تحميل الصورة", "hero": "صورة رئيسية", "background": "خلفية", "accent": "عنصر", "expand": "توسيع {role} من {title}", "download": "تحميل {role} من {title}" }
+  },
+  "menus": {
+    "projectActions": { "aria": "خيارات المشروع", "addFavorite": "إضافة إلى المفضلة", "removeFavorite": "إزالة من المفضلة", "copyLink": "نسخ الرابط", "useAsTemplate": "استخدام كقالب", "saveAsTemplate": "حفظ كقالب", "sendToTrash": "نقل إلى المهملات" },
+    "templateActions": { "aria": "خيارات القالب", "makePrivate": "اجعله خاصاً", "makePublic": "اجعله عاماً", "useAsTemplate": "استخدامه كقالب", "delete": "حذف القالب" },
+    "brandKitActions": { "aria": "خيارات هوية الشركة", "use": "استخدام هوية الشركة", "unsetDefault": "إلغاء التعيين كافتراضية", "setDefault": "تعيين كافتراضية", "delete": "حذف هوية الشركة" },
+    "accessChip": { "aria": "مستوى الوصول", "view": "عرض", "comment": "تعليق", "edit": "تعديل", "viewOnly": "يستطيع المشاهدة فقط", "viewAndComment": "يستطيع المشاهدة والتعليق", "editFull": "يستطيع التعديل الكامل" }
+  },
+  "components": {
+    "planUsage": { "plan": "الخطة {plan}", "free": "مجاني", "plus": "بلس", "pro": "احترافي", "usageThisMonth": "استخدام العروض التقديمية هذا الشهر", "usedPercent": "تم استخدام {percentage}%", "usageCount": "{count} / {limit} عرضًا", "upgrade": "ترقية الخطة", "renewalDate": "تاريخ التجديد: {date}", "noRenewal": "لا يوجد تاريخ تجديد" },
+    "search": { "searching": "جارٍ البحث...", "noResults": "لا توجد نتائج لـ \"{query}\"", "placeholder": "ابحث في مشاريعك...", "resultsAria": "نتائج البحث في المشاريع", "emptyHint": "ابدأ بالكتابة للبحث في مشاريعك", "toOpen": "للفتح", "toClose": "للإغلاق" },
+    "pagination": { "aria": "ترقيم الصفحات", "previousPage": "الصفحة السابقة", "nextPage": "الصفحة التالية", "pageN": "الصفحة {n}" },
+    "recentProjects": { "title": "أحدث المشاريع", "emptyTitle": "لا توجد مشاريع بعد", "emptyDesc": "ابدأ بإنشاء أول عرض تقديمي وسيظهر هنا فور حفظه.", "createProject": "إنشاء مشروع" },
+    "myTemplates": { "empty": "لا توجد قوالب محفوظة — عند حفظ عرض كقالب سيظهر هنا لتبدأ منه.", "header": "ابدأ من قالب", "subtitle": "ما تراه هو ما تحصل عليه", "viewAll": "عرض الكل" },
+    "templateTile": { "preparing": "جارٍ تجهيز القالب", "labelTemplate": "قالب {format}", "premiumSuffix": " · مميز", "options": "خيارات القالب", "makePublic": "اجعله عاماً", "makePrivate": "اجعله خاصاً" },
+    "brandKitTile": { "use": "استخدام {name}", "default": "افتراضية", "options": "خيارات هوية الشركة", "colors": "الألوان", "fonts": "الخطوط" },
+    "projectThumbnail": { "open": "افتح {title} — {count} شرائح", "slideOne": "شريحة", "slideMany": "شرائح", "creatingPreview": "جاري إنشاء المعاينة", "preparingTemplate": "جارٍ تجهيز القالب", "favorite": "مشروع مفضّل", "projectName": "اسم المشروع", "options": "خيارات المشروع" },
+    "dashboardWidget": { "viewAll": "عرض الكل" },
+    "lightbox": { "title": "معاينة القالب", "slideOf": "شريحة {n} من {total}", "slideN": "الشريحة {n}", "useAsTemplate": "استخدامه كقالب" },
+    "filterBar": { "projectFilters": "فلاتر المشاريع", "templateFilters": "فلاتر القوالب", "searchTitles": "بحث في عناوين المشاريع", "searchPlaceholder": "ابحث باسم المشروع…", "favoritesOnly": "المفضلة فقط", "langArabic": "العربية", "langEnglish": "الإنجليزية", "ownerMine": "خاصة", "ownerCommunity": "المجتمع", "ownerAll": "الكل", "clearColor": "إلغاء تصفية اللون", "filterColor": "تصفية باللون {color}" },
+    "favoritesGrid": { "emptyTitle": "لا توجد مشاريع مفضلة بعد", "emptyDesc": "اضغط على النجمة من قائمة خيارات أي مشروع لإضافته إلى هذه الصفحة.", "goToProjects": "اذهب إلى المشاريع" }
   },
   "editor": {
     "toolbar": {

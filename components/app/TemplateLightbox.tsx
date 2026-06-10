@@ -30,6 +30,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
 import type { SlideFormat } from "@/lib/schema/slide";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // Stage dimensions — driven by the actual rendered showcase WebP
 // width (800 px from thumbnail-render's THUMBNAIL_WIDTH_PX). 450 px
@@ -72,6 +73,8 @@ export function TemplateLightbox({
   useBusy,
   isPremium,
 }: Props) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const [index, setIndex] = useState(0);
   const total = slides.length;
   const isPortrait = format === "9:16";
@@ -191,7 +194,7 @@ export function TemplateLightbox({
             className="pointer-events-none fixed inset-0 z-[2001] flex items-center justify-center p-4"
           >
             <div
-              dir="rtl"
+              dir={dir}
               role="dialog"
               aria-modal="true"
               aria-labelledby="tpl-lbx-title"
@@ -206,7 +209,7 @@ export function TemplateLightbox({
                     id="tpl-lbx-title"
                     className="truncate text-base font-semibold text-white"
                   >
-                    معاينة القالب
+                    {dict.components.lightbox.title}
                   </h2>
                   {isPremium ? <PremiumBadge className="shrink-0" /> : null}
                 </div>
@@ -219,7 +222,7 @@ export function TemplateLightbox({
                   <button
                     type="button"
                     onClick={onClose}
-                    aria-label="إغلاق"
+                    aria-label={dict.common.close}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
                   >
                     <span className="material-symbols-outlined">close</span>
@@ -239,7 +242,7 @@ export function TemplateLightbox({
                   side="right"
                   enabled={canPrev}
                   onClick={goPrev}
-                  ariaLabel="السابق"
+                  ariaLabel={dict.common.previous}
                 />
                 <div
                   className="relative shrink-0 overflow-hidden rounded-xl bg-black/30"
@@ -249,7 +252,9 @@ export function TemplateLightbox({
                     <img
                       key={currentSrc}
                       src={currentSrc}
-                      alt={`شريحة ${index + 1} من ${total}`}
+                      alt={dict.components.lightbox.slideOf
+                        .replace("{n}", String(index + 1))
+                        .replace("{total}", String(total))}
                       className="h-full w-full object-contain"
                       style={{
                         // Fade between slides on index change. Tiny
@@ -271,7 +276,7 @@ export function TemplateLightbox({
                   side="left"
                   enabled={canNext}
                   onClick={goNext}
-                  ariaLabel="التالي"
+                  ariaLabel={dict.common.next}
                 />
               </div>
 
@@ -295,7 +300,10 @@ export function TemplateLightbox({
                           ref={active ? activeThumbRef : null}
                           type="button"
                           onClick={() => setIndex(i)}
-                          aria-label={`الشريحة ${i + 1}`}
+                          aria-label={dict.components.lightbox.slideN.replace(
+                            "{n}",
+                            String(i + 1),
+                          )}
                           aria-current={active}
                           className={`h-10 w-16 shrink-0 overflow-hidden rounded-md transition-opacity ${
                             active
@@ -337,7 +345,7 @@ export function TemplateLightbox({
                   >
                     {useBusy ? "progress_activity" : "dashboard_customize"}
                   </span>
-                  استخدامه كقالب
+                  {dict.components.lightbox.useAsTemplate}
                 </button>
               </footer>
             </div>

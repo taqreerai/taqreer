@@ -18,20 +18,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export type AccessRole = "view" | "comment" | "edit";
-
-const ROLE_LABEL: Record<AccessRole, string> = {
-  view: "عرض",
-  comment: "تعليق",
-  edit: "تعديل",
-};
-
-const ROLE_DESCRIPTION: Record<AccessRole, string> = {
-  view: "يستطيع المشاهدة فقط",
-  comment: "يستطيع المشاهدة والتعليق",
-  edit: "يستطيع التعديل الكامل",
-};
 
 const MENU_WIDTH = 220;
 const MENU_HEIGHT_ESTIMATE_PX = 160;
@@ -55,6 +44,18 @@ export function AccessChipDropdown({
   triggerLabel?: string;
   readOnly?: boolean;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
+  const roleLabel: Record<AccessRole, string> = {
+    view: dict.menus.accessChip.view,
+    comment: dict.menus.accessChip.comment,
+    edit: dict.menus.accessChip.edit,
+  };
+  const roleDescription: Record<AccessRole, string> = {
+    view: dict.menus.accessChip.viewOnly,
+    comment: dict.menus.accessChip.viewAndComment,
+    edit: dict.menus.accessChip.editFull,
+  };
   const [open, setOpen] = useState(false);
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -204,7 +205,7 @@ export function AccessChipDropdown({
       ? window.innerHeight - triggerRect.top + ANCHOR_GAP_PX
       : undefined;
 
-  const label = triggerLabel ?? ROLE_LABEL[value];
+  const label = triggerLabel ?? roleLabel[value];
 
   return (
     <>
@@ -244,9 +245,9 @@ export function AccessChipDropdown({
                 <motion.div
                   key="access-dropdown"
                   ref={surfaceRef}
-                  dir="rtl"
+                  dir={dir}
                   role="menu"
-                  aria-label="مستوى الوصول"
+                  aria-label={dict.menus.accessChip.aria}
                   initial={{
                     opacity: 0,
                     y: shouldFlipAbove ? 6 : -6,
@@ -267,8 +268,8 @@ export function AccessChipDropdown({
                       <RoleItem
                         key={opt}
                         active={value === opt}
-                        label={ROLE_LABEL[opt]}
-                        description={ROLE_DESCRIPTION[opt]}
+                        label={roleLabel[opt]}
+                        description={roleDescription[opt]}
                         onClick={() => {
                           onChange(opt);
                           setOpen(false);

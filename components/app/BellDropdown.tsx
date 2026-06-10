@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { createClient } from "@/lib/supabase/client";
 import {
   formatNotificationTime,
@@ -50,7 +51,38 @@ const TOAST_AUTO_DISMISS_MS = 15_000;
 // popover. Tuned so the popover floats clear of the header chrome.
 const BELL_ANCHOR_GAP_PX = 25;
 
+// Popover / toast column geometry — both surfaces are a fixed 320 px
+// wide (w-80) and centred under the bell's `centerX`. Kept here so the
+// dir-aware left math below reads from named constants.
+const POPOVER_WIDTH_PX = 320;
+const VIEWPORT_GUTTER_PX = 12;
+
+// Physical `left` for the popover / toast column.
+//
+// The bell's `centerX` is a screen-space x; centring the 320 px column
+// on it is `centerX - 160`, which is symmetric and dir-neutral. The
+// dir-awareness matters at the CLAMP edges: the original code clamped
+// to a 12 px LEFT gutter first (`Math.max(12, …)`), which biases an
+// off-screen anchor toward the visual LEFT — correct for LTR, but in
+// RTL the inline-start is the visual RIGHT, so an anchor that would
+// overflow should snap to the RIGHT gutter instead. We mirror the
+// anchor around the viewport centre when `dir === "rtl"` so the column
+// hangs from the inline-start edge consistently with the rest of the
+// RTL chrome, then clamp into the same 12 px gutters.
+function popoverLeft(centerX: number, viewportWidth: number, dir: "rtl" | "ltr"): number {
+  const maxLeft = viewportWidth - POPOVER_WIDTH_PX - VIEWPORT_GUTTER_PX;
+  // Mirror the horizontal anchor in RTL so "start" reads as the visual
+  // right edge (matches headless's start-corner intent + the popover's
+  // dir={dir}). centerX → viewportWidth - centerX flips the anchor
+  // across the viewport centre.
+  const anchorX = dir === "rtl" ? viewportWidth - centerX : centerX;
+  const centred = anchorX - POPOVER_WIDTH_PX / 2;
+  return Math.max(VIEWPORT_GUTTER_PX, Math.min(centred, maxLeft));
+}
+
 export function BellDropdown({ headless = false }: { headless?: boolean } = {}) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const router = useRouter();
   // Hide "deck finished" from the BELL only (its list, its toast pop, AND the
   // unread badge — all derive from `items` below). For images decks it fires
@@ -222,14 +254,17 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
       counter += 1;
       notificationStore.push({
         kind,
-        title: `اختبار التنبيه #${counter}`,
-        desc: "هذا تنبيه تجريبي للتأكد من ظهور التوست تحت الجرس",
+        title: dict.dialogs.notifications.devTestTitle.replace(
+          "{counter}",
+          String(counter),
+        ),
+        desc: dict.dialogs.notifications.devTestDesc,
       });
     };
     return () => {
       delete w.__pushTestNotif;
     };
-  }, []);
+  }, [dict]);
 
   // Wire the store to the current user once on mount. Without this the
   // store has no userId → push() drops silently and nothing appears
@@ -452,7 +487,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
           setOpen(next);
           if (next) notificationStore.markAllRead();
         }}
-        aria-label="الإشعارات"
+        aria-label={dict.dialogs.notifications.bellTitle}
         aria-expanded={open}
         // Icon-only — no background, no border, no glass circle (dashboard
         // header pass 2026-05-30). Just the bell glyph with a white/60 →
@@ -483,7 +518,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
             // surface itself static. Width is fixed to 320px so we can
             // centre via explicit left math (no `-translate-x-1/2`).
             <div
-              dir="rtl"
+              dir={dir}
               data-bell-popover
               // `.in-slide-popover` (dark navy 45% alpha) instead of
             // `.surface-popover` (fully transparent + glass blur). The
@@ -499,10 +534,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
             className="in-slide-popover fixed z-[1100] w-80 overflow-hidden rounded-2xl"
               style={{
                 top: bellRect.top,
-                left: Math.max(
-                  12,
-                  Math.min(bellRect.centerX - 160, window.innerWidth - 320 - 12),
-                ),
+                left: popoverLeft(bellRect.centerX, window.innerWidth, dir),
               }}
             >
               <motion.div
@@ -512,11 +544,11 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
               >
             <div className="flex items-center justify-between px-4 py-3">
-              <p className="text-sm font-semibold text-white">الإشعارات</p>
+              <p className="text-sm font-semibold text-white">{dict.dialogs.notifications.bellTitle}</p>
               {unread > 0 ? (
                 // Sky-blue info chip — see badge color note above.
                 <span className="rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-medium leading-none text-white">
-                  {unread} جديد
+                  {dict.dialogs.notifications.bellNew.replace("{count}", String(unread))}
                 </span>
               ) : null}
             </div>
@@ -527,7 +559,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
                   <span className="material-symbols-outlined mb-2 block text-[40px] text-white/30">
                     inbox
                   </span>
-                  <p className="text-xs text-white/50">لا توجد إشعارات</p>
+                  <p className="text-xs text-white/50">{dict.dialogs.notifications.none}</p>
                 </div>
               ) : (
                 visible.map((n) => (
@@ -543,7 +575,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
                 disabled={items.length === 0}
                 className="btn-pill"
               >
-                مسح الكل
+                {dict.dialogs.notifications.clearAll}
               </button>
               <button
                 type="button"
@@ -554,7 +586,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
                 disabled={items.length === 0}
                 className="btn-pill"
               >
-                عرض الكل
+                {dict.dialogs.notifications.seeAll}
               </button>
             </div>
               </motion.div>
@@ -583,17 +615,11 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
             // `layout` ↔ AnimatePresence reflow fight that was causing
             // the evicted toast to bounce between positions.
             <div
-              dir="rtl"
+              dir={dir}
               className="pointer-events-none fixed z-[1099] w-80"
               style={{
                 top: bellRect.top,
-                left: Math.max(
-                  12,
-                  Math.min(
-                    bellRect.centerX - 160,
-                    window.innerWidth - 320 - 12,
-                  ),
-                ),
+                left: popoverLeft(bellRect.centerX, window.innerWidth, dir),
                 // 3 visible slots + an extra slot's worth of headroom
                 // for the evicted toast to fade out from. Slot height
                 // matches BellToast (see TOAST_SLOT_HEIGHT below).
@@ -647,6 +673,7 @@ function BellToast({
   onClick: (n: Notification) => void;
   onDismiss: () => void;
 }) {
+  const dict = useDict();
   // ResizeObserver-driven height reporting. Falls back to a no-op on
   // environments without RO (older Safari pre-13.1, jsdom in tests);
   // the parent's TOAST_SLOT_HEIGHT default still positions toasts at
@@ -700,7 +727,7 @@ function BellToast({
           e.stopPropagation();
           onDismiss();
         }}
-        aria-label="إغلاق"
+        aria-label={dict.common.close}
         // `end-4` (16 px) + `h-6 w-6` (24 × 24) match the chevron in
         // NotificationRow's end column exactly — same end offset (the
         // row uses `px-4`, so its end column's right edge is also 16 px
@@ -742,6 +769,7 @@ export function NotificationRow({
   compact?: boolean;
   showTime?: boolean;
 }) {
+  const dict = useDict();
   // Per-type icon (comment → speech bubble, invite → envelope, …),
   // monochrome on the bell — colour is reserved for the dashboard widget.
   const iconGlyph = notificationIcon(n);
@@ -934,7 +962,7 @@ export function NotificationRow({
           <button
             type="button"
             onClick={handleToggleExpand}
-            aria-label={expanded ? "طي" : "عرض النص الكامل"}
+            aria-label={expanded ? dict.dialogs.notifications.collapse : dict.dialogs.notifications.showFull}
             aria-expanded={expanded}
             className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
           >
@@ -951,7 +979,7 @@ export function NotificationRow({
           <button
             type="button"
             onClick={handleDelete}
-            aria-label="حذف"
+            aria-label={dict.dialogs.notifications.delete}
             className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 opacity-0 transition-all hover:bg-white/10 hover:text-white group-hover:opacity-100"
           >
             <span className="material-symbols-outlined text-[16px]">close</span>

@@ -36,6 +36,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toggle } from "@/components/create/controls";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import type { BrandSnapshot } from "@/lib/template/derive-brand";
 
 type PreviewResponse = {
@@ -56,6 +57,8 @@ export function SaveAsTemplateDialog({
   // this — onSaved should not call onCancel.
   onSaved: (templateId: string) => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   // Default ON — encourages sharing into the community feed. Users
@@ -107,7 +110,7 @@ export function SaveAsTemplateDialog({
         if (!res.ok) {
           const body = (await res.json().catch(() => ({}))) as { error?: string };
           if (!cancelled) {
-            setPreviewError(body.error ?? "تعذر تحميل المعاينة");
+            setPreviewError(body.error ?? dict.dialogs.saveTemplate.errLoadPreview);
           }
           return;
         }
@@ -115,13 +118,13 @@ export function SaveAsTemplateDialog({
         if (cancelled) return;
         setPreview(data);
       } catch {
-        if (!cancelled) setPreviewError("تعذر تحميل المعاينة");
+        if (!cancelled) setPreviewError(dict.dialogs.saveTemplate.errLoadPreview);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, projectId]);
+  }, [open, projectId, dict]);
 
   // Inject brand webfonts so the live preview renders in the actual
   // brand fonts. Idempotent — same href twice produces one link tag.
@@ -180,7 +183,7 @@ export function SaveAsTemplateDialog({
         error?: string;
       };
       if (!res.ok || !body.ok || !body.templateId) {
-        setSaveError(body.error ?? "تعذر الحفظ، حاول مرة أخرى.");
+        setSaveError(body.error ?? dict.dialogs.saveTemplate.errSave);
         return;
       }
       // Re-run the parent's server component before notifying the
@@ -192,11 +195,11 @@ export function SaveAsTemplateDialog({
       router.refresh();
       onSaved(body.templateId);
     } catch {
-      setSaveError("تعذر الحفظ، حاول مرة أخرى.");
+      setSaveError(dict.dialogs.saveTemplate.errSave);
     } finally {
       setSaving(false);
     }
-  }, [projectId, canSave, isPublic, onSaved, router]);
+  }, [projectId, canSave, isPublic, onSaved, router, dict]);
 
   if (typeof window === "undefined") return null;
 
@@ -242,7 +245,7 @@ export function SaveAsTemplateDialog({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
             <div
-              dir="rtl"
+              dir={dir}
               role="dialog"
               aria-modal="true"
               aria-labelledby="save-tpl-title"
@@ -261,13 +264,13 @@ export function SaveAsTemplateDialog({
                   id="save-tpl-title"
                   className="text-base font-semibold text-white"
                 >
-                  حفظ كقالب
+                  {dict.dialogs.saveTemplate.title}
                 </h2>
                 <button
                   type="button"
                   onClick={onCancel}
                   disabled={saving}
-                  aria-label="إغلاق"
+                  aria-label={dict.common.close}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined">close</span>
@@ -281,8 +284,7 @@ export function SaveAsTemplateDialog({
                 {/* One-line context note — replaces the long header
                     description so the header stays compact. */}
                 <p className="mb-4 text-xs text-white/50 leading-relaxed">
-                  سيتم حفظ ألوان وخطوط هذا العرض كقالب جديد. لن يتم
-                  نسخ محتوى الشرائح أو الشعار.
+                  {dict.dialogs.saveTemplate.description}
                 </p>
                 <BrandPreview preview={preview} error={previewError} />
 
@@ -292,15 +294,14 @@ export function SaveAsTemplateDialog({
                     value={isPublic}
                     onChange={setIsPublic}
                     disabled={saving || !preview}
-                    ariaLabel="مشاركة مع المجتمع"
+                    ariaLabel={dict.dialogs.saveTemplate.shareCommunity}
                   />
                   <div className="flex-1 select-none">
                     <div className="text-sm font-medium text-white">
-                      مشاركة مع المجتمع
+                      {dict.dialogs.saveTemplate.shareCommunity}
                     </div>
                     <div className="text-xs text-white/50 mt-0.5 leading-relaxed">
-                      القوالب العامة تظهر في صفحة قوالب المجتمع
-                      ليستخدمها الآخرون. يمكنك تغيير ذلك لاحقاً.
+                      {dict.dialogs.saveTemplate.shareCommunityDesc}
                     </div>
                   </div>
                 </div>
@@ -323,7 +324,7 @@ export function SaveAsTemplateDialog({
                   disabled={saving}
                   className="btn-pill"
                 >
-                  إلغاء
+                  {dict.common.cancel}
                 </button>
                 <button
                   type="button"
@@ -331,7 +332,7 @@ export function SaveAsTemplateDialog({
                   disabled={!canSave}
                   className="btn-pill"
                 >
-                  {saving ? "جاري الحفظ..." : "حفظ القالب"}
+                  {saving ? dict.dialogs.saveTemplate.saving : dict.dialogs.saveTemplate.save}
                 </button>
               </footer>
             </div>
@@ -352,6 +353,7 @@ function BrandPreview({
   preview: PreviewResponse | null;
   error: string | null;
 }) {
+  const dict = useDict();
   if (error) {
     return (
       <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-300">
@@ -395,7 +397,7 @@ function BrandPreview({
               lineHeight: 1.1,
             }}
           >
-            {preview.brand.language === "ar" ? "العنوان الرئيسي" : "Heading"}
+            {preview.brand.language === "ar" ? dict.dialogs.saveTemplate.headingLabel : "Heading"}
           </div>
           <div
             style={{
@@ -406,7 +408,7 @@ function BrandPreview({
             }}
           >
             {preview.brand.fontHeading.name} · {preview.brand.fontBody.name} ·{" "}
-            {preview.brand.language === "ar" ? "عربي" : "English"} · {preview.brand.format}
+            {preview.brand.language === "ar" ? dict.dialogs.saveTemplate.langArabic : "English"} · {preview.brand.format}
           </div>
           <div className="mt-5 flex gap-2">
             {preview.brand.palette.map((hex) => (

@@ -30,7 +30,23 @@
   },
   "common": {
     "pro": "Pro",
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "deleting": "Deleting…",
+    "deletePermanently": "Permanently delete",
+    "edit": "Edit",
+    "rename": "Rename",
+    "previous": "Previous",
+    "next": "Next",
+    "viewAll": "View all",
+    "download": "Download",
+    "premium": "Premium",
+    "default": "Default",
+    "share": "Share",
+    "export": "Export"
   },
   "newProjectDialog": {
     "title": "Start a new project",
@@ -377,6 +393,53 @@
       "mimic": { "title": "Mimic a deck's style", "subtitle": "Attach a reference deck and we'll apply its style to your new content.", "cta": "Create deck", "whatWeMimic": "What we're mimicking", "uploadReference": "Upload the reference deck", "extractNote": "We'll extract colors, fonts, and layout from the reference.", "copyText": "Copy text" },
       "datasheet": { "title": "Create a deck from your data", "subtitle": "Turn an Excel or CSV file into a professional deck with the right charts.", "cta": "Create deck", "data": "Data", "uploadData": "Upload the data file", "dropHint": "XLSX / CSV — up to 25 MB", "table": "Table", "chartType": "Chart type", "columns": "Columns", "line": "Line" }
     }
+  },
+  "dialogs": {
+    "share": {
+      "title": "Share", "invitePeople": "Invite people", "emailPlaceholder": "email@example.com", "enterEmail": "Enter an email", "sending": "Sending…", "invite": "Invite",
+      "peopleWithAccess": "People with access", "you": "You", "awaitingAcceptance": "Awaiting acceptance", "noInvites": "No one's invited yet.", "fullOwnership": "Full ownership", "remove": "Remove",
+      "copyLink": "Copy share link", "copied": "Copied", "publicLinkAria": "Public link", "publicLinkEnabled": "Public link enabled — view only", "publicLinkDisabled": "Public link disabled",
+      "exportPresentation": "Export presentation", "exportFormat": "Export format", "orShareOn": "Or share directly on:",
+      "fmtPdf": "Multi-page PDF file", "fmtPptx": "Editable PPTX file", "fmtHtml": "Standalone HTML file", "fmtPng": "Zipped images folder",
+      "errLoadShare": "Couldn't load share settings", "errLoadProject": "Couldn't load the project", "errSendInvite": "Couldn't send the invitation",
+      "errEnablePublic": "Couldn't enable the public link", "errDisablePublic": "Couldn't disable the public link"
+    },
+    "saveTemplate": {
+      "title": "Save as template", "description": "This deck's colors and fonts will be saved as a new template. Slide content and the logo won't be copied.",
+      "shareCommunity": "Share with the community", "shareCommunityDesc": "Public templates appear on the community templates page for others to use. You can change this later.",
+      "save": "Save template", "saving": "Saving…", "headingLabel": "Heading", "langArabic": "Arabic",
+      "errLoadPreview": "Couldn't load the preview", "errSave": "Couldn't save — try again."
+    },
+    "notifications": {
+      "title": "All notifications", "none": "No notifications", "noneToShow": "No notifications to show", "count": "{count} notifications", "clearAll": "Clear all",
+      "bellTitle": "Notifications", "bellNew": "{count} new", "seeAll": "See all", "delete": "Delete", "collapse": "Collapse", "showFull": "Show full text",
+      "devTestTitle": "Test alert #{counter}", "devTestDesc": "This is a test alert to confirm the toast shows under the bell"
+    },
+    "trashConfirm": { "title": "Move project to trash", "body": "This project will be permanently deleted with all its versions and comments. This can't be undone.", "bodyNamed": "\"{title}\" will be permanently deleted with all its versions and comments. This can't be undone." },
+    "deleteTemplate": { "title": "Delete template", "body": "This template will be permanently deleted along with its slides. This can't be undone." },
+    "renameKit": { "title": "Rename brand kit", "nameLabel": "Brand kit name" },
+    "deleteKit": { "title": "Delete brand kit", "body": "This brand kit will be permanently deleted. Existing decks that used it won't be affected.", "bodyNamed": "\"{name}\" will be permanently deleted. Existing decks that used it won't be affected." },
+    "libraryImage": { "imageFrom": "Image from {title}", "downloadImage": "Download image", "hero": "Hero image", "background": "Background", "accent": "Accent element", "expand": "Expand {role} from {title}", "download": "Download {role} from {title}" }
+  },
+  "menus": {
+    "projectActions": { "aria": "Project options", "addFavorite": "Add to favorites", "removeFavorite": "Remove from favorites", "copyLink": "Copy link", "useAsTemplate": "Use as template", "saveAsTemplate": "Save as template", "sendToTrash": "Move to trash" },
+    "templateActions": { "aria": "Template options", "makePrivate": "Make it private", "makePublic": "Make it public", "useAsTemplate": "Use as template", "delete": "Delete template" },
+    "brandKitActions": { "aria": "Brand kit options", "use": "Use brand kit", "unsetDefault": "Unset as default", "setDefault": "Set as default", "delete": "Delete brand kit" },
+    "accessChip": { "aria": "Access level", "view": "View", "comment": "Comment", "edit": "Edit", "viewOnly": "Can view only", "viewAndComment": "Can view and comment", "editFull": "Can edit fully" }
+  },
+  "components": {
+    "planUsage": { "plan": "{plan} plan", "free": "Free", "plus": "Plus", "pro": "Pro", "usageThisMonth": "Presentation usage this month", "usedPercent": "{percentage}% used", "usageCount": "{count} / {limit} decks", "upgrade": "Upgrade plan", "renewalDate": "Renews: {date}", "noRenewal": "No renewal date" },
+    "search": { "searching": "Searching…", "noResults": "No results for \"{query}\"", "placeholder": "Search your projects…", "resultsAria": "Project search results", "emptyHint": "Start typing to search your projects", "toOpen": "to open", "toClose": "to close" },
+    "pagination": { "aria": "Pagination", "previousPage": "Previous page", "nextPage": "Next page", "pageN": "Page {n}" },
+    "recentProjects": { "title": "Recent projects", "emptyTitle": "No projects yet", "emptyDesc": "Create your first deck and it'll show up here once saved.", "createProject": "Create project" },
+    "myTemplates": { "empty": "No saved templates — save a deck as a template and it'll show up here to start from.", "header": "Start from a template", "subtitle": "What you see is what you get", "viewAll": "View all" },
+    "templateTile": { "preparing": "Preparing template", "labelTemplate": "Template {format}", "premiumSuffix": " · Premium", "options": "Template options", "makePublic": "Make it public", "makePrivate": "Make it private" },
+    "brandKitTile": { "use": "Use {name}", "default": "Default", "options": "Brand kit options", "colors": "Colors", "fonts": "Fonts" },
+    "projectThumbnail": { "open": "Open {title} — {count} slides", "slideOne": "slide", "slideMany": "slides", "creatingPreview": "Creating preview", "preparingTemplate": "Preparing template", "favorite": "Favorite project", "projectName": "Project name", "options": "Project options" },
+    "dashboardWidget": { "viewAll": "View all" },
+    "lightbox": { "title": "Template preview", "slideOf": "Slide {n} of {total}", "slideN": "Slide {n}", "useAsTemplate": "Use as template" },
+    "filterBar": { "projectFilters": "Project filters", "templateFilters": "Template filters", "searchTitles": "Search project titles", "searchPlaceholder": "Search by project name…", "favoritesOnly": "Favorites only", "langArabic": "Arabic", "langEnglish": "English", "ownerMine": "Mine", "ownerCommunity": "Community", "ownerAll": "All", "clearColor": "Clear color filter", "filterColor": "Filter by color {color}" },
+    "favoritesGrid": { "emptyTitle": "No favorite projects yet", "emptyDesc": "Click the star in any project's options menu to add it to this page.", "goToProjects": "Go to projects" }
   },
   "editor": {
     "toolbar": {

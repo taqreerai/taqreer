@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import {
   DashboardEmptyState,
   DashboardWidget,
@@ -40,6 +41,7 @@ export function RecentProjects({
   // the 7th-most-recent project into the empty slot. Without the
   // refresh the grid would stick at 5 tiles until next navigation
   // (the bug user flagged 2026-05-24).
+  const dict = useDict();
   const router = useRouter();
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
 
@@ -93,7 +95,7 @@ export function RecentProjects({
 
   return (
     <DashboardWidget>
-      <DashboardWidgetHeader title="أحدث المشاريع" href="/projects" />
+      <DashboardWidgetHeader title={dict.components.recentProjects.title} href="/projects" />
       <ProjectsGrid
         projects={visible}
         gridClassName="grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3"
@@ -114,9 +116,9 @@ export function RecentProjects({
         emptyState={
           <DashboardEmptyState
             icon="add_circle"
-            title="لا توجد مشاريع بعد"
-            description="ابدأ بإنشاء أول عرض تقديمي وسيظهر هنا فور حفظه."
-            action={{ label: "إنشاء مشروع", href: "/create" }}
+            title={dict.components.recentProjects.emptyTitle}
+            description={dict.components.recentProjects.emptyDesc}
+            action={{ label: dict.components.recentProjects.createProject, href: "/create" }}
           />
         }
       />

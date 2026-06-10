@@ -17,6 +17,7 @@
 //   • Date — subhead under the name.
 
 import { useRef } from "react";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // Inputs from the SSR page. Optional fields tolerate legacy rows /
 // the user-sync race.
@@ -47,6 +48,8 @@ export function BrandKitTile({
   onMenuOpen: (triggerRect: DOMRect) => void;
 }) {
   const dotsRef = useRef<HTMLButtonElement | null>(null);
+  const dict = useDict();
+  const { dir } = useLocale();
 
   const handleDotsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -74,8 +77,8 @@ export function BrandKitTile({
           onUse();
         }
       }}
-      aria-label={`استخدام ${kit.name}`}
-      dir="rtl"
+      aria-label={dict.components.brandKitTile.use.replace("{name}", kit.name)}
+      dir={dir}
       // `rounded-3xl` overrides .surface-card's default radius so the
       // tiles read as visibly rounded (per user direction 2026-05-27).
       // The list page renders the tiles directly — no wrapping
@@ -95,7 +98,7 @@ export function BrandKitTile({
           <div className="flex items-center gap-1.5">
             {kit.isDefault ? (
               <span
-                title="افتراضية"
+                title={dict.common.default}
                 // Material Symbols defaults to outlined; FILL=1 plus
                 // a higher weight gives the canonical filled star.
                 // White (not violet) per user direction 2026-05-27 —
@@ -106,7 +109,7 @@ export function BrandKitTile({
                   fontSize: 14,
                   fontVariationSettings: "'FILL' 1, 'wght' 500",
                 }}
-                aria-label="افتراضية"
+                aria-label={dict.common.default}
               >
                 star
               </span>
@@ -124,7 +127,7 @@ export function BrandKitTile({
           type="button"
           data-brand-kit-menu-trigger={kit.id}
           onClick={handleDotsClick}
-          aria-label="خيارات هوية الشركة"
+          aria-label={dict.components.brandKitTile.options}
           aria-haspopup="menu"
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-white/5 hover:text-white"
         >
@@ -173,7 +176,7 @@ export function BrandKitTile({
       <footer className="flex items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-[10px] uppercase tracking-wider text-muted/70">
-            الألوان
+            {dict.components.brandKitTile.colors}
           </span>
           <div className="flex items-center gap-1.5">
             {kit.colors.length > 0 ? (
@@ -192,7 +195,7 @@ export function BrandKitTile({
         </div>
         <div className="flex min-w-0 flex-col items-end gap-0.5 text-end">
           <span className="text-[10px] uppercase tracking-wider text-muted/70">
-            الخطوط
+            {dict.components.brandKitTile.fonts}
           </span>
           <span
             className="max-w-[140px] truncate text-[12px] font-medium text-white"

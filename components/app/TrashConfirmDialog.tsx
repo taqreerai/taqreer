@@ -15,6 +15,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function TrashConfirmDialog({
   open,
@@ -36,6 +37,8 @@ export function TrashConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   // Esc closes the dialog — but ONLY while not busy. Closing
   // mid-delete would dismiss the spinner without aborting the
   // request, leaving the user without feedback when it lands.
@@ -70,7 +73,7 @@ export function TrashConfirmDialog({
         >
           <motion.div
             key="trash-confirm-card"
-            dir="rtl"
+            dir={dir}
             initial={{ opacity: 0, scale: 0.95, y: -16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -16 }}
@@ -85,15 +88,15 @@ export function TrashConfirmDialog({
               id="trash-confirm-title"
               className="mb-2 text-xl font-bold text-white"
             >
-              نقل المشروع إلى المهملات
+              {dict.dialogs.trashConfirm.title}
             </h3>
             <p
               id="trash-confirm-body"
               className="mb-8 text-sm text-muted"
             >
               {projectTitle
-                ? `سيتم حذف "${projectTitle}" بشكل نهائي مع جميع نسخه وتعليقاته. لا يمكن التراجع عن هذا الإجراء.`
-                : "سيتم حذف هذا المشروع بشكل نهائي مع جميع نسخه وتعليقاته. لا يمكن التراجع عن هذا الإجراء."}
+                ? dict.dialogs.trashConfirm.bodyNamed.replace("{title}", projectTitle)
+                : dict.dialogs.trashConfirm.body}
             </p>
             <div className="flex gap-3">
               <button
@@ -102,7 +105,7 @@ export function TrashConfirmDialog({
                 disabled={busy}
                 className="btn-pill flex-1 px-4 py-3 text-sm"
               >
-                إلغاء
+                {dict.common.cancel}
               </button>
               <button
                 type="button"
@@ -110,7 +113,7 @@ export function TrashConfirmDialog({
                 disabled={busy}
                 className="btn-pill-danger flex-1 px-4 py-3 text-sm"
               >
-                {busy ? "جاري الحذف..." : "حذف نهائياً"}
+                {busy ? dict.common.deleting : dict.common.deletePermanently}
               </button>
             </div>
           </motion.div>

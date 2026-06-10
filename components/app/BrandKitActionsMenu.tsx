@@ -19,6 +19,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 const MENU_WIDTH = 240;
 // Four items + divider + padding ≈ 200 px. Over-estimate is
@@ -58,6 +59,8 @@ export function BrandKitActionsMenu({
   isDefault?: boolean;
   onClose: () => void;
 } & BrandKitActionsMenuActions) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
   // Outside click + Esc. Same recipe as the project + template menus.
@@ -116,9 +119,9 @@ export function BrandKitActionsMenu({
         <motion.div
           key="brand-kit-actions-menu"
           ref={surfaceRef}
-          dir="rtl"
+          dir={dir}
           role="menu"
-          aria-label="خيارات هوية الشركة"
+          aria-label={dict.menus.brandKitActions.aria}
           initial={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
@@ -129,20 +132,22 @@ export function BrandKitActionsMenu({
           <ul className="flex flex-col p-1.5">
             <MenuItem
               icon="auto_awesome"
-              label="استخدام هوية الشركة"
+              label={dict.menus.brandKitActions.use}
               onClick={onUse}
               onClose={onClose}
             />
             <MenuItem
               icon="edit"
-              label="إعادة تسمية"
+              label={dict.common.rename}
               onClick={onRename}
               onClose={onClose}
             />
             <MenuItem
               icon={isDefault ? "star" : "star_outline"}
               label={
-                isDefault ? "إلغاء التعيين كافتراضية" : "تعيين كافتراضية"
+                isDefault
+                  ? dict.menus.brandKitActions.unsetDefault
+                  : dict.menus.brandKitActions.setDefault
               }
               onClick={onSetDefault}
               onClose={onClose}
@@ -150,7 +155,7 @@ export function BrandKitActionsMenu({
             <li aria-hidden className="my-1 h-px bg-white/[0.08]" />
             <MenuItem
               icon="delete"
-              label="حذف هوية الشركة"
+              label={dict.menus.brandKitActions.delete}
               destructive
               onClick={onDelete}
               onClose={onClose}

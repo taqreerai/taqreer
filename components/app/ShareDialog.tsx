@@ -35,6 +35,7 @@ import {
 import { useExportActions } from "@/lib/preview/use-export-actions";
 import { Avatar } from "@/components/common/Avatar";
 import { Toggle } from "@/components/create/controls";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 type ShareRow = {
   id: string;
@@ -101,6 +102,8 @@ export function ShareDialog({
   showExportTab?: boolean;
   onClose: () => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const [tab, setTab] = useState<ShareDialogTab>(initialTab);
   const [state, setState] = useState<ShareState | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -200,7 +203,7 @@ export function ShareDialog({
         );
         if (!res.ok) {
           if (!cancelled) {
-            setFetchError("تعذر تحميل إعدادات المشاركة");
+            setFetchError(dict.dialogs.share.errLoadShare);
           }
           return;
         }
@@ -209,7 +212,7 @@ export function ShareDialog({
         setState(data);
         lastHydratedProjectIdRef.current = projectId;
       } catch {
-        if (!cancelled) setFetchError("تعذر تحميل إعدادات المشاركة");
+        if (!cancelled) setFetchError(dict.dialogs.share.errLoadShare);
       }
     })();
     return () => {
@@ -237,7 +240,7 @@ export function ShareDialog({
             error?: string;
           };
           if (!cancelled) {
-            setManifestError(body.error ?? "تعذر تحميل المشروع");
+            setManifestError(body.error ?? dict.dialogs.share.errLoadProject);
           }
           return;
         }
@@ -249,7 +252,7 @@ export function ShareDialog({
         setFetchedManifest(data.manifest);
         setFetchedFormat(data.format ?? undefined);
       } catch {
-        if (!cancelled) setManifestError("تعذر تحميل المشروع");
+        if (!cancelled) setManifestError(dict.dialogs.share.errLoadProject);
       }
     })();
     return () => {
@@ -315,7 +318,7 @@ export function ShareDialog({
     setInviteError(null);
     const email = inviteEmail.trim();
     if (!email) {
-      setInviteError("أدخل البريد الإلكتروني");
+      setInviteError(dict.dialogs.share.enterEmail);
       return;
     }
     setInviteBusy(true);
@@ -335,7 +338,7 @@ export function ShareDialog({
         error?: string;
       };
       if (!res.ok || !body.ok) {
-        setInviteError(body.error ?? "تعذر إرسال الدعوة");
+        setInviteError(body.error ?? dict.dialogs.share.errSendInvite);
         return;
       }
       // Refetch the canonical list so the new row appears (with the
@@ -351,7 +354,7 @@ export function ShareDialog({
       setInviteEmail("");
       setInviteRole("view");
     } catch {
-      setInviteError("تعذر إرسال الدعوة");
+      setInviteError(dict.dialogs.share.errSendInvite);
     } finally {
       setInviteBusy(false);
     }
@@ -446,16 +449,16 @@ export function ShareDialog({
           setState((s) => (s ? { ...s, publicAccessLevel: prev } : s));
           setFetchError(
             enabled
-              ? "تعذر تفعيل الرابط العام"
-              : "تعذر إيقاف الرابط العام",
+              ? dict.dialogs.share.errEnablePublic
+              : dict.dialogs.share.errDisablePublic,
           );
         }
       } catch {
         setState((s) => (s ? { ...s, publicAccessLevel: prev } : s));
         setFetchError(
           enabled
-            ? "تعذر تفعيل الرابط العام"
-            : "تعذر إيقاف الرابط العام",
+            ? dict.dialogs.share.errEnablePublic
+            : dict.dialogs.share.errDisablePublic,
         );
       }
     },
@@ -486,7 +489,7 @@ export function ShareDialog({
           },
         );
         if (!res.ok) {
-          setFetchError("تعذر تفعيل الرابط العام");
+          setFetchError(dict.dialogs.share.errEnablePublic);
           return;
         }
         // Mirror the lock in local state so subsequent copies skip
@@ -495,7 +498,7 @@ export function ShareDialog({
           s ? { ...s, publicAccessLevel: "view" } : s,
         );
       } catch {
-        setFetchError("تعذر تفعيل الرابط العام");
+        setFetchError(dict.dialogs.share.errEnablePublic);
         return;
       }
     }
@@ -546,7 +549,7 @@ export function ShareDialog({
                 below). Panel naturally reflows via flex-col when its
                 body child resizes. */}
             <div
-              dir="rtl"
+              dir={dir}
               role="dialog"
               aria-modal="true"
               aria-labelledby="share-title"
@@ -560,7 +563,10 @@ export function ShareDialog({
                   className="text-base font-semibold text-white truncate"
                   title={projectTitle}
                 >
-                  {tab === "share" || !showExportTab ? "مشاركة" : "تصدير"} ·{" "}
+                  {tab === "share" || !showExportTab
+                    ? dict.dialogs.share.title
+                    : dict.common.export}{" "}
+                  ·{" "}
                   <span className="text-white/60 font-normal">
                     {projectTitle}
                   </span>
@@ -569,7 +575,7 @@ export function ShareDialog({
                   type="button"
                   onClick={onClose}
                   disabled={anyBusy}
-                  aria-label="إغلاق"
+                  aria-label={dict.common.close}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined">close</span>
@@ -606,13 +612,13 @@ export function ShareDialog({
                 {showExportTab ? (
                   <div className="flex shrink-0 flex-col gap-2 border-e border-white/[0.08] px-3 py-5">
                     <TabPill
-                      label="مشاركة"
+                      label={dict.dialogs.share.title}
                       icon="person_add"
                       active={tab === "share"}
                       onClick={() => setTab("share")}
                     />
                     <TabPill
-                      label="تصدير"
+                      label={dict.common.export}
                       icon="download"
                       active={tab === "export"}
                       onClick={() => setTab("export")}
@@ -734,16 +740,18 @@ export function ShareDialog({
                       {copied ? "check" : "link"}
                     </motion.span>
                   </AnimatePresence>
-                  {copied ? "تم النسخ" : "نسخ رابط المشاركة"}
+                  {copied
+                    ? dict.dialogs.share.copied
+                    : dict.dialogs.share.copyLink}
                 </button>
                 <div className="inline-flex items-center gap-2">
                   <span className="text-xs text-white/60">
                     {state?.publicAccessLevel === "view"
-                      ? "الرابط العام مفعّل — للمشاهدة فقط"
-                      : "الرابط العام غير مفعّل"}
+                      ? dict.dialogs.share.publicLinkEnabled
+                      : dict.dialogs.share.publicLinkDisabled}
                   </span>
                   <Toggle
-                    ariaLabel="الرابط العام"
+                    ariaLabel={dict.dialogs.share.publicLinkAria}
                     value={state?.publicAccessLevel === "view"}
                     onChange={(next) => void setPublicLinkEnabled(next)}
                     disabled={!projectId || !state}
@@ -840,10 +848,13 @@ function ShareTabContent({
   revokingId: string | null;
   updatingRoleId: string | null;
 }) {
+  const dict = useDict();
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="mb-2 text-sm font-medium text-white">دعوة أشخاص</h3>
+        <h3 className="mb-2 text-sm font-medium text-white">
+          {dict.dialogs.share.invitePeople}
+        </h3>
 
         {fetchError ? (
           <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -879,7 +890,7 @@ function ShareTabContent({
               type="email"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="email@example.com"
+              placeholder={dict.dialogs.share.emailPlaceholder}
               dir="ltr"
               disabled={inviteBusy || !state}
               className="flex-1 bg-transparent px-4 text-end text-sm text-white placeholder:text-white/35 focus:outline-none disabled:opacity-50"
@@ -894,7 +905,9 @@ function ShareTabContent({
               disabled={inviteBusy || !state || !inviteEmail.trim()}
               className="btn-gradient inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {inviteBusy ? "جارٍ..." : "دعوة"}
+              {inviteBusy
+                ? dict.dialogs.share.sending
+                : dict.dialogs.share.invite}
             </button>
           </div>
           {inviteError ? (
@@ -905,7 +918,7 @@ function ShareTabContent({
 
       <div>
         <h3 className="mb-2 text-sm font-medium text-white">
-          الأشخاص الذين لديهم وصول
+          {dict.dialogs.share.peopleWithAccess}
         </h3>
 
         <ul className="space-y-1.5">
@@ -913,7 +926,7 @@ function ShareTabContent({
           {state?.user ? (
             <PersonRow
               role="owner"
-              displayName={state.user.name ?? "أنت"}
+              displayName={state.user.name ?? dict.dialogs.share.you}
               email={state.user.email}
               avatarName={state.user.name ?? state.user.email}
               avatarImage={state.user.image}
@@ -939,7 +952,11 @@ function ShareTabContent({
                      — no separate accepted state, the name/email
                      swap IS the signal). */
                   displayName={row.user?.name ?? row.user?.email ?? row.email}
-                  email={row.user ? row.user.email : "بانتظار القبول"}
+                  email={
+                    row.user
+                      ? row.user.email
+                      : dict.dialogs.share.awaitingAcceptance
+                  }
                   // Avatar seed prefers the joined user id (stable
                   // across re-invites of the same person); falls back
                   // to the share row id for pending invites so each
@@ -959,7 +976,7 @@ function ShareTabContent({
 
           {state && state.shares.length === 0 ? (
             <li className="text-xs text-white/40 pe-1 pt-1">
-              لا يوجد أشخاص مدعوّون بعد.
+              {dict.dialogs.share.noInvites}
             </li>
           ) : null}
         </ul>
@@ -995,6 +1012,7 @@ function PersonRow({
   onRevoke?: () => void;
   busy?: boolean;
 }) {
+  const dict = useDict();
   // Under `dir="rtl"` the FIRST flex child lands on the visual RIGHT.
   // Per direction 2026-05-24 — avatar on the visual RIGHT (start),
   // then name+email, access chip, revoke X going LEFT. DOM order:
@@ -1027,7 +1045,7 @@ function PersonRow({
           email (text-end under auto-LTR = right) and the Arabic
           status string (text-end under RTL = left) to disagree —
           the visual right edge was the spec, so pin it physically. */}
-      <div className="min-w-0 flex-1 text-right">
+      <div className="min-w-0 flex-1 text-end">
         <div className="truncate text-sm text-white">{displayName}</div>
         <div className="truncate text-[11px] text-white/40">{email}</div>
       </div>
@@ -1036,7 +1054,7 @@ function PersonRow({
           value="edit"
           onChange={() => {}}
           readOnly
-          triggerLabel="ملكية كاملة"
+          triggerLabel={dict.dialogs.share.fullOwnership}
         />
       ) : (
         <AccessChipDropdown
@@ -1050,7 +1068,7 @@ function PersonRow({
           type="button"
           onClick={onRevoke}
           disabled={busy}
-          aria-label="إزالة"
+          aria-label={dict.dialogs.share.remove}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
         >
           <span
@@ -1080,6 +1098,7 @@ function ExportTabContent({
   formatFallback: SlideFormat | undefined;
   loadError: string | null;
 }) {
+  const dict = useDict();
   // Manifest is required for the client-side PPTX + HTML pipelines.
   // It's either passed in directly (editor) or lazy-fetched via
   // /api/projects/[id]/manifest (project tile). Errors render as
@@ -1088,7 +1107,9 @@ function ExportTabContent({
   if (loadError) {
     return (
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-white">تصدير العرض</h3>
+        <h3 className="text-sm font-medium text-white">
+          {dict.dialogs.share.exportPresentation}
+        </h3>
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {loadError}
         </div>
@@ -1109,12 +1130,15 @@ function ExportTabContent({
 }
 
 function ExportTabSkeleton() {
+  const dict = useDict();
   // Mirrors the loaded layout (heading + 4 rows + LinkedIn) so the
   // body wrapper's measured height doesn't lurch when the manifest
   // fetch lands.
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-medium text-white">صيغة التصدير</h3>
+      <h3 className="text-sm font-medium text-white">
+        {dict.dialogs.share.exportFormat}
+      </h3>
       <ul className="space-y-2">
         {[0, 1, 2, 3].map((i) => (
           <li
@@ -1131,7 +1155,7 @@ function ExportTabSkeleton() {
         ))}
       </ul>
       <div className="space-y-2 pt-2">
-        <p className="text-xs text-white/50">أو شارك مباشرة على:</p>
+        <p className="text-xs text-white/50">{dict.dialogs.share.orShareOn}</p>
         <div className="h-8 w-24 animate-pulse rounded-full bg-white/[0.05]" />
       </div>
     </div>
@@ -1149,6 +1173,7 @@ function ExportTabBody({
   manifest: SlideManifest;
   formatFallback: SlideFormat | undefined;
 }) {
+  const dict = useDict();
   const actions = useExportActions({
     projectId,
     projectTitle,
@@ -1157,7 +1182,9 @@ function ExportTabBody({
   });
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-medium text-white">صيغة التصدير</h3>
+      <h3 className="text-sm font-medium text-white">
+        {dict.dialogs.share.exportFormat}
+      </h3>
       <ul className="space-y-2">
         {/* Format accents come from `--tq-export-*` tokens in
             globals.css so future palette tweaks propagate without
@@ -1166,7 +1193,7 @@ function ExportTabBody({
           icon="picture_as_pdf"
           accent="var(--tq-export-pdf)"
           label="PDF"
-          sub="ملف PDF متعدد الصفحات"
+          sub={dict.dialogs.share.fmtPdf}
           running={actions.states.pdf.status === "running"}
           disabled={actions.busy && actions.states.pdf.status !== "running"}
           onClick={actions.runPdf}
@@ -1175,7 +1202,7 @@ function ExportTabBody({
           icon="slideshow"
           accent="var(--tq-export-pptx)"
           label="PowerPoint"
-          sub="ملف PPTX قابل للتحرير"
+          sub={dict.dialogs.share.fmtPptx}
           running={actions.states.pptx.status === "running"}
           disabled={actions.busy && actions.states.pptx.status !== "running"}
           onClick={actions.runPptx}
@@ -1184,7 +1211,7 @@ function ExportTabBody({
           icon="code"
           accent="var(--tq-export-html)"
           label="HTML"
-          sub="ملف HTML مستقل"
+          sub={dict.dialogs.share.fmtHtml}
           running={actions.states.html.status === "running"}
           disabled={actions.busy && actions.states.html.status !== "running"}
           onClick={actions.runHtml}
@@ -1193,7 +1220,7 @@ function ExportTabBody({
           icon="image"
           accent="var(--tq-export-png)"
           label="PNGs"
-          sub="مجلد صور مضغوط"
+          sub={dict.dialogs.share.fmtPng}
           running={actions.states.png.status === "running"}
           disabled={actions.busy && actions.states.png.status !== "running"}
           onClick={actions.runPng}
@@ -1207,7 +1234,7 @@ function ExportTabBody({
       ) : null}
 
       <div className="space-y-2 pt-2">
-        <p className="text-xs text-white/50">أو شارك مباشرة على:</p>
+        <p className="text-xs text-white/50">{dict.dialogs.share.orShareOn}</p>
         <LinkedInShareButton projectId={projectId} />
       </div>
     </div>

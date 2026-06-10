@@ -8,6 +8,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function BrandKitDeleteConfirmDialog({
   open,
@@ -22,6 +23,8 @@ export function BrandKitDeleteConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -54,7 +57,7 @@ export function BrandKitDeleteConfirmDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-start justify-center p-4"
           >
             <motion.div
-              dir="rtl"
+              dir={dir}
               role="alertdialog"
               aria-modal="true"
               aria-labelledby="brand-kit-delete-title"
@@ -70,15 +73,15 @@ export function BrandKitDeleteConfirmDialog({
                 id="brand-kit-delete-title"
                 className="mb-2 text-xl font-bold text-white"
               >
-                حذف هوية الشركة
+                {dict.dialogs.deleteKit.title}
               </h3>
               <p
                 id="brand-kit-delete-body"
                 className="mb-8 text-sm text-muted"
               >
                 {brandKitName
-                  ? `سيتم حذف "${brandKitName}" بشكل نهائي. لن تتأثر العروض الموجودة التي استخدمت هذه الهوية.`
-                  : "سيتم حذف هذه الهوية بشكل نهائي. لن تتأثر العروض الموجودة التي استخدمتها."}
+                  ? dict.dialogs.deleteKit.bodyNamed.replace("{name}", brandKitName)
+                  : dict.dialogs.deleteKit.body}
               </p>
               <div className="flex gap-3">
                 <button
@@ -87,7 +90,7 @@ export function BrandKitDeleteConfirmDialog({
                   disabled={busy}
                   className="btn-pill flex-1 px-4 py-3 text-sm"
                 >
-                  إلغاء
+                  {dict.common.cancel}
                 </button>
                 <button
                   type="button"
@@ -95,7 +98,7 @@ export function BrandKitDeleteConfirmDialog({
                   disabled={busy}
                   className="btn-pill-danger flex-1 px-4 py-3 text-sm"
                 >
-                  {busy ? "جاري الحذف..." : "حذف نهائياً"}
+                  {busy ? dict.common.deleting : dict.common.deletePermanently}
                 </button>
               </div>
             </motion.div>

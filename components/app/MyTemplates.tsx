@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import {
   TemplateTile,
   type TemplateTileData,
@@ -46,6 +47,8 @@ export function MyTemplates({
   templates: MyTemplatesTemplate[];
   embedded?: boolean;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   // null = lightbox closed; a template object = open at that template.
   const [preview, setPreview] = useState<MyTemplatesTemplate | null>(null);
   // Gate the "Use this template" CTA so a double-click can't fire
@@ -99,7 +102,7 @@ export function MyTemplates({
     <>
       {templates.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted">
-          لا توجد قوالب محفوظة — عند حفظ عرض كقالب سيظهر هنا لتبدأ منه.
+          {dict.components.myTemplates.empty}
         </p>
       ) : (
         <ul className="grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
@@ -133,18 +136,18 @@ export function MyTemplates({
 
   // Embedded (inside HomeLibrary's toggle): grid + lightbox only.
   if (embedded) {
-    return <div dir="rtl">{body}</div>;
+    return <div dir={dir}>{body}</div>;
   }
 
   return (
-    <div className="surface-card rounded-2xl p-5 sm:p-6" dir="rtl">
+    <div className="surface-card rounded-2xl p-5 sm:p-6" dir={dir}>
       <header className="mb-5 flex items-start justify-between">
         <div>
-          <h2 className="tq-widget-title">ابدأ من قالب</h2>
-          <p className="mt-1 text-xs text-muted">ما تراه هو ما تحصل عليه</p>
+          <h2 className="tq-widget-title">{dict.components.myTemplates.header}</h2>
+          <p className="mt-1 text-xs text-muted">{dict.components.myTemplates.subtitle}</p>
         </div>
         <Link href="/templates" className="tq-widget-link no-underline">
-          عرض الكل
+          {dict.components.myTemplates.viewAll}
         </Link>
       </header>
       {body}

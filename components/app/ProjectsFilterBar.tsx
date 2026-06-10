@@ -17,6 +17,7 @@
 // `group` ARIA on the wrapper.
 
 import { useId } from "react";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // Null = no filter active on this dimension. Single non-null value
 // = filter to that one option (no multi-select; the chips are
@@ -63,15 +64,17 @@ export function ProjectsFilterBar({
   onColorChange,
 }: Props) {
   const searchId = useId();
+  const dict = useDict();
+  const { dir } = useLocale();
 
   return (
     <section
-      aria-label="فلاتر المشاريع"
+      aria-label={dict.components.filterBar.projectFilters}
       // `flex-wrap` so narrow viewports drop swatches / extra chips
       // to a second line. `dir="rtl"` makes the start side (right)
       // hold the search, end side (left) hold whatever has `ms-auto`.
       className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3"
-      dir="rtl"
+      dir={dir}
     >
       {/* Search — start side (right in RTL). `flex-1 min-w-[200px]
           max-w-xs` lets it stretch toward the centre but caps so the
@@ -84,14 +87,14 @@ export function ProjectsFilterBar({
           search
         </span>
         <label htmlFor={searchId} className="sr-only">
-          بحث في عناوين المشاريع
+          {dict.components.filterBar.searchTitles}
         </label>
         <input
           id={searchId}
           type="search"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="ابحث باسم المشروع…"
+          placeholder={dict.components.filterBar.searchPlaceholder}
           className="input-search w-full rounded-full px-4 py-2 pe-10 text-sm"
         />
       </div>
@@ -121,8 +124,11 @@ export function ProjectsFilterBar({
 
         {(
           [
-            { value: "ar" as const, label: "العربية" },
-            { value: "en" as const, label: "الإنجليزية" },
+            { value: "ar" as const, label: dict.components.filterBar.langArabic },
+            {
+              value: "en" as const,
+              label: dict.components.filterBar.langEnglish,
+            },
           ]
         ).map((opt) => {
           const active = language === opt.value;
@@ -158,7 +164,7 @@ export function ProjectsFilterBar({
           >
             star
           </span>
-          المفضلة فقط
+          {dict.components.filterBar.favoritesOnly}
         </button>
       </div>
 
@@ -187,7 +193,12 @@ export function ProjectsFilterBar({
                 style={{ backgroundColor: hex }}
               >
                 <span className="sr-only">
-                  {selected ? "إلغاء تصفية اللون" : `تصفية باللون ${hex}`}
+                  {selected
+                    ? dict.components.filterBar.clearColor
+                    : dict.components.filterBar.filterColor.replace(
+                        "{color}",
+                        hex,
+                      )}
                 </span>
               </button>
             );

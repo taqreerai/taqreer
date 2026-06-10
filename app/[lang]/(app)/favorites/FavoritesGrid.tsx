@@ -22,6 +22,7 @@ import {
 } from "@/components/app/ProjectsGrid";
 import { Pagination } from "@/components/app/Pagination";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 const PAGE_SIZE = 15;
 
@@ -30,6 +31,7 @@ export function FavoritesGrid({
 }: {
   projects: ProjectsGridProject[];
 }) {
+  const dict = useDict();
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [unfavoritedIds, setUnfavoritedIds] = useState<Set<string>>(
     () => new Set(),
@@ -90,16 +92,16 @@ export function FavoritesGrid({
               star
             </span>
             <h3 className="mb-2 text-base font-semibold text-white">
-              لا توجد مشاريع مفضلة بعد
+              {dict.components.favoritesGrid.emptyTitle}
             </h3>
             <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
-              اضغط على النجمة من قائمة خيارات أي مشروع لإضافته إلى هذه الصفحة.
+              {dict.components.favoritesGrid.emptyDesc}
             </p>
             <Link
               className="btn-gradient inline-block px-4 py-1.5 text-xs no-underline"
               href="/dashboard"
             >
-              اذهب إلى المشاريع
+              {dict.components.favoritesGrid.goToProjects}
             </Link>
           </div>
         }

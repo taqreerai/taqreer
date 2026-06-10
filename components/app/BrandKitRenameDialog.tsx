@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function BrandKitRenameDialog({
   open,
@@ -23,6 +24,8 @@ export function BrandKitRenameDialog({
   onCancel: () => void;
   onSave: (name: string) => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const [value, setValue] = useState(currentName);
   const [prevOpen, setPrevOpen] = useState(open);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -78,7 +81,7 @@ export function BrandKitRenameDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-start justify-center p-4"
           >
             <motion.form
-              dir="rtl"
+              dir={dir}
               role="dialog"
               aria-modal="true"
               aria-labelledby="brand-kit-rename-title"
@@ -97,7 +100,7 @@ export function BrandKitRenameDialog({
                 id="brand-kit-rename-title"
                 className="mb-4 text-xl font-bold text-white"
               >
-                إعادة تسمية الهوية
+                {dict.dialogs.renameKit.title}
               </h3>
               <input
                 ref={inputRef}
@@ -106,8 +109,8 @@ export function BrandKitRenameDialog({
                 onChange={(e) => setValue(e.target.value)}
                 maxLength={120}
                 disabled={busy}
-                placeholder="اسم الهوية"
-                aria-label="اسم الهوية"
+                placeholder={dict.dialogs.renameKit.nameLabel}
+                aria-label={dict.dialogs.renameKit.nameLabel}
                 className="input-dark mb-8 w-full"
                 style={{ height: 44, padding: "0 16px" }}
               />
@@ -118,14 +121,14 @@ export function BrandKitRenameDialog({
                   disabled={busy}
                   className="btn-pill flex-1 px-4 py-3 text-sm"
                 >
-                  إلغاء
+                  {dict.common.cancel}
                 </button>
                 <button
                   type="submit"
                   disabled={!canSave}
                   className="btn-gradient flex-1 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {busy ? "جاري الحفظ..." : "حفظ"}
+                  {busy ? dict.common.saving : dict.common.save}
                 </button>
               </div>
             </motion.form>

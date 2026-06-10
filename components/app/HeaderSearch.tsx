@@ -32,6 +32,7 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 const DEBOUNCE_MS = 250;
 const MAX_RESULTS = 4;
@@ -74,6 +75,8 @@ function PanelBody({
   setActiveIndex,
   navigateTo,
 }: PanelBodyProps) {
+  const dict = useDict();
+  const { dir } = useLocale();
   if (loading && results.length === 0) {
     return (
       <div className="flex items-center justify-center gap-2 px-4 py-6 text-xs text-muted">
@@ -84,7 +87,7 @@ function PanelBody({
         >
           progress_activity
         </span>
-        جارٍ البحث...
+        {dict.components.search.searching}
       </div>
     );
   }
@@ -92,13 +95,13 @@ function PanelBody({
   if (results.length === 0) {
     return (
       <div className="px-4 py-6 text-center text-xs text-muted">
-        لا توجد نتائج لـ &ldquo;{trimmed}&rdquo;
+        {dict.components.search.noResults.replace("{query}", trimmed)}
       </div>
     );
   }
 
   return (
-    <ul className="flex flex-col p-1.5" dir="rtl">
+    <ul className="flex flex-col p-1.5" dir={dir}>
       {results.map((project, index) => (
         <ResultRow
           key={project.id}
@@ -149,7 +152,7 @@ function ResultRow({
           e.preventDefault();
           onSelect(project);
         }}
-        className={`flex w-full items-center gap-3 rounded-xl p-2 text-right transition-colors ${
+        className={`flex w-full items-center gap-3 rounded-xl p-2 text-end transition-colors ${
           isActive ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
         }`}
       >
@@ -203,6 +206,7 @@ export function HeaderSearch({
   autoFocus?: boolean;
   variant?: "input" | "palette";
 } = {}) {
+  const dict = useDict();
   const router = useRouter();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -385,7 +389,7 @@ export function HeaderSearch({
           <input
             ref={inputRef}
             className="min-w-0 flex-1 bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-muted"
-            placeholder="ابحث في مشاريعك..."
+            placeholder={dict.components.search.placeholder}
             type="text"
             value={query}
             onChange={(e) => {
@@ -410,7 +414,7 @@ export function HeaderSearch({
           className="max-h-[52vh] overflow-y-auto hide-scrollbar"
           id={listboxId}
           role="listbox"
-          aria-label="نتائج البحث في المشاريع"
+          aria-label={dict.components.search.resultsAria}
         >
           {hasQuery ? (
             <PanelBody
@@ -424,7 +428,7 @@ export function HeaderSearch({
             />
           ) : (
             <p className="px-4 py-8 text-center text-xs text-muted">
-              ابدأ بالكتابة للبحث في مشاريعك
+              {dict.components.search.emptyHint}
             </p>
           )}
         </div>
@@ -433,11 +437,11 @@ export function HeaderSearch({
           <kbd className="rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
             ↵
           </kbd>
-          <span>للفتح</span>
+          <span>{dict.components.search.toOpen}</span>
           <kbd className="ms-3 rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
             esc
           </kbd>
-          <span>للإغلاق</span>
+          <span>{dict.components.search.toClose}</span>
         </div>
       </div>
     );
@@ -451,7 +455,7 @@ export function HeaderSearch({
       <input
         ref={inputRef}
         className="input-search pr-10"
-        placeholder="ابحث في مشاريعك..."
+        placeholder={dict.components.search.placeholder}
         type="text"
         value={query}
         onChange={(e) => {
@@ -494,7 +498,7 @@ export function HeaderSearch({
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                   role="listbox"
                   id={listboxId}
-                  aria-label="نتائج البحث في المشاريع"
+                  aria-label={dict.components.search.resultsAria}
                 >
                   <PanelBody
                     loading={loading}

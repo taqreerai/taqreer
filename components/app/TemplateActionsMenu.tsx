@@ -23,6 +23,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 const MENU_WIDTH = 240;
 // Conservative — 3 items × ~38 px + a divider + 12 px padding ≈ 150 px.
@@ -63,6 +64,8 @@ export function TemplateActionsMenu({
   isPublic: boolean;
   onClose: () => void;
 } & TemplateActionsMenuActions) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
   // Outside click + Esc. Mirrors ProjectActionsMenu — clicking THIS
@@ -131,9 +134,9 @@ export function TemplateActionsMenu({
         <motion.div
           key="template-actions-menu"
           ref={surfaceRef}
-          dir="rtl"
+          dir={dir}
           role="menu"
-          aria-label="خيارات القالب"
+          aria-label={dict.menus.templateActions.aria}
           initial={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
@@ -144,7 +147,11 @@ export function TemplateActionsMenu({
           <ul className="flex flex-col p-1.5">
             <MenuItem
               icon={isPublic ? "lock" : "public"}
-              label={isPublic ? "اجعله خاصاً" : "اجعله عاماً"}
+              label={
+                isPublic
+                  ? dict.menus.templateActions.makePrivate
+                  : dict.menus.templateActions.makePublic
+              }
               onClick={onToggleVisibility}
               closeAfter
               onClose={onClose}
@@ -155,7 +162,7 @@ export function TemplateActionsMenu({
                 menu's vertical rhythm is stable. */}
             <MenuItem
               icon="dashboard_customize"
-              label="استخدامه كقالب"
+              label={dict.menus.templateActions.useAsTemplate}
               onClick={onUseAsTemplate}
               disabled={!onUseAsTemplate}
               closeAfter
@@ -164,7 +171,7 @@ export function TemplateActionsMenu({
             <li aria-hidden className="my-1 h-px bg-white/[0.08]" />
             <MenuItem
               icon="delete"
-              label="حذف القالب"
+              label={dict.menus.templateActions.delete}
               destructive
               onClick={onDelete}
               closeAfter

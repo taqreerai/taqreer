@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // One image tile in the /library grid.
 //
@@ -26,12 +27,6 @@ export type LibraryImage = {
   projectId: string;
   projectTitle: string;
   createdAt: string; // ISO
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  hero: "صورة رئيسية",
-  bg: "خلفية",
-  accent: "عنصر",
 };
 
 // Resized-thumbnail URL via Supabase's image-transform endpoint. A generated
@@ -66,7 +61,14 @@ export function LibraryImageCard({
   image: LibraryImage;
   onOpen: (image: LibraryImage) => void;
 }) {
-  const roleLabel = ROLE_LABEL[image.role] ?? image.role;
+  const dict = useDict();
+  const { dir } = useLocale();
+  const roleLabels: Record<string, string> = {
+    hero: dict.dialogs.libraryImage.hero,
+    bg: dict.dialogs.libraryImage.background,
+    accent: dict.dialogs.libraryImage.accent,
+  };
+  const roleLabel = roleLabels[image.role] ?? image.role;
   // Load escalation for a transient drop. Attempt 0: resized thumbnail.
   // Attempt 1: same thumbnail with a cache-busting param (the transform
   // endpoint ignores unknown params and re-serves). Attempt 2: the full
@@ -89,7 +91,9 @@ export function LibraryImageCard({
       <button
         type="button"
         onClick={() => onOpen(image)}
-        aria-label={`توسيع ${roleLabel} من ${image.projectTitle}`}
+        aria-label={dict.dialogs.libraryImage.expand
+          .replace("{role}", roleLabel)
+          .replace("{title}", image.projectTitle)}
         className="absolute inset-0 block h-full w-full"
       >
         {/* Native <img> — Supabase storage URLs aren't in next
@@ -149,7 +153,9 @@ export function LibraryImageCard({
           <a
             href={`/api/library/images/${image.id}`}
             download
-            aria-label={`تحميل ${roleLabel} من ${image.projectTitle}`}
+            aria-label={dict.dialogs.libraryImage.download
+              .replace("{role}", roleLabel)
+              .replace("{title}", image.projectTitle)}
             className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--tq-bg-dim)] text-white transition-colors hover:text-white"
           >
             <span className="material-symbols-outlined text-[18px]">
@@ -158,7 +164,7 @@ export function LibraryImageCard({
           </a>
         </div>
         <p
-          dir="rtl"
+          dir={dir}
           className="min-w-0 truncate text-[11px] font-semibold text-white"
         >
           {image.projectTitle}

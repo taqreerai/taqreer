@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LibraryImage } from "@/components/app/LibraryImageCard";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function LibraryImageModal({
   open,
@@ -30,6 +31,8 @@ export function LibraryImageModal({
   initialIndex: number;
   onClose: () => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const total = images.length;
   const [index, setIndex] = useState(initialIndex);
 
@@ -100,10 +103,10 @@ export function LibraryImageModal({
             className="pointer-events-none fixed inset-0 z-[2001] flex items-center justify-center p-4"
           >
             <div
-              dir="rtl"
+              dir={dir}
               role="dialog"
               aria-modal="true"
-              aria-label={`صورة من ${image.projectTitle}`}
+              aria-label={dict.dialogs.libraryImage.imageFrom.replace("{title}", image.projectTitle)}
               onClick={(e) => e.stopPropagation()}
               className="surface-modal pointer-events-auto flex max-h-[90vh] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl"
             >
@@ -120,7 +123,7 @@ export function LibraryImageModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    aria-label="إغلاق"
+                    aria-label={dict.common.close}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
                   >
                     <span className="material-symbols-outlined">close</span>
@@ -135,7 +138,7 @@ export function LibraryImageModal({
                   side="right"
                   enabled={canPrev}
                   onClick={goPrev}
-                  ariaLabel="السابق"
+                  ariaLabel={dict.common.previous}
                 />
                 <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -150,7 +153,7 @@ export function LibraryImageModal({
                   side="left"
                   enabled={canNext}
                   onClick={goNext}
-                  ariaLabel="التالي"
+                  ariaLabel={dict.common.next}
                 />
               </div>
 
@@ -167,7 +170,7 @@ export function LibraryImageModal({
                   >
                     download
                   </span>
-                  تحميل الصورة
+                  {dict.dialogs.libraryImage.downloadImage}
                 </a>
               </footer>
             </div>

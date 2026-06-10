@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { NotificationRow } from "@/components/app/BellDropdown";
 import {
   notificationStore,
@@ -24,6 +25,8 @@ export function AllNotificationsModal({
   onClose: () => void;
   items: Notification[];
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const router = useRouter();
   // The bell already calls setUser → store is hydrated. This modal just
   // reads the same snapshot via the `items` prop.
@@ -160,10 +163,10 @@ export function AllNotificationsModal({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
           <div
-            dir="rtl"
+            dir={dir}
             role="dialog"
             aria-modal="true"
-            aria-label="جميع الإشعارات"
+            aria-label={dict.dialogs.notifications.title}
             onClick={(e) => e.stopPropagation()}
             className={`surface-modal pointer-events-auto flex w-[min(100vw-24px,560px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl ${
               clearPhase === "collapsing" ? "panel-closing" : ""
@@ -171,17 +174,20 @@ export function AllNotificationsModal({
           >
             <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
               <div>
-                <h2 className="text-base font-semibold text-white">جميع الإشعارات</h2>
+                <h2 className="text-base font-semibold text-white">{dict.dialogs.notifications.title}</h2>
                 <p className="text-xs text-white/50">
                   {items.length === 0
-                    ? "لا توجد إشعارات"
-                    : `${items.length} إشعار`}
+                    ? dict.dialogs.notifications.none
+                    : dict.dialogs.notifications.count.replace(
+                        "{count}",
+                        String(items.length),
+                      )}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="إغلاق"
+                aria-label={dict.common.close}
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
               >
                 <span className="material-symbols-outlined">close</span>
@@ -194,7 +200,7 @@ export function AllNotificationsModal({
                   <span className="material-symbols-outlined mb-3 block text-[48px] text-white/30">
                     inbox
                   </span>
-                  <p className="text-sm text-white/50">لا توجد إشعارات لعرضها</p>
+                  <p className="text-sm text-white/50">{dict.dialogs.notifications.noneToShow}</p>
                 </div>
               ) : (
                 // AnimatePresence + layout per row: deleting any item
@@ -208,7 +214,7 @@ export function AllNotificationsModal({
                       layout
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, x: -24 }}
+                      exit={{ opacity: 0, x: dir === "rtl" ? 24 : -24 }}
                       transition={{
                         opacity: { duration: 0.18 },
                         x: { duration: 0.18 },
@@ -235,7 +241,7 @@ export function AllNotificationsModal({
                   disabled={clearPhase !== "idle"}
                   className="btn-pill"
                 >
-                  مسح الكل
+                  {dict.dialogs.notifications.clearAll}
                 </button>
               </footer>
             ) : null}

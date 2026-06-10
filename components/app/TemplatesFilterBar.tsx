@@ -13,6 +13,8 @@
 // Refactoring to a generic <FilterBar chips={...}> is a v2 move once
 // we have a third filter-bar consumer to triangulate the API against.
 
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+
 export type FormatFilter = "16:9" | "9:16" | null;
 export type LanguageFilter = "ar" | "en" | null;
 // Default = "own". The user lands on the templates page looking for
@@ -58,21 +60,27 @@ export function TemplatesFilterBar({
   ownCount,
   communityCount,
 }: Props) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const ownerOptions: ReadonlyArray<{
     value: OwnerFilter;
     label: string;
     count?: number;
   }> = [
-    { value: "own", label: "خاصة", count: ownCount },
-    { value: "community", label: "المجتمع", count: communityCount },
-    { value: "all", label: "الكل" },
+    { value: "own", label: dict.components.filterBar.ownerMine, count: ownCount },
+    {
+      value: "community",
+      label: dict.components.filterBar.ownerCommunity,
+      count: communityCount,
+    },
+    { value: "all", label: dict.components.filterBar.ownerAll },
   ];
 
   return (
     <section
-      aria-label="فلاتر القوالب"
+      aria-label={dict.components.filterBar.templateFilters}
       className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3"
-      dir="rtl"
+      dir={dir}
     >
       <div className="flex flex-wrap items-center gap-2">
         {(
@@ -97,8 +105,11 @@ export function TemplatesFilterBar({
 
         {(
           [
-            { value: "ar" as const, label: "العربية" },
-            { value: "en" as const, label: "الإنجليزية" },
+            { value: "ar" as const, label: dict.components.filterBar.langArabic },
+            {
+              value: "en" as const,
+              label: dict.components.filterBar.langEnglish,
+            },
           ]
         ).map((opt) => {
           const active = language === opt.value;
@@ -166,7 +177,12 @@ export function TemplatesFilterBar({
                 style={{ backgroundColor: hex }}
               >
                 <span className="sr-only">
-                  {selected ? "إلغاء تصفية اللون" : `تصفية باللون ${hex}`}
+                  {selected
+                    ? dict.components.filterBar.clearColor
+                    : dict.components.filterBar.filterColor.replace(
+                        "{color}",
+                        hex,
+                      )}
                 </span>
               </button>
             );
