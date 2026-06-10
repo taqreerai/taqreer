@@ -7,7 +7,7 @@
 // reveals: the right title slides in from the right, the left demo from the left.
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { BidiExtractionDemo } from "@/components/marketing/BidiExtractionDemo";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 
@@ -22,24 +22,24 @@ export function BidiSection() {
           <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} />{" "}
           لتحسين التصدير
         </h2>
-        {/* Subtitle — only when the tech is toggled ON. */}
-        <AnimatePresence>
-          {fixed && (
-            <motion.p
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="overflow-hidden text-lg leading-relaxed text-muted"
-            >
-              <span className="mt-5 block">
-                نفس النص الذي تدخله للتصميم يصدر إلى
-                <br />
-                PowerPoint بدون مشاكل في الاتجاه
-              </span>
-            </motion.p>
-          )}
-        </AnimatePresence>
+        {/* Subtitle — fades in when the tech is toggled ON. Its space is
+            ALWAYS reserved (no height animation): the grid is `items-center`, so
+            growing the column on toggle would re-center it and slide the
+            in-heading switch up under the cursor. Locking the height keeps the
+            heading + switch put; only the description's opacity changes. */}
+        <motion.p
+          aria-hidden={!fixed}
+          initial={false}
+          animate={{ opacity: fixed ? 1 : 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="text-lg leading-relaxed text-muted"
+        >
+          <span className="mt-5 block">
+            نفس النص الذي تدخله للتصميم يصدر إلى
+            <br />
+            PowerPoint بدون مشاكل في الاتجاه
+          </span>
+        </motion.p>
       </ScrollReveal>
 
       {/* Demo — left column (order-2 = left in RTL). */}
@@ -66,7 +66,7 @@ function InlineSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
       style={{
         verticalAlign: "-0.06em",
         background: on ? "var(--tq-gradient-brand)" : "var(--tq-card)",
-        border: "1px solid var(--tq-border-glass)",
+        border: "1px solid var(--tq-border-hairline)",
         boxShadow: on ? "0 0 18px rgba(var(--tq-violet-rgb),0.5)" : "none",
       }}
     >
