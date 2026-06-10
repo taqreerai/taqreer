@@ -58,7 +58,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="relative flex h-20 items-center justify-between">
-          <a className="flex flex-shrink-0 items-center gap-2" href="#">
+          <Link className="flex flex-shrink-0 items-center gap-2" href="/">
             <Image
               src="/logo-light.svg"
               alt="Taqreer Logo"
@@ -66,7 +66,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
               height={32}
               className="h-8 w-auto object-contain"
             />
-          </a>
+          </Link>
 
           <div className="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-8 md:flex">
             <a

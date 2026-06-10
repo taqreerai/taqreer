@@ -270,6 +270,10 @@
      cards. `--tq-bg-glass` (dropdowns + editor side-panels) tracks the
      floating level. */
   --tq-panel:    #161616;
+  /* Inset card surface — one shade darker than --tq-panel so a card / canvas /
+     inactive control reads as distinct from the panel background (used by the
+     BiDi demo canvas, pricing cards, the inactive segmented-toggle fill). */
+  --tq-card:     #111111;
   /* Card / chrome surface — matched to the shadcn `bbWjxCq` dark preset's
      `--card` (user reference). Drives every `.glass-card` (dashboard cards AND
      the editor toolbox). */
@@ -311,6 +315,11 @@
      both the avatar ring shadow and the +N overflow chip shadow in
      SlidePresenceStack (added 2026-05-23 — was an inline rgba). */
   --tq-avatar-ring:   rgba(255, 255, 255, 0.4);
+
+  /* Brand-gradient stops, also exposed as standalone accent tokens so the two
+     non-purple brand colours can be referenced without raw hex. */
+  --tq-brand-blue:    #370BF4;
+  --tq-brand-purple:  #7D2DFF;
 
   /* 5. Gradients */
   --tq-gradient-brand:  linear-gradient(135deg, #370BF4 0%, #7D2DFF 100%);

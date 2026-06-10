@@ -927,7 +927,7 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
                 // Our brand-gradient colours (blue → violet → purple). Literal
                 // hexes on purpose: the --tq-blue/violet/magenta tokens are all
                 // aliased to one purple after §21, so tokens here read monochrome.
-                colors={["#370BF4", "#7D2DFF", "#8B5CF6"]}
+                colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
               />
             </FieldRow>
             <CardSeparator />
@@ -1002,7 +1002,7 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
         body: (
           <>
             <FieldRow label="الألوان">
-              <FakePalette colors={["#370BF4", "#8B5CF6"]} />
+              <FakePalette colors={["var(--tq-brand-blue)", "var(--tq-violet)"]} />
             </FieldRow>
             <CardSeparator />
             <FieldRow label="الخط">
@@ -1046,7 +1046,7 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
                 // Our brand-gradient colours (blue → violet → purple). Literal
                 // hexes on purpose: the --tq-blue/violet/magenta tokens are all
                 // aliased to one purple after §21, so tokens here read monochrome.
-                colors={["#370BF4", "#7D2DFF", "#8B5CF6"]}
+                colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
               />
             </FieldRow>
             <CardSeparator />
@@ -1120,7 +1120,7 @@ const FLOWS: Record<Exclude<View, "dashboard">, FlowSpec> = {
                 // Our brand-gradient colours (blue → violet → purple). Literal
                 // hexes on purpose: the --tq-blue/violet/magenta tokens are all
                 // aliased to one purple after §21, so tokens here read monochrome.
-                colors={["#370BF4", "#7D2DFF", "#8B5CF6"]}
+                colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
               />
             </FieldRow>
             <CardSeparator />

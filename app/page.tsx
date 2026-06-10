@@ -21,8 +21,8 @@ import { prisma } from "@/lib/prisma";
 import { Hero } from "@/components/marketing/Hero";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { BidiExtractionDemo } from "@/components/marketing/BidiExtractionDemo";
-import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import { MagneticGlow } from "@/components/app/MagneticGlow";
+import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
@@ -83,8 +83,9 @@ export default async function LandingPage() {
   return (
     <SmoothScrollProvider>
     <main>
-      {/* §24: the dashboard's interactive dot field + animated aurora, pinned to
-          the viewport (fixed) so it stays as a backdrop while the page scrolls. */}
+      {/* Panel-coloured base pinned behind everything, so the page reads as
+          --tq-panel while the MagneticGlow aurora still shows on top of it. */}
+      <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
       <LandingNav isAuthed={!!user} />
 

@@ -51,20 +51,12 @@ export function BidiExtractionDemo() {
             while the slide content stays RTL. No shadow. */}
         <div
           dir="ltr"
-          className="absolute top-1/2 left-1/2 z-10 w-[min(540px,86%)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]"
+          className="absolute top-1/2 left-1/2 z-10 w-[min(540px,86%)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 bg-[var(--tq-card)]"
         >
           <TitleBar />
 
-          {/* The dark slide. */}
-          <div className="relative aspect-video w-full overflow-hidden bg-[#1b1b1e]">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
-              style={{
-                background:
-                  "radial-gradient(120% 100% at 50% 140%, rgba(139,92,246,0.16), transparent 70%)",
-              }}
-            />
+          {/* The dark slide (no glow — flat --tq-card fill). */}
+          <div className="relative aspect-video w-full overflow-hidden bg-[var(--tq-card)]">
             <div className="relative flex h-full flex-col p-6" dir="rtl">
               <div className="flex items-center gap-2">
                 <span className="h-4 w-1.5 rounded-full bg-[var(--tq-violet)]" />
@@ -90,7 +82,7 @@ export function BidiExtractionDemo() {
                 className="pointer-events-none absolute inset-y-0 w-1/2"
                 style={{
                   background:
-                    "linear-gradient(90deg, transparent, rgba(139,92,246,0.12), transparent)",
+                    "linear-gradient(90deg, transparent, rgba(var(--tq-violet-rgb),0.12), transparent)",
                 }}
                 initial={{ x: "-160%", opacity: 0 }}
                 animate={{ x: "300%", opacity: [0, 1, 1, 0] }}
@@ -127,7 +119,7 @@ export function BidiExtractionDemo() {
 
 function TitleBar() {
   return (
-    <div className="relative flex h-11 items-center border-b border-white/[0.06] bg-[#1c1c1e] px-4">
+    <div className="relative flex h-11 items-center border-b border-white/[0.06] bg-[var(--tq-card)] px-4">
       {/* macOS traffic lights (universal OS chrome colors, like Hero.tsx). */}
       <div className="flex items-center gap-2">
         <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
@@ -161,13 +153,15 @@ function Sentence({ fixed }: { fixed: boolean }) {
             style={
               tok.run
                 ? {
-                    color: fixed ? "var(--tq-violet)" : "#6b7280",
-                    background: fixed ? "rgba(139,92,246,0.14)" : "transparent",
+                    color: fixed ? "var(--tq-violet)" : "var(--tq-text-muted)",
+                    background: fixed
+                      ? "rgba(var(--tq-violet-rgb),0.14)"
+                      : "transparent",
                     border: fixed
-                      ? "1px solid rgba(139,92,246,0.4)"
+                      ? "1px solid rgba(var(--tq-violet-rgb),0.4)"
                       : "1px dashed rgba(255,255,255,0.2)",
                   }
-                : { color: "#f3f4f6", border: "1px solid transparent" }
+                : { color: "var(--tq-text-primary)", border: "1px solid transparent" }
             }
           >
             {tok.t}
@@ -201,8 +195,8 @@ function FlowLines() {
   const DOT_COLORS = [
     "var(--tq-violet)",
     "rgba(255,255,255,0.55)",
-    "#7D2DFF",
-    "#370BF4",
+    "var(--tq-brand-purple)",
+    "var(--tq-brand-blue)",
     "rgba(255,255,255,0.4)",
     "var(--tq-violet)",
   ];
@@ -219,7 +213,7 @@ function FlowLines() {
           key={`p${i}`}
           id={`tq-flow-${i}`}
           d={d}
-          stroke="rgba(139,92,246,0.16)"
+          stroke="rgba(var(--tq-violet-rgb),0.16)"
           strokeWidth="1.5"
           strokeDasharray="5 8"
           style={{ animation: `tq-dash-flow ${3 + (i % 3) * 0.5}s linear infinite` }}

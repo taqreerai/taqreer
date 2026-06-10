@@ -46,7 +46,7 @@ Taqreer: see and control users, generations, spend, revenue, and broadcasts.
 
 ## New data model (Prisma)
 
-```
+```prisma
 model TokenUsage {            // P3 — API spend (data already captured in Inngest)
   id            String   @id @default(cuid())
   userId        String?           // null for system/warm jobs
