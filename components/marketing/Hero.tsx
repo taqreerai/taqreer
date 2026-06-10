@@ -213,117 +213,39 @@ export function Hero({ projectCount }: { projectCount?: number }) {
 // so the bar inherits the same glass language as the dashboard
 // header below it — no hardcoded surface colors.
 //
-// Traffic lights are rendered as GLASS DOTS (not red/yellow/green) —
-// user direction "make it with our glass css" trumps the macOS-color
-// motif from the screenshot. Same `bg-white/15` recipe the auth
-// header dots use elsewhere in the system; no hardcoded hex.
-// Icon glyphs are Material Symbols Outlined.
-//
-// Right cluster intentionally renders 4 icon buttons (download /
-// share / new-tab-plus / all-tabs grid) at the same affordance
-// weight as the left-side nav arrows so the bar reads as a real
-// Safari window, not a stripped-down minimal mock.
+// Matches the BiDi canvas window header: a --tq-card bar with macOS traffic
+// lights + the two ghost glyphs on the right. Simplified to the address bar
+// only — no nav arrows / right action cluster, and no icons inside the address
+// bar (just the URL). Traffic-light colors are universal OS chrome.
 
 function BrowserChromeBar({ path }: { path: string }) {
-  // Reusable "glass icon" recipe. These chrome controls are purely
-  // decorative (no handlers) so they render as `aria-hidden` spans,
-  // not focusable buttons — they're a browser mockup, not real
-  // affordances. Pure tokens, no hardcoded color.
-  const iconBtnCls =
-    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--tq-text-muted)]";
-
   return (
     <div
       dir="ltr"
-      className="flex items-center gap-2 border-b border-[var(--tq-border-glass)] bg-[var(--tq-bg-glass)] px-3 py-2"
+      className="relative flex h-11 items-center border-b border-[var(--tq-border-glass)] bg-[var(--tq-card)] px-4"
     >
-      {/* Traffic lights — macOS-colored (close-red, minimize-yellow,
-          expand-green) per user direction 2026-05-28. These are
-          universally-recognized OS chrome colors, not brand surfaces,
-          so they're hardcoded here as an explicit exception to the
-          "never hardcode" rule — same approach taken by every other
-          Mac browser mockup. Anchored visual-left. */}
-      <div className="flex shrink-0 items-center gap-1.5 pr-1">
-        <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
+      {/* macOS traffic lights — same as the BiDi canvas window header. */}
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
+        <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
+        <span className="h-3 w-3 rounded-full bg-[#28C840]" />
       </div>
 
-      {/* Sidebar toggle — Safari's leftmost chrome button after the
-          traffic lights. */}
-      <span aria-hidden className={iconBtnCls}>
-        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-          dock_to_right
-        </span>
-      </span>
-
-      {/* Back / forward nav arrows — paired glass affordance. */}
-      <div className="flex items-center gap-0.5">
-        <span aria-hidden className={iconBtnCls}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-            chevron_left
-          </span>
-        </span>
-        <span aria-hidden className={iconBtnCls}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-            chevron_right
-          </span>
-        </span>
-      </div>
-
-      {/* URL pill — shield + lock + domain + refresh. Centered via
-          `flex-1` cluster so it tracks the bar width on resize. */}
-      <div className="flex flex-1 items-center justify-center px-2">
-        <div className="flex w-full max-w-[280px] items-center gap-1.5 rounded-md border border-[var(--tq-border-glass)] bg-black/25 px-2 py-1 text-[11px] text-[var(--tq-text-muted)]">
-          <span
-            className="material-symbols-outlined shrink-0"
-            style={{ fontSize: 12 }}
-            aria-hidden
-          >
-            shield
-          </span>
-          <span
-            className="material-symbols-outlined shrink-0"
-            style={{ fontSize: 12 }}
-            aria-hidden
-          >
-            lock
-          </span>
-          <span className="flex-1 truncate text-center font-mono">
-            taqreer.ai{path}
-          </span>
-          <span
-            className="material-symbols-outlined shrink-0"
-            style={{ fontSize: 12 }}
-            aria-hidden
-          >
-            refresh
-          </span>
+      {/* Address bar only — centered, no icons inside (just the URL). */}
+      <div className="absolute left-1/2 w-full max-w-[300px] -translate-x-1/2 px-4">
+        <div className="truncate rounded-md border border-[var(--tq-border-glass)] bg-black/25 px-3 py-1 text-center font-mono text-[11px] text-[var(--tq-text-muted)]">
+          taqreer.ai{path}
         </div>
       </div>
 
-      {/* Right cluster — download, share, new tab, all tabs. */}
-      <div className="flex shrink-0 items-center gap-0.5">
-        <span aria-hidden className={iconBtnCls}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-            download
-          </span>
-        </span>
-        <span aria-hidden className={iconBtnCls}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-            ios_share
-          </span>
-        </span>
-        <span aria-hidden className={iconBtnCls}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-            add
-          </span>
-        </span>
-        <span aria-hidden className={iconBtnCls}>
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-            grid_view
-          </span>
-        </span>
+      {/* Right ghost glyphs — same two as the BiDi canvas header. */}
+      <div className="ml-auto flex items-center gap-3 text-white/25">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 12h16M4 6h16M4 18h16" />
+        </svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
       </div>
     </div>
   );
