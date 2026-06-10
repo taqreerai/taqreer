@@ -15,6 +15,8 @@ import { serializeSlideSection } from "@/lib/editor/serialize";
 import { SLIDE_NAV_WIDTH } from "@/components/preview/SlideNavSidebar";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 // Snappier than the house 500/35 so a dropped row settles into its new slot
 // quickly (the reorder/settle was reading slow at the default).
@@ -33,15 +35,17 @@ function rgbToHex(rgb: string): string {
 
 // Localize the non-text kind labels. buildLayerTree (shared with the lab) hands
 // back English "Image"/"Generated image"/"Graphic"; text rows already carry the
-// slide's own (Arabic) text. We translate here, never in the shared builder.
-function displayLabel(node: LayerNode, isEn: boolean): string {
+// slide's own text. Labels are editor chrome → UI-locale dictionary, never the
+// deck language and never the shared builder.
+function displayLabel(node: LayerNode, dict: Dictionary): string {
+  const t = dict.editor.layers;
   if (node.kind === "image") {
     const gen = node.el.hasAttribute("data-genimage");
-    return isEn ? (gen ? "Generated image" : "Image") : gen ? "صورة مولّدة" : "صورة";
+    return gen ? t.generatedImage : t.image;
   }
-  if (node.kind === "graphic") return isEn ? "Graphic" : "رسمة";
-  if (node.kind === "gradient") return isEn ? "Gradient" : "تدرّج";
-  if (node.kind === "background") return isEn ? "Background" : "الخلفية";
+  if (node.kind === "graphic") return t.graphic;
+  if (node.kind === "gradient") return t.gradient;
+  if (node.kind === "background") return t.background;
   return node.label;
 }
 
@@ -78,7 +82,6 @@ export function LayersPanel({
   onSelect,
   onCommit,
   slideId,
-  language = "ar",
 }: {
   // The editor iframe's document (from SlideEditor.onDocReady), or null when the
   // editor isn't mounted yet.
@@ -88,8 +91,13 @@ export function LayersPanel({
   // Persist a reorder — same (slideId, html) save path the StylePill uses.
   onCommit: (slideId: string, html: string) => void;
   slideId: string;
+  // Deck language — accepted for caller compatibility but unused now that the
+  // panel (editor chrome) follows the UI locale via useDict/useLocale.
   language?: "ar" | "en";
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
+  const t = dict.editor.layers;
   const [tree, setTree] = useState<LayerNode[]>([]);
   // The controlled display order (front-first). framer Reorder reorders this
   // visually during a drag; we persist z-index + save on drag END.
@@ -189,7 +197,6 @@ export function LayersPanel({
     commitOrder();
   };
 
-  const isEn = language === "en";
   // The slide BACKGROUND — synthesized from the real slide root (the first tagged
   // element inside the stage), since buildLayerTree is handed the stage, not the
   // root. Pinned as a fixed bottom row; never in the draggable list.
@@ -213,14 +220,12 @@ export function LayersPanel({
     setBgPickerOpen(false);
     if (slideRoot) onCommit(slideId, serializeSlideSection(slideRoot));
   };
-  const countLabel = isEn
-    ? `${tree.length} ${tree.length === 1 ? "layer" : "layers"}`
-    : `${tree.length} ${tree.length === 1 ? "طبقة" : "طبقات"}`;
+  const countLabel = `${tree.length} ${tree.length === 1 ? t.layerOne : t.layerMany}`;
 
   return (
     <aside
-      dir={isEn ? "ltr" : "rtl"}
-      aria-label={isEn ? "Layers" : "الطبقات"}
+      dir={dir}
+      aria-label={t.title}
       // Drop the clip while dragging (lifted row floats past the edges) OR while
       // the background colour picker is open (it spills below the panel).
       className={` fixed z-[30] flex flex-col rounded-3xl border p-3 ${
@@ -239,9 +244,7 @@ export function LayersPanel({
     >
       <header className="border-b border-white/[0.08] px-1 pb-3 pt-1">
         <p className="text-muted text-[10px] uppercase tracking-widest">{countLabel}</p>
-        <h2 className="mt-1 text-sm font-semibold text-white">
-          {isEn ? "Layers" : "الطبقات"}
-        </h2>
+        <h2 className="mt-1 text-sm font-semibold text-white">{t.title}</h2>
       </header>
 
       {order.length === 0 && !bgNode ? (
@@ -251,12 +254,10 @@ export function LayersPanel({
           // paragraph-write animation the streaming slide thumbnails use, so the
           // empty Layers panel reads as "designing…" rather than "nothing here".
           <div className="flex flex-1 items-center justify-center py-8">
-            <ParagraphWriteIcon rtl={!isEn} size={28} className="text-white/40" />
+            <ParagraphWriteIcon rtl={dir === "rtl"} size={28} className="text-white/40" />
           </div>
         ) : (
-          <p className="px-2 py-4 text-[12px] text-white/40">
-            {isEn ? "No layers" : "لا توجد طبقات"}
-          </p>
+          <p className="px-2 py-4 text-[12px] text-white/40">{t.none}</p>
         )
       ) : (
         <>
@@ -282,8 +283,8 @@ export function LayersPanel({
                     commitOrder();
                     setDraggingId(null);
                   }}
-                  onMove={(dir) => moveLayer(node, dir)}
-                  isEn={isEn}
+                  onMove={(d) => moveLayer(node, d)}
+                  dict={dict}
                 />
               );
             })}
@@ -296,12 +297,12 @@ export function LayersPanel({
               <div className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-white/70">
                 <LayerIcon kind="background" active={false} />
                 <span className="min-w-0 flex-1 truncate text-start">
-                  {displayLabel(bgNode, isEn)}
+                  {displayLabel(bgNode, dict)}
                 </span>
                 <div className="relative shrink-0">
                   <button
                     type="button"
-                    aria-label={isEn ? "Background colour" : "لون الخلفية"}
+                    aria-label={t.bgColor}
                     // Closing via the swatch must persist too — commitBg() both
                     // closes and serializes, else a live recolor is dropped.
                     onClick={() => (bgPickerOpen ? commitBg() : setBgPickerOpen(true))}
@@ -338,7 +339,7 @@ function LayerRow({
   onDragStart,
   onDragEnd,
   onMove,
-  isEn,
+  dict,
 }: {
   node: LayerNode;
   active: boolean;
@@ -347,7 +348,7 @@ function LayerRow({
   onDragStart: () => void;
   onDragEnd: () => void;
   onMove: (dir: -1 | 1) => void;
-  isEn: boolean;
+  dict: Dictionary;
 }) {
   // Drag is initiated ONLY by the grip handle (dragListener off) so the rest of
   // the row stays a plain click-to-select target — no gesture conflict.
@@ -391,7 +392,7 @@ function LayerRow({
         {/* No dir="auto": labels follow the panel's RTL so Latin names still sit
             on the leading edge. */}
         <span className="min-w-0 flex-1 truncate text-start">
-          {displayLabel(node, isEn)}
+          {displayLabel(node, dict)}
         </span>
       </button>
       {/* Grip handle (trailing edge). Drag with the pointer, or focus it and use
@@ -399,7 +400,7 @@ function LayerRow({
       <span
         role="button"
         tabIndex={0}
-        aria-label={isEn ? "Reorder layer (use arrow keys)" : "إعادة ترتيب الطبقة (بمفاتيح الأسهم)"}
+        aria-label={dict.editor.layers.reorder}
         onPointerDown={(e) => controls.start(e)}
         onKeyDown={(e) => {
           if (e.key === "ArrowUp") {

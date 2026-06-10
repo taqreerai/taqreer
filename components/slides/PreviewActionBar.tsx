@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // Toolbar orientation → drives where each ToolButton's tooltip pops. Vertical
 // (left rail): to the right, toward content. Horizontal (Studio bottom bar):
@@ -347,6 +348,8 @@ export function PreviewActionBar({
   disabled?: boolean;
 }) {
   const router = useRouter();
+  const dict = useDict();
+  const { dir } = useLocale();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
   // Export + Share moved to the StudioHeader (command-bar redesign §16) —
   // useExportActions + the ShareDialog live up there now, not in this bar.
@@ -424,7 +427,7 @@ export function PreviewActionBar({
 
   const handleRegenerate = async () => {
     if (regen.status === "running") return;
-    setRegen({ status: "running", message: "جارٍ إرسال الطلب..." });
+    setRegen({ status: "running", message: dict.editor.toasts.sendingRequest });
     try {
       const response = await fetch(`/api/projects/${projectId}/regenerate`, { method: "POST" });
       if (!response.ok) {
@@ -436,7 +439,7 @@ export function PreviewActionBar({
     } catch (error) {
       setRegen({
         status: "error",
-        message: error instanceof Error ? error.message : "تعذر إعادة التصميم",
+        message: error instanceof Error ? error.message : dict.editor.toasts.regenFailed,
       });
     }
   };
@@ -455,10 +458,10 @@ export function PreviewActionBar({
   const handleSaveProject = async () => {
     if (saveProject.status === "running") return;
     if (!currentVersionId) {
-      setSaveProject({ status: "error", message: "لا يوجد إصدار للحفظ" });
+      setSaveProject({ status: "error", message: dict.editor.toasts.noVersionToSave });
       return;
     }
-    setSaveProject({ status: "running", message: "جارٍ حفظ المشروع..." });
+    setSaveProject({ status: "running", message: dict.editor.toasts.savingProject });
     try {
       // Snapshot pending edits as history checkpoints first, so the pinned
       // saved version captures the new per-slide version numbers.
@@ -481,11 +484,11 @@ export function PreviewActionBar({
         savedVersionId: data.savedVersionId,
         savedSlideVersions: data.savedSlideVersions,
       });
-      setSaveProject({ status: "success", message: "تم حفظ المشروع" });
+      setSaveProject({ status: "success", message: dict.editor.toasts.projectSaved });
     } catch (error) {
       setSaveProject({
         status: "error",
-        message: error instanceof Error ? error.message : "تعذر حفظ المشروع",
+        message: error instanceof Error ? error.message : dict.editor.toasts.saveFailed,
       });
     }
   };
@@ -553,7 +556,7 @@ export function PreviewActionBar({
         // any layout-projection (framer `layout` doesn't animate reliably here).
         // dir=rtl so the Edit⇄AI toggle leads on the RIGHT (RTL leading edge)
         // and the rest of the cluster flows leftward from it.
-        dir="rtl"
+        dir={dir}
         className={`surface-card flex items-center gap-1 rounded-full p-1.5 ${
           horizontal ? "flex-row" : "flex-col"
         }`}
@@ -563,12 +566,12 @@ export function PreviewActionBar({
           <div className="flex items-center gap-1">
             <SegmentedToggle
               options={[
-                { value: "edit", label: "تحرير", icon: "edit" },
-                { value: "ai", label: "ذكاء", icon: "auto_awesome" },
+                { value: "edit", label: dict.editor.toolbar.edit, icon: "edit" },
+                { value: "ai", label: dict.editor.toolbar.ai, icon: "auto_awesome" },
               ]}
               value={studioMode}
               onChange={onSetStudioMode}
-              ariaLabel="وضع المحرر"
+              ariaLabel={dict.editor.toolbar.editorMode}
               size="comfortable"
             />
             <ToolbarDivider horizontal={horizontal} />
@@ -630,7 +633,7 @@ export function PreviewActionBar({
                       <span className="btn-gradient-anim flex h-5 w-5 items-center justify-center rounded-full">
                         <span className="spinner h-3 w-3 rounded-full border-2 border-white/30 border-t-white" />
                       </span>
-                      يُطبّق…
+                      {dict.editor.toolbar.applying}
                     </div>
                   ) : (
                     <>
@@ -640,7 +643,7 @@ export function PreviewActionBar({
                           send (user direction — don't over-explain). */}
                       <input
                         type="text"
-                        dir="rtl"
+                        dir="auto"
                         value={aiInput}
                         onChange={(e) => setAiInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -651,8 +654,8 @@ export function PreviewActionBar({
                         }}
                         placeholder={
                           hasAiRegion
-                            ? "اكتب تعديلاتك للذكاء"
-                            : "اكتب تعديلاتك، أو حدد منطقة أولاً"
+                            ? dict.editor.toolbar.aiPlaceholderRegion
+                            : dict.editor.toolbar.aiPlaceholderNoRegion
                         }
                         disabled={focusedSlideLocked}
                         className="w-[250px] bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
@@ -662,7 +665,7 @@ export function PreviewActionBar({
                         type="button"
                         onClick={() => void handleAiSend()}
                         disabled={!aiInput.trim() || focusedSlideLocked}
-                        aria-label="توليد"
+                        aria-label={dict.editor.toolbar.generate}
                         className="btn-gradient-anim flex h-7 w-7 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
                       >
                         <span className="material-symbols-outlined text-[16px] leading-none">
@@ -676,7 +679,7 @@ export function PreviewActionBar({
                 {onRegenSlide ? (
                   <ToolButton
                     icon="auto_fix_high"
-                    label="أعد تصميم الشريحة"
+                    label={dict.editor.toolbar.redesignSlide}
                     onClick={onRegenSlide}
                     disabled={applying || focusedSlideLocked}
                   />
@@ -687,7 +690,7 @@ export function PreviewActionBar({
                     "redesign the whole deck". */}
                 <ToolButton
                   icon="autorenew"
-                  label="أعد تصميم الكل"
+                  label={dict.editor.toolbar.redesignAll}
                   running={regen.status === "running"}
                   onClick={handleRegenerate}
                   disabled={applying || commentMode}
@@ -715,7 +718,7 @@ export function PreviewActionBar({
               {onUndo ? (
                 <ToolButton
                   icon="undo"
-                  label="تراجع"
+                  label={dict.editor.toolbar.undo}
                   onClick={onUndo}
                   disabled={applying || !canUndo}
                 />
@@ -723,7 +726,7 @@ export function PreviewActionBar({
               {onRedo ? (
                 <ToolButton
                   icon="redo"
-                  label="إعادة"
+                  label={dict.editor.toolbar.redo}
                   onClick={onRedo}
                   disabled={applying || !canRedo}
                 />
@@ -732,10 +735,10 @@ export function PreviewActionBar({
                 icon="chat_bubble_outline"
                 label={
                   focusedSlideLocked && !commentMode
-                    ? "الشريحة مقفلة — أعد فتح القفل لإضافة تعليق"
+                    ? dict.editor.toolbar.slideLockedComment
                     : commentMode
-                      ? "إنهاء وضع التعليقات"
-                      : "إضافة تعليق"
+                      ? dict.editor.toolbar.exitComments
+                      : dict.editor.toolbar.addComment
                 }
                 iconFilled={commentMode}
                 onClick={onToggleCommentMode}
@@ -758,7 +761,7 @@ export function PreviewActionBar({
             {onOpenHistory ? (
               <ToolButton
                 icon="history"
-                label="سجل الإصدارات"
+                label={dict.editor.toolbar.versionHistory}
                 active={historyOpen}
                 onClick={(e) =>
                   onOpenHistory(e.currentTarget.getBoundingClientRect())
@@ -770,7 +773,7 @@ export function PreviewActionBar({
               <ToolButton
                 icon={focusedSlideLocked ? "lock" : "lock_open"}
                 label={
-                  focusedSlideLocked ? "إلغاء قفل الشريحة" : "قفل الشريحة"
+                  focusedSlideLocked ? dict.editor.toolbar.unlockSlide : dict.editor.toolbar.lockSlide
                 }
                 active={focusedSlideLocked}
                 iconFilled={focusedSlideLocked}
@@ -780,7 +783,7 @@ export function PreviewActionBar({
             {/* Save Project. */}
             <ToolButton
               icon={isSaved ? "check" : "save"}
-              label={isSaved ? "محفوظ" : "حفظ المشروع"}
+              label={isSaved ? dict.editor.toolbar.saved : dict.editor.toolbar.saveProject}
               running={saveProject.status === "running"}
               onClick={handleSaveProject}
               active={isSaved}
@@ -813,7 +816,7 @@ export function PreviewActionBar({
           ) : null}
           <ToolButton
             icon="home"
-            label="الرجوع إلى لوحة التحكم"
+            label={dict.editor.toolbar.backToDashboard}
             onClick={() => router.push("/dashboard")}
           />
         </div>

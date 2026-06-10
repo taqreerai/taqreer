@@ -16,6 +16,7 @@
 import type { CommentAuthor, CommentRow } from "@/lib/types/comment";
 import { Avatar } from "@/components/common/Avatar";
 import { formatRelativeArabic } from "@/lib/util/relative-time";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // Same nominal width as SlideNavSidebar — both panels share the
 // fixed slot against the main sidebar's inner edge, so swapping
@@ -51,11 +52,13 @@ export function CommentsPanel({
   // against the main sidebar's inner edge as it animates.
   mainSidebarWidth: number;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const slideComments = comments.filter((c) => c.slideId === slideId);
   return (
     <aside
-      dir="rtl"
-      aria-label="لوحة التعليقات"
+      dir={dir}
+      aria-label={dict.editor.comments.panelAria}
       // Glass surface — built from primitives (no `.surface-card`
       // because that class carries a hover transition we don't want
       // on a sidebar panel). The `` utility is
@@ -85,11 +88,13 @@ export function CommentsPanel({
           header, so the title + close button are dropped. */}
       {embedded ? null : (
         <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3 px-1">
-          <p className="text-sm font-semibold text-white">التعليقات</p>
+          <p className="text-sm font-semibold text-white">
+            {dict.editor.comments.title}
+          </p>
           <button
             type="button"
             onClick={onClose}
-            aria-label="إغلاق وضع التعليق"
+            aria-label={dict.editor.comments.exitCommentMode}
             className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
             <span
@@ -114,10 +119,10 @@ export function CommentsPanel({
               comment
             </span>
             <p className="text-xs text-white/50">
-              لا توجد تعليقات على هذه الشريحة
+              {dict.editor.comments.none}
             </p>
             <p className="text-[10px] leading-relaxed text-white/30">
-              ارسم مربعاً على الشريحة لإضافة تعليق
+              {dict.editor.comments.drawHint}
             </p>
           </div>
         ) : (
@@ -167,7 +172,7 @@ export function CommentsPanel({
             >
               check
             </span>
-            إنهاء التعليق
+            {dict.editor.comments.finish}
           </button>
         </div>
       )}
@@ -196,10 +201,12 @@ function CommentMeta({
   author: CommentAuthor | null;
   createdAt: string;
 }) {
+  const dict = useDict();
   // Email is intentionally not in the wire shape (PII). When a user
-  // has no display name set we fall back to "غير معروف" — visually
-  // the gradient-initial avatar still differentiates rows.
-  const displayName = author?.name?.trim() || "غير معروف";
+  // has no display name set we fall back to the locale's "unknown"
+  // label — visually the gradient-initial avatar still differentiates
+  // rows.
+  const displayName = author?.name?.trim() || dict.editor.comments.unknown;
   return (
     <div className="flex items-center gap-2">
       {/* First child = logical-start = visual-right under RTL parent. */}

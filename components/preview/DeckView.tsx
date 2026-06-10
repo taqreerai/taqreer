@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { stripLocale } from "@/lib/i18n/navigation";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { motion, type Variants } from "framer-motion";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
@@ -356,6 +357,8 @@ export function DeckView({
   // role taxonomy.
   const canEdit = role === "owner" || role === "edit";
   const canComment = canEdit || role === "comment";
+  const dict = useDict();
+  const { dir } = useLocale();
   const router = useRouter();
   // Locale-stripped so route checks compare against unprefixed paths (the
   // pathname is /ar/preview/… after the [lang] move).
@@ -2460,8 +2463,8 @@ export function DeckView({
   // actually reports degraded/down; otherwise it's just a long deck.
   const slowCaption =
     serverStatus?.level === "degraded" || serverStatus?.level === "down"
-      ? "الخادم يواجه ضغطاً حالياً — قد يطول الانتظار"
-      : "العملية تستغرق وقتاً أطول من المعتاد — لا يزال العمل جارياً";
+      ? dict.editor.errors.serverBusy
+      : dict.editor.errors.takingLonger;
 
   // Fetch draft comments once on completed mount. The server filters by the
   // presentation's currentVersionId, so refetching on manifest swap (after
@@ -2541,7 +2544,7 @@ export function DeckView({
       setApplying(null);
       notificationStore.push({
         kind: "warning",
-        title: "تعذر تطبيق التعليقات",
+        title: dict.editor.errors.failedApply,
         desc: `${projectTitle} — ${message}`,
         // /project is the canonical working-session URL post route
         // split. A "apply comments failed" notification dropped via
@@ -2679,7 +2682,7 @@ export function DeckView({
           (isPinned && data.versionStatus === "failed") ||
           data.status === "failed"
         ) {
-          failApply("تم إلغاء العملية أو حدث خطأ. يمكنك المحاولة مرة أخرى.");
+          failApply(dict.editor.errors.cancelledOrFailed);
           return;
         }
 
@@ -2740,20 +2743,20 @@ export function DeckView({
           data.versionStatus !== "completed" &&
           Date.now() - lastProgressMs > STUCK_NO_PROGRESS_MS
         ) {
-          failApply("توقفت العملية. ربما تم إلغاؤها — حاول مرة أخرى.");
+          failApply(dict.editor.errors.stopped);
           return;
         }
 
         // 5. Hard timeout.
         if (Date.now() - applyStartedAt > APPLY_TIMEOUT_MS) {
-          failApply("استغرقت العملية وقتاً أطول من المتوقع. حاول مجدداً.");
+          failApply(dict.editor.errors.tookLonger);
           return;
         }
       } catch {
         consecutiveErrors += 1;
         // 4. Network / server disconnect. ~10 s of failed polls.
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-          failApply("انقطع الاتصال بالخادم. تحقق من الشبكة ثم حاول مجدداً.");
+          failApply(dict.editor.errors.disconnected);
         }
       }
     };
@@ -2776,18 +2779,18 @@ export function DeckView({
   ): never => {
     let message: string;
     if (status === 409) {
-      message = "تم تطبيق التعليقات. لم يعد قابلاً للتعديل.";
+      message = dict.editor.errors.applied;
     } else if (status === 401) {
-      message = "انتهت الجلسة، أعد تسجيل الدخول.";
+      message = dict.editor.errors.sessionExpired;
     } else if (status === 404) {
-      message = "التعليق غير موجود.";
+      message = dict.editor.errors.commentNotFound;
     } else if (status === 423) {
       // Server-side lock guard from POST /comments. Fires when a peer
       // locked the slide before the local optimistic create made it
       // to the server — the client gate hides comment-mode on locked
       // slides but a stale broadcast leaves a small window where the
       // local view still thinks the slide is unlocked.
-      message = "هذه الشريحة مقفلة — قم بفك القفل قبل إضافة تعليقات.";
+      message = dict.editor.errors.slideLocked;
     } else {
       message = fallback;
     }
@@ -2825,7 +2828,7 @@ export function DeckView({
           forAi: studioMode === "ai",
           slideId: input.slideId,
         });
-        throwApiError(res.status, "تعذر حفظ التعليق.");
+        throwApiError(res.status, dict.editor.errors.failedSaveComment);
       }
       const data = (await res.json()) as { comment: CommentRow };
       edbg("comment", "created ✓", {
@@ -2855,7 +2858,7 @@ export function DeckView({
           body: JSON.stringify(body),
         },
       );
-      if (!res.ok) throwApiError(res.status, "تعذر تحديث التعليق.");
+      if (!res.ok) throwApiError(res.status, dict.editor.errors.failedUpdateComment);
       const data = (await res.json()) as { comment: CommentRow };
       setComments((prev) =>
         prev.map((c) => (c.id === input.commentId ? data.comment : c)),
@@ -2870,7 +2873,7 @@ export function DeckView({
         `/api/projects/${projectId}/comments/${commentId}`,
         { method: "DELETE" },
       );
-      if (!res.ok) throwApiError(res.status, "تعذر حذف التعليق.");
+      if (!res.ok) throwApiError(res.status, dict.editor.errors.failedDeleteComment);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     },
     [projectId],
@@ -3039,10 +3042,15 @@ export function DeckView({
       // Element-only).
       if (!(e.target instanceof Element)) return;
       const target = e.target;
+      // Match against the LOCALIZED aria-labels (these elements' aria-labels now
+      // come from the active-locale dict). `slidePrefix` is the slide-aria text
+      // before the number, so it matches both the focused hero ("Slide N of M")
+      // and the thumbnails ("Slide N") in either locale.
+      const slidePrefix = dict.editor.nav.slideAria.split("{n}")[0];
       if (
-        target.closest('[aria-label^="الشريحة"]') || // Hero motion.div
-        target.closest('aside[aria-label="لوحة التعليقات"]') || // Comments panel
-        target.closest('aside[aria-label="شريط الشرائح"]') || // SlideNav (transient during fade)
+        target.closest(`[aria-label^="${slidePrefix}"]`) || // Hero motion.div / thumbnails
+        target.closest(`aside[aria-label="${dict.editor.comments.panelAria}"]`) || // Comments panel
+        target.closest(`aside[aria-label="${dict.editor.nav.slidesSidebar}"]`) || // SlideNav (transient during fade)
         target.closest('[data-preview-toolbar="true"]') || // PreviewActionBar wrapper
         target.closest(".surface-modal") || // Editor popover
         target.closest("header") || // App header
@@ -3158,12 +3166,12 @@ export function DeckView({
     setRetryError("");
     try {
       const res = await fetch(`/api/projects/${projectId}/retry`, { method: "POST" });
-      if (!res.ok) throw new Error("تعذر إعادة المحاولة الآن");
+      if (!res.ok) throw new Error(dict.editor.errors.cannotRetry);
       // Let the server re-render the parent with the queued status; parent
       // keys DeckView so this component remounts back into "generating".
       router.refresh();
     } catch (err) {
-      setRetryError(err instanceof Error ? err.message : "تعذر إعادة المحاولة الآن");
+      setRetryError(err instanceof Error ? err.message : dict.editor.errors.cannotRetry);
     } finally {
       setRetrying(false);
     }
@@ -3195,7 +3203,9 @@ export function DeckView({
         console.error(
           `[deck-view] cancel failed — HTTP ${res.status} — body: ${body}`,
         );
-        throw new Error(`تعذر إلغاء العملية (HTTP ${res.status})`);
+        throw new Error(
+          dict.editor.errors.cancelFailed.replace("{status}", String(res.status)),
+        );
       }
       // Close the modal optimistically; the page-level re-render
       // (router.refresh) will swap DeckView into the cancelled-recovery
@@ -3354,14 +3364,14 @@ export function DeckView({
   // ─── Failed ────────────────────────────────────────────────────────────────
   if (status === "failed") {
     return (
-      <section dir="rtl" className="page-container">
+      <section dir={dir} className="page-container">
         <div className="surface-card-danger mx-auto max-w-xl rounded-xl p-8 text-center">
           <span className="material-symbols-outlined mb-4 block text-[42px] text-red-400">
             warning
           </span>
-          <h1 className="mb-2 text-[26px] font-bold text-white">تعذر إنشاء العرض</h1>
+          <h1 className="mb-2 text-[26px] font-bold text-white">{dict.editor.screen.createFailedTitle}</h1>
           <p className="text-muted mb-6">
-            {retryError || "حدث خطأ أثناء تصميم الشرائح."}
+            {retryError || dict.editor.errors.designError}
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <button
@@ -3373,10 +3383,10 @@ export function DeckView({
               {retrying ? (
                 <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
               ) : null}
-              حاول مرة أخرى
+              {dict.editor.screen.tryAgain}
             </button>
             <Link href="/dashboard" className="btn-pill px-6 py-3 text-sm no-underline">
-              العودة للرئيسية
+              {dict.editor.screen.backHome}
             </Link>
           </div>
         </div>
@@ -3403,7 +3413,7 @@ export function DeckView({
   if (status === "cancelled") {
     return (
       <section
-        dir="rtl"
+        dir={dir}
         className="page-container flex min-h-[calc(100vh-120px)] items-center justify-center"
       >
         <div className="surface-card mx-auto w-full max-w-xl rounded-2xl p-8 text-center">
@@ -3411,10 +3421,10 @@ export function DeckView({
             stop_circle
           </span>
           <h1 className="mb-2 text-[26px] font-bold text-white">
-            تم إلغاء الإنشاء
+            {dict.editor.screen.cancelledTitle}
           </h1>
           <p className="text-muted mb-6">
-            تم إيقاف العملية بناءً على طلبك وحذف الشرائح المُنشأة.
+            {dict.editor.screen.cancelledBody}
           </p>
           <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
             {/* "إعادة الإنشاء" — sends the user BACK to the create
@@ -3439,7 +3449,7 @@ export function DeckView({
               }
               className="btn-gradient inline-flex items-center justify-center gap-2 px-5 py-2 text-sm no-underline"
             >
-              إعادة الإنشاء
+              {dict.editor.screen.recreate}
             </Link>
             <Link
               href="/dashboard"
@@ -3452,7 +3462,7 @@ export function DeckView({
               // the gradient button beside it.
               className="btn-pill no-underline px-5! py-2! text-sm!"
             >
-              العودة للرئيسية
+              {dict.editor.screen.backHome}
             </Link>
           </div>
         </div>
@@ -4011,7 +4021,9 @@ export function DeckView({
           variants={slideCardVariants}
           initial="hidden"
           animate="visible"
-          aria-label={`الشريحة ${focusedIndex + 1} من ${Math.max(viewSlides.length, 1)}`}
+          aria-label={dict.editor.nav.slideOf
+            .replace("{n}", String(focusedIndex + 1))
+            .replace("{total}", String(Math.max(viewSlides.length, 1)))}
           style={{ aspectRatio, width: heroWidthCss }}
           // Animated mesh-gradient ring — class is always present so
           // CSS owns the fade in/out via `data-active`. When false,
@@ -4067,30 +4079,30 @@ export function DeckView({
                 />
               ) : (
                 <div
-                  dir="rtl"
+                  dir={dir}
                   className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-white"
                 >
                   <h1 className="font-headline-lg text-[28px] font-bold">
-                    جارٍ تصميم عرضك...
+                    {dict.editor.screen.designing}
                   </h1>
                   <div className="text-muted flex items-center justify-center gap-3 text-sm">
                     <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
                     <span>
                       {progress?.stage === "thinking"
-                        ? "التفكير..."
+                        ? dict.editor.progress.thinking
                         : progress?.stage === "validating"
-                          ? "التحقق من المخرجات..."
+                          ? dict.editor.progress.validating
                           : progress?.stage === "saving"
-                            ? "حفظ العرض..."
+                            ? dict.editor.progress.saving
                             : progress?.currentSlide
                               ? initialSourceKind === "data"
-                                ? "جارٍ تحليل البيانات..."
+                                ? dict.editor.progress.analyzingData
                                 : initialSourceKind === "mimic"
-                                  ? "جارٍ قراءة المصدر وأسلوب التصميم..."
+                                  ? dict.editor.progress.readingSource
                                   : initialSourceKind === "enhance"
-                                    ? "جارٍ استخراج النص والهوية البصرية..."
-                                    : "جارٍ كتابة المحتوى وتصميم الشرائح..."
-                              : "بدء التصميم..."}
+                                    ? dict.editor.progress.extracting
+                                    : dict.editor.progress.writing
+                              : dict.editor.progress.startingDesign}
                     </span>
                   </div>
                   <div className="w-full max-w-md">
@@ -4175,14 +4187,10 @@ export function DeckView({
               2026-05-23). */}
           {!generating && isFocusedRegenerating ? (
             <div
-              // `dir="rtl"` so the trailing ASCII `...` lands on the
-              // visual LEFT (end of an RTL line) instead of the
-              // visual RIGHT. Without it the overlay inherits the
-              // canvas row's `dir="ltr"`, the Unicode BiDi algorithm
-              // treats `...` as a neutral run at line start, and the
-              // dots render at the visual LEFT BEFORE the Arabic
-              // ("... جارٍ إعادة التصميم") instead of after it.
-              dir="rtl"
+              // Follow the UI locale so the status label + its trailing
+              // ellipsis read correctly in both directions (the overlay
+              // otherwise inherits the canvas row's dir="ltr").
+              dir={dir}
               className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white"
               style={{ backgroundColor: "var(--tq-bg-dim)" }}
             >
@@ -4196,7 +4204,7 @@ export function DeckView({
                 className="text-white/70"
               />
               <span className="text-xs font-medium">
-                جارٍ إعادة التصميم...
+                {dict.editor.screen.redesigning}
               </span>
             </div>
           ) : null}

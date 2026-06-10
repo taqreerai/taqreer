@@ -20,6 +20,7 @@
 // independently via `flex-1 overflow-y-auto`.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { SegmentedToggle } from "@/components/create/controls";
 import { SlideRenderer, slideRootBackground } from "@/components/slides/SlideRenderer";
 import { SlidePresenceStack } from "@/components/preview/SlidePresenceStack";
@@ -139,6 +140,8 @@ export function SlideNavSidebar({
   // (between user click + server ack) so they can't double-fire.
   cancelDisabled?: boolean;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const { width: canvasW, height: canvasH } = dimensionsForFormat(format);
   const aspectRatio = `${canvasW} / ${canvasH}`;
 
@@ -246,12 +249,12 @@ export function SlideNavSidebar({
     }
   };
 
-  const panelDir: "rtl" | "ltr" = language === "en" ? "ltr" : "rtl";
+  const panelDir: "rtl" | "ltr" = dir;
 
   return (
     <aside
       dir={panelDir}
-      aria-label="شريط الشرائح"
+      aria-label={dict.editor.nav.slidesSidebar}
       // Glass surface — built from primitives (no `.surface-card`
       // because that class carries a hover transition we don't want
       // on a sidebar panel). Bg + border come from the canonical
@@ -305,10 +308,9 @@ export function SlideNavSidebar({
         // matches the deck's content language. `dir="auto"` lets the
         // browser anchor the digit-vs-word order naturally.
         const isSingle = items.length === 1;
-        const countLabel =
-          language === "en"
-            ? `${items.length} ${isSingle ? "slide" : "slides"}`
-            : `${items.length} ${isSingle ? "شريحة" : "شرائح"}`;
+        const countLabel = `${items.length} ${
+          isSingle ? dict.editor.nav.slideOne : dict.editor.nav.slideMany
+        }`;
         return title ? (
           <header className="border-b border-white/[0.08] pb-3 px-1 pt-1">
             <p
@@ -338,18 +340,18 @@ export function SlideNavSidebar({
         <div className="px-1 pt-3">
           <SegmentedToggle
             options={[
-              { value: "slides", label: "الشرائح", icon: "grid_view" },
+              { value: "slides", label: dict.editor.nav.slidesTab, icon: "grid_view" },
               {
                 value: "comments",
                 label: commentCount
-                  ? `التعليقات ${commentCount}`
-                  : "التعليقات",
+                  ? `${dict.editor.nav.commentsTab} ${commentCount}`
+                  : dict.editor.nav.commentsTab,
                 icon: "chat_bubble",
               },
             ]}
             value={tab}
             onChange={(t) => onTabChange?.(t)}
-            ariaLabel="عرض الشرائح أو التعليقات"
+            ariaLabel={dict.editor.nav.showSlidesOrComments}
             size="comfortable"
             fullWidth
           />
@@ -392,9 +394,11 @@ export function SlideNavSidebar({
               key={item.index}
               type="button"
               onClick={() => onSelect(item.index)}
-              aria-label={`الشريحة ${item.index + 1}${
-                isActive ? " — مختارة" : ""
-              }${isLocked ? " — مقفلة" : ""}`}
+              aria-label={
+                dict.editor.nav.slideAria.replace("{n}", String(item.index + 1)) +
+                (isActive ? dict.editor.nav.slideSelected : "") +
+                (isLocked ? dict.editor.nav.slideLocked : "")
+              }
               aria-current={isActive ? "true" : undefined}
               // Only the active thumbnail carries a visible stroke now
               // (1 px white/60, via the inline `box-shadow` above).
@@ -595,8 +599,8 @@ export function SlideNavSidebar({
             {bulkBusy
               ? "..."
               : allLocked
-                ? "إلغاء قفل الكل"
-                : "قفل الكل"}
+                ? dict.editor.nav.unlockAll
+                : dict.editor.nav.lockAll}
           </button>
         </footer>
       ) : null}
@@ -622,7 +626,7 @@ export function SlideNavSidebar({
             >
               stop_circle
             </span>
-            {cancelDisabled ? "جارٍ الإلغاء..." : "إلغاء الإنشاء"}
+            {cancelDisabled ? dict.editor.nav.cancelling : dict.editor.nav.cancelGeneration}
           </button>
         </footer>
       ) : null}

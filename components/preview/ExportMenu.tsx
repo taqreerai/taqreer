@@ -19,17 +19,18 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { useExportActions, type ExportKind } from "@/lib/preview/use-export-actions";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 const MENU_WIDTH = 220;
 const ANCHOR_GAP_PX = 8;
 const VIEWPORT_EDGE_INSET_PX = 12;
 
 // Fixed order (locked 2026-05-21): PPTX → PDF → PNG → HTML.
-const FORMATS: { kind: ExportKind; icon: string; label: string }[] = [
-  { kind: "pptx", icon: "download", label: "تصدير PPTX" },
-  { kind: "pdf", icon: "picture_as_pdf", label: "تصدير PDF" },
-  { kind: "png", icon: "image", label: "تصدير PNG" },
-  { kind: "html", icon: "code", label: "تصدير HTML" },
+const FORMATS: { kind: ExportKind; icon: string }[] = [
+  { kind: "pptx", icon: "download" },
+  { kind: "pdf", icon: "picture_as_pdf" },
+  { kind: "png", icon: "image" },
+  { kind: "html", icon: "code" },
 ];
 
 export function ExportMenu({
@@ -45,6 +46,8 @@ export function ExportMenu({
   formatFallback?: SlideFormat;
   disabled?: boolean;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -119,7 +122,7 @@ export function ExportMenu({
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="تصدير"
+        aria-label={dict.editor.export.export}
         className={`btn-pill flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] ${
           disabled ? "cursor-not-allowed opacity-40" : ""
         }`}
@@ -130,7 +133,7 @@ export function ExportMenu({
         >
           {busy ? "progress_activity" : "ios_share"}
         </span>
-        <span>تصدير</span>
+        <span>{dict.editor.export.export}</span>
         <span className="material-symbols-outlined text-[16px] opacity-70" aria-hidden>
           expand_more
         </span>
@@ -142,9 +145,9 @@ export function ExportMenu({
               {open && rect ? (
                 <motion.div
                   ref={surfaceRef}
-                  dir="rtl"
+                  dir={dir}
                   role="menu"
-                  aria-label="تصدير العرض"
+                  aria-label={dict.editor.export.exportPresentation}
                   initial={{ opacity: 0, y: 6, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 6, scale: 0.98 }}
@@ -175,7 +178,9 @@ export function ExportMenu({
                             >
                               {running ? "progress_activity" : f.icon}
                             </span>
-                            <span className="flex-1 text-start">{f.label}</span>
+                            <span className="flex-1 text-start">
+                              {dict.editor.export[f.kind]}
+                            </span>
                           </button>
                         </li>
                       );

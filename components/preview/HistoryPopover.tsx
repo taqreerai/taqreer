@@ -27,6 +27,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export type HistoryRow = {
   versionNumber: number;
@@ -74,6 +75,8 @@ export function HistoryPopover({
   // because the cursor was still over the fading popover.
   onExitComplete?: () => void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
   // Close on outside click / Esc — matches the bell dropdown
@@ -164,7 +167,7 @@ export function HistoryPopover({
         <motion.div
           key="history-popover"
           ref={surfaceRef}
-          dir="rtl"
+          dir={dir}
           data-history-popover
           initial={{ opacity: 0, y: flipUp ? 6 : -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -174,7 +177,9 @@ export function HistoryPopover({
           style={{ top, bottom, left, width: POPOVER_WIDTH }}
         >
           <header className="border-b border-white/[0.08] px-3 py-2">
-            <p className="text-xs font-semibold text-white">سجل الإصدارات</p>
+            <p className="text-xs font-semibold text-white">
+              {dict.editor.history.title}
+            </p>
           </header>
           <ul className="flex max-h-[280px] flex-col overflow-y-auto overscroll-contain">
             <AnimatePresence initial={false}>
@@ -197,7 +202,9 @@ export function HistoryPopover({
             </AnimatePresence>
             {rest.length === 0 ? (
               <li className="px-4 py-3 text-xs text-white/50">
-                {genesis ? "لا توجد تعديلات بعد." : "لا توجد إصدارات سابقة."}
+                {genesis
+                  ? dict.editor.history.noEditsYet
+                  : dict.editor.history.noPreviousVersions}
               </li>
             ) : null}
           </ul>
@@ -230,6 +237,7 @@ function OriginalRow({
   disabled: boolean;
   onClick: () => void;
 }) {
+  const dict = useDict();
   return (
     <div className="border-t border-white/[0.08]">
       <button
@@ -260,10 +268,10 @@ function OriginalRow({
           </svg>
           <span className="flex flex-col gap-0.5">
             <span className="text-xs font-medium text-white">
-              النسخة الأصلية
+              {dict.editor.history.originalVersion}
             </span>
             <span className="text-[10px] text-white/50">
-              أول إصدار تم إنشاؤه
+              {dict.editor.history.firstGenerated}
             </span>
           </span>
         </span>
@@ -284,6 +292,7 @@ function HistoryItem({
   disabled: boolean;
   onClick: () => void;
 }) {
+  const dict = useDict();
   const number = row.versionNumber.toString().padStart(2, "0");
   const relative = formatDistanceToNow(new Date(row.createdAt), {
     addSuffix: true,
@@ -302,7 +311,7 @@ function HistoryItem({
     >
       <span className="flex flex-col gap-0.5">
         <span className="text-xs font-medium text-white">
-          {`الإصدار ${number}`}
+          {dict.editor.history.version.replace("{n}", String(number))}
         </span>
         <span className="text-[10px] text-white/50">{relative}</span>
       </span>
@@ -313,12 +322,13 @@ function HistoryItem({
 
 // The «الحالي» (current-version) pill — shared by HistoryItem + OriginalRow.
 function CurrentBadge() {
+  const dict = useDict();
   return (
     <span
       className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-white"
       style={{ background: "var(--tq-violet)" }}
     >
-      الحالي
+      {dict.editor.history.current}
     </span>
   );
 }

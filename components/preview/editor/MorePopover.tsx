@@ -13,15 +13,17 @@
 
 import { useEffect } from "react";
 import { motion } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 type Kind = "text" | "image" | "svg";
 
 const WIDTH = 232;
 
-// Localized in the render via `isEn`. Symbol-based controls (transform /
-// decoration) are language-neutral, so they carry no Arabic variant.
-// Weight names stay in English for every deck language (user direction) —
-// they're typographic terms, like the font-family name, not translatable chrome.
+// Row labels are localized via the UI-locale dictionary in the render. Symbol-
+// based controls (transform / decoration) are language-neutral, so they carry
+// no Arabic variant. Weight names stay in English for every locale (user
+// direction) — they're typographic terms, like the font-family name, not
+// translatable chrome.
 const WEIGHTS: { value: string; label: string }[] = [
   { value: "100", label: "Thin" },
   { value: "200", label: "Extra Light" },
@@ -46,21 +48,10 @@ const DECORATIONS: { value: string; label: string }[] = [
   { value: "line-through", label: "S" },
 ];
 
-// Row labels per locale (Arabic-first editor chrome).
-const ROW = {
-  weight: { en: "Weight", ar: "الوزن" },
-  line: { en: "Line", ar: "الأسطر" },
-  transform: { en: "Transform", ar: "الأحرف" },
-  decoration: { en: "Decoration", ar: "الزخرفة" },
-  opacity: { en: "Opacity", ar: "الشفافية" },
-  rounding: { en: "Rounding", ar: "التدوير" },
-} as const;
-
 export function MorePopover({
   open,
   target,
   kind,
-  isEn,
   flipUp = false,
   setStyle,
   onClose,
@@ -68,15 +59,15 @@ export function MorePopover({
   open: boolean;
   target: HTMLElement;
   kind: Kind;
-  // Deck language — Arabic-first; English labels only for an English deck.
-  isEn: boolean;
   // When the pill sits low in the viewport, open the menu UPWARD (above the
   // pill) instead of down, so it never runs off the bottom edge.
   flipUp?: boolean;
   setStyle: (prop: string, value: string) => void;
   onClose: () => void;
 }) {
-  const t = (k: keyof typeof ROW) => (isEn ? ROW[k].en : ROW[k].ar);
+  // Row labels are editor chrome → UI-locale dictionary (not the deck language).
+  const t = useDict().editor.typography;
+  const { dir } = useLocale();
   const weightOptions = WEIGHTS; // English names regardless of deck language
   // Close on Esc only. Outside-click is intentionally NOT handled here: clicking
   // outside the pill deselects it → the pill (and this popover, which is its
@@ -110,9 +101,9 @@ export function MorePopover({
   // instant `open` flips false; the entrance (initial→animate) still plays.
   return (
     <motion.div
-      // Follow the deck language: Arabic decks flow RTL (label on the right,
-      // control on the left) — the chrome is Arabic-first. English decks stay LTR.
-      dir={isEn ? "ltr" : "rtl"}
+      // Editor chrome → follow the UI locale: RTL puts the label on the right and
+      // the control on the left; LTR mirrors it.
+      dir={dir}
       className={`surface-popover absolute z-30 rounded-2xl px-3.5 py-3.5 ${
         flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
       }`}
@@ -123,14 +114,14 @@ export function MorePopover({
     >
       {kind === "text" ? (
         <>
-          <Row label={t("weight")}>
+          <Row label={t.weight}>
             <Select
               value={weight}
               options={weightOptions}
               onChange={(v) => setStyle("font-weight", v)}
             />
           </Row>
-          <Row label={t("line")}>
+          <Row label={t.line}>
             <Slider
               value={lineMul}
               min={0.8}
@@ -140,21 +131,21 @@ export function MorePopover({
               onChange={(n) => setStyle("line-height", String(n))}
             />
           </Row>
-          <Row label={t("transform")}>
+          <Row label={t.transform}>
             <Seg
               value={transform}
               options={TRANSFORMS}
               onChange={(v) => setStyle("text-transform", v)}
             />
           </Row>
-          <Row label={t("decoration")}>
+          <Row label={t.decoration}>
             <Seg
               value={decoration}
               options={DECORATIONS}
               onChange={(v) => setStyle("text-decoration", v)}
             />
           </Row>
-          <Row label={t("opacity")}>
+          <Row label={t.opacity}>
             <Slider
               value={opacityPct}
               min={0}
@@ -168,7 +159,7 @@ export function MorePopover({
         </>
       ) : (
         <>
-          <Row label={t("opacity")}>
+          <Row label={t.opacity}>
             <Slider
               value={opacityPct}
               min={0}
@@ -179,7 +170,7 @@ export function MorePopover({
               onChange={(n) => setStyle("opacity", String(n / 100))}
             />
           </Row>
-          <Row label={t("rounding")}>
+          <Row label={t.rounding}>
             <Slider
               value={radiusPx}
               min={0}

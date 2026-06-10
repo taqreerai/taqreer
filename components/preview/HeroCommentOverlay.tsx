@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { Avatar } from "@/components/common/Avatar";
 import { formatRelativeArabic } from "@/lib/util/relative-time";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // Minimum drag size in slide-space pixels. Smaller drags are treated
 // as misfired clicks and discarded — keeps stray mousedowns from
@@ -98,6 +99,7 @@ export function HeroCommentOverlay({
   // too small (a misfired click) so it doubles as "clear the region".
   onAiBoundsChange?: (bounds: CommentBounds | null) => void;
 }) {
+  const dict = useDict();
   // Defaults true so the historical callers that gated the whole
   // mount on `{commentMode ? <HeroCommentOverlay /> : null}` keep
   // working without passing the prop.
@@ -254,7 +256,9 @@ export function HeroCommentOverlay({
       }
       setEditor(null);
     } catch (err) {
-      setEditorError(err instanceof Error ? err.message : "تعذر حفظ التعليق.");
+      setEditorError(
+        err instanceof Error ? err.message : dict.editor.comments.failedSave,
+      );
     } finally {
       // `finally` not `else` — on success the editor closes (above)
       // but we still want the in-flight flag reset for the next
@@ -273,7 +277,9 @@ export function HeroCommentOverlay({
       await onDelete(editor.commentId);
       setEditor(null);
     } catch (err) {
-      setEditorError(err instanceof Error ? err.message : "تعذر حذف التعليق.");
+      setEditorError(
+        err instanceof Error ? err.message : dict.editor.comments.failedDelete,
+      );
     } finally {
       setDeletingEditor(false);
     }
@@ -383,7 +389,7 @@ export function HeroCommentOverlay({
                 const localY = rect ? e.clientY - rect.top : 0;
                 setPreviewState({ commentId: c.id, x: localX, y: localY });
               }}
-              aria-label="عرض التعليق"
+              aria-label={dict.editor.comments.viewComment}
               className="pointer-events-auto absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
               style={style}
             />
@@ -398,7 +404,7 @@ export function HeroCommentOverlay({
               handlePinClick(c);
             }}
             onMouseDown={(e) => e.stopPropagation()}
-            aria-label="تعديل التعليق"
+            aria-label={dict.editor.comments.editComment}
             className="absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
             style={style}
           />
@@ -708,6 +714,8 @@ function CommentEditor({
   saving?: boolean;
   deleting?: boolean;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const POPOVER_W = 360;
   const POPOVER_GAP = 8;
   const POPOVER_ESTIMATED_H = 260;
@@ -739,8 +747,8 @@ function CommentEditor({
       // and follows the app's Arabic-first conventions (matches the
       // MarkerPreviewPopup). The textarea inside uses `dir="auto"`
       // so a comment that starts with a Latin word still flows LTR
-      // visually while the chrome stays RTL.
-      dir="rtl"
+      // visually while the chrome stays in the UI-locale direction.
+      dir={dir}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       // `.in-slide-dim` carries the shared `--tq-bg`-mix background so
@@ -791,7 +799,7 @@ function CommentEditor({
           }
         }}
         rows={3}
-        placeholder="اكتب تعليقك هنا..."
+        placeholder={dict.editor.comments.writePlaceholder}
         style={{
           background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
           borderColor: "rgba(255, 255, 255, var(--tq-border-opacity))",
@@ -803,17 +811,21 @@ function CommentEditor({
           {onDelete ? (
             <GlassIconButton
               icon="delete"
-              label="حذف التعليق"
+              label={dict.editor.comments.deleteComment}
               onClick={onDelete}
               loading={deleting}
             />
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <GlassIconButton icon="close" label="إلغاء" onClick={onCancel} />
+          <GlassIconButton
+            icon="close"
+            label={dict.editor.comments.cancel}
+            onClick={onCancel}
+          />
           <GlassIconButton
             icon="check"
-            label="حفظ"
+            label={dict.editor.comments.save}
             active
             onClick={onSave}
             disabled={!editor.content.trim()}
@@ -864,6 +876,8 @@ function MarkerPreviewPopup({
   onEdit: () => void;
   onDelete: () => Promise<void> | void;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const POPOVER_W = 320;
   const POPOVER_GAP = 8;
   // Conservative estimate covering header (~36 px) + content
@@ -907,17 +921,26 @@ function MarkerPreviewPopup({
       if (!(e.target instanceof Node)) return;
       if (popoverRef.current?.contains(e.target)) return;
       // Don't close on clicks landing on a marker pin — the parent
-      // will swap `previewCommentId` and we'd race.
-      if (e.target instanceof Element && e.target.closest("[aria-label='عرض التعليق']")) {
+      // will swap `previewCommentId` and we'd race. The selector must
+      // match the marker button's RENDERED aria-label, which is now
+      // locale-driven (`dict.editor.comments.viewComment`) — keep this
+      // matcher in lockstep so click-detection works in both locales.
+      if (
+        e.target instanceof Element &&
+        e.target.closest(
+          `[aria-label="${dict.editor.comments.viewComment}"]`,
+        )
+      ) {
         return;
       }
       onClose();
     };
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  }, [onClose, dict.editor.comments.viewComment]);
 
-  const displayName = comment.author?.name?.trim() || "غير معروف";
+  const displayName =
+    comment.author?.name?.trim() || dict.editor.comments.unknown;
 
   const handleDeleteClick = async () => {
     if (isDeleting) return;
@@ -942,7 +965,7 @@ function MarkerPreviewPopup({
       // slide content. Slide direction is irrelevant here. The
       // comment body div below uses `dir="auto"` so mixed-script
       // content still flows correctly per first strong character.
-      dir="rtl"
+      dir={dir}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       // Same glass + dim recipe the editor uses — readable on white
@@ -1001,7 +1024,7 @@ function MarkerPreviewPopup({
         <button
           type="button"
           onClick={onClose}
-          aria-label="إغلاق"
+          aria-label={dict.editor.comments.close}
           className="ms-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
         >
           <span className="material-symbols-outlined text-[16px]">close</span>
@@ -1060,7 +1083,7 @@ function MarkerPreviewPopup({
                   delete
                 </span>
               )}
-              حذف
+              {dict.editor.comments.delete}
             </button>
           ) : null}
           {canEdit ? (
@@ -1076,7 +1099,7 @@ function MarkerPreviewPopup({
               >
                 edit
               </span>
-              تعديل
+              {dict.editor.comments.edit}
             </button>
           ) : null}
         </div>

@@ -27,12 +27,14 @@
 // thumbnail click.
 
 import { Avatar } from "@/components/common/Avatar";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import type { PresenceViewer } from "@/lib/realtime/project-channel";
 
 const MAX_AVATARS = 2;
 const AVATAR_PX = 20;
 
 export function SlidePresenceStack({ viewers }: { viewers: PresenceViewer[] }) {
+  const dict = useDict();
   if (viewers.length === 0) return null;
   const visible = viewers.slice(0, MAX_AVATARS);
   const overflow = viewers.length - visible.length;
@@ -97,7 +99,7 @@ export function SlidePresenceStack({ viewers }: { viewers: PresenceViewer[] }) {
       ))}
       {overflow > 0 ? (
         <div
-          aria-label={`و${overflow} آخرين`}
+          aria-label={dict.editor.presence.replace("{n}", String(overflow))}
           className="-ms-[6px] flex items-center justify-center rounded-full bg-black/60 font-semibold text-white"
           style={{
             width: AVATAR_PX,

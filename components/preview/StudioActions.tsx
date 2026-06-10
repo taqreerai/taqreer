@@ -6,6 +6,7 @@
 // dropped — the always-present sidebar logo handles returning home.
 
 import { useState } from "react";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import type { ProjectRole } from "@/lib/api/project-access";
 import { ExportMenu } from "./ExportMenu";
@@ -24,6 +25,8 @@ export function StudioActions({
   formatFallback?: SlideFormat;
   role: ProjectRole;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   const [shareOpen, setShareOpen] = useState(false);
   const isOwner = role === "owner";
 
@@ -32,7 +35,7 @@ export function StudioActions({
   if (!manifest) return null;
 
   return (
-    <div dir="rtl" className="flex items-center gap-2">
+    <div dir={dir} className="flex items-center gap-2">
       <ExportMenu
         projectId={projectId}
         projectTitle={projectTitle}
@@ -44,13 +47,13 @@ export function StudioActions({
           <button
             type="button"
             onClick={() => setShareOpen(true)}
-            aria-label="مشاركة"
+            aria-label={dict.editor.share}
             className="btn-pill flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 text-[13px]"
           >
             <span className="material-symbols-outlined text-[18px]" aria-hidden>
               person_add
             </span>
-            <span>مشاركة</span>
+            <span>{dict.editor.share}</span>
           </button>
           <ShareDialog
             open={shareOpen}

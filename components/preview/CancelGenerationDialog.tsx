@@ -21,6 +21,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export function CancelGenerationDialog({
   open,
@@ -38,6 +39,8 @@ export function CancelGenerationDialog({
   // mid-request.
   busy: boolean;
 }) {
+  const dict = useDict();
+  const { dir } = useLocale();
   // Body-scroll lock while open — same shape as ShareDialog uses.
   // Restoring `overflow` to its prior value (vs. forcing "auto")
   // respects whatever upstream style the page may have set.
@@ -92,7 +95,7 @@ export function CancelGenerationDialog({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
             <div
-              dir="rtl"
+              dir={dir}
               role="dialog"
               aria-modal="true"
               aria-labelledby="cancel-gen-title"
@@ -104,13 +107,13 @@ export function CancelGenerationDialog({
                   id="cancel-gen-title"
                   className="text-base font-semibold text-white"
                 >
-                  إلغاء الإنشاء
+                  {dict.editor.cancelDialog.title}
                 </h2>
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={busy}
-                  aria-label="إغلاق"
+                  aria-label={dict.editor.cancelDialog.close}
                   className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span
@@ -124,8 +127,7 @@ export function CancelGenerationDialog({
 
               <div className="px-5 py-5">
                 <p className="text-sm leading-relaxed text-white/80">
-                  هل تريد إلغاء عملية الإنشاء؟ سيتم إيقاف Claude فوراً وحذف
-                  الشرائح التي تم إنشاؤها حتى الآن.
+                  {dict.editor.cancelDialog.body}
                 </p>
               </div>
 
@@ -136,7 +138,7 @@ export function CancelGenerationDialog({
                   disabled={busy}
                   className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white transition-colors hover:border-white/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  متابعة الإنشاء
+                  {dict.editor.cancelDialog.continue}
                 </button>
                 <button
                   type="button"
@@ -155,7 +157,9 @@ export function CancelGenerationDialog({
                       stop_circle
                     </span>
                   )}
-                  {busy ? "جارٍ الإلغاء..." : "تأكيد الإلغاء"}
+                  {busy
+                    ? dict.editor.cancelDialog.cancelling
+                    : dict.editor.cancelDialog.confirmCancel}
                 </button>
               </footer>
             </div>

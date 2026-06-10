@@ -24,6 +24,7 @@ import { FontControl } from "./FontControl";
 import { canonicalFamily, googleFontUrl } from "@/lib/editor/font-search";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import type { GenImageAspect } from "@/lib/images/slide-images";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 type Props = {
   // The selection SET (plan-editor §20). Length 1 → the classic single-element
@@ -37,7 +38,8 @@ type Props = {
   // Clears the selection (→ unmounts the pill). Fired on a click outside the pill
   // AND outside the slide canvas (clicks inside the iframe go through SlideEditor).
   onDismiss: () => void;
-  // Deck language — drives the ⋯ inspector's localized labels (Arabic-first).
+  // Deck language — accepted for caller compatibility but unused now that the
+  // pill chrome follows the UI locale (useDict / useLocale).
   language?: "en" | "ar";
   // §19 — regenerate an AI image box with an edited prompt. The pill shows the
   // Regenerate button only for an AI image (data-genid + data-genimage); on
@@ -166,6 +168,7 @@ const SIZE_MAX = 1200;
 // number reads first, the spinner is a quiet secondary affordance. Range spans the
 // decorative 700px+ numbers.
 function SizeStepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const t = useDict().editor.style;
   const [text, setText] = useState(String(value));
   const focused = useRef(false);
   useEffect(() => {
@@ -195,7 +198,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
       <input
         value={text}
         inputMode="numeric"
-        aria-label="Font size"
+        aria-label={t.fontSize}
         dir="ltr"
         onFocus={() => {
           focused.current = true;
@@ -215,7 +218,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
       <div className="flex flex-col">
         <button
           type="button"
-          aria-label="Bigger"
+          aria-label={t.bigger}
           className="flex h-[12px] w-[15px] items-center justify-center text-white/45 transition-colors hover:text-white"
           onClick={() => onChange(clamp(value + 1))}
         >
@@ -223,7 +226,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         </button>
         <button
           type="button"
-          aria-label="Smaller"
+          aria-label={t.smaller}
           className="flex h-[12px] w-[15px] items-center justify-center text-white/45 transition-colors hover:text-white"
           onClick={() => onChange(clamp(value - 1))}
         >
@@ -243,11 +246,16 @@ function Chevron({ up = false }: { up?: boolean }) {
   );
 }
 
-export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage, language = "ar" }: Props) {
+export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage }: Props) {
   // The primary target — anchors positioning, drives single-element controls
   // (image/svg), and supplies the DISPLAYED value for every text control. A
   // multi-text selection still reads/writes through `targets`.
   const target = targets[0];
+  // Pill controls are editor chrome → strings + chrome direction come from the
+  // UI locale (useDict / useLocale), not the deck language.
+  const dict = useDict();
+  const t = dict.editor.style;
+  const { dir } = useLocale();
   // True multi-element selection (the marquee picked 2+). When false this is the
   // classic single-element pill and every code path below collapses to `target`.
   const multi = targets.length > 1;
@@ -636,7 +644,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
   // The font the element ACTUALLY renders in (theme font when no inline pick) —
   // shown on the collapsed font pill.
   const renderedFontName =
-    (cs.fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "") || "الخط";
+    (cs.fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "") || t.font;
 
   // ── "Mixed" indicators (multi-text only). Each control DISPLAYS the primary
   // target's value; when the set's values DIFFER for that control we flag it so the
@@ -656,13 +664,12 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
     const f = (el.style.fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "");
     return f ? (canonicalFamily(f) ?? f) : "";
   });
-  const isEn = language === "en";
-  const mixedLabel = isEn ? "Mixed" : "متعدد";
+  const mixedLabel = t.mixed;
 
   return createPortal(
     <div
       ref={pillRef}
-      dir="ltr"
+      dir={dir}
       style={{
         position: "fixed",
         left: -9999,
@@ -803,7 +810,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
           <div className="relative flex h-8 items-center justify-center px-1.5">
             <button
               type="button"
-              aria-label="Graphic colour"
+              aria-label={t.graphicColour}
               onClick={() => {
                 setColorOpen((o) => !o);
                 setMoreOpen(false);
@@ -841,14 +848,14 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
         <>
           <button
             type="button"
-            aria-label="Replace image"
+            aria-label={t.replaceImage}
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
             className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
             style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
           >
             <ReplaceIcon />
-            {uploading ? "Uploading…" : "Replace"}
+            {uploading ? t.uploading : t.replace}
           </button>
           <input
             ref={fileInputRef}
@@ -865,7 +872,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
               <button
                 type="button"
                 data-regen-toggle="true"
-                aria-label="إعادة توليد الصورة بالذكاء"
+                aria-label={t.regenImage}
                 onClick={() => {
                   setRegenPrompt(target.getAttribute("data-genimage") ?? "");
                   setRegenOpen((o) => !o);
@@ -877,12 +884,12 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                 style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
               >
                 <RegenImageIcon />
-                إعادة توليد
+                {t.regenerate}
               </button>
               {regenOpen && (
                 <div
                   ref={regenPopoverRef}
-                  dir="rtl"
+                  dir={dir}
                   onMouseDown={(e) => e.stopPropagation()}
                   className="surface-popover absolute z-20 rounded-xl p-2.5 text-white"
                   style={{
@@ -907,19 +914,19 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                         handleRegenConfirm();
                       }
                     }}
-                    placeholder="صف الصورة التي تريد توليدها…"
+                    placeholder={t.regenPlaceholder}
                     className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] leading-relaxed text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/40"
                     style={{ borderColor: "var(--tq-border-hairline)", background: "var(--tq-surface)" }}
                   />
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-white/40">تُحتسب صورة واحدة</span>
+                    <span className="text-[10px] text-white/40">{t.regenHint}</span>
                     <button
                       type="button"
                       onClick={handleRegenConfirm}
                       disabled={!regenPrompt.trim()}
                       className="btn-gradient-anim inline-flex h-7 items-center rounded-full px-3.5 text-[12px] font-medium text-white disabled:opacity-40"
                     >
-                      توليد
+                      {t.generate}
                     </button>
                   </div>
                 </div>
@@ -952,7 +959,6 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
               open={moreOpen}
               target={target}
               kind={kind}
-              isEn={language === "en"}
               flipUp={popoverFlipUp}
               setStyle={setStyle}
               onClose={() => setMoreOpen(false)}

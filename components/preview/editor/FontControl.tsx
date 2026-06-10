@@ -16,6 +16,7 @@ import {
   previewCss2Url,
   type GoogleFontEntry,
 } from "@/lib/editor/font-search";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 const WIDTH = 252;
 const PREVIEW_LINK_ID = "tq-font-preview-link";
@@ -39,6 +40,8 @@ export function FontControl({
   flipUp?: boolean;
   onPick: (family: string | null) => void;
 }) {
+  const dict = useDict();
+  const t = dict.editor.fonts;
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => searchGoogleFonts(query, { limit: 60 }), [query]);
@@ -129,8 +132,8 @@ export function FontControl({
               dir="rtl"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث عن خط…"
-              aria-label="ابحث عن خط"
+              placeholder={t.searchPlaceholder}
+              aria-label={t.searchAria}
               className="min-w-0 flex-1 bg-transparent text-right text-[13px] text-white outline-none placeholder:text-white/40"
             />
           </div>
@@ -138,7 +141,7 @@ export function FontControl({
           <button
             ref={btnRef}
             type="button"
-            aria-label={`Font family: ${label}`}
+            aria-label={t.fontFamily.replace("{name}", label)}
             onClick={() => onOpenChange(true)}
             className="flex h-full items-center gap-1 whitespace-nowrap px-2.5 text-[12px] text-white/85 transition-colors hover:text-white"
           >
@@ -173,18 +176,18 @@ export function FontControl({
                     : "text-white/70 hover:bg-white/[0.05] hover:text-white"
                 }`}
               >
-                <span>الخط الافتراضي</span>
+                <span>{t.defaultFont}</span>
                 {currentFamily === null ? <CheckIcon /> : null}
               </button>
             </li>
 
             {sectioned ? (
               <>
-                {arabic.length ? <SectionLabel>عربية</SectionLabel> : null}
+                {arabic.length ? <SectionLabel>{t.arabic}</SectionLabel> : null}
                 {arabic.map((r) => (
                   <FontRow key={r.f} entry={r} active={isActive(currentFamily, r.f)} onPick={pick} />
                 ))}
-                {latin.length ? <SectionLabel>لاتينية</SectionLabel> : null}
+                {latin.length ? <SectionLabel>{t.latin}</SectionLabel> : null}
                 {latin.map((r) => (
                   <FontRow key={r.f} entry={r} active={isActive(currentFamily, r.f)} onPick={pick} />
                 ))}
@@ -194,7 +197,7 @@ export function FontControl({
                 <FontRow key={r.f} entry={r} active={isActive(currentFamily, r.f)} onPick={pick} />
               ))
             ) : (
-              <li className="px-3.5 py-3 text-[12px] text-white/45">لا توجد نتائج</li>
+              <li className="px-3.5 py-3 text-[12px] text-white/45">{t.noResults}</li>
             )}
           </ul>
         </motion.div>
