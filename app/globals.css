@@ -23,7 +23,7 @@
  *     box-shadow.
  *   - Do NOT add `shadow-*`, `backdrop-blur-glass`, `backdrop-saturate-*`, or
  *     `rgba(255,255,255,var(--glass-opacity))` fills to new UI. Menus / popovers /
- *     dropdowns use `.glass-dropdown` (solid `--tq-surface` + `--tq-border-glass`
+ *     dropdowns use `.surface-menu` (solid `--tq-surface` + `--tq-border-glass`
  *     hairline) — the SAME bg + border as the sidebar profile (user) menu, which
  *     is the reference for every dropdown.
  *   - ONE accent: `--tq-purple #8B5CF6` (`--tq-blue / -violet / -magenta /
@@ -61,12 +61,12 @@
  *  │    color pickers / quality picker / Google-fonts dropdown   │
  *  │                                                             │
  *  │    SOLID surface + hairline border. NO blur, NO shadow,     │
- *  │    NO transparency. Recipe (= what `.glass-dropdown` does): │
+ *  │    NO transparency. Recipe (= what `.surface-menu` does): │
  *  │      background:  var(--tq-surface)   (solid ≈ #1E1E1E)     │
  *  │      border:      1px solid var(--tq-border-glass)          │
- *  │    Use `.glass-dropdown` for portal menus (matches the      │
- *  │    sidebar profile menu), `.glass-card` for cards,          │
- *  │    `.glass-modal` for dialogs. Do NOT add `shadow-*` or     │
+ *  │    Use `.surface-menu` for portal menus (matches the      │
+ *  │    sidebar profile menu), `.surface-card` for cards,          │
+ *  │    `.surface-modal` for dialogs. Do NOT add `shadow-*` or     │
  *  │    `backdrop-blur-glass` — legacy no-ops that read wrong.   │
  *  └─────────────────────────────────────────────────────────────┘
  *  ┌─────────────────────────────────────────────────────────────┐
@@ -108,14 +108,14 @@
  *  CLASS INDEX
  *  ────────────
  *  Cards
- *    .glass-card             Standard card  (glass bg + border, preset-responsive)
- *    .glass-empty-state      Empty-state card (same glass, no gradient stroke)
- *    .glass-card-danger      Danger variant (glass bg + red border)
+ *    .surface-card             Standard card  (glass bg + border, preset-responsive)
+ *    .surface-empty-state      Empty-state card (same glass, no gradient stroke)
+ *    .surface-card-danger      Danger variant (glass bg + red border)
  *
  *  Surfaces — popovers / menus / pickers (see PATTERN 3 above)
- *    .glass-popover          Re-usable popover (matches PATTERN 3 recipe)
- *    .glass-dropdown         Portal dropdowns (dark glass, NOT preset-responsive)
- *    .glass-modal            Modal dialogs (darker, NOT preset-responsive)
+ *    .surface-popover          Re-usable popover (matches PATTERN 3 recipe)
+ *    .surface-menu         Portal dropdowns (dark glass, NOT preset-responsive)
+ *    .surface-modal            Modal dialogs (darker, NOT preset-responsive)
  *
  *  Buttons (see PATTERNS 1, 2, 4 above)
  *    .btn-pill               Normal button surface (pill + glass + white text)
@@ -125,7 +125,7 @@
  *    .btn-pill-danger        Destructive pill (red-tinted variant of .btn-pill)
  *
  *  Navigation / chrome
- *    .dropdown-item          Item inside a .glass-dropdown
+ *    .dropdown-item          Item inside a .surface-menu
  *    .nav-item               Sidebar nav link (idle)
  *    .nav-active             Sidebar nav link (active)
  *
@@ -271,8 +271,8 @@
   --tq-status-down-text:   #fca5a5;
   --tq-status-down-bg:     rgba(239, 68, 68, 0.12);
   --tq-status-down-border: rgba(239, 68, 68, 0.30);
-  /* Glass surface fill — matches `.glass-card` / `.qa-card` /
-     `.glass-popover` bg recipe (white at `--glass-opacity` alpha).
+  /* Glass surface fill — matches `.surface-card` / `.qa-card` /
+     `.surface-popover` bg recipe (white at `--glass-opacity` alpha).
      Lets consumers reference the same fill via a single token
      instead of re-typing the rgba inline. Added 2026-05-23 when
      SlideNavSidebar called this out as a hardcoded CSS smell. */
@@ -290,7 +290,7 @@
      BiDi demo canvas, pricing cards, the inactive segmented-toggle fill). */
   --tq-card:     #111111;
   /* Card / chrome surface — matched to the shadcn `bbWjxCq` dark preset's
-     `--card` (user reference). Drives every `.glass-card` (dashboard cards AND
+     `--card` (user reference). Drives every `.surface-card` (dashboard cards AND
      the editor toolbox). */
   --tq-surface:  oklch(0.205 0 0);
   /* §22: floating panels (dropdowns + editor side panels) share the card
@@ -485,7 +485,7 @@ button, a, [role="button"] {
 
 /* Textareas using .input-dark — keep them rectangular-ish so multi-
    line content doesn't sit inside a pill silhouette. 14 px matches
-   the resting glass-card radius elsewhere in the system. */
+   the resting surface-card radius elsewhere in the system. */
 textarea.input-dark {
   border-radius: 14px;
   padding: 12px 16px;
@@ -644,11 +644,11 @@ textarea.input-dark {
    button's visual weight across the form. */
 /* §21: the auth modal is FLAT like the rest of the app — the old heavy 7× frost
    override is gone (it was a no-op once `--glass-blur` went to 0). The selector
-   (`.auth-modal.glass-modal`, specificity 0,2,0) now just pins its fill so it
-   beats `.glass-modal` regardless of source order; the auth panel carries both
+   (`.auth-modal.surface-modal`, specificity 0,2,0) now just pins its fill so it
+   beats `.surface-modal` regardless of source order; the auth panel carries both
    classes. */
-.auth-modal.glass-modal {
-  background: var(--tq-bg-glass);
+.auth-modal.surface-modal {
+  background: var(--tq-surface);
 }
 
 .auth-modal .input-dark,
@@ -858,7 +858,7 @@ html.app-shell-scroll body {
 }
 
 /* ─── Cards ─── */
-.glass-card {
+.surface-card {
   /* §21: opaque solid surface (reads correctly over ANY background incl. the
      studio canvas). NO :hover — cards are static; hover affordance lives on
      buttons + links only (user direction). */
@@ -1227,12 +1227,12 @@ html.app-shell-scroll body {
 /* Generation-canvas backdrop tint. The unified studio frame
    (`.canvas-gradient-border`) has NO fill of its own, so the empty/thinking
    canvas — before any slide streams — was a transparent void over the dark
-   studio gradient. This restores the pre-§18 `.glass-card` frosted look DURING
+   studio gradient. This restores the pre-§18 `.surface-card` frosted look DURING
    GENERATION only. Just the background tint here (same `--glass-opacity` token
-   as `.glass-card`, no hardcoded value); the BLUR is applied on the element via
+   as `.surface-card`, no hardcoded value); the BLUR is applied on the element via
    the `backdrop-blur-glass` + `backdrop-saturate` Tailwind utilities — the app's
    glass convention, because Lightning CSS strips a bare `backdrop-filter` from
-   plain rules (see `.glass-card`, which gets its blur the same way). No
+   plain rules (see `.surface-card`, which gets its blur the same way). No
    border/radius, so removing it on completion (when the opaque slide already
    covers it) causes no edge shift and the canvas frame never remounts. */
 .canvas-gen-glass {
@@ -1275,8 +1275,8 @@ html.app-shell-scroll body {
 }
 
 /* Normal-button surface (Pattern 1). Transparent — buttons sit on
-   top of glass surfaces (.glass-card, .glass-popover, .glass-modal,
-   .glass-dropdown) and inherit the tint from the surface. Stacking
+   top of glass surfaces (.surface-card, .surface-popover, .surface-modal,
+   .surface-menu) and inherit the tint from the surface. Stacking
    the button's own glass over the surface's glass reads as a solid
    chip, which is wrong (user feedback 2026-05-20). Affordance comes
    from the muted border + text colour fading to bright on hover.
@@ -1312,7 +1312,7 @@ html.app-shell-scroll body {
 }
 
 /* ─── Sidebar ─── */
-/* Sidebar glass surface — matches the SlideNavSidebar / .glass-card
+/* Sidebar glass surface — matches the SlideNavSidebar / .surface-card
    recipe so all three vertical panels (main sidebar, slide-nav,
    comments) share one visual language. Background is the canonical
    white-tint at the preset's --glass-opacity, NOT a 72%-solid dark
@@ -1404,7 +1404,7 @@ html.app-shell-scroll body {
 }
 
 /* ─── Empty State Card (no gradient border) ─── */
-.glass-empty-state {
+.surface-empty-state {
   background: var(--tq-surface);
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity));
@@ -1738,7 +1738,7 @@ html.app-shell-scroll body {
    sidebar, toolbox, and every other tooltip read identically (user direction
    2026-06-09). */
 .sidebar-tooltip {
-  background: var(--glass-fill);
+  background: var(--tq-surface);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: white;
   font-size: 12px;
@@ -2003,10 +2003,10 @@ html.app-shell-scroll body {
    The header, dropdowns, modals, and popovers all share ONE multiplier
    on the user's `--glass-blur` preset so the dashboard reads consistent:
    pick a preset in Settings → every elevated surface responds in lock-
-   step. Cards (`.glass-card` family) stay at 1× for a subtler effect.
+   step. Cards (`.surface-card` family) stay at 1× for a subtler effect.
    The dark base fill differs per role so visual hierarchy comes from
    tint, not blur. */
-/* `.glass-dropdown`, `.glass-modal`, and `.glass-popover` all carry the
+/* `.surface-menu`, `.surface-modal`, and `.surface-popover` all carry the
    same faint white fill at the user's `--glass-opacity` (via the
    documented `--tq-bg-glass` token) layered over the backdrop blur — a
    touch of separation from the page while staying clearly glass. (They
@@ -2022,24 +2022,24 @@ html.app-shell-scroll body {
    `backdrop-blur-glass backdrop-saturate-[var(--glass-saturation)]` to
    the className. The `--backdrop-blur-glass` theme token (top of file)
    keeps the blur preset-linked. */
-.glass-dropdown {
-  background: var(--tq-bg-glass);
+.surface-menu {
+  background: var(--tq-surface);
   border: 1px solid var(--tq-border-glass);
 }
 
-.glass-modal {
+.surface-modal {
   /* Floating modals/dialogs share the popover's dark fill (2026-06-08) so they
      read as solid frosted glass over any backdrop. The auth modal overrides back
      to the faint white tint (see `.auth-modal`). */
-  background: var(--glass-fill);
+  background: var(--tq-surface);
   border: 1px solid var(--tq-border-glass);
 }
 
-.glass-popover {
+.surface-popover {
   /* Dark fill over the backdrop blur so a popover stays legible on ANY contrast
      (a faint white fill washed out over light slides / surfaces). Centralised in
      `--glass-fill` (2026-06-08: 30% → 45%, shared with floating modals). */
-  background: var(--glass-fill);
+  background: var(--tq-surface);
   border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) + 0.05));
 }
 
@@ -2048,7 +2048,7 @@ html.app-shell-scroll body {
    lock). Kept around for future selector hooks, but the bg-color
    and transition are now ENTIRELY component-owned:
      • SlidePill.tsx sets `background-color` via inline style (so
-       it can't be beaten by `.glass-popover { background:
+       it can't be beaten by `.surface-popover { background:
        transparent }` source-order races).
      • The fade animation rides on Tailwind's `transition-opacity
        duration-150` class on the same element — DO NOT add a
@@ -2106,7 +2106,7 @@ html.app-shell-scroll body {
      comment editor / marker preview match every other popover + modal. Stays
      DARK (not `--tq-bg-glass`) because this floats over slides that can be white
      — a faint-white fill would vanish there. */
-  background-color: var(--glass-fill);
+  background-color: var(--tq-surface);
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
@@ -2147,13 +2147,13 @@ html.app-shell-scroll body {
 }
 
 /* ─── Card Danger Variant ─── */
-.glass-card-danger {
+.surface-card-danger {
   background: var(--tq-surface);
   border: 1px solid var(--tq-border-danger);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.glass-card-danger .settings-divider {
+.surface-card-danger .settings-divider {
   border-bottom-color: var(--tq-border-danger);
 }
 

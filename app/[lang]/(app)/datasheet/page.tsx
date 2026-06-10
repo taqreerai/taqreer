@@ -576,7 +576,7 @@ export default function DatasheetPage() {
               (bottom, optional).
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="dataset" title="البيانات" />
 
@@ -637,7 +637,7 @@ export default function DatasheetPage() {
               الهوية البصرية card, identical to /create.
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             {/* Inline header (not CardHeader) so the saved-kit pill can
                 overlay the title row. Mirrors /create's branding header:
@@ -752,7 +752,7 @@ export default function DatasheetPage() {
               EXPORT SETTINGS CARD (DOM 3rd) — identical to /create
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title="إعدادات الإخراج" />
 
@@ -960,7 +960,7 @@ function DataDropzone({
             : "border-white/20 bg-black/20 hover:border-white/30"
         }`}
       >
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]">
           <span
             className="material-symbols-outlined text-white/80"
             style={{ fontSize: 22 }}

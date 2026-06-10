@@ -111,7 +111,7 @@ export function ColorPickerPopover({
   align = "center",
   flipUp = false,
   instantExit = false,
-  surfaceClassName = "glass-card backdrop-blur-glass backdrop-saturate-(--glass-saturation)",
+  surfaceClassName = "surface-card",
 }: {
   open: boolean;
   value: string;
@@ -130,9 +130,9 @@ export function ColorPickerPopover({
   // Use to keep the popover on-screen when the swatch sits in a
   // grid column near the page edge.
   align?: ColorPickerAlign;
-  // Glass surface recipe. Defaults to the white-tint `.glass-card` used on
+  // Glass surface recipe. Defaults to the white-tint `.surface-card` used on
   // the create/brand/mimic flows' light cards. The in-canvas style pill passes
-  // `.glass-popover` (dark fill) so the picker matches the pill over a slide.
+  // `.surface-popover` (dark fill) so the picker matches the pill over a slide.
   surfaceClassName?: string;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -304,12 +304,12 @@ export function ColorPickerPopover({
         // own blur — but the picker must not be nested inside another
         // backdrop-filter element (the style pill keeps its blur on a sibling
         // layer for this). `surfaceClassName` is the glass recipe (default
-        // `.glass-card`; the style pill passes `.glass-popover`); `mt-3.5` gaps it
+        // `.surface-card`; the style pill passes `.surface-popover`); `mt-3.5` gaps it
         // below the trigger. Width 182 px; inner dims scale with it.
         <motion.div
           ref={wrapperRef}
           dir="ltr"
-          className={`${surfaceClassName} absolute z-30 rounded-xl p-2.5 shadow-2xl ${
+          className={`${surfaceClassName} absolute z-30 rounded-xl p-2.5 ${
             flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
           }`}
           style={{ ...positionStyle, width: POPOVER_WIDTH }}

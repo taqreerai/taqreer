@@ -82,7 +82,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
       </header>
 
       {images.length === 0 ? (
-        <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+        <div className="surface-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
           <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
             photo_library
           </span>
@@ -140,7 +140,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
           </div>
 
           {visible.length === 0 ? (
-            <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+            <div className="surface-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
               <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
                 search_off
               </span>

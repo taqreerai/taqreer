@@ -85,7 +85,7 @@ export function FavoritesGrid({
           }
         }}
         emptyState={
-          <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+          <div className="surface-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
             <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
               star
             </span>

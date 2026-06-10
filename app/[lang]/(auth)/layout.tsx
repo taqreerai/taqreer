@@ -61,13 +61,13 @@ export default async function AuthLayout({
           portal'd dropdowns the form might open. */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-12">
         <div
-          // Canonical `.glass-modal` + `.backdrop-blur-glass-boost`
+          // Canonical `.surface-modal` + `.`
           // (custom utility defined in globals.css via Tailwind v4's
           // `@utility` directive). Multiplier 7 on `--glass-blur`
           // gives a heavy frosted-glass read against the marquee —
           // preset "normal" (8 px) → 56 px effective blur. Still
           // tracks the user's Settings glass preset.
-          className="auth-modal glass-modal backdrop-blur-glass-boost w-full max-w-md rounded-3xl p-8 shadow-2xl"
+          className="auth-modal surface-modal w-full max-w-md rounded-3xl p-8"
         >
           <Link
             href={localizedHref("/", lang)}

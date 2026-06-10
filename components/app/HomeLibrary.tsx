@@ -34,7 +34,7 @@ export function HomeLibrary({
   const { locale } = useLocale();
 
   return (
-    <div className="glass-card rounded-2xl p-5 sm:p-6">
+    <div className="surface-card rounded-2xl p-5 sm:p-6">
       <header className="mb-5 flex items-center justify-between gap-3">
         <SegmentedToggle<Tab>
           options={[

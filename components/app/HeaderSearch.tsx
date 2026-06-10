@@ -5,7 +5,7 @@
 // Typing fires a debounced GET to /api/projects/search; results
 // render in a portal'd glass popover anchored to the input's
 // bounding rect (top + left + width all match the input). Portal
-// is non-negotiable: the header itself has `backdrop-blur-glass`,
+// is non-negotiable: the header itself has ``,
 // and a parent backdrop-filter creates a containing block that
 // kills any child backdrop-filter — the dropdown's blur would
 // render as nothing. createPortal moves the panel to <body> so
@@ -13,8 +13,8 @@
 // BrandKitActionsMenu use.
 //
 // Surface = `.in-slide-popover` (rgba(12,12,12,0.45) tint + faint
-// border) + `backdrop-blur-glass` + `backdrop-saturate`. Together
-// these give the actual visible glass — `.glass-popover` alone is
+// border) + `` + `backdrop-saturate`. Together
+// these give the actual visible glass — `.surface-popover` alone is
 // `background: transparent` and would render invisibly here.
 //
 // Keyboard: ↑/↓ move focus, Enter opens the focused (or first)
@@ -477,12 +477,12 @@ export function HeaderSearch({
               {showDropdown && anchorRect ? (
                 <motion.div
                   // Portal'd so the dropdown escapes the header's
-                  // `backdrop-blur-glass` stacking context (parent
+                  // `` stacking context (parent
                   // backdrop-filter kills child backdrop-filter).
                   // Pinned to the input's bounding rect: same left
                   // + same width, top sits 8 px below the bottom.
                   data-header-search-panel
-                  className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+                  className="in-slide-popover fixed z-[1100] overflow-hidden rounded-2xl"
                   style={{
                     top: anchorRect.bottom + 8,
                     left: anchorRect.left,

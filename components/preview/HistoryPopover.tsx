@@ -13,7 +13,7 @@
 // - Position computed from the trigger button's `DOMRect`: fixed
 //   `top = bottom + 8`, `left = centerX - width/2`, clamped to
 //   the viewport so the popover never spills out at narrow widths.
-// - `.glass-popover` + Tailwind `backdrop-blur-glass` for the
+// - `.surface-popover` + Tailwind `` for the
 //   surface (Pattern 3 — Layout surfaces).
 // - Inner content fades in via a motion.div so the outer surface
 //   stays static and keeps its backdrop-filter intact (any
@@ -170,7 +170,7 @@ export function HistoryPopover({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: flipUp ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+          className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
           style={{ top, bottom, left, width: POPOVER_WIDTH }}
         >
           <header className="border-b border-white/[0.08] px-3 py-2">

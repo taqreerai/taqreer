@@ -1,7 +1,7 @@
 "use client";
 
 // Landing FAQ — RTL accordion. Single item open at a time; the first is open by
-// default. Plain framer height animation, design-system tokens (.glass-card +
+// default. Plain framer height animation, design-system tokens (.surface-card +
 // --tq-* + Cairo via the page). No new deps.
 
 import { useState } from "react";

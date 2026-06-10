@@ -114,7 +114,7 @@ export function FontControl({
       <motion.div
         className="flex h-8 items-center overflow-hidden rounded-full"
         style={{
-          background: "var(--tq-bg-glass)",
+          background: "var(--tq-surface)",
           border: "1px solid var(--tq-border-glass)",
           width: collapsedW == null ? "max-content" : undefined,
         }}
@@ -154,7 +154,7 @@ export function FontControl({
       {open ? (
         <motion.div
           dir="rtl"
-          className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 overflow-hidden rounded-2xl shadow-2xl ${
+          className={`surface-popover absolute z-30 overflow-hidden rounded-2xl ${
             flipUp ? "bottom-full mb-2.5" : "top-full mt-2.5"
           }`}
           style={{ left: 0, width: WIDTH }}

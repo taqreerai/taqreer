@@ -113,7 +113,7 @@ export function MorePopover({
       // Follow the deck language: Arabic decks flow RTL (label on the right,
       // control on the left) — the chrome is Arabic-first. English decks stay LTR.
       dir={isEn ? "ltr" : "rtl"}
-      className={`glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-30 rounded-2xl px-3.5 py-3.5 shadow-2xl ${
+      className={`surface-popover absolute z-30 rounded-2xl px-3.5 py-3.5 ${
         flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
       }`}
       style={{ left: 0, width: WIDTH }}
@@ -272,7 +272,7 @@ function Select({
       className="w-full cursor-pointer appearance-none rounded-md border px-2 py-1.5 text-[12px] text-white outline-none"
       style={{
         borderColor: "var(--tq-border-glass)",
-        background: "var(--tq-bg-glass)",
+        background: "var(--tq-surface)",
       }}
     >
       {options.map((o) => (
@@ -310,7 +310,7 @@ function Seg({
             }`}
             style={
               active
-                ? { background: "var(--tq-bg-glass)" }
+                ? { background: "var(--tq-surface)" }
                 : undefined
             }
           >

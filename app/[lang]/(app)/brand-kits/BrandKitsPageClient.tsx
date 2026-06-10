@@ -251,7 +251,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
     return (
       <div
         dir="rtl"
-        className="glass-card flex flex-col items-center justify-center gap-3 p-12 text-center"
+        className="surface-card flex flex-col items-center justify-center gap-3 p-12 text-center"
       >
         <span
           className="material-symbols-outlined text-[40px] text-white/40"

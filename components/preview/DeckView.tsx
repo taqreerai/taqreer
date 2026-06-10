@@ -3044,7 +3044,7 @@ export function DeckView({
         target.closest('aside[aria-label="لوحة التعليقات"]') || // Comments panel
         target.closest('aside[aria-label="شريط الشرائح"]') || // SlideNav (transient during fade)
         target.closest('[data-preview-toolbar="true"]') || // PreviewActionBar wrapper
-        target.closest(".glass-modal") || // Editor popover
+        target.closest(".surface-modal") || // Editor popover
         target.closest("header") || // App header
         target.closest('aside[aria-label="Sidebar"]') // Main app sidebar
       ) {
@@ -3355,7 +3355,7 @@ export function DeckView({
   if (status === "failed") {
     return (
       <section dir="rtl" className="page-container">
-        <div className="glass-card-danger mx-auto max-w-xl rounded-xl p-8 text-center">
+        <div className="surface-card-danger mx-auto max-w-xl rounded-xl p-8 text-center">
           <span className="material-symbols-outlined mb-4 block text-[42px] text-red-400">
             warning
           </span>
@@ -3396,7 +3396,7 @@ export function DeckView({
   // viewport (minus the dashboard header). `min-h-[calc(100vh-120px)]`
   // = viewport minus the DashboardShell header padding so the card
   // floats inside the visible area rather than docking against the
-  // top of the content well. `.glass-card` is the canonical neutral
+  // top of the content well. `.surface-card` is the canonical neutral
   // surface (token-driven background + backdrop-blur, see globals.css
   // — no inline `style` overrides). Buttons use `.btn-gradient` +
   // `.btn-pill` to match the failed-state recovery card.
@@ -3406,7 +3406,7 @@ export function DeckView({
         dir="rtl"
         className="page-container flex min-h-[calc(100vh-120px)] items-center justify-center"
       >
-        <div className="glass-card mx-auto w-full max-w-xl rounded-2xl p-8 text-center">
+        <div className="surface-card mx-auto w-full max-w-xl rounded-2xl p-8 text-center">
           <span className="material-symbols-outlined mb-4 block text-[42px] text-white/70">
             stop_circle
           </span>
@@ -4025,7 +4025,7 @@ export function DeckView({
           // any ancestor clip would chop the halo. The clip needed
           // for the SlideRenderer's scaled content moved down to
           // the inner wrapper below.
-          className={`canvas-gradient-border group/canvas relative p-0 shadow-2xl${
+          className={`canvas-gradient-border group/canvas relative p-0${
             commentMode || studioMode === "ai" ? " cursor-crosshair" : ""
           }`}
           // The gradient halo is the "you're instructing the AI" indicator.
@@ -4046,7 +4046,7 @@ export function DeckView({
           <div
             className={`h-full w-full overflow-hidden${
               generating
-                ? " canvas-gen-glass backdrop-blur-glass backdrop-saturate-(--glass-saturation)"
+                ? " canvas-gen-glass"
                 : ""
             }`}
           >

@@ -102,7 +102,7 @@ function ToolButton({
   // Two coordinated visual transitions on hover:
   //   - icon: muted (white/60) → white
   //   - border: dim (white/15) → bright (white/40)
-  // Idle = TRANSPARENT background (the toolbar sits on a `.glass-card`
+  // Idle = TRANSPARENT background (the toolbar sits on a `.surface-card`
   // surface; stacking another glass tint on top reads as a solid chip,
   // which is wrong — same rule as `.btn-pill` in globals.css). Active
   // raises the glass intensity as the sole state indicator (e.g.
@@ -130,7 +130,7 @@ function ToolButton({
         aria-pressed={active}
         // No inline style anymore — both hover + active backgrounds
         // come from Tailwind utilities in `colorClasses` above. The
-        // blur still comes from `backdrop-blur-glass` so the button
+        // blur still comes from `` so the button
         // participates in v4's compositional backdrop-filter rule.
         className={
           gradient
@@ -206,7 +206,7 @@ function ToolButton({
           so `group-hover` can animate the slide. */}
       <div
         dir="auto"
-        className={`pointer-events-none absolute z-50 whitespace-nowrap rounded-lg border border-white/[0.12] bg-[var(--glass-fill)] px-3 py-1.5 text-xs text-white opacity-0 transition-all duration-200 group-hover:opacity-100 ${
+        className={`pointer-events-none absolute z-50 whitespace-nowrap rounded-lg border border-white/[0.12] bg-[var(--tq-surface)] px-3 py-1.5 text-xs text-white opacity-0 transition-all duration-200 group-hover:opacity-100 ${
           tooltipHorizontal
             ? // Bottom bar → pop ABOVE the button, centered, sliding up.
               "bottom-full left-1/2 mb-2.5 -translate-x-1/2 translate-y-1.5 group-hover:translate-y-0"
@@ -554,7 +554,7 @@ export function PreviewActionBar({
         // dir=rtl so the Edit⇄AI toggle leads on the RIGHT (RTL leading edge)
         // and the rest of the cluster flows leftward from it.
         dir="rtl"
-        className={`glass-card flex items-center gap-1 rounded-full p-1.5 ${
+        className={`surface-card flex items-center gap-1 rounded-full p-1.5 ${
           horizontal ? "flex-row" : "flex-col"
         }`}
       >
@@ -622,7 +622,7 @@ export function PreviewActionBar({
                     `pendingAiBounds`); the instruction is typed here. The mesh
                     gradient lives ONLY on this AI hero (the sparkle + the send
                     button), per the frontend consult. */}
-                <div className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) flex h-9 items-center gap-1.5 rounded-full px-1.5">
+                <div className="surface-popover flex h-9 items-center gap-1.5 rounded-full px-1.5">
                   {aiBusy ? (
                     // Submitting — collapse to a compact running label, the mesh
                     // ring spinning, until the regen settles (§17 states).

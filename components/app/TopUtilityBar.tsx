@@ -166,7 +166,7 @@ function SearchOverlay({
               dir="rtl"
               className="pointer-events-auto w-[min(92vw,580px)] overflow-hidden rounded-xl"
               style={{
-                background: "var(--glass-fill)",
+                background: "var(--tq-surface)",
                 border: "1px solid var(--tq-border-hairline)",
               }}
             >

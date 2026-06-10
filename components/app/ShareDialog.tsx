@@ -21,7 +21,7 @@
 // non-owners (Phase 15.E).
 //
 // Frame: copies `SaveAsTemplateDialog` byte-for-byte (sibling
-// overlay+panel pattern, glass-popover surface, Esc + body-scroll
+// overlay+panel pattern, surface-popover surface, Esc + body-scroll
 // lock, btn-pill footer). Only the BODY content + tab strip differ.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -551,7 +551,7 @@ export function ShareDialog({
               aria-modal="true"
               aria-labelledby="share-title"
               onClick={(e) => e.stopPropagation()}
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto flex w-[min(100vw-24px,640px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl"
+              className="surface-modal pointer-events-auto flex w-[min(100vw-24px,640px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
               <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
@@ -791,7 +791,7 @@ function TabPill({
           layoutId="share-tab-active-bg"
           className="absolute inset-0 rounded-full"
           style={{
-            background: "var(--tq-bg-glass)",
+            background: "var(--tq-surface)",
             border: "1px solid var(--tq-border-glass)",
           }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
@@ -871,7 +871,7 @@ function ShareTabContent({
           <div
             className="flex items-stretch gap-2 rounded-full p-1"
             style={{
-              background: "var(--tq-bg-glass)",
+              background: "var(--tq-surface)",
               border: "1px solid var(--tq-border-glass)",
             }}
           >
@@ -1010,7 +1010,7 @@ function PersonRow({
     <div
       className="flex items-center gap-3 rounded-full px-4 py-2"
       style={{
-        background: "var(--tq-bg-glass)",
+        background: "var(--tq-surface)",
         border: "1px solid var(--tq-border-glass)",
       }}
     >

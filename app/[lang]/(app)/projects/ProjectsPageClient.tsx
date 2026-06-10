@@ -220,7 +220,7 @@ export function ProjectsPageClient({
         emptyState={
           projects.length === 0 ? (
             // True empty — user has no projects yet. Funnel to /create.
-            <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+            <div className="surface-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
               <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
                 folder_open
               </span>
@@ -240,7 +240,7 @@ export function ProjectsPageClient({
           ) : (
             // Filtered to zero — projects exist but the active filters
             // hide them all. Offer a reset rather than a /create CTA.
-            <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+            <div className="surface-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
               <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
                 filter_alt_off
               </span>

@@ -2,7 +2,7 @@
 
 // Full notifications list, modal style. Triggered from the bell dropdown's
 // "عرض الكل" button. Mirrors the slide lightbox visual treatment:
-// glass-modal backdrop, glass-card panel, body-scroll lock + Esc to close.
+// surface-modal backdrop, surface-card panel, body-scroll lock + Esc to close.
 // Scrollable; up to 30 items (the store's cap).
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -165,7 +165,7 @@ export function AllNotificationsModal({
             aria-modal="true"
             aria-label="جميع الإشعارات"
             onClick={(e) => e.stopPropagation()}
-            className={`glass-modal backdrop-blur-glass-boost pointer-events-auto flex w-[min(100vw-24px,560px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl ${
+            className={`surface-modal pointer-events-auto flex w-[min(100vw-24px,560px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl ${
               clearPhase === "collapsing" ? "panel-closing" : ""
             }`}
           >

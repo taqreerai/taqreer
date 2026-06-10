@@ -39,7 +39,7 @@ export function DashboardWidgetHeader({ title, href, actionLabel = "عرض ال�
 
 export function DashboardEmptyState({ icon, title, description, className = "", action }: DashboardEmptyStateProps) {
   return (
-    <div className={`glass-empty-state flex flex-col items-center justify-center py-10 px-6 text-center min-h-[160px] ${className}`}>
+    <div className={`surface-empty-state flex flex-col items-center justify-center py-10 px-6 text-center min-h-[160px] ${className}`}>
       <span className="material-symbols-outlined text-[26px] text-muted/40 mb-3">{icon}</span>
       <h3 className="text-sm font-semibold text-white mb-1">{title}</h3>
       <p className="text-xs text-muted leading-6 max-w-[220px]">

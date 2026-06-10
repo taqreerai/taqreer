@@ -829,7 +829,7 @@ export default function EnhanceContentPage() {
               the file area needs much more vertical real estate.
               p-4 + gap-4 deliberately tighter than the create-flow
               cards so the row reads compact, not airy. */}
-          <div className="glass-card flex min-h-[540px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+          <div className="surface-card flex min-h-[540px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -878,7 +878,7 @@ export default function EnhanceContentPage() {
                   }`}
                 >
                   <span
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]"
                   >
                     {stage === "extracting" ? (
                       <span className="spinner h-5 w-5 rounded-full border-2 border-white/20 border-t-white" />
@@ -993,7 +993,7 @@ export default function EnhanceContentPage() {
               dropdown in the header, palette, single brand-font picker,
               logo row, save toggle. Same min-h / min-w / flex-1 sizing
               as the source card so the two-card row stays balanced. */}
-          <div className="glass-card flex min-h-[540px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+          <div className="surface-card flex min-h-[540px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
             {/* Inline header (not CardHeader) so the saved-kit pill can
                 overlay the title row. Mirrors /create's branding header:
                 pb-4 balances the card's p-4 top padding so the title sits

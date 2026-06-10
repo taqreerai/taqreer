@@ -204,7 +204,7 @@ export function TemplatesPageClient({
             templates.length === 0 ? (
               // True empty — user has no templates AND community is
               // empty. Steer them toward saving one.
-              <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="surface-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
                 <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
                   dashboard_customize
                 </span>
@@ -218,7 +218,7 @@ export function TemplatesPageClient({
             ) : (
               // Filtered to zero — templates exist but the active
               // filters hide them all.
-              <div className="glass-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="surface-empty-state flex flex-col items-center justify-center px-6 py-16 text-center">
                 <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
                   filter_alt_off
                 </span>

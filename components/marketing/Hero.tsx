@@ -84,7 +84,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 تم إنشاء {formattedCount} عرض تقديمي حتى الآن
               </span>
             )}
-            <span className="rounded-full border border-[var(--tq-border-glass)] bg-[var(--tq-bg-glass)] px-4 py-1.5 text-xs font-medium text-muted">
+            <span className="rounded-full border border-[var(--tq-border-glass)] bg-[var(--tq-surface)] px-4 py-1.5 text-xs font-medium text-muted">
               مدعوم بتقنية Claude Design
             </span>
           </motion.div>

@@ -223,7 +223,7 @@ export function LayersPanel({
       aria-label={isEn ? "Layers" : "الطبقات"}
       // Drop the clip while dragging (lifted row floats past the edges) OR while
       // the background colour picker is open (it spills below the panel).
-      className={`backdrop-blur-glass fixed z-[30] flex flex-col rounded-3xl border p-3 shadow-2xl ${
+      className={` fixed z-[30] flex flex-col rounded-3xl border p-3 ${
         isDragging || bgPickerOpen ? "overflow-visible" : "overflow-hidden"
       }`}
       style={{
@@ -233,7 +233,7 @@ export function LayersPanel({
         top: 16,
         bottom: 100,
         width: SLIDE_NAV_WIDTH,
-        background: "var(--tq-bg-glass)",
+        background: "var(--tq-surface)",
         borderColor: "var(--tq-border-glass)",
       }}
     >
@@ -318,7 +318,7 @@ export function LayersPanel({
                     align="start"
                     flipUp
                     instantExit
-                    surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
+                    surfaceClassName="surface-popover"
                   />
                 </div>
               </div>

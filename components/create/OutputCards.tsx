@@ -135,7 +135,7 @@ export function CardShell({
     <motion.div
       layout={layoutEnabled}
       transition={{ layout: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }}
-      className="glass-card flex flex-col gap-4 rounded-2xl p-5"
+      className="surface-card flex flex-col gap-4 rounded-2xl p-5"
     >
       <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
         <span
@@ -275,7 +275,7 @@ export function InlineStepper({
       // h-22 / w~66 (button h-5 w-5, input w-6). The 1-px
       // border-glass token + glass-bg match the rest of the input
       // chrome on /create + /mimic.
-      className="flex items-center rounded-full border backdrop-blur-glass"
+      className="flex items-center rounded-full border"
       style={{
         height: 22,
         background: "rgba(255, 255, 255, var(--glass-opacity))",
@@ -393,7 +393,7 @@ function SizeChoice({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className="backdrop-blur-glass flex h-11 items-center justify-between gap-3 rounded-xl border px-3 transition-colors"
+      className=" flex h-11 items-center justify-between gap-3 rounded-xl border px-3 transition-colors"
       style={{
         background: "rgba(255, 255, 255, var(--glass-opacity))",
         borderColor: active

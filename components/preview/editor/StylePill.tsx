@@ -189,7 +189,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         paddingInlineStart: 8,
         paddingInlineEnd: 3,
         borderColor: "var(--tq-border-glass)",
-        background: "var(--tq-bg-glass)",
+        background: "var(--tq-surface)",
       }}
     >
       <input
@@ -683,7 +683,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
           blur on a sibling layer, the picker's only backdrop-filter ancestor is
           none → it blurs the slide directly, exactly like the pill. */}
       <div
-        className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) rounded-full shadow-2xl"
+        className="surface-popover rounded-full"
         style={{ position: "absolute", inset: 0 }}
       />
       <div
@@ -781,7 +781,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                 // Match the pill exactly: same dark glass + the modal-strength
                 // boost blur (not the default white-tint card) so the picker
                 // reads as frosted glass over a slide.
-                surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
+                surfaceClassName="surface-popover"
               />
             </div>
           </div>
@@ -826,7 +826,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
               align="center"
               flipUp={popoverFlipUp}
               instantExit
-              surfaceClassName="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation)"
+              surfaceClassName="surface-popover"
             />
           </div>
           <Divider />
@@ -845,7 +845,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
             className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
-            style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
+            style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-glass)" }}
           >
             <ReplaceIcon />
             {uploading ? "Uploading…" : "Replace"}
@@ -858,7 +858,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
             onChange={onPickImage}
           />
           {/* §19 — Regenerate an AI image with an edited prompt. Only for AI
-              boxes (data-genid + data-genimage). Opens a glass-popover prompt
+              boxes (data-genid + data-genimage). Opens a surface-popover prompt
               editor pre-filled with the box's prompt. */}
           {isAiImage && onRegenImage && (
             <div style={{ position: "relative" }}>
@@ -874,7 +874,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                   setFontOpen(false);
                 }}
                 className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white"
-                style={{ background: "var(--tq-bg-glass)", border: "1px solid var(--tq-border-glass)" }}
+                style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-glass)" }}
               >
                 <RegenImageIcon />
                 إعادة توليد
@@ -884,7 +884,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                   ref={regenPopoverRef}
                   dir="rtl"
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="glass-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) absolute z-20 rounded-xl p-2.5 text-white shadow-2xl"
+                  className="surface-popover absolute z-20 rounded-xl p-2.5 text-white"
                   style={{
                     width: 300,
                     right: 0,
@@ -909,7 +909,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                     }}
                     placeholder="صف الصورة التي تريد توليدها…"
                     className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] leading-relaxed text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/40"
-                    style={{ borderColor: "var(--tq-border-glass)", background: "var(--tq-bg-glass)" }}
+                    style={{ borderColor: "var(--tq-border-glass)", background: "var(--tq-surface)" }}
                   />
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span className="text-[10px] text-white/40">تُحتسب صورة واحدة</span>

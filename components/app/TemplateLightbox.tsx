@@ -8,7 +8,7 @@
 // have only 3 slides (vs. a deck's 12-20) — so the wide stage was
 // dead pixels. This component:
 //
-//   • Renders in a glass-popover modal (same chrome as the Bell
+//   • Renders in a surface-popover modal (same chrome as the Bell
 //     "عرض الكل" modal + SaveAsTemplateDialog) instead of taking
 //     over the whole viewport.
 //   • Stage is fixed at TEMPLATE_STAGE_PX wide (16:9) or tall
@@ -197,7 +197,7 @@ export function TemplateLightbox({
               aria-labelledby="tpl-lbx-title"
               onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: stageWidth + STAGE_CHROME_PX }}
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto flex max-h-[90vh] flex-col overflow-hidden rounded-2xl"
+              className="surface-modal pointer-events-auto flex max-h-[90vh] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
               <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">

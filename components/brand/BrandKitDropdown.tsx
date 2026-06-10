@@ -50,7 +50,7 @@ export function BrandKitDropdown({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`backdrop-blur-glass flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={` flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
         }`}
         style={{ background: "rgba(255, 255, 255, var(--glass-opacity))" }}
@@ -70,7 +70,7 @@ export function BrandKitDropdown({
       </button>
       {open ? (
         <div
-          className="absolute end-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+          className="absolute end-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
           role="listbox"
           aria-label="الهويات المحفوظة"
         >

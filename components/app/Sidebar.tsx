@@ -402,17 +402,17 @@ export function Sidebar({
                   width: dropdownPos.width,
                   zIndex: 9999,
                 }}
-                // `.glass-dropdown` is background-free now (no own tint).
+                // `.surface-menu` is background-free now (no own tint).
                 // Blur comes from the Tailwind utilities so it participates
                 // in v4's compositional `backdrop-filter` rule — without
                 // these utilities the dropdown is completely see-through
                 // (no blur), since the CSS class only sets border. See
-                // globals.css `.glass-dropdown` for full reasoning.
+                // globals.css `.surface-menu` for full reasoning.
                 // max-height + scroll so the now-taller menu (§20: header
                 // controls live here) never runs off the top of short
                 // viewports — it opens upward from the bottom-anchored profile
                 // button.
-                className="glass-dropdown backdrop-blur-glass backdrop-saturate-(--glass-saturation) rounded-2xl shadow-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
+                className="surface-menu rounded-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
               >
                 <div className="px-3 py-2">
                   <p className="font-semibold text-white text-sm truncate">{name}</p>

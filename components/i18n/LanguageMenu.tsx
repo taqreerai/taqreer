@@ -1,7 +1,7 @@
 "use client";
 
 // Chrome language chooser — the `translate` icon button + a dropdown menu, using
-// the same glass-popover surface, MenuItem rows, portal, and outside-click/Esc
+// the same surface-popover surface, MenuItem rows, portal, and outside-click/Esc
 // dismissal as the app's other dashboard menus (TemplateActionsMenu /
 // ProjectActionsMenu). Picking a language swaps the locale segment on the CURRENT
 // path (so you stay on the page) and writes a cookie so the choice persists and
@@ -109,7 +109,7 @@ export function LanguageMenu({ className = "" }: { className?: string }) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  className="glass-dropdown fixed z-[1100] overflow-hidden rounded-xl"
+                  className="surface-menu fixed z-[1100] overflow-hidden rounded-xl"
                   style={{ top, left, width: MENU_WIDTH }}
                 >
                   <ul className="flex flex-col p-1.5">

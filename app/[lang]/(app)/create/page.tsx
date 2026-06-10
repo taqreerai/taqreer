@@ -666,7 +666,7 @@ export default function CreatePage() {
               CONTENT CARD (DOM 1st, visual right)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="subject" title={t.contentCard} />
 
@@ -758,7 +758,7 @@ export default function CreatePage() {
               BRANDING CARD (DOM 2nd) — palette + one font + logo
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             {/* Mirrors CardHeader exactly (icon + title + pb-4 hairline) so
                 the separator and title sit at the same heights as the other
@@ -885,7 +885,7 @@ export default function CreatePage() {
               EXPORT SETTINGS CARD (DOM 3rd, visual left)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`glass-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title={t.outputCard} />
 
@@ -1079,7 +1079,7 @@ function ContentDropzone({
             : "border-white/20 bg-black/20 hover:border-white/30"
         } min-h-[44px]`}
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
           <span
             className="material-symbols-outlined text-white/80"
             style={{ fontSize: 18 }}

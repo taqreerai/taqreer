@@ -1,7 +1,7 @@
 "use client";
 
 // Per-tile actions menu for template tiles. Mirrors ProjectActionsMenu
-// structurally — same glass-popover surface, same anchor + flip-above
+// structurally — same surface-popover surface, same anchor + flip-above
 // math, same outside-click + Esc dismissal — with a smaller item set
 // tailored to templates:
 //
@@ -138,7 +138,7 @@ export function TemplateActionsMenu({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+          className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
           style={{ top, bottom, left, width: MENU_WIDTH }}
         >
           <ul className="flex flex-col p-1.5">

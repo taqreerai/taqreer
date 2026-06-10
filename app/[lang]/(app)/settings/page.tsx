@@ -184,7 +184,7 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-6">
 
         {/* ── Profile ── */}
-        <div className="settings-card glass-card rounded-xl">
+        <div className="settings-card surface-card rounded-xl">
           <h2 className="settings-card-title">الملف الشخصي</h2>
           <div className="settings-divider" />
 
@@ -240,7 +240,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Password ── */}
-        <div className="settings-card glass-card rounded-xl">
+        <div className="settings-card surface-card rounded-xl">
           <h2 className="settings-card-title">تغيير كلمة المرور</h2>
           <div className="settings-divider" />
 
@@ -273,7 +273,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Delete Account ── */}
-        <div className="settings-card glass-card-danger rounded-xl">
+        <div className="settings-card surface-card-danger rounded-xl">
           <h2 className="settings-card-title text-red-400">حذف الحساب</h2>
           <div className="settings-divider" />
           <p className="text-muted text-sm mb-5">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع بياناتك نهائياً</p>
@@ -304,7 +304,7 @@ export default function SettingsPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="glass-modal backdrop-blur-glass-boost rounded-2xl p-8 max-w-md w-full mt-[20vh] shadow-2xl"
+              className="surface-modal rounded-2xl p-8 max-w-md w-full mt-[20vh]"
             >
               <h3 className="text-xl font-bold mb-2 text-white">حذف الحساب</h3>
               <p className="text-muted text-sm mb-8">هل أنت متأكد؟ هذا الإجراء لا يمكن التراجع عنه وسيُحذف حسابك وجميع بياناتك نهائياً.</p>

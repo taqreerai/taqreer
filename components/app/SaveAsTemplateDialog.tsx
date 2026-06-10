@@ -5,7 +5,7 @@
 // Mirrors the Bell-modal visual pattern (AllNotificationsModal) so the
 // dialog feels native to the app:
 //   • dim overlay sibling (motion fade) — NO backdrop-filter on this one
-//   • glass-popover panel sibling — fixed-positioned, NOT animated, so
+//   • surface-popover panel sibling — fixed-positioned, NOT animated, so
 //     backdrop-filter actually blurs the page beneath it (any animated
 //     transform/opacity ancestor would trap the filter in a stacking
 //     context and the blur would silently disappear)
@@ -249,7 +249,7 @@ export function SaveAsTemplateDialog({
               onClick={(e) => e.stopPropagation()}
               // Width + max-height mirror AllNotificationsModal byte-
               // for-byte so the two modals read as the same artefact.
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto flex w-[min(100vw-24px,560px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl"
+              className="surface-modal pointer-events-auto flex w-[min(100vw-24px,560px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header — title + close X, exactly the BellModal shape
                   (items-center; single-line title; no descriptive

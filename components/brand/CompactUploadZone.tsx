@@ -146,7 +146,7 @@ export function CompactUploadZone({
         }}
       >
         <span
-          className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--tq-bg-glass)] ${
+          className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)] ${
             horizontal ? "h-8 w-8" : "h-10 w-10"
           }`}
         >

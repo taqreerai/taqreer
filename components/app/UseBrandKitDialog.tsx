@@ -11,7 +11,7 @@
 //
 // Sibling-overlay pattern (dim + panel siblings inside
 // AnimatePresence) per the CR 2026-05-22 finding — preserves the
-// panel's `backdrop-blur-glass` glass refraction. Same recipe as
+// panel's `` glass refraction. Same recipe as
 // `TemplateDeleteConfirmDialog` and `SaveAsTemplateDialog`.
 
 import { useEffect, useState } from "react";
@@ -97,7 +97,7 @@ export function UseBrandKitDialog({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto w-full max-w-3xl rounded-2xl p-8 shadow-2xl"
+              className="surface-modal pointer-events-auto w-full max-w-3xl rounded-2xl p-8"
             >
               <header className="mb-6 flex items-start justify-between gap-3">
                 <div>

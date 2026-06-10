@@ -12,7 +12,7 @@
 //
 // `.modal-dim` + `backdrop-brightness-75` produces the dimming via
 // backdrop-filter (no own bg-color) so the panel's own
-// `backdrop-blur-glass` still has unbleached page content to blur.
+// `` still has unbleached page content to blur.
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -62,7 +62,7 @@ export function TemplateDeleteConfirmDialog({
           {/* Panel wrapper — sibling of the dim. NOT animated (the
               earlier nested-then-promoted-to-motion experiments
               proved that animated transform/opacity ancestors trap
-              the glass-modal's backdrop-blur). Click-outside is
+              the surface-modal's backdrop-blur). Click-outside is
               handled by the dim's onClick above; the panel itself
               has `pointer-events-auto` to receive its own clicks. */}
           <div
@@ -80,7 +80,7 @@ export function TemplateDeleteConfirmDialog({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto mt-[20vh] w-full max-w-md rounded-2xl p-8 shadow-2xl"
+              className="surface-modal pointer-events-auto mt-[20vh] w-full max-w-md rounded-2xl p-8"
             >
               <h3
                 id="template-delete-title"

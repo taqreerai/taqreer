@@ -7,7 +7,7 @@
 // Why a portal popover (not a native `<select>`):
 // the global "no native dropdowns" rule (user feedback 2026-05-23 —
 // "we already have styled ones, don't use defaults"). Same recipe as
-// ProjectActionsMenu: portal'd `.glass-popover`, position derived
+// ProjectActionsMenu: portal'd `.surface-popover`, position derived
 // from the trigger's DOMRect, flip-above when low on viewport,
 // outside-click + Esc dismiss.
 //
@@ -259,7 +259,7 @@ export function AccessChipDropdown({
                     scale: 0.98,
                   }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1200] overflow-hidden rounded-2xl shadow-2xl"
+                  className="surface-popover fixed z-[1200] overflow-hidden rounded-2xl"
                   style={{ top, bottom, left, width: MENU_WIDTH }}
                 >
                   <ul className="flex flex-col p-1.5">

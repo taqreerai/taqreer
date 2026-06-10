@@ -1,6 +1,6 @@
 "use client";
 
-// Per-tile 3-dots menu for brand-kit tiles. Same glass-popover surface
+// Per-tile 3-dots menu for brand-kit tiles. Same surface-popover surface
 // + anchor + flip-above math + outside-click + Esc dismissal as
 // `ProjectActionsMenu` and `TemplateActionsMenu`. Item set:
 //
@@ -123,7 +123,7 @@ export function BrandKitActionsMenu({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+          className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
           style={{ top, bottom, left, width: MENU_WIDTH }}
         >
           <ul className="flex flex-col p-1.5">

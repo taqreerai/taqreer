@@ -16,7 +16,7 @@ export function TemplatesCard({
   thumbnails: MarqueeThumbnail[];
 }) {
   return (
-    <div className="templates-host glass-card overflow-hidden rounded-2xl p-6">
+    <div className="templates-host surface-card overflow-hidden rounded-2xl p-6">
       {/* LTR-locked layout: content LEFT, thumbnails RIGHT; the text
           block re-anchors RTL for natural Arabic reading. */}
       <div dir="ltr" className="flex flex-col items-stretch gap-8 md:flex-row">

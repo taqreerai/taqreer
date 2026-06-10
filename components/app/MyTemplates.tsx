@@ -137,7 +137,7 @@ export function MyTemplates({
   }
 
   return (
-    <div className="glass-card rounded-2xl p-5 sm:p-6" dir="rtl">
+    <div className="surface-card rounded-2xl p-5 sm:p-6" dir="rtl">
       <header className="mb-5 flex items-start justify-between">
         <div>
           <h2 className="tq-widget-title">ابدأ من قالب</h2>

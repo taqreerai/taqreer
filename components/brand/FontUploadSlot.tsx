@@ -92,7 +92,7 @@ export function FontUploadSlot({
       />
       {file ? (
         <div
-          className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2 bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+          className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
         >
           <div className="flex min-w-0 items-center gap-2">
             <span

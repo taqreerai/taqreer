@@ -160,7 +160,7 @@ export function GenerateSplitButton({
             exit={{ opacity: 0, scale: 0.95, y: 4 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.25 }}
             dir="rtl"
-            className="backdrop-blur-glass absolute right-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-2xl border shadow-2xl bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+            className=" absolute right-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
           >
             <div className="px-3 py-2 text-[11px] text-white/40">
               جودة التوليد
@@ -211,7 +211,7 @@ export function GenerateSplitButton({
                         تفكير
                       </span>
                     ) : (
-                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white/50 bg-[var(--tq-bg-glass)]">
+                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white/50 bg-[var(--tq-surface)]">
                         سريع
                       </span>
                     )}

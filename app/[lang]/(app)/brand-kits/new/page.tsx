@@ -227,7 +227,7 @@ export default function NewBrandKitPage() {
             ═══════════════════════════════════════════════════════ */}
         <div className="flex justify-center">
           <div
-            className={`glass-card flex ${CARD_W_CLASS} min-h-[540px] flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex ${CARD_W_CLASS} min-h-[540px] flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="palette" title="الهوية البصرية" />
 

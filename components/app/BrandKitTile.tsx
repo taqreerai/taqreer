@@ -76,7 +76,7 @@ export function BrandKitTile({
       }}
       aria-label={`استخدام ${kit.name}`}
       dir="rtl"
-      // `rounded-3xl` overrides .glass-card's default radius so the
+      // `rounded-3xl` overrides .surface-card's default radius so the
       // tiles read as visibly rounded (per user direction 2026-05-27).
       // The list page renders the tiles directly — no wrapping
       // container — so the rounding is the only chrome separating
@@ -85,7 +85,7 @@ export function BrandKitTile({
       // `hover:-translate-y-0.5` is the same subtle lift QuickActions
       // applies via `.qa-card:hover` — kept in CSS (not JS state) so
       // it composes naturally with the 3-dots button's own hover.
-      className="glass-card group relative flex cursor-pointer flex-col gap-4 overflow-hidden rounded-3xl p-4 transition-all duration-200 hover:-translate-y-0.5"
+      className="surface-card group relative flex cursor-pointer flex-col gap-4 overflow-hidden rounded-3xl p-4 transition-all duration-200 hover:-translate-y-0.5"
     >
       {/* Header row — name + 3-dots aligned to the visual top edges.
           Default kits get a small star chip pinned to the start of

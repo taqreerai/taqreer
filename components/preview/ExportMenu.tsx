@@ -5,7 +5,7 @@
 // separate export buttons that used to live in the bottom toolbar — those moved
 // up to the header and collapsed here (command-bar redesign, plan-editor §16).
 //
-// Anchoring + open/close mirror ProjectActionsMenu.tsx (portal'd .glass-popover,
+// Anchoring + open/close mirror ProjectActionsMenu.tsx (portal'd .surface-popover,
 // position from the trigger's DOMRect, outside-click + Esc to close, own-trigger
 // excluded). The menu always opens DOWNWARD — the trigger sits in the top header,
 // so there's never a reason to flip above.
@@ -149,7 +149,7 @@ export function ExportMenu({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 6, scale: 0.98 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+                  className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
                   style={{ bottom, left, width: MENU_WIDTH }}
                 >
                   <ul className="flex flex-col p-1.5">

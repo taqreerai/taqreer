@@ -5,8 +5,8 @@
 // 1-for-1 so the visual language stays consistent:
 //
 //   • `.modal-dim` overlay at z-[1000]
-//   • Glass panel at z-[1001], `glass-popover backdrop-blur-glass
-//     backdrop-saturate-(--glass-saturation)` surface, `rounded-2xl`,
+//   • Glass panel at z-[1001], `surface-popover
+//` surface, `rounded-2xl`,
 //     dark glass border
 //   • Esc + click-outside both close (when not busy)
 //   • Body-scroll lock while open
@@ -97,7 +97,7 @@ export function CancelGenerationDialog({
               aria-modal="true"
               aria-labelledby="cancel-gen-title"
               onClick={(e) => e.stopPropagation()}
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto flex w-[min(100vw-24px,440px)] flex-col overflow-hidden rounded-2xl"
+              className="surface-modal pointer-events-auto flex w-[min(100vw-24px,440px)] flex-col overflow-hidden rounded-2xl"
             >
               <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
                 <h2

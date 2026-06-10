@@ -4,7 +4,7 @@
 //
 // Reuses the app's canonical modal chrome (same recipe as
 // TemplateLightbox / TemplateDeleteConfirmDialog): a `modal-dim`
-// overlay sibling + a `glass-modal backdrop-blur-glass-boost` panel,
+// overlay sibling + a `surface-modal` panel,
 // both rendered through a portal inside AnimatePresence so the panel's
 // backdrop-filter samples the page cleanly (an animated transform/
 // opacity ancestor would trap the blur).
@@ -105,7 +105,7 @@ export function LibraryImageModal({
               aria-modal="true"
               aria-label={`صورة من ${image.projectTitle}`}
               onClick={(e) => e.stopPropagation()}
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto flex max-h-[90vh] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl"
+              className="surface-modal pointer-events-auto flex max-h-[90vh] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl"
             >
               <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
                 <h2 className="truncate text-base font-semibold text-white">

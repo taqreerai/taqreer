@@ -17,7 +17,7 @@
 //   7. Send to trash  — destructive; parent opens TrashConfirmDialog
 //
 // Anchoring + open/close mirror HistoryPopover.tsx (which mirrors
-// BellDropdown.tsx): portal'd .glass-popover, position derived from
+// BellDropdown.tsx): portal'd .surface-popover, position derived from
 // the trigger's DOMRect, closes on outside-click + Esc. The trigger
 // is tagged `data-project-menu-trigger` so its own click doesn't get
 // captured by the outside-click handler — without that exclusion,
@@ -195,7 +195,7 @@ export function ProjectActionsMenu({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: shouldFlipAbove ? 6 : -6, scale: 0.98 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className="glass-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] overflow-hidden rounded-2xl shadow-2xl"
+          className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
           style={{ top, bottom, left, width: MENU_WIDTH }}
         >
           <ul className="flex flex-col p-1.5">

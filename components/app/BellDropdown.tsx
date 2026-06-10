@@ -2,7 +2,7 @@
 
 // Header bell + notification popover.
 //
-// Visual language: glass-card popover (matches `.glass-modal` blur) anchored
+// Visual language: surface-card popover (matches `.surface-modal` blur) anchored
 // below the bell button. Top 5 items shown; footer has "See all" → opens
 // the AllNotificationsModal, and "Clear all" → wipes the store.
 //
@@ -286,7 +286,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
 
   // Toast notifications — when a NEW notification (created within the
   // last 5 s) appears in the store, it pops up under the bell as a
-  // glass-popover toast. Auto-dismisses after 15 s; user can close
+  // surface-popover toast. Auto-dismisses after 15 s; user can close
   // early with the X. Stack capped at 3 — a 4th arrival keeps all 4
   // visible briefly so they slide down to their new slots, then
   // dismisses the oldest on the next frame so its exit animation
@@ -486,7 +486,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
               dir="rtl"
               data-bell-popover
               // `.in-slide-popover` (dark navy 45% alpha) instead of
-            // `.glass-popover` (fully transparent + glass blur). The
+            // `.surface-popover` (fully transparent + glass blur). The
             // bell can float over the slide canvas on /project/[id]
             // pages, and bright-theme slides (white backgrounds) were
             // showing through the transparent popover, leaving the
@@ -496,7 +496,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
             // recipe here so the bell behaves identically. The
             // backdrop blur stays on; the dark tint just clamps the
             // composite luminance into a band where white text reads.
-            className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) fixed z-[1100] w-80 overflow-hidden rounded-2xl shadow-2xl"
+            className="in-slide-popover fixed z-[1100] w-80 overflow-hidden rounded-2xl"
               style={{
                 top: bellRect.top,
                 left: Math.max(
@@ -691,7 +691,7 @@ function BellToast({
       // (dark tint at 45% alpha) so a brightly themed slide showing
       // through doesn't wash the white notification text out. Same
       // recipe as the MarkerPreviewPopup on slides.
-      className="in-slide-popover backdrop-blur-glass backdrop-saturate-(--glass-saturation) pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl shadow-2xl"
+      className="in-slide-popover pointer-events-auto absolute inset-x-0 top-0 overflow-hidden rounded-2xl"
     >
       <NotificationRow n={n} onClick={onClick} compact={false} showTime={false} />
       <button

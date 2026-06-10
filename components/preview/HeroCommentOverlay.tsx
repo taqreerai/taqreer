@@ -651,7 +651,7 @@ function GlassIconButton({
       // bg inline (state-driven); blur via Tailwind utility (memory:
       // feedback_tw_glass_system).
       style={{ background: baseBg }}
-      className={`backdrop-blur-glass backdrop-saturate-(--glass-saturation) flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${colorClasses} ${
+      className={` flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${colorClasses} ${
         isDisabled ? "opacity-40" : ""
       }`}
     >
@@ -748,7 +748,7 @@ function CommentEditor({
       // SlidePill uses. Class lives in globals.css so future palette
       // changes propagate; inline style only carries layout values
       // (left/top/width) that depend on the click location.
-      // NO `.glass-modal` class — it sets `background: transparent`
+      // NO `.surface-modal` class — it sets `background: transparent`
       // via the SHORTHAND, which Safari's cascade was treating as
       // winning over any class-based `background-color` longhand
       // including `.in-slide-dim`'s. Replaced with inline values so
@@ -766,7 +766,7 @@ function CommentEditor({
       // backdrop-filter compositor sees a fully-resolved background
       // colour — inline `var()` references kept rendering transparent
       // for both popovers on Safari despite valid token definitions.
-      className="in-slide-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      className="in-slide-popover pointer-events-auto absolute z-20 rounded-xl p-3 text-white"
       style={{ left, top, width: POPOVER_W }}
     >
       {error ? (
@@ -796,7 +796,7 @@ function CommentEditor({
           background: "rgba(255, 255, 255, var(--glass-opacity))",
           borderColor: "rgba(255, 255, 255, var(--glass-border-opacity))",
         }}
-        className="backdrop-blur-glass backdrop-saturate-(--glass-saturation) w-full resize-none rounded-xl border px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/40"
+        className=" w-full resize-none rounded-xl border px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/40"
       />
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="flex gap-1">
@@ -946,9 +946,9 @@ function MarkerPreviewPopup({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       // Same glass + dim recipe the editor uses — readable on white
-      // slides (via `.in-slide-dim`), border ring from `.glass-modal`,
+      // slides (via `.in-slide-dim`), border ring from `.surface-modal`,
       // backdrop blur via Tailwind v4 compositional utility.
-      // NO `.glass-modal` class — it sets `background: transparent`
+      // NO `.surface-modal` class — it sets `background: transparent`
       // via the SHORTHAND, which Safari's cascade was treating as
       // winning over any class-based `background-color` longhand
       // including `.in-slide-dim`'s. Replaced with inline values so
@@ -966,7 +966,7 @@ function MarkerPreviewPopup({
       // backdrop-filter compositor sees a fully-resolved background
       // colour — inline `var()` references kept rendering transparent
       // for both popovers on Safari despite valid token definitions.
-      className="in-slide-popover backdrop-blur-glass-boost backdrop-saturate-(--glass-saturation) pointer-events-auto absolute z-20 rounded-xl p-3 text-white shadow-2xl"
+      className="in-slide-popover pointer-events-auto absolute z-20 rounded-xl p-3 text-white"
       style={{ left, top, width: POPOVER_W }}
     >
       {/* Header — avatar visual-right, name+time stacked visual-left

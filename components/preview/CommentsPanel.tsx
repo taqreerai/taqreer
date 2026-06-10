@@ -56,16 +56,16 @@ export function CommentsPanel({
     <aside
       dir="rtl"
       aria-label="لوحة التعليقات"
-      // Glass surface — built from primitives (no `.glass-card`
+      // Glass surface — built from primitives (no `.surface-card`
       // because that class carries a hover transition we don't want
-      // on a sidebar panel). The `backdrop-blur-glass` utility is
+      // on a sidebar panel). The `` utility is
       // the preset-linked blur token; the inline bg / border-color
-      // use the same CSS variables `.glass-card` reads.
+      // use the same CSS variables `.surface-card` reads.
       className={
         embedded
           ? // Inside the nav's Comments tab — fill the body, no chrome.
             "flex h-full min-h-0 flex-col"
-          : "backdrop-blur-glass-boost fixed z-[30] flex flex-col border-l p-3 transition-[right] duration-300 ease-in-out"
+          : " fixed z-[30] flex flex-col border-l p-3 transition-[right] duration-300 ease-in-out"
       }
       style={
         embedded
@@ -75,7 +75,7 @@ export function CommentsPanel({
               bottom: 0,
               right: mainSidebarWidth,
               width: COMMENTS_PANEL_WIDTH,
-              background: "var(--glass-fill)",
+              background: "var(--tq-surface)",
               borderLeftColor:
                 "rgba(255, 255, 255, var(--glass-border-opacity))",
             }

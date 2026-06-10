@@ -133,7 +133,7 @@ export function SegmentedToggle<T extends string>({
       className={`relative flex items-center gap-0.5 rounded-full p-0.5 ${
         surface === "card"
           ? "border border-white/10 bg-[var(--tq-card)]"
-          : "bg-[var(--tq-bg-glass)]"
+          : "bg-[var(--tq-surface)]"
       } ${fullWidth ? "w-full" : ""}`}
       role="radiogroup"
       aria-label={ariaLabel}
@@ -214,7 +214,7 @@ export function Pill({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`backdrop-blur-glass whitespace-nowrap rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={` whitespace-nowrap rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         size === "compact" ? "px-2 py-0.5 text-[11px]" : "px-3 py-1.5 text-sm"
       } ${
         active
@@ -298,7 +298,7 @@ export function PositionDropdown({
         // wrapping to a second line when the parent row is tight
         // (the row has flex-wrap which would otherwise break the
         // button itself across rows).
-        className={`backdrop-blur-glass flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={` flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           fullWidth ? "w-full justify-between" : "shrink-0"
         } ${
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
@@ -321,11 +321,11 @@ export function PositionDropdown({
         <div
           // Exact same surface recipe as GoogleFontSlot's dropdown
           // popover (see components/brand/GoogleFontSlot.tsx) so the
-          // two read as the same chrome family: backdrop-blur-glass
-          // for the frosted-blur, bg-[var(--tq-bg-glass)] for the
+          // two read as the same chrome family:
+          // for the frosted-blur, bg-[var(--tq-surface)] for the
           // translucent fill, border-[var(--tq-border-glass)] for
-          // the hairline, shadow-2xl for the lift off the page.
-          className="absolute top-full z-30 mt-1 min-w-[140px] overflow-hidden rounded-xl border p-2 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+          // the hairline, for the lift off the page.
+          className="absolute top-full z-30 mt-1 min-w-[140px] overflow-hidden rounded-xl border p-2 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
           role="listbox"
           aria-label="موضع"
         >
@@ -426,7 +426,7 @@ export function PositionPicker({
             // Same idle/active vocabulary as `Pill`: glass surface
             // always, stroke + text bump to full-white when active
             // (no purple gradient).
-            className={`backdrop-blur-glass flex h-11 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={` flex h-11 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               active ? "text-white" : "text-white/60 hover:text-white"
             }`}
             style={{
@@ -647,7 +647,7 @@ export function ExclusionDropdown({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`backdrop-blur-glass flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={` flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
         }`}
         style={{
@@ -666,9 +666,9 @@ export function ExclusionDropdown({
       </button>
       {open ? (
         <div
-          // Same glass-popover recipe as PositionDropdown +
-          // GoogleFontSlot — backdrop-blur-glass + bg-glass + glass
-          // border + shadow-2xl. Keeps the dropdown family visually
+          // Same surface-popover recipe as PositionDropdown +
+          // GoogleFontSlot — + bg-glass + glass
+          // border +. Keeps the dropdown family visually
           // consistent across /create.
           // ARIA: this is a group of independent checkbox toggles
           // (cover + closing), not a single-select listbox — `listbox`
@@ -676,7 +676,7 @@ export function ExclusionDropdown({
           // into announcing one-of-many semantics. Switched to
           // `group` so the inner `checkbox`-role buttons read as
           // independent toggles (CR #41 finding, 2026-05-28).
-          className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 shadow-2xl backdrop-blur-glass bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+          className="absolute top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
           role="group"
           aria-label="استثناء"
         >

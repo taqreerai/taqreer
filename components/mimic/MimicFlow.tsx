@@ -751,7 +751,7 @@ export default function MimicFlow({
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`glass-card flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <input
               ref={contentInputRef}
@@ -855,7 +855,7 @@ export default function MimicFlow({
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
             className={`${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
           >
-                <div className={`glass-card flex h-full ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}>
+                <div className={`surface-card flex h-full ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}>
                   {/* Inline header (not CardHeader) so the saved-kit pill
                       can overlay the title row. Mirrors /create's branding
                       header: pb-4 balances the card's p-4 top padding so the
@@ -987,7 +987,7 @@ export default function MimicFlow({
             className={`${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
           >
             <div
-              className="canvas-gradient-border glass-card flex h-full w-full flex-col gap-4 rounded-2xl p-4"
+              className="canvas-gradient-border surface-card flex h-full w-full flex-col gap-4 rounded-2xl p-4"
               data-active="true"
             >
               <input
@@ -1077,7 +1077,7 @@ export default function MimicFlow({
                   // template (locked, no upload). Reuses the dropzone's
                   // "ready" visual vocabulary, non-interactive.
                   <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-4 text-center">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]">
                       <span
                         className="material-symbols-outlined text-emerald-300"
                         style={{ fontSize: "22px" }}
@@ -1262,7 +1262,7 @@ function FileDropzone({
             stage-aware glyph swap as before (extracting spinner /
             ready check / picked file icon / empty cloud_upload). */}
         <span
-          className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--tq-bg-glass)] ${
+          className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)] ${
             horizontal ? "h-8 w-8" : "h-10 w-10"
           }`}
         >

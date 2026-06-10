@@ -64,7 +64,7 @@ export function BrandKitDeleteConfirmDialog({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="glass-modal backdrop-blur-glass-boost pointer-events-auto mt-[20vh] w-full max-w-md rounded-2xl p-8 shadow-2xl"
+              className="surface-modal pointer-events-auto mt-[20vh] w-full max-w-md rounded-2xl p-8"
             >
               <h3
                 id="brand-kit-delete-title"

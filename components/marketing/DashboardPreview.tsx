@@ -29,7 +29,7 @@
 // real dashboard/components are auth-gated and depend on Prisma data,
 // `useUser`, `usePathname`, etc., none of which fit a static marketing
 // preview. Visual fidelity comes from reusing the design-system
-// classes (`.qa-card`, `.glass-card`, `.nav-active`, `.nav-item`,
+// classes (`.qa-card`, `.surface-card`, `.nav-active`, `.nav-item`,
 // `.sidebar-bg`, `.btn-pill`, `.input-dark`, `.divider-dark`,
 // `.badge-purple`, `.progress-track`, `.progress-bar`) and brand
 // tokens (`--tq-violet`, `--tq-blue`, `--tq-magenta`, `--tq-lavender`,
@@ -496,9 +496,9 @@ function DashboardBody({
 
       {/* Bottom "library" card — a segmented toggle (مشاريعي ⇄ القوالب) over a
           peeking row of project tiles (mirrors the real HomeLibrary). */}
-      <section className="glass-card shrink-0 rounded-2xl p-3">
+      <section className="surface-card shrink-0 rounded-2xl p-3">
         <div className="mb-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-0.5 rounded-full bg-[var(--tq-bg-glass)] p-0.5 text-[9px]">
+          <div className="flex items-center gap-0.5 rounded-full bg-[var(--tq-surface)] p-0.5 text-[9px]">
             <span className="rounded-full bg-white/10 px-2.5 py-1 font-medium text-white">
               مشاريعي
             </span>
@@ -657,7 +657,7 @@ function FlowBody({
 
       {/* Card grid — variable column count per flow (2-4) so each
           flow's natural shape comes through. Each card uses the
-          shared `.glass-card` chrome + same header icon + bottom
+          shared `.surface-card` chrome + same header icon + bottom
           hairline pattern as the real flows. */}
       {/* Fixed-width cards in a centered row — same width across flows
           (regardless of 2 vs 3 cards), mirroring the real flows' `w-[360px]`
@@ -743,7 +743,7 @@ function FakeDropzone({
       className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-2.5"
       aria-disabled
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--tq-bg-glass)]">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
         <span
           className="material-symbols-outlined text-white/80"
           style={{ fontSize: 14 }}
@@ -860,7 +860,7 @@ function CardSeparator() {
 
 function FlowCard({ card }: { card: FlowCardSpec }) {
   return (
-    <div className="glass-card flex w-[210px] min-h-[300px] shrink-0 flex-col gap-2.5 rounded-2xl p-3">
+    <div className="surface-card flex w-[210px] min-h-[300px] shrink-0 flex-col gap-2.5 rounded-2xl p-3">
       {/* Card header — icon + title + hairline separator. Matches the
           real `CardHeader` primitive: `<span class="material-symbols-
           outlined"> + bold title + border-b`. */}

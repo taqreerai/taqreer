@@ -160,7 +160,7 @@ export function BrandFontPicker({
                   <span
                     key={`${u.name}-${index}`}
                     onClick={(event) => event.stopPropagation()}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-white bg-[var(--tq-bg-glass)] border-[var(--tq-border-glass)]"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-white bg-[var(--tq-surface)] border-[var(--tq-border-glass)]"
                   >
                     <span
                       className="material-symbols-outlined text-white/60"
