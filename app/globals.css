@@ -17,10 +17,12 @@
  *  throughout this header): FLAT + SOLID. No transparency on surfaces, NO
  *  backdrop blur, NO box-shadows.
  *   - Surfaces are SOLID colors: gutter --tq-bg #0A0A0A  <  panel --tq-panel
- *     #161616  <  cards/menus/popovers --tq-surface ≈ #1E1E1E. The `--glass-*` /
- *     `glass-*` names are VESTIGIAL: `--glass-blur: 0`, and `--glass-fill` /
- *     `--tq-bg-glass` resolve to the SOLID `--tq-surface`. No class defines a
- *     box-shadow.
+ *     #161616  <  cards/menus/popovers --tq-surface ≈ #1E1E1E. Surface classes:
+ *     `.surface-card` / `.surface-popover` / `.surface-menu` / `.surface-modal`
+ *     — all SOLID `--tq-surface` + a hairline `--tq-border-glass`, NO blur, NO
+ *     shadow. (The old `glass-*` class names were renamed to `surface-*`;
+ *     `--glass-blur` stays 0 and a few `--glass-*` opacity/border tokens linger
+ *     but render solid.)
  *   - Do NOT add `shadow-*`, `backdrop-blur-glass`, `backdrop-saturate-*`, or
  *     `rgba(255,255,255,var(--glass-opacity))` fills to new UI. Menus / popovers /
  *     dropdowns use `.surface-menu` (solid `--tq-surface` + `--tq-border-glass`
