@@ -17,11 +17,14 @@ export function normalizePlan(plan: string | null | undefined): KnownPlan {
 }
 
 /**
- * Whether a plan may use premium templates. Reserved for the TOP tier
- * (product decision 2026-05-29; tier renamed "pro" -> "max" 2026-06-11).
- * Centralized so the gate threshold lives in one place if it later
- * widens to include "pro".
+ * Whether a plan may use premium templates. The top TWO tiers (user
+ * direction 2026-06-11: "premium templates, open only for pro and
+ * max"), matching the subscriptionmodel.md capability table.
+ * Centralized so the gate threshold lives in one place. Curation of
+ * WHICH templates are premium happens in the future admin panel
+ * (Template.isPremium already exists in the schema).
  */
 export function isProPlan(plan: string | null | undefined): boolean {
-  return normalizePlan(plan) === "max";
+  const p = normalizePlan(plan);
+  return p === "pro" || p === "max";
 }

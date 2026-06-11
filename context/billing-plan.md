@@ -1,10 +1,11 @@
 # Billing & Subscription Architecture Plan
 
-> **Status: DRAFT for review - nothing here is built yet.** This is the
+> **Status: REVIEWED 2026-06-11 - decisions locked in §8.** This is the
 > missing "whole model" layer above context/subscriptionmodel.md (which owns
 > pricing numbers and the credit ledger, both built and tested). This doc owns
 > the USER-FACING model: surfaces, journeys, Stripe's role, and build order.
-> Review, amend, then we proceed phase by phase.
+> UI components ship for review FIRST as static renders on /lab/billing
+> before any of them go live (user direction).
 
 ---
 
@@ -31,10 +32,23 @@ updated only by webhooks. If they ever disagree with Stripe, Stripe is right.
 | **Stripe Customer Portal** (hosted) | Cancel, change payment method, view invoices, (optionally) switch plans. We build NONE of this UI - it is a redirect | config only |
 | **Profile popup** (exists) | Upgrade pill → landing #pricing today; later can deep-link to Checkout | done |
 | **Insufficient-credits dialog** | The two offers: reduce slides / top up (top-up button → Checkout with the smallest covering pack preselected) | part of wiring phase |
-| **Paywall states** | Locked preset / locked flow / cap exceeded → upgrade CTA → #pricing | part of wiring phase |
+| **Paywall states** | Locked preset / locked flow / cap exceeded / **premium template (Pro+Max only)** → upgrade CTA → #pricing | part of wiring phase |
+| **Billing notifications** (existing bell) | Billing events land in the existing Notification system: "Your account was credited with N" (top-up / renewal / signup), "Payment failed - update your card", "Subscription will end on {date}". Realtime fan-out + bell rows already exist; billing just adds types | small |
 
 Decision embedded here: **no custom billing page beyond one Settings section.**
 Cancel/cards/invoices are Stripe-hosted. This kills ~80% of the UI work.
+
+**UI review loop (user direction 2026-06-11):** every component above ships
+FIRST as a static render on the dev-only showcase page `/lab/billing` -
+the user reviews each, gives directions, and only then does the component
+graduate into the real flow. Nothing billing-UI goes live unreviewed.
+
+**Premium templates:** gated to **Pro + Max** (`isProPlan` in lib/plan.ts,
+already enforced server-side in POST /api/templates/[id]/use). WHICH
+templates are premium is curated in the future **admin panel**
+(context/admin-panel-plan.md) - `Template.isPremium` already exists in the
+schema, so the architecture is ready; until the panel ships it stays a
+DB-set flag.
 
 ## 3. Journeys (what happens when)
 
@@ -118,8 +132,9 @@ Stripe webhooks - so no reset cron is needed in the wiring phase.
 
 | Phase | Contents | Size |
 |---|---|---|
-| **A. Generation wiring** (gaps #2+#5+#6+#1-cheap) | preflight in /api/projects (402 + two offers), hold/settle in deck-generate + onFailure + cancel(per keeps-partial spec §7), chargeCredits in regen + name-gen, signup grant call site + email-normalize + IP velocity, daily sweeper (stuck holds + expireTopups), insufficient-credits dialog UI | 1 session |
-| **B. Stripe test mode** | Products/Prices (4 tiers + 3 packs) in test dashboard, lib/billing/prices.ts mapping, /api/stripe/checkout + /portal + /webhook (sig-verified, idempotent), Settings → Billing section, pricing CTAs wired, StripeWebhookEvent table | 1 session |
+| **A0. Billing-UI showcase** | /lab/billing static renders of every billing component (notifications, insufficient dialog, paywalls, premium-template lock, Settings Billing, past_due banner) - user reviews + directs before anything ships | done first |
+| **A. Generation wiring** (gaps #2+#5+#6+#1-cheap) | preflight in /api/projects (402 + two offers), hold/settle in deck-generate + onFailure + cancel(per keeps-partial spec §7), chargeCredits in regen + name-gen, signup grant call site + email-normalize + IP velocity, daily cron (stuck-holds sweep + expireTopups + monthly drip for yearly subs via resetMonthlyAllotment), insufficient-credits dialog (as approved from A0) | 1 session |
+| **B. Stripe test mode** | Products/Prices (4 tiers × monthly+yearly + 3 packs) in test dashboard, lib/billing/prices.ts mapping, /api/stripe/checkout + /portal (restricted config) + /webhook (sig-verified, idempotent), Settings → Billing section, pricing CTAs wired, billing Notification types, StripeWebhookEvent table | 1 session |
 | **C. Polish + edge UX** | past_due banner, upgrade deep-links from popup/paywalls, success/cancel return pages, admin refund helper | small |
 | **D. Live keys** | live Products/Prices behind env switch, prod webhook endpoint, Stripe Tax (KSA/UAE VAT), $1 smoke charge + refund | small, pre-launch |
 
@@ -138,23 +153,58 @@ Stripe webhooks - so no reset cron is needed in the wiring phase.
 - Settle = `settleHold(jobKey, generationCost(preset, N))`; ledger already
   clamps to the hold (never above the shown estimate).
 
-## 8. Open decisions for review
+## 8. Decisions (locked in review, 2026-06-11)
 
-1. **Upgrade proration (credits side)**: full new allotment immediately
-   (proposed) vs difference-only. Stripe handles the money proration either way.
-2. **Yearly billing**: the landing toggle shows ~10%-off yearly prices that do
-   not exist in the model. Ship monthly-only in Phase B and hide the toggle,
-   or define yearly (12x credits up front? monthly drip?). Proposal: hide the
-   toggle until yearly is really designed.
-3. **Plan switching inside the Customer Portal**: allow (less code, Stripe UI)
-   or restrict portal to cancel/payment-method and keep upgrades on our
-   pricing page (more control over messaging). Proposal: portal does
-   everything; our pricing page is acquisition, portal is management.
-4. **Free trial of paid tiers**: not in the model today. Proposal: none -
-   Free's 400-credit grant IS the trial.
-5. **Refund policy** (product, not code): define before live keys.
+1. **Upgrade proration (credits side): full new allotment immediately.**
+   Stripe prorates the money; the ledger grants the new tier's full
+   allotment on upgrade (already implemented as grantSubscriptionCycle).
+2. **Yearly billing: IN scope, credits renew monthly.** A yearly
+   subscriber pays the discounted yearly price once (Stripe yearly Price
+   per tier, created in Phase B); credits still DRIP MONTHLY - the
+   existing `resetMonthlyAllotment` (idempotent, advances resetAt one
+   month per cycle) is driven by the Phase A daily cron, independent of
+   Stripe invoices. Monthly subscribers reset on the renewal webhook;
+   yearly subscribers reset on the cron. The landing's monthly/yearly
+   toggle stays.
+3. **Customer Portal restricted to cancel + payment methods + invoices.**
+   Plan switching (up AND down) happens only on our pricing page, so we
+   own the messaging; the portal's plan-switch feature stays disabled in
+   its Stripe dashboard config.
+4. **No free trial of paid tiers.** The Free plan's 400-credit signup
+   grant is the trial.
+5. **Premium templates: Pro + Max only** (see §2); curation lands in the
+   admin panel later, architecture ready now.
+
+## 9. Refund policy (researched proposal - approve before live keys)
+
+Standard practice for consumable AI credits is "non-refundable once
+consumed, fair within a window", plus always refunding billing errors -
+forcing credits-only on legitimate refund requests measurably increases
+chargeback risk, while goodwill credits as a FIRST OFFER are fine.
+
+Proposed policy (AR + EN in the terms page before live keys):
+
+- **Subscriptions:** full refund within **7 days of the FIRST purchase**
+  if less than ~10% of the month's credits were consumed. Renewals are
+  not auto-refundable (Stripe sends receipts; we add a pre-renewal email
+  reminder later, which is the single best dispute reducer). Goodwill
+  exceptions at our discretion.
+- **Top-up packs:** refundable in full within **14 days if untouched**;
+  non-refundable once any credit from the pack is spent (instant-delivery
+  consumable - the standard carve-out).
+- **Always refunded in full:** duplicate charges, billing errors, paid
+  features not delivered due to our fault.
+- **Mechanics:** refunds issued in Stripe (support-initiated for now,
+  admin panel later); the `charge.refunded` webhook debits the matching
+  granted credits, floored at zero. Cancelling a subscription is never a
+  refund - it stops renewal, access runs to period end (§3).
+- **KSA/UAE note:** digital consumables are generally exempt from
+  cooling-off once consumption starts; state this explicitly in the
+  Arabic terms. Re-verify wording with Stripe Tax / local counsel before
+  live keys.
 
 ---
 
-*Next step: review this doc. On approval, Phase A starts (it needs no Stripe
-decisions beyond §7's cancel spec).*
+*Phase A is unblocked: cancel keeps-partial spec is in §7, all §8
+decisions are locked, and the /lab/billing showcase gates each UI piece
+on user review before it goes live.*
