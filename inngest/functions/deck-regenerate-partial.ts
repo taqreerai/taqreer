@@ -1,5 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
+import { holdCredits, settleHold } from "@/lib/credits/server";
+import { regenCost } from "@/lib/credits/cost";
 import { prisma } from "@/lib/prisma";
 import {
   SLIDE_DIMENSIONS,
@@ -444,6 +447,18 @@ export const deckRegeneratePartial = inngest.createFunction(
           // Inngest run already records the original error).
           console.error("partial-regen onFailure: status write failed", e, error);
         });
+      // Failed regens charge nothing - release the credit hold (keyed
+      // the same way the hold step keys it; idempotent / not_found-safe).
+      try {
+        const { settleHold: release } = await import("@/lib/credits/server");
+        await release({
+          jobKey: `regen:${original.versionId}`,
+          chargeAmount: 0,
+          metadata: { status: "failed" },
+        });
+      } catch (e) {
+        console.error("partial-regen onFailure: credit release failed", e);
+      }
     },
   },
   async ({ event, step, logger }) => {
@@ -509,6 +524,42 @@ export const deckRegeneratePartial = inngest.createFunction(
     const eventQuality: Quality | null = isQuality(data.quality)
       ? data.quality
       : null;
+
+    // ─── Credit pre-authorization (billing plan Phase A) ───────────
+    // Regen costs perSlide × N (no base). Hold before any Claude call;
+    // settle in full after the save, release in onFailure. Keyed by
+    // the target version id - one regen run per version row, stable
+    // across Inngest retries.
+    const regenChargeKey = `regen:${versionId}`;
+    const regenAmount = regenCost(
+      eventQuality ?? "opus-balanced",
+      targetSlideIds.length,
+    );
+    const regenHold = await step.run("credit-hold", async () => {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { userId: true },
+      });
+      if (!project) {
+        return { ok: false as const, reason: "missing_project" as const };
+      }
+      return holdCredits({
+        userId: project.userId,
+        jobKey: regenChargeKey,
+        amount: regenAmount,
+        metadata: {
+          kind: "deck.regenerate.partial",
+          preset: eventQuality ?? "opus-balanced",
+          slides: targetSlideIds.length,
+          estimateShown: regenAmount,
+        },
+      });
+    });
+    if (!regenHold.ok) {
+      throw new NonRetriableError(
+        `credit hold refused: ${"reason" in regenHold ? regenHold.reason : "unknown"}`,
+      );
+    }
     const callParams = paramsForQuality(eventQuality);
     logger.info("partial_regen_quality_preset", {
       quality: eventQuality ?? "medium (default)",
@@ -770,6 +821,14 @@ export const deckRegeneratePartial = inngest.createFunction(
           data: { status: "completed" },
         }),
       ]);
+
+      // Regen saved - capture the full held amount (per-slide × N, the
+      // exact number quoted at hold time). Idempotent per chargeKey.
+      await settleHold({
+        jobKey: regenChargeKey,
+        chargeAmount: regenAmount,
+        metadata: { status: "succeeded", slides: targetSlideIds.length },
+      });
 
       // Per-slide history bookkeeping. One new SlideVersion row per
       // regenerated slide (source="partial_regen"), SlideState

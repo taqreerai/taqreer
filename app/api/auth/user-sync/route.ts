@@ -2,8 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
+import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
     const {
@@ -20,6 +21,13 @@ export async function POST() {
       image: user.user_metadata?.avatar_url ?? null,
     };
 
+    // Detect first-ever sync BEFORE the upsert so the one-time signup
+    // grant fires exactly when the row is born.
+    const existing = await prisma.user.findUnique({
+      where: { supabaseUserId: user.id },
+      select: { id: true },
+    });
+
     // `language` is intentionally NOT in `update` — a returning user keeps
     // their saved choice; a brand-new row takes the column default ("ar").
     const dbUser = await prisma.user.upsert({
@@ -30,8 +38,27 @@ export async function POST() {
         ...profile,
         plan: "free",
       },
-      select: { language: true },
+      select: { id: true, language: true },
     });
+
+    // One-time Free signup grant (billing plan Phase A). Guarded by
+    // signupGrantedAt server-side (idempotent even if two first syncs
+    // race) plus the email-alias + IP-velocity abuse checks. Never
+    // fails the sync - a blocked/failed grant just leaves 0 credits.
+    if (!existing) {
+      await maybeGrantSignupCredits({
+        userId: dbUser.id,
+        email: profile.email,
+        ip:
+          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+          null,
+      }).catch((err) => {
+        console.error(
+          "[user-sync] signup grant failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+      });
+    }
 
     // Seed the locale cookie from the account language so a login on a NEW
     // browser/device lands in the user's saved language (the proxy reads only

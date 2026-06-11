@@ -30,6 +30,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import {
+  CreditGateDialog,
+  isCreditGatePayload,
+  type CreditGatePayload,
+} from "@/components/credits/CreditGateDialog";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
@@ -346,6 +351,8 @@ export default function MimicFlow({
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 402 credit-gate payload from POST /api/projects (billing Phase A).
+  const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
 
   // ─── File validation ───────────────────────────────────────────
@@ -578,7 +585,12 @@ export default function MimicFlow({
     );
 
   // ─── Submit ────────────────────────────────────────────────────
-  const handleGenerate = async () => {
+  const handleGenerate = async (overrideSlideCount?: number) => {
+    // onClick={handleGenerate} passes the click EVENT as the first arg -
+    // only a real number (the dialog's reduce offer) counts as an
+    // override.
+    const reducedSlideCount =
+      typeof overrideSlideCount === "number" ? overrideSlideCount : null;
     // Template mode has no designFile (the reference is a preset
     // file_id), so the guard checks designExtracted only.
     if (stage !== "ready" || !designExtracted) return;
@@ -701,7 +713,8 @@ export default function MimicFlow({
           language,
           saveBrandKit,
           slideCount:
-            slideCountMode === "custom" ? slideCountValue : null,
+            reducedSlideCount ??
+            (slideCountMode === "custom" ? slideCountValue : null),
           quality,
           source,
         }),
@@ -711,6 +724,11 @@ export default function MimicFlow({
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
+        if (response.status === 402 && isCreditGatePayload(data)) {
+          setCreditGate(data);
+          setSubmitting(false);
+          return;
+        }
         throw new Error(data?.error ?? dict.flows.createFailed);
       }
 
@@ -736,6 +754,14 @@ export default function MimicFlow({
 
   return (
     <div className="page-container flex w-full justify-center" dir={dir}>
+      <CreditGateDialog
+        gate={creditGate}
+        onClose={() => setCreditGate(null)}
+        onReduce={(slides) => {
+          setCreditGate(null);
+          void handleGenerate(slides);
+        }}
+      />
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">

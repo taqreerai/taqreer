@@ -37,6 +37,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import {
+  CreditGateDialog,
+  isCreditGatePayload,
+  type CreditGatePayload,
+} from "@/components/credits/CreditGateDialog";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
@@ -313,6 +318,8 @@ export default function CreatePage() {
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 402 credit-gate payload from POST /api/projects (billing Phase A).
+  const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
 
   // ─── Derived flags ─────────────────────────────────────────────
@@ -472,9 +479,15 @@ export default function CreatePage() {
     );
 
   // ─── Submit ────────────────────────────────────────────────────
-  const handleGenerate = async () => {
+  const handleGenerate = async (overrideSlideCount?: number) => {
+    // onClick={handleGenerate} passes the click EVENT as the first arg -
+    // only a real number (the dialog's reduce offer) counts as an
+    // override.
+    const reducedSlideCount =
+      typeof overrideSlideCount === "number" ? overrideSlideCount : null;
     if (!contentReady) return;
     setError("");
+    setCreditGate(null);
     setSubmitting(true);
     try {
       const logoUploaded = await uploadAsset(
@@ -607,7 +620,8 @@ export default function CreatePage() {
           language,
           saveBrandKit,
           slideCount:
-            slideCountMode === "custom" ? slideCountValue : null,
+            reducedSlideCount ??
+            (slideCountMode === "custom" ? slideCountValue : null),
           quality,
           imagesMode,
           ...(source ? { source } : {}),
@@ -618,6 +632,11 @@ export default function CreatePage() {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
+        if (response.status === 402 && isCreditGatePayload(data)) {
+          setCreditGate(data);
+          setSubmitting(false);
+          return;
+        }
         throw new Error(data?.error ?? t.createFailed);
       }
 
@@ -643,6 +662,14 @@ export default function CreatePage() {
 
   return (
     <div className="page-container flex w-full justify-center">
+      <CreditGateDialog
+        gate={creditGate}
+        onClose={() => setCreditGate(null)}
+        onReduce={(slides) => {
+          setCreditGate(null);
+          void handleGenerate(slides);
+        }}
+      />
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">{t.create.title}</h1>

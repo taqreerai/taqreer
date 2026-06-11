@@ -451,6 +451,9 @@ export async function grantSignupCredits(args: {
   userId: string;
   now?: Date;
   notify?: boolean;
+  // Audit trail extras (e.g. the signup request IP for the velocity
+  // guard in lib/credits/signup.ts).
+  metadata?: Prisma.InputJsonValue;
 }): Promise<{ granted: number; alreadyGranted: boolean }> {
   const now = args.now ?? new Date();
   const amount = TIERS.free.signupGrant;
@@ -469,7 +472,13 @@ export async function grantSignupCredits(args: {
         signupGrantedAt: now,
       },
     });
-    await logEvent(tx, args.userId, "credit.grant.signup", amount, {});
+    await logEvent(
+      tx,
+      args.userId,
+      "credit.grant.signup",
+      amount,
+      args.metadata ?? {},
+    );
     return { granted: amount, alreadyGranted: false };
   }, SERIALIZED);
   if (!result.alreadyGranted) {

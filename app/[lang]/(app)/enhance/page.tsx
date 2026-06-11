@@ -37,6 +37,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import {
+  CreditGateDialog,
+  isCreditGatePayload,
+  type CreditGatePayload,
+} from "@/components/credits/CreditGateDialog";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -249,6 +254,8 @@ export default function EnhanceContentPage() {
     ExtractCompletedResponse["result"] | null
   >(null);
   const [error, setError] = useState("");
+  // 402 credit-gate payload from POST /api/projects (billing Phase A).
+  const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
 
   // Accurate prep progress for the dropzone. The bar maps real signals
@@ -773,6 +780,11 @@ export default function EnhanceContentPage() {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
+        if (response.status === 402 && isCreditGatePayload(data)) {
+          setCreditGate(data);
+          setStage("ready");
+          return;
+        }
         throw new Error(data?.error ?? dict.flows.createFailed);
       }
 
@@ -809,6 +821,13 @@ export default function EnhanceContentPage() {
     // so the 3-card row sits in the visual sweet-spot instead of
     // dead-center where it'd float low on tall screens.
     <div className="page-container flex w-full justify-center" dir={dir}>
+      {/* Enhance is a 1:1 rebuild - no reduce offer (fewer slides would
+          mean truncating the source). */}
+      <CreditGateDialog
+        gate={creditGate}
+        onClose={() => setCreditGate(null)}
+        allowReduce={false}
+      />
       <div className="mt-[6vh] flex w-full max-w-3xl flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">{dict.flows.enhance.title}</h1>

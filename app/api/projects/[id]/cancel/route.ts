@@ -1,51 +1,31 @@
 // POST /api/projects/[id]/cancel
 //
-// Mid-generation cancel. Stops Claude streaming + the surrounding
-// Inngest run, discards all partial slides, marks Project / Version /
-// Job as "cancelled". Belt + suspenders:
+// Mid-generation cancel - KEEPS-PARTIAL policy (billing plan §7,
+// 2026-06-11, supersedes the 2026-05-27 discard policy): the user
+// keeps every slide that finished streaming and pays for exactly
+// those; a cancel before the first slide is a full refund.
 //
-//   1. Inngest `cancelOn` (declarative) — fires
-//      `deck.generate.cancel.requested` with `data.jobId`. Inngest
-//      tears the function envelope down at the next step boundary
-//      and skips retries.
-//   2. DB cancel flag (imperative, mid-stream) — sets
-//      `Job.cancelRequestedAt = NOW()`. The deck-generate worker
-//      polls this column on every closed slide in the streaming
-//      parser and calls `stream.controller.abort()` when it flips.
-//      This is what actually stops the Anthropic stream mid-flight
-//      so the user stops paying output tokens.
-//
-// Both run from this single endpoint — the DB flip happens in the
-// transaction below, the Inngest event fires immediately after.
+// This route is now a pure SIGNAL: it sets `Job.cancelRequestedAt`
+// (+ flips Job.status for idempotency). The deck-generate worker
+// polls that column on every closed slide, aborts the Anthropic
+// stream (which is what stops output-token billing mid-flight), and
+// then OWNS the terminal state: with kept slides it saves the partial
+// deck as a normal completed (short) deck and settles the credit hold
+// for the produced count; with zero slides it marks everything
+// cancelled and releases the hold in full. The old `cancelOn` Inngest
+// event was removed with this policy - it killed the function before
+// its save/settle steps could run.
 //
 // ─── Access ────────────────────────────────────────────────────────
 // Edit access required. Owner + accepted edit-share collaborators
 // can cancel; comment / view / public-view roles get 403. Matches
 // the regenerate route's gate — anyone who can re-trigger a run
 // can also kill one in flight.
-//
-// ─── State transitions on success ──────────────────────────────────
-//   • Job.cancelRequestedAt   = NOW()
-//   • Job.status              = "cancelled"
-//   • Project.status          = "cancelled"
-//   • Version.status          = "cancelled"
-//   • Version.slideJson       = { status: "cancelled", slides: [] }
-//     (discard all partial slides per the product call 2026-05-27;
-//      the user can re-create with adjusted settings if they want
-//      a different deck)
-//   • Broadcast `deck.regen.finished` so the DeckView listener
-//     re-fetches status and surfaces the "cancelled" recovery card.
 
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
-import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
-
-function toJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
-}
 
 export async function POST(
   _request: Request,
@@ -110,64 +90,25 @@ export async function POST(
     });
   }
 
-  const currentVersionId = project.presentation.currentVersionId;
-
-  // Atomic state flip — job + project + version all move to cancelled
-  // in one tx so a partial failure can't leave the UI in a half-state
-  // ("project cancelled but version still generating").
+  // Signal the worker. Keeps-partial: the worker owns every terminal
+  // write from here (save partial deck + settle, or mark cancelled +
+  // release). Job.status flips to "cancelled" for the idempotency
+  // check above; the worker overwrites it with the real terminal
+  // state ("succeeded" when slides were kept).
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.job.update({
-        where: { id: latestJob.id },
-        data: {
-          cancelRequestedAt: new Date(),
-          status: "cancelled",
-        },
-      });
-      await tx.project.update({
-        where: { id: project.id },
-        data: { status: "cancelled" },
-      });
-      if (currentVersionId) {
-        await tx.presentationVersion.update({
-          where: { id: currentVersionId },
-          data: {
-            status: "cancelled",
-            // Discard all partial slides — the product policy is "cancel
-            // means start over", not "save what's done". See route header
-            // comment for the rationale.
-            slideJson: toJson({ status: "cancelled", slides: [] }),
-          },
-        });
-      }
+    await prisma.job.update({
+      where: { id: latestJob.id },
+      data: {
+        cancelRequestedAt: new Date(),
+        status: "cancelled",
+      },
     });
   } catch (err) {
-    console.error("[cancel] transaction failed", err);
+    console.error("[cancel] job update failed", err);
     return NextResponse.json(
       { error: "Failed to update cancellation state" },
       { status: 500 },
     );
-  }
-
-  // Fire the Inngest cancellation event. The deck-generate function
-  // declares `cancelOn: [{ event: "deck.generate.cancel.requested",
-  // match: "data.jobId" }]` so this stops the run at the next step
-  // boundary (and skips remaining retries). Belt + suspenders with
-  // the DB flag above: the worker's in-stream poll aborts the
-  // Anthropic stream mid-flight so output-token billing stops
-  // immediately; Inngest tears down the function envelope after.
-  try {
-    await sendInngestEventWithRetry({
-      name: "deck.generate.cancel.requested",
-      id: `cancel:${latestJob.id}`,
-      data: { jobId: latestJob.id, projectId: project.id },
-    });
-  } catch (err) {
-    // Best-effort: if Inngest is unreachable, the DB poll still
-    // catches the cancel on the next stream tick. Don't fail the
-    // request — the user's intent (mark cancelled) is honored
-    // by the DB transaction above.
-    console.error("[cancel] inngest.send failed", err);
   }
 
   // Broadcast so other viewers (and the local DeckView poller) see

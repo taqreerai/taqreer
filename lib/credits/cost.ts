@@ -212,14 +212,20 @@ export function estimateSlides(input: SlideEstimateInput): SlideEstimate {
   }
 }
 
+// When the input size is unknowable up front (create-from-file before
+// extraction), the prompt's own default targets 8-12 slides - hold for
+// that upper bound (capped by the tier), not the full tier cap, so a
+// Max user isn't pre-authorized 1,700+ credits for a 10-slide deck.
+export const UNKNOWN_INPUT_HOLD_SLIDES = 12;
+
 /**
  * What one generation request will hold and (at most) charge.
  *
  * Exact counts: hold == charge == the quoted number.
- * Estimates:    hold the estimated count (or the tier cap when the
- *               input is unknowable), settle on the actual manifest
- *               count - clamped to the hold, so the user is NEVER
- *               charged more than the number they were shown.
+ * Estimates:    hold the estimated count (or the unknown-input default
+ *               when the input is unknowable), settle on the actual
+ *               manifest count - clamped to the hold, so the user is
+ *               NEVER charged more than the number they were shown.
  */
 export function quoteGeneration(args: {
   preset: Quality;
@@ -234,7 +240,7 @@ export function quoteGeneration(args: {
 } {
   const effective = effectivePreset(args.preset, args.flow);
   const holdSlides = Math.min(
-    args.estimate.slides ?? args.slideCap,
+    args.estimate.slides ?? UNKNOWN_INPUT_HOLD_SLIDES,
     args.slideCap,
   );
   return {

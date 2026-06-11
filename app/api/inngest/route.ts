@@ -9,6 +9,7 @@ import {
   templateRender,
   thumbnailRender,
   extractSource,
+  creditsMaintenance,
 } from "@/inngest/index";
 
 export const { GET, POST, PUT } = serve({
@@ -22,5 +23,6 @@ export const { GET, POST, PUT } = serve({
     templateRender,
     thumbnailRender,
     extractSource,
+    creditsMaintenance,
   ],
 });

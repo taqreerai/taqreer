@@ -15,6 +15,9 @@ import {
 } from "@/lib/types/quality";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import { detectImageRegion } from "@/lib/geo/image-region";
+import { preflightGenerate } from "@/lib/credits/preflight";
+import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
+import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { getDictionary, type Dictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
@@ -421,6 +424,40 @@ export async function POST(request: Request) {
   const title = buildProjectTitle(payload, dict);
   const projectType = payload.type === "enhance" ? "enhance" : "create";
 
+  // Resolve the Prisma user UP FRONT (lifted out of the tx below) - the
+  // credit preflight needs the user id + plan BEFORE we create any
+  // rows. The upsert is idempotent; concurrent first-time requests
+  // still resolve via the supabaseUserId unique constraint. A brand-new
+  // row also receives the one-time signup grant here (the user-sync
+  // path covers normal logins; this covers a first request that beats
+  // it).
+  const existingUser = await prisma.user.findUnique({
+    where: { supabaseUserId: user.id },
+    select: { id: true },
+  });
+  const dbUser = await prisma.user.upsert({
+    where: { supabaseUserId: user.id },
+    update: {
+      email: user.email ?? `${user.id}@supabase.local`,
+      name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+      image: user.user_metadata?.avatar_url ?? null,
+    },
+    create: {
+      supabaseUserId: user.id,
+      email: user.email ?? `${user.id}@supabase.local`,
+      name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
+      image: user.user_metadata?.avatar_url ?? null,
+      plan: "free",
+    },
+  });
+  if (!existingUser) {
+    await maybeGrantSignupCredits({
+      userId: dbUser.id,
+      email: dbUser.email,
+      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    });
+  }
+
   // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000
   // input tokens). Falls back to Arial when no font configured — the
   // universal default available on every OS, supports both Arabic and
@@ -541,6 +578,84 @@ export async function POST(request: Request) {
   }
   const quality = resolveQuality(payload.quality);
 
+  // ─── Credit preflight (billing plan Phase A) ──────────────────────
+  // The ONLY money gate before the Inngest hold: tier flow/preset/cap
+  // checks + balance vs the quote. Blocks with a 402 + the two offers
+  // (reduce / top up) BEFORE any rows or Claude calls exist. The
+  // payload shape feeds CreditGateDialog client-side.
+  const creditFlow: CreditFlow =
+    validatedSource?.kind === "enhance"
+      ? "enhance"
+      : validatedSource?.kind === "mimic"
+        ? "mimic"
+        : validatedSource?.kind === "data"
+          ? "datasheet"
+          : "create";
+  let slideInput: SlideEstimateInput;
+  if (typeof payload.slideCount === "number" && payload.slideCount > 0) {
+    slideInput = { kind: "fixed", count: payload.slideCount };
+  } else if (validatedSource?.kind === "enhance") {
+    // 1:1 rebuild - the source page count IS the count. PPTX ships
+    // verbatim per-slide text so the length is exact; text-less PDFs
+    // fall through to the unknown-input hold (known gap: surfacing the
+    // PDF page count at route time needs the locked extraction
+    // pipeline to expose it).
+    slideInput =
+      validatedSource.textPerSlide.length > 0
+        ? { kind: "enhance", pageCount: validatedSource.textPerSlide.length }
+        : { kind: "text", text: "" };
+  } else if (validatedSource?.kind === "data") {
+    slideInput = {
+      kind: "datasheet",
+      sheetCount: validatedSource.sheetCount,
+      totalRows: validatedSource.totalRows,
+    };
+  } else if (validatedSource?.kind === "mimic") {
+    slideInput = { kind: "mimic", briefText: validatedSource.userContent ?? null };
+  } else {
+    slideInput = {
+      kind: "text",
+      text: payload.content?.type === "text" ? payload.content.text ?? "" : "",
+    };
+  }
+  const preflight = await preflightGenerate({
+    userId: dbUser.id,
+    plan: dbUser.plan,
+    flow: creditFlow,
+    preset: quality,
+    slideInput,
+  });
+  if (!preflight.ok) {
+    return NextResponse.json(
+      {
+        error: preflight.reason,
+        balance: preflight.balance.total,
+        slideCap: preflight.slideCap ?? null,
+        options: preflight.options ?? null,
+        quotes: preflight.quotes,
+      },
+      { status: 402 },
+    );
+  }
+  // Honest authoring size = the number we HELD for. The settle clamps
+  // the charge to the hold, so if Claude authored MORE slides than the
+  // hold covers, the overflow would be free. Pinning the brief's target
+  // to `holdSlides` keeps shown == authored == charged across every
+  // path - critical for the flows whose count is only an ESTIMATE
+  // (datasheet from sheet/row scalars, a text-less PDF enhance, typed
+  // mimic): without this the client could under-quote via small
+  // estimate inputs while a large `markdown`/source still drives Claude
+  // to author a full deck (security review 2026-06-11, findings 1+2).
+  //
+  // EXACT user picks (`fixed` count) already equal holdSlides, so this
+  // is a no-op for them. Auto/create-from-text keeps its own estimate
+  // (it IS the holdSlides basis). The only behavioural change is that
+  // estimate-driven source flows now author at the quoted size instead
+  // of the prompt's free-running default.
+  const cappedSlideCount = preflight.exact
+    ? resolvedSlideCount
+    : preflight.holdSlides;
+
   // Location-aware lifestyle imagery: map the REQUEST's country (the "area of
   // generation") to a regional people descriptor so an images-deck made from
   // Saudi Arabia depicts local people, not a generic cast. Only resolved for
@@ -556,7 +671,7 @@ export async function POST(request: Request) {
     content: payload.content,
     brand: claudeBrand,
     rules: payload.rules ?? null,
-    slideCount: resolvedSlideCount,
+    slideCount: cappedSlideCount,
     // context/images.md — when on (create flow), deck-generate swaps the
     // SVG-only graphics directive for the images-deck override + reserves
     // generated-image boxes. OMITTED when off, so a normal deck's brief
@@ -576,6 +691,14 @@ export async function POST(request: Request) {
     enhance: projectType === "enhance" ? payload.enhance ?? null : null,
     brief,
     quality,
+    // Pre-auth contract for deck-generate's holdCredits step: the
+    // amount quoted (and shown) here is the MOST the job may charge.
+    credit: {
+      holdCredits: preflight.holdCredits,
+      holdSlides: preflight.holdSlides,
+      exact: preflight.exact,
+      flow: creditFlow,
+    },
   };
 
   // Allowlist-filtered logo blob for the optional brand-kit save.
@@ -586,24 +709,8 @@ export async function POST(request: Request) {
   const safeLogoForKit = buildSafeLogoForKit(payload.brand?.logo);
 
   const result = await prisma.$transaction(async (tx) => {
-    // Upsert is inside the tx so a tx failure rolls back the user row
-    // too; also lets concurrent first-time-user requests resolve cleanly
-    // via the unique constraint on supabaseUserId.
-    const dbUser = await tx.user.upsert({
-      where: { supabaseUserId: user.id },
-      update: {
-        email: user.email ?? `${user.id}@supabase.local`,
-        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-        image: user.user_metadata?.avatar_url ?? null,
-      },
-      create: {
-        supabaseUserId: user.id,
-        email: user.email ?? `${user.id}@supabase.local`,
-        name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
-        image: user.user_metadata?.avatar_url ?? null,
-        plan: "free",
-      },
-    });
+    // (The user upsert moved ABOVE the credit preflight - `dbUser` in
+    // scope here is that lifted row.)
 
     // "Save as default identity" (حفظ كهوية افتراضية). The saved kit becomes
     // the user's DEFAULT so the landing flows auto-hydrate it — colours, fonts,
@@ -656,7 +763,7 @@ export async function POST(request: Request) {
           brand: payload.brand,
           enhance: payload.enhance,
           rules: payload.rules,
-          slideCount: resolvedSlideCount,
+          slideCount: cappedSlideCount,
           // Persist only the SOURCE KIND — `loadProject`'s
           // `readSourceKind` keys off `source.kind` to pick the
           // generating-state status copy in DeckView ("جارٍ تحليل

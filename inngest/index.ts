@@ -6,3 +6,4 @@ export { brandAnalyze } from "./functions/brand-analyze";
 export { templateRender } from "./functions/template-render";
 export { thumbnailRender } from "./functions/thumbnail-render";
 export { extractSource } from "./functions/extract-source";
+export { creditsMaintenance } from "./functions/credits-maintenance";

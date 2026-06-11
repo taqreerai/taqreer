@@ -1,6 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Prisma } from "@prisma/client";
+import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
+import { holdCredits, settleHold } from "@/lib/credits/server";
+import { generationCost } from "@/lib/credits/cost";
+import { isQuality, type Quality } from "@/lib/types/quality";
 import { prisma } from "@/lib/prisma";
 import { sourceKindToFlow } from "@/lib/project/flow";
 import {
@@ -1267,21 +1271,18 @@ export const deckGenerate = inngest.createFunction(
     retries: 3,
     triggers: [{ event: "deck.generate.requested" }],
     // ─── Cancellation ─────────────────────────────────────────────
-    // POST /api/projects/[id]/cancel fires `deck.generate.cancel.requested`
-    // with `data.jobId` matching the original run's jobId. Inngest stops
-    // the function at the next step boundary AND skips retries. Inside a
-    // long-running step (the streaming step does ~30-120s of work),
-    // cancelOn alone is too coarse — we ALSO poll the Job row for
-    // `cancelRequestedAt` after every closed slide and abort the
-    // Anthropic stream via AbortController. Belt + suspenders: Inngest
-    // tears down the function envelope, the DB poll kills the stream
-    // mid-flight so we stop billing for output tokens.
-    cancelOn: [
-      {
-        event: "deck.generate.cancel.requested",
-        match: "data.jobId",
-      },
-    ],
+    // POST /api/projects/[id]/cancel sets `Job.cancelRequestedAt`; the
+    // streaming step polls that column after every closed slide and
+    // aborts the Anthropic stream via AbortController - that is what
+    // stops output-token billing mid-flight. The declarative `cancelOn`
+    // was REMOVED with the keeps-partial policy (billing plan §7,
+    // 2026-06-11): it killed the function at the next step boundary,
+    // which made the post-cancel save/settle steps unreachable - and
+    // the user now KEEPS the slides that finished streaming (and pays
+    // for exactly those), so the function must always reach its save +
+    // credit-settle logic. A cancel that lands between steps is caught
+    // at the next poll window inside the stream step (or, worst case,
+    // by the daily stuck-holds sweep).
     // Terminal failure hook — fires once after Inngest exhausts all
     // function-level retries on a thrown error. Pre-fix, deck-generate
     // had no onFailure handler, so a failed run left Project /
@@ -1384,6 +1385,17 @@ export const deckGenerate = inngest.createFunction(
             }),
           ),
         );
+        // Failed generations charge NOTHING - release the full credit
+        // hold (idempotent; a job that never held returns not_found,
+        // which is fine).
+        updates.push(
+          safeUpdate("credit release", async () => {
+            const { settleHold: release } = await import(
+              "@/lib/credits/server"
+            );
+            await release({ jobKey: original.jobId!, chargeAmount: 0 });
+          }),
+        );
       }
       await Promise.all(updates);
     },
@@ -1426,6 +1438,51 @@ export const deckGenerate = inngest.createFunction(
         });
       });
     });
+
+    // ─── Credit pre-authorization (billing plan Phase A) ───────────
+    // Hold the quoted maximum BEFORE any Claude call. Idempotent per
+    // jobId, so an Inngest retry re-finds the hold instead of debiting
+    // again. The /api/projects preflight already verified the balance;
+    // this atomic hold is the actual money gate (a concurrent job may
+    // have spent the balance since). Settles on every exit: actual
+    // count on success / keep-partial cancel, zero on failure (the
+    // onFailure hook) and on empty cancel. Jobs enqueued before the
+    // billing wiring carry no `credit` payload and run uncharged.
+    const credit = (data as {
+      credit?: { holdCredits: number; holdSlides: number; flow?: string };
+    }).credit;
+    if (credit && typeof credit.holdCredits === "number" && jobId) {
+      const holdJobId = jobId;
+      const holdResult = await step.run("credit-hold", async () => {
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { userId: true },
+        });
+        if (!project) {
+          return { ok: false as const, reason: "missing_project" as const };
+        }
+        return holdCredits({
+          userId: project.userId,
+          jobKey: holdJobId,
+          amount: credit.holdCredits,
+          metadata: {
+            kind: "deck.generate",
+            flow: credit.flow ?? data.type,
+            preset: data.quality ?? null,
+            holdSlides: credit.holdSlides,
+            estimateShown: credit.holdCredits,
+          },
+        });
+      });
+      if (!holdResult.ok) {
+        // No retries - the balance won't reappear by itself. onFailure
+        // marks the rows failed; the (never-placed) hold has nothing
+        // to release.
+        throw new NonRetriableError(
+          `credit hold refused: ${"reason" in holdResult ? holdResult.reason : "unknown"}`,
+        );
+      }
+    }
 
 
     // Resolve quality preset → model + thinking + effort. Falls back
@@ -1833,16 +1890,82 @@ export const deckGenerate = inngest.createFunction(
           }
         });
 
+        // Shared manifest assembly - used by BOTH the clean-finish path
+        // and the keeps-partial cancel path (billing plan §7: the user
+        // keeps the slides that finished streaming and pays for exactly
+        // those). Reads `slides` / `theme` / stream language state from
+        // the enclosing scope.
+        const assembleManifest = () => {
+          const coverSlide = slides.find((s) => s.role === "cover") ?? slides[0];
+          const coverTitleMatch = coverSlide
+            ? /\bdata-deck-title\s*=\s*("([^"]*)"|'([^']*)')/i.exec(
+                coverSlide.html,
+              )
+            : null;
+          const claudeTitle = (coverTitleMatch?.[2] ?? coverTitleMatch?.[3] ?? "")
+            .trim()
+            .slice(0, 160);
+          const briefTitle = (data.brief as { title?: string } | null)?.title
+            ?.trim();
+          const deckTitle =
+            claudeTitle.length > 0
+              ? claudeTitle
+              : briefTitle && briefTitle.length > 0
+                ? briefTitle
+                : "عرض تقديمي";
+          const htmlFlowSourceKind = readSource(data)?.kind;
+          const sourcePreserving =
+            data.type === "enhance" || htmlFlowSourceKind === "mimic";
+          const langDir = sourcePreserving
+            ? detectDeckDirection(slides)
+            : { language: streamLanguage, direction: streamDirection };
+          const manifest = {
+            version: "2.0" as const,
+            presentationId: data.presentationId,
+            title: deckTitle,
+            language: langDir.language,
+            direction: langDir.direction,
+            theme,
+            slides,
+          };
+          const result = SlideManifestSchema.safeParse(manifest);
+          if (!result.success) {
+            logger.error("deck_generate_create_html_invalid", {
+              slides: slides.length,
+              issues: JSON.stringify(result.error.issues).slice(0, 1200),
+            });
+            throw new Error("Create-HTML manifest failed schema validation.");
+          }
+          return result.data;
+        };
+
         let message;
         try {
           message = await stream.finalMessage();
         } catch (err) {
           if (cancelObserved) {
-            logger.info("deck_generate_cancelled_by_user", {
+            // Keeps-partial: only FULLY CLOSED <section>s count - the
+            // splitter is deliberately NOT flushed here, so a slide cut
+            // mid-stream is dropped. With zero finished slides the
+            // cancel is free; otherwise the partial deck saves like a
+            // normal (short) one and settles for what was made.
+            if (slides.length === 0) {
+              logger.info("deck_generate_cancelled_by_user", {
+                jobId,
+                label: "create-html",
+              });
+              return { cancelled: true } as const;
+            }
+            logger.info("deck_generate_cancelled_keep_partial", {
               jobId,
-              label: "create-html",
+              kept: slides.length,
             });
-            return { cancelled: true } as const;
+            await writeProgress("saving", slides.length, slides.length);
+            return {
+              manifest: assembleManifest(),
+              usage,
+              stoppedEarly: true,
+            };
           }
           throw err;
         }
@@ -1923,54 +2046,11 @@ export const deckGenerate = inngest.createFunction(
         }
 
         // Claude tags the COVER <section> with data-deck-title (3–8 words, the
-        // deck's language). Prefer it; fall back to the brief's truncated paste,
-        // then a generic default. Quote-bounded + trimmed + capped (it flows to
-        // Project.title and the export filename, promoted at completion below).
-        const coverSlide = slides.find((s) => s.role === "cover") ?? slides[0];
-        const coverTitleMatch = coverSlide
-          ? /\bdata-deck-title\s*=\s*("([^"]*)"|'([^']*)')/i.exec(coverSlide.html)
-          : null;
-        const claudeTitle = (coverTitleMatch?.[2] ?? coverTitleMatch?.[3] ?? "")
-          .trim()
-          .slice(0, 160);
-        const briefTitle = (data.brief as { title?: string } | null)?.title
-          ?.trim();
-        const deckTitle =
-          claudeTitle.length > 0
-            ? claudeTitle
-            : briefTitle && briefTitle.length > 0
-              ? briefTitle
-              : "عرض تقديمي";
-        // Enhance / mimic preserve the SOURCE's language (per their directive +
-        // the LANGUAGE block), so the saved top-level language/direction must
-        // follow the produced content, NOT the brief (which can default to ar/rtl
-        // for an English source). Create / datasheet keep the user-picked brief
-        // values. (CR PR #49.)
-        const htmlFlowSourceKind = readSource(data)?.kind;
-        const sourcePreserving =
-          data.type === "enhance" || htmlFlowSourceKind === "mimic";
-        const langDir = sourcePreserving
-          ? detectDeckDirection(slides)
-          : { language: streamLanguage, direction: streamDirection };
-        const manifest = {
-          version: "2.0" as const,
-          presentationId: data.presentationId,
-          title: deckTitle,
-          language: langDir.language,
-          direction: langDir.direction,
-          theme,
-          slides,
-        };
-        const result = SlideManifestSchema.safeParse(manifest);
-        if (!result.success) {
-          logger.error("deck_generate_create_html_invalid", {
-            slides: slides.length,
-            issues: JSON.stringify(result.error.issues).slice(0, 1200),
-          });
-          throw new Error("Create-HTML manifest failed schema validation.");
-        }
+        // deck's language). Title extraction + language/direction resolution +
+        // schema validation live in `assembleManifest` above (shared with the
+        // keeps-partial cancel path).
         await writeProgress("saving", slides.length, slides.length);
-        return { manifest: result.data, usage };
+        return { manifest: assembleManifest(), usage };
       }
 
       // Every flow takes the HTML-authoring branch above (isHtmlAuthoringFlow is
@@ -1981,15 +2061,13 @@ export const deckGenerate = inngest.createFunction(
         "deckGenerate: no HTML-authoring branch matched — every flow must use the HTML path.",
       );
     });
-    // Cancellation short-circuit: the streaming step returned the
-    // `{ cancelled: true }` marker, meaning the user clicked Cancel
-    // mid-generation. The POST /api/projects/[id]/cancel route already
-    // marked Project / Version / Job as cancelled in its transaction
-    // AND fired the Inngest cancel event (which makes this run a
-    // no-retry exit anyway). All downstream work — DB save, thumbnail
-    // render, notifications fan-out, post-stream broadcast — is
-    // skipped. Function returns cleanly so Inngest marks the run
-    // successful (the user-intended outcome was "stop", not "fail").
+    // Cancellation short-circuit - reached ONLY when the cancel landed
+    // before the FIRST slide finished streaming (keeps-partial policy,
+    // billing plan §7: with kept slides the stream step returns a
+    // manifest + `stoppedEarly` and flows through the normal save
+    // below). The cancel route only sets the Job flag now, so the
+    // terminal status writes happen HERE - and the full credit hold is
+    // released (a cancel that produced nothing costs nothing).
     //
     // Discriminated union by literal-boolean: `cancelled: true` on the
     // cancel branch, `cancelled` absent on the success branch. Narrows
@@ -2000,6 +2078,7 @@ export const deckGenerate = inngest.createFunction(
       | { cancelled: true }
       | {
           cancelled?: false;
+          stoppedEarly?: boolean;
           manifest: SlideManifest;
           usage: {
             attempts: number;
@@ -2013,20 +2092,51 @@ export const deckGenerate = inngest.createFunction(
     if (validatedResult.cancelled) {
       // A cancelled run still uploaded the transient enhance images in
       // the prep step, and this clean-cancel return fires neither the
-      // post-save flush nor onFailure — so flush here. Best-effort: if
-      // the cancel arrived via Inngest's `cancelOn` hard-kill this step
-      // may not run, leaving the orphans for a periodic sweep.
+      // post-save flush nor onFailure - so flush here.
       if (enhanceImages && enhanceImages.fileIds.length > 0) {
         const idsToFlush = enhanceImages.fileIds;
         await step.run("flush-enhance-images-cancelled", () =>
           flushSlideImages(idsToFlush),
         );
       }
+      await step.run("mark-cancelled-and-release", async () => {
+        await Promise.allSettled([
+          ...(jobId
+            ? [
+                prisma.job.update({
+                  where: { id: jobId },
+                  data: { status: "cancelled" },
+                }),
+              ]
+            : []),
+          prisma.project.update({
+            where: { id: projectId },
+            data: { status: "cancelled" },
+          }),
+          prisma.presentationVersion.update({
+            where: { id: versionId },
+            data: {
+              status: "cancelled",
+              slideJson: { status: "cancelled", slides: [] } as never,
+            },
+          }),
+        ]);
+        // Nothing was produced - full refund of the hold (idempotent;
+        // uncharged legacy jobs return not_found, which is fine).
+        if (jobId) {
+          await settleHold({
+            jobKey: jobId,
+            chargeAmount: 0,
+            metadata: { status: "cancelled", produced: 0 },
+          });
+        }
+      });
       logger.info("deck_generate_exit_cancelled", { jobId, projectId });
       return { status: "cancelled" } as const;
     }
 
     const { manifest, usage } = validatedResult;
+    const stoppedEarly = validatedResult.stoppedEarly === true;
 
     // Request every weight of each theme font so any weight Claude used both
     // renders in the preview and embeds in the export (Google's css2 silently
@@ -2251,7 +2361,13 @@ export const deckGenerate = inngest.createFunction(
             where: { id: jobId },
             data: {
               status: "succeeded",
-              outputJson: manifest as never,
+              // `_stoppedEarly` marks keeps-partial cancels for
+              // analytics - the deck itself is a normal completed
+              // (short) deck.
+              outputJson: {
+                ...(manifest as Record<string, unknown>),
+                ...(stoppedEarly ? { _stoppedEarly: true } : {}),
+              } as never,
               // Token telemetry — see Job schema notes. Captured for
               // pricing analysis; no gating yet.
               model: callParams.model,
@@ -2266,6 +2382,38 @@ export const deckGenerate = inngest.createFunction(
           .catch((error) => {
             logger.warn("job_update_failed", { jobId, error: String(error) });
           });
+      }
+    });
+
+    // ─── Credit settle (billing plan Phase A) ───────────────────────
+    // Charge for what was actually made - the saved manifest's slide
+    // count - and release the rest of the hold. Covers both clean
+    // finishes and keeps-partial cancels (the user keeps N slides, pays
+    // for N). The ledger clamps the charge to the held amount, so the
+    // user can never pay more than the estimate they were shown.
+    // Idempotent per jobId; legacy uncharged jobs return not_found.
+    await step.run("credit-settle", async () => {
+      if (!jobId) return;
+      // Legacy quality keys ("medium", "opus-max", ...) fall back to the
+      // default preset for pricing - same fallback paramsForQuality uses
+      // for the actual model call.
+      const pricedPreset: Quality = isQuality(data.quality)
+        ? data.quality
+        : "opus-balanced";
+      const result = await settleHold({
+        jobKey: jobId,
+        chargeAmount: generationCost(pricedPreset, manifest.slides.length),
+        metadata: {
+          status: stoppedEarly ? "cancelled_keep_partial" : "succeeded",
+          produced: manifest.slides.length,
+        },
+      });
+      if (result.ok) {
+        logger.info("credit_settled", {
+          jobId,
+          charged: result.charged,
+          refunded: result.refunded,
+        });
       }
     });
 

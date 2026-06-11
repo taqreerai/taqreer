@@ -48,6 +48,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import {
+  CreditGateDialog,
+  isCreditGatePayload,
+  type CreditGatePayload,
+} from "@/components/credits/CreditGateDialog";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -291,6 +296,8 @@ export default function DatasheetPage() {
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 402 credit-gate payload from POST /api/projects (billing Phase A).
+  const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
 
   // ─── Derived flags ─────────────────────────────────────────────
@@ -417,7 +424,12 @@ export default function DatasheetPage() {
     );
 
   // ─── Submit ────────────────────────────────────────────────────
-  const handleGenerate = async () => {
+  const handleGenerate = async (overrideSlideCount?: number) => {
+    // onClick={handleGenerate} passes the click EVENT as the first arg -
+    // only a real number (the dialog's reduce offer) counts as an
+    // override.
+    const reducedSlideCount =
+      typeof overrideSlideCount === "number" ? overrideSlideCount : null;
     if (!fileReady || !dataParsed) return;
     setError("");
     setSubmitting(true);
@@ -533,7 +545,8 @@ export default function DatasheetPage() {
           language,
           saveBrandKit,
           slideCount:
-            slideCountMode === "custom" ? slideCountValue : null,
+            reducedSlideCount ??
+            (slideCountMode === "custom" ? slideCountValue : null),
           quality,
           source,
         }),
@@ -543,6 +556,11 @@ export default function DatasheetPage() {
         const data = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
+        if (response.status === 402 && isCreditGatePayload(data)) {
+          setCreditGate(data);
+          setSubmitting(false);
+          return;
+        }
         throw new Error(data?.error ?? dict.flows.createFailed);
       }
 
@@ -561,6 +579,14 @@ export default function DatasheetPage() {
 
   return (
     <div className="page-container flex w-full justify-center" dir={dir}>
+      <CreditGateDialog
+        gate={creditGate}
+        onClose={() => setCreditGate(null)}
+        onReduce={(slides) => {
+          setCreditGate(null);
+          void handleGenerate(slides);
+        }}
+      />
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">{dict.flows.datasheet.title}</h1>
