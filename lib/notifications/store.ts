@@ -202,6 +202,17 @@ class NotificationStore {
           }),
         );
       });
+      // Credit balance nudges - re-dispatched as a DOM event for the
+      // credit store (lib/credits/store.ts). Same CustomEvent decoupling
+      // as share.revoked: this store owns the ONLY user-channel
+      // subscription, other stores listen on window instead of opening
+      // a second channel on the same topic. Pointer-only by design -
+      // the store refetches GET /api/credits; the balance never rides
+      // the (public) socket.
+      handle.on("credit.balance.changed", () => {
+        if (typeof window === "undefined") return;
+        window.dispatchEvent(new CustomEvent("taqreer:credit-balance-changed"));
+      });
       this.channel = handle;
     } catch (err) {
       console.warn("[notifications] openUserChannel failed", err);

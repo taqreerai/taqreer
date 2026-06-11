@@ -1,0 +1,193 @@
+// Generation preflight - the decision the product makes BEFORE any hold
+// is placed (test spec §3: never quietly produce a chopped deck, never
+// charge for a broken result, stop and offer real choices).
+//
+// Order of gates:
+//   1. flow locked for the tier            → upgrade
+//   2. preset locked for the tier          → upgrade
+//   3. slide count above the tier cap      → block (never truncate; §5)
+//   4. cost above the spendable balance    → block with options:
+//        a. condensed deck at the size the balance affords (the deck is
+//           SUMMARIZED to fit - the condense flag rides the brief so the
+//           prompt compresses content, never cuts it off)
+//        b. a cheaper unlocked preset that affords the full size
+//        c. the top-up gap (needs N, you have M)
+// Only after all four pass may the caller place the hold.
+
+import type { Quality } from "@/lib/types/quality";
+import { QUALITY_PRESETS } from "@/lib/types/quality";
+import { normalizePlan } from "@/lib/plan";
+import {
+  type Flow,
+  type SlideEstimateInput,
+  TIERS,
+  estimateSlides,
+  effectivePreset,
+  generationCost,
+  maxAffordableSlides,
+  quoteGeneration,
+} from "@/lib/credits/cost";
+import { getBalance, type BalanceSnapshot } from "@/lib/credits/server";
+
+// A deck below this is not a deck (cover + body + closing).
+export const MIN_CONDENSED_SLIDES = 3;
+
+export type PresetQuote = {
+  preset: Quality;
+  // What it actually runs (and is priced) on - identity today.
+  effective: Quality;
+  unlocked: boolean;
+  // Credits for the quoted slide count (the hold amount). Null when
+  // the preset is locked for the tier.
+  credits: number | null;
+  affordable: boolean;
+};
+
+export type PreflightOk = {
+  ok: true;
+  plan: string;
+  balance: BalanceSnapshot;
+  holdSlides: number;
+  holdCredits: number;
+  // True when the count is user-set / source-derived (charge == quote);
+  // false when estimated (hold the quote, settle on the actual count).
+  exact: boolean;
+  // True when the input estimated MORE slides than the tier cap and the
+  // deck will be authored condensed at the cap. Surfaced so the UI says
+  // so up front - the cap is never applied silently.
+  cappedToTier: boolean;
+  quotes: PresetQuote[];
+};
+
+export type PreflightBlocked = {
+  ok: false;
+  plan: string;
+  balance: BalanceSnapshot;
+  reason:
+    | "flow_locked"
+    | "preset_locked"
+    | "slide_cap_exceeded"
+    | "insufficient_credits";
+  // For slide_cap_exceeded: the cap that was exceeded.
+  slideCap?: number;
+  // For insufficient_credits - the three honest ways forward.
+  options?: {
+    // Largest summarized deck the balance affords on the chosen preset
+    // (null when even MIN_CONDENSED_SLIDES doesn't fit).
+    condensedSlides: number | null;
+    condensedCredits: number | null;
+    // Unlocked presets whose FULL-size cost fits the balance.
+    cheaperPresets: Quality[];
+    // needs − have.
+    topupGap: number;
+  };
+  quotes: PresetQuote[];
+};
+
+export type PreflightResult = PreflightOk | PreflightBlocked;
+
+export async function preflightGenerate(args: {
+  userId: string;
+  plan: string;
+  flow: Flow;
+  preset: Quality;
+  slideInput: SlideEstimateInput;
+  now?: Date;
+}): Promise<PreflightResult> {
+  const now = args.now ?? new Date();
+  const plan = normalizePlan(args.plan);
+  const tier = TIERS[plan];
+  const balance = await getBalance(args.userId, now);
+  const estimate = estimateSlides(args.slideInput);
+
+  const quoteFor = (preset: Quality): PresetQuote => {
+    const unlocked = tier.presets.includes(preset);
+    const quote = quoteGeneration({
+      preset,
+      flow: args.flow,
+      estimate,
+      slideCap: tier.slideCap,
+    });
+    return {
+      preset,
+      effective: quote.effective,
+      unlocked,
+      credits: unlocked ? quote.holdCredits : null,
+      affordable: unlocked && quote.holdCredits <= balance.total,
+    };
+  };
+  const quotes = QUALITY_PRESETS.map((p) => quoteFor(p.key));
+
+  if (!tier.flows.includes(args.flow)) {
+    return { ok: false, plan, balance, reason: "flow_locked", quotes };
+  }
+  if (!tier.presets.includes(args.preset)) {
+    return { ok: false, plan, balance, reason: "preset_locked", quotes };
+  }
+  // An EXACT size above the cap blocks BEFORE generating (enhance is a
+  // 1:1 rebuild and knows its page count up front; a stepper above the
+  // cap shouldn't reach here, but the server still refuses) - capping
+  // an exact count would mean truncation, and we never truncate. A
+  // non-exact estimate (word count, data shape) is only the size the
+  // deck will be AUTHORED at: clamping it to the cap yields a complete,
+  // summarized deck, so it proceeds with the capped quote below.
+  if (estimate.exact && estimate.slides !== null && estimate.slides > tier.slideCap) {
+    return {
+      ok: false,
+      plan,
+      balance,
+      reason: "slide_cap_exceeded",
+      slideCap: tier.slideCap,
+      quotes,
+    };
+  }
+
+  const effective = effectivePreset(args.preset, args.flow);
+  const quote = quoteGeneration({
+    preset: args.preset,
+    flow: args.flow,
+    estimate,
+    slideCap: tier.slideCap,
+  });
+
+  if (quote.holdCredits > balance.total) {
+    const affordable = maxAffordableSlides(effective, balance.total);
+    const condensedSlides =
+      affordable >= MIN_CONDENSED_SLIDES
+        ? Math.min(affordable, quote.holdSlides)
+        : null;
+    const cheaperPresets = tier.presets.filter((p) => {
+      if (p === args.preset) return false;
+      const alt = effectivePreset(p, args.flow);
+      return generationCost(alt, quote.holdSlides) <= balance.total;
+    });
+    return {
+      ok: false,
+      plan,
+      balance,
+      reason: "insufficient_credits",
+      options: {
+        condensedSlides,
+        condensedCredits:
+          condensedSlides !== null
+            ? generationCost(effective, condensedSlides)
+            : null,
+        cheaperPresets: [...cheaperPresets],
+        topupGap: quote.holdCredits - balance.total,
+      },
+      quotes,
+    };
+  }
+
+  return {
+    ok: true,
+    plan,
+    balance,
+    holdSlides: quote.holdSlides,
+    holdCredits: quote.holdCredits,
+    exact: quote.exact,
+    cappedToTier:
+      estimate.slides !== null && estimate.slides > tier.slideCap,
+    quotes,
+  };
+}

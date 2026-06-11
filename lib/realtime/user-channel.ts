@@ -29,11 +29,15 @@ import { getRealtimeBrowserClient } from "./supabase-browser";
 // on the wire format. Add new entries here BEFORE emitting them; the
 // pre-registered Supabase listener for each entry needs to exist
 // before the channel subscribes (the on/subscribe ordering rule).
-export type UserBroadcastEvent = "notification.created" | "share.revoked";
+export type UserBroadcastEvent =
+  | "notification.created"
+  | "share.revoked"
+  | "credit.balance.changed";
 
 const USER_BROADCAST_EVENTS: readonly UserBroadcastEvent[] = [
   "notification.created",
   "share.revoked",
+  "credit.balance.changed",
 ];
 
 // Wire payload shapes per event. `server-broadcast.ts` enforces the
@@ -56,6 +60,16 @@ export type UserBroadcastPayloadMap = {
     projectId: string;
     projectTitle?: string;
   };
+  // POINTER-ONLY, like notification.created - deliberately an empty
+  // signal. The `user:{id}` topics are public broadcast channels (no
+  // private-channel authorization yet), so the socket must never carry
+  // the balance itself: anyone with the anon key and a harvested
+  // Prisma id could subscribe to another user's topic and read it
+  // (security review 2026-06-11). Consumers refetch the auth-gated
+  // GET /api/credits instead - that route is the ONLY data path.
+  // Emitted by lib/credits/server.ts after every ledger mutation
+  // (hold / settle / grant / reset / expiry).
+  "credit.balance.changed": Record<string, never>;
 };
 
 export type UserChannelHandle = {
@@ -97,6 +111,7 @@ export function openUserChannel(prismaUserId: string): UserChannelHandle {
   const subscribers: BroadcastSubscribers = {
     "notification.created": [],
     "share.revoked": [],
+    "credit.balance.changed": [],
   };
 
   // Pre-register one Supabase listener per event name. See project-
