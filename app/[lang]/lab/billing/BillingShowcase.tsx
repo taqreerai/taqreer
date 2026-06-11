@@ -3,12 +3,21 @@
 // Static billing-UI showcase (see page.tsx). Every component below is a
 // FROZEN mockup built from the design system's existing primitives
 // (.surface-card / .surface-modal / .btn-pill / .btn-gradient /
-// .badge-purple / .progress-track / status tokens) - no new visual
-// vocabulary. Copy lives in a local bilingual table for fast review
-// iteration; the strings move into dictionaries/ when each component
-// graduates to production (so nothing here is "hardcoded final").
+// .badge-purple / .progress-track / status tokens / NoticeCard) - no new
+// visual vocabulary. Copy lives in a local bilingual table for fast
+// review iteration; the strings move into dictionaries/ when each
+// component graduates to production (so nothing here is "hardcoded
+// final").
+//
+// Round 2 (user directions 2026-06-11): bell rows shipped to the real
+// BellDropdown; top-up button = label start / bolt + bold price end;
+// alt actions styled as .btn-pill; same-row buttons equal width;
+// Billing section gained the 4-tier pricing table + 4 packs (500
+// added); RTL-corrected relative times; "الترقية إلى" copy; NoticeCard
+// promoted to components/common as the app-wide warning pattern.
 
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import { NoticeCard } from "@/components/common/NoticeCard";
 
 // ─── Review copy (en/ar) - graduates to dictionaries on approval ────
 const COPY = {
@@ -19,7 +28,7 @@ const COPY = {
     sections: {
       notifications: {
         title: "1. Billing notifications (existing bell)",
-        desc: "New notification types riding the existing bell + realtime fan-out.",
+        desc: "This row design now IS the real bell (moved to the top bar next to search).",
       },
       insufficient: {
         title: "2. Insufficient-credits dialog",
@@ -31,7 +40,7 @@ const COPY = {
       },
       lockedFlow: {
         title: "4. Locked flow (Free tier opening /enhance)",
-        desc: "Source flows are Plus and above.",
+        desc: "Source flows are Plus and above. Built on the NoticeCard primitive (section 9).",
       },
       capExceeded: {
         title: "5. Slide cap exceeded (enhance upload too long)",
@@ -43,11 +52,15 @@ const COPY = {
       },
       settingsBilling: {
         title: "7. Settings - Billing section",
-        desc: "Plan summary, top-up packs, Stripe-hosted management.",
+        desc: "Plan summary, the 4-tier switch table, 4 top-up packs, Stripe-hosted management.",
       },
       pastDue: {
         title: "8. Payment-failed banner (past_due)",
         desc: "Shown in Settings while Stripe retries the charge.",
+      },
+      notice: {
+        title: "9. NoticeCard - the app-wide warning pattern",
+        desc: "The locked-flow look, promoted to a shared primitive (components/common/NoticeCard). Default for confirms and outcome states: cancel generation, generation cancelled, delete account...",
       },
     },
     notif: {
@@ -70,11 +83,12 @@ const COPY = {
       body: "This deck needs 830 credits - you have 240.",
       reduce: "Generate 8 slides instead",
       reduceHint: "fits your balance - 228 credits",
-      topup: "Top up 1,000 credits - $12",
+      topup: "Top up 1,000 credits",
+      topupPrice: "$12",
       topupHint: "packs never expire with the monthly reset",
       cancel: "Cancel",
     },
-    preset: { header: "Generation quality", balance: "Balance: 240 cr", locked: "Upgrade to Pro", eta: "~4 min", fast: "Fast", thinking: "Thinking", price: "≈ 180 cr" },
+    preset: { header: "Generation quality", balance: "Balance: 240 cr", locked: "Upgrade to Pro", fast: "Fast", price: "≈ 180 cr" },
     flow: {
       title: "Enhance an existing presentation",
       body: "Enhance, Mimic and Datasheet are available from the Plus plan.",
@@ -84,7 +98,7 @@ const COPY = {
       title: "This file has 60 slides",
       body: "Your plan generates up to 30 slides per deck. Upgrade to Pro for 60.",
       cta: "Upgrade to Pro",
-      alt: "Or pick a shorter file",
+      alt: "Pick a shorter file",
     },
     template: {
       badge: "Premium",
@@ -101,10 +115,24 @@ const COPY = {
       credits: "3,420 / 5,000 credits left",
       manage: "Manage subscription",
       manageHint: "Payment method, invoices and cancellation open in Stripe",
+      plansTitle: "Change plan",
+      perMonth: "/mo",
+      creditsMo: "credits / mo",
+      creditsOnce: "credits (signup)",
+      current: "Current plan",
+      upgrade: "Upgrade",
+      downgrade: "Downgrade",
+      tiers: [
+        { name: "Free", price: "$0", credits: "400" },
+        { name: "Plus", price: "$15", credits: "2,000" },
+        { name: "Pro", price: "$30", credits: "5,000" },
+        { name: "Max", price: "$70", credits: "12,000" },
+      ],
       packsTitle: "Top-up packs",
       packsHint: "Stack on your balance, survive monthly resets, expire after 12 months",
       buy: "Buy",
       packs: [
+        { credits: "500", price: "$7" },
         { credits: "1,000", price: "$12" },
         { credits: "3,000", price: "$32" },
         { credits: "8,000", price: "$75" },
@@ -114,6 +142,15 @@ const COPY = {
       text: "Your last payment failed. Update your payment method to keep your plan.",
       cta: "Update payment method",
     },
+    notice: {
+      confirmTitle: "Cancel this generation?",
+      confirmBody: "You'll keep the 12 finished slides for 542 credits. The rest is refunded.",
+      confirmYes: "Cancel generation",
+      confirmNo: "Keep generating",
+      doneTitle: "Generation cancelled",
+      doneBody: "12 slides were kept - 288 credits refunded to your balance.",
+      doneCta: "Open the deck",
+    },
   },
   ar: {
     pageTitle: "معرض واجهات الفوترة",
@@ -122,7 +159,7 @@ const COPY = {
     sections: {
       notifications: {
         title: "1. إشعارات الفوترة (الجرس الحالي)",
-        desc: "أنواع إشعارات جديدة عبر نظام الإشعارات الموجود.",
+        desc: "هذا التصميم أصبح الجرس الفعلي (انتقل إلى الشريط العلوي بجانب البحث).",
       },
       insufficient: {
         title: "2. نافذة الرصيد غير الكافي",
@@ -134,7 +171,7 @@ const COPY = {
       },
       lockedFlow: {
         title: "4. مسار مقفل (باقة Free تفتح /enhance)",
-        desc: "مسارات المصدر متاحة من باقة Plus فأعلى.",
+        desc: "مسارات المصدر متاحة من باقة Plus فأعلى. مبني على NoticeCard (القسم 9).",
       },
       capExceeded: {
         title: "5. تجاوز حد الشرائح (ملف تحسين طويل)",
@@ -146,11 +183,15 @@ const COPY = {
       },
       settingsBilling: {
         title: "7. الإعدادات - قسم الفوترة",
-        desc: "ملخص الباقة، باقات الشحن، والإدارة عبر Stripe.",
+        desc: "ملخص الباقة، جدول الباقات الأربع، 4 باقات شحن، والإدارة عبر Stripe.",
       },
       pastDue: {
         title: "8. شريط فشل الدفع (past_due)",
         desc: "يظهر في الإعدادات أثناء إعادة محاولات Stripe.",
+      },
+      notice: {
+        title: "9. NoticeCard - نمط التحذير الموحد",
+        desc: "تصميم المسار المقفل أصبح مكوّنًا مشتركًا. الافتراضي للتأكيدات والنتائج: إلغاء التوليد، تم الإلغاء، حذف الحساب...",
       },
     },
     notif: {
@@ -173,11 +214,12 @@ const COPY = {
       body: "هذا العرض يحتاج 830 نقطة - رصيدك 240.",
       reduce: "أنشئ 8 شرائح بدلاً من ذلك",
       reduceHint: "يناسب رصيدك - 228 نقطة",
-      topup: "اشحن 1,000 نقطة - $12",
+      topup: "اشحن 1,000 نقطة",
+      topupPrice: "$12",
       topupHint: "باقات الشحن لا تتأثر بالتجديد الشهري",
       cancel: "إلغاء",
     },
-    preset: { header: "جودة التوليد", balance: "رصيدك: 240 نقطة", locked: "رقِّ إلى Pro", eta: "~4 د", fast: "سريع", thinking: "تفكير", price: "≈ 180 نقطة" },
+    preset: { header: "جودة التوليد", balance: "رصيدك: 240 نقطة", locked: "الترقية إلى Pro", fast: "سريع", price: "≈ 180 نقطة" },
     flow: {
       title: "تحسين عرض موجود",
       body: "التحسين والمحاكاة والبيانات متاحة من باقة Plus.",
@@ -185,9 +227,9 @@ const COPY = {
     },
     cap: {
       title: "هذا الملف يحتوي 60 شريحة",
-      body: "باقتك تنشئ حتى 30 شريحة لكل عرض. رقِّ إلى Pro لـ 60 شريحة.",
-      cta: "رقِّ إلى Pro",
-      alt: "أو اختر ملفًا أقصر",
+      body: "باقتك تنشئ حتى 30 شريحة لكل عرض. الترقية إلى Pro تتيح 60 شريحة.",
+      cta: "الترقية إلى Pro",
+      alt: "اختر ملفًا أقصر",
     },
     template: {
       badge: "مميز",
@@ -204,10 +246,24 @@ const COPY = {
       credits: "متبقٍ 3,420 / 5,000 نقطة",
       manage: "إدارة الاشتراك",
       manageHint: "وسيلة الدفع والفواتير والإلغاء تُفتح في Stripe",
+      plansTitle: "تغيير الباقة",
+      perMonth: "/شهر",
+      creditsMo: "نقطة / شهر",
+      creditsOnce: "نقطة (عند التسجيل)",
+      current: "باقتك الحالية",
+      upgrade: "ترقية",
+      downgrade: "تخفيض",
+      tiers: [
+        { name: "Free", price: "$0", credits: "400" },
+        { name: "Plus", price: "$15", credits: "2,000" },
+        { name: "Pro", price: "$30", credits: "5,000" },
+        { name: "Max", price: "$70", credits: "12,000" },
+      ],
       packsTitle: "باقات الشحن",
       packsHint: "تُضاف إلى رصيدك، تتجاوز التجديد الشهري، وتنتهي بعد 12 شهرًا",
       buy: "شراء",
       packs: [
+        { credits: "500", price: "$7" },
         { credits: "1,000", price: "$12" },
         { credits: "3,000", price: "$32" },
         { credits: "8,000", price: "$75" },
@@ -216,6 +272,15 @@ const COPY = {
     pastDue: {
       text: "فشل آخر دفع. حدّث وسيلة الدفع للحفاظ على باقتك.",
       cta: "تحديث وسيلة الدفع",
+    },
+    notice: {
+      confirmTitle: "إلغاء هذا التوليد؟",
+      confirmBody: "ستحتفظ بالشرائح الـ 12 المكتملة مقابل 542 نقطة، ويُسترد الباقي.",
+      confirmYes: "إلغاء التوليد",
+      confirmNo: "متابعة التوليد",
+      doneTitle: "تم إلغاء التوليد",
+      doneBody: "احتفظت بـ 12 شريحة - أُعيدت 288 نقطة إلى رصيدك.",
+      doneCta: "افتح العرض",
     },
   },
 };
@@ -250,7 +315,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
   );
 }
 
-// ─── 1. Bell notification rows ──────────────────────────────────────
+// ─── 1. Bell notification rows (now the REAL bell design) ──────────
 function NotificationRows({ c }: { c: Copy }) {
   const rows = [
     { icon: "account_balance_wallet", tone: "ok", title: c.notif.credited, desc: c.notif.creditedDesc, time: c.notif.timeNow },
@@ -276,7 +341,10 @@ function NotificationRows({ c }: { c: Copy }) {
             <p className="text-[13px] font-semibold leading-snug text-foreground">{row.title}</p>
             <p className="mt-0.5 text-[11px] text-muted">{row.desc}</p>
           </div>
-          <span className="shrink-0 text-[10px] text-muted" dir="ltr">{row.time}</span>
+          {/* No forced dir - the page direction orders digit+unit
+              correctly ("س2" reads with the number on the right in AR;
+              user direction 2026-06-11). */}
+          <span className="shrink-0 text-[10px] text-muted">{row.time}</span>
         </div>
       ))}
     </div>
@@ -294,9 +362,14 @@ function InsufficientDialog({ c }: { c: Copy }) {
           <span className="font-medium">{c.insufficient.reduce}</span>
           <span className="text-xs text-muted">{c.insufficient.reduceHint}</span>
         </button>
+        {/* Label alone on the start side; bolt + BOLD price together on
+            the end side (user direction 2026-06-11). */}
         <button type="button" className="btn-gradient flex w-full items-center justify-between px-5 py-3 text-sm">
           <span className="font-medium">{c.insufficient.topup}</span>
-          <Icon name="bolt" size={16} />
+          <span className="flex items-center gap-1.5">
+            <Icon name="bolt" size={16} />
+            <span className="font-bold" dir="ltr">{c.insufficient.topupPrice}</span>
+          </span>
         </button>
         <p className="text-center text-[11px] text-muted">{c.insufficient.topupHint}</p>
       </div>
@@ -342,16 +415,16 @@ function LockedPresetMenu({ c }: { c: Copy }) {
   );
 }
 
-// ─── 4. Locked flow ─────────────────────────────────────────────────
+// ─── 4. Locked flow - built on the shared NoticeCard ────────────────
 function LockedFlowCard({ c }: { c: Copy }) {
   return (
-    <div className="surface-card relative mx-auto max-w-sm overflow-hidden rounded-2xl p-8 text-center">
-      <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--tq-surface)] text-foreground/70">
-        <Icon name="lock" size={22} />
-      </span>
-      <h3 className="mb-2 text-base font-bold text-foreground">{c.flow.title}</h3>
-      <p className="mb-6 text-sm text-muted">{c.flow.body}</p>
-      <button type="button" className="btn-gradient px-6 py-2.5 text-sm">{c.flow.cta}</button>
+    <div className="surface-card mx-auto max-w-sm rounded-2xl">
+      <NoticeCard
+        icon="lock"
+        title={c.flow.title}
+        body={c.flow.body}
+        actions={<button type="button" className="btn-gradient px-6 py-2.5 text-sm">{c.flow.cta}</button>}
+      />
     </div>
   );
 }
@@ -366,9 +439,11 @@ function CapExceededCard({ c }: { c: Copy }) {
       <div className="min-w-0 flex-1">
         <h3 className="text-sm font-bold text-foreground">{c.cap.title}</h3>
         <p className="mt-1 text-sm text-muted">{c.cap.body}</p>
-        <div className="mt-4 flex items-center gap-3">
+        {/* Same-row buttons share one size (user direction 2026-06-11);
+            the alt action is a normal .btn-pill, not a bare text link. */}
+        <div className="mt-4 flex items-stretch gap-3 [&>*]:flex-1 [&>*]:max-w-[200px]">
           <button type="button" className="btn-gradient px-5 py-2 text-sm">{c.cap.cta}</button>
-          <button type="button" className="text-sm text-muted transition-colors hover:text-foreground">{c.cap.alt}</button>
+          <button type="button" className="btn-pill px-5 py-2 text-sm">{c.cap.alt}</button>
         </div>
       </div>
     </div>
@@ -395,14 +470,14 @@ function PremiumTemplate({ c }: { c: Copy }) {
         </div>
         <p className="mt-1.5 truncate px-0.5 text-start text-[12px] font-semibold text-foreground">{c.template.name}</p>
       </div>
-      {/* Gate dialog on use */}
+      {/* Gate dialog on use - equal-width buttons in one row. */}
       <div className="surface-modal w-full max-w-sm rounded-2xl p-8">
         <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--tq-surface)] text-foreground/80">
           <Icon name="workspace_premium" size={22} />
         </span>
         <h3 className="mb-2 text-lg font-bold text-foreground">{c.template.dialogTitle}</h3>
         <p className="mb-6 text-sm text-muted">{c.template.dialogBody}</p>
-        <div className="flex items-center gap-3">
+        <div className="flex items-stretch gap-3 [&>*]:flex-1">
           <button type="button" className="btn-gradient px-5 py-2.5 text-sm">{c.template.cta}</button>
           <button type="button" className="btn-pill px-5 py-2.5 text-sm">{c.template.cancel}</button>
         </div>
@@ -413,6 +488,8 @@ function PremiumTemplate({ c }: { c: Copy }) {
 
 // ─── 7. Settings - Billing section ──────────────────────────────────
 function SettingsBilling({ c }: { c: Copy }) {
+  const CURRENT_TIER = "Pro"; // mock - the showcase user is on Pro
+  const currentIdx = c.billing.tiers.findIndex((t) => t.name === CURRENT_TIER);
   return (
     <div className="surface-card mx-auto max-w-2xl rounded-2xl p-6">
       <h3 className="mb-4 text-base font-bold text-foreground">{c.billing.title}</h3>
@@ -436,15 +513,58 @@ function SettingsBilling({ c }: { c: Copy }) {
         </div>
       </div>
 
-      {/* Top-up packs */}
+      {/* Plan switch table - all 4 tiers, current marked, others
+          upgrade/downgrade (user direction 2026-06-11). */}
+      <div className="mt-5">
+        <p className="text-sm font-semibold text-foreground">{c.billing.plansTitle}</p>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {c.billing.tiers.map((tier, idx) => {
+            const isCurrent = idx === currentIdx;
+            const isUpgrade = idx > currentIdx;
+            return (
+              <div
+                key={tier.name}
+                className={`flex flex-col items-center gap-0.5 rounded-xl border p-4 ${
+                  isCurrent
+                    ? "border-[var(--tq-purple)] bg-[var(--tq-card)]"
+                    : "border-[var(--tq-border-hairline)] bg-[var(--tq-card)]"
+                }`}
+              >
+                <span className="text-sm font-bold text-foreground">{tier.name}</span>
+                <span className="text-lg font-bold text-foreground tabular-nums" dir="ltr">
+                  {tier.price}
+                  <span className="text-[10px] font-normal text-muted">{c.billing.perMonth}</span>
+                </span>
+                <span className="text-[10px] text-muted" dir="ltr">
+                  {tier.credits} {idx === 0 ? c.billing.creditsOnce : c.billing.creditsMo}
+                </span>
+                {isCurrent ? (
+                  <span className="mt-2 w-full rounded-full py-1.5 text-center text-xs font-medium text-muted">
+                    {c.billing.current}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className={`mt-2 w-full py-1.5 text-xs ${isUpgrade ? "btn-gradient" : "btn-pill"}`}
+                  >
+                    {isUpgrade ? c.billing.upgrade : c.billing.downgrade}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Top-up packs - 4, matching the tier card count. */}
       <div className="mt-5">
         <p className="text-sm font-semibold text-foreground">{c.billing.packsTitle}</p>
         <p className="mt-0.5 text-xs text-muted">{c.billing.packsHint}</p>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {c.billing.packs.map((pack) => (
             <div key={pack.price} className="flex flex-col items-center gap-1 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-4">
               <span className="text-lg font-bold text-foreground tabular-nums" dir="ltr">{pack.credits}</span>
-              <span className="text-xs text-muted" dir="ltr">{pack.price}</span>
+              <span className="text-xs font-bold text-muted" dir="ltr">{pack.price}</span>
               <button type="button" className="btn-pill mt-2 w-full py-1.5 text-xs">{c.billing.buy}</button>
             </div>
           ))}
@@ -471,6 +591,36 @@ function PastDueBanner({ c }: { c: Copy }) {
         {c.pastDue.text}
       </span>
       <button type="button" className="btn-pill shrink-0 px-4 py-1.5 text-xs">{c.pastDue.cta}</button>
+    </div>
+  );
+}
+
+// ─── 9. NoticeCard pattern examples ─────────────────────────────────
+function NoticeExamples({ c }: { c: Copy }) {
+  return (
+    <div className="flex flex-wrap items-stretch justify-center gap-6">
+      <div className="surface-modal w-full max-w-sm rounded-2xl">
+        <NoticeCard
+          icon="stop_circle"
+          tone="warn"
+          title={c.notice.confirmTitle}
+          body={c.notice.confirmBody}
+          actions={
+            <>
+              <button type="button" className="btn-pill px-5 py-2.5 text-sm">{c.notice.confirmYes}</button>
+              <button type="button" className="btn-gradient px-5 py-2.5 text-sm">{c.notice.confirmNo}</button>
+            </>
+          }
+        />
+      </div>
+      <div className="surface-card w-full max-w-sm rounded-2xl">
+        <NoticeCard
+          icon="task_alt"
+          title={c.notice.doneTitle}
+          body={c.notice.doneBody}
+          actions={<button type="button" className="btn-pill px-5 py-2.5 text-sm">{c.notice.doneCta}</button>}
+        />
+      </div>
     </div>
   );
 }
@@ -507,6 +657,9 @@ export function BillingShowcase() {
         </Section>
         <Section title={c.sections.pastDue.title} desc={c.sections.pastDue.desc}>
           <PastDueBanner c={c} />
+        </Section>
+        <Section title={c.sections.notice.title} desc={c.sections.notice.desc}>
+          <NoticeExamples c={c} />
         </Section>
       </div>
     </main>

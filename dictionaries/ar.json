@@ -555,7 +555,7 @@
   },
   "components": {
     "planUsage": { "plan": "الخطة {plan}", "free": "Free", "plus": "Plus", "pro": "Pro", "max": "Max", "creditUsage": "استخدام الرصيد لهذه الدورة", "usedPercent": "تم استخدام {percentage}%", "creditsLeft": "متبقٍ {count} / {limit} نقطة", "upgrade": "ترقية الخطة", "renewalDate": "تاريخ التجديد: {date}", "noRenewal": "لا يوجد تاريخ تجديد" },
-    "credits": { "title": "الرصيد", "ringLabel": "الرصيد: متبقٍ {remaining} من {total}", "subscriptionSplit": "نقاط الخطة", "topupSplit": "نقاط الشحن", "renews": "يتجدد: {date}", "noRenewal": "لا يوجد تاريخ تجديد", "creditsLeftShort": "متبقٍ {count}", "upgradeTitle": "رقِّ إلى {tier}", "upgradeCta": "ترقية" },
+    "credits": { "title": "الرصيد", "ringLabel": "الرصيد: متبقٍ {remaining} من {total}", "subscriptionSplit": "نقاط الخطة", "topupSplit": "نقاط الشحن", "renews": "يتجدد: {date}", "noRenewal": "لا يوجد تاريخ تجديد", "creditsLeftShort": "متبقٍ {count}", "upgradeTitle": "الترقية إلى {tier}", "upgradeCta": "ترقية" },
     "search": { "searching": "جارٍ البحث...", "noResults": "لا توجد نتائج لـ \"{query}\"", "placeholder": "ابحث في مشاريعك...", "resultsAria": "نتائج البحث في المشاريع", "emptyHint": "ابدأ بالكتابة للبحث في مشاريعك", "toOpen": "للفتح", "toClose": "للإغلاق" },
     "pagination": { "aria": "ترقيم الصفحات", "previousPage": "الصفحة السابقة", "nextPage": "الصفحة التالية", "pageN": "الصفحة {n}" },
     "recentProjects": { "title": "أحدث المشاريع", "emptyTitle": "لا توجد مشاريع بعد", "emptyDesc": "ابدأ بإنشاء أول عرض تقديمي وسيظهر هنا فور حفظه.", "createProject": "إنشاء مشروع" },

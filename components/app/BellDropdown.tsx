@@ -482,13 +482,13 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
         }}
         aria-label={dict.dialogs.notifications.bellTitle}
         aria-expanded={open}
-        // Icon-only — no background, no border, no glass circle (dashboard
-        // header pass 2026-05-30). Just the bell glyph with a white/60 →
-        // white hover lift, matching the toggle + theme / language icons.
-        // `relative` is kept so the unread badge can anchor to the corner.
-        className="relative flex h-11 w-11 items-center justify-center text-foreground/60 transition-colors hover:text-foreground"
+        // Sits in the TopUtilityBar next to search (user direction
+        // 2026-06-11) - same h-9 icon-button vocabulary as its
+        // neighbours (search / theme / language). `relative` is kept so
+        // the unread badge can anchor to the corner.
+        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-overlay-soft hover:text-foreground"
       >
-        <span className="material-symbols-outlined text-[22px]">notifications</span>
+        <span className="material-symbols-outlined text-[20px]">notifications</span>
         {unread > 0 ? (
           // Sky-blue info chip. Tailwind `bg-blue-500` (#3B82F6) —
           // brand `--tq-blue` is violet-leaning at badge size; same
@@ -878,8 +878,12 @@ export function NotificationRow({
         clickable ? "cursor-pointer" : "cursor-default"
       } ${n.read ? "opacity-50" : ""} focus-visible:bg-foreground/[0.06] focus-visible:outline-none`}
     >
-      <span className="material-symbols-outlined flex-shrink-0 text-[22px] text-foreground">
-        {iconGlyph}
+      {/* Circular icon chip - the /lab/billing showcase design adopted
+          as the bell-wide row style (user direction 2026-06-11). The
+          glyph itself still comes from the per-type role mapping
+          (lib/notifications/visuals). */}
+      <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)] text-foreground/80">
+        <span className="material-symbols-outlined text-[16px]">{iconGlyph}</span>
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">

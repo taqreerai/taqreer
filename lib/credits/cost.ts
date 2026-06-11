@@ -96,10 +96,15 @@ export function nextTier(plan: KnownPlan): KnownPlan | null {
   return idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : null;
 }
 
-// Top-up packs (§1, PROPOSED). sourceKey idempotency lives in the
-// ledger; this table is the catalog the pricing UI + Stripe Prices
-// will map onto.
+// Top-up packs (§1, PROPOSED; 4 packs per user direction 2026-06-11 to
+// match the 4 tier cards). Per-credit prices sit WELL ABOVE every
+// tier's subscription rate (Plus is the priciest at $0.0075/credit;
+// the cheapest pack here is $0.0094) so topping up can never undercut
+// upgrading - the "can't cheat the top-up system" rule. sourceKey
+// idempotency lives in the ledger; this table is the catalog the
+// pricing UI + Stripe Prices map onto.
 export const TOPUP_PACKS = [
+  { key: "mini", credits: 500, priceUsd: 7 },
   { key: "small", credits: 1_000, priceUsd: 12 },
   { key: "medium", credits: 3_000, priceUsd: 32 },
   { key: "large", credits: 8_000, priceUsd: 75 },

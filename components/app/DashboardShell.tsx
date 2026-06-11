@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/app/Sidebar";
-import { BellDropdown } from "@/components/app/BellDropdown";
 import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
 import { useLocale } from "@/components/i18n/LocaleProvider";
@@ -115,9 +114,9 @@ export function DashboardShell({
     <div className="dashboard-bg min-h-screen relative opacity-100">
       <Sidebar />
 
-      {/* Headless notification runtime (§20) — boots the store (setUser via
-          /api/me) + renders the live toast stack on every page. */}
-      <BellDropdown headless />
+      {/* The bell now lives in the TopUtilityBar (user direction
+          2026-06-11) - that instance boots the notification store and
+          owns the toasts; no headless mount needed. */}
 
       <main
         className="min-h-screen text-on-background relative"

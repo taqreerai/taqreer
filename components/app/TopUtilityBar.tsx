@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { HeaderSearch } from "@/components/app/HeaderSearch";
+import { BellDropdown } from "@/components/app/BellDropdown";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -82,6 +83,10 @@ export function TopUtilityBar() {
               </kbd>
             </button>
           </Tooltip>
+          {/* Notifications bell - moved here from the sidebar profile menu
+              (user direction 2026-06-11). This instance also boots the
+              notification store + owns the live toast stack. */}
+          <BellDropdown />
         </div>
 
         {/* Theme + language — pinned to the end (visual left). Theme is still an

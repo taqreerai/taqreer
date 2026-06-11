@@ -8,7 +8,7 @@ import { THEME_COOKIE } from "@/lib/ui-cookies";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { Tooltip } from "@/components/common/Tooltip";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@/hooks/useUser";
@@ -19,8 +19,6 @@ import type { AnimatedIconHandle } from "@/components/icons/types";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
-import { AllNotificationsModal } from "@/components/app/AllNotificationsModal";
-import { notificationStore, useNotifications } from "@/lib/notifications/store";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 import { nextTier } from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
@@ -139,7 +137,6 @@ export function Sidebar({
   // §20: header chrome moved into this profile menu. These overlays are
   // opened by their menu rows below and render via their own body portals.
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   // Theme toggle for the profile menu (mirrors components/app/ThemeToggle): flip
   // the `.light` class on <html> + persist the `tq_theme` cookie. Synced from the
@@ -177,18 +174,8 @@ export function Sidebar({
     router.push(switchLocaleHref(rawPathname, next));
   };
 
-  // Unread badge for the "الإشعارات" row + the avatar dot. Mirror the bell's
-  // filter (hide premature "deck finished" rows) so the count matches what
-  // the modal lists. The store boot/toasts live in the headless BellDropdown
-  // mounted by DashboardShell — this only reads the shared snapshot.
-  const allNotifications = useNotifications();
-  const notifications = useMemo(
-    () => allNotifications.filter((n) => n.type !== "deck.generate.finished"),
-    [allNotifications],
-  );
-  const unread = notifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0);
-  // Clamped label shared by the avatar dot + the notifications menu-row badge.
-  const unreadLabel = unread > 9 ? "9+" : unread;
+  // Unread cues moved to the top utility bar's bell (user direction
+  // 2026-06-11) - the avatar corner now carries only the credit ring.
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -401,15 +388,6 @@ export function Sidebar({
                     .replace("{remaining}", formatCredits(credits.balance.total))
                     .replace("{total}", formatCredits(credits.capacity))}
                 />
-              ) : null}
-              {/* Unread-notifications badge (§20). With the header bell gone,
-                  this is the only always-visible unread cue — anchored to the
-                  avatar's top-start corner. Sky-blue chip, same vocabulary as
-                  the old bell badge. */}
-              {unread > 0 ? (
-                <span className="absolute -top-0.5 end-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground shadow">
-                  {unreadLabel}
-                </span>
               ) : null}
               {avatarUrl ? (
                 <Image
@@ -660,25 +638,8 @@ export function Sidebar({
                       <span className="material-symbols-outlined text-[18px]">add_circle</span>
                       <span>{dict.profileMenu.newProject}</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileOpen(false);
-                        // Match the bell's "all-read on open" rule so the badge
-                        // clears the moment the list is surfaced.
-                        notificationStore.markAllRead();
-                        setNotificationsOpen(true);
-                      }}
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">notifications</span>
-                      <span>{dict.profileMenu.notifications}</span>
-                      {unread > 0 ? (
-                        <span className="ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground">
-                          {unreadLabel}
-                        </span>
-                      ) : null}
-                    </button>
+                    {/* Notifications moved to the top utility bar's bell
+                        (user direction 2026-06-11) - no menu row here. */}
 
                     <div className="divider-dark my-1" />
 
@@ -743,11 +704,6 @@ export function Sidebar({
       <NewProjectDialog
         open={newProjectOpen}
         onClose={() => setNewProjectOpen(false)}
-      />
-      <AllNotificationsModal
-        open={notificationsOpen}
-        onClose={() => setNotificationsOpen(false)}
-        items={notifications}
       />
     </aside>
   );

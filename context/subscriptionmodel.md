@@ -67,9 +67,14 @@ the per-credit subscription rate:
 
 | Pack | Credits | Price | $/credit |
 |---|---|---|---|
+| Mini | 500 | $7 | $0.014 |
 | Small | 1,000 | $12 | $0.012 |
 | Medium | 3,000 | $32 | $0.0107 |
 | Large | 8,000 | $75 | $0.0094 |
+
+4 packs (matches the 4 tier cards - user direction 2026-06-11). Every pack's
+$/credit sits well above every tier's subscription rate (priciest tier rate is
+Plus at $0.0075), so topping up can never undercut upgrading.
 
 ---
 
