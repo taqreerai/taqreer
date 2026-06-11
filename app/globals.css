@@ -446,6 +446,37 @@ button, a, [role="button"] {
   margin-bottom: 12px;
 }
 
+/* Settings row: label/description on the start side, control on the
+   end side (lovable-style settings list, user direction 2026-06-11).
+   Logical grid sides, so AR mirrors automatically. Rows separate with
+   a hairline; the card's last row drops it via `border-b-0`. */
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: center;
+  padding-block: 18px;
+  border-bottom: 1px solid var(--tq-border-hairline);
+}
+@media (min-width: 640px) {
+  .settings-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: 24px;
+  }
+}
+
+.settings-row-title {
+  color: var(--tq-text-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.settings-row-desc {
+  color: var(--tq-text-muted);
+  font-size: 0.8125rem;
+  margin-top: 2px;
+}
+
 /* ─── Canonical H1 ─── */
 /* Single source of truth for top-level title TYPOGRAPHY: size +
    weight + color. Used on dashboard widget headers, create-flow

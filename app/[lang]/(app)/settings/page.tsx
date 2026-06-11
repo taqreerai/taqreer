@@ -160,59 +160,68 @@ export default function SettingsPage() {
       {/* Stacked cards — one per row. */}
       <div className="flex flex-col gap-6">
 
-        {/* ── Profile ── */}
+        {/* ── Profile ── label-start / control-end rows (user direction
+            2026-06-11, lovable-style settings reference). Logical grid
+            sides so AR mirrors automatically. */}
         <div className="settings-card surface-card rounded-xl">
           <h2 className="settings-card-title">{dict.pages.settings.profile.title}</h2>
           <div className="settings-divider" />
 
-          <div className="flex items-center gap-4 mb-5">
-            {avatarUrl ? (
-              <Image
-                src={avatarUrl}
-                alt={displayName}
-                width={64}
-                height={64}
-                // `no-referrer` for Google profile pics — see
-                // components/common/Avatar.tsx for the full rationale.
-                referrerPolicy="no-referrer"
-                className="rounded-full object-cover w-16 h-16 tq-avatar-ring"
-              />
-            ) : (
-              <div
-                // Per-user gradient — same picker the dashboard
-                // sidebar + presence avatars use, so the same person
-                // gets the same colour everywhere they appear. Inline
-                // `backgroundImage` overrides the canonical single-
-                // gradient `background` set on `.tq-avatar-fallback`.
-                className="w-16 h-16 rounded-full tq-avatar-fallback text-xl"
-                style={{
-                  backgroundImage: avatarGradientForSeed(
-                    user?.id ?? user?.email ?? displayName,
-                  ),
-                }}
-              >
-                {displayName.charAt(0).toUpperCase()}
+          <form onSubmit={handleSaveProfile}>
+            <div className="settings-row">
+              <div>
+                <p className="settings-row-title">{dict.pages.settings.profile.title}</p>
+                <p className="settings-row-desc">{user?.email}</p>
               </div>
-            )}
-            <div>
-              <p className="font-semibold text-foreground text-sm">{displayName}</p>
-              <p className="text-muted text-xs">{user?.email}</p>
+              <div className="flex items-center justify-end gap-3">
+                <p className="text-sm font-semibold text-foreground">{displayName}</p>
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt={displayName}
+                    width={48}
+                    height={48}
+                    // `no-referrer` for Google profile pics — see
+                    // components/common/Avatar.tsx for the full rationale.
+                    referrerPolicy="no-referrer"
+                    className="rounded-full object-cover w-12 h-12 tq-avatar-ring"
+                  />
+                ) : (
+                  <div
+                    // Per-user gradient — same picker the dashboard
+                    // sidebar + presence avatars use.
+                    className="w-12 h-12 rounded-full tq-avatar-fallback text-lg"
+                    style={{
+                      backgroundImage: avatarGradientForSeed(
+                        user?.id ?? user?.email ?? displayName,
+                      ),
+                    }}
+                  >
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          <form onSubmit={handleSaveProfile} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.profile.fullName}</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={dict.pages.settings.profile.fullNamePlaceholder} className="input-dark" />
+            <div className="settings-row">
+              <div>
+                <p className="settings-row-title">{dict.pages.settings.profile.fullName}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={dict.pages.settings.profile.fullNamePlaceholder} className="input-dark" />
+                <button type="submit" disabled={saving} className="btn-pill shrink-0 px-5 py-2.5 text-sm disabled:opacity-50 cursor-pointer">
+                  {saving ? dict.pages.settings.profile.saving : dict.pages.settings.profile.save}
+                </button>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-muted">{dict.pages.settings.profile.email}</label>
+
+            <div className="settings-row border-b-0">
+              <div>
+                <p className="settings-row-title">{dict.pages.settings.profile.email}</p>
+              </div>
               <input type="email" value={user?.email ?? ""} disabled className="input-dark" />
             </div>
             <StatusMsg msg={profileMsg} />
-            <button type="submit" disabled={saving} className="btn-gradient px-6 py-3 disabled:opacity-50 w-full cursor-pointer">
-              {saving ? dict.pages.settings.profile.saving : dict.pages.settings.profile.save}
-            </button>
           </form>
         </div>
 
@@ -227,25 +236,27 @@ export default function SettingsPage() {
             </p>
           )}
 
-          <form onSubmit={handleChangePassword} className="space-y-4">
+          <form onSubmit={handleChangePassword}>
             {!isGoogleUser && (
-              <div>
-                <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.password.current}</label>
+              <div className="settings-row">
+                <p className="settings-row-title">{dict.pages.settings.password.current}</p>
                 <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" className="input-dark" />
               </div>
             )}
-            <div>
-              <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.password.new}</label>
+            <div className="settings-row">
+              <p className="settings-row-title">{dict.pages.settings.password.new}</p>
               <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="••••••••" className="input-dark" />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.password.confirm}</label>
-              <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="••••••••" className="input-dark" />
+            <div className="settings-row border-b-0">
+              <p className="settings-row-title">{dict.pages.settings.password.confirm}</p>
+              <div className="flex items-center gap-3">
+                <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="••••••••" className="input-dark" />
+                <button type="submit" disabled={pwLoading} className="btn-pill shrink-0 px-5 py-2.5 text-sm disabled:opacity-50 cursor-pointer">
+                  {pwLoading ? dict.pages.settings.password.saving : isGoogleUser ? dict.pages.settings.password.add : dict.pages.settings.password.change}
+                </button>
+              </div>
             </div>
             <StatusMsg msg={pwMsg} />
-            <button type="submit" disabled={pwLoading} className="btn-gradient px-6 py-3 disabled:opacity-50 w-full cursor-pointer">
-              {pwLoading ? dict.pages.settings.password.saving : isGoogleUser ? dict.pages.settings.password.add : dict.pages.settings.password.change}
-            </button>
           </form>
         </div>
 
@@ -253,13 +264,17 @@ export default function SettingsPage() {
         <div className="settings-card surface-card-danger rounded-xl">
           <h2 className="settings-card-title text-red-400">{dict.pages.settings.deleteAccount.title}</h2>
           <div className="settings-divider" />
-          <p className="text-muted text-sm mb-5">{dict.pages.settings.deleteAccount.warning}</p>
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="btn-pill-danger px-4 py-2 text-sm cursor-pointer"
-          >
-            {dict.pages.settings.deleteAccount.button}
-          </button>
+          <div className="settings-row border-b-0">
+            <p className="settings-row-desc">{dict.pages.settings.deleteAccount.warning}</p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="btn-pill-danger px-4 py-2 text-sm cursor-pointer"
+              >
+                {dict.pages.settings.deleteAccount.button}
+              </button>
+            </div>
+          </div>
         </div>
 
       </div>

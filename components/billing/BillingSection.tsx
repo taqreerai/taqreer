@@ -1,11 +1,10 @@
 "use client";
 
-// Settings → Billing section (billing plan Phase B). The production
-// form of the /lab/billing showcase section 7: plan summary, the
-// monthly/yearly change-plan table (→ Stripe Checkout), top-up packs
-// (→ Checkout), Manage subscription (→ Stripe Portal), and the
-// past_due dunning banner. All money management is Stripe-hosted; this
-// surface only opens the right hosted page.
+// /billing page content. Three sections in order (user direction
+// 2026-06-11): Plan (summary + dunning), Change plan (landing-style
+// pricing cards + the design-system monthly/yearly SegmentedToggle),
+// Top-up packs. All money management is Stripe; purchases go to our
+// embedded /checkout page, the portal handles cancel/payment-method.
 //
 // Reads the shared credit store for plan + balance, and
 // /api/billing/summary for the subscription-mirror state (renewal /
@@ -19,6 +18,7 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { dateFnsLocale } from "@/lib/i18n/date";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 import { TIERS, TIER_ORDER, TOPUP_PACKS } from "@/lib/credits/cost";
+import { SegmentedToggle } from "@/components/create/controls";
 import { normalizePlan, type KnownPlan } from "@/lib/plan";
 
 type Cadence = "monthly" | "yearly";
@@ -48,11 +48,15 @@ const FEATURES_ENABLED: Record<KnownPlan, number> = {
   max: 7,
 };
 
+// "Pro" carries the landing's popular pill here too.
+const POPULAR_TIER: KnownPlan = "pro";
+
 export function BillingSection() {
   const dict = useDict();
-  const { locale } = useLocale();
+  const { locale, dir } = useLocale();
   const router = useRouter();
   const t = dict.components.billing;
+  const pricing = dict.landing.pricing;
   const credits = useCreditBalance();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [cadence, setCadence] = useState<Cadence>("monthly");
@@ -61,6 +65,7 @@ export function BillingSection() {
   // Paid purchases go to our EMBEDDED checkout page (stays on
   // taqreer.ai); only the portal still leaves to Stripe-hosted.
   function buy(lookupKey: string) {
+    setBusy(lookupKey);
     router.push(`${localizedHref("/checkout", locale)}?price=${lookupKey}`);
   }
 
@@ -111,60 +116,59 @@ export function BillingSection() {
       : null;
 
   return (
-    <div className="settings-card surface-card rounded-xl">
-      <h2 className="settings-card-title">{t.title}</h2>
-      <div className="settings-divider" />
+    <div className="flex flex-col gap-10">
+      {/* ── Plan ── */}
+      <section>
+        <h2 className="mb-3 text-lg font-semibold text-foreground">{t.planTitle}</h2>
 
-      {/* Dunning banner */}
-      {summary?.status === "past_due" ? (
-        <div
-          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
-          style={{
-            background: "var(--tq-status-warn-bg)",
-            borderColor: "var(--tq-status-warn-border)",
-          }}
-        >
-          <span className="flex items-center gap-2 text-sm text-foreground">
-            <span className="material-symbols-outlined text-[var(--tq-status-warn-text)]" style={{ fontSize: 16 }}>
-              credit_card_off
-            </span>
-            {t.pastDue}
-          </span>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => go("/api/stripe/portal", undefined, "portal")}
-            className="btn-pill shrink-0 px-4 py-1.5 text-xs"
+        {/* Dunning banner */}
+        {summary?.status === "past_due" ? (
+          <div
+            className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
+            style={{
+              background: "var(--tq-status-warn-bg)",
+              borderColor: "var(--tq-status-warn-border)",
+            }}
           >
-            {t.pastDueCta}
-          </button>
-        </div>
-      ) : null}
+            <span className="flex items-center gap-2 text-sm text-foreground">
+              <span className="material-symbols-outlined text-[var(--tq-status-warn-text)]" style={{ fontSize: 16 }}>
+                credit_card_off
+              </span>
+              {t.pastDue}
+            </span>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => go("/api/stripe/portal", undefined, "portal")}
+              className="btn-pill shrink-0 px-4 py-1.5 text-xs"
+            >
+              {t.pastDueCta}
+            </button>
+          </div>
+        ) : null}
 
-      {/* Plan summary */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-4">
-        <div className="min-w-0">
-          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            {dict.components.planUsage.plan.replace("{plan}", planNames[plan] ?? plan)}
-            <span className="badge-purple">{planNames[plan] ?? plan}</span>
-          </p>
-          <p className="mt-0.5 text-xs text-muted">
-            {summary?.cancelAtPeriodEnd && renewDate
-              ? t.endsOn.replace("{date}", renewDate)
-              : renewDate
-                ? t.renews.replace("{date}", renewDate)
-                : t.noRenewal}
-          </p>
-          {credits ? (
-            <p className="mt-2 text-xs text-muted tabular-nums" dir="ltr">
-              {dict.components.planUsage.creditsLeft
-                .replace("{count}", formatCredits(credits.balance.total))
-                .replace("{limit}", formatCredits(credits.capacity))}
+        <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-2xl p-5">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              {dict.components.planUsage.plan.replace("{plan}", planNames[plan] ?? plan)}
+              <span className="badge-purple">{planNames[plan] ?? plan}</span>
             </p>
-          ) : null}
-        </div>
-        {summary?.hasBillingAccount ? (
-          <div className="text-end">
+            <p className="mt-0.5 text-xs text-muted">
+              {summary?.cancelAtPeriodEnd && renewDate
+                ? t.endsOn.replace("{date}", renewDate)
+                : renewDate
+                  ? t.renews.replace("{date}", renewDate)
+                  : t.noRenewal}
+            </p>
+            {credits ? (
+              <p className="mt-2 text-xs text-muted tabular-nums" dir="ltr">
+                {dict.components.planUsage.creditsLeft
+                  .replace("{count}", formatCredits(credits.balance.total))
+                  .replace("{limit}", formatCredits(credits.capacity))}
+              </p>
+            ) : null}
+          </div>
+          {summary?.hasBillingAccount ? (
             <button
               type="button"
               disabled={busy !== null}
@@ -173,83 +177,88 @@ export function BillingSection() {
             >
               {busy === "portal" ? t.loading : t.manage}
             </button>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Change-plan table with the monthly/yearly toggle */}
-      <div className="mt-5">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">{t.changePlan}</p>
-          <div className="flex items-center gap-0.5 rounded-full bg-[var(--tq-surface)] p-0.5 text-xs">
-            {(["monthly", "yearly"] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCadence(c)}
-                className={`rounded-full px-3 py-1 transition-colors ${
-                  cadence === c
-                    ? "bg-foreground/10 font-medium text-foreground"
-                    : "text-muted"
-                }`}
-              >
-                {c === "monthly" ? t.monthly : t.yearly}
-              </button>
-            ))}
-          </div>
+          ) : null}
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      </section>
+
+      {/* ── Change plan ── */}
+      <section>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-foreground">{t.changePlan}</h2>
+          {/* The design-system white animated toggle - same control as
+              the landing's monthly/yearly switch. */}
+          <SegmentedToggle<Cadence>
+            options={[
+              { value: "monthly", label: pricing.monthly },
+              {
+                value: "yearly",
+                label: (
+                  <>
+                    {pricing.yearly}{" "}
+                    <span className="text-xs font-normal text-[var(--tq-discount-accent)]">
+                      {pricing.discount}
+                    </span>
+                  </>
+                ),
+              },
+            ]}
+            value={cadence}
+            onChange={setCadence}
+            ariaLabel={pricing.billingAria}
+          />
+        </div>
+
+        {/* Landing-size pricing cards (same layout as the landing
+            grid); only the CTAs differ: Current / Upgrade / Downgrade. */}
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {TIER_ORDER.map((tier, idx) => {
             const isCurrent = idx === currentIdx;
             const isUpgrade = idx > currentIdx;
             const isFree = tier === "free";
-            const priceUsd =
-              isFree
-                ? 0
-                : cadence === "yearly"
-                  ? YEARLY_PER_MONTH[tier as "plus" | "pro" | "max"]
-                  : TIERS[tier].priceUsd;
+            const popular = tier === POPULAR_TIER;
+            const copy = pricing.tiers[idx];
+            const priceUsd = isFree
+              ? 0
+              : cadence === "yearly"
+                ? YEARLY_PER_MONTH[tier as "plus" | "pro" | "max"]
+                : TIERS[tier].priceUsd;
+            const footnote =
+              cadence === "yearly" && !isFree ? pricing.billedYearly : copy.footnote;
             const lookupKey = `tier_${tier}_${cadence}`;
+            const featureLabels = [copy.credits, ...copy.features];
             return (
               <div
                 key={tier}
-                className={`flex flex-col items-center gap-0.5 rounded-xl border p-4 ${
-                  isCurrent
-                    ? "border-[var(--tq-purple)] bg-[var(--tq-card)]"
-                    : "border-[var(--tq-border-hairline)] bg-[var(--tq-card)]"
+                className={`surface-card relative flex w-full flex-col rounded-2xl p-8 ${
+                  isCurrent ? "outline outline-1 outline-[var(--tq-purple)]" : ""
                 }`}
               >
-                <span className="text-sm font-bold text-foreground">{planNames[tier]}</span>
-                <span className="text-lg font-bold text-foreground tabular-nums" dir="ltr">
-                  ${priceUsd}
-                  <span className="text-[10px] font-normal text-muted">{t.perMonth}</span>
-                </span>
-                <span className="text-[10px] text-muted" dir="ltr">
-                  {formatCredits(
-                    isFree ? TIERS.free.signupGrant : TIERS[tier].monthlyAllotment,
-                  )}{" "}
-                  {isFree ? t.creditsOnce : t.creditsMo}
-                </span>
-                {/* Full feature list, same copy as the landing pricing
-                    cards (user direction 2026-06-11). Row 0 is the
-                    credits line; rows 1..6 are features[0..5]. */}
-                <ul className="mt-3 w-full space-y-1.5 self-start">
-                  {[
-                    dict.landing.pricing.tiers[idx].credits,
-                    ...dict.landing.pricing.tiers[idx].features,
-                  ].map((label, fi) => {
+                {popular && (
+                  <div className="hero-stat-pill absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#fff" }} />
+                    {pricing.mostPopular}
+                  </div>
+                )}
+
+                <h3 className="mb-4 text-center text-xl font-medium">{copy.name}</h3>
+                <p className="mb-8 h-10 whitespace-pre-line text-center text-sm text-muted">
+                  {copy.description}
+                </p>
+
+                <div className="mb-8 flex-grow space-y-4">
+                  {featureLabels.map((label, fi) => {
                     const enabled = fi < FEATURES_ENABLED[tier];
                     return (
-                      <li
+                      <div
                         key={fi}
-                        className={`flex items-center gap-1.5 text-[11px] ${
-                          enabled ? "text-foreground" : "text-muted opacity-60"
+                        className={`flex items-center gap-2.5 whitespace-nowrap text-[13px] ${
+                          enabled ? "" : "text-muted opacity-60"
                         }`}
                       >
                         <span
-                          className="material-symbols-outlined shrink-0"
+                          className="material-symbols-outlined"
                           style={{
-                            fontSize: 14,
+                            fontSize: 18,
                             color: enabled ? "var(--tq-violet)" : undefined,
                             opacity: enabled ? 1 : 0.5,
                           }}
@@ -258,65 +267,75 @@ export function BillingSection() {
                           check
                         </span>
                         {label}
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
-                {isCurrent ? (
-                  <span className="mt-2 w-full rounded-full py-1.5 text-center text-xs font-medium text-muted">
-                    {t.current}
-                  </span>
-                ) : isFree ? (
-                  // Downgrade-to-Free happens by cancelling in the portal.
-                  <button
-                    type="button"
-                    disabled={busy !== null || !summary?.hasBillingAccount}
-                    onClick={() => go("/api/stripe/portal", undefined, "portal")}
-                    className="btn-pill mt-2 w-full py-1.5 text-xs disabled:opacity-50"
-                  >
-                    {t.downgrade}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      buy(lookupKey)
-                    }
-                    className={`mt-2 w-full py-1.5 text-xs ${isUpgrade ? "btn-gradient" : "btn-pill"}`}
-                  >
-                    {busy === lookupKey ? t.loading : isUpgrade ? t.upgrade : t.downgrade}
-                  </button>
-                )}
+                </div>
+
+                <div className="mt-auto text-center">
+                  <div className="mb-2 flex items-end justify-center gap-1">
+                    <span className="text-4xl font-bold tabular-nums" dir="ltr">
+                      ${priceUsd}
+                    </span>
+                    {!isFree && <span className="mb-1 text-muted">{pricing.perMonth}</span>}
+                  </div>
+                  <div className="mb-6 text-xs text-muted">{footnote}</div>
+                  {isCurrent ? (
+                    <span className="block w-full rounded-full py-3 text-sm font-medium text-muted">
+                      {t.current}
+                    </span>
+                  ) : isFree ? (
+                    // Downgrade-to-Free happens by cancelling in the portal.
+                    <button
+                      type="button"
+                      disabled={busy !== null || !summary?.hasBillingAccount}
+                      onClick={() => go("/api/stripe/portal", undefined, "portal")}
+                      className="btn-pill block w-full py-3 text-sm disabled:opacity-50"
+                    >
+                      {t.downgrade}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => buy(lookupKey)}
+                      className={`block w-full py-3 text-sm ${
+                        isUpgrade ? "btn-gradient" : "btn-pill"
+                      }`}
+                    >
+                      {busy === lookupKey ? t.loading : isUpgrade ? t.upgrade : t.downgrade}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* Top-up packs */}
-      <div className="mt-5">
-        <p className="text-sm font-semibold text-foreground">{t.packsTitle}</p>
+      {/* ── Top-up packs ── */}
+      <section>
+        <h2 className="text-lg font-semibold text-foreground">{t.packsTitle}</h2>
         <p className="mt-0.5 text-xs text-muted">{t.packsHint}</p>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid gap-6 md:grid-cols-2 xl:grid-cols-4" dir={dir}>
           {TOPUP_PACKS.map((pack) => {
             const lookupKey = `topup_${pack.key}`;
             return (
               <div
                 key={pack.key}
-                className="flex flex-col items-center gap-1 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-4"
+                className="surface-card flex flex-col items-center gap-1 rounded-2xl p-8"
               >
-                <span className="text-lg font-bold text-foreground tabular-nums" dir="ltr">
+                <span className="text-3xl font-bold text-foreground tabular-nums" dir="ltr">
                   {formatCredits(pack.credits)}
                 </span>
-                <span className="text-xs font-bold text-muted" dir="ltr">
+                <span className="text-sm font-bold text-muted" dir="ltr">
                   ${pack.priceUsd}
                 </span>
                 <button
                   type="button"
                   disabled={busy !== null}
                   onClick={() => buy(lookupKey)}
-                  className="btn-pill mt-2 w-full py-1.5 text-xs"
+                  className="btn-pill mt-4 w-full py-2.5 text-sm"
                 >
                   {busy === lookupKey ? t.loading : t.buy}
                 </button>
@@ -324,7 +343,7 @@ export function BillingSection() {
             );
           })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

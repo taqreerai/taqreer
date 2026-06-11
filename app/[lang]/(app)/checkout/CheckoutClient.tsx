@@ -9,7 +9,6 @@ import {
 } from "@stripe/react-stripe-js";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { getStripe } from "@/lib/billing/stripe-client";
 
 export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
@@ -48,24 +47,19 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
   if (!lookupKey) return null;
 
   return (
-    <main dir={dir} className="min-h-screen bg-[var(--tq-panel)]">
-      {/* Branded header - logo + back to billing. */}
-      <header className="mx-auto flex max-w-2xl items-center justify-between px-6 py-5">
-        <Link href={localizedHref("/", locale)} aria-label="taqreer.ai">
-          <ThemeLogo width={108} height={28} />
-        </Link>
+    // Lives INSIDE the dashboard chrome now (sidebar + top bar stay,
+    // user direction 2026-06-11) - back link + title + the embedded form.
+    <div className="page-container">
+      <div className="mx-auto w-full max-w-2xl pb-16">
         <Link
           href={localizedHref("/billing", locale)}
-          className="flex items-center gap-1 text-sm text-muted no-underline transition-colors hover:text-foreground"
+          className="mb-4 inline-flex items-center gap-1 text-sm text-muted no-underline transition-colors hover:text-foreground"
         >
           <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
             {dir === "rtl" ? "chevron_right" : "chevron_left"}
           </span>
           {t.back}
         </Link>
-      </header>
-
-      <div className="mx-auto max-w-2xl px-6 pb-16">
         <h1 className="text-2xl font-bold text-foreground">
           {isTopup ? t.topupTitle : t.title}
         </h1>
@@ -94,6 +88,6 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

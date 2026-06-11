@@ -5,14 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { NoticeCard } from "@/components/common/NoticeCard";
 
 type State = "processing" | "success" | "failed";
 
 export function ReturnClient({ sessionId }: { sessionId: string | null }) {
   const dict = useDict();
-  const { locale, dir } = useLocale();
+  const { locale } = useLocale();
   const t = dict.checkout;
   const router = useRouter();
   const [state, setState] = useState<State>("processing");
@@ -56,13 +55,9 @@ export function ReturnClient({ sessionId }: { sessionId: string | null }) {
   }, [sessionId]);
 
   return (
-    <main dir={dir} className="min-h-screen bg-[var(--tq-panel)]">
-      <header className="mx-auto flex max-w-2xl items-center px-6 py-5">
-        <Link href={localizedHref("/", locale)} aria-label="taqreer.ai">
-          <ThemeLogo width={108} height={28} />
-        </Link>
-      </header>
-      <div className="mx-auto max-w-md px-6 pt-[10vh]">
+    // Inside the dashboard chrome (same as /checkout itself).
+    <div className="page-container">
+      <div className="mx-auto max-w-md pt-[10vh]">
         <div className="surface-card rounded-2xl">
           {state === "processing" ? (
             <NoticeCard icon="hourglass_top" title={t.returnProcessing} />
@@ -90,6 +85,6 @@ export function ReturnClient({ sessionId }: { sessionId: string | null }) {
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }
