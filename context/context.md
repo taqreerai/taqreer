@@ -1315,65 +1315,62 @@ once 17.A lands — they can ship sequentially or in parallel.
 
 ---
 
-## 22. Bilingual, theming & the blue design system ✅ (2026-06, on PR #57 → main)
+## 22. Bilingual, theming & the blue design system
 
-A large milestone across i18n, theming, and a full visual-language change. See
-[context/architecture.md](context/architecture.md) for the current structured map.
+Present-state summary; see [context/architecture.md](context/architecture.md) for
+the full structured map.
 
-### 22.1 Bilingual `[lang]` migration
-- Every route moved under `app/[lang]/` (`ar` | `en`). `proxy.ts` redirects bare
+### 22.1 Bilingual `[lang]`
+- Every route lives under `app/[lang]/` (`ar` | `en`). `proxy.ts` redirects bare
   URLs to a locale prefix, then refreshes the Supabase session (skips `/api` +
-  static files). `<html dir lang>` set per-locale by the `[lang]` layout.
-- ~895 dictionary keys in `dictionaries/{ar,en}.json` (en = the reference shape;
-  ar must stay key-identical). Server: `getDictionary`. Client: `LocaleProvider`
-  (`useDict`/`useLocale`). Strings + **logical-properties** sweep across ~90
-  files (0 hardcoded Arabic / physical `left`/`right` left).
-- **Two independent direction axes**: chrome dir = UI locale; canvas dir =
-  `manifest.direction`. `stripLocale()` before any pathname check;
-  `localizedHref` / `switchLocaleHref` for nav. `User.locale` persists the choice.
-- Exceptions that stay Arabic-aware: the BiDi demo + the AR font specimen.
+  static files). `<html dir lang>` is set per-locale by the `[lang]` layout.
+- ~895 dictionary keys in `dictionaries/{ar,en}.json` (en is the reference shape;
+  ar stays key-identical). Server: `getDictionary`. Client: `LocaleProvider`
+  (`useDict` / `useLocale`). UI copy + layout are dictionary-driven and use
+  logical CSS properties only.
+- **Two independent direction axes**: chrome dir = the UI locale; canvas dir =
+  `manifest.direction`. `stripLocale()` precedes any pathname check;
+  `localizedHref` / `switchLocaleHref` build internal nav. `User.locale` persists
+  the choice. The BiDi demo + the AR font specimen stay Arabic-aware regardless
+  of locale.
 
 ### 22.2 Light / dark theming
-- `tq_theme` cookie, SSR-applied (`themeClass` on `<html>`) → no flash.
-  `ThemeToggle` flips a `.light` class + the cookie.
-- `:root.light` overrides ONLY the neutral scale (shadcn light defaults) + the
-  accent. Theme-aware overlay tokens (`--tq-overlay-*`, `--tq-dot`,
-  `--logo-invert`) + `@theme inline` mapping (`--color-foreground/-border/…`) so
-  `text-foreground` / `bg-surface` / `border-border` flip automatically.
-- Light flips the dashboard **gutter (white) ↔ content panel (gray)** vs dark.
-- `ThemeLogo` swaps `/logo-light.svg` (white) ↔ `/logo-blue.svg` (solid
-  `#0057FF`) by theme via CSS, no JS.
+- A `tq_theme` cookie selects the theme, SSR-applied (`themeClass` on `<html>`),
+  no flash. `ThemeToggle` flips a `.light` class + the cookie.
+- `:root.light` overrides only the neutral scale (shadcn light defaults) + the
+  accent. Theme-aware tokens (`--tq-overlay-*`, `--tq-dot`, `--logo-invert`) and
+  `@theme inline` mappings make `text-foreground` / `bg-surface` / `border-border`
+  flip automatically.
+- In light, the dashboard gutter is white and the rounded content panel is gray
+  (the inverse of dark). `ThemeLogo` shows `/logo-light.svg` (white) on dark and
+  `/logo-blue.svg` (solid `#0057FF`) on light, via CSS.
 
-### 22.3 ONE BLUE accent — purple removed
-- The brand collapsed to a single **blue** accent (`#0057FF` main). Token still
-  *named* `--tq-purple` for back-compat but resolves to blue: **dark `#3380FF`**
-  (brighter) / **light `#0057FF`**; aliases (`--tq-blue/-violet/-magenta/
-  -lavender` + `-rgb`) all follow. Blue ramp: `#0042E0 / #1E6BFF / #0057FF /
-  #3380FF / #66A3FF`.
-- The AI mesh gradient, aurora glow, hero `.text-gradient`, all `--tq-gradient-*`,
-  the `--color-brand-purple-*` scale (selection highlight), the wordmark SVG, and
-  the editor marquee → all blue. **No purple/magenta** except the `--tq-export-
-  html/-png` file-type icon tints (deliberate categorical set).
-- **Flat, locked**: the glass system was already gone; this locked the palette.
-  Typography capped at Cairo **400–700** (no Black/900). Brand voice: **no em dash**.
+### 22.3 One blue accent
+- The brand has a single **blue** accent (`#0057FF` main). The accent token is
+  named `--tq-purple` (legacy name) and resolves to blue: **dark `#3380FF`**
+  (brighter), **light `#0057FF`**; the aliases (`--tq-blue/-violet/-magenta/
+  -lavender` + `-rgb`) follow. Blue ramp: `#0042E0 / #1E6BFF / #0057FF / #3380FF
+  / #66A3FF`.
+- The AI mesh gradient, aurora glow, `.text-gradient`, all `--tq-gradient-*`, the
+  `--color-brand-purple-*` scale (selection), the wordmark SVG, and the editor
+  marquee are all blue. The only non-blue brand hues are the `--tq-export-html/
+  -png` file-type icon tints.
+- The system is flat: opaque surfaces + hairline borders, no shadow/blur.
+  Typography is Cairo, weights **400–700** only. Copy uses Latin numerals only
+  and no em dash.
 
 ### 22.4 Chrome
-- **No Header** (deleted §20). `TopUtilityBar` (search + theme + lang) pinned to
-  the content panel top. **Sidebar** = always-collapsed 60px icon rail (`start-2`),
-  icons 18px, tooltips portaled. Profile menu gained a **theme toggle** + a
-  **Language ›** drilldown (instant swap). Active nav fill is theme-aware.
-- Content wrapped in `.tq-content-panel` (rounded). Home aurora kept; **flow-page
-  background glow removed** (flat dot texture only).
+- No top header: chrome lives in `TopUtilityBar` (search + theme + lang, pinned to
+  the content panel) and the Sidebar profile menu (account · New project ·
+  Notifications · theme toggle · **Language ›** drilldown · Settings · Sign out).
+- The Sidebar is a thin 60px icon rail (`start-2`, icons 18px, portaled tooltips,
+  theme-aware active fill). Content sits in `.tq-content-panel` (rounded). The home
+  dashboard carries the aurora glow; flow pages are flat (dot texture only).
 
 ### 22.5 Brand guidelines
-- `public/brand-guidelines.html` — a self-contained, downloadable spec for
+- `public/brand-guidelines.html` is a self-contained, downloadable spec for
   designers (logo, blue palette, Cairo type, live components, glow usage) with a
   dark/light toggle. Live at `/brand-guidelines.html`.
-
-### 22.6 CodeRabbit pass
-- PR #57 review addressed: open-redirect guard on login `?next=`, proxy skips
-  session refresh for static files, locale-aware internal links, dir-aware
-  pagination chevrons, a11y `role="menu"`, lint `set-state-in-effect` fix, etc.
 
 ---
 

@@ -1,9 +1,8 @@
 # Taqreer — App Architecture & Design-System Map
 
-> Originally written 2026-06-08; **substantially updated 2026-06-11** for the
-> bilingual `[lang]` migration, the light/dark theme system, and the flat
-> **blue** design system (the glass system + purple palette are gone).
-> **Line numbers are approximate** — grep the symbol, don't trust `:NN`.
+> A reference map of the app: stack, routes, i18n, theming, design system,
+> components, flows, backend. **Line numbers are approximate** — grep the symbol,
+> don't trust `:NN`. Last reviewed 2026-06-11.
 
 ## Contents
 1. [Stack & top-level layout](#1-stack--top-level-layout)
@@ -28,7 +27,7 @@
 - **Data**: Prisma → local Postgres (docker-compose, `localhost:5432`). **Supabase** = auth + storage + realtime only (NOT the app DB).
 - **Generation**: Anthropic Claude (Opus 4.8 default) streams HTML slides via **Inngest** background jobs; gpt-image-2 for generated images.
 - **Edge gate**: [proxy.ts](proxy.ts) (Next middleware) — redirects bare URLs to a locale prefix, then refreshes the Supabase session. Skips both for `/api` and static-file requests.
-- **Root layout**: [app/[lang]/layout.tsx](app/[lang]/layout.tsx) — Cairo + Poppins fonts, `<html dir lang>` from the locale, `themeClass` from the `tq_theme` cookie, Material Symbols, wraps children in `LocaleProvider` (dictionary → client). There is **no** `GlassPreflight` (deleted with the glass system).
+- **Root layout**: [app/[lang]/layout.tsx](app/[lang]/layout.tsx) — Cairo + Poppins fonts, `<html dir lang>` from the locale, `themeClass` from the `tq_theme` cookie, Material Symbols, wraps children in `LocaleProvider` (dictionary → client).
 
 ---
 
@@ -50,7 +49,7 @@ Auth-gated SSR (redirects to `/[lang]/login?next=`).
 | `/dashboard` | Home: QuickActions + HomeLibrary (projects ⇄ templates) | default |
 | `/projects`, `/favorites`, `/templates`, `/library` | grids (client filter + paginate) | default |
 | `/brand-kits`, `/brand-kits/new` | saved brand identities | default |
-| `/settings` | profile, plan, delete account (no glass-preset picker anymore) | default |
+| `/settings` | profile, plan, delete account | default |
 | `/create`, `/enhance`, `/mimic`, `/datasheet`, `/use-template/[id]` | the 4 creation flows | flow |
 | `/project/[projectId]` | **unified studio** — generation AND editing (`DeckView`) | studio (chrome-less) |
 | `/preview/[projectId]` | back-compat redirect → `/project` | — |
@@ -92,18 +91,18 @@ Dark is the primary brand mode; light is a first-class shadcn-neutral theme.
 ## 5. App shell & layout chrome
 
 ### [components/app/DashboardShell.tsx](components/app/DashboardShell.tsx)
-Client shell: the thin Sidebar rail + the rounded content panel + `<main>`. There is **no Header** (deleted §20 — its controls moved into the profile menu + `TopUtilityBar`). Content is offset from the rail via `marginInlineStart: SIDEBAR_WIDTH + 8`. Route-aware panel:
+Client shell: the thin Sidebar rail + the rounded content panel + `<main>`. There is no top header — chrome lives in the Sidebar profile menu + `TopUtilityBar`. Content is offset from the rail via `marginInlineStart: SIDEBAR_WIDTH + 8`. Route-aware panel:
 - **studio** (`/project`,`/preview`): chrome-less `studio-canvas` (DeckView paints its own panels).
 - **flow** / **default**: content wrapped in **`.tq-content-panel`** (rounded 18px, 8px gutter on all sides). Home/flows get `.tq-panel-glow` / `.tq-panel-flow`; other pages `.tq-panel-gray`.
 
-### [components/app/Sidebar.tsx](components/app/Sidebar.tsx) — always-collapsed 60px icon rail
-Floated `start-2` (8px off the inline-start edge), transparent (`.sidebar-bg`), no expand/collapse. Logo/home → 4 create actions → nav links → profile button. Nav pills `.nav-item` / `.nav-active` (active fill is **theme-aware** `--tq-overlay-strong`). Icons `AnimatedIcon size={18}`. Tooltips are **portaled to body** (the rail clips them otherwise). **Profile dropdown** (portal, `role="menu"`): account · New project · Notifications · **Theme toggle** · **Language ›** (drilldown sub-view, instant swap) · Settings · Sign out.
+### [components/app/Sidebar.tsx](components/app/Sidebar.tsx) — thin 60px icon rail
+Floated `start-2` (8px off the inline-start edge), transparent (`.sidebar-bg`), fixed-width (icons only, no expand state). Logo/home → 4 create actions → nav links → profile button. Nav pills `.nav-item` / `.nav-active` (active fill is **theme-aware** `--tq-overlay-strong`). Icons `AnimatedIcon size={18}`. Tooltips are **portaled to body** (the rail clips them otherwise). **Profile dropdown** (portal, `role="menu"`): account · New project · Notifications · **Theme toggle** · **Language ›** (drilldown sub-view, instant swap) · Settings · Sign out.
 
 ### [components/app/TopUtilityBar.tsx](components/app/TopUtilityBar.tsx) — pinned to the content panel's top
 `HealthDot` + search (⌘K command palette) on the start; **ThemeToggle + LanguageMenu** on the end.
 
 ### Dashboard home ([dashboard/page.tsx](app/[lang]/(app)/dashboard/page.tsx))
-`QuickActions` (4 mesh-hover cards) + **`HomeLibrary`** (one card whose header is a projects ⇄ templates `SegmentedToggle`). The old widget grid (RecentGeneration/RecentActivity/ProjectTableRow/Sparkline/Header) was **deleted 2026-06-09**.
+`QuickActions` (4 mesh-hover cards) + **`HomeLibrary`** (one card whose header is a projects ⇄ templates `SegmentedToggle`).
 
 ### Layout constants
 | | value |
@@ -114,7 +113,7 @@ Floated `start-2` (8px off the inline-start edge), transparent (`.sidebar-bg`), 
 | Page scroll | on `<body>` (not `<html>`) so the RTL scrollbar sits on the left |
 
 ### Backgrounds
-`.tq-aurora` = a bottom-anchored, blurred, drifting **blue** ambient glow on the home dashboard (+ the editor). **Flow pages have NO background glow** (removed 2026-06-11 — flat dot texture only). `.studio-canvas` = dotted grid + bottom blue glow.
+`.tq-aurora` = a bottom-anchored, blurred, drifting **blue** ambient glow on the home dashboard (+ the editor). Flow pages are flat — dot texture only, no glow. `.studio-canvas` = dotted grid + bottom blue glow.
 
 ### Z-index ladder
 `0` panel glow · `1` main · `30` TopUtilityBar · `50` Sidebar · `1100` action popovers · `1000/1001` dashboard modals · `9999` profile dropdown.
@@ -123,10 +122,10 @@ Floated `start-2` (8px off the inline-start edge), transparent (`.sidebar-bg`), 
 
 ## 6. Design system (flat, blue)
 
-**Single source of truth = [app/globals.css](app/globals.css)** — the header comment block is the legend. The **glass system is gone** (no blur, no shadow, no transparency-as-depth): opaque surfaces + hairline borders.
+**Single source of truth = [app/globals.css](app/globals.css)** — the header comment block is the legend. The system is **flat**: no blur, no shadow, no transparency-as-depth — opaque surfaces + hairline borders.
 
 ### One accent: BLUE
-The brand runs on a **single blue accent**. The token is still *named* `--tq-purple` (kept so ~26 referencing files didn't need edits) but it resolves to blue, and the legacy aliases (`--tq-blue / -violet / -magenta / -lavender` + their `-rgb`) all point at it.
+The brand runs on a **single blue accent**. The accent token is named `--tq-purple` (a legacy name) and resolves to blue; the aliases `--tq-blue / -violet / -magenta / -lavender` (+ their `-rgb`) all point at it.
 - **Dark**: `--tq-purple #3380FF` (brighter accent) / `-hover #0057FF` (deeper) / `-rgb 51,128,255`.
 - **Light** (`:root.light`): `--tq-purple #0057FF` (the main brand blue) / `-hover #0046CC` / `-rgb 0,87,255`.
 - Blue ramp used by gradients/mesh/aurora: deep `#0042E0`, mid `#1E6BFF`, main `#0057FF`, bright `#3380FF`, light `#66A3FF`.
@@ -166,13 +165,13 @@ The brand runs on a **single blue accent**. The token is still *named* `--tq-pur
 - **`ColorPickerPopover`**, **`Avatar`**, **`AnimatedIcon`** (+ `ParagraphWriteIcon`), **`SlideRenderer`**.
 
 ### Dashboard ([components/app/](components/app/))
-`HomeLibrary`, `QuickActions`, `ProjectsGrid`, `ProjectThumbnail`, `TemplateTile`, `BrandKitTile`, `Pagination` (dir-aware chevrons), `PlanUsage`, `MyTemplates`, `Sidebar`, `DashboardShell`, `BellDropdown`. **Removed**: `Header`, `RecentGenerationWidget`, `RecentActivityWidget`, `ProjectTableRow`, `Sparkline`, `GlassPreflight`.
+`HomeLibrary`, `QuickActions`, `ProjectsGrid`, `ProjectThumbnail`, `TemplateTile`, `BrandKitTile`, `Pagination` (dir-aware chevrons), `PlanUsage`, `MyTemplates`, `Sidebar`, `DashboardShell`, `BellDropdown`.
 
 ### Dialogs / portal menus
 Sibling overlay+panel pattern on `surface-modal`: `NewProjectDialog`, `ShareDialog`, `SaveAsTemplateDialog`, confirm dialogs, `TemplateLightbox`, `AllNotificationsModal`. Menus: `ProjectActionsMenu`, `TemplateActionsMenu`, `BrandKitActionsMenu`, `ExportMenu`, `LanguageMenu`.
 
 ### Studio/editor ([components/preview/](components/preview/), [components/slides/](components/slides/))
-`DeckView` (orchestrator), `SlideNavSidebar`, `LayersPanel`, `CommentsPanel`, `HeroCommentOverlay`, `PreviewActionBar` (bottom toolbar), `SlideEditor` (iframe), `StylePill`/`MorePopover`/`FontControl`, `SlidePresenceStack`. (`StudioHeader` was deleted — actions moved into `SlideNavSidebar`'s footer.)
+`DeckView` (orchestrator), `SlideNavSidebar` (its footer holds the studio actions), `LayersPanel`, `CommentsPanel`, `HeroCommentOverlay`, `PreviewActionBar` (bottom toolbar), `SlideEditor` (iframe), `StylePill`/`MorePopover`/`FontControl`, `SlidePresenceStack`.
 
 > Restyle guidance: token/CSS changes go in **globals.css**, not component edits. Reuse widget/dialog/menu chrome; honor chrome-dir + logical properties + portal-menu patterns.
 
