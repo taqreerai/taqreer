@@ -1,11 +1,27 @@
 # Billing & Subscription Architecture Plan
 
-> **Status: REVIEWED 2026-06-11 - decisions locked in §8.** This is the
-> missing "whole model" layer above context/subscriptionmodel.md (which owns
-> pricing numbers and the credit ledger, both built and tested). This doc owns
-> the USER-FACING model: surfaces, journeys, Stripe's role, and build order.
-> UI components ship for review FIRST as static renders on /lab/billing
-> before any of them go live (user direction).
+> **Status: BUILT through Phase C in test mode (2026-06-12).** Phases A0/A/B/C
+> are done; only Phase D (live keys + Stripe Tax + branding + real-card smoke
+> test) and the real paid-generation test remain. Decisions locked in §8.
+> This doc owns the USER-FACING model above context/subscriptionmodel.md
+> (pricing numbers + ledger): surfaces, journeys, Stripe's role, build order.
+>
+> **Post-review evolution (user-directed, supersedes parts of §2):**
+> - Billing moved OUT of Settings to a dedicated **/billing** page (user-menu
+>   entry; popup upgrade pill + credits card deep-link to it). Change-plan
+>   cards are landing-size with the full feature list + popular pill;
+>   monthly/yearly via the design-system SegmentedToggle.
+> - Checkout is NOT Stripe-hosted and NOT the embedded iframe: it is **our
+>   own Elements form** on /checkout (Checkout Sessions `ui_mode: elements`,
+>   PaymentElement + CurrencySelectorElement, Appearance API themed from live
+>   tokens via lib/billing/appearance.ts, dark/light reactive in place, full
+>   Arabic). Two cards: order + email | payment fields + pay. /checkout/return
+>   confirms via /api/stripe/checkout/status then auto-redirects to /dashboard.
+> - Limits learned: the Link "Save my information" block (+ its Optional tag)
+>   is welded inside the PaymentElement iframe - restyle-only, can't move or
+>   target it from page CSS; the test-mode "stripe" dev button vanishes on
+>   live keys; dashboard branding (bg #FFFFFF / button #0057FF) is live-mode
+>   only - the sandbox and test API both refuse it.
 
 ---
 
@@ -135,8 +151,8 @@ Stripe webhooks - so no reset cron is needed in the wiring phase.
 | **A0. Billing-UI showcase** | /lab/billing static renders of every billing component (notifications, insufficient dialog, paywalls, premium-template lock, Settings Billing, past_due banner) - user reviews + directs before anything ships | done first |
 | **A. Generation wiring** (gaps #2+#5+#6+#1-cheap) | preflight in /api/projects (402 + two offers), hold/settle in deck-generate + onFailure + cancel(per keeps-partial spec §7), chargeCredits in regen + name-gen, signup grant call site + email-normalize + IP velocity, daily cron (stuck-holds sweep + expireTopups + monthly drip for yearly subs via resetMonthlyAllotment), insufficient-credits dialog (as approved from A0) | 1 session |
 | **B. Stripe test mode** ✅ DONE (commit 7d8c2dc) | lib/billing/{stripe,prices,customer}.ts; scripts/stripe-setup-products.ts (run: 7 products + 10 prices live); /api/stripe/{checkout,portal,webhook}; GET /api/billing/summary; components/billing/BillingSection; landing pricing CTAs; billing Notification types; Subscription mirror fields + StripeWebhookEvent table. Verified 5/5 webhook checks + live checkout URL + sim 30/30 + security-review clean. | done |
-| **C. Polish + edge UX** | past_due banner, upgrade deep-links from popup/paywalls, success/cancel return pages, admin refund helper | small |
-| **D. Live keys** | live Products/Prices behind env switch, prod webhook endpoint, Stripe Tax (KSA/UAE VAT), $1 smoke charge + refund | small, pre-launch |
+| **C. Polish + edge UX** ✅ DONE (through commit b44f677) | /billing page split out of Settings, Elements checkout (replaces hosted + embedded iframe - see status header), past_due banner, upgrade deep-links from popup, /checkout/return auto-redirect; settings .settings-row layout; widths unified at max-w-6xl | done |
+| **D. Live keys** ⏳ REMAINING | live Products/Prices behind env switch, prod webhook endpoint + cron deploy, Stripe Tax (KSA/UAE VAT), dashboard branding (live-mode only), $1 smoke charge + refund with a real card; ALSO: real paid-generation test (hold→Claude→settle, awaiting user go) + premium-template gating enforcement | pre-launch |
 
 ## 7. Cancel keeps-partial spec (gap #3, folded into Phase A)
 

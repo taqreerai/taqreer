@@ -49,7 +49,9 @@ Auth-gated SSR (redirects to `/[lang]/login?next=`).
 | `/dashboard` | Home: QuickActions + HomeLibrary (projects ⇄ templates) | default |
 | `/projects`, `/favorites`, `/templates`, `/library` | grids (client filter + paginate) | default |
 | `/brand-kits`, `/brand-kits/new` | saved brand identities | default |
-| `/settings` | profile, plan, delete account | default |
+| `/settings` | plan banner + profile / password / delete; label-start control-end `.settings-row` rows | default |
+| `/billing` | plan summary + dunning, change-plan cards (landing-size, popular pill), top-up packs; linked from the user menu, the popup upgrade pill, and the popup credits card | default |
+| `/checkout`, `/checkout/return` | OUR Elements payment form (Checkout Sessions `ui_mode: elements`); return page auto-redirects to `/dashboard` on success | default |
 | `/create`, `/enhance`, `/mimic`, `/datasheet`, `/use-template/[id]` | the 4 creation flows | flow |
 | `/project/[projectId]` | **unified studio** — generation AND editing (`DeckView`) | studio (chrome-less) |
 | `/preview/[projectId]` | back-compat redirect → `/project` | — |
@@ -167,6 +169,9 @@ The brand runs on a **single blue accent**. The accent token is named `--tq-purp
 ### Dashboard ([components/app/](components/app/))
 `HomeLibrary`, `QuickActions`, `ProjectsGrid`, `ProjectThumbnail`, `TemplateTile`, `BrandKitTile`, `Pagination` (dir-aware chevrons), `PlanUsage`, `MyTemplates`, `Sidebar`, `DashboardShell`, `BellDropdown`.
 
+### Billing ([components/billing/](components/billing/), [components/common/](components/common/))
+`BillingSection` (the /billing page body), `CreditGateDialog` (402 offers in the 4 flows), **`NoticeCard`** (app-wide confirm/outcome pattern, bare glyphs — also the checkout return states). Credit store: [lib/credits/store.ts](lib/credits/store.ts) — ONE balance feeding the avatar ring, popup breakdown, and plan banner, ticked by the `credit.balance.changed` nudge.
+
 ### Dialogs / portal menus
 Sibling overlay+panel pattern on `surface-modal`: `NewProjectDialog`, `ShareDialog`, `SaveAsTemplateDialog`, confirm dialogs, `TemplateLightbox`, `AllNotificationsModal`. Menus: `ProjectActionsMenu`, `TemplateActionsMenu`, `BrandKitActionsMenu`, `ExportMenu`, `LanguageMenu`.
 
@@ -200,19 +205,30 @@ User → Project → Presentation (1:1) → PresentationVersion (slideJson = ful
                                      → SlideState → SlideVersion (per-slide history, capped 20)
 Project → ProjectShare (view|comment|edit, inviteToken) · GeneratedImage · Comment (forAi → partial regen)
         · Job · BrandKit · Template
-User → Notification · Subscription · UsageEvent · Folder   (User.locale persists the chrome locale)
+User → Notification · Subscription (Stripe mirror: stripeSubscriptionId/PriceId,
+       cancelAtPeriodEnd, currentPeriodEnd — webhooks only write it)
+     · CreditAccount → TopupGrant (FIFO by expiry, 12-mo) · CreditHold
+     · UsageEvent · Folder        (User.locale persists the chrome locale;
+StripeWebhookEvent = webhook idempotency claims; User.stripeCustomerId)
 ```
 `Presentation.currentVersionId` = active; `savedVersionId` + `savedSlideVersions` = pinned saved snapshot.
 
 ### Inngest ([inngest/functions/](inngest/functions/))
-`deck-generate` (brief → Claude streams `<section>` HTML → `StreamingHtmlSplitter` → `lib/deck/scope-css` + `lib/deck/scaffold` → seed versions → manifest → image-warm + thumbnails). Plus `deck-regenerate-partial`, `deck-image-warm` (gpt-image-2, bill-once), `extract-source`, `brand-analyze`, `thumbnail-render` (Puppeteer→WebP), `template-render`.
+`deck-generate` (brief → **holdCredits** → Claude streams `<section>` HTML → `StreamingHtmlSplitter` → `lib/deck/scope-css` + `lib/deck/scaffold` → seed versions → manifest → **settleHold** → image-warm + thumbnails; release in onFailure; cancel keeps partial + charges streamed slides). Plus `deck-regenerate-partial` (hold/settle, jobKey `regen:{versionId}`), `credits-maintenance` (daily 03:00 — stuck holds >24h, top-up expiry, monthly drip), `deck-image-warm` (gpt-image-2, bill-once), `extract-source`, `brand-analyze`, `thumbnail-render` (Puppeteer→WebP), `template-render`.
+
+### Credits & billing ([lib/credits/](lib/credits/), [lib/billing/](lib/billing/))
+- **Ledger** (`lib/credits/server.ts`): hold/settle/charge/grants/reset — all atomic via per-user `SELECT FOR UPDATE`, idempotent; balance changes broadcast a pointer-only `credit.balance.changed` nudge (clients refetch `GET /api/credits`).
+- **Cost model** (`lib/credits/cost.ts`): TIERS free/plus/pro/max, TOPUP_PACKS x4, per-flow `estimateSlides`, `effectivePreset` (auto-upgrade DISABLED).
+- **Preflight** (`lib/credits/preflight.ts`): gates flow/preset/cap/balance → 402 with reduce-slides / cheaper-preset / top-up options (brief slideCount pinned to holdSlides — the under-quote fix).
+- **Stripe** (`lib/billing/`): server SDK (`stripe.ts`, apiVersion 2026-04-22.dahlia), catalog by lookup_key + grant metadata (`prices.ts`), customer get-or-create (`customer.ts`), browser singleton (`stripe-client.ts`), **Appearance builder** (`appearance.ts` — live tokens → opaque sRGB, alpha composited over the card).
+- Signup grant (`lib/credits/signup.ts`): email-normalize dedupe + IP velocity 3/24h.
 
 ### API ([app/api/](app/api/))
-Projects (create/save/regenerate[-partial]/retry/cancel/status/favorite/share/export{pdf,png}), slides (`[slideKey]/{edit,checkpoint,restore,regen,lock,versions,images}`), comments, brand-kits, templates, extract, datasheet/parse, storage/upload, invitations/[token]/accept, notifications, `me` (locale persist), auth/{user-sync,delete-account}.
+Projects (create [**credit preflight 402**]/save/regenerate[-partial]/retry/cancel/status/favorite/share/export{pdf,png}), slides (`[slideKey]/{edit,checkpoint,restore,regen,lock,versions,images}`), comments, brand-kits, templates, extract, datasheet/parse, storage/upload, invitations/[token]/accept, notifications, `me` (locale persist), auth/{user-sync,delete-account}, **credits** (balance), **billing/summary** (plan + mirror state), **stripe/{checkout,portal,webhook,checkout/status}** (checkout returns the session client secret for the Elements form; webhook = sig-verified raw body + StripeWebhookEvent claims → ledger grants), **realtime/token** (HS256 mint, topics claim).
 
 ### Auth / realtime / storage
 - **Access** ([lib/api/project-access.ts](lib/api/project-access.ts)): Supabase JWT → Prisma User; `resolveProjectAccess` owner > edit > comment > view (SSR + API both gate).
-- **Realtime** ([lib/realtime/](lib/realtime/)): `project:{id}` + `user:{id}` channels + presence; the `/status?includeManifest&includeSlideStates` fat-sync is the broadcast handler's refetch. Local dev → status poll fallback.
+- **Realtime** ([lib/realtime/](lib/realtime/)): **private** `project:{id}` + `user:{supabaseUid}` channels + presence, authorized by a minted HS256 JWT with a `topics` claim (`GET /api/realtime/token`) + realtime.messages RLS policies; explicit `setAuth(token)` before subscribe. The `/status?includeManifest&includeSlideStates` fat-sync is the broadcast handler's refetch. Local dev → status poll fallback.
 - **Storage**: Supabase buckets `slide-previews` (WebP, public), `generated-images` (public), `brand-assets`/`source-files` (private).
 - **Export** ([lib/export/](lib/export/)): `dom-to-pptx` **patched via patch-package** (BiDi: bodyPr rtlCol + pPr rtl/algn + rPr lang=ar-SA), bidi-postprocess, render-deck-pdf.
 
