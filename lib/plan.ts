@@ -4,7 +4,7 @@
 // helpers narrow + classify it so callers don't re-declare the literal
 // union (it lived duplicated in the dashboard page + /api/usage/plan).
 
-export const KNOWN_PLANS = ["free", "starter", "plus", "pro"] as const;
+export const KNOWN_PLANS = ["free", "plus", "pro", "max"] as const;
 export type KnownPlan = (typeof KNOWN_PLANS)[number];
 
 export function isKnownPlan(plan: string): plan is KnownPlan {
@@ -17,10 +17,11 @@ export function normalizePlan(plan: string | null | undefined): KnownPlan {
 }
 
 /**
- * Whether a plan may use premium templates. Reserved for the top "pro"
- * tier (product decision 2026-05-29). Centralized so the gate threshold
- * lives in one place if it later widens to include "plus".
+ * Whether a plan may use premium templates. Reserved for the TOP tier
+ * (product decision 2026-05-29; tier renamed "pro" -> "max" 2026-06-11).
+ * Centralized so the gate threshold lives in one place if it later
+ * widens to include "pro".
  */
 export function isProPlan(plan: string | null | undefined): boolean {
-  return normalizePlan(plan) === "pro";
+  return normalizePlan(plan) === "max";
 }

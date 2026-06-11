@@ -24,9 +24,9 @@ export function PlanUsage() {
     capacity > 0 ? Math.min(100, Math.round((used / capacity) * 100)) : 0;
   const planNames: Record<string, string> = {
     free: dict.components.planUsage.free,
-    starter: dict.components.planUsage.starter,
     plus: dict.components.planUsage.plus,
     pro: dict.components.planUsage.pro,
+    max: dict.components.planUsage.max,
   };
   const planName = planNames[plan] ?? plan;
   const renewalDate = balance.allotmentResetAt

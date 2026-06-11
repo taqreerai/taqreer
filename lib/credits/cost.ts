@@ -48,7 +48,10 @@ export type TierConfig = {
   flows: readonly Flow[];
 };
 
-// The LOCKED tier ladder (§1). Keys match lib/plan.ts KNOWN_PLANS.
+// The tier ladder (§1; names Free/Plus/Pro/Max per user direction
+// 2026-06-11 - the grants/caps/gates are the original LOCKED values,
+// only the labels moved: starter->plus, plus->pro, pro->max). Keys
+// match lib/plan.ts KNOWN_PLANS.
 export const TIERS: Record<KnownPlan, TierConfig> = {
   free: {
     priceUsd: 0,
@@ -58,7 +61,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     presets: ["sonnet-fast"],
     flows: ["create"],
   },
-  starter: {
+  plus: {
     priceUsd: 15,
     monthlyAllotment: 2000,
     signupGrant: 0,
@@ -66,7 +69,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     presets: ["sonnet-fast", "opus-fast"],
     flows: ALL_FLOWS,
   },
-  plus: {
+  pro: {
     priceUsd: 30,
     monthlyAllotment: 5000,
     signupGrant: 0,
@@ -74,7 +77,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     presets: ["sonnet-fast", "opus-fast", "opus-balanced"],
     flows: ALL_FLOWS,
   },
-  pro: {
+  max: {
     priceUsd: 70,
     monthlyAllotment: 12000,
     signupGrant: 0,
@@ -83,6 +86,15 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     flows: ALL_FLOWS,
   },
 };
+
+// Upgrade ladder, cheapest first - drives "Turn {nextTier}" CTAs.
+export const TIER_ORDER: readonly KnownPlan[] = ["free", "plus", "pro", "max"];
+
+/** The next tier up, or null when already on the top tier. */
+export function nextTier(plan: KnownPlan): KnownPlan | null {
+  const idx = TIER_ORDER.indexOf(plan);
+  return idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : null;
+}
 
 // Top-up packs (§1, PROPOSED). sourceKey idempotency lives in the
 // ledger; this table is the catalog the pricing UI + Stripe Prices

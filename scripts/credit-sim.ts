@@ -116,7 +116,7 @@ async function main() {
     });
   }
 
-  async function makeUser(plan: "free" | "starter" | "plus" | "pro") {
+  async function makeUser(plan: "free" | "plus" | "pro" | "max") {
     userSeq += 1;
     const user = await prisma.user.create({
       data: {
@@ -162,7 +162,7 @@ async function main() {
 
   async function fakeGenerate(opts: {
     userId: string;
-    plan: "free" | "starter" | "plus" | "pro";
+    plan: "free" | "plus" | "pro" | "max";
     flow: Flow;
     preset: Quality;
     slideInput: SlideEstimateInput;
@@ -295,10 +295,10 @@ async function main() {
 
   {
     // 1.1 Fixed-size deck charges exactly the formula price.
-    const user = await makeUser("starter");
+    const user = await makeUser("plus");
     const result = await fakeGenerate({
       userId: user.id,
-      plan: "starter",
+      plan: "plus",
       flow: "create",
       preset: "sonnet-fast",
       slideInput: { kind: "fixed", count: 10 },
@@ -324,10 +324,10 @@ async function main() {
 
   {
     // 1.2 Auto mode: hold the estimate, charge the actual, release the rest.
-    const user = await makeUser("starter");
+    const user = await makeUser("plus");
     const result = await fakeGenerate({
       userId: user.id,
-      plan: "starter",
+      plan: "plus",
       flow: "create",
       preset: "opus-fast",
       slideInput: { kind: "text", text: words(1000) }, // → 12 slides est.
@@ -354,10 +354,10 @@ async function main() {
 
   {
     // 1.3 Model overshoots the estimate → charge CLAMPS to what was shown.
-    const user = await makeUser("starter");
+    const user = await makeUser("plus");
     const result = await fakeGenerate({
       userId: user.id,
-      plan: "starter",
+      plan: "plus",
       flow: "create",
       preset: "opus-fast",
       slideInput: { kind: "text", text: words(1000) }, // hold 542 (12 slides)
@@ -378,7 +378,7 @@ async function main() {
 
   {
     // 1.4 Free actions move no money and write no ledger events.
-    const user = await makeUser("starter");
+    const user = await makeUser("plus");
     const before = await balanceOf(user.id);
     const eventsBefore = await prisma.usageEvent.count({
       where: { userId: user.id },
@@ -406,12 +406,12 @@ async function main() {
   // ─── Section 2 - Estimates per flow ──────────────────────────────
 
   {
-    const user = await makeUser("plus");
+    const user = await makeUser("pro");
     // 2.1 Create from text: ~1 slide / 100 words (+cover +closing).
     const est = cost.estimateSlides({ kind: "text", text: words(1200) });
     const quotes = await preflightGenerate({
       userId: user.id,
-      plan: "plus",
+      plan: "pro",
       flow: "create",
       preset: "opus-balanced",
       slideInput: { kind: "text", text: words(1200) },
@@ -574,7 +574,7 @@ async function main() {
 
   {
     // 3.3 Cheaper-model path: the block lists presets that DO fit.
-    const user = await makeUser("plus");
+    const user = await makeUser("pro");
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
@@ -584,7 +584,7 @@ async function main() {
     });
     const blocked = await fakeGenerate({
       userId: user.id,
-      plan: "plus",
+      plan: "pro",
       flow: "create",
       preset: "opus-balanced",
       slideInput: { kind: "text", text: words(1200) }, // 14 slides → 708
@@ -600,7 +600,7 @@ async function main() {
       opts3.cheaperPresets.includes("opus-fast");
     const fallback = await fakeGenerate({
       userId: user.id,
-      plan: "plus",
+      plan: "pro",
       flow: "create",
       preset: "opus-fast",
       slideInput: { kind: "text", text: words(1200) },
@@ -625,7 +625,7 @@ async function main() {
 
   {
     // 3.4 Top-up path: buy a pack, then the original choice fits.
-    const user = await makeUser("plus");
+    const user = await makeUser("pro");
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
@@ -641,7 +641,7 @@ async function main() {
     });
     const result = await fakeGenerate({
       userId: user.id,
-      plan: "plus",
+      plan: "pro",
       flow: "create",
       preset: "opus-balanced",
       slideInput: { kind: "text", text: words(1200) }, // 708
@@ -668,10 +668,10 @@ async function main() {
   {
     // 3.5 Source deck above the tier cap blocks at preflight - never a
     // truncated rebuild, never a charge.
-    const user = await makeUser("starter"); // cap 30
+    const user = await makeUser("plus"); // cap 30
     const result = await fakeGenerate({
       userId: user.id,
-      plan: "starter",
+      plan: "plus",
       flow: "enhance",
       preset: "opus-fast",
       slideInput: { kind: "enhance", pageCount: 60 },
@@ -697,10 +697,10 @@ async function main() {
 
   {
     // 4.1 Cancel late: pay for the slides actually made.
-    const user = await makeUser("starter");
+    const user = await makeUser("plus");
     const result = await fakeGenerate({
       userId: user.id,
-      plan: "starter",
+      plan: "plus",
       flow: "create",
       preset: "opus-fast",
       slideInput: { kind: "fixed", count: 30 }, // hold 830
@@ -722,7 +722,7 @@ async function main() {
     // 4.2 Cancel before anything streamed: full release.
     const early = await fakeGenerate({
       userId: user.id,
-      plan: "starter",
+      plan: "plus",
       flow: "create",
       preset: "opus-fast",
       slideInput: { kind: "fixed", count: 30 },
@@ -745,7 +745,7 @@ async function main() {
 
   {
     // 4.3 An "edit" that runs the AI costs credits; a local edit doesn't.
-    const user = await makeUser("plus");
+    const user = await makeUser("pro");
     const before = await balanceOf(user.id);
     // Local in-canvas edit: pure content save, no Claude → no ledger call.
     const afterLocal = await balanceOf(user.id);
@@ -826,13 +826,13 @@ async function main() {
   {
     // 4.5 Refund farming: fail/cancel on purpose, 10 rounds → net zero,
     // never a gain.
-    const user = await makeUser("starter");
+    const user = await makeUser("plus");
     const start = await balanceOf(user.id);
     let maxSeen = start;
     for (let i = 0; i < 10; i++) {
       const r = await fakeGenerate({
         userId: user.id,
-        plan: "starter",
+        plan: "plus",
         flow: "create",
         preset: "opus-fast",
         slideInput: { kind: "fixed", count: 20 },
@@ -875,7 +875,7 @@ async function main() {
 
   {
     // 5.1 Retry storm: the same job holds and settles exactly once.
-    const user = await makeUser("starter");
+    const user = await makeUser("plus");
     const jobKey = "sim-retry-job";
     const h1 = await ledger.holdCredits({
       userId: user.id,
@@ -921,10 +921,10 @@ async function main() {
 
   {
     // 5.2 Failed generation after retries: full refund, charged 0.
-    const user = await makeUser("plus");
+    const user = await makeUser("pro");
     const result = await fakeGenerate({
       userId: user.id,
-      plan: "plus",
+      plan: "pro",
       flow: "create",
       preset: "opus-balanced",
       slideInput: { kind: "fixed", count: 20 },
@@ -947,10 +947,10 @@ async function main() {
 
     // 5.2b Preset gate: a tier can never run (or be charged for) a
     // preset it hasn't unlocked.
-    const starterUser = await makeUser("starter");
+    const starterUser = await makeUser("plus");
     const gated = await fakeGenerate({
       userId: starterUser.id,
-      plan: "starter",
+      plan: "plus",
       flow: "create",
       preset: "opus-balanced",
       slideInput: { kind: "fixed", count: 20 },
@@ -995,7 +995,7 @@ async function main() {
 
   {
     // 6.1 Spend order + exact-source refunds across buckets.
-    const user = await makeUser("starter"); // sub 2000
+    const user = await makeUser("plus"); // sub 2000
     await ledger.grantTopup({
       userId: user.id,
       credits: 1000,
@@ -1032,7 +1032,7 @@ async function main() {
 
   {
     // 6.2 Monthly reset: allotment snaps back, no rollover, pack survives.
-    const user = await makeUser("starter"); // sub 2000, resets +1 month
+    const user = await makeUser("plus"); // sub 2000, resets +1 month
     await ledger.grantTopup({
       userId: user.id,
       credits: 1000,
@@ -1100,7 +1100,7 @@ async function main() {
 
   {
     // 6.4 Downgrade keeps everything spendable.
-    const user = await makeUser("pro"); // 12000
+    const user = await makeUser("max"); // 12000
     await ledger.grantTopup({
       userId: user.id,
       credits: 1000,

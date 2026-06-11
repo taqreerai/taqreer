@@ -8,6 +8,12 @@
 > **PROPOSED** — tune once we have 100+ runs/preset. Billing code not shipped;
 > §7 is the build plan.
 >
+> **Rev 2026-06-11 (naming):** tiers RENAMED **Free / Plus / Pro / Max**
+> (was Free / Starter / Plus / Pro) per user direction - same Latin names in
+> both languages. Grants, prices, caps, and gates are UNCHANGED; whenever this
+> doc says Starter read **Plus**, Plus read **Pro**, Pro read **Max**. Code
+> keys follow the new names (`lib/plan.ts`, `lib/credits/cost.ts` TIERS).
+>
 > **Rev 2026-06-09:** reconciled to the **current 3-preset menu** (presets changed
 > since the original draft); **user-selectable model with per-preset credit cost**
 > (§3a); cost basis **validated against measured production spend** ($223 real API

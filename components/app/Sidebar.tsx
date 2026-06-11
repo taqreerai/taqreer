@@ -22,56 +22,11 @@ import { NewProjectDialog } from "@/components/app/NewProjectDialog";
 import { AllNotificationsModal } from "@/components/app/AllNotificationsModal";
 import { notificationStore, useNotifications } from "@/lib/notifications/store";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
+import { nextTier } from "@/lib/credits/cost";
+import { normalizePlan } from "@/lib/plan";
 import { CreditRing } from "@/components/app/CreditRing";
 import { format } from "date-fns";
 import { dateFnsLocale } from "@/lib/i18n/date";
-
-// Recent-usage row helpers for the credit breakdown in the profile
-// menu. A settle event's stored amount is the REFUND remainder; the
-// number the user cares about is what the generation actually cost,
-// which rides in metadata.charged.
-type CreditEvent = {
-  eventType: string;
-  amount: number;
-  metadata: unknown;
-};
-
-function creditEventDelta(event: CreditEvent): number {
-  if (event.eventType === "credit.settle") {
-    const charged = (event.metadata as { charged?: number } | null)?.charged;
-    return -(typeof charged === "number" ? charged : 0);
-  }
-  return event.amount;
-}
-
-function creditEventLabel(
-  event: CreditEvent,
-  dict: ReturnType<typeof useDict>,
-): string {
-  const t = dict.components.credits.events;
-  switch (event.eventType) {
-    case "credit.settle":
-      return t.generation;
-    case "credit.charge": {
-      const kind = (event.metadata as { kind?: string } | null)?.kind;
-      return kind === "name-gen" ? t.nameGen : t.aiEdit;
-    }
-    case "credit.release":
-      return t.refund;
-    case "credit.grant.topup":
-      return t.topup;
-    case "credit.grant.subscription":
-      return t.renewal;
-    case "credit.grant.signup":
-      return t.welcome;
-    case "credit.reset":
-      return t.reset;
-    case "credit.expire_topup":
-      return t.expired;
-    default:
-      return event.eventType;
-  }
-}
 
 // One sidebar nav link. Each instance owns its own icon ref so the
 // pill's mouseenter / mouseleave can drive the animated icon
@@ -163,6 +118,16 @@ export function Sidebar({
     credits && credits.capacity > 0
       ? credits.balance.total / credits.capacity
       : null;
+  // Tier labels are the SAME Latin names in both locales (user
+  // direction 2026-06-11) but still flow through the dict.
+  const planNames: Record<string, string> = {
+    free: dict.components.planUsage.free,
+    plus: dict.components.planUsage.plus,
+    pro: dict.components.planUsage.pro,
+    max: dict.components.planUsage.max,
+  };
+  const currentPlan = credits ? normalizePlan(credits.plan) : null;
+  const upgradeTo = currentPlan ? nextTier(currentPlan) : null;
   const [profileOpen, setProfileOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{
     top?: number; bottom?: number; left?: number; right?: number; width: number;
@@ -563,88 +528,115 @@ export function Sidebar({
                   // ── Main view ──
                   <>
                     <div className="px-3 py-2">
-                      <p className="font-semibold text-foreground text-sm truncate">{name}</p>
+                      <p className="flex min-w-0 items-center gap-1.5 font-semibold text-foreground text-sm">
+                        <span className="truncate">{name}</span>
+                        {/* Tier chip - logical gap/flex so it sits after
+                            the name in BOTH directions (start side stays
+                            the name, badge trails it in AR too). */}
+                        {currentPlan ? (
+                          <span className="badge-purple shrink-0">
+                            {planNames[currentPlan] ?? currentPlan}
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="text-muted text-xs truncate">{email}</p>
                     </div>
                     <div className="divider-dark my-1" />
 
-                    {/* ── Credit breakdown ── balance, subscription vs
-                        top-up split, renewal date, recent movements.
-                        Reads the SAME store as the avatar ring and the
-                        settings card; updates in place on the
-                        credit.balance.changed broadcast. */}
+                    {/* ── Credit cards ── reads the SAME store as the
+                        avatar ring and the settings card; updates in
+                        place on the credit.balance.changed nudge. */}
                     {credits ? (
                       <>
-                        <div className="px-3 py-2">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="text-xs text-muted">
-                              {dict.components.credits.title}
-                            </span>
-                            <span className="text-sm font-semibold text-foreground tabular-nums" dir="ltr">
-                              {formatCredits(credits.balance.total)}
-                            </span>
-                          </div>
-                          <div className="progress-track my-2">
-                            <div
-                              className="progress-bar"
-                              style={{
-                                width: `${Math.round((creditFraction ?? 0) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-muted">
-                            <span>{dict.components.credits.subscriptionSplit}</span>
-                            <span className="tabular-nums" dir="ltr">
-                              {formatCredits(credits.balance.subscription)}
-                            </span>
-                          </div>
-                          <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted">
-                            <span>{dict.components.credits.topupSplit}</span>
-                            <span className="tabular-nums" dir="ltr">
-                              {formatCredits(credits.balance.topup)}
-                            </span>
-                          </div>
-                          <p className="mt-1.5 text-[11px] text-muted">
-                            {credits.balance.allotmentResetAt
-                              ? dict.components.credits.renews.replace(
-                                  "{date}",
-                                  format(
-                                    new Date(credits.balance.allotmentResetAt),
-                                    "d MMMM",
-                                    { locale: dateFnsLocale(locale) },
-                                  ),
-                                )
-                              : dict.components.credits.noRenewal}
-                          </p>
-                          {credits.recent.length > 0 ? (
-                            <div className="mt-2 border-t border-[var(--tq-border-hairline)] pt-1.5">
-                              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                                {dict.components.credits.recentUsage}
-                              </p>
-                              {credits.recent.slice(0, 3).map((event) => {
-                                const delta = creditEventDelta(event);
-                                return (
-                                  <div
-                                    key={event.id}
-                                    className="flex items-center justify-between py-0.5 text-[11px]"
-                                  >
-                                    <span className="truncate text-muted">
-                                      {creditEventLabel(event, dict)}
-                                    </span>
-                                    <span
-                                      className={`ms-2 shrink-0 tabular-nums ${
-                                        delta > 0 ? "text-emerald-400" : "text-muted"
-                                      }`}
-                                      dir="ltr"
-                                    >
-                                      {delta > 0 ? "+" : ""}
-                                      {formatCredits(delta)}
-                                    </span>
-                                  </div>
-                                );
-                              })}
+                        <div className="flex flex-col gap-2 px-1 py-1">
+                          {/* Upgrade card - only when a next tier exists. */}
+                          {upgradeTo ? (
+                            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-3 py-2.5">
+                              <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
+                                <span
+                                  className="material-symbols-outlined leading-none"
+                                  style={{ fontSize: 16 }}
+                                  aria-hidden
+                                >
+                                  bolt
+                                </span>
+                                <span className="truncate">
+                                  {dict.components.credits.upgradeTitle.replace(
+                                    "{tier}",
+                                    planNames[upgradeTo] ?? upgradeTo,
+                                  )}
+                                </span>
+                              </span>
+                              <Link
+                                href={`${localizedHref("/", locale)}#pricing`}
+                                onClick={() => setProfileOpen(false)}
+                                className="btn-gradient shrink-0 px-3 py-1.5 text-xs no-underline"
+                              >
+                                {dict.components.credits.upgradeCta}
+                              </Link>
                             </div>
                           ) : null}
+
+                          {/* Credits card: title + "{n} left ›" link,
+                              usage bar, plan/top-up split, renewal. */}
+                          <div className="rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-3 py-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-foreground">
+                                {dict.components.credits.title}
+                              </span>
+                              <Link
+                                href={localizedHref("/settings", locale)}
+                                onClick={() => setProfileOpen(false)}
+                                className="flex shrink-0 items-center gap-0.5 text-xs text-muted no-underline transition-colors hover:text-foreground"
+                              >
+                                <span className="tabular-nums" dir="ltr">
+                                  {dict.components.credits.creditsLeftShort.replace(
+                                    "{count}",
+                                    formatCredits(credits.balance.total),
+                                  )}
+                                </span>
+                                <span
+                                  className="material-symbols-outlined leading-none"
+                                  style={{ fontSize: 14 }}
+                                  aria-hidden
+                                >
+                                  {dir === "rtl" ? "chevron_left" : "chevron_right"}
+                                </span>
+                              </Link>
+                            </div>
+                            <div className="progress-track my-2">
+                              <div
+                                className="progress-bar"
+                                style={{
+                                  width: `${Math.round((creditFraction ?? 0) * 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-muted">
+                              <span>{dict.components.credits.subscriptionSplit}</span>
+                              <span className="tabular-nums" dir="ltr">
+                                {formatCredits(credits.balance.subscription)}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted">
+                              <span>{dict.components.credits.topupSplit}</span>
+                              <span className="tabular-nums" dir="ltr">
+                                {formatCredits(credits.balance.topup)}
+                              </span>
+                            </div>
+                            <p className="mt-1.5 text-[11px] text-muted">
+                              {credits.balance.allotmentResetAt
+                                ? dict.components.credits.renews.replace(
+                                    "{date}",
+                                    format(
+                                      new Date(credits.balance.allotmentResetAt),
+                                      "d MMMM",
+                                      { locale: dateFnsLocale(locale) },
+                                    ),
+                                  )
+                                : dict.components.credits.noRenewal}
+                            </p>
+                          </div>
                         </div>
                         <div className="divider-dark my-1" />
                       </>
