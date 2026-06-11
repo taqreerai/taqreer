@@ -14,8 +14,11 @@
 // actions. Buttons in the row stretch equally (flex-1) - same-row
 // buttons are always the same size (user direction 2026-06-11).
 //
-// `tone="warn"` tints the icon chip with the status-warn tokens for
-// destructive / failure contexts (delete, payment failed, cancelled).
+// Icons are BARE glyphs - no background circle, no chip (user direction
+// 2026-06-11: "just make the icons simple"). Pick plain glyphs over
+// self-circled ones (use "check", not "task_alt"). `tone="warn"` tints
+// the glyph with the status-warn token for destructive / failure
+// contexts (delete, payment failed, cancelled).
 
 export function NoticeCard({
   icon,
@@ -24,7 +27,7 @@ export function NoticeCard({
   actions,
   tone = "default",
 }: {
-  // Material Symbols glyph name (e.g. "lock", "warning", "delete").
+  // Material Symbols glyph name (e.g. "lock", "warning", "check").
   icon: string;
   title: string;
   body?: React.ReactNode;
@@ -35,15 +38,15 @@ export function NoticeCard({
   return (
     <div className="flex flex-col items-center p-8 text-center">
       <span
-        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
+        className={`material-symbols-outlined mb-4 leading-none ${
           tone === "warn"
-            ? "bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]"
-            : "bg-[var(--tq-surface)] text-foreground/70"
+            ? "text-[var(--tq-status-warn-text)]"
+            : "text-foreground/70"
         }`}
+        style={{ fontSize: 28 }}
+        aria-hidden
       >
-        <span className="material-symbols-outlined leading-none" style={{ fontSize: 22 }} aria-hidden>
-          {icon}
-        </span>
+        {icon}
       </span>
       <h3 className="mb-2 text-base font-bold text-foreground">{title}</h3>
       {body ? <p className="mb-6 text-sm text-muted">{body}</p> : null}

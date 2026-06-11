@@ -433,8 +433,8 @@ function LockedFlowCard({ c }: { c: Copy }) {
 function CapExceededCard({ c }: { c: Copy }) {
   return (
     <div className="surface-card mx-auto flex max-w-lg items-start gap-4 rounded-2xl p-6">
-      <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--tq-status-warn-bg)] text-[var(--tq-status-warn-text)]">
-        <Icon name="warning" size={18} />
+      <span className="mt-0.5 shrink-0 text-[var(--tq-status-warn-text)]">
+        <Icon name="warning" size={22} />
       </span>
       <div className="min-w-0 flex-1">
         <h3 className="text-sm font-bold text-foreground">{c.cap.title}</h3>
@@ -472,8 +472,8 @@ function PremiumTemplate({ c }: { c: Copy }) {
       </div>
       {/* Gate dialog on use - equal-width buttons in one row. */}
       <div className="surface-modal w-full max-w-sm rounded-2xl p-8">
-        <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--tq-surface)] text-foreground/80">
-          <Icon name="workspace_premium" size={22} />
+        <span className="mb-4 block text-foreground/80">
+          <Icon name="workspace_premium" size={26} />
         </span>
         <h3 className="mb-2 text-lg font-bold text-foreground">{c.template.dialogTitle}</h3>
         <p className="mb-6 text-sm text-muted">{c.template.dialogBody}</p>
@@ -601,7 +601,7 @@ function NoticeExamples({ c }: { c: Copy }) {
     <div className="flex flex-wrap items-stretch justify-center gap-6">
       <div className="surface-modal w-full max-w-sm rounded-2xl">
         <NoticeCard
-          icon="stop_circle"
+          icon="warning"
           tone="warn"
           title={c.notice.confirmTitle}
           body={c.notice.confirmBody}
@@ -615,7 +615,7 @@ function NoticeExamples({ c }: { c: Copy }) {
       </div>
       <div className="surface-card w-full max-w-sm rounded-2xl">
         <NoticeCard
-          icon="task_alt"
+          icon="check"
           title={c.notice.doneTitle}
           body={c.notice.doneBody}
           actions={<button type="button" className="btn-pill px-5 py-2.5 text-sm">{c.notice.doneCta}</button>}
