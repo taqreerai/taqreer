@@ -25,7 +25,7 @@ export default function AppNotFound() {
   // Direction is inherited from <html dir> (set by the [lang] layout); strings
   // come from the active-locale dictionary via NotFoundContent.
   return (
-    <div className="flex flex-col items-center gap-8 px-6 pt-[12vh] text-center">
+    <div className="page-container flex flex-col items-center gap-8 px-6 pt-[12vh] text-center">
       <NotFoundContent recovery="dashboard" />
     </div>
   );

@@ -17,5 +17,10 @@ const dictionaries = {
 export type Dictionary = Awaited<ReturnType<(typeof dictionaries)["en"]>>;
 
 export async function getDictionary(locale: Locale): Promise<Dictionary> {
+  // Runtime guard for an un-narrowed value reaching here — the cast below would
+  // otherwise call `undefined()` and throw an opaque error for a bad locale.
+  if (!(locale in dictionaries)) {
+    throw new Error(`Unsupported locale: ${locale}`);
+  }
   return dictionaries[locale]() as Promise<Dictionary>;
 }

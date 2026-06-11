@@ -10,7 +10,7 @@ export function ThemeLogo({
   height,
   className = "",
   priority = false,
-  alt = "taqreer.ai logo",
+  alt = "taqreer.ai",
 }: {
   width: number;
   height: number;
@@ -18,6 +18,8 @@ export function ThemeLogo({
   priority?: boolean;
   alt?: string;
 }) {
+  // Default alt is the bare brand name (a proper noun, not localised). Callers
+  // that want richer copy pass a dictionary-driven `alt`.
   return (
     <>
       <Image

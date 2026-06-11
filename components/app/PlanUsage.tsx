@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { dateFnsLocale } from "@/lib/i18n/date";
 
 type PlanUsageProps = {
@@ -42,7 +43,7 @@ export function PlanUsage({ plan, usageCount, limit, renewalDate }: PlanUsagePro
         </div>
 
         <div className="flex flex-col items-end space-y-3 relative z-10">
-          <Link className="btn-gradient px-8 py-3 no-underline" href="/#pricing">
+          <Link className="btn-gradient px-8 py-3 no-underline" href={`${localizedHref("/", locale)}#pricing`}>
             {dict.components.planUsage.upgrade}
           </Link>
           <span className="text-muted text-xs">

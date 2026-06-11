@@ -32,9 +32,10 @@ export default function ForgotPasswordPage() {
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         // Supabase verifies the recovery token, creates a recovery session, then
-        // redirects to this URL with the session in the hash. `/reset-password`
-        // (unlocalized) is re-prefixed by the proxy to the user's locale.
-        redirectTo: `${window.location.origin}/reset-password`,
+        // redirects to this URL with the session in the hash. Prefix the active
+        // locale explicitly so a stale/missing locale cookie can't land the user
+        // on the wrong language after recovery.
+        redirectTo: `${window.location.origin}${localizedHref("/reset-password", locale)}`,
       });
       if (resetError) {
         setError(t.errorGeneric);

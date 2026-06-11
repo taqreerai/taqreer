@@ -201,10 +201,10 @@ export function ProjectThumbnail({
                       ? dict.components.projectThumbnail.slideOne
                       : dict.components.projectThumbnail.slideMany,
                   )
-              : dict.components.projectThumbnail.open
-                  .replace("{title}", actions.titleState)
-                  .split("—")[0]
-                  .trimEnd()
+              : dict.components.projectThumbnail.openNoSlides.replace(
+                  "{title}",
+                  actions.titleState,
+                )
           }
           className={`absolute inset-0 block ${
             onOpen ? "cursor-zoom-in" : "cursor-pointer"

@@ -391,6 +391,7 @@ export function HeroCommentOverlay({
                 setPreviewState({ commentId: c.id, x: localX, y: localY });
               }}
               aria-label={dict.editor.comments.viewComment}
+              data-comment-marker="true"
               className="pointer-events-auto absolute rounded-md border border-orange-400/80 bg-orange-400/15 transition-colors hover:bg-orange-400/30"
               style={style}
             />
@@ -921,16 +922,13 @@ function MarkerPreviewPopup({
     const handler = (e: MouseEvent) => {
       if (!(e.target instanceof Node)) return;
       if (popoverRef.current?.contains(e.target)) return;
-      // Don't close on clicks landing on a marker pin — the parent
-      // will swap `previewCommentId` and we'd race. The selector must
-      // match the marker button's RENDERED aria-label, which is now
-      // locale-driven (`dict.editor.comments.viewComment`) — keep this
-      // matcher in lockstep so click-detection works in both locales.
+      // Don't close on clicks landing on a marker pin — the parent will swap
+      // `previewCommentId` and we'd race. Match a stable data attribute rather
+      // than the locale-driven aria-label, so a quote/bracket in a translation
+      // can't produce an invalid selector and break click-detection.
       if (
         e.target instanceof Element &&
-        e.target.closest(
-          `[aria-label="${dict.editor.comments.viewComment}"]`,
-        )
+        e.target.closest("[data-comment-marker]")
       ) {
         return;
       }
@@ -938,7 +936,7 @@ function MarkerPreviewPopup({
     };
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
-  }, [onClose, dict.editor.comments.viewComment]);
+  }, [onClose]);
 
   const displayName =
     comment.author?.name?.trim() || dict.editor.comments.unknown;

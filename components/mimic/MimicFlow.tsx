@@ -1283,7 +1283,7 @@ function FileDropzone({
           }`}
         >
           {stage === "extracting" ? (
-            <span className="spinner h-5 w-5 rounded-full border-2 border-foreground/20 border-t-white" />
+            <span className="spinner h-5 w-5 rounded-full border-2 border-foreground/20 border-t-foreground" />
           ) : stage === "ready" ? (
             <span
               className="material-symbols-outlined text-emerald-300"

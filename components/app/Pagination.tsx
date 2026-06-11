@@ -4,11 +4,10 @@
 // the outer nav):
 //   [prev]  [1] [2] [3] … [N]  [next]
 //
-// Logical, not visual — "prev" means "older page index", which in
-// RTL maps to a rightward chevron (backward in reading direction).
-// Material Symbols glyphs don't auto-flip, so the icons are picked
-// explicitly: chevron_right = prev, chevron_left = next in this
-// RTL chrome.
+// Logical, not visual — "prev" means "older page index". Material
+// Symbols glyphs don't auto-flip, so prev/next chevrons are picked
+// from `dir`: in RTL prev points right (back in reading direction),
+// in LTR prev points left.
 //
 // Number window: shows every page when total ≤ 7; otherwise
 // compresses with ellipsis around the current page:
@@ -63,6 +62,8 @@ function buildTokens(page: number, pageCount: number): Token[] {
 export function Pagination({ page, pageCount, onChange }: Props) {
   const dict = useDict();
   const { dir } = useLocale();
+  const prevIcon = dir === "rtl" ? "chevron_right" : "chevron_left";
+  const nextIcon = dir === "rtl" ? "chevron_left" : "chevron_right";
   if (pageCount <= 1) return null;
   const tokens = buildTokens(page, pageCount);
   const atStart = page === 0;
@@ -82,7 +83,7 @@ export function Pagination({ page, pageCount, onChange }: Props) {
         className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span aria-hidden className="material-symbols-outlined text-[18px]">
-          chevron_right
+          {prevIcon}
         </span>
       </button>
 
@@ -126,7 +127,7 @@ export function Pagination({ page, pageCount, onChange }: Props) {
         className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span aria-hidden className="material-symbols-outlined text-[18px]">
-          chevron_left
+          {nextIcon}
         </span>
       </button>
     </nav>

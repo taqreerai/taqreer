@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { TemplatesScroll } from "@/components/marketing/TemplatesScroll";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import type { MarqueeThumbnail } from "@/lib/auth/marquee-projects";
 
 export function TemplatesCard({
@@ -19,7 +20,7 @@ export function TemplatesCard({
   thumbnails: MarqueeThumbnail[];
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   return (
     <div className="templates-host surface-card overflow-hidden rounded-2xl p-6">
       {/* LTR-locked layout: content LEFT, thumbnails RIGHT; the text
@@ -33,7 +34,7 @@ export function TemplatesCard({
             {dict.landing.templatesCard.description}
           </p>
           <Link
-            href="/signup"
+            href={localizedHref("/signup", locale)}
             className="btn-gradient inline-block w-fit px-6 py-2 text-xs"
           >
             {dict.landing.templatesCard.cta}

@@ -453,6 +453,7 @@ export function Sidebar({
                 // controls live here) never runs off the top of short
                 // viewports — it opens upward from the bottom-anchored profile
                 // button.
+                role="menu"
                 className="surface-menu rounded-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
               >
                 <AnimatePresence mode="popLayout" initial={false}>

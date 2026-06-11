@@ -16,6 +16,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import {
   TemplateTile,
   type TemplateTileData,
@@ -48,7 +49,7 @@ export function MyTemplates({
   embedded?: boolean;
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   // null = lightbox closed; a template object = open at that template.
   const [preview, setPreview] = useState<MyTemplatesTemplate | null>(null);
   // Gate the "Use this template" CTA so a double-click can't fire
@@ -146,7 +147,7 @@ export function MyTemplates({
           <h2 className="tq-widget-title">{dict.components.myTemplates.header}</h2>
           <p className="mt-1 text-xs text-muted">{dict.components.myTemplates.subtitle}</p>
         </div>
-        <Link href="/templates" className="tq-widget-link no-underline">
+        <Link href={localizedHref("/templates", locale)} className="tq-widget-link no-underline">
           {dict.components.myTemplates.viewAll}
         </Link>
       </header>

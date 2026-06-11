@@ -86,6 +86,15 @@ export async function proxy(request: NextRequest) {
   const isApi = pathname.startsWith("/api");
   const isFile = /\.[^/]+$/.test(pathname);
 
+  // Static files (icon.svg, robots.txt, images, …) are public and never
+  // locale-routed — serve them as-is and skip the Supabase session refresh
+  // below so asset requests don't pay for avoidable auth I/O. Guard with
+  // `!isApi` so a dynamic API param that happens to contain a dot
+  // (e.g. /api/projects/x/slides/key.png) still gets its session refresh.
+  if (isFile && !isApi) {
+    return NextResponse.next();
+  }
+
   // ── Locale gate ──────────────────────────────────────────────────────────
   // Chrome direction is URL-driven, so every page URL must carry a locale.
   // Redirect bare URLs to a locale prefix before anything else. (The slide

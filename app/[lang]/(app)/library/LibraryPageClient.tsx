@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { Pagination } from "@/components/app/Pagination";
 import { SegmentedToggle } from "@/components/create/controls";
 import { LibraryImageCard } from "@/components/app/LibraryImageCard";
@@ -28,7 +29,7 @@ type SortKey = "date" | "name";
 
 export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const t = dict.pages.library;
   const sortOptions: ReadonlyArray<{ value: SortKey; label: string }> = [
     { value: "date", label: t.sortRecent },
@@ -95,7 +96,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
           </p>
           <Link
             className="btn-gradient inline-block px-4 py-1.5 text-xs no-underline"
-            href="/create"
+            href={localizedHref("/create", locale)}
           >
             {t.createDeck}
           </Link>

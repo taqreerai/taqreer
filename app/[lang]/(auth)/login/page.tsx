@@ -30,9 +30,15 @@ export default function LoginPage() {
   const dict = useDict();
   const t = dict.auth;
 
-  // `next` from the proxy is already locale-prefixed; the fallback isn't, so
-  // localize it.
-  const nextUrl = searchParams.get("next") || localizedHref("/dashboard", locale);
+  // `next` is user-controlled query input, so only honour internal relative
+  // paths (one leading slash, never "//" or an absolute URL) to avoid
+  // open-redirects; anything else falls back to the localized dashboard. The
+  // proxy-supplied `next` is already a locale-prefixed internal path.
+  const rawNext = searchParams.get("next");
+  const nextUrl =
+    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
+      ? rawNext
+      : localizedHref("/dashboard", locale);
   const templateId = searchParams.get("template");
   const deleted = searchParams.get("deleted") === "true";
 

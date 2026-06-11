@@ -121,8 +121,9 @@ export function DashboardShell({
 
       <main
         className="min-h-screen text-on-background relative"
-        // +8: the rail floats 8px off the right edge (Sidebar `right-2`), so the
-        // content clears the rail AND that gap.
+        // +8: the rail floats 8px off the inline-start edge (Sidebar `start-2`),
+        // and we offset the content with `marginInlineStart`, so it clears the
+        // rail AND that gap in both directions.
         style={{ marginInlineStart: `${SIDEBAR_WIDTH + 8}px`, marginInlineEnd: 0, zIndex: 1 }}
       >
         {/* §22/§24: rounded content panel floating on the dark gutter. Home gets

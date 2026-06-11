@@ -28,16 +28,18 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const [locale, setLocale] = useState<"ar" | "en">("ar");
+  // Derive the locale from the cookie in the initializer (not a mount effect) so
+  // the error page renders once with the right language — avoids the
+  // react-hooks/set-state-in-effect cascade.
+  const [locale] = useState<"ar" | "en">(() => {
+    if (typeof document === "undefined") return "ar";
+    const m = document.cookie.match(/(?:^|; )tq_locale=(ar|en)\b/);
+    return m?.[1] === "en" ? "en" : "ar";
+  });
 
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
-
-  useEffect(() => {
-    const m = document.cookie.match(/(?:^|; )tq_locale=(ar|en)\b/);
-    if (m) setLocale(m[1] as "ar" | "en");
-  }, []);
 
   const t = STRINGS[locale];
 

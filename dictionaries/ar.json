@@ -559,7 +559,7 @@
     "myTemplates": { "empty": "لا توجد قوالب محفوظة. عند حفظ عرض كقالب سيظهر هنا لتبدأ منه.", "header": "ابدأ من قالب", "subtitle": "ما تراه هو ما تحصل عليه", "viewAll": "عرض الكل" },
     "templateTile": { "preparing": "جارٍ تجهيز القالب", "labelTemplate": "قالب {format}", "premiumSuffix": " · مميز", "options": "خيارات القالب", "makePublic": "اجعله عاماً", "makePrivate": "اجعله خاصاً" },
     "brandKitTile": { "use": "استخدام {name}", "default": "افتراضية", "options": "خيارات هوية الشركة", "colors": "الألوان", "fonts": "الخطوط" },
-    "projectThumbnail": { "open": "افتح {title} · {count} شرائح", "slideOne": "شريحة", "slideMany": "شرائح", "creatingPreview": "جاري إنشاء المعاينة", "preparingTemplate": "جارٍ تجهيز القالب", "favorite": "مشروع مفضّل", "projectName": "اسم المشروع", "options": "خيارات المشروع" },
+    "projectThumbnail": { "open": "افتح {title} · {count} شرائح", "openNoSlides": "افتح {title}", "slideOne": "شريحة", "slideMany": "شرائح", "creatingPreview": "جاري إنشاء المعاينة", "preparingTemplate": "جارٍ تجهيز القالب", "favorite": "مشروع مفضّل", "projectName": "اسم المشروع", "options": "خيارات المشروع" },
     "dashboardWidget": { "viewAll": "عرض الكل" },
     "lightbox": { "title": "معاينة القالب", "slideOf": "شريحة {n} من {total}", "slideN": "الشريحة {n}", "useAsTemplate": "استخدامه كقالب" },
     "filterBar": { "projectFilters": "فلاتر المشاريع", "templateFilters": "فلاتر القوالب", "searchTitles": "بحث في عناوين المشاريع", "searchPlaceholder": "ابحث باسم المشروع…", "favoritesOnly": "المفضلة فقط", "langArabic": "العربية", "langEnglish": "الإنجليزية", "ownerMine": "خاصة", "ownerCommunity": "المجتمع", "ownerAll": "الكل", "clearColor": "إلغاء تصفية اللون", "filterColor": "تصفية باللون {color}" },

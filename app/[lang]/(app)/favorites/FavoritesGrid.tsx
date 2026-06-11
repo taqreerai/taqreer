@@ -22,7 +22,8 @@ import {
 } from "@/components/app/ProjectsGrid";
 import { Pagination } from "@/components/app/Pagination";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 const PAGE_SIZE = 15;
 
@@ -32,6 +33,7 @@ export function FavoritesGrid({
   projects: ProjectsGridProject[];
 }) {
   const dict = useDict();
+  const { locale } = useLocale();
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [unfavoritedIds, setUnfavoritedIds] = useState<Set<string>>(
     () => new Set(),
@@ -99,7 +101,7 @@ export function FavoritesGrid({
             </p>
             <Link
               className="btn-gradient inline-block px-4 py-1.5 text-xs no-underline"
-              href="/dashboard"
+              href={localizedHref("/dashboard", locale)}
             >
               {dict.components.favoritesGrid.goToProjects}
             </Link>

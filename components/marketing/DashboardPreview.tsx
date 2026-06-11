@@ -560,11 +560,10 @@ function PlaceholderTile({
       >
         <SlideWireframe />
       </div>
-      {/* Footer — title + subtitle, same hierarchy as the real tile's
-          info row. Right-aligned per user direction 2026-05-28:
-          "remember we are trying to replicate a miniature of the
-          dashboard". */}
-      <div className="px-0.5 text-end">
+      {/* Footer — title + subtitle, same hierarchy as the real tile's info row.
+          Aligned to the logical start so it reads correctly in both directions
+          (start = right in RTL, matching the original Arabic-era intent). */}
+      <div className="px-0.5 text-start">
         <p className="truncate text-[10px] font-semibold leading-tight text-foreground">
           {title}
         </p>
