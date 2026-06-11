@@ -240,7 +240,7 @@ function BrowserChromeBar({ path }: { path: string }) {
       </div>
 
       {/* Right ghost glyphs — same two as the BiDi canvas header. */}
-      <div className="ms-auto flex items-center gap-3 text-white/25">
+      <div className="ms-auto flex items-center gap-3 text-foreground/25">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 12h16M4 6h16M4 18h16" />
         </svg>

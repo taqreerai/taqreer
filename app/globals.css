@@ -701,7 +701,9 @@ html {
 }
 
 body {
-  color: #ffffff;
+  /* Base inherited text colour — token so un-classed text (e.g. the hero
+     heading) flips with the theme instead of staying white. */
+  color: var(--tq-text-primary);
 }
 
 /* §24 (scoped 2026-06-09): the DASHBOARD makes BODY the scroll container so the
@@ -986,8 +988,10 @@ html.app-shell-scroll body {
 .btn-gradient-anim {
   position: relative;
   isolation: isolate;
-  background: rgba(255, 255, 255, var(--tq-tint-opacity));
-  color: white;
+  /* Flip-aware: near-transparent tint + token text, so the outlined CTA reads
+     on a light page too (the mesh ring + hover-fill are the accent). */
+  background: var(--tq-overlay-soft);
+  color: var(--tq-text-primary);
   /* No shadow transition — the button system is flat app-wide
      (2026-05-22). Background transition stays so the hover fill
      still crossfades smoothly. */
