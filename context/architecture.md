@@ -1,230 +1,234 @@
 # Taqreer — App Architecture & Design-System Map
 
-> Written 2026-06-08 as a reference before reshaping the dashboard. Covers the design
-> system, dashboard chrome, reusable components, user flows, and the backend.
-> **Line numbers are approximate** (from a code sweep) — grep the symbol, don't trust the `:NN`.
-> The design system + glass + editor + generation sections were verified firsthand.
+> Originally written 2026-06-08; **substantially updated 2026-06-11** for the
+> bilingual `[lang]` migration, the light/dark theme system, and the flat
+> **blue** design system (the glass system + purple palette are gone).
+> **Line numbers are approximate** — grep the symbol, don't trust `:NN`.
 
 ## Contents
 1. [Stack & top-level layout](#1-stack--top-level-layout)
 2. [Route tree](#2-route-tree)
-3. [Dashboard shell & layout chrome](#3-dashboard-shell--layout-chrome)  ← most relevant for a restyle
-4. [Design system](#4-design-system)  ← tokens, glass, type, utilities, rules
-5. [Reusable component inventory](#5-reusable-component-inventory)  ← reuse, don't rebuild
-6. [User flows](#6-user-flows)
-7. [Backend & data](#7-backend--data)
-8. [Conventions & gotchas](#8-conventions--gotchas)
+3. [i18n / bilingual (the differentiator)](#3-i18n--bilingual)
+4. [Theming (light / dark)](#4-theming-light--dark)
+5. [App shell & layout chrome](#5-app-shell--layout-chrome)
+6. [Design system (flat, blue)](#6-design-system-flat-blue)
+7. [Reusable component inventory](#7-reusable-component-inventory)
+8. [User flows](#8-user-flows)
+9. [Backend & data](#9-backend--data)
+10. [Conventions & gotchas](#10-conventions--gotchas)
 
 ---
 
 ## 1. Stack & top-level layout
 
 - **Next.js 16 App Router** (Turbopack), React 18/19, TypeScript `strict`.
-- **Tailwind v4, CSS-first** — no `tailwind.config`; theme lives in `@theme`/`@theme inline` blocks inside [app/globals.css](app/globals.css). Lightning CSS minifier (has quirks — see §8).
-- **Arabic-first / RTL** — `<html dir="rtl">`, Cairo font. RTL/BiDi quality is the product differentiator.
+- **Tailwind v4, CSS-first** — no `tailwind.config`; theme lives in `@theme` / `@theme inline` blocks inside [app/globals.css](app/globals.css). Lightning CSS minifier (quirks — see §10).
+- **Bilingual (Arabic + English)** — every page URL carries a locale segment (`/ar/…`, `/en/…`). `<html dir>` + `<html lang>` are set per-locale by the `[lang]` layout. RTL/BiDi quality is the product differentiator (see §3).
+- **Light + dark themes** — `tq_theme` cookie, SSR-applied, no flash (see §4).
 - **Data**: Prisma → local Postgres (docker-compose, `localhost:5432`). **Supabase** = auth + storage + realtime only (NOT the app DB).
 - **Generation**: Anthropic Claude (Opus 4.8 default) streams HTML slides via **Inngest** background jobs; gpt-image-2 for generated images.
-- **Root**: [app/layout.tsx](app/layout.tsx) — fonts (Cairo + Poppins), RTL, Material Symbols, `GlassPreflight` (reads glass preset from localStorage onto `<html>`).
-- Three route groups: `app/(marketing)` implicit at `/` ([app/page.tsx](app/page.tsx)), `app/(auth)`, `app/(app)`.
+- **Edge gate**: [proxy.ts](proxy.ts) (Next middleware) — redirects bare URLs to a locale prefix, then refreshes the Supabase session. Skips both for `/api` and static-file requests.
+- **Root layout**: [app/[lang]/layout.tsx](app/[lang]/layout.tsx) — Cairo + Poppins fonts, `<html dir lang>` from the locale, `themeClass` from the `tq_theme` cookie, Material Symbols, wraps children in `LocaleProvider` (dictionary → client). There is **no** `GlassPreflight` (deleted with the glass system).
 
 ---
 
 ## 2. Route tree
 
-### `/` — landing ([app/page.tsx](app/page.tsx))
-Hero, features, pricing, templates marquee, trust logos. Public.
+Everything lives under `app/[lang]/`. `[lang]` ∈ `{ ar, en }` (`lib/i18n/config.ts`).
 
-### `app/(auth)/*` — glass-modal layout over a marquee wall ([app/(auth)/layout.tsx](app/(auth)/layout.tsx))
-`/login`, `/signup`, `/forgot-password`, `/reset-password`. The auth modal = `auth-modal glass-modal backdrop-blur-glass-boost` (kept on the heavy 7× frost — see §4 glass).
+### `app/[lang]/page.tsx` — landing (public)
+Hero, features, BiDi demo band, pricing, templates, footer. `LandingNav` carries the logo, links, **theme toggle + language menu**, and login/signup (authed → Dashboard).
 
-### `app/(app)/*` — protected; wrapped by `DashboardShell` ([app/(app)/layout.tsx](app/(app)/layout.tsx))
-Auth-gated SSR (redirects to `/login?next=`). Reads `tq_sidebar_collapsed` cookie for no-flash sidebar.
+### `app/[lang]/(auth)/*` — auth modal over a marquee wall ([layout](app/[lang]/(auth)/layout.tsx))
+`/login`, `/signup`, `/forgot-password`, `/reset-password`. Flat `surface-modal` (no glass). `login` sanitizes the user-controlled `?next=` to internal paths only (open-redirect guard).
 
-| Route | File | Purpose | Shell mode |
-|---|---|---|---|
-| `/dashboard` | dashboard/page.tsx | Home: QuickActions, Recent Projects, Activity, Templates, Plan | standard |
-| `/projects` | projects/page.tsx | All projects, client filter+paginate | standard |
-| `/favorites` | favorites/page.tsx | Starred projects | standard |
-| `/templates` | templates/page.tsx | Own + community templates | standard |
-| `/library` | library/page.tsx | Uploaded images | standard |
-| `/brand-kits`, `/brand-kits/new` | brand-kits/* | Saved brand identities | standard |
-| `/settings` | settings/page.tsx | Profile, plan, **glass preset picker**, delete account | standard |
-| `/create` | create/page.tsx | Scratch: text/file + brand + output | flow (centered 1280) |
-| `/enhance` | enhance/page.tsx | Redesign an existing deck (PDF/PPTX upload) | flow |
-| `/mimic` | mimic/page.tsx | Reproduce a design reference (`MimicFlow`) | flow |
-| `/datasheet` | datasheet/page.tsx | Data (xlsx/csv) → deck | flow |
-| `/use-template/[id]` | use-template/[id]/page.tsx | Template → `MimicFlow` in template mode | flow |
-| `/project/[projectId]` | project/[projectId]/page.tsx | **Unified studio** — generation AND editing (DeckView) | studio (chrome-less) |
-| `/preview/[projectId]` | preview/[projectId]/page.tsx | **Back-compat redirect → /project** | — |
+### `app/[lang]/(app)/*` — protected; wrapped by `DashboardShell` ([layout](app/[lang]/(app)/layout.tsx))
+Auth-gated SSR (redirects to `/[lang]/login?next=`).
 
-Studio was unified to one URL (`/project`) 2026-06-07 — DeckView renders both the generating shell (disabled) and the editor (enabled) in the same tree; no remount on completion.
+| Route | Purpose | Shell mode |
+|---|---|---|
+| `/dashboard` | Home: QuickActions + HomeLibrary (projects ⇄ templates) | default |
+| `/projects`, `/favorites`, `/templates`, `/library` | grids (client filter + paginate) | default |
+| `/brand-kits`, `/brand-kits/new` | saved brand identities | default |
+| `/settings` | profile, plan, delete account (no glass-preset picker anymore) | default |
+| `/create`, `/enhance`, `/mimic`, `/datasheet`, `/use-template/[id]` | the 4 creation flows | flow |
+| `/project/[projectId]` | **unified studio** — generation AND editing (`DeckView`) | studio (chrome-less) |
+| `/preview/[projectId]` | back-compat redirect → `/project` | — |
 
 ---
 
-## 3. Dashboard shell & layout chrome
+## 3. i18n / bilingual
 
-The piece most relevant to a restyle. RTL: **sidebar on the right**, content pushed left.
+The defining feature. Two **independent** direction axes:
+- **Chrome direction** = the UI locale. `<html dir>` is set by the `[lang]` layout; everything in the app shell mirrors with it. Logical CSS only (`start`/`end`, `ms`/`me`, `text-start`, `inset-inline-*`) — never physical `left`/`right`/`ml`.
+- **Canvas direction** = the deck's `manifest.direction`. A slide's text direction is independent of the chrome (an Arabic user can edit an English deck). The BiDi demo + the Arabic font specimen are the deliberate exceptions that stay Arabic-aware regardless of locale.
+
+**Machinery**
+- `lib/i18n/config.ts` — `locales`, `defaultLocale`, `isLocale`, `dirForLocale`, `LOCALE_COOKIE` (`tq_locale`).
+- `lib/i18n/dictionaries.ts` — server-only loader; `getDictionary(locale)` dynamic-imports `dictionaries/{ar,en}.json`. The `Dictionary` type is inferred from `en.json`; `ar.json` must stay structurally identical (key parity).
+- `dictionaries/en.json` / `ar.json` — ~895 keys. en is the reference shape.
+- `components/i18n/LocaleProvider.tsx` — `useDict()` + `useLocale()` (`{ locale, dir }`) for client components.
+- `lib/i18n/navigation.ts` — `localizedHref(path, locale)` (prefix the locale for internal links), `switchLocaleHref(path, next)` (swap the locale segment), **`stripLocale(path)`** (call this before ANY pathname comparison — pathname is `/ar/dashboard`).
+- `components/i18n/LanguageMenu.tsx` — the translate-icon dropdown (cookie + `PATCH /api/me` + `router.push(switchLocaleHref)`).
+- `proxy.ts` locale-gates bare URLs.
+
+**Rules**: bilingual = translate **and** mirror direction in the same pass; **Latin numerals only (0–9)** even inside Arabic copy (never ٠–٩); internal links use `localizedHref`.
+
+---
+
+## 4. Theming (light / dark)
+
+Dark is the primary brand mode; light is a first-class shadcn-neutral theme.
+
+- **Mechanism**: a `light` class on `<html>` flips the tokens. `tq_theme` cookie (`lib/ui-cookies.ts` `THEME_COOKIE`), read SSR in the `[lang]` layout → `themeClass` → no flash.
+- **`components/app/ThemeToggle.tsx`** — flips the `.light` class + writes the cookie. Mounted in `TopUtilityBar`, `LandingNav`, and as a row in the Sidebar profile menu.
+- **`:root.light { … }`** in globals.css overrides ONLY the neutral scale (shadcn light defaults) + the accent: `--tq-bg` white, `--tq-panel` soft gray (`#F2F2F2`), `--tq-card #F7F7F7`, `--tq-surface` white, text `oklch(0.145)`, muted `oklch(0.556)`, hairline `oklch(0.922)`. **Light flips the dashboard gutter (white) ↔ rounded content panel (gray)** vs dark.
+- **Theme-aware overlays**: `--tq-overlay-soft/-/-strong` (white-alpha on dark, black-alpha on light) → the `bg-overlay-*` utilities. `--tq-dot`, `--tq-studio-dot`, `--logo-invert` likewise.
+- **`@theme inline`** maps `--color-foreground/-muted-foreground/-border/-overlay-*/-background/-surface` to the flip-aware `--tq-*` tokens, so `text-foreground` / `border-border` / `bg-surface` flip automatically.
+- **Logo**: `components/brand/ThemeLogo.tsx` renders both `/logo-light.svg` (white) and `/logo-blue.svg` (solid `#0057FF`) and CSS-swaps on `:root.light` (`.logo-on-dark` / `.logo-on-light`) — no JS, no flash. Used in LandingNav, footer, Sidebar, auth.
+
+---
+
+## 5. App shell & layout chrome
 
 ### [components/app/DashboardShell.tsx](components/app/DashboardShell.tsx)
-Client shell wrapping Header + Sidebar + `<main>` + children. Owns sidebar collapse state (localStorage `taqreer_sidebar_collapsed` + cookie `tq_sidebar_collapsed` + a cross-tab CustomEvent). Route-aware content padding:
-- **studio** (`/project`, `/preview`): no chrome — renders `<div class="studio-canvas">{children}</div>`; DeckView paints its own StudioHeader + floating panels.
-- **flow** (`/create`,`/enhance`,`/mimic`,`/datasheet`,`/use-template`): `mx-auto max-w-[1280px] pt-28 px-8 pb-8 space-y-16`.
-- **default** (dashboard pages): `pt-28 px-8 pb-8 space-y-16`, edge-to-edge.
+Client shell: the thin Sidebar rail + the rounded content panel + `<main>`. There is **no Header** (deleted §20 — its controls moved into the profile menu + `TopUtilityBar`). Content is offset from the rail via `marginInlineStart: SIDEBAR_WIDTH + 8`. Route-aware panel:
+- **studio** (`/project`,`/preview`): chrome-less `studio-canvas` (DeckView paints its own panels).
+- **flow** / **default**: content wrapped in **`.tq-content-panel`** (rounded 18px, 8px gutter on all sides). Home/flows get `.tq-panel-glow` / `.tq-panel-flow`; other pages `.tq-panel-gray`.
 
-### [components/app/Header.tsx](components/app/Header.tsx) — fixed, h-20 (80px), `.header-bg` (border-bottom + blur, no fill)
-RTL clusters: **right** = sidebar toggle + theme/lang placeholders; **center** = `HeaderSearch` (debounced cross-project search); **left** = `ServerStatusChip` + `BellDropdown` (notifications) + "مشروع جديد" gradient button (opens `NewProjectDialog`).
+### [components/app/Sidebar.tsx](components/app/Sidebar.tsx) — always-collapsed 60px icon rail
+Floated `start-2` (8px off the inline-start edge), transparent (`.sidebar-bg`), no expand/collapse. Logo/home → 4 create actions → nav links → profile button. Nav pills `.nav-item` / `.nav-active` (active fill is **theme-aware** `--tq-overlay-strong`). Icons `AnimatedIcon size={18}`. Tooltips are **portaled to body** (the rail clips them otherwise). **Profile dropdown** (portal, `role="menu"`): account · New project · Notifications · **Theme toggle** · **Language ›** (drilldown sub-view, instant swap) · Settings · Sign out.
 
-### [components/app/Sidebar.tsx](components/app/Sidebar.tsx) — fixed right, **80px collapsed / 260px expanded**, `.sidebar-bg`
-Logo → Home → divider → 4 create actions (`/create` إنشاء, `/enhance` تحسين, `/mimic` محاكاة, `/datasheet` من بيانات) → divider → 6 nav links (`/projects`, `/templates`, `/library`, `/brand-kits`, `/favorites`, `/settings`) → usage bar → profile (dropdown portal). Nav pills: `.nav-item` / `.nav-active`. Animated icons (`AnimatedIcon`, hover-driven). Collapsed shows tooltips.
+### [components/app/TopUtilityBar.tsx](components/app/TopUtilityBar.tsx) — pinned to the content panel's top
+`HealthDot` + search (⌘K command palette) on the start; **ThemeToggle + LanguageMenu** on the end.
 
-### Dashboard home ([app/(app)/dashboard/page.tsx](app/(app)/dashboard/page.tsx)) — `.page-container` (rtl), `space-y-16`
-`QuickActions` (4 glass cards) → 3-col widget pair (`RecentGenerationWidget` 2-col + `RecentActivityWidget` 1-col) → `MyTemplates` → `PlanUsage`. SSR `force-dynamic`.
+### Dashboard home ([dashboard/page.tsx](app/[lang]/(app)/dashboard/page.tsx))
+`QuickActions` (4 mesh-hover cards) + **`HomeLibrary`** (one card whose header is a projects ⇄ templates `SegmentedToggle`). The old widget grid (RecentGeneration/RecentActivity/ProjectTableRow/Sparkline/Header) was **deleted 2026-06-09**.
 
 ### Layout constants
 | | value |
 |---|---|
-| Sidebar | 80 / 260 px |
-| Header | 80px (h-20) |
-| Flow content max | 1280px |
-| Page padding | `pt-28 px-8 pb-8` |
+| Sidebar rail | 60px, floated `start-2` |
+| Content panel | `.tq-content-panel` 18px radius, 8px gutter |
 | Section gap | `space-y-16` (64px) |
-| Sidebar transition | 300ms ease-in-out |
-
-### Z-index ladder
-`0` dashboard-bg glow · `1` main · `40` Header · `50` Sidebar · `1100` action popovers · `1000/1001` dashboard modals · `1200/1201` brand/new-project modals · `2000/2001` template lightbox · `9999` profile dropdown.
+| Page scroll | on `<body>` (not `<html>`) so the RTL scrollbar sits on the left |
 
 ### Backgrounds
-`.dashboard-bg::before` = fixed violet radial glow (`top:145%`, blur 80px). `.studio-canvas` = dotted grid + radial vignette + the same glow.
+`.tq-aurora` = a bottom-anchored, blurred, drifting **blue** ambient glow on the home dashboard (+ the editor). **Flow pages have NO background glow** (removed 2026-06-11 — flat dot texture only). `.studio-canvas` = dotted grid + bottom blue glow.
+
+### Z-index ladder
+`0` panel glow · `1` main · `30` TopUtilityBar · `50` Sidebar · `1100` action popovers · `1000/1001` dashboard modals · `9999` profile dropdown.
 
 ---
 
-## 4. Design system
+## 6. Design system (flat, blue)
 
-**Single source of truth = [app/globals.css](app/globals.css).** Header comment block is a numbered legend of the whole system. Rule (stated there): never invent hex/radius/bg in TSX — compose tokens, or add a class to globals.css first.
+**Single source of truth = [app/globals.css](app/globals.css)** — the header comment block is the legend. The **glass system is gone** (no blur, no shadow, no transparency-as-depth): opaque surfaces + hairline borders.
 
-### Tokens (`:root`)
-**Brand**: `--tq-blue #370BF4` · `--tq-magenta #E036B8` · `--tq-magenta-hot #F900FF` · `--tq-violet #7D2DFF` · `--tq-lavender #9326C9` (+ `-rgb` variants).
-**Surface**: `--tq-bg #0E0E18` · `--tq-bg-dim rgba(12,12,12,.55)` · `--tq-bg-strong rgba(14,14,24,.92)` · `--tq-bg-glass rgba(255,255,255,var(--glass-opacity))` (faint white, inline cards) · `--tq-modal-dim` (oklab 45% black).
-**Text**: `--tq-text-primary #fff` · `--tq-text-muted #b4b4b4`.
-**Border**: `--tq-border-glass` · `--tq-border rgba(40,40,40,.8)` · `--tq-border-focus #ffffff42` (neutral, not brand) · `--tq-avatar-ring`.
-**Status triads** (ok/warn/down): `--tq-status-*-{dot,text,bg,border}`.
-**Gradients**: `--tq-gradient-brand` (blue→violet 135°, CTAs+progress) · `--tq-gradient-full` (3-stop) · `--tq-gradient-avatar`.
-**Radius**: `--tq-radius-md 12px`.
-**@theme inline** (Tailwind utilities): `--color-{background,surface,surface-container-*,primary,…}` (Material-style dashboard palette), `--font-sans: "Cairo"…`, gradient bg-images.
+### One accent: BLUE
+The brand runs on a **single blue accent**. The token is still *named* `--tq-purple` (kept so ~26 referencing files didn't need edits) but it resolves to blue, and the legacy aliases (`--tq-blue / -violet / -magenta / -lavender` + their `-rgb`) all point at it.
+- **Dark**: `--tq-purple #3380FF` (brighter accent) / `-hover #0057FF` (deeper) / `-rgb 51,128,255`.
+- **Light** (`:root.light`): `--tq-purple #0057FF` (the main brand blue) / `-hover #0046CC` / `-rgb 0,87,255`.
+- Blue ramp used by gradients/mesh/aurora: deep `#0042E0`, mid `#1E6BFF`, main `#0057FF`, bright `#3380FF`, light `#66A3FF`.
+- **No purple/magenta anywhere** except `--tq-export-html` (violet) / `--tq-export-png` (magenta) — file-type icon tints (a deliberate categorical set alongside PDF=red/PPTX=orange), not brand accent.
 
-### Glass system (runtime-tunable; the big one)
-Four `--glass-*` vars drive every glass surface; the Settings page swaps a preset (off/subtle/normal/strong) live via `GlassPreflight`. Defaults (**normal**): `--glass-opacity .04` · `--glass-blur 8px` · `--glass-border-opacity .09` · `--glass-saturation 130%` · plus `--glass-hover-{opacity,border}-add`.
+### Surfaces (dark)
+`--tq-bg #0A0A0A` (gutter) · `--tq-panel #161616` (content panel) · `--tq-card #111111` (inset: BiDi canvas, toggle track) · `--tq-surface oklch(0.205)` (cards + floating chrome). Light flips these (see §4).
 
-- **`--glass-fill: #00000073`** (≈45% black) — the **dark fill for FLOATING glass** (popovers + modals), added 2026-06-08. Inline cards stay faint-white.
-- **Surface classes**: `.glass-card` (white-tint, inline cards) · `.glass-card-danger` (red border) · `.glass-dropdown` (white-tint, portal menus) · **`.glass-modal`** + **`.glass-popover`** (dark `--glass-fill`) · `.in-slide-popover` (dark, comment editor/preview over slides) · `.qa-card` (animated mesh border).
-- **Blur is applied via Tailwind utilities, NOT bare `backdrop-filter`** (Lightning CSS strips bare `backdrop-filter` from plain rules). Two utilities:
-  - `backdrop-blur-glass` = `calc(--glass-blur * 2.5)` = **20px** (standard glass: header, panels, cards).
-  - `backdrop-blur-glass-boost` = `calc(--glass-blur * 1)` = **8px** (floating popovers/modals; was 7×=56px before 2026-06-08).
-- **Auth modal is EXCLUDED**: `.auth-modal.glass-modal` overrides back to faint-white fill + `--tw-backdrop-blur: blur(*7)` (56px) so it reads through the marquee wall. (Selector is `.auth-modal.glass-modal` = 0,2,0 so it beats `.glass-modal`'s later source order.)
-- Comment surfaces (editor popover, marker preview, standalone CommentsPanel) were aligned to `--glass-fill` + boost 2026-06-08. The **studio nav panels** (Layers/Slides/Comments-tab) deliberately stay on `backdrop-blur-glass` white-tint (user choice).
+### Gradients & glow (the only colour energy)
+- **AI mesh** (`.btn-gradient-anim` button + `.canvas-gradient-border`): `@property`-registered `--mesh-x1..6`/`-y1..6` drift across 12 keyframes; an animated all-blue mesh stroke at rest, a full dark-blue mesh fill on hover. This is the "Claude does work here" signal — used sparingly.
+- **Aurora** (`.tq-aurora-a/-b`): drifting blue radial blobs, heavy blur, bottom-masked. Home + editor only.
+- `.text-gradient`, `--tq-gradient-brand/-full/-avatar` → all-blue ramps.
 
 ### Typography
-Cairo (variable, `next/font`), Poppins fallback. `.tq-h1` (24/700), `.tq-widget-title` (18/700), `.tq-subhead` (14). **Latin numerals only (0-9)** even in Arabic copy. Material Symbols sized via chained selectors (`.material-symbols-outlined.tq-icon-{sm,lg}`) because the font ships an unlayered `font-size:24px` that beats Tailwind `text-[Npx]`.
+**Cairo** (Arabic + Latin, `next/font`) is the only typeface. **Weight range 400–700 ONLY** — Regular (400) is the main weight and carries titles & display; Bold (700) is the max. **No Black/900 or ExtraBold/800.** Latin numerals only. (Poppins is loaded as `--font-poppins` but the body is `font-sans` = Cairo.)
 
-### Utility classes (compose these)
-`.btn-pill` (secondary, transparent+border) · `.btn-gradient` (primary CTA, brand gradient, pill, flat) · `.btn-pill-danger` (red) · `.btn-gradient-anim` / `.canvas-gradient-border` (animated `--mesh-*` gradient border = "AI does work here") · `.input-dark` / `.input-search` (glass inputs) · `.dropdown-item` · `.nav-item`/`.nav-active` · `.badge-purple` · `.progress-track`/`.progress-bar` · `.modal-dim` · `.studio-canvas` · `.text-gradient` · `.hide-scrollbar` · `.mask-edges`. All buttons are pill-shaped (9999px); flat (no shadows) since 2026-05-22.
+### Utility classes
+`.btn-pill` (secondary) · `.btn-gradient` (solid-blue primary CTA; light hover = darker, dark hover = brighter) · `.btn-gradient-anim` (AI mesh) · `.input-dark` / `.input-search` · `.dropdown-item` · `.nav-item`/`.nav-active` · `.badge-purple` (blue badge) · `.surface-card/-popover/-menu/-modal` · `.bg-overlay-{soft,-,strong}` · `.tq-content-panel` · `.tq-aurora*` · `.logo-monochrome` / `.logo-on-{dark,light}` · `.text-gradient` · `.hide-scrollbar`. All buttons pill-shaped, flat.
 
-### Animation
-`--mesh-x1..6`/`--mesh-y1..6` `@property` vars + 12 keyframes drive the drifting gradient borders. Marquee/scroll keyframes for auth + templates. `prefers-reduced-motion` drops them.
+### Brand guidelines
+**[public/brand-guidelines.html](public/brand-guidelines.html)** — a self-contained, downloadable spec for designers (logo, blue palette, Cairo type, components, glow usage), with a light/dark toggle. Live at `/brand-guidelines.html`.
 
 ### The 3 discipline rules (non-negotiable, user-flagged)
 1. Never hardcode — use tokens / add a class to globals.css first.
 2. Read the globals.css legend before any visual change.
-3. Reuse existing components/primitives — never fork tokens, Cairo, `--tq-*`, glass, or shared primitives.
+3. Reuse existing primitives — never fork tokens, Cairo, `--tq-*`, or shared components.
 
 ---
 
-## 5. Reusable component inventory
-
-Tiered by "reuse-me". Full catalog below; **Tier-1 = always reuse**.
+## 7. Reusable component inventory
 
 ### Tier-1 primitives
-- **Controls** ([components/create/controls.tsx](components/create/controls.tsx)): `CardHeader`, `SegmentedToggle<T>` (spring 500/35), `Toggle` (RTL), `Pill`, `LanguagePills`, `PositionPicker`/`PositionDropdown`, `ExclusionDropdown`, `InlinePaletteSwatch`.
-- **`PillButton`** ([components/create/PillButton.tsx](components/create/PillButton.tsx)) — primary/secondary/ghost CTA, the canonical button across flows.
-- **`ColorPickerPopover`** ([components/create/ColorPickerPopover.tsx](components/create/ColorPickerPopover.tsx)) — SV square + hue + hex + presets; used by design cards AND in-canvas pills.
-- **Brand** ([components/brand/](components/brand/)): `CompactUploadZone`, `FontUploadSlot`, `GoogleFontSlot`, `LogoRow`, `BrandKitDropdown`, `BrandFontPicker`.
-- **`Avatar`** ([components/common/Avatar.tsx](components/common/Avatar.tsx)) — image or initial-on-gradient.
-- **`AnimatedIcon`** ([components/icons/AnimatedIcon.tsx](components/icons/AnimatedIcon.tsx)) — Material name → animated SVG (sidebar, QuickActions, toolbar). `ParagraphWriteIcon` = the generating placeholder.
-- **`SlideRenderer`** ([components/slides/SlideRenderer.tsx](components/slides/SlideRenderer.tsx)) — renders a slide from HTML+theme; thumbnails AND canvas.
+- **Controls** ([components/create/controls.tsx](components/create/controls.tsx)): `SegmentedToggle<T>` (spring 500/35), `Toggle` (RTL, always-white knob), `PositionDropdown`, etc.
+- **`GenerateSplitButton`** ([components/create/GenerateSplitButton.tsx](components/create/GenerateSplitButton.tsx)) — the AI split-button CTA (mesh).
+- **Brand** ([components/brand/](components/brand/)): `CompactUploadZone`, `FontUploadSlot`, `GoogleFontSlot`, `LogoRow`, `LogoUploadSlot`, `AIImagesPanel`, **`ThemeLogo`**.
+- **i18n / theme**: `LocaleProvider`, `LanguageMenu`, `ThemeToggle`, `TopUtilityBar`.
+- **`ColorPickerPopover`**, **`Avatar`**, **`AnimatedIcon`** (+ `ParagraphWriteIcon`), **`SlideRenderer`**.
 
-### Dashboard widgets ([components/app/](components/app/))
-`DashboardWidget` + `DashboardWidgetHeader` + `DashboardEmptyState` (chrome — swap the body). Widgets: `RecentGenerationWidget`, `RecentActivityWidget`, `MyTemplates`, `PlanUsage`, `QuickActions`. Tiles: `ProjectThumbnail`, `ProjectTableRow`, `TemplateTile`, `BrandKitTile`, `ProjectsGrid`, `Pagination`, `Sparkline`, `GenerateSplitButton`.
+### Dashboard ([components/app/](components/app/))
+`HomeLibrary`, `QuickActions`, `ProjectsGrid`, `ProjectThumbnail`, `TemplateTile`, `BrandKitTile`, `Pagination` (dir-aware chevrons), `PlanUsage`, `MyTemplates`, `Sidebar`, `DashboardShell`, `BellDropdown`. **Removed**: `Header`, `RecentGenerationWidget`, `RecentActivityWidget`, `ProjectTableRow`, `Sparkline`, `GlassPreflight`.
 
-### Dialogs/modals (sibling overlay+panel pattern, glass surface — reuse the chrome)
-`NewProjectDialog` (singleton, Header), `ShareDialog`, `SaveAsTemplateDialog`, `UseBrandKitDialog`, `AllNotificationsModal`, `TemplateLightbox`, `LibraryImageModal`, `CancelGenerationDialog`, confirm dialogs (`TemplateDeleteConfirmDialog`, `BrandKitDeleteConfirmDialog`, `BrandKitRenameDialog`, `TrashConfirmDialog`).
-
-### Portal menus
-`ProjectActionsMenu`, `TemplateActionsMenu`, `BrandKitActionsMenu`, `AccessChipDropdown` (share role picker), `HistoryPopover`, `ExportMenu`, `BellDropdown`.
+### Dialogs / portal menus
+Sibling overlay+panel pattern on `surface-modal`: `NewProjectDialog`, `ShareDialog`, `SaveAsTemplateDialog`, confirm dialogs, `TemplateLightbox`, `AllNotificationsModal`. Menus: `ProjectActionsMenu`, `TemplateActionsMenu`, `BrandKitActionsMenu`, `ExportMenu`, `LanguageMenu`.
 
 ### Studio/editor ([components/preview/](components/preview/), [components/slides/](components/slides/))
-`DeckView` (orchestrator), `StudioHeader`, `SlideNavSidebar`, `LayersPanel`, `CommentsPanel`, `HeroCommentOverlay`, `PreviewActionBar` (bottom toolbar), `SlideEditor` (iframe), `StylePill` + `MorePopover` + `FontControl` (in-canvas), `GenImageProvider` (genid→url context), `SlidePresenceStack`.
+`DeckView` (orchestrator), `SlideNavSidebar`, `LayersPanel`, `CommentsPanel`, `HeroCommentOverlay`, `PreviewActionBar` (bottom toolbar), `SlideEditor` (iframe), `StylePill`/`MorePopover`/`FontControl`, `SlidePresenceStack`. (`StudioHeader` was deleted — actions moved into `SlideNavSidebar`'s footer.)
 
-> Restyle guidance: token/CSS changes go in **globals.css**, not component edits. Reuse widget/dialog/menu chrome; swap only body content. Honor RTL + AnimatedIcon + portal-menu patterns.
+> Restyle guidance: token/CSS changes go in **globals.css**, not component edits. Reuse widget/dialog/menu chrome; honor chrome-dir + logical properties + portal-menu patterns.
 
 ---
 
-## 6. User flows
+## 8. User flows
 
-All four creation flows share the 3-card layout (content/brand/output) and converge on `POST /api/projects → /project/[id]`.
+All four creation flows share the 3-card layout (content / brand / output) and converge on `POST /api/projects → /project/[id]`.
 
-- **/create** — text OR file (PDF/PPTX/DOCX/TXT). File → `POST /api/extract` then poll `/api/extract/[jobId]` → `anthropicFileId`. Brand (saved kit / palette / font / logo) + output (size, count, pagination, design style, AI images). `source.kind = "scratch"`.
-- **/enhance** — PDF/PPTX upload with real XHR progress; extraction returns fonts/colors/pageCount/language/textPerSlide; `event.type = "enhance"` (preserves source content + identity, redesigns layout).
-- **/mimic** — upload a design reference → minted as an Anthropic doc; `source.kind = "mimic"` (reproduce the reference's visual language). `/use-template/[id]` = same flow seeded from a template.
+- **/create** — text OR file (PDF/PPTX/DOCX/TXT). File → `POST /api/extract` then poll `/api/extract/[jobId]`. `source.kind = "scratch"`.
+- **/enhance** — PDF/PPTX upload w/ XHR progress; returns fonts/colors/pageCount/language/textPerSlide; `source.kind = "enhance"` (preserve content + identity, redesign).
+- **/mimic** — design reference → Anthropic doc; `source.kind = "mimic"`. `/use-template/[id]` = same flow seeded from a template.
 - **/datasheet** — xlsx/csv → `POST /api/datasheet/parse` (sync) → markdown; `source.kind = "data"`.
 
-**Generation prompt** lives in [inngest/functions/deck-generate.ts](inngest/functions/deck-generate.ts) — `SYSTEM_PROMPT_CREATE_HTML` (+ mimic/enhance addenda). LANGUAGE directive per flow; CONTENT FIDELITY (soft) on scratch; cover carries `data-deck-title` → `Project.title`. (See [context/plan-editor.md](context/plan-editor.md) for editor specs §17-§20.)
+**Generation prompt** lives in [inngest/functions/deck-generate.ts](inngest/functions/deck-generate.ts) — `SYSTEM_PROMPT_CREATE_HTML` (+ mimic/enhance addenda); LANGUAGE directive per flow; cover carries `data-deck-title` → `Project.title`.
 
-**Studio** (`/project/[id]`, `DeckView`): generating shell (disabled, streaming) ⟶ seamless ⟶ editor (enabled). Edit = in-place content save (no version); undo/redo = client stack; history = checkpoints on Save + 10-min idle. Roles gate affordances.
+**Studio** (`/project/[id]`, `DeckView`): generating shell (disabled, streaming) ⟶ seamless ⟶ editor (enabled). Edit = in-place content save; undo/redo = client stack; history = checkpoints on Save + 10-min idle. **Realtime events → in-place state updates, never `router.refresh`.**
 
 ---
 
-## 7. Backend & data
+## 9. Backend & data
 
 ### Prisma ([prisma/schema.prisma](prisma/schema.prisma))
 ```
-User → Project → Presentation (1:1) → PresentationVersion (1:M, slideJson = full manifest)
-                                     → SlideState (per slideKey: lockedAt, cachedComments, currentVersionNumber)
-                                         → SlideVersion (per-slide history, capped 20, source=create|regen|partial_regen|manual_edit)
-Project → ProjectShare (per-invitee: accessLevel view|comment|edit, inviteToken)
-        → GeneratedImage (genid, prompt, status, storageUrl)
-        → Comment (forAi flag → partial regen) · Job (Inngest telemetry) · BrandKit · Template
-User → Notification (bell)  · Subscription · UsageEvent · Folder
+User → Project → Presentation (1:1) → PresentationVersion (slideJson = full manifest)
+                                     → SlideState → SlideVersion (per-slide history, capped 20)
+Project → ProjectShare (view|comment|edit, inviteToken) · GeneratedImage · Comment (forAi → partial regen)
+        · Job · BrandKit · Template
+User → Notification · Subscription · UsageEvent · Folder   (User.locale persists the chrome locale)
 ```
-`Presentation.currentVersionId` = active; `savedVersionId` + `savedSlideVersions` = pinned saved snapshot (drives the saved/unsaved indicator).
+`Presentation.currentVersionId` = active; `savedVersionId` + `savedSlideVersions` = pinned saved snapshot.
 
 ### Inngest ([inngest/functions/](inngest/functions/))
-`deck-generate` (`deck.generate.requested`): brief → Claude streams `<section>` HTML → `StreamingHtmlSplitter` → scope CSS (`lib/deck/scope-css`) + canvas frame (`lib/deck/scaffold`) → seed versions → save manifest → fire image-warm + thumbnails. Also: `deck-regenerate-partial`, `deck-image-warm` (gpt-image-2, bill-once via storage existence + idem key, broadcasts `slide.image.ready`), `deck-images-generate`, `extract-source`, `brand-analyze`, `thumbnail-render` (Puppeteer→WebP), `template-render`.
+`deck-generate` (brief → Claude streams `<section>` HTML → `StreamingHtmlSplitter` → `lib/deck/scope-css` + `lib/deck/scaffold` → seed versions → manifest → image-warm + thumbnails). Plus `deck-regenerate-partial`, `deck-image-warm` (gpt-image-2, bill-once), `extract-source`, `brand-analyze`, `thumbnail-render` (Puppeteer→WebP), `template-render`.
 
 ### API ([app/api/](app/api/))
-Projects (create/save/regenerate[-partial]/retry/cancel/status/favorite/share/export{pdf,png}), slides (`[slideKey]/{edit,checkpoint,restore,regen,lock,versions,images}`), comments, brand-kits, templates, extract, datasheet/parse, storage/upload[-image], invitations/[token]/accept, notifications, auth/{user-sync,delete-account}.
+Projects (create/save/regenerate[-partial]/retry/cancel/status/favorite/share/export{pdf,png}), slides (`[slideKey]/{edit,checkpoint,restore,regen,lock,versions,images}`), comments, brand-kits, templates, extract, datasheet/parse, storage/upload, invitations/[token]/accept, notifications, `me` (locale persist), auth/{user-sync,delete-account}.
 
-### Auth & access ([lib/api/project-access.ts](lib/api/project-access.ts))
-Supabase JWT → Prisma User. `resolveProjectAccess(id, requiredRole)`: owner > edit > comment > view. Owner / accepted ProjectShare / public `publicAccessLevel` / revoked-denies-public. SSR pages + API routes both gate.
-
-### Realtime ([lib/realtime/](lib/realtime/))
-Project channel `project:{id}` (comment.*, slide.regen.*, deck.regen.*, slide.lock.*, slides.locks.bulk-changed, slide.image.ready) + user channel `user:{id}` (notifications) + presence. `broadcastToProject/User` from Inngest + routes. **Realtime events → in-place state updates, never `router.refresh`** (the `/status?includeManifest&includeSlideStates` fat-sync is the broadcast handler's refetch). In local dev, broadcasts don't deliver (docker Postgres) — the status poll is the fallback.
-
-### Storage & images
-Supabase buckets: `slide-previews` (WebP thumbnails, public), `generated-images` (gpt-image + uploads, public), `brand-assets`/`source-files` (private). `lib/images/`: `genImageHash` (sha256→12hex path), `publicGeneratedImageUrl`, `scanGenImages`/`injectImgSrc`.
-
-### Key lib/ modules
-`anthropic/` (quality-params, files) · `schema/slide.ts` (SlideManifest/Slide/Theme, SLIDE_DIMENSIONS) · `deck/` (html-stream, scaffold, scope-css) · `export/` (dom-to-pptx **patched via patch-package**, bidi-postprocess, sanitize-server, render-deck-pdf) · `images/` · `db/slide-versioning.ts` · `realtime/` · `extract/` · `project/` (load-project, flow, derive-color-tags) · `brand/` · `notifications/`.
+### Auth / realtime / storage
+- **Access** ([lib/api/project-access.ts](lib/api/project-access.ts)): Supabase JWT → Prisma User; `resolveProjectAccess` owner > edit > comment > view (SSR + API both gate).
+- **Realtime** ([lib/realtime/](lib/realtime/)): `project:{id}` + `user:{id}` channels + presence; the `/status?includeManifest&includeSlideStates` fat-sync is the broadcast handler's refetch. Local dev → status poll fallback.
+- **Storage**: Supabase buckets `slide-previews` (WebP, public), `generated-images` (public), `brand-assets`/`source-files` (private).
+- **Export** ([lib/export/](lib/export/)): `dom-to-pptx` **patched via patch-package** (BiDi: bodyPr rtlCol + pPr rtl/algn + rPr lang=ar-SA), bidi-postprocess, render-deck-pdf.
 
 ---
 
-## 8. Conventions & gotchas
+## 10. Conventions & gotchas
 
-- **Glass blur ≠ bare `backdrop-filter`.** Lightning CSS strips it from plain rules — apply blur via the `backdrop-blur-glass`/`-boost` Tailwind utilities; bg via a class.
-- **Turbopack sometimes serves a stale globals.css chunk** after an edit — a second touch forces recompile; verify a new rule landed via `document.styleSheets`.
-- **`set-state-in-effect` + ref-mutation-in-render are lint errors here.** For derived/accumulated state use React's "adjust state during render" pattern; mirror state→ref in an effect (that's allowed).
-- **RTL everywhere** — test on an Arabic page; cascade order matters (e.g. `.auth-modal.glass-modal` needed 0,2,0 to beat `.glass-modal`).
+- **`stripLocale(pathname)` before ANY pathname check** — the live pathname is `/ar/dashboard`. Internal links use `localizedHref`; locale switches use `switchLocaleHref`.
+- **Two direction axes** — chrome dir (UI locale) vs canvas dir (manifest). Don't conflate. Use logical CSS only.
 - **Latin numerals only** in user-facing copy.
-- **`dev` is the only branch.** Never `git checkout -b`. Push only on request / milestone / >3 commits.
-- **Run `/security-review`** after new API routes, upload/auth/sanitize edits, schema changes, Inngest prompt-pipeline edits.
-- **`lib/deck/validate-layout.ts` + `vision-check.ts`** are pre-existing untracked files — not part of recent work; don't commit them.
-- Editor iframe reload needs `reloadKey` baked into `srcDoc` (the edit path leaves `bodyHtml` stale) — see [components/preview/editor/SlideEditor.tsx](components/preview/editor/SlideEditor.tsx).
+- **No em dash** in any writing/copy/comments (user rule) — comma/colon/middot/hyphen instead.
+- **Theme = a cookie + a `.light` class** — verify visuals in BOTH themes (flip and compare, don't eyeball one).
+- **Turbopack sometimes serves a stale globals.css chunk** after an edit — make a second real content change to force a clean recompile, then verify via `document.styleSheets`.
+- **`set-state-in-effect` is a lint error here** — derive initial state in the `useState` initializer, not a mount effect.
+- **Page scroll is on `<body>`** (so the RTL scrollbar sits left); `scrollbar-gutter: stable` is required (modals lock `overflow:hidden`).
+- **`dev` is the only branch.** Never `git checkout -b`. Push on request / milestone / >3 commits.
+- **Run `/security-review`** after new API routes, upload/auth/sanitize edits, schema changes, Inngest prompt edits.
+- Editor iframe reload needs `reloadKey` baked into `srcDoc` — see [components/preview/editor/SlideEditor.tsx](components/preview/editor/SlideEditor.tsx).
