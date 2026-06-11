@@ -7,7 +7,7 @@
 <meta name="description" content="The brand guidebook for taqreer.ai — logo, color, typography, components, and glow usage for UI & graphic designers." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
 /* ============================================================================
    taqreer.ai — Brand Guidelines
@@ -182,7 +182,7 @@ nav.toc .toc-label {
 }
 .hero .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .hero h1 {
-  font-size: clamp(40px, 7vw, 78px); font-weight: 900; line-height: .98;
+  font-size: clamp(40px, 7vw, 78px); font-weight: 700; line-height: .98;
   letter-spacing: -.03em; margin: 0 0 22px;
 }
 .hero h1 .blue {
@@ -242,7 +242,7 @@ h3.sub { font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform
 
 /* ---------- Type specimen ---------- */
 .specimen { background: var(--card); border: var(--hair-w) solid var(--hair); border-radius: var(--radius); padding: 30px; }
-.specimen .big { font-size: clamp(46px,8vw,84px); font-weight: 900; line-height: 1; letter-spacing: -.02em; margin: 0; }
+.specimen .big { font-size: clamp(46px,8vw,84px); font-weight: 700; line-height: 1; letter-spacing: -.02em; margin: 0; }
 .specimen .ar { direction: rtl; }
 .scale-row { display: flex; align-items: baseline; gap: 20px; padding: 14px 0; border-bottom: var(--hair-w) solid var(--hair-2); }
 .scale-row:last-child { border-bottom: 0; }
@@ -527,22 +527,21 @@ footer.foot .meta { font-size: 13px; color: var(--muted); }
 
     <h3 class="sub">Weights</h3>
     <div class="weights">
-      <div class="w"><div class="demo" style="font-weight:400">Regular</div><div class="lab">400 · body, long text</div></div>
+      <div class="w"><div class="demo" style="font-weight:400">Regular</div><div class="lab">400 · MAIN — body &amp; long text</div></div>
       <div class="w"><div class="demo" style="font-weight:500">Medium</div><div class="lab">500 · labels, buttons</div></div>
-      <div class="w"><div class="demo" style="font-weight:600">SemiBold</div><div class="lab">600 · UI titles (default emphasis)</div></div>
-      <div class="w"><div class="demo" style="font-weight:700">Bold</div><div class="lab">700 · prices, strong stats</div></div>
-      <div class="w"><div class="demo" style="font-weight:900">Black</div><div class="lab">900 · hero display</div></div>
+      <div class="w"><div class="demo" style="font-weight:600">SemiBold</div><div class="lab">600 · UI titles</div></div>
+      <div class="w"><div class="demo" style="font-weight:700">Bold</div><div class="lab">700 · MAX — headings, display, stats</div></div>
     </div>
 
     <h3 class="sub">Scale</h3>
     <div class="card flat">
-      <div class="scale-row"><span class="lab">Display / 64</span><span style="font-size:40px;font-weight:900;letter-spacing:-.02em">Turn content into decks</span></div>
+      <div class="scale-row"><span class="lab">Display / 64</span><span style="font-size:40px;font-weight:700;letter-spacing:-.02em">Turn content into decks</span></div>
       <div class="scale-row"><span class="lab">Title / 32</span><span style="font-size:30px;font-weight:700;letter-spacing:-.01em">Section heading</span></div>
       <div class="scale-row"><span class="lab">Subtitle / 20</span><span style="font-size:20px;font-weight:600">Card title text</span></div>
       <div class="scale-row"><span class="lab">Body / 16</span><span style="font-size:16px;font-weight:400;color:var(--muted)">Body copy sits at 16px / 1.6 line-height for comfortable reading in both scripts.</span></div>
       <div class="scale-row"><span class="lab">Label / 13</span><span style="font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)">Eyebrow label</span></div>
     </div>
-    <p class="note">Numerals are always <strong>Latin (0–9)</strong>, even inside Arabic strings — never Arabic-Indic (٠–٩). Headings tighten tracking (−0.02em); body stays at 0.</p>
+    <p class="note"><strong>Weight range: 400–700 only.</strong> Regular (400) is the main weight; Bold (700) is the heaviest — never Black/900 or ExtraBold/800. Numerals are always <strong>Latin (0–9)</strong>, even inside Arabic strings — never Arabic-Indic (٠–٩). Headings tighten tracking (−0.02em); body stays at 0.</p>
   </section>
 
   <!-- 5. COMPONENTS -->

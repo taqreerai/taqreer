@@ -736,7 +736,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
                 uniformly active (the dot flags the divergence). */}
             <span style={{ display: "inline-flex", alignItems: "center" }}>
               <Btn active={isBold && !boldMixed} onClick={() => setStyle("font-weight", isBold ? "400" : "700")} label="Bold">
-                <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>
+                <span style={{ fontWeight: 700, fontSize: 15 }}>B</span>
               </Btn>
               {boldMixed && <MixedDot label={mixedLabel} />}
             </span>
