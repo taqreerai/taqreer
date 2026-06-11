@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { PlanUsage } from "@/components/app/PlanUsage";
+import { BillingSection } from "@/components/billing/BillingSection";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import type { User } from "@supabase/supabase-js";
@@ -158,6 +159,10 @@ export default function SettingsPage() {
 
       {/* Stacked cards — one per row. */}
       <div className="flex flex-col gap-6">
+
+        {/* ── Billing (Phase B) ── plan summary, change-plan table,
+            top-up packs, Stripe-hosted management. */}
+        <BillingSection />
 
         {/* ── Profile ── */}
         <div className="settings-card surface-card rounded-xl">

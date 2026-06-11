@@ -195,7 +195,7 @@ export default async function LandingPage({
             />
           </ScrollReveal>
           <ScrollReveal direction="up" className="mt-12">
-            <PricingTiers />
+            <PricingTiers isAuthed={!!user} />
           </ScrollReveal>
         </section>
 

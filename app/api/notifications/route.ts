@@ -248,6 +248,43 @@ function formatNotificationRow(
         .replace("{project}", project);
       href = isProject ? `/project/${row.projectId}` : undefined;
       break;
+    case "billing.credited": {
+      kind = "success";
+      const credits =
+        typeof payload.credits === "number" ? payload.credits : 0;
+      const reason =
+        payload.reason === "topup" || payload.reason === "welcome"
+          ? payload.reason
+          : "renewal";
+      title = n.billing.creditedTitle.replace(
+        "{credits}",
+        credits.toLocaleString("en-US"),
+      );
+      desc = n.billing[
+        reason === "topup"
+          ? "creditedTopup"
+          : reason === "welcome"
+            ? "creditedWelcome"
+            : "creditedRenewal"
+      ];
+      href = "/settings";
+      break;
+    }
+    case "billing.payment_failed":
+      kind = "error";
+      title = n.billing.paymentFailedTitle;
+      desc = n.billing.paymentFailedDesc;
+      href = "/settings";
+      break;
+    case "billing.subscription_ending": {
+      kind = "warning";
+      const date =
+        typeof payload.date === "string" ? payload.date : "";
+      title = n.billing.endingTitle.replace("{date}", date);
+      desc = n.billing.endingDesc;
+      href = "/settings";
+      break;
+    }
     default:
       // Unknown type — surface a generic row using payload.title if
       // present (forward-compat for types deployed server-side ahead

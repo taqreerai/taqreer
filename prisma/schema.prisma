@@ -500,16 +500,44 @@ model Folder {
   projects  Project[]
 }
 
+// One row per user, mirroring their Stripe subscription state (billing
+// plan §1: Stripe owns money state, this row is a read-mirror updated
+// ONLY by webhooks). `plan`/`status`/`currentPeriodEnd` are reflections,
+// never authored client-side. Top-up purchases do NOT touch this row -
+// they land directly as TopupGrant ledger rows.
 model Subscription {
   id               String    @id @default(cuid())
-  userId           String
+  userId           String    @unique
   stripeCustomerId String?   @unique
+  // The Stripe Subscription object id (sub_...). Null for free users
+  // who only ever bought top-ups (a customer with no subscription).
+  stripeSubscriptionId String? @unique
+  // The active recurring Price id (price_...) - maps back to tier +
+  // cadence via lib/billing/prices.ts. Null when not subscribed.
+  stripePriceId    String?
   plan             String    @default("free")
+  // active | past_due | canceled - mirrors Stripe's subscription.status
+  // (narrowed). `past_due` drives the Settings dunning banner.
   status           String    @default("active")
   currentPeriodEnd DateTime?
+  // Stripe's cancel_at_period_end: true after the user cancels but
+  // before the period actually ends (access continues until then).
+  cancelAtPeriodEnd Boolean  @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Stripe webhook idempotency ledger. Every handled event id is inserted
+// here FIRST; a duplicate delivery (Stripe retries aggressively) hits
+// the unique constraint and is skipped, so grants never double-apply.
+// (TopupGrant.sourceKey + CreditHold.jobKey already guard the ledger
+// side; this guards the whole handler so non-grant side effects - plan
+// flips, status writes - are also exactly-once.)
+model StripeWebhookEvent {
+  id          String   @id // the Stripe event id (evt_...)
+  type        String
+  processedAt DateTime @default(now())
 }
 
 // ─── Credit ledger (context/subscriptionmodel.md §7, Phase 1) ───────

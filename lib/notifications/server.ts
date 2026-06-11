@@ -52,7 +52,12 @@ export type NotificationType =
   | "deck.generate.finished"
   | "deck.generate.failed"
   | "share.invited"
-  | "share.accepted";
+  | "share.accepted"
+  // Billing (Phase B) - account-scoped, no project. Fanned out to the
+  // single recipient via recipientUserIds.
+  | "billing.credited"
+  | "billing.payment_failed"
+  | "billing.subscription_ending";
 
 // Per-type payload contracts. The DB column is `Json` (no schema
 // enforcement at the DB layer) — these are the *intended* shapes
@@ -93,6 +98,17 @@ export type NotificationPayloadMap = {
   "share.accepted": {
     accessLevel: "view" | "comment" | "edit";
   };
+  "billing.credited": {
+    credits: number;
+    // What put credits in: a renewal/upgrade, a top-up pack, or the
+    // free signup gift - drives the row's sub-line.
+    reason: "renewal" | "topup" | "welcome";
+  };
+  "billing.payment_failed": Record<string, never>;
+  "billing.subscription_ending": {
+    // ISO date the access ends (period end). Rendered Latin-digit.
+    date: string;
+  };
 };
 
 // Group window for the merge path. 10 minutes covers the realistic
@@ -127,7 +143,9 @@ const GROUPABLE_TYPES = new Set<NotificationType>();
 
 type FanOutInput<T extends NotificationType> = {
   type: T;
-  projectId: string;
+  // Null for account-scoped events (billing.*) that carry an explicit
+  // `recipientUserIds` instead of resolving from project membership.
+  projectId: string | null;
   // Prisma user id of the actor (the user whose action triggered
   // the event). Excluded from the recipient set via self-echo skip.
   // Pass null for system-generated events (`deck.generate.*`) so
@@ -244,7 +262,9 @@ export async function fanOutNotification<T extends NotificationType>(
   } = input;
 
   // Resolve recipients: caller override OR project membership.
-  let recipients = recipientUserIds ?? (await resolveProjectMembers(projectId));
+  let recipients =
+    recipientUserIds ??
+    (projectId ? await resolveProjectMembers(projectId) : []);
   // Self-echo skip — the actor doesn't need to be told they did the
   // thing. Skipped even when `recipientUserIds` is an override (a
   // share-accepted notification to the owner won't fire if the owner

@@ -31,6 +31,9 @@ const TYPE_ICON: Record<string, string> = {
   "deck.generate.failed": "error",
   "deck.regen.finished": "autorenew",
   "slide.regen.finished": "autorenew",
+  "billing.credited": "account_balance_wallet",
+  "billing.payment_failed": "credit_card_off",
+  "billing.subscription_ending": "event_upcoming",
 };
 
 const KIND_ICON: Record<NotificationKind, string> = {
@@ -58,6 +61,9 @@ const TYPE_TINT: Record<string, string> = {
   "deck.generate.failed": "bg-red-500/12 text-red-400",
   "deck.regen.finished": "bg-amber-500/12 text-amber-400",
   "slide.regen.finished": "bg-amber-500/12 text-amber-400",
+  "billing.credited": "bg-emerald-500/12 text-emerald-400",
+  "billing.payment_failed": "bg-red-500/12 text-red-400",
+  "billing.subscription_ending": "bg-amber-500/12 text-amber-400",
 };
 
 const KIND_TINT: Record<NotificationKind, string> = {

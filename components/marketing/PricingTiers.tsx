@@ -93,11 +93,40 @@ function pricingRevealDirection(idx: number): "right" | "left" | "up" {
   return "up";
 }
 
-export function PricingTiers() {
+// Tier rows here are positional; map index → plan key for checkout.
+const TIER_PLAN_KEYS = ["free", "plus", "pro", "max"] as const;
+
+export function PricingTiers({ isAuthed = false }: { isAuthed?: boolean }) {
   const [billing, setBilling] = useState<Billing>("monthly");
+  const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
   const { dir } = useLocale();
   const t = dict.landing.pricing;
+
+  // Signed-in pricing CTA → Stripe Checkout for that tier + cadence.
+  // Signed-out keeps the /signup link (acquisition). Free tier always
+  // routes to signup.
+  async function checkout(planKey: string) {
+    if (planKey === "free") {
+      window.location.href = "/signup";
+      return;
+    }
+    const lookupKey = `tier_${planKey}_${billing}`;
+    setBusy(lookupKey);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ lookupKey }),
+      });
+      const data = (await res.json().catch(() => null)) as { url?: string } | null;
+      if (data?.url) window.location.href = data.url;
+      else setBusy(null);
+    } catch {
+      setBusy(null);
+    }
+  }
 
   return (
     <>
@@ -135,7 +164,15 @@ export function PricingTiers() {
             delay={0.1 * (idx + 1)}
             className={`flex ${tier.popular ? "relative" : ""}`}
           >
-            <PricingCard tier={tier} copy={t.tiers[idx]} pricing={t} billing={billing} />
+            <PricingCard
+              tier={tier}
+              copy={t.tiers[idx]}
+              pricing={t}
+              billing={billing}
+              isAuthed={isAuthed}
+              busy={busy === `tier_${TIER_PLAN_KEYS[idx]}_${billing}`}
+              onCheckout={() => checkout(TIER_PLAN_KEYS[idx])}
+            />
           </ScrollReveal>
         ))}
       </div>
@@ -151,11 +188,17 @@ function PricingCard({
   copy,
   pricing,
   billing,
+  isAuthed,
+  busy,
+  onCheckout,
 }: {
   tier: Tier;
   copy: TierCopy;
   pricing: PricingCopy;
   billing: Billing;
+  isAuthed: boolean;
+  busy: boolean;
+  onCheckout: () => void;
 }) {
   const price = billing === "yearly" ? tier.priceYearly : tier.priceMonthly;
   const footnote =
@@ -219,9 +262,22 @@ function PricingCard({
           {!tier.isFree && <span className="mb-1 text-muted">{pricing.perMonth}</span>}
         </div>
         <div className="mb-6 text-xs text-muted">{footnote}</div>
-        <Link href="/signup" className="btn-gradient block w-full py-3 text-sm">
-          {copy.cta}
-        </Link>
+        {/* Signed-in: a paid tier checks out via Stripe; Free + all
+            signed-out CTAs go to signup (acquisition). */}
+        {isAuthed && !tier.isFree ? (
+          <button
+            type="button"
+            onClick={onCheckout}
+            disabled={busy}
+            className="btn-gradient block w-full py-3 text-sm disabled:opacity-70"
+          >
+            {busy ? "…" : copy.cta}
+          </button>
+        ) : (
+          <Link href="/signup" className="btn-gradient block w-full py-3 text-sm">
+            {copy.cta}
+          </Link>
+        )}
       </div>
     </div>
   );
