@@ -42,7 +42,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
 
   // No / unknown price → bounce back to billing.
   useEffect(() => {
-    if (!lookupKey) router.replace(localizedHref("/settings", locale));
+    if (!lookupKey) router.replace(localizedHref("/billing", locale));
   }, [lookupKey, locale, router]);
 
   if (!lookupKey) return null;
@@ -55,7 +55,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
           <ThemeLogo width={108} height={28} />
         </Link>
         <Link
-          href={localizedHref("/settings", locale)}
+          href={localizedHref("/billing", locale)}
           className="flex items-center gap-1 text-sm text-muted no-underline transition-colors hover:text-foreground"
         >
           <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
@@ -75,7 +75,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
           <div className="surface-card rounded-2xl p-8 text-center">
             <p className="mb-6 text-sm text-muted">{t.error}</p>
             <Link
-              href={localizedHref("/settings", locale)}
+              href={localizedHref("/billing", locale)}
               className="btn-pill px-6 py-2.5 text-sm no-underline"
             >
               {t.back}

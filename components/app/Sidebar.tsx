@@ -549,7 +549,7 @@ export function Sidebar({
                                 </span>
                               </span>
                               <Link
-                                href={`${localizedHref("/", locale)}#pricing`}
+                                href={localizedHref("/billing", locale)}
                                 onClick={() => setProfileOpen(false)}
                                 className="btn-gradient shrink-0 px-3 py-1.5 text-xs no-underline"
                               >
@@ -558,18 +558,18 @@ export function Sidebar({
                             </div>
                           ) : null}
 
-                          {/* Credits card: title + "{n} left ›" link,
-                              usage bar, plan/top-up split, renewal. */}
-                          <div className="rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-3 py-2.5">
+                          {/* Credits card: the WHOLE card links to
+                              /billing (user direction 2026-06-11). */}
+                          <Link
+                            href={localizedHref("/billing", locale)}
+                            onClick={() => setProfileOpen(false)}
+                            className="block rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-3 py-2.5 no-underline transition-colors hover:border-[var(--tq-purple)]"
+                          >
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-semibold text-foreground">
                                 {dict.components.credits.title}
                               </span>
-                              <Link
-                                href={localizedHref("/settings", locale)}
-                                onClick={() => setProfileOpen(false)}
-                                className="flex shrink-0 items-center gap-0.5 text-xs text-muted no-underline transition-colors hover:text-foreground"
-                              >
+                              <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted">
                                 <span className="tabular-nums" dir="ltr">
                                   {dict.components.credits.creditsLeftShort.replace(
                                     "{count}",
@@ -583,7 +583,7 @@ export function Sidebar({
                                 >
                                   {dir === "rtl" ? "chevron_left" : "chevron_right"}
                                 </span>
-                              </Link>
+                              </span>
                             </div>
                             <div className="progress-track my-2">
                               <div
@@ -617,7 +617,7 @@ export function Sidebar({
                                   )
                                 : dict.components.credits.noRenewal}
                             </p>
-                          </div>
+                          </Link>
                         </div>
                         <div className="divider-dark my-1" />
                       </>
@@ -673,6 +673,14 @@ export function Sidebar({
 
                     <div className="divider-dark my-1" />
 
+                    <Link
+                      href={localizedHref("/billing", locale)}
+                      onClick={() => setProfileOpen(false)}
+                      className="dropdown-item"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">credit_card</span>
+                      <span>{dict.profileMenu.billing}</span>
+                    </Link>
                     <Link
                       href={localizedHref("/settings", locale)}
                       onClick={() => setProfileOpen(false)}

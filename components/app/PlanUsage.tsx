@@ -35,14 +35,27 @@ export function PlanUsage() {
 
   return (
     <section>
-      <div className="plan-banner p-5 flex flex-col md:flex-row items-center justify-between relative overflow-hidden">
-        <div className="w-full md:w-1/2 mb-6 md:mb-0 relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-[24px] font-bold text-on-surface">{dict.components.planUsage.plan.replace("{plan}", planName)}</h3>
-            <span className="badge-purple">{planName}</span>
+      {/* Full-width usage bar under a header row; the renewal date sits
+          where the usage caption used to (user direction 2026-06-11). */}
+      <div className="plan-banner p-5 relative overflow-hidden">
+        <div className="relative z-10 flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <h3 className="text-[24px] font-bold text-on-surface">{dict.components.planUsage.plan.replace("{plan}", planName)}</h3>
+              <span className="badge-purple">{planName}</span>
+            </div>
+            <p className="text-muted text-sm">
+              {renewalDate
+                ? dict.components.planUsage.renewalDate.replace("{date}", format(renewalDate, "d MMMM", { locale: dateFnsLocale(locale) }))
+                : dict.components.planUsage.noRenewal}
+            </p>
           </div>
-          <p className="text-muted mb-4 text-sm">{dict.components.planUsage.creditUsage}</p>
-          <div className="progress-track mb-2">
+          <Link className="btn-gradient shrink-0 px-8 py-3 no-underline" href={localizedHref("/billing", locale)}>
+            {dict.components.planUsage.upgrade}
+          </Link>
+        </div>
+        <div className="relative z-10 mt-4">
+          <div className="progress-track mb-2 w-full">
             <div className="progress-bar" style={{ width: `${percentage}%` }} />
           </div>
           <div className="flex justify-between text-xs text-muted">
@@ -53,17 +66,6 @@ export function PlanUsage() {
                 .replace("{limit}", formatCredits(capacity))}
             </span>
           </div>
-        </div>
-
-        <div className="flex flex-col items-end space-y-3 relative z-10">
-          <Link className="btn-gradient px-8 py-3 no-underline" href={`${localizedHref("/", locale)}#pricing`}>
-            {dict.components.planUsage.upgrade}
-          </Link>
-          <span className="text-muted text-xs">
-            {renewalDate
-              ? dict.components.planUsage.renewalDate.replace("{date}", format(renewalDate, "d MMMM", { locale: dateFnsLocale(locale) }))
-              : dict.components.planUsage.noRenewal}
-          </span>
         </div>
       </div>
     </section>

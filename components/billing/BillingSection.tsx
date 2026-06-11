@@ -39,6 +39,15 @@ const YEARLY_PER_MONTH: Record<"plus" | "pro" | "max", number> = {
   max: 63,
 };
 
+// How many of the landing's 7 feature rows (credits + 6 features) are
+// enabled per tier - mirrors TIERS in components/marketing/PricingTiers.
+const FEATURES_ENABLED: Record<KnownPlan, number> = {
+  free: 4,
+  plus: 6,
+  pro: 7,
+  max: 7,
+};
+
 export function BillingSection() {
   const dict = useDict();
   const { locale } = useLocale();
@@ -164,9 +173,6 @@ export function BillingSection() {
             >
               {busy === "portal" ? t.loading : t.manage}
             </button>
-            <p className="mt-1.5 max-w-[180px] text-[10px] leading-relaxed text-muted">
-              {t.manageHint}
-            </p>
           </div>
         ) : null}
       </div>
@@ -224,6 +230,38 @@ export function BillingSection() {
                   )}{" "}
                   {isFree ? t.creditsOnce : t.creditsMo}
                 </span>
+                {/* Full feature list, same copy as the landing pricing
+                    cards (user direction 2026-06-11). Row 0 is the
+                    credits line; rows 1..6 are features[0..5]. */}
+                <ul className="mt-3 w-full space-y-1.5 self-start">
+                  {[
+                    dict.landing.pricing.tiers[idx].credits,
+                    ...dict.landing.pricing.tiers[idx].features,
+                  ].map((label, fi) => {
+                    const enabled = fi < FEATURES_ENABLED[tier];
+                    return (
+                      <li
+                        key={fi}
+                        className={`flex items-center gap-1.5 text-[11px] ${
+                          enabled ? "text-foreground" : "text-muted opacity-60"
+                        }`}
+                      >
+                        <span
+                          className="material-symbols-outlined shrink-0"
+                          style={{
+                            fontSize: 14,
+                            color: enabled ? "var(--tq-violet)" : undefined,
+                            opacity: enabled ? 1 : 0.5,
+                          }}
+                          aria-hidden
+                        >
+                          check
+                        </span>
+                        {label}
+                      </li>
+                    );
+                  })}
+                </ul>
                 {isCurrent ? (
                   <span className="mt-2 w-full rounded-full py-1.5 text-center text-xs font-medium text-muted">
                     {t.current}

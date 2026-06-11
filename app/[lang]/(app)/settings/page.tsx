@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { PlanUsage } from "@/components/app/PlanUsage";
-import { BillingSection } from "@/components/billing/BillingSection";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import type { User } from "@supabase/supabase-js";
@@ -147,9 +146,10 @@ export default function SettingsPage() {
 
   return (
     <div className="page-container">
-      {/* §settings (2026-06-09): one centered column — cards stacked a row each
-          at a comfortable reading width, instead of the old 2-col grid. */}
-      <div className="mx-auto flex w-full max-w-2xl flex-col">
+      {/* §settings (2026-06-09): one centered column of stacked cards.
+          Width matches the landing content frame (max-w-7xl, user
+          direction 2026-06-11). */}
+      <div className="mx-auto flex w-full max-w-7xl flex-col">
       {/* Plan banner - full width at top. Self-feeding from the shared
           credit store (same number as the avatar ring + profile menu). */}
       <PlanUsage />
@@ -159,10 +159,6 @@ export default function SettingsPage() {
 
       {/* Stacked cards — one per row. */}
       <div className="flex flex-col gap-6">
-
-        {/* ── Billing (Phase B) ── plan summary, change-plan table,
-            top-up packs, Stripe-hosted management. */}
-        <BillingSection />
 
         {/* ── Profile ── */}
         <div className="settings-card surface-card rounded-xl">
