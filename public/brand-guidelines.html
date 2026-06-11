@@ -494,7 +494,7 @@ footer.foot .meta { font-size: 13px; color: var(--muted); }
     <h3 class="sub">Do &amp; Don't</h3>
     <div class="dl">
       <div class="item do"><div class="h">✓ Do</div>Use solid blue on light surfaces and pure white on dark. Keep it flat and monochrome.</div>
-      <div class="item dont"><div class="h">✕ Don't</div>Re-introduce the old purple/magenta gradient, add shadows, outline it, or place white on a busy photo without a scrim.</div>
+      <div class="item dont"><div class="h">✕ Don't</div>Add a gradient, shadow, or outline; tint it any colour but the brand blue or white; or place white on a busy photo without a scrim.</div>
       <div class="item do"><div class="h">✓ Do</div>Scale uniformly and preserve the clear space.</div>
       <div class="item dont"><div class="h">✕ Don't</div>Stretch, rotate, recolor to a non-brand hue, or separate the <em>e</em>-bars from the wordmark.</div>
     </div>
@@ -509,7 +509,7 @@ footer.foot .meta { font-size: 13px; color: var(--muted); }
 
     <h3 class="sub">Blue ramp</h3>
     <div class="swatches" id="blueChips"></div>
-    <p class="note"><strong>Accent by theme:</strong> Light uses <code>#0057FF</code> at rest / <code>#0046CC</code> on hover. Dark uses the brighter <code>#3380FF</code> as the accent, with <code>#0057FF</code> as the deeper button-rest. Token name is <code>--tq-purple</code> for back-compat, but it always resolves to blue.</p>
+    <p class="note"><strong>Accent by theme:</strong> Light uses <code>#0057FF</code> at rest / <code>#0046CC</code> on hover. Dark uses the brighter <code>#3380FF</code> as the accent, with <code>#0057FF</code> as the deeper button-rest.</p>
 
     <h3 class="sub">Neutrals — Dark (primary)</h3>
     <div class="neutral-row" id="darkNeutrals"></div>
@@ -523,10 +523,6 @@ footer.foot .meta { font-size: 13px; color: var(--muted); }
         <tr><td><span class="sw" style="background:#34D399"></span>Success</td><td><code>--tq-status-ok</code></td><td><code>#34D399</code></td><td>Operational status, confirmations</td></tr>
         <tr><td><span class="sw" style="background:#FBBF24"></span>Warning</td><td><code>--tq-status-warn</code></td><td><code>#FBBF24</code></td><td>Degraded / attention</td></tr>
         <tr><td><span class="sw" style="background:#F87171"></span>Danger</td><td><code>--tq-status-down</code></td><td><code>#F87171</code></td><td>Errors, destructive actions</td></tr>
-        <tr><td><span class="sw" style="background:#EF4444"></span>PDF</td><td><code>--tq-export-pdf</code></td><td><code>red</code></td><td>File-type icon tints — a deliberate</td></tr>
-        <tr><td><span class="sw" style="background:#FF9F40"></span>PPTX</td><td><code>--tq-export-pptx</code></td><td><code>orange</code></td><td>categorical set (NOT brand accent).</td></tr>
-        <tr><td><span class="sw" style="background:#7D2DFF"></span>HTML</td><td><code>--tq-export-html</code></td><td><code>violet</code></td><td>The only non-blue hues that survive,</td></tr>
-        <tr><td><span class="sw" style="background:#9326C9"></span>PNG</td><td><code>--tq-export-png</code></td><td><code>magenta</code></td><td>scoped strictly to export icons.</td></tr>
       </tbody>
     </table>
   </section>
@@ -559,7 +555,7 @@ footer.foot .meta { font-size: 13px; color: var(--muted); }
       <div class="scale-row"><span class="lab">Body / 16</span><span style="font-size:16px;font-weight:400;color:var(--muted)">Body copy sits at 16px / 1.6 line-height for comfortable reading in both scripts.</span></div>
       <div class="scale-row"><span class="lab">Label / 13</span><span style="font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)">Eyebrow label</span></div>
     </div>
-    <p class="note"><strong>Weight range: 400–700 only.</strong> Regular (400) is the main weight and carries titles &amp; display; Bold (700) is the heaviest, reserved for emphasis — never Black/900 or ExtraBold/800. Numerals are always <strong>Latin (0–9)</strong>, even inside Arabic strings — never Arabic-Indic (٠–٩). Headings tighten tracking (−0.02em); body stays at 0.</p>
+    <p class="note"><strong>Weight range: 400–700.</strong> Regular (400) is the main weight and carries titles &amp; display; Bold (700) is the heaviest, reserved for emphasis. Numerals are always <strong>Latin (0–9)</strong>, even inside Arabic strings. Headings tighten tracking (−0.02em); body stays at 0.</p>
   </section>
 
   <!-- 5. COMPONENTS -->
