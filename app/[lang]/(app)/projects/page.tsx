@@ -42,7 +42,7 @@ export default async function ProjectsPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login?next=/projects");
+    redirect(`/${lang}/login?next=/${lang}/projects`);
   }
 
   const dbUser = await prisma.user.findUnique({
@@ -52,7 +52,7 @@ export default async function ProjectsPage({
   // Defensive: Prisma row missing → bounce to /dashboard so first-
   // login upsert materialises it. Avoids confusing empty state.
   if (!dbUser) {
-    redirect("/dashboard");
+    redirect(`/${lang}/dashboard`);
   }
 
   const projects = await prisma.project.findMany({

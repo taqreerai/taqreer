@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/app/DashboardShell";
 import { createClient } from "@/lib/supabase/server";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/ui-cookies";
 
 export async function generateMetadata({
   params,
@@ -19,17 +20,14 @@ export async function generateMetadata({
   };
 }
 
-// Must match `sidebarCookieKey` in DashboardShell.tsx — the client
-// writes the cookie when the user toggles the sidebar, so SSR can
-// read it here and render the right initial state (no expand-then-
-// collapse flash on navigation).
-const SIDEBAR_COOKIE = "tq_sidebar_collapsed";
-
 export default async function AppLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ lang: string }>;
 }) {
+  const { lang } = await params;
   const supabase = await createClient();
   // `getUser()` round-trips to Supabase auth so a forged / stale
   // cookie can't pass the protected-layout gate. `getSession()`
@@ -39,11 +37,11 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/dashboard");
+    redirect(`/${lang}/login?next=/${lang}/dashboard`);
   }
 
   const cookieStore = await cookies();
-  const initialIsCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
+  const initialIsCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
 
   return (
     <DashboardShell initialIsCollapsed={initialIsCollapsed}>

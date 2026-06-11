@@ -50,7 +50,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { ar } from "date-fns/locale";
+import { dateFnsLocale } from "@/lib/i18n/date";
 import type { SlideFormat } from "@/lib/schema/slide";
 import { ProjectActionsDialogs } from "@/components/app/ProjectActionsDialogs";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
@@ -119,7 +119,7 @@ export function ProjectThumbnail({
 }: Props) {
   const router = useRouter();
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const rootRef = useRef<HTMLButtonElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -156,7 +156,7 @@ export function ProjectThumbnail({
 
   const relativeDate = formatDistanceToNow(new Date(createdAt), {
     addSuffix: true,
-    locale: ar,
+    locale: dateFnsLocale(locale),
   });
 
   // ── Menu actions ───────────────────────────────────────────────

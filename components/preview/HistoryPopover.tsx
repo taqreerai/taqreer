@@ -26,7 +26,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
-import { ar } from "date-fns/locale";
+import { dateFnsLocale } from "@/lib/i18n/date";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 export type HistoryRow = {
@@ -293,10 +293,11 @@ function HistoryItem({
   onClick: () => void;
 }) {
   const dict = useDict();
+  const { locale } = useLocale();
   const number = row.versionNumber.toString().padStart(2, "0");
   const relative = formatDistanceToNow(new Date(row.createdAt), {
     addSuffix: true,
-    locale: ar,
+    locale: dateFnsLocale(locale),
   });
   return (
     <button

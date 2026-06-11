@@ -1,9 +1,9 @@
 "use client";
 
 import { format } from "date-fns";
-import { ar } from "date-fns/locale";
 import Link from "next/link";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { dateFnsLocale } from "@/lib/i18n/date";
 
 type PlanUsageProps = {
   plan: string;
@@ -14,6 +14,7 @@ type PlanUsageProps = {
 
 export function PlanUsage({ plan, usageCount, limit, renewalDate }: PlanUsageProps) {
   const dict = useDict();
+  const { locale } = useLocale();
   const percentage = limit > 0 ? Math.min(100, Math.round((usageCount / limit) * 100)) : 0;
   const planNames: Record<string, string> = {
     free: dict.components.planUsage.free,
@@ -46,7 +47,7 @@ export function PlanUsage({ plan, usageCount, limit, renewalDate }: PlanUsagePro
           </Link>
           <span className="text-muted text-xs">
             {renewalDate
-              ? dict.components.planUsage.renewalDate.replace("{date}", format(renewalDate, "d MMMM", { locale: ar }))
+              ? dict.components.planUsage.renewalDate.replace("{date}", format(renewalDate, "d MMMM", { locale: dateFnsLocale(locale) }))
               : dict.components.planUsage.noRenewal}
           </span>
         </div>

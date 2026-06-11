@@ -53,30 +53,23 @@ const BELL_ANCHOR_GAP_PX = 25;
 
 // Popover / toast column geometry — both surfaces are a fixed 320 px
 // wide (w-80) and centred under the bell's `centerX`. Kept here so the
-// dir-aware left math below reads from named constants.
+// left math below reads from named constants.
 const POPOVER_WIDTH_PX = 320;
 const VIEWPORT_GUTTER_PX = 12;
 
 // Physical `left` for the popover / toast column.
 //
-// The bell's `centerX` is a screen-space x; centring the 320 px column
-// on it is `centerX - 160`, which is symmetric and dir-neutral. The
-// dir-awareness matters at the CLAMP edges: the original code clamped
-// to a 12 px LEFT gutter first (`Math.max(12, …)`), which biases an
-// off-screen anchor toward the visual LEFT — correct for LTR, but in
-// RTL the inline-start is the visual RIGHT, so an anchor that would
-// overflow should snap to the RIGHT gutter instead. We mirror the
-// anchor around the viewport centre when `dir === "rtl"` so the column
-// hangs from the inline-start edge consistently with the rest of the
-// RTL chrome, then clamp into the same 12 px gutters.
-function popoverLeft(centerX: number, viewportWidth: number, dir: "rtl" | "ltr"): number {
+// `centerX` is the bell's screen-space x (from getBoundingClientRect), so it
+// already encodes the trigger's real on-screen position in BOTH directions —
+// in RTL the bell sits at the visual left and centerX is small; in LTR it sits
+// at the right and centerX is large. Centring the 320 px column on it
+// (`centerX - 160`) hangs it under the trigger either way; the popover's own
+// `dir={dir}` handles the internal layout. Do NOT mirror centerX in RTL —
+// `viewportWidth - centerX` would fling the column to the opposite side of the
+// screen, away from the bell (CR #55). Just clamp into the 12 px gutters.
+function popoverLeft(centerX: number, viewportWidth: number): number {
   const maxLeft = viewportWidth - POPOVER_WIDTH_PX - VIEWPORT_GUTTER_PX;
-  // Mirror the horizontal anchor in RTL so "start" reads as the visual
-  // right edge (matches headless's start-corner intent + the popover's
-  // dir={dir}). centerX → viewportWidth - centerX flips the anchor
-  // across the viewport centre.
-  const anchorX = dir === "rtl" ? viewportWidth - centerX : centerX;
-  const centred = anchorX - POPOVER_WIDTH_PX / 2;
+  const centred = centerX - POPOVER_WIDTH_PX / 2;
   return Math.max(VIEWPORT_GUTTER_PX, Math.min(centred, maxLeft));
 }
 
@@ -534,7 +527,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
             className="in-slide-popover fixed z-[1100] w-80 overflow-hidden rounded-2xl"
               style={{
                 top: bellRect.top,
-                left: popoverLeft(bellRect.centerX, window.innerWidth, dir),
+                left: popoverLeft(bellRect.centerX, window.innerWidth),
               }}
             >
               <motion.div
@@ -619,7 +612,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
               className="pointer-events-none fixed z-[1099] w-80"
               style={{
                 top: bellRect.top,
-                left: popoverLeft(bellRect.centerX, window.innerWidth, dir),
+                left: popoverLeft(bellRect.centerX, window.innerWidth),
                 // 3 visible slots + an extra slot's worth of headroom
                 // for the evicted toast to fade out from. Slot height
                 // matches BellToast (see TOAST_SLOT_HEIGHT below).

@@ -15,8 +15,9 @@
 
 import type { CommentAuthor, CommentRow } from "@/lib/types/comment";
 import { Avatar } from "@/components/common/Avatar";
-import { formatRelativeArabic } from "@/lib/util/relative-time";
+import { formatRelativeTime } from "@/lib/util/relative-time";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { intlLocale } from "@/lib/i18n/date";
 
 // Same nominal width as SlideNavSidebar — both panels share the
 // fixed slot against the main sidebar's inner edge, so swapping
@@ -59,11 +60,11 @@ export function CommentsPanel({
     <aside
       dir={dir}
       aria-label={dict.editor.comments.panelAria}
-      // Glass surface — built from primitives (no `.surface-card`
-      // because that class carries a hover transition we don't want
-      // on a sidebar panel). The `` utility is
-      // the preset-linked blur token; the inline bg / border-color
-      // use the same CSS variables `.surface-card` reads.
+      // Dark surface built from primitives (no `.surface-card`, which
+      // carries a hover transition we don't want on a sidebar panel).
+      // The inline bg / border-color use the same `--tq-surface` /
+      // `--tq-border-*` variables `.surface-card` reads — no blur (the
+      // glass system was removed in the §21 flat redesign).
       className={
         embedded
           ? // Inside the nav's Comments tab — fill the body, no chrome.
@@ -202,6 +203,7 @@ function CommentMeta({
   createdAt: string;
 }) {
   const dict = useDict();
+  const { locale } = useLocale();
   // Email is intentionally not in the wire shape (PII). When a user
   // has no display name set we fall back to the locale's "unknown"
   // label — visually the gradient-initial avatar still differentiates
@@ -230,15 +232,15 @@ function CommentMeta({
         <time
           className="text-[10px] leading-tight text-white/40"
           dateTime={createdAt}
-          title={new Date(createdAt).toLocaleString("ar")}
+          title={new Date(createdAt).toLocaleString(intlLocale(locale))}
         >
-          {formatRelativeArabic(createdAt)}
+          {formatRelativeTime(createdAt, locale)}
         </time>
       </div>
     </div>
   );
 }
 
-// `formatRelativeArabic` lives in `lib/util/relative-time.ts` — see
+// `formatRelativeTime` lives in `lib/util/relative-time.ts` — see
 // the import at the top of the file. Shared with HeroCommentOverlay's
 // MarkerPreviewPopup so wording stays locked across surfaces.

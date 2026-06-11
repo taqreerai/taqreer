@@ -26,13 +26,9 @@ import { DeckView } from "@/components/preview/DeckView";
 import { loadProject } from "@/lib/project/load-project";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { prisma } from "@/lib/prisma";
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/ui-cookies";
 
 export const dynamic = "force-dynamic";
-
-// Same cookie name DashboardShell reads in app/(app)/layout.tsx —
-// SSR-read here too so the SlideNavSidebar's `right:` value is
-// correct on first paint and the panel doesn't slide on refresh.
-const SIDEBAR_COOKIE = "tq_sidebar_collapsed";
 
 export default async function ProjectPage({
   params,
@@ -58,7 +54,7 @@ export default async function ProjectPage({
   // back-compat with old links.) No redirect-when-not-ready anymore.
 
   const cookieStore = await cookies();
-  const isCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "1";
+  const isCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
   const initialMainSidebarWidth = isCollapsed ? 80 : 260;
 
   // Phase 16.B presence — same profile fetch as /preview's page. Null

@@ -25,13 +25,18 @@ import { LibraryPageClient, type LibraryImage } from "./LibraryPageClient";
 // images that became `ready` after the last visit.
 export const dynamic = "force-dynamic";
 
-export default async function LibraryPage() {
+export default async function LibraryPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login?next=/library");
+    redirect(`/${lang}/login?next=/${lang}/library`);
   }
 
   const dbUser = await prisma.user.findUnique({
@@ -39,7 +44,7 @@ export default async function LibraryPage() {
     select: { id: true },
   });
   if (!dbUser) {
-    redirect("/dashboard");
+    redirect(`/${lang}/dashboard`);
   }
 
   // The user's projects that have a saved version, mapped

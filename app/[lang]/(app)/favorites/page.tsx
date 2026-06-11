@@ -33,7 +33,7 @@ export default async function FavoritesPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login?next=/favorites");
+    redirect(`/${lang}/login?next=/${lang}/favorites`);
   }
 
   const dbUser = await prisma.user.findUnique({
@@ -45,7 +45,7 @@ export default async function FavoritesPage({
   // it). Bounce them to /dashboard to materialise the row before
   // any project queries run — avoids a confusing empty state.
   if (!dbUser) {
-    redirect("/dashboard");
+    redirect(`/${lang}/dashboard`);
   }
 
   // Same select clause shape as the dashboard RecentProjects query,

@@ -3,10 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/app/DashboardShell";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { NotFoundContent } from "@/components/i18n/NotFoundContent";
-
-// Must match `(app)/layout.tsx` so the manually-mounted DashboardShell picks up
-// the same sidebar-collapsed preference.
-const SIDEBAR_COOKIE = "tq_sidebar_collapsed";
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/ui-cookies";
 
 // Shared 404 renderer. Picks chrome by CONTEXT so a not-found "stays where you
 // are":
@@ -32,7 +29,7 @@ export async function NotFoundView({
 
   if (dashboardChrome) {
     const initialIsCollapsed =
-      (await cookies()).get(SIDEBAR_COOKIE)?.value === "1";
+      (await cookies()).get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
     return (
       <DashboardShell initialIsCollapsed={initialIsCollapsed}>
         <div className="flex flex-col items-center gap-8 px-6 pt-[12vh] text-center">

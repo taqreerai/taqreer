@@ -10,8 +10,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommentRow, CommentBounds } from "@/lib/types/comment";
 import { Avatar } from "@/components/common/Avatar";
-import { formatRelativeArabic } from "@/lib/util/relative-time";
+import { formatRelativeTime } from "@/lib/util/relative-time";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { intlLocale } from "@/lib/i18n/date";
 
 // Minimum drag size in slide-space pixels. Smaller drags are treated
 // as misfired clicks and discarded — keeps stray mousedowns from
@@ -877,7 +878,7 @@ function MarkerPreviewPopup({
   onDelete: () => Promise<void> | void;
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const POPOVER_W = 320;
   const POPOVER_GAP = 8;
   // Conservative estimate covering header (~36 px) + content
@@ -1016,9 +1017,9 @@ function MarkerPreviewPopup({
           <time
             className="text-[10px] leading-tight text-white/40"
             dateTime={comment.createdAt}
-            title={new Date(comment.createdAt).toLocaleString("ar")}
+            title={new Date(comment.createdAt).toLocaleString(intlLocale(locale))}
           >
-            {formatRelativeArabic(comment.createdAt)}
+            {formatRelativeTime(comment.createdAt, locale)}
           </time>
         </div>
         <button

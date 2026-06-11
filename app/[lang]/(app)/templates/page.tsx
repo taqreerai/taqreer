@@ -23,13 +23,18 @@ const PER_AXIS_CAP = 60;
 
 export const dynamic = "force-dynamic";
 
-export default async function TemplatesPage() {
+export default async function TemplatesPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login?next=/templates");
+    redirect(`/${lang}/login?next=/${lang}/templates`);
   }
 
   const dbUser = await prisma.user.findFirst({
@@ -37,7 +42,7 @@ export default async function TemplatesPage() {
     select: { id: true },
   });
   if (!dbUser) {
-    redirect("/login?next=/templates");
+    redirect(`/${lang}/login?next=/${lang}/templates`);
   }
 
   const selectShape = {

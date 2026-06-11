@@ -10,14 +10,19 @@ import { redirect } from "next/navigation";
 // completed → placeholder tiles even after thumbnails are ready.
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/dashboard");
+    redirect(`/${lang}/login?next=/${lang}/dashboard`);
   }
 
   const existingUser = await prisma.user.findUnique({

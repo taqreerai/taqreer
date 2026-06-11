@@ -44,6 +44,13 @@ function getSafeRedirectPath(next: string | null, origin: string, locale: string
     const redirectUrl = new URL(next, origin);
     if (redirectUrl.origin !== origin) return fallback;
     if (!redirectUrl.pathname.startsWith("/")) return fallback;
+    // Never bounce back to an auth page (e.g. `?next=/en/login`) — that just
+    // re-enters this same "authed user on an auth route" branch and risks a
+    // redirect loop. Send those to the dashboard fallback instead.
+    const logicalNext = stripLocale(redirectUrl.pathname);
+    if (authRoutes.some((r) => logicalNext === r || logicalNext.startsWith(`${r}/`))) {
+      return fallback;
+    }
     let path = `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
     // A `next` without a locale (e.g. from an external link) → prefix it so the
     // user lands inside the active locale rather than bouncing through the gate.

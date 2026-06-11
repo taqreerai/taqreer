@@ -55,7 +55,7 @@ export function BrandKitDropdown({
         className={` flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           open ? "border-white/40" : "border-white/15 hover:border-white/30"
         }`}
-        style={{ background: "rgba(255, 255, 255, var(--tq-tint-opacity))" }}
+        style={{ background: "var(--tq-surface)" }}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
           bookmark

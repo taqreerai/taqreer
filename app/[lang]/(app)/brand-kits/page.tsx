@@ -63,7 +63,7 @@ export default async function BrandKitsPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login?next=/brand-kits");
+    redirect(`/${lang}/login?next=/${lang}/brand-kits`);
   }
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
@@ -72,7 +72,7 @@ export default async function BrandKitsPage({
   if (!dbUser) {
     // First-login user-sync race — bounce to dashboard so the upsert
     // happens, same recovery /projects uses.
-    redirect("/dashboard");
+    redirect(`/${lang}/dashboard`);
   }
 
   const kits = await prisma.brandKit.findMany({
@@ -128,7 +128,7 @@ export default async function BrandKitsPage({
           <p className="tq-subhead">{dict.pages.brandKits.listSubtitle}</p>
         </div>
         <Link
-          href="/brand-kits/new"
+          href={`/${lang}/brand-kits/new`}
           className="btn-gradient flex shrink-0 items-center gap-2 px-4 py-2 text-sm"
         >
           <span
