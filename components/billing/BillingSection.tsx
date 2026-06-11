@@ -19,7 +19,7 @@ import { dateFnsLocale } from "@/lib/i18n/date";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 import { TIERS, TIER_ORDER, TOPUP_PACKS } from "@/lib/credits/cost";
 import { SegmentedToggle } from "@/components/create/controls";
-import { normalizePlan, type KnownPlan } from "@/lib/plan";
+import { normalizePlan, planLabel, type KnownPlan } from "@/lib/plan";
 
 type Cadence = "monthly" | "yearly";
 
@@ -83,12 +83,7 @@ export function BillingSection() {
   }, []);
 
   const plan = summary ? summary.plan : credits ? normalizePlan(credits.plan) : "free";
-  const planNames: Record<string, string> = {
-    free: dict.components.planUsage.free,
-    plus: dict.components.planUsage.plus,
-    pro: dict.components.planUsage.pro,
-    max: dict.components.planUsage.max,
-  };
+  const planName = planLabel(dict.components.planUsage, plan);
 
   async function go(path: string, body?: unknown, key?: string) {
     setBusy(key ?? path);
@@ -150,8 +145,8 @@ export function BillingSection() {
         <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-2xl p-5">
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              {dict.components.planUsage.plan.replace("{plan}", planNames[plan] ?? plan)}
-              <span className="badge-purple">{planNames[plan] ?? plan}</span>
+              {dict.components.planUsage.plan.replace("{plan}", planName)}
+              <span className="badge-purple">{planName}</span>
             </p>
             <p className="mt-0.5 text-xs text-muted">
               {summary?.cancelAtPeriodEnd && renewDate

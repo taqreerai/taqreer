@@ -21,7 +21,7 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import { useCreditBalance } from "@/lib/credits/store";
-import { normalizePlan } from "@/lib/plan";
+import { normalizePlan, planLabel } from "@/lib/plan";
 import { Tooltip } from "@/components/common/Tooltip";
 
 // Current-plan chip at the cluster's start edge (user direction
@@ -33,19 +33,13 @@ function PlanBadge() {
   const credits = useCreditBalance();
   if (!credits) return null;
   const plan = normalizePlan(credits.plan);
-  const planNames: Record<string, string> = {
-    free: dict.components.planUsage.free,
-    plus: dict.components.planUsage.plus,
-    pro: dict.components.planUsage.pro,
-    max: dict.components.planUsage.max,
-  };
   return (
     <Link
       href={localizedHref("/billing", locale)}
       className="badge-purple no-underline"
       aria-label={dict.components.billing.title}
     >
-      {planNames[plan] ?? plan}
+      {planLabel(dict.components.planUsage, plan)}
     </Link>
   );
 }

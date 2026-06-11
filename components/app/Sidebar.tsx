@@ -21,7 +21,7 @@ import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 import { nextTier } from "@/lib/credits/cost";
-import { normalizePlan } from "@/lib/plan";
+import { normalizePlan, planLabel } from "@/lib/plan";
 import { CreditRing } from "@/components/app/CreditRing";
 import { format } from "date-fns";
 import { dateFnsLocale } from "@/lib/i18n/date";
@@ -118,12 +118,6 @@ export function Sidebar({
       : null;
   // Tier labels are the SAME Latin names in both locales (user
   // direction 2026-06-11) but still flow through the dict.
-  const planNames: Record<string, string> = {
-    free: dict.components.planUsage.free,
-    plus: dict.components.planUsage.plus,
-    pro: dict.components.planUsage.pro,
-    max: dict.components.planUsage.max,
-  };
   const currentPlan = credits ? normalizePlan(credits.plan) : null;
   const upgradeTo = currentPlan ? nextTier(currentPlan) : null;
   const [profileOpen, setProfileOpen] = useState(false);
@@ -519,7 +513,7 @@ export function Sidebar({
                             the name, badge trails it in AR too). */}
                         {currentPlan ? (
                           <span className="badge-purple shrink-0">
-                            {planNames[currentPlan] ?? currentPlan}
+                            {planLabel(dict.components.planUsage, currentPlan)}
                           </span>
                         ) : null}
                       </p>
@@ -550,7 +544,7 @@ export function Sidebar({
                                 <span className="truncate">
                                   {dict.components.credits.upgradeTitle.replace(
                                     "{tier}",
-                                    planNames[upgradeTo] ?? upgradeTo,
+                                    planLabel(dict.components.planUsage, upgradeTo),
                                   )}
                                 </span>
                               </span>

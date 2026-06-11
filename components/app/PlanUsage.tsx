@@ -6,6 +6,7 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { dateFnsLocale } from "@/lib/i18n/date";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
+import { planLabel } from "@/lib/plan";
 
 // Settings-page plan banner. Reads the SAME credit store as the
 // sidebar avatar ring and the profile-menu breakdown - the three
@@ -22,13 +23,7 @@ export function PlanUsage() {
   const used = Math.max(0, capacity - balance.total);
   const percentage =
     capacity > 0 ? Math.min(100, Math.round((used / capacity) * 100)) : 0;
-  const planNames: Record<string, string> = {
-    free: dict.components.planUsage.free,
-    plus: dict.components.planUsage.plus,
-    pro: dict.components.planUsage.pro,
-    max: dict.components.planUsage.max,
-  };
-  const planName = planNames[plan] ?? plan;
+  const planName = planLabel(dict.components.planUsage, plan);
   const renewalDate = balance.allotmentResetAt
     ? new Date(balance.allotmentResetAt)
     : null;

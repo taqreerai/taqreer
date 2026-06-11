@@ -28,3 +28,27 @@ export function isProPlan(plan: string | null | undefined): boolean {
   const p = normalizePlan(plan);
   return p === "pro" || p === "max";
 }
+
+/**
+ * Localized tier label from the planUsage dict slice (which carries the
+ * free/plus/pro/max strings). Centralizes the per-plan name lookup that
+ * the sidebar ring, plan badge, plan banner, and billing cards all share,
+ * with a raw-plan fallback for any unknown stored value.
+ */
+export function planLabel(
+  labels: { free: string; plus: string; pro: string; max: string },
+  plan: string,
+): string {
+  switch (plan) {
+    case "free":
+      return labels.free;
+    case "plus":
+      return labels.plus;
+    case "pro":
+      return labels.pro;
+    case "max":
+      return labels.max;
+    default:
+      return plan;
+  }
+}
