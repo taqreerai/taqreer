@@ -377,9 +377,12 @@
    colours are inherited from :root unchanged (user direction). */
 :root.light {
   color-scheme: light;
-  --tq-bg:              oklch(0.95 0 0);
-  --tq-bg-rgb:          242, 242, 242;
-  --tq-panel:           oklch(1 0 0);
+  /* Light mode flips the gutter/panel relationship (user direction): the main
+     dashboard gutter is WHITE and the rounded content panel is the soft gray,
+     so the two swap sides vs dark mode. */
+  --tq-bg:              oklch(1 0 0);
+  --tq-bg-rgb:          255, 255, 255;
+  --tq-panel:           oklch(0.95 0 0);
   --tq-card:            oklch(0.97 0 0);
   --tq-surface:         oklch(1 0 0);
   --tq-text-primary:    oklch(0.145 0 0);
@@ -1927,34 +1930,11 @@ html.app-shell-scroll body {
 }
 
 /* §24: flow pages (create / enhance / mimic / datasheet / use-template) — the
-   interactive DOT field (MagneticGlow with aurora=false) plus this STATIC
-   bottom glow, the same brand-violet wash the editor uses
-   (`.studio-canvas::before`). Absolute (not fixed) so the panel's
-   `overflow:hidden` clips it to the rounded corners; z:0 keeps it below the
-   page content (which has no z-index) but above the dot canvas (-z). */
+   interactive DOT field (MagneticGlow with aurora=false) on a FLAT panel. The
+   static bottom brand-glow was removed (user direction 2026-06-11): flow pages
+   carry no background glow, only the dot texture. */
 .tq-panel-flow {
   background-color: var(--tq-panel);
-}
-.tq-panel-flow::before {
-  content: "";
-  /* Exact copy of `.studio-canvas::before` (the editor's bottom glow), but
-     `absolute` (relative to the panel) instead of `fixed`, so the panel's
-     overflow:hidden clips it. Flow panels are ~viewport-tall, so top:145%
-     lands the glow at the same spot as the editor (user: same as editor). */
-  position: absolute;
-  top: 145%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at bottom,
-    rgba(var(--tq-violet-rgb), 0.4) 60%,
-    #0000 97%
-  );
-  filter: blur(80px);
 }
 
 /* While a Studio Layers row is being dragged, lock the whole document to the
