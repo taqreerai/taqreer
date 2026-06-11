@@ -12,7 +12,7 @@ export default function BillingPage() {
   const dict = useDict();
   return (
     <div className="page-container">
-      <div className="mx-auto flex w-full max-w-7xl flex-col">
+      <div className="mx-auto flex w-full max-w-6xl flex-col">
         <h1 className="tq-h1 mb-6">{dict.components.billing.title}</h1>
         <BillingSection />
       </div>

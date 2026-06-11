@@ -147,9 +147,9 @@ export default function SettingsPage() {
   return (
     <div className="page-container">
       {/* §settings (2026-06-09): one centered column of stacked cards.
-          Width matches the landing content frame (max-w-7xl, user
-          direction 2026-06-11). */}
-      <div className="mx-auto flex w-full max-w-7xl flex-col">
+          Width matches the create-flow content frame (max-w-6xl, user
+          direction 2026-06-12; was 7xl/landing). */}
+      <div className="mx-auto flex w-full max-w-6xl flex-col">
       {/* Plan banner - full width at top. Self-feeding from the shared
           credit store (same number as the avatar ring + profile menu). */}
       <PlanUsage />

@@ -112,7 +112,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
     // back link + title + our form.
     <div className="page-container">
       {/* Same content frame as /billing so titles + width line up. */}
-      <div className="mx-auto w-full max-w-7xl pb-16">
+      <div className="mx-auto w-full max-w-6xl pb-16">
         <Link
           href={localizedHref("/billing", locale)}
           className="mb-4 inline-flex items-center gap-1 text-sm text-muted no-underline transition-colors hover:text-foreground"
