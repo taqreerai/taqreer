@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 
 export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
@@ -49,6 +50,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
+            <ThemeToggle />
             <LanguageMenu />
             {isAuthed ? (
               <Link href={localizedHref("/dashboard", locale)} className="btn-gradient px-5 py-2 text-xs">

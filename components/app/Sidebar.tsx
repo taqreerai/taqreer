@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { stripLocale, localizedHref } from "@/lib/i18n/navigation";
+import { stripLocale, localizedHref, switchLocaleHref } from "@/lib/i18n/navigation";
+import { locales, LOCALE_COOKIE, type Locale } from "@/lib/i18n/config";
+import { THEME_COOKIE } from "@/lib/ui-cookies";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { Tooltip } from "@/components/common/Tooltip";
 import Image from "next/image";
@@ -95,7 +97,8 @@ export function Sidebar({
 }) {
   // Locale-stripped so `pathname === item.path` (unprefixed) still marks the
   // active nav item after the [lang] move (pathname is /ar/dashboard).
-  const pathname = stripLocale(usePathname() ?? "");
+  const rawPathname = usePathname() ?? "";
+  const pathname = stripLocale(rawPathname);
   const router = useRouter();
   const { locale, dir } = useLocale();
   const dict = useDict();
@@ -113,6 +116,35 @@ export function Sidebar({
   // opened by their menu rows below and render via their own body portals.
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Theme toggle for the profile menu (mirrors components/app/ThemeToggle): flip
+  // the `.light` class on <html> + persist the `tq_theme` cookie. Synced from the
+  // DOM on mount (SSR already applied the class), so the row icon matches.
+  const [light, setLight] = useState(false);
+  useEffect(() => {
+    setLight(document.documentElement.classList.contains("light"));
+  }, []);
+  const toggleTheme = () => {
+    const next = !light;
+    setLight(next);
+    document.documentElement.classList.toggle("light", next);
+    document.cookie = `${THEME_COOKIE}=${next ? "light" : "dark"};path=/;max-age=31536000;samesite=lax`;
+  };
+
+  // Chrome locale switch (mirrors components/i18n/LanguageMenu): swap the locale
+  // segment of the current path, persist the cookie, and best-effort save to the
+  // account. Closes the menu on pick.
+  const chooseLocale = (next: Locale) => {
+    setProfileOpen(false);
+    if (next === locale) return;
+    document.cookie = `${LOCALE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
+    void fetch("/api/me", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ locale: next }),
+    }).catch(() => {});
+    router.push(switchLocaleHref(rawPathname, next));
+  };
 
   // Unread badge for the "الإشعارات" row + the avatar dot. Mirror the bell's
   // filter (hide premature "deck finished" rows) so the count matches what
@@ -455,6 +487,44 @@ export function Sidebar({
                     </span>
                   ) : null}
                 </button>
+
+                <div className="divider-dark my-1" />
+
+                {/* Theme toggle — flips the chrome theme in place (menu stays
+                    open so the colour change is visible). */}
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-pressed={light}
+                  className="dropdown-item"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    {light ? "dark_mode" : "light_mode"}
+                  </span>
+                  <span>{dict.topBar.theme}</span>
+                </button>
+
+                {/* Language — one row per locale, leading check on the active
+                    one (same pattern as the LanguageMenu dropdown). */}
+                {locales.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={code === locale}
+                    onClick={() => chooseLocale(code)}
+                    className="dropdown-item"
+                  >
+                    <span
+                      className="material-symbols-outlined text-[18px]"
+                      style={{ opacity: code === locale ? 1 : 0 }}
+                      aria-hidden
+                    >
+                      check
+                    </span>
+                    <span>{code === "ar" ? dict.language.ar : dict.language.en}</span>
+                  </button>
+                ))}
 
                 <div className="divider-dark my-1" />
 
