@@ -187,8 +187,8 @@ export function SlideCountStepper({
     compact ? "h-6 w-6" : "h-8 w-8"
   } shrink-0 items-center justify-center rounded-full border text-foreground transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-40`;
   const stepBtnStyle = {
-    background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
-    borderColor: "rgba(255, 255, 255, var(--tq-border-opacity))",
+    background: "var(--tq-overlay-soft)",
+    borderColor: "var(--tq-border-hairline)",
   } as const;
   const iconSize = compact ? 14 : 16;
   const inputDims = compact
@@ -281,8 +281,8 @@ export function InlineStepper({
       className="flex items-center rounded-full border"
       style={{
         height: 22,
-        background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
-        borderColor: "rgba(255, 255, 255, var(--tq-border-opacity))",
+        background: "var(--tq-overlay-soft)",
+        borderColor: "var(--tq-border-hairline)",
       }}
     >
       <button
@@ -399,10 +399,10 @@ function SizeChoice({
       aria-pressed={active}
       className=" flex h-11 items-center justify-between gap-3 rounded-xl border px-3 transition-colors"
       style={{
-        background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
+        background: "var(--tq-overlay-soft)",
         borderColor: active
-          ? "rgba(255, 255, 255, 1)"
-          : "rgba(255, 255, 255, var(--tq-border-opacity))",
+          ? "var(--tq-text-primary)"
+          : "var(--tq-border-hairline)",
       }}
     >
       <span className="flex flex-col items-start leading-tight">

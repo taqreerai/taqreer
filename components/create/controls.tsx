@@ -229,10 +229,10 @@ export function Pill({
           : "text-foreground/60 hover:text-foreground"
       }`}
       style={{
-        background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
+        background: "var(--tq-overlay-soft)",
         borderColor: active
           ? "rgba(255, 255, 255, 1)"
-          : "rgba(255, 255, 255, var(--tq-border-opacity))",
+          : "var(--tq-border-hairline)",
       }}
     >
       {children}
@@ -314,7 +314,7 @@ export function PositionDropdown({
           open ? "border-foreground/40" : "border-foreground/15 hover:border-foreground/30"
         }`}
         style={{
-          background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
+          background: "var(--tq-overlay-soft)",
         }}
       >
         <span
@@ -366,7 +366,7 @@ export function PositionDropdown({
                       : "border-foreground/15 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
                   }`}
                   style={{
-                    background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
+                    background: "var(--tq-overlay-soft)",
                   }}
                 >
                   <span
@@ -442,10 +442,10 @@ export function PositionPicker({
               active ? "text-foreground" : "text-foreground/60 hover:text-foreground"
             }`}
             style={{
-              background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
+              background: "var(--tq-overlay-soft)",
               borderColor: active
                 ? "rgba(255, 255, 255, 1)"
-                : "rgba(255, 255, 255, var(--tq-border-opacity))",
+                : "var(--tq-border-hairline)",
             }}
           >
             <span
@@ -675,7 +675,7 @@ export function ExclusionDropdown({
           open ? "border-foreground/40" : "border-foreground/15 hover:border-foreground/30"
         }`}
         style={{
-          background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
+          background: "var(--tq-overlay-soft)",
         }}
       >
         <span

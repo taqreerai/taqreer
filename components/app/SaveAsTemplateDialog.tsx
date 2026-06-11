@@ -375,8 +375,8 @@ function BrandPreview({
         border: `1px solid color-mix(in srgb, ${preview.brand.text} 12%, transparent)`,
       }
     : {
-        background: "rgba(255, 255, 255, 0.03)",
-        border: "1px solid rgba(255, 255, 255, 0.06)",
+        background: "var(--tq-overlay-soft)",
+        border: "1px solid var(--tq-border-hairline)",
       };
 
   return (
