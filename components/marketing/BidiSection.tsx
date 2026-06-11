@@ -38,7 +38,7 @@ export function BidiSection() {
           transition={{ duration: 0.3, ease: "easeOut" }}
           className="text-lg leading-relaxed text-muted"
         >
-          <span className="mt-5 block">{b.subtitle}</span>
+          <span className="mt-5 block whitespace-pre-line">{b.subtitle}</span>
         </motion.p>
       </ScrollReveal>
 
