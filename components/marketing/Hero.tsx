@@ -82,7 +82,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
               <span className="hero-stat-pill flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium">
                 <span
                   className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: "var(--tq-violet)" }}
+                  style={{ background: "#fff" }}
                 />
                 {dict.landing.hero.statusCount.replace("{count}", String(formattedCount))}
               </span>

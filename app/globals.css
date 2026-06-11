@@ -351,6 +351,11 @@
      .light swaps to dark dots so the texture stays visible on white. */
   --tq-dot: rgba(236, 238, 245, 0.14);
 
+  /* Monochrome-logo invert — logos are normalised to a single colour via
+     `brightness(0) invert(var(--logo-invert))`: white on dark (1), black on
+     light (0) so a mono logo stays visible on either card. */
+  --logo-invert: 1;
+
   /* 9. Background Blobs */
   --bg-blob-opacity-1: 0.28;
   --bg-blob-opacity-2: 0.22;
@@ -379,13 +384,22 @@
   --tq-dot:             rgba(0, 0, 0, 0.14);
   --tq-studio-dot:      rgba(0, 0, 0, 0.07);
   --tq-bg-strong:       rgba(0, 0, 0, 0.04);
+  /* Accent → brand BLUE in light mode (user direction): the solid purple accent
+     (buttons / toggles / active states / sliders) becomes blue. The aliases
+     --tq-violet / --tq-blue / --tq-lavender are `var(--tq-purple)`, so they
+     follow automatically; the *-rgb literals (used in rgba()) are flipped too. */
+  --tq-purple:       #370BF4;
+  --tq-purple-hover: #2A06C7;
+  --tq-purple-rgb:   55, 11, 244;
+  --tq-violet-rgb:   55, 11, 244;
+  --tq-blue-rgb:     55, 11, 244;
+  --logo-invert:     0;
 }
 
-/* Tooltips stay a DARK chip in both themes (inverted on light) — a white-on-
-   white tooltip is invisible. Keep the dark surface + white text on .light. */
-:root.light .sidebar-tooltip {
-  background: oklch(0.205 0 0);
-  color: #fff;
+/* Monochrome logo (brand-kit + flow-card uploads) — flips white↔black with the
+   theme so it reads on either card surface. */
+.logo-monochrome {
+  filter: brightness(0) invert(var(--logo-invert));
 }
 
 /* ─── Global cursor defaults ─── */
@@ -1059,6 +1073,10 @@ html.app-shell-scroll body {
    idle — the drift continues uninterrupted, only the visual surface
    transitions from "ring-only" to "full fill". */
 .btn-gradient-anim:hover {
+  /* The hover fill is a dark mesh (#3300FF base) in BOTH themes, so the text
+     must be white on hover — even in light, where the rest text is dark. This
+     keeps the hover identical to the dark version. */
+  color: #fff;
   /* Dark #27074C blob + solid base dropped — bright blobs over the
      deepest brand colour (#3300FF) for the CTA backdrop. */
   background:
@@ -1731,8 +1749,8 @@ html.app-shell-scroll body {
    2026-06-09). */
 .sidebar-tooltip {
   background: var(--tq-surface);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: white;
+  border: 1px solid var(--tq-border-hairline);
+  color: var(--tq-text-primary);
   font-size: 12px;
   border-radius: 8px;
   padding: 6px 12px;

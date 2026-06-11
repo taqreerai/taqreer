@@ -539,7 +539,7 @@ export function SlideNavSidebar({
                   as a perfect circle; two-digit counts widen via
                   `min-w-4` instead of stretching the height. */}
               {item.kind === "slide" && item.commentCount > 0 ? (
-                <div className="pointer-events-none absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground shadow">
+                <div className="pointer-events-none absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
                   {item.commentCount}
                 </div>
               ) : null}
@@ -552,7 +552,7 @@ export function SlideNavSidebar({
                   width stable as the number grows from 1 → 12. */}
               <span
                 dir="ltr"
-                className="pointer-events-none absolute bottom-1 right-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none tabular-nums text-foreground"
+                className="pointer-events-none absolute bottom-1 right-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none tabular-nums text-white"
               >
                 {String(item.index + 1).padStart(2, "0")}
               </span>

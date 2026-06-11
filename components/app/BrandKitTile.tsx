@@ -155,7 +155,7 @@ export function BrandKitTile({
           <img
             src={kit.logoDisplayUrl}
             alt=""
-            className="h-16 w-auto max-w-[70%] object-contain [filter:brightness(0)_invert(1)]"
+            className="h-16 w-auto max-w-[70%] object-contain logo-monochrome"
             loading="lazy"
             decoding="async"
           />

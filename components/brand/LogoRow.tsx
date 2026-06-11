@@ -86,7 +86,7 @@ export function LogoRow({
           <img
             src={activeUrl}
             alt={dict.flows.brand.logoPreview}
-            className="max-h-[80%] max-w-[80%] object-contain [filter:brightness(0)_invert(1)]"
+            className="max-h-[80%] max-w-[80%] object-contain logo-monochrome"
           />
           <button
             type="button"

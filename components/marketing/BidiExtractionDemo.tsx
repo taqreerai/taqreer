@@ -58,7 +58,7 @@ export function BidiExtractionDemo({
             centred (lab). */}
         <div
           dir="ltr"
-          className={`absolute top-1/2 z-10 w-[min(540px,86%)] -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 ${
+          className={`absolute top-1/2 z-10 w-[min(540px,86%)] -translate-y-1/2 overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)] ${
             align === "left"
               ? "left-0"
               : align === "right"
@@ -76,7 +76,7 @@ export function BidiExtractionDemo({
             <div className="relative flex h-full flex-col p-6" dir={dir}>
               <div className="flex items-center gap-2">
                 <span className="h-4 w-1.5 rounded-full bg-[var(--tq-violet)]" />
-                <span className="text-[14px] font-semibold text-white/90">
+                <span className="text-[14px] font-semibold text-foreground/90">
                   {b.slideHeader}
                 </span>
               </div>
@@ -85,7 +85,7 @@ export function BidiExtractionDemo({
                 <Sentence fixed={fixed} />
               </div>
 
-              <div className="text-end text-[11px] font-medium tracking-wide text-white/20">
+              <div className="text-end text-[11px] font-medium tracking-wide text-foreground/20">
                 01 / 12
               </div>
             </div>
@@ -117,7 +117,7 @@ export function BidiExtractionDemo({
           `fixed` instead, so this is hidden via `hideToggle`). */}
       {!hideToggle && (
         <div className="flex items-center gap-4">
-          <span className="text-[15px] font-medium text-white/65">
+          <span className="text-[15px] font-medium text-foreground/65">
             {b.labLabel}
           </span>
           <SegmentedToggle
@@ -138,7 +138,7 @@ export function BidiExtractionDemo({
 
 function TitleBar({ title }: { title: string }) {
   return (
-    <div className="relative flex h-11 items-center border-b border-white/[0.06] bg-[var(--tq-card)] px-4">
+    <div className="relative flex h-11 items-center border-b border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-4">
       {/* macOS traffic lights (universal OS chrome colors, like Hero.tsx). */}
       <div className="flex items-center gap-2">
         <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
@@ -148,7 +148,7 @@ function TitleBar({ title }: { title: string }) {
       <span className="absolute left-1/2 -translate-x-1/2 text-[13px] font-medium text-[var(--tq-text-muted)]">
         {title}
       </span>
-      <div className="ml-auto flex items-center gap-3 text-white/25">
+      <div className="ml-auto flex items-center gap-3 text-foreground/25">
         <Glyph d="M4 12h16M4 6h16M4 18h16" />
         <Glyph d="M12 5v14M5 12h14" />
       </div>

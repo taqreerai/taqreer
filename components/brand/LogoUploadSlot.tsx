@@ -205,7 +205,7 @@ export function LogoUploadSlot({
         // polychrome) to solid white. See file header for the
         // rationale — preview only, saved bytes untouched. max-w pins
         // wide logos so they don't crowd the close button.
-        className="max-w-[140px] object-contain [filter:brightness(0)_invert(1)]"
+        className="max-w-[140px] object-contain logo-monochrome"
         style={{ maxHeight: logoMaxHeightPx }}
       />
       <button

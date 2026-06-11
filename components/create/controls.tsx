@@ -527,10 +527,12 @@ export function Toggle({
           dir === "rtl" ? { right: value ? 22 : 2 } : { left: value ? 22 : 2 }
         }
         transition={{ type: "spring", stiffness: 500, damping: 35 }}
-        // White knob in both themes (the physical switch metaphor) — on the
-        // purple ON track and the faint OFF track it must read as a light disc,
-        // not flip dark. Shadow lifts it off the light-mode OFF track.
-        className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm"
+        // ON: white disc on the coloured (accent) track. OFF: `bg-foreground`
+        // (white in dark, dark in light) so it contrasts with the faint OFF
+        // track in each theme. Shadow lifts it in light.
+        className={`absolute top-0.5 h-5 w-5 rounded-full shadow-sm ${
+          value ? "bg-white" : "bg-foreground"
+        }`}
       />
     </button>
   );
