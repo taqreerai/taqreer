@@ -1924,6 +1924,21 @@ html.app-shell-scroll body {
   position: relative;
   min-height: 100vh;
   isolation: isolate;
+  /* The studio editor stays DARK in both themes — the slide-editing workspace is
+     a focused dark canvas (like most editors), and it also hosts theme-
+     independent in-slide popovers. Re-pin the neutral tokens to their dark
+     values so `.light` doesn't bleed into the editor chrome (white-on-white). */
+  --tq-bg: #0A0A0A;
+  --tq-panel: #161616;
+  --tq-card: #111111;
+  --tq-surface: oklch(0.205 0 0);
+  --tq-text-primary: #ffffff;
+  --tq-text-muted: #b4b4b4;
+  --tq-border-hairline: rgba(255, 255, 255, 0.1);
+  --tq-overlay-soft: rgba(255, 255, 255, 0.05);
+  --tq-overlay: rgba(255, 255, 255, 0.10);
+  --tq-overlay-strong: rgba(255, 255, 255, 0.18);
+  color-scheme: dark;
   /* Match the dashboard content-panel surface (#161616) rather than the darker
      gutter, so the editor reads as the same shell colour as the rest of the app
      (user direction 2026-06-09). */
