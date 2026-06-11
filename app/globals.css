@@ -377,6 +377,8 @@
   --tq-overlay:         rgba(0, 0, 0, 0.06);
   --tq-overlay-strong:  rgba(0, 0, 0, 0.10);
   --tq-dot:             rgba(0, 0, 0, 0.14);
+  --tq-studio-dot:      rgba(0, 0, 0, 0.07);
+  --tq-bg-strong:       rgba(0, 0, 0, 0.04);
 }
 
 /* Tooltips stay a DARK chip in both themes (inverted on light) — a white-on-
@@ -1251,10 +1253,11 @@ html.app-shell-scroll body {
   justify-content: center;
   gap: 0.375rem;
   /* §21: solid subtle gray surface (was a transparent ghost outline) so
-     secondary buttons read as filled chips like the reference. */
-  background: rgba(255, 255, 255, 0.06);
+     secondary buttons read as filled chips like the reference. Flip-aware so
+     the fill + text contrast in light too (were hardcoded white). */
+  background: var(--tq-overlay-soft);
   border: 1px solid var(--tq-border-hairline);
-  color: rgba(255, 255, 255, 0.75);
+  color: color-mix(in oklab, var(--tq-text-primary) 78%, transparent);
   border-radius: 9999px;
   padding: 0.375rem 0.75rem;
   font-size: 0.75rem;
@@ -1939,21 +1942,6 @@ html.app-shell-scroll body {
   position: relative;
   min-height: 100vh;
   isolation: isolate;
-  /* The studio editor stays DARK in both themes — the slide-editing workspace is
-     a focused dark canvas (like most editors), and it also hosts theme-
-     independent in-slide popovers. Re-pin the neutral tokens to their dark
-     values so `.light` doesn't bleed into the editor chrome (white-on-white). */
-  --tq-bg: #0A0A0A;
-  --tq-panel: #161616;
-  --tq-card: #111111;
-  --tq-surface: oklch(0.205 0 0);
-  --tq-text-primary: #ffffff;
-  --tq-text-muted: #b4b4b4;
-  --tq-border-hairline: rgba(255, 255, 255, 0.1);
-  --tq-overlay-soft: rgba(255, 255, 255, 0.05);
-  --tq-overlay: rgba(255, 255, 255, 0.10);
-  --tq-overlay-strong: rgba(255, 255, 255, 0.18);
-  color-scheme: dark;
   /* Match the dashboard content-panel surface (#161616) rather than the darker
      gutter, so the editor reads as the same shell colour as the rest of the app
      (user direction 2026-06-09). */

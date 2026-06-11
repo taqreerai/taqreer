@@ -3369,7 +3369,7 @@ export function DeckView({
           <span className="material-symbols-outlined mb-4 block text-[42px] text-red-400">
             warning
           </span>
-          <h1 className="mb-2 text-[26px] font-bold text-white">{dict.editor.screen.createFailedTitle}</h1>
+          <h1 className="mb-2 text-[26px] font-bold text-foreground">{dict.editor.screen.createFailedTitle}</h1>
           <p className="text-muted mb-6">
             {retryError || dict.editor.errors.designError}
           </p>
@@ -3381,7 +3381,7 @@ export function DeckView({
               className="btn-gradient inline-flex items-center justify-center gap-2 px-6 py-3 disabled:opacity-60"
             >
               {retrying ? (
-                <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+                <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
               ) : null}
               {dict.editor.screen.tryAgain}
             </button>
@@ -3417,10 +3417,10 @@ export function DeckView({
         className="page-container flex min-h-[calc(100vh-120px)] items-center justify-center"
       >
         <div className="surface-card mx-auto w-full max-w-xl rounded-2xl p-8 text-center">
-          <span className="material-symbols-outlined mb-4 block text-[42px] text-white/70">
+          <span className="material-symbols-outlined mb-4 block text-[42px] text-foreground/70">
             stop_circle
           </span>
-          <h1 className="mb-2 text-[26px] font-bold text-white">
+          <h1 className="mb-2 text-[26px] font-bold text-foreground">
             {dict.editor.screen.cancelledTitle}
           </h1>
           <p className="text-muted mb-6">
@@ -4080,13 +4080,13 @@ export function DeckView({
               ) : (
                 <div
                   dir={dir}
-                  className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-white"
+                  className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-foreground"
                 >
                   <h1 className="font-headline-lg text-[28px] font-bold">
                     {dict.editor.screen.designing}
                   </h1>
                   <div className="text-muted flex items-center justify-center gap-3 text-sm">
-                    <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+                    <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
                     <span>
                       {progress?.stage === "thinking"
                         ? dict.editor.progress.thinking
@@ -4121,7 +4121,7 @@ export function DeckView({
                     <p className="text-muted mt-2 text-xs">{percent}%</p>
                   </div>
                   {isSlow && (
-                    <span className="text-[11px] leading-relaxed text-white/60">
+                    <span className="text-[11px] leading-relaxed text-foreground/60">
                       {slowCaption}
                     </span>
                   )}
@@ -4191,7 +4191,7 @@ export function DeckView({
               // ellipsis read correctly in both directions (the overlay
               // otherwise inherits the canvas row's dir="ltr").
               dir={dir}
-              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white"
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-foreground"
               style={{ backgroundColor: "var(--tq-bg-dim)" }}
             >
               {/* Branded paragraph-write animation. Replaces the legacy
@@ -4201,7 +4201,7 @@ export function DeckView({
               <ParagraphWriteIcon
                 rtl={(manifest?.language ?? "ar") !== "en"}
                 size={32}
-                className="text-white/70"
+                className="text-foreground/70"
               />
               <span className="text-xs font-medium">
                 {dict.editor.screen.redesigning}

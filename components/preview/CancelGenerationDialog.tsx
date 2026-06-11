@@ -102,10 +102,10 @@ export function CancelGenerationDialog({
               onClick={(e) => e.stopPropagation()}
               className="surface-modal pointer-events-auto flex w-[min(100vw-24px,440px)] flex-col overflow-hidden rounded-2xl"
             >
-              <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+              <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
                 <h2
                   id="cancel-gen-title"
-                  className="text-base font-semibold text-white"
+                  className="text-base font-semibold text-foreground"
                 >
                   {dict.editor.cancelDialog.title}
                 </h2>
@@ -114,7 +114,7 @@ export function CancelGenerationDialog({
                   onClick={onClose}
                   disabled={busy}
                   aria-label={dict.editor.cancelDialog.close}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span
                     className="material-symbols-outlined"
@@ -126,17 +126,17 @@ export function CancelGenerationDialog({
               </header>
 
               <div className="px-5 py-5">
-                <p className="text-sm leading-relaxed text-white/80">
+                <p className="text-sm leading-relaxed text-foreground/80">
                   {dict.editor.cancelDialog.body}
                 </p>
               </div>
 
-              <footer className="flex items-center justify-end gap-2 border-t border-white/[0.08] px-5 py-3">
+              <footer className="flex items-center justify-end gap-2 border-t border-foreground/[0.08] px-5 py-3">
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={busy}
-                  className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white transition-colors hover:border-white/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full border border-foreground/15 bg-foreground/[0.04] px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {dict.editor.cancelDialog.continue}
                 </button>

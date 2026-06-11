@@ -176,8 +176,8 @@ export function HistoryPopover({
           className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
           style={{ top, bottom, left, width: POPOVER_WIDTH }}
         >
-          <header className="border-b border-white/[0.08] px-3 py-2">
-            <p className="text-xs font-semibold text-white">
+          <header className="border-b border-foreground/[0.08] px-3 py-2">
+            <p className="text-xs font-semibold text-foreground">
               {dict.editor.history.title}
             </p>
           </header>
@@ -201,7 +201,7 @@ export function HistoryPopover({
               ))}
             </AnimatePresence>
             {rest.length === 0 ? (
-              <li className="px-4 py-3 text-xs text-white/50">
+              <li className="px-4 py-3 text-xs text-foreground/50">
                 {genesis
                   ? dict.editor.history.noEditsYet
                   : dict.editor.history.noPreviousVersions}
@@ -239,15 +239,15 @@ function OriginalRow({
 }) {
   const dict = useDict();
   return (
-    <div className="border-t border-white/[0.08]">
+    <div className="border-t border-foreground/[0.08]">
       <button
         type="button"
         onClick={disabled || isCurrent ? undefined : onClick}
         disabled={disabled || isCurrent}
         className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-start transition-colors ${
           isCurrent
-            ? "text-white"
-            : "text-white/80 hover:bg-white/[0.04] hover:text-white"
+            ? "text-foreground"
+            : "text-foreground/80 hover:bg-foreground/[0.04] hover:text-foreground"
         } ${disabled && !isCurrent ? "cursor-wait opacity-60" : ""}`}
       >
         <span className="flex items-center gap-2">
@@ -261,16 +261,16 @@ function OriginalRow({
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden
-            className="shrink-0 text-white/55"
+            className="shrink-0 text-foreground/55"
           >
             <path d="M3 3v5h5" />
             <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
           </svg>
           <span className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-white">
+            <span className="text-xs font-medium text-foreground">
               {dict.editor.history.originalVersion}
             </span>
-            <span className="text-[10px] text-white/50">
+            <span className="text-[10px] text-foreground/50">
               {dict.editor.history.firstGenerated}
             </span>
           </span>
@@ -306,15 +306,15 @@ function HistoryItem({
       disabled={disabled || isCurrent}
       className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-start transition-colors ${
         isCurrent
-          ? "bg-white/[0.06] text-white"
-          : "text-white/80 hover:bg-white/[0.04] hover:text-white"
+          ? "bg-foreground/[0.06] text-foreground"
+          : "text-foreground/80 hover:bg-foreground/[0.04] hover:text-foreground"
       } ${disabled && !isCurrent ? "cursor-wait opacity-60" : ""}`}
     >
       <span className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-white">
+        <span className="text-xs font-medium text-foreground">
           {dict.editor.history.version.replace("{n}", String(number))}
         </span>
-        <span className="text-[10px] text-white/50">{relative}</span>
+        <span className="text-[10px] text-foreground/50">{relative}</span>
       </span>
       {isCurrent ? <CurrentBadge /> : null}
     </button>
@@ -326,7 +326,7 @@ function CurrentBadge() {
   const dict = useDict();
   return (
     <span
-      className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-white"
+      className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-foreground"
       style={{ background: "var(--tq-violet)" }}
     >
       {dict.editor.history.current}

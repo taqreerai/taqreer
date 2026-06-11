@@ -213,13 +213,13 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
           else if (e.key === "ArrowUp") { e.preventDefault(); onChange(clamp(value + 1)); }
           else if (e.key === "ArrowDown") { e.preventDefault(); onChange(clamp(value - 1)); }
         }}
-        className="no-spinner w-[26px] border-none bg-transparent text-center text-[13px] tabular-nums text-white outline-none"
+        className="no-spinner w-[26px] border-none bg-transparent text-center text-[13px] tabular-nums text-foreground outline-none"
       />
       <div className="flex flex-col">
         <button
           type="button"
           aria-label={t.bigger}
-          className="flex h-[12px] w-[15px] items-center justify-center text-white/45 transition-colors hover:text-white"
+          className="flex h-[12px] w-[15px] items-center justify-center text-foreground/45 transition-colors hover:text-foreground"
           onClick={() => onChange(clamp(value + 1))}
         >
           <Chevron up />
@@ -227,7 +227,7 @@ function SizeStepper({ value, onChange }: { value: number; onChange: (n: number)
         <button
           type="button"
           aria-label={t.smaller}
-          className="flex h-[12px] w-[15px] items-center justify-center text-white/45 transition-colors hover:text-white"
+          className="flex h-[12px] w-[15px] items-center justify-center text-foreground/45 transition-colors hover:text-foreground"
           onClick={() => onChange(clamp(value - 1))}
         >
           <Chevron />
@@ -851,7 +851,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
             aria-label={t.replaceImage}
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white disabled:opacity-60"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-foreground/85 transition-colors hover:text-foreground disabled:opacity-60"
             style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
           >
             <ReplaceIcon />
@@ -880,7 +880,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
                   setMoreOpen(false);
                   setFontOpen(false);
                 }}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-white/85 transition-colors hover:text-white"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-foreground/85 transition-colors hover:text-foreground"
                 style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
               >
                 <RegenImageIcon />
@@ -891,7 +891,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
                   ref={regenPopoverRef}
                   dir={dir}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="surface-popover absolute z-20 rounded-xl p-2.5 text-white"
+                  className="surface-popover absolute z-20 rounded-xl p-2.5 text-foreground"
                   style={{
                     width: 300,
                     right: 0,
@@ -915,16 +915,16 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
                       }
                     }}
                     placeholder={t.regenPlaceholder}
-                    className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] leading-relaxed text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/40"
+                    className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/35 focus:border-foreground/40"
                     style={{ borderColor: "var(--tq-border-hairline)", background: "var(--tq-surface)" }}
                   />
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-white/40">{t.regenHint}</span>
+                    <span className="text-[10px] text-foreground/40">{t.regenHint}</span>
                     <button
                       type="button"
                       onClick={handleRegenConfirm}
                       disabled={!regenPrompt.trim()}
-                      className="btn-gradient-anim inline-flex h-7 items-center rounded-full px-3.5 text-[12px] font-medium text-white disabled:opacity-40"
+                      className="btn-gradient-anim inline-flex h-7 items-center rounded-full px-3.5 text-[12px] font-medium text-foreground disabled:opacity-40"
                     >
                       {t.generate}
                     </button>
@@ -1039,7 +1039,7 @@ function OpacityControl({ value, onChange }: { value: number; onChange: (pct: nu
         className="h-1.5 w-[48px] cursor-pointer"
         style={{ accentColor: "var(--tq-violet)" }}
       />
-      <span className="w-[34px] shrink-0 text-right text-[11px] tabular-nums text-white">
+      <span className="w-[34px] shrink-0 text-right text-[11px] tabular-nums text-foreground">
         {value}%
       </span>
     </div>
@@ -1065,7 +1065,7 @@ function Btn({
       aria-pressed={active}
       onClick={onClick}
       className={`inline-flex h-8 items-center justify-center rounded-md px-1.5 transition-colors ${
-        active ? "text-white" : "text-white/55 hover:text-white"
+        active ? "text-foreground" : "text-foreground/55 hover:text-foreground"
       }`}
     >
       {children}

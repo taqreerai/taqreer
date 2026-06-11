@@ -118,8 +118,8 @@ function ToolButton({
   // Bare icon buttons (§16): no ring, no background chip. State reads purely
   // from icon brightness — active/hover = white, idle = white/60.
   const colorClasses = active
-    ? "text-white"
-    : "text-white/60 hover:text-white";
+    ? "text-foreground"
+    : "text-foreground/60 hover:text-foreground";
   return (
     <div className="group relative">
       <button
@@ -159,7 +159,7 @@ function ToolButton({
         {iconNode ? (
           iconNode
         ) : running ? (
-          <span className="spinner h-4 w-4 rounded-full border-2 border-white/20 border-t-white" />
+          <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
         ) : (
           <span
             className="material-symbols-outlined text-[18px]"
@@ -185,7 +185,7 @@ function ToolButton({
             Brand `--tq-blue` is violet-leaning and was repeatedly
             flagged as not reading as blue at this badge size. */}
         {countBadge && countBadge > 0 ? (
-          <span className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
+          <span className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground shadow">
             {countBadge}
           </span>
         ) : null}
@@ -207,7 +207,7 @@ function ToolButton({
           so `group-hover` can animate the slide. */}
       <div
         dir="auto"
-        className={`pointer-events-none absolute z-50 whitespace-nowrap rounded-lg border border-white/[0.12] bg-[var(--tq-surface)] px-3 py-1.5 text-xs text-white opacity-0 transition-all duration-200 group-hover:opacity-100 ${
+        className={`pointer-events-none absolute z-50 whitespace-nowrap rounded-lg border border-foreground/[0.12] bg-[var(--tq-surface)] px-3 py-1.5 text-xs text-foreground opacity-0 transition-all duration-200 group-hover:opacity-100 ${
           tooltipHorizontal
             ? // Bottom bar → pop ABOVE the button, centered, sliding up.
               "bottom-full left-1/2 mb-2.5 -translate-x-1/2 translate-y-1.5 group-hover:translate-y-0"
@@ -232,7 +232,7 @@ function ToolbarDivider({ horizontal = false }: { horizontal?: boolean }) {
     <div
       aria-hidden
       className={
-        horizontal ? "mx-2 h-6 w-px bg-white/[0.12]" : "my-2 h-px w-6 bg-white/[0.12]"
+        horizontal ? "mx-2 h-6 w-px bg-foreground/[0.12]" : "my-2 h-px w-6 bg-foreground/[0.12]"
       }
     />
   );
@@ -629,9 +629,9 @@ export function PreviewActionBar({
                   {aiBusy ? (
                     // Submitting — collapse to a compact running label, the mesh
                     // ring spinning, until the regen settles (§17 states).
-                    <div className="flex items-center gap-2 px-2 text-xs text-white/80">
+                    <div className="flex items-center gap-2 px-2 text-xs text-foreground/80">
                       <span className="btn-gradient-anim flex h-5 w-5 items-center justify-center rounded-full">
-                        <span className="spinner h-3 w-3 rounded-full border-2 border-white/30 border-t-white" />
+                        <span className="spinner h-3 w-3 rounded-full border-2 border-foreground/30 border-t-white" />
                       </span>
                       {dict.editor.toolbar.applying}
                     </div>
@@ -658,7 +658,7 @@ export function PreviewActionBar({
                             : dict.editor.toolbar.aiPlaceholderNoRegion
                         }
                         disabled={focusedSlideLocked}
-                        className="w-[250px] bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/35 disabled:opacity-50"
+                        className="w-[250px] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50"
                       />
                       {/* Send (توليد) — the one mesh button; needs an instruction. */}
                       <button
@@ -835,7 +835,7 @@ export function PreviewActionBar({
           className={`rounded-lg px-3 py-1.5 text-xs ${
             visibleMessage.kind === "error"
               ? "bg-red-500/10 text-red-300"
-              : "bg-white/5 text-muted"
+              : "bg-foreground/5 text-muted"
           }`}
         >
           {visibleMessage.text}

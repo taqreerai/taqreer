@@ -242,9 +242,9 @@ export function LayersPanel({
         borderColor: "var(--tq-border-hairline)",
       }}
     >
-      <header className="border-b border-white/[0.08] px-1 pb-3 pt-1">
+      <header className="border-b border-foreground/[0.08] px-1 pb-3 pt-1">
         <p className="text-muted text-[10px] uppercase tracking-widest">{countLabel}</p>
-        <h2 className="mt-1 text-sm font-semibold text-white">{t.title}</h2>
+        <h2 className="mt-1 text-sm font-semibold text-foreground">{t.title}</h2>
       </header>
 
       {order.length === 0 && !bgNode ? (
@@ -254,10 +254,10 @@ export function LayersPanel({
           // paragraph-write animation the streaming slide thumbnails use, so the
           // empty Layers panel reads as "designing…" rather than "nothing here".
           <div className="flex flex-1 items-center justify-center py-8">
-            <ParagraphWriteIcon rtl={dir === "rtl"} size={28} className="text-white/40" />
+            <ParagraphWriteIcon rtl={dir === "rtl"} size={28} className="text-foreground/40" />
           </div>
         ) : (
-          <p className="px-2 py-4 text-[12px] text-white/40">{t.none}</p>
+          <p className="px-2 py-4 text-[12px] text-foreground/40">{t.none}</p>
         )
       ) : (
         <>
@@ -293,8 +293,8 @@ export function LayersPanel({
               draggable. Its colour is changed inline from the swatch on the
               trailing (left in RTL) edge; no canvas pill. */}
           {bgNode && (
-            <div className="mt-1 shrink-0 border-t border-white/[0.06] pt-1">
-              <div className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-white/70">
+            <div className="mt-1 shrink-0 border-t border-foreground/[0.06] pt-1">
+              <div className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-foreground/70">
                 <LayerIcon kind="background" active={false} />
                 <span className="min-w-0 flex-1 truncate text-start">
                   {displayLabel(bgNode, dict)}
@@ -377,15 +377,15 @@ function LayerRow({
         dragging
           ? "is-dragging"
           : active
-            ? "bg-white/[0.10]"
-            : "hover:bg-white/[0.05]"
+            ? "bg-foreground/[0.10]"
+            : "hover:bg-foreground/[0.05]"
       }`}
     >
       <button
         type="button"
         onClick={() => onSelect(node.el)}
         className={`flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-start text-[13px] transition-colors ${
-          active ? "text-white" : "text-white/70 group-hover/row:text-white"
+          active ? "text-foreground" : "text-foreground/70 group-hover/row:text-foreground"
         }`}
       >
         <LayerIcon kind={node.kind} active={active} />
@@ -411,7 +411,7 @@ function LayerRow({
             onMove(1);
           }
         }}
-        className="flex shrink-0 cursor-grab touch-none items-center rounded px-1.5 py-2 text-white/25 opacity-0 outline-none transition-opacity hover:text-white/60 focus-visible:opacity-100 focus-visible:text-white/70 focus-visible:ring-1 focus-visible:ring-white/40 group-hover/row:opacity-100 active:cursor-grabbing"
+        className="flex shrink-0 cursor-grab touch-none items-center rounded px-1.5 py-2 text-foreground/25 opacity-0 outline-none transition-opacity hover:text-foreground/60 focus-visible:opacity-100 focus-visible:text-foreground/70 focus-visible:ring-1 focus-visible:ring-white/40 group-hover/row:opacity-100 active:cursor-grabbing"
       >
         <GripIcon />
       </span>
@@ -420,7 +420,7 @@ function LayerRow({
 }
 
 function LayerIcon({ kind, active }: { kind: LayerNode["kind"]; active: boolean }) {
-  const cls = `shrink-0 ${active ? "text-white" : "text-white/45"}`;
+  const cls = `shrink-0 ${active ? "text-foreground" : "text-foreground/45"}`;
   if (kind === "image") {
     return (
       <svg className={cls} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

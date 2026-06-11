@@ -127,7 +127,7 @@ export function FontControl({
       >
         {open ? (
           <div dir={dir} className="flex items-center gap-1.5 px-2.5" style={{ width: WIDTH }}>
-            <SearchIcon className="shrink-0 text-white/40" />
+            <SearchIcon className="shrink-0 text-foreground/40" />
             <input
               ref={inputRef}
               dir={dir}
@@ -135,7 +135,7 @@ export function FontControl({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t.searchPlaceholder}
               aria-label={t.searchAria}
-              className="min-w-0 flex-1 bg-transparent text-start text-[13px] text-white outline-none placeholder:text-white/40"
+              className="min-w-0 flex-1 bg-transparent text-start text-[13px] text-foreground outline-none placeholder:text-foreground/40"
             />
           </div>
         ) : (
@@ -144,7 +144,7 @@ export function FontControl({
             type="button"
             aria-label={t.fontFamily.replace("{name}", label)}
             onClick={() => onOpenChange(true)}
-            className="flex h-full items-center gap-1 whitespace-nowrap px-2.5 text-[12px] text-white/85 transition-colors hover:text-white"
+            className="flex h-full items-center gap-1 whitespace-nowrap px-2.5 text-[12px] text-foreground/85 transition-colors hover:text-foreground"
           >
             <span className="max-w-[124px] truncate" dir="ltr">
               {label}
@@ -173,8 +173,8 @@ export function FontControl({
                 onClick={() => pick(null)}
                 className={`flex w-full items-center justify-between gap-2 px-3.5 py-2 text-[13px] transition-colors ${
                   currentFamily === null
-                    ? "text-white"
-                    : "text-white/70 hover:bg-white/[0.05] hover:text-white"
+                    ? "text-foreground"
+                    : "text-foreground/70 hover:bg-foreground/[0.05] hover:text-foreground"
                 }`}
               >
                 <span>{t.defaultFont}</span>
@@ -198,7 +198,7 @@ export function FontControl({
                 <FontRow key={r.f} entry={r} active={isActive(currentFamily, r.f)} onPick={pick} />
               ))
             ) : (
-              <li className="px-3.5 py-3 text-[12px] text-white/45">{t.noResults}</li>
+              <li className="px-3.5 py-3 text-[12px] text-foreground/45">{t.noResults}</li>
             )}
           </ul>
         </motion.div>
@@ -231,7 +231,7 @@ function FontRow({
         dir="ltr"
         onClick={() => onPick(entry.f)}
         className={`flex w-full items-center gap-2.5 px-3.5 py-[7px] text-left transition-colors ${
-          active ? "bg-white/[0.08] text-white" : "text-white/85 hover:bg-white/[0.05] hover:text-white"
+          active ? "bg-foreground/[0.08] text-foreground" : "text-foreground/85 hover:bg-foreground/[0.05] hover:text-foreground"
         }`}
       >
         <span className="flex w-4 shrink-0 justify-center">{active ? <CheckIcon /> : null}</span>
@@ -239,7 +239,7 @@ function FontRow({
           {entry.f}
         </span>
         {entry.a === 1 ? (
-          <span className="shrink-0 text-[16px] leading-tight text-white/45" dir="rtl" style={{ fontFamily: stack }}>
+          <span className="shrink-0 text-[16px] leading-tight text-foreground/45" dir="rtl" style={{ fontFamily: stack }}>
             {AR_SPECIMEN}
           </span>
         ) : null}
@@ -250,7 +250,7 @@ function FontRow({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <li className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wide text-white/35">
+    <li className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/35">
       {children}
     </li>
   );

@@ -198,7 +198,7 @@ function decorationOf(raw: string): string {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-      <span className="w-[64px] shrink-0 text-[12px] text-white/55">{label}</span>
+      <span className="w-[64px] shrink-0 text-[12px] text-foreground/55">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         {children}
       </div>
@@ -227,7 +227,7 @@ function Slider({
 }) {
   return (
     <>
-      <span className="w-[40px] shrink-0 text-right text-[12px] tabular-nums text-white">
+      <span className="w-[40px] shrink-0 text-right text-[12px] tabular-nums text-foreground">
         {value.toFixed(digits)}
         {unit}
       </span>
@@ -260,7 +260,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full cursor-pointer appearance-none rounded-md border px-2 py-1.5 text-[12px] text-white outline-none"
+      className="w-full cursor-pointer appearance-none rounded-md border px-2 py-1.5 text-[12px] text-foreground outline-none"
       style={{
         borderColor: "var(--tq-border-hairline)",
         background: "var(--tq-surface)",
@@ -297,7 +297,7 @@ function Seg({
             aria-pressed={active}
             onClick={() => onChange(o.value)}
             className={`inline-flex h-7 min-w-[26px] items-center justify-center rounded-md px-1 text-[12px] transition-colors ${
-              active ? "text-white" : "text-white/55 hover:text-white"
+              active ? "text-foreground" : "text-foreground/55 hover:text-foreground"
             }`}
             style={
               active

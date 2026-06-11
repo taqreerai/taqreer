@@ -80,23 +80,22 @@ export function CommentsPanel({
               right: mainSidebarWidth,
               width: COMMENTS_PANEL_WIDTH,
               background: "var(--tq-surface)",
-              borderLeftColor:
-                "rgba(255, 255, 255, var(--tq-border-opacity))",
+              borderLeftColor: "var(--tq-border-hairline)",
             }
       }
     >
       {/* Standalone-only header — in embedded mode the nav's tab bar is the
           header, so the title + close button are dropped. */}
       {embedded ? null : (
-        <header className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-3 px-1">
-          <p className="text-sm font-semibold text-white">
+        <header className="flex items-center justify-between gap-2 border-b border-foreground/[0.08] pb-3 px-1">
+          <p className="text-sm font-semibold text-foreground">
             {dict.editor.comments.title}
           </p>
           <button
             type="button"
             onClick={onClose}
             aria-label={dict.editor.comments.exitCommentMode}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
           >
             <span
               className="material-symbols-outlined"
@@ -114,15 +113,15 @@ export function CommentsPanel({
         {slideComments.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-2 text-center">
             <span
-              className="material-symbols-outlined text-white/30"
+              className="material-symbols-outlined text-foreground/30"
               style={{ fontSize: "32px" }}
             >
               comment
             </span>
-            <p className="text-xs text-white/50">
+            <p className="text-xs text-foreground/50">
               {dict.editor.comments.none}
             </p>
-            <p className="text-[10px] leading-relaxed text-white/30">
+            <p className="text-[10px] leading-relaxed text-foreground/30">
               {dict.editor.comments.drawHint}
             </p>
           </div>
@@ -131,7 +130,7 @@ export function CommentsPanel({
             {slideComments.map((c) => (
               <li
                 key={c.id}
-                className="rounded-md border border-white/10 bg-white/5 p-2.5"
+                className="rounded-md border border-foreground/10 bg-foreground/5 p-2.5"
               >
                 <CommentMeta
                   author={c.author}
@@ -144,7 +143,7 @@ export function CommentsPanel({
                   // misaligning the block against the RTL panel
                   // chrome. The Unicode BiDi engine still handles
                   // glyph order inside the line based on script.
-                  className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-white/90"
+                  className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-foreground/90"
                 >
                   {c.content}
                 </div>
@@ -160,7 +159,7 @@ export function CommentsPanel({
           Drafts persist regardless; the toolbar's regen button fires the
           partial regen. */}
       {embedded ? null : (
-        <div className="border-t border-white/[0.08] pt-3">
+        <div className="border-t border-foreground/[0.08] pt-3">
           <button
             type="button"
             onClick={onApply}
@@ -226,11 +225,11 @@ function CommentMeta({
             inside an RTL panel — exactly the misalignment users
             complained about. BiDi glyph order is still handled
             correctly by the parent's RTL context. */}
-        <span className="truncate text-[11px] font-medium leading-tight text-white">
+        <span className="truncate text-[11px] font-medium leading-tight text-foreground">
           {displayName}
         </span>
         <time
-          className="text-[10px] leading-tight text-white/40"
+          className="text-[10px] leading-tight text-foreground/40"
           dateTime={createdAt}
           title={new Date(createdAt).toLocaleString(intlLocale(locale))}
         >

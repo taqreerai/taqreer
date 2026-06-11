@@ -312,22 +312,22 @@ export function SlideNavSidebar({
           isSingle ? dict.editor.nav.slideOne : dict.editor.nav.slideMany
         }`;
         return title ? (
-          <header className="border-b border-white/[0.08] pb-3 px-1 pt-1">
+          <header className="border-b border-foreground/[0.08] pb-3 px-1 pt-1">
             <p
               dir="auto"
               className="text-muted text-[10px] tracking-widest uppercase"
             >
               {countLabel}
             </p>
-            <h1 className="mt-1 truncate text-sm font-semibold text-white">
+            <h1 className="mt-1 truncate text-sm font-semibold text-foreground">
               {title}
             </h1>
           </header>
         ) : (
-          <header className="flex items-center justify-between px-1 pt-1 pb-3 border-b border-white/[0.08]">
+          <header className="flex items-center justify-between px-1 pt-1 pb-3 border-b border-foreground/[0.08]">
             <span
               dir="auto"
-              className="text-xs font-semibold text-white/50"
+              className="text-xs font-semibold text-foreground/50"
             >
               {countLabel}
             </span>
@@ -426,7 +426,7 @@ export function SlideNavSidebar({
               >
                 {item.kind === "placeholder" ? (
                   <div
-                    className={`flex h-full w-full items-center justify-center bg-white/5 ${
+                    className={`flex h-full w-full items-center justify-center bg-foreground/5 ${
                       item.state === "pending" || item.state === "current"
                         ? "animate-pulse"
                         : ""
@@ -448,7 +448,7 @@ export function SlideNavSidebar({
                       // before the user notices; /enhance is the visible
                       // case (PDF reading + thinking-phase iteration push
                       // text streaming to a tight burst at the end).
-                      <span className="material-symbols-outlined text-white/60" style={{ fontSize: "18px" }}>
+                      <span className="material-symbols-outlined text-foreground/60" style={{ fontSize: "18px" }}>
                         check_circle
                       </span>
                     ) : item.state === "current" ? (
@@ -460,7 +460,7 @@ export function SlideNavSidebar({
                       <ParagraphWriteIcon
                         rtl={language === "ar"}
                         size={22}
-                        className="text-white/70"
+                        className="text-foreground/70"
                       />
                     ) : null}
                   </div>
@@ -500,7 +500,7 @@ export function SlideNavSidebar({
                   <ParagraphWriteIcon
                     rtl={language === "ar"}
                     size={20}
-                    className="text-white/70"
+                    className="text-foreground/70"
                   />
                 </div>
               ) : null}
@@ -514,7 +514,7 @@ export function SlideNavSidebar({
               {isLocked ? (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15">
                   <span
-                    className="material-symbols-outlined text-white drop-shadow-lg"
+                    className="material-symbols-outlined text-foreground drop-shadow-lg"
                     style={{ fontSize: 28 }}
                     aria-hidden
                   >
@@ -539,7 +539,7 @@ export function SlideNavSidebar({
                   as a perfect circle; two-digit counts widen via
                   `min-w-4` instead of stretching the height. */}
               {item.kind === "slide" && item.commentCount > 0 ? (
-                <div className="pointer-events-none absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
+                <div className="pointer-events-none absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground shadow">
                   {item.commentCount}
                 </div>
               ) : null}
@@ -552,7 +552,7 @@ export function SlideNavSidebar({
                   width stable as the number grows from 1 → 12. */}
               <span
                 dir="ltr"
-                className="pointer-events-none absolute bottom-1 right-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none tabular-nums text-white"
+                className="pointer-events-none absolute bottom-1 right-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none tabular-nums text-foreground"
               >
                 {String(item.index + 1).padStart(2, "0")}
               </span>
@@ -567,7 +567,7 @@ export function SlideNavSidebar({
           removed StudioHeader. Slides tab only; the parent gates content
           (owner / manifest ready). */}
       {actionsSlot && tab === "slides" ? (
-        <footer className="border-t border-white/[0.08] pt-3 px-1">
+        <footer className="border-t border-foreground/[0.08] pt-3 px-1">
           {actionsSlot}
         </footer>
       ) : null}
@@ -582,7 +582,7 @@ export function SlideNavSidebar({
         // (user: "remove the separator under export and share"); but when that
         // footer is absent (no actionsSlot — e.g. during generation / no
         // manifest), keep a top border so the pill doesn't float borderless.
-        <footer className={actionsSlot ? "pt-2 px-1" : "border-t border-white/[0.08] pt-3 px-1"}>
+        <footer className={actionsSlot ? "pt-2 px-1" : "border-t border-foreground/[0.08] pt-3 px-1"}>
           <button
             type="button"
             onClick={handleBulkClick}
@@ -612,7 +612,7 @@ export function SlideNavSidebar({
           deck-nav above. The actual confirm modal lives in DeckView
           to keep this component layout-only. */}
       {onCancelGeneration ? (
-        <footer className="border-t border-white/[0.08] pt-3 px-1">
+        <footer className="border-t border-foreground/[0.08] pt-3 px-1">
           <button
             type="button"
             onClick={onCancelGeneration}
