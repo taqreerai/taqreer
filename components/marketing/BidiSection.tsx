@@ -74,7 +74,7 @@ function InlineSwitch({
       className="relative mx-1 inline-block h-[0.72em] w-[1.4em] shrink-0 rounded-full transition-colors duration-300"
       style={{
         verticalAlign: "-0.06em",
-        background: on ? "var(--tq-gradient-brand)" : "var(--tq-card)",
+        background: on ? "var(--tq-gradient-brand)" : "#000",
         border: "1px solid var(--tq-border-hairline)",
         boxShadow: on ? "0 0 18px rgba(var(--tq-violet-rgb),0.5)" : "none",
       }}

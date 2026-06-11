@@ -1346,7 +1346,10 @@ html.app-shell-scroll body {
    `--tq-text-primary` is owned by the JSX (`nav-icon` colour swap)
    so this class only needs to paint the surface. */
 .nav-active {
-  background: rgba(255, 255, 255, calc(var(--tq-tint-opacity) * 2.6));
+  /* Theme-aware active fill: white-ish on dark, dark-ish on light (was a
+     hardcoded white rgba that vanished on the light sidebar). Stronger than the
+     hover overlay so active reads clearly above hover. */
+  background: var(--tq-overlay-strong);
   color: var(--tq-text-primary);
 }
 

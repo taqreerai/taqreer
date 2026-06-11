@@ -69,7 +69,7 @@ function SidebarNavLink({
           className="flex items-center justify-center w-[40px] h-[40px] flex-shrink-0 nav-icon transition-colors duration-200"
           style={{ color: isActive ? 'var(--tq-text-primary)' : 'var(--tq-muted)' }}
         >
-          <AnimatedIcon ref={iconRef} name={icon} size={16} />
+          <AnimatedIcon ref={iconRef} name={icon} size={18} />
         </div>
         <span className={`font-medium text-sm transition-all duration-300 ${
           isCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
@@ -124,6 +124,13 @@ export function Sidebar({
   useEffect(() => {
     setLight(document.documentElement.classList.contains("light"));
   }, []);
+  // Profile menu sub-view — the language picker is a "Language >" drilldown that
+  // swaps the menu body for a back header + the locale options. Reset to the main
+  // view whenever the menu closes so it always reopens at the top level.
+  const [langView, setLangView] = useState(false);
+  useEffect(() => {
+    if (!profileOpen) setLangView(false);
+  }, [profileOpen]);
   const toggleTheme = () => {
     const next = !light;
     setLight(next);
@@ -422,6 +429,7 @@ export function Sidebar({
             {profileOpen && dropdownPos && (
               <motion.div
                 ref={dropdownRef}
+                layout
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -447,103 +455,148 @@ export function Sidebar({
                 // button.
                 className="surface-menu rounded-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
               >
-                <div className="px-3 py-2">
-                  <p className="font-semibold text-foreground text-sm truncate">{name}</p>
-                  <p className="text-muted text-xs truncate">{email}</p>
-                </div>
-                <div className="divider-dark my-1" />
-
-                {/* ── Header chrome, relocated (§20) ──
-                    The dashboard header is hidden app-wide; its controls live
-                    here as menu rows. Action rows close the menu, then open
-                    their own (body-portalled) overlay. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    setNewProjectOpen(true);
-                  }}
-                  className="dropdown-item"
-                >
-                  <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                  <span>{dict.profileMenu.newProject}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    // Match the bell's "all-read on open" rule so the badge
-                    // clears the moment the list is surfaced.
-                    notificationStore.markAllRead();
-                    setNotificationsOpen(true);
-                  }}
-                  className="dropdown-item"
-                >
-                  <span className="material-symbols-outlined text-[18px]">notifications</span>
-                  <span>{dict.profileMenu.notifications}</span>
-                  {unread > 0 ? (
-                    <span className="ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground">
-                      {unreadLabel}
-                    </span>
-                  ) : null}
-                </button>
-
-                <div className="divider-dark my-1" />
-
-                {/* Theme toggle — flips the chrome theme in place (menu stays
-                    open so the colour change is visible). */}
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  aria-pressed={light}
-                  className="dropdown-item"
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {light ? "dark_mode" : "light_mode"}
-                  </span>
-                  <span>{dict.topBar.theme}</span>
-                </button>
-
-                {/* Language — one row per locale, leading check on the active
-                    one (same pattern as the LanguageMenu dropdown). */}
-                {locales.map((code) => (
-                  <button
-                    key={code}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={code === locale}
-                    onClick={() => chooseLocale(code)}
-                    className="dropdown-item"
+                <AnimatePresence mode="popLayout" initial={false}>
+                {langView ? (
+                  // ── Language sub-view (drilldown from the "Language >" row) ──
+                  <motion.div
+                    key="lang"
+                    initial={{ opacity: 0, x: dir === "rtl" ? -14 : 14 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: dir === "rtl" ? -14 : 14 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    <span
-                      className="material-symbols-outlined text-[18px]"
-                      style={{ opacity: code === locale ? 1 : 0 }}
-                      aria-hidden
+                    <button
+                      type="button"
+                      onClick={() => setLangView(false)}
+                      className="dropdown-item"
                     >
-                      check
-                    </span>
-                    <span>{code === "ar" ? dict.language.ar : dict.language.en}</span>
-                  </button>
-                ))}
+                      <span className="material-symbols-outlined text-[18px]">
+                        {dir === "rtl" ? "chevron_right" : "chevron_left"}
+                      </span>
+                      <span className="font-semibold">{dict.language.label}</span>
+                    </button>
+                    <div className="divider-dark my-1" />
+                    {locales.map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={code === locale}
+                        onClick={() => chooseLocale(code)}
+                        className="dropdown-item"
+                      >
+                        <span
+                          className="material-symbols-outlined text-[18px]"
+                          style={{ opacity: code === locale ? 1 : 0 }}
+                          aria-hidden
+                        >
+                          check
+                        </span>
+                        <span>{code === "ar" ? dict.language.ar : dict.language.en}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                ) : (
+                  // ── Main view ──
+                  <motion.div
+                    key="main"
+                    initial={{ opacity: 0, x: dir === "rtl" ? 14 : -14 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: dir === "rtl" ? 14 : -14 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <div className="px-3 py-2">
+                      <p className="font-semibold text-foreground text-sm truncate">{name}</p>
+                      <p className="text-muted text-xs truncate">{email}</p>
+                    </div>
+                    <div className="divider-dark my-1" />
 
-                <div className="divider-dark my-1" />
+                    {/* ── Header chrome, relocated (§20) ──
+                        The dashboard header is hidden app-wide; its controls live
+                        here as menu rows. Action rows close the menu, then open
+                        their own (body-portalled) overlay. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        setNewProjectOpen(true);
+                      }}
+                      className="dropdown-item"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                      <span>{dict.profileMenu.newProject}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        // Match the bell's "all-read on open" rule so the badge
+                        // clears the moment the list is surfaced.
+                        notificationStore.markAllRead();
+                        setNotificationsOpen(true);
+                      }}
+                      className="dropdown-item"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">notifications</span>
+                      <span>{dict.profileMenu.notifications}</span>
+                      {unread > 0 ? (
+                        <span className="ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground">
+                          {unreadLabel}
+                        </span>
+                      ) : null}
+                    </button>
 
-                <Link
-                  href={localizedHref("/settings", locale)}
-                  onClick={() => setProfileOpen(false)}
-                  className="dropdown-item"
-                >
-                  <span className="material-symbols-outlined text-[18px]">settings</span>
-                  <span>{dict.profileMenu.settings}</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="dropdown-item"
-                >
-                  <span className="material-symbols-outlined text-[18px]">logout</span>
-                  <span>{dict.profileMenu.signOut}</span>
-                </button>
+                    <div className="divider-dark my-1" />
+
+                    {/* Theme toggle — flips the chrome theme in place (menu stays
+                        open so the colour change is visible). */}
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      aria-pressed={light}
+                      className="dropdown-item"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        {light ? "dark_mode" : "light_mode"}
+                      </span>
+                      <span>{dict.topBar.theme}</span>
+                    </button>
+
+                    {/* Language — opens the locale sub-view (drilldown). */}
+                    <button
+                      type="button"
+                      onClick={() => setLangView(true)}
+                      aria-haspopup="menu"
+                      className="dropdown-item"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">translate</span>
+                      <span>{dict.language.label}</span>
+                      <span className="material-symbols-outlined text-[18px] ms-auto opacity-50">
+                        {dir === "rtl" ? "chevron_left" : "chevron_right"}
+                      </span>
+                    </button>
+
+                    <div className="divider-dark my-1" />
+
+                    <Link
+                      href={localizedHref("/settings", locale)}
+                      onClick={() => setProfileOpen(false)}
+                      className="dropdown-item"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">settings</span>
+                      <span>{dict.profileMenu.settings}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="dropdown-item"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">logout</span>
+                      <span>{dict.profileMenu.signOut}</span>
+                    </button>
+                  </motion.div>
+                )}
+                </AnimatePresence>
               </motion.div>
             )}
           </AnimatePresence>,

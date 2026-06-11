@@ -58,7 +58,7 @@ export function BidiExtractionDemo({
             centred (lab). */}
         <div
           dir="ltr"
-          className={`absolute top-1/2 z-10 w-[min(540px,86%)] -translate-y-1/2 overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)] ${
+          className={`absolute top-1/2 z-0 w-[min(540px,86%)] -translate-y-1/2 overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] ${
             align === "left"
               ? "left-0"
               : align === "right"
@@ -68,10 +68,11 @@ export function BidiExtractionDemo({
         >
           <TitleBar title={b.windowTitle} />
 
-          {/* Transparent slide — only the border + the (kept) title bar; the
-              flow-lines behind show through. The slide chrome (header on the
-              reading-start edge, pagination on the reading-end edge) follows the
-              UI locale: RTL → header right / pagination left, LTR → flipped. */}
+          {/* Solid slide surface (--tq-card). The window sits BEHIND the flow
+              lines + dots (z-0 vs the FlowLines svg's z-10), so the extraction
+              stream reads as passing OVER the slide. The slide chrome (header on
+              the reading-start edge, pagination on the reading-end edge) follows
+              the UI locale: RTL → header right / pagination left, LTR → flipped. */}
           <div className="relative aspect-video w-full overflow-hidden">
             <div className="relative flex h-full flex-col p-6" dir={dir}>
               <div className="flex items-center gap-2">
@@ -249,7 +250,7 @@ function FlowLines({ align = "center" }: { align?: "center" | "left" | "right" }
 
   return (
     <svg
-      className="absolute inset-0 h-full w-full"
+      className="absolute inset-0 z-10 h-full w-full"
       viewBox="0 0 1000 460"
       fill="none"
       preserveAspectRatio="xMidYMid meet"
