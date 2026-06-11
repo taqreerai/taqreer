@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { Cairo, Poppins } from "next/font/google";
 import "../globals.css";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { ScrollReset } from "@/components/app/ScrollReset";
 import { isLocale, dirForLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import { isAppPath } from "@/lib/app-routes";
 import { stripLocale } from "@/lib/i18n/navigation";
+import { THEME_COOKIE } from "@/lib/ui-cookies";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -106,11 +107,15 @@ export default async function RootLayout({
   // (left) at first paint instead of jumping there when DashboardShell mounts.
   const appShell = isAppPath(stripLocale((await headers()).get("x-pathname") ?? ""));
 
+  // Theme class on <html> at first paint (no flash) from the tq_theme cookie.
+  // :root.light in globals.css flips the neutral tokens; default is dark.
+  const themeClass = (await cookies()).get(THEME_COOKIE)?.value === "light" ? " light" : "";
+
   return (
     <html
       lang={lang}
       dir={dir}
-      className={`${cairo.variable} ${poppins.variable}${appShell ? " app-shell-scroll" : ""}`}
+      className={`${cairo.variable} ${poppins.variable}${appShell ? " app-shell-scroll" : ""}${themeClass}`}
       suppressHydrationWarning
     >
       <head>

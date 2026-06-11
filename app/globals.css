@@ -339,10 +339,39 @@
   --tq-tint-opacity:     0.05;
   --tq-border-opacity:   0.1;
 
+  /* Flip-aware overlay tints — white-over-dark by default; the .light theme
+     swaps them to black-over-light so hover / subtle-fill tints still read.
+     Consumed via the `bg-overlay-*` utilities (replacing hardcoded `bg-white/x`
+     during the light-theme sweep). */
+  --tq-overlay-soft:   rgba(255, 255, 255, 0.05);
+  --tq-overlay:        rgba(255, 255, 255, 0.10);
+  --tq-overlay-strong: rgba(255, 255, 255, 0.18);
+
   /* 9. Background Blobs */
   --bg-blob-opacity-1: 0.28;
   --bg-blob-opacity-2: 0.22;
   --bg-blob-opacity-3: 0.14;
+}
+
+/* ─── Light theme ───────────────────────────────────────────────────────────
+   Toggled by `html.light` (set from the `tq_theme` cookie; SSR-applied so there
+   is no flash). Flips ONLY the neutral scale to shadcn/ui light defaults; the
+   brand accents (--tq-purple, the AI mesh, --tq-gradient-*) and the aurora glow
+   colours are inherited from :root unchanged (user direction). */
+:root.light {
+  color-scheme: light;
+  --tq-bg:              oklch(0.95 0 0);
+  --tq-bg-rgb:          242, 242, 242;
+  --tq-panel:           oklch(1 0 0);
+  --tq-card:            oklch(0.97 0 0);
+  --tq-surface:         oklch(1 0 0);
+  --tq-text-primary:    oklch(0.145 0 0);
+  --tq-text-muted:      oklch(0.556 0 0);
+  --tq-border-hairline: oklch(0.922 0 0);
+  --tq-border-focus:    oklch(0.708 0 0);
+  --tq-overlay-soft:    rgba(0, 0, 0, 0.04);
+  --tq-overlay:         rgba(0, 0, 0, 0.06);
+  --tq-overlay-strong:  rgba(0, 0, 0, 0.10);
 }
 
 /* ─── Global cursor defaults ─── */
@@ -563,14 +592,26 @@ textarea.input-dark {
   --color-brand-gray-800: #1F2937;
   --color-brand-gray-900: #111827;
 
-  /* Dashboard Theme Variables — §21: neutral flat grays (were blue/purple-cast).
-     Single uniform dark scale, no hue. */
-  --color-background: #0A0A0A;
-  --color-on-background: #ECECEC;
-  --color-surface: #161616;
-  --color-on-surface: #ECECEC;
-  --color-surface-variant: #202020;
-  --color-on-surface-variant: #ffffff;
+  /* Dashboard Theme Variables — now reference the --tq-* neutral tokens so the
+     `bg-surface` / `text-on-surface` / `bg-background` utilities FLIP with the
+     theme (the .light block overrides those tokens). Were hardcoded dark hexes. */
+  --color-background: var(--tq-bg);
+  --color-on-background: var(--tq-text-primary);
+  --color-surface: var(--tq-panel);
+  --color-on-surface: var(--tq-text-primary);
+  --color-surface-variant: var(--tq-surface);
+  --color-on-surface-variant: var(--tq-text-primary);
+
+  /* shadcn-style semantic aliases for the light-theme sweep — convert hardcoded
+     `text-white` → `text-foreground`, `text-white/60` → `text-muted-foreground`,
+     `border-white/10` → `border-border`, `bg-white/x` → `bg-overlay-*`. All
+     resolve to flip-aware --tq tokens. */
+  --color-foreground: var(--tq-text-primary);
+  --color-muted-foreground: var(--tq-text-muted);
+  --color-border: var(--tq-border-hairline);
+  --color-overlay-soft: var(--tq-overlay-soft);
+  --color-overlay: var(--tq-overlay);
+  --color-overlay-strong: var(--tq-overlay-strong);
   --color-surface-container-low: #141414;
   --color-surface-container: #181818;
   --color-surface-container-high: #1C1C1C;
@@ -615,7 +656,7 @@ textarea.input-dark {
      (Y' ~40), just hue stripped — propagates to .input-search,
      .btn-pill, and every other border-token consumer. */
   --tq-border: rgba(40, 40, 40, 0.8);
-  --tq-muted: #b4b4b4;
+  --tq-muted: var(--tq-text-muted);
 
   --font-headline-md: "Cairo", sans-serif;
   --font-headline-lg: "Cairo", sans-serif;
@@ -1777,6 +1818,11 @@ html.app-shell-scroll body {
   animation: tq-aurora-b 17s ease-in-out infinite;
   will-change: transform, opacity;
 }
+/* Light theme: `screen` blends to white against a light page, so the glow would
+   vanish. Drop to `normal` so the same brand-colour gradients tint the page
+   (colours unchanged, per user direction); soften so it reads as a wash. */
+:root.light .tq-aurora { opacity: 0.7; }
+:root.light .tq-aurora-b { mix-blend-mode: normal; }
 /* Big opposite horizontal sweeps + scale + opacity "breathing" so the bottom
    glow visibly flows. transform-origin is the bottom so the scale rises into
    the masked band. */

@@ -65,13 +65,13 @@ function QACard({ card }: { card: QuickActionCard }) {
       // `mt-auto`, both single-line (truncate).
       className="qa-card group relative flex flex-col gap-2 overflow-hidden rounded-2xl p-4 min-h-[96px] cursor-pointer no-underline transition-all duration-200"
     >
-      <div className="shrink-0 text-muted transition-colors group-hover:text-white">
+      <div className="shrink-0 text-muted transition-colors group-hover:text-foreground">
         <AnimatedIcon ref={iconRef} name={card.icon} size={28} strokeWidth={1.5} />
       </div>
       <div className="mt-auto min-w-0 w-full">
         {/* No truncate: copy wraps instead of clipping to "…". Grid row-stretch
             keeps every card the same height, so wrapped rows stay consistent. */}
-        <h3 className="text-lg font-semibold text-white leading-snug">
+        <h3 className="text-lg font-semibold text-foreground leading-snug">
           {card.title}
         </h3>
         <p className="mt-1 text-[12px] text-muted">{card.desc}</p>

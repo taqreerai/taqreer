@@ -169,7 +169,7 @@ export default async function DashboardPage({
           inviting a scroll to the projects / templates grid. */}
       <section className="flex min-h-[calc(100vh-9rem)] items-center justify-center">
         <div className="w-full">
-          <h1 className="mx-auto mb-8 max-w-3xl text-balance text-center text-2xl font-semibold text-white sm:text-3xl">
+          <h1 className="mx-auto mb-8 max-w-3xl text-balance text-center text-2xl font-semibold text-foreground sm:text-3xl">
             {greeting}
           </h1>
           <QuickActions />

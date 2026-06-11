@@ -5,3 +5,7 @@
 // Sidebar collapsed-state, read SSR-side so the rail paints in the right state
 // on first frame (DashboardShell hydrates from the same value).
 export const SIDEBAR_COLLAPSED_COOKIE = "tq_sidebar_collapsed";
+
+// UI theme ("light" | "dark"). Read SSR-side in the root layout to put `light`
+// on <html> at first paint (no flash); the ThemeToggle writes it on switch.
+export const THEME_COOKIE = "tq_theme";

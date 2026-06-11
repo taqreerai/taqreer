@@ -74,7 +74,7 @@ function SidebarNavLink({
           {label}
         </span>
         {comingSoon && !isCollapsed && (
-          <span className="ms-auto me-3 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+          <span className="ms-auto me-3 rounded-md bg-overlay px-1.5 py-0.5 text-[10px] font-semibold text-muted">
             {dict.nav.comingSoon}
           </span>
         )}
@@ -332,7 +332,7 @@ export function Sidebar({
                   avatar's top-start corner. Sky-blue chip, same vocabulary as
                   the old bell badge. */}
               {unread > 0 ? (
-                <span className="absolute -top-0.5 end-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
+                <span className="absolute -top-0.5 end-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground shadow">
                   {unreadLabel}
                 </span>
               ) : null}
@@ -377,7 +377,7 @@ export function Sidebar({
             <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 text-start ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pe-1'
             }`}>
-              <span className="font-medium text-white text-sm leading-tight truncate">{name}</span>
+              <span className="font-medium text-foreground text-sm leading-tight truncate">{name}</span>
               <span className="text-muted text-[11px] truncate">{email}</span>
             </div>
           </button>
@@ -415,7 +415,7 @@ export function Sidebar({
                 className="surface-menu rounded-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
               >
                 <div className="px-3 py-2">
-                  <p className="font-semibold text-white text-sm truncate">{name}</p>
+                  <p className="font-semibold text-foreground text-sm truncate">{name}</p>
                   <p className="text-muted text-xs truncate">{email}</p>
                 </div>
                 <div className="divider-dark my-1" />
@@ -449,7 +449,7 @@ export function Sidebar({
                   <span className="material-symbols-outlined text-[18px]">notifications</span>
                   <span>{dict.profileMenu.notifications}</span>
                   {unread > 0 ? (
-                    <span className="ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white">
+                    <span className="ms-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground">
                       {unreadLabel}
                     </span>
                   ) : null}

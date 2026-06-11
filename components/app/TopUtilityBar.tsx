@@ -14,25 +14,10 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { HeaderSearch } from "@/components/app/HeaderSearch";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import { Tooltip } from "@/components/common/Tooltip";
-
-// A tooltipped, icon-only square control — uses the shared animated tooltip
-// (placement="bottom" → the pill slides down below the icon).
-function PlaceholderIconButton({ icon, label }: { icon: string; label: string }) {
-  return (
-    <Tooltip label={label} placement="bottom">
-      <button
-        type="button"
-        aria-label={label}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/[0.06] hover:text-white"
-      >
-        <span className="material-symbols-outlined text-[20px]">{icon}</span>
-      </button>
-    </Tooltip>
-  );
-}
 
 // Server-health indicator — a small pill with a colored dot (green/amber/red)
 // for the upstream provider status, status label on hover (shared animated
@@ -89,10 +74,10 @@ export function TopUtilityBar() {
               type="button"
               onClick={() => setSearchOpen(true)}
               aria-label={dict.topBar.search}
-              className="flex h-9 items-center gap-2 rounded-lg ps-2 pe-2.5 text-muted transition-colors hover:bg-white/[0.06] hover:text-white"
+              className="flex h-9 items-center gap-2 rounded-lg ps-2 pe-2.5 text-muted transition-colors hover:bg-overlay-soft hover:text-foreground"
             >
               <span className="material-symbols-outlined text-[20px]">search</span>
-              <kbd className="rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] font-medium leading-none text-muted">
+              <kbd className="rounded border border-border bg-overlay-soft px-1.5 py-0.5 font-sans text-[10px] font-medium leading-none text-muted">
                 ⌘K
               </kbd>
             </button>
@@ -104,7 +89,7 @@ export function TopUtilityBar() {
             translate icon, now a dropdown menu). */}
         <div className="pointer-events-auto flex items-center gap-1">
           <HealthDot />
-          <PlaceholderIconButton icon="light_mode" label={dict.topBar.theme} />
+          <ThemeToggle />
           <LanguageMenu />
         </div>
       </div>
