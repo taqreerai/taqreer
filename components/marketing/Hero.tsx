@@ -99,7 +99,11 @@ export function Hero({ projectCount }: { projectCount?: number }) {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="flex flex-col items-center"
+          // `.hero-fold-copy` reserves the first viewport for the copy
+          // (centered) so the preview's top edge always lands ~180px
+          // above the fold - identical composition on laptop and 4K
+          // (see globals.css "Hero fold composition").
+          className="hero-fold-copy flex flex-col items-center justify-center"
         >
           {/* Status chip pair. The violet count chip only renders when
               we have a real positive count from the DB — keeps the
@@ -155,10 +159,22 @@ export function Hero({ projectCount }: { projectCount?: number }) {
           </div>
         </motion.div>
 
-        {/* Tilted dashboard preview. All back glow layers were removed (the
-            §24 stacked light-bar halo + the older blur layer) — the preview
-            sits flat over the page background. */}
-        <div className="relative mx-auto max-w-5xl" style={{ perspective: "1000px" }}>
+      </div>
+
+      {/* Tilted dashboard preview. All back glow layers were removed (the
+          §24 stacked light-bar halo + the older blur layer) - the preview
+          sits flat over the page background.
+
+          Lives OUTSIDE the max-w-7xl copy container in its own
+          `.hero-preview-frame`: 64rem floor (the old max-w-5xl - laptops
+          unchanged) growing with viewport height on tall screens so the
+          peek-then-reveal composition stays constant up to 4K (see
+          globals.css "Hero fold composition"). */}
+      <div className="relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
+        <div
+          className="hero-preview-frame relative mx-auto"
+          style={{ perspective: "1000px" }}
+        >
           <motion.div
             // Entrance: image starts low + pulled toward the camera
             // (translateZ positive), then rises up + recedes back

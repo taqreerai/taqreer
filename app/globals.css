@@ -1698,6 +1698,39 @@ html.app-shell-scroll body {
   border: 1px solid var(--tq-purple);
 }
 
+/* ─── Hero fold composition (landing only, 2026-06-11) ───
+   Keep the first viewport reading the SAME on every resolution: hero
+   copy vertically centered, dashboard preview peeking ~180px above the
+   fold, the rest revealed on scroll (user direction 2026-06-11).
+
+   .hero-fold-copy
+     Reserves the first fold for the copy block: 10rem matches the
+     section's own top padding, 14vh is the preview peek - PROPORTIONAL
+     so the visible slice of the dashboard reads the same at 900px and
+     2160px tall (a fixed-px peek looked like nothing at 4K once the
+     15-degree tilt pulled the panel's top edge back). On laptops the
+     copy's natural height already exceeds this min-height, so nothing
+     changes; on tall screens (1200p/1440p/4K) the copy centers in the
+     extra space and pushes the preview down to the fold line.
+     svh (small viewport height) keeps mobile browser chrome honest;
+     the plain-vh line is the fallback for engines without svh.
+
+   .hero-preview-frame
+     Lets the preview GROW with viewport height past the laptop
+     baseline so the reveal proportions stay constant: 64rem is the
+     existing max-w-5xl baseline (floor - laptops render exactly as
+     before); `128vh - 16rem` grows the width on viewports taller than
+     ~1000px (the 3:2 frame then spans ~85% of the viewport height,
+     matching the laptop composition); 92vw caps ultrawide overflow. */
+.hero-fold-copy {
+  min-height: calc(100vh - 10rem - 14vh);
+  min-height: calc(100svh - 10rem - 14svh);
+}
+.hero-preview-frame {
+  width: 100%;
+  max-width: clamp(64rem, 128vh - 16rem, 92vw);
+}
+
 .group:hover .nav-icon {
   color: #ffffff !important;
 }

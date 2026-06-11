@@ -124,10 +124,15 @@ export default async function LandingPage({
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
       <LandingNav isAuthed={!!user} />
 
+      {/* Hero sits OUTSIDE the max-w-7xl column: its dashboard preview
+          grows with viewport height on tall screens (.hero-preview-frame,
+          globals.css "Hero fold composition") and a 7xl cap would clamp
+          it back to laptop size on 4K. The hero centers its own copy. */}
+      <Hero projectCount={projectCount} />
+
       {/* Centered content column (no frame hairlines — sections stack on the
           dotted + aurora backdrop, matching the dashboard). */}
       <div className="relative mx-auto max-w-7xl">
-        <Hero projectCount={projectCount} />
 
         {/* Trusted-by — animated full-width marquee with edge-fade mask
             (`.mask-edges`) so the logos dissolve at both ends. */}
