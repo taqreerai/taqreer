@@ -17,6 +17,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { isLocale } from "@/lib/i18n/config";
 
 export async function GET() {
   const supabase = await createClient();
@@ -32,4 +33,28 @@ export async function GET() {
     supabaseUserId: data.user.id,
     prismaUserId: dbUser?.id ?? null,
   });
+}
+
+// PATCH /api/me — persist the signed-in user's UI language to their account
+// (`User.language`). The cookie is still the per-browser fast path the proxy
+// reads; this is the cross-device source of truth, seeded back into the cookie
+// at login (user-sync / OAuth callback). Body: `{ locale: "ar" | "en" }`.
+export async function PATCH(request: Request) {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user) {
+    return new NextResponse(null, { status: 401 });
+  }
+  const body = (await request.json().catch(() => null)) as { locale?: unknown } | null;
+  const locale = typeof body?.locale === "string" ? body.locale : undefined;
+  if (!isLocale(locale)) {
+    return NextResponse.json({ error: "invalid locale" }, { status: 400 });
+  }
+  // `updateMany` (not `update`) so a missing row is a no-op rather than a throw
+  // — the Prisma user is created lazily on first authed page load.
+  await prisma.user.updateMany({
+    where: { supabaseUserId: data.user.id },
+    data: { language: locale },
+  });
+  return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
 export async function POST() {
   try {
@@ -19,7 +20,9 @@ export async function POST() {
       image: user.user_metadata?.avatar_url ?? null,
     };
 
-    await prisma.user.upsert({
+    // `language` is intentionally NOT in `update` — a returning user keeps
+    // their saved choice; a brand-new row takes the column default ("ar").
+    const dbUser = await prisma.user.upsert({
       where: { supabaseUserId: user.id },
       update: profile,
       create: {
@@ -27,9 +30,21 @@ export async function POST() {
         ...profile,
         plan: "free",
       },
+      select: { language: true },
     });
 
-    return NextResponse.json({ ok: true });
+    // Seed the locale cookie from the account language so a login on a NEW
+    // browser/device lands in the user's saved language (the proxy reads only
+    // the cookie — it can't reach Prisma at the edge).
+    const res = NextResponse.json({ ok: true });
+    if (isLocale(dbUser.language)) {
+      res.cookies.set(LOCALE_COOKIE, dbUser.language, {
+        path: "/",
+        maxAge: 31536000,
+        sameSite: "lax",
+      });
+    }
+    return res;
   } catch (err) {
     // Log only the message to avoid surfacing PII (Supabase user object,
     // email, headers) into server logs. The stack trace stays on the Error

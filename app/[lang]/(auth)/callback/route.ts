@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { isLocale, defaultLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -10,7 +12,11 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Sync user to database
+      // Saved account language → seeds the locale cookie + landing locale so an
+      // OAuth login on a NEW device opens in the user's language. Returning
+      // users have a Prisma row; brand-new OAuth users don't yet (the dashboard
+      // page upserts it on first render) → fall back to the default locale.
+      let locale: string = defaultLocale;
       try {
         const {
           data: { session },
@@ -28,25 +34,34 @@ export async function GET(request: NextRequest) {
                 "User",
               avatar_url: user.user_metadata?.avatar_url || null,
               plan: "free",
-              language: "ar",
               updated_at: new Date().toISOString(),
             },
             {
               onConflict: "supabase_user_id",
             }
           );
+          const dbUser = await prisma.user.findUnique({
+            where: { supabaseUserId: user.id },
+            select: { language: true },
+          });
+          if (isLocale(dbUser?.language)) locale = dbUser.language;
         }
       } catch (err) {
         console.error("User sync error:", err);
         // Continue even if sync fails
       }
 
-      // Redirect straight to the dashboard. The `/confirmed`
-      // interstitial was removed 2026-05-28 — it served only as a
-      // 2.5 s checkmark + redirect, which added a noticeable pause
-      // without conveying anything the dashboard's own load state
-      // doesn't already.
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      // Redirect straight to the (localized) dashboard. The `/confirmed`
+      // interstitial was removed 2026-05-28 — it served only as a 2.5 s
+      // checkmark + redirect, which added a noticeable pause without conveying
+      // anything the dashboard's own load state doesn't already.
+      const res = NextResponse.redirect(new URL(`/${locale}/dashboard`, request.url));
+      res.cookies.set(LOCALE_COOKIE, locale, {
+        path: "/",
+        maxAge: 31536000,
+        sameSite: "lax",
+      });
+      return res;
     }
   }
 

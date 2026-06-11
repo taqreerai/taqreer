@@ -38,6 +38,14 @@ export function LanguageMenu({ className = "" }: { className?: string }) {
     setOpen(false);
     if (next === locale) return;
     document.cookie = `${LOCALE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
+    // Persist to the account too, so the choice follows the user across
+    // browsers/devices (the cookie above is the immediate per-browser effect).
+    // Fire-and-forget; anonymous users get a 401 here, which we ignore.
+    void fetch("/api/me", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ locale: next }),
+    }).catch(() => {});
     router.push(switchLocaleHref(pathname, next));
   };
 
