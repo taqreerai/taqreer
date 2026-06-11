@@ -79,6 +79,10 @@ function SectionHeader({
 // templates below don't each need editing.
 const RULE = "";
 const PX = "px-4 sm:px-6 lg:px-8";
+// Each content section fills ≥ one viewport with its content vertically
+// centered, so scrolling lands on one section at a time (short sections centre;
+// taller ones — pricing/templates/faq — grow past the viewport with the py gap).
+const SECTION = "flex min-h-screen flex-col justify-center py-24";
 
 export default async function LandingPage({
   params,
@@ -127,7 +131,7 @@ export default async function LandingPage({
 
         {/* Trusted-by — animated full-width marquee with edge-fade mask
             (`.mask-edges`) so the logos dissolve at both ends. */}
-        <section className={`${RULE} py-8`}>
+        <section className="py-24">
           <div className="mask-edges relative w-full overflow-hidden" dir="ltr">
             <div className="animate-marquee-rtl pause-on-hover flex w-max opacity-50 grayscale">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -144,27 +148,26 @@ export default async function LandingPage({
         </section>
 
         {/* Flows — 4 gapped cards (dashboard-style), no backbone dividers. */}
-        <section id="features">
-          <ScrollReveal direction="up" className={`${PX} pt-32 pb-12`}>
+        <section id="features" className={SECTION}>
+          <ScrollReveal direction="up" className={`${PX} pb-12`}>
             <SectionHeader
               eyebrow={dict.landing.sections.features.eyebrow}
               title={dict.landing.sections.features.title}
               subtitle={dict.landing.sections.features.subtitle}
             />
           </ScrollReveal>
-          <ScrollReveal direction="up" className={`${PX} pb-12`}>
+          <ScrollReveal direction="up" className={PX}>
             <FeatureFlowCards />
           </ScrollReveal>
         </section>
 
-        {/* BiDi band — asymmetric, inline-toggle title. NO border-t: the flows
-            band's bottom line is the separator above it. */}
-        <section className={`${PX} py-32`}>
+        {/* BiDi band — asymmetric, inline-toggle title. */}
+        <section className={`${SECTION} ${PX}`}>
           <BidiSection />
         </section>
 
         {/* Templates */}
-        <section id="templates" className={`${RULE} ${PX} py-32`}>
+        <section id="templates" className={`${SECTION} ${PX}`}>
           <ScrollReveal direction="up">
             <SectionHeader
               eyebrow={dict.landing.sections.templates.eyebrow}
@@ -178,7 +181,7 @@ export default async function LandingPage({
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className={`${RULE} ${PX} py-32`}>
+        <section id="pricing" className={`${SECTION} ${PX}`}>
           <ScrollReveal direction="up">
             <SectionHeader
               eyebrow={dict.landing.sections.pricing.eyebrow}
@@ -192,7 +195,7 @@ export default async function LandingPage({
         </section>
 
         {/* FAQ — centered header over the full-width accordion. */}
-        <section id="faq" className={`${RULE} pt-32 pb-32`}>
+        <section id="faq" className={SECTION}>
           <ScrollReveal direction="up" className={`${PX} mb-8`}>
             <SectionHeader
               eyebrow={dict.landing.sections.faq.eyebrow}
