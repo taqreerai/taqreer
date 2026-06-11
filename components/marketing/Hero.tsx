@@ -4,7 +4,7 @@
 // dashboard preview. Brand chrome references --tq-violet / .btn-gradient
 // / .btn-pill / .text-muted to stay in lock-step with the dashboard.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { DashboardPreview } from "./DashboardPreview";
@@ -38,22 +38,52 @@ export function Hero({ projectCount }: { projectCount?: number }) {
   // mirrors it here, BrowserChromeBar reads it). 2026-05-28.
   const [demoPath, setDemoPath] = useState("/dashboard");
 
-  // Scroll-driven rotation that hits 0° exactly when the dashboard
-  // container's bottom edge reaches the bottom of the viewport
-  // (user direction 2026-05-28: was tied to a fixed scrollY of 600
-  // and felt delayed — the moment the bottom edge lands at the
-  // viewport edge, the rotation should be flat). `useScroll` with
-  // a `target` + `offset` ties the progress to the element's actual
-  // position instead of an arbitrary px value: progress 0 when the
-  // element's top crosses the viewport bottom (just entering view),
-  // progress 1 when the element's bottom crosses the viewport bottom
-  // (fully revealed). Maps 0 → 1 onto rotateX 15° → 0°.
+  // Scroll-driven rotation: full 15° tilt at the top of the page,
+  // flattening to 0° as the visitor scrolls. The flatten distance is
+  // measured from layout - "how far must the page scroll before the
+  // preview's bottom edge meets the viewport bottom" (the original
+  // end condition, user direction 2026-05-28) - but CLAMPED to a
+  // minimum. The previous element-reveal mapping (`useScroll` target
+  // + offset ["start end","end end"]) degenerated on tall viewports:
+  // when the whole preview already fit in the first screen, progress
+  // started at 1 and the tilt never existed (user-spotted 2026-06-11).
+  // Pixel-based progress with a 360px floor keeps small screens
+  // behaving as before and gives tall screens a resting tilt that
+  // settles over the first few hundred pixels of scroll.
+  //
+  // Measured via the offsetParent chain (layout position) rather than
+  // getBoundingClientRect so the entrance animation's transforms and
+  // the tilt itself can't skew the measurement.
   const dashboardWrapperRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: dashboardWrapperRef,
-    offset: ["start end", "end end"],
+  const MIN_FLATTEN_PX = 360;
+  const [flattenDistance, setFlattenDistance] = useState(MIN_FLATTEN_PX);
+  useEffect(() => {
+    const measure = () => {
+      const el = dashboardWrapperRef.current;
+      if (!el) return;
+      let top = 0;
+      let node: HTMLElement | null = el;
+      while (node) {
+        top += node.offsetTop;
+        node = node.offsetParent as HTMLElement | null;
+      }
+      const untilBottomMeetsViewport = top + el.offsetHeight - window.innerHeight;
+      setFlattenDistance(Math.max(MIN_FLATTEN_PX, untilBottomMeetsViewport));
+    };
+    measure();
+    // Layout can shift once fonts/images settle - re-measure next frame
+    // and on resize.
+    const raf = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+  const { scrollY } = useScroll();
+  const rotateX = useTransform(scrollY, [0, flattenDistance], [15, 0], {
+    clamp: true,
   });
-  const rotateX = useTransform(scrollYProgress, [0, 1], [15, 0]);
 
   // Latin numerals + thousand separator ("12,345") — RTL-safe inside
   // the Arabic chip copy, per the project's "Latin digits only" rule.

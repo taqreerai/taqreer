@@ -4,8 +4,9 @@
 // + cards live here (moved out of the server `app/page.tsx`).
 //
 // Tiers mirror the LOCKED monthly pricing in context/subscriptionmodel.md
-// (Free $0 / Starter $15 / Plus $30 / Pro $70). YEARLY is a ~10%-off placeholder
-// — the model is monthly-only, so confirm real annual pricing before launch.
+// (Free $0 / Plus $15 / Pro $30 / Max $70 - tier names renamed 2026-06-11).
+// YEARLY is a ~10%-off placeholder - the model is monthly-only, so confirm
+// real annual pricing before launch.
 
 import { useState } from "react";
 import Link from "next/link";

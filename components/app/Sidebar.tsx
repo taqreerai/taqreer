@@ -549,9 +549,12 @@ export function Sidebar({
                     {credits ? (
                       <>
                         <div className="flex flex-col gap-2 px-1 py-1">
-                          {/* Upgrade card - only when a next tier exists. */}
+                          {/* Upgrade pill - only when a next tier exists.
+                              Fully rounded so its curve matches the CTA
+                              button inside (a tight one-row card read
+                              awkwardly as a square-cornered box). */}
                           {upgradeTo ? (
-                            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-3 py-2.5">
+                            <div className="flex items-center justify-between gap-2 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] py-1.5 ps-4 pe-1.5">
                               <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
                                 <span
                                   className="material-symbols-outlined leading-none"

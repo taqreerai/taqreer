@@ -420,7 +420,7 @@
           "cta": "Start free"
         },
         {
-          "name": "Starter",
+          "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "2,000 credits / month",
           "features": ["All creation methods", "Fast Opus model", "Images with the latest GPT models", "Up to 30 slides per deck", "Custom brand identity", "Premium templates"],
@@ -428,7 +428,7 @@
           "cta": "Start now"
         },
         {
-          "name": "Plus",
+          "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
           "credits": "5,000 credits / month",
           "features": ["Opus thinking model", "Images with the latest GPT models", "Premium templates", "Up to 60 slides per deck", "Custom brand identity", "All creation methods"],
@@ -436,7 +436,7 @@
           "cta": "Start now"
         },
         {
-          "name": "Pro",
+          "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "12,000 credits / month",
           "features": ["All models and all methods", "Images with the latest GPT models", "Up to 75 slides per deck", "Premium templates", "Custom brand identity", "Processing priority"],
