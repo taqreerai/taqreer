@@ -75,6 +75,31 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookupKey]);
 
+  // Theme reactivity: the toggle flips the `light` class on <html>;
+  // rebuild the appearance from the new computed tokens while KEEPING
+  // the same clientSecret promise (no new session). The provider
+  // diffs elementsOptions.appearance and restyles in place.
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setOptions((prev) =>
+        prev
+          ? {
+              ...prev,
+              elementsOptions: {
+                appearance: checkoutAppearance(),
+                fonts: CHECKOUT_FONTS,
+              },
+            }
+          : prev,
+      );
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
   // No / unknown price → bounce back to billing.
   useEffect(() => {
     if (!lookupKey) router.replace(localizedHref("/billing", locale));
@@ -86,7 +111,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
     // Lives INSIDE the dashboard chrome (sidebar + top bar stay) -
     // back link + title + our form.
     <div className="page-container">
-      <div className="mx-auto w-full max-w-xl pb-16">
+      <div className="mx-auto w-full max-w-4xl pb-16">
         <Link
           href={localizedHref("/billing", locale)}
           className="mb-4 inline-flex items-center gap-1 text-sm text-muted no-underline transition-colors hover:text-foreground"
@@ -161,12 +186,15 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
   }
 
   return (
-    <div className="surface-card flex flex-col gap-5 rounded-2xl p-6">
-      {/* Order summary: line item + total (Stripe pre-formats the
-          amount string in the session currency). */}
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--tq-border-hairline)] pb-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">
+    // Two cards in one row (user direction 2026-06-12): order details
+    // + email on the start side, the payment fields + pay button on
+    // the end side. Stacks on small screens.
+    <div className="grid items-start gap-6 lg:grid-cols-[1fr_1.2fr]">
+      <div className="surface-card flex flex-col gap-5 rounded-2xl p-6">
+        {/* Order summary: line item + total (Stripe pre-formats the
+            amount string in the session currency). */}
+        <div className="border-b border-[var(--tq-border-hairline)] pb-4">
+          <p className="text-sm font-semibold text-foreground">
             {checkout.lineItems[0]?.name}
           </p>
           <p className="mt-0.5 text-lg font-bold text-foreground tabular-nums" dir="ltr">
@@ -175,47 +203,50 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
               <span className="text-xs font-normal text-muted"> {dict.landing.pricing.perMonth}</span>
             )}
           </p>
+          {/* SAR/USD switch on its own row (it's a wide segmented
+              control) - only renders when the session has currency
+              options. */}
+          <div className="mt-3">
+            <CurrencySelectorElement />
+          </div>
         </div>
-        {/* SAR/USD switch - only renders when the session has
-            currency options. */}
-        <div className="shrink-0">
-          <CurrencySelectorElement />
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-foreground">
+            {t.emailLabel}
+          </label>
+          <input
+            type="email"
+            value={effectiveEmail}
+            onChange={(e) => {
+              setEmailTouched(true);
+              setEmail(e.target.value);
+            }}
+            className="input-dark"
+            dir="ltr"
+            autoComplete="email"
+          />
         </div>
       </div>
 
-      <div>
-        <label className="mb-2 block text-sm font-medium text-foreground">
-          {t.emailLabel}
-        </label>
-        <input
-          type="email"
-          value={effectiveEmail}
-          onChange={(e) => {
-            setEmailTouched(true);
-            setEmail(e.target.value);
-          }}
-          className="input-dark"
-          dir="ltr"
-          autoComplete="email"
-        />
+      <div className="surface-card flex flex-col gap-5 rounded-2xl p-6">
+        <PaymentElement options={{ layout: "tabs" }} />
+
+        {payError ? (
+          <p className="text-sm text-[rgb(220,38,38)]" role="alert">
+            {payError}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={pay}
+          disabled={paying || !checkout.canConfirm}
+          className="btn-gradient w-full py-3 text-sm disabled:opacity-60"
+        >
+          {paying ? t.processingPay : cta}
+        </button>
       </div>
-
-      <PaymentElement options={{ layout: "tabs" }} />
-
-      {payError ? (
-        <p className="text-sm text-[rgb(220,38,38)]" role="alert">
-          {payError}
-        </p>
-      ) : null}
-
-      <button
-        type="button"
-        onClick={pay}
-        disabled={paying || !checkout.canConfirm}
-        className="btn-gradient w-full py-3 text-sm disabled:opacity-60"
-      >
-        {paying ? t.processingPay : cta}
-      </button>
     </div>
   );
 }
