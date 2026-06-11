@@ -74,7 +74,17 @@ export async function POST(request: Request) {
   }
 
   const isSubscription = spec.grant.kind === "subscription";
+  // EMBEDDED checkout (user direction 2026-06-11: keep people on
+  // taqreer.ai, our branding) - the form mounts inside /checkout via
+  // @stripe/react-stripe-js EmbeddedCheckout. We return the session's
+  // client_secret instead of a redirect URL. On completion Stripe
+  // redirects within OUR page to return_url (the {CHECKOUT_SESSION_ID}
+  // template lets the return page confirm status).
   const session = await stripe.checkout.sessions.create({
+    // `embedded_page` is the 2026-04-22.dahlia name for embedded
+    // checkout (was `embedded` on older API versions) - the form mounts
+    // in our page via @stripe/react-stripe-js EmbeddedCheckout.
+    ui_mode: "embedded_page",
     mode: isSubscription ? "subscription" : "payment",
     customer: customerId,
     line_items: [{ price: price.id, quantity: 1 }],
@@ -91,13 +101,9 @@ export async function POST(request: Request) {
             },
           },
         }),
-    success_url: `${APP_URL}/settings?billing=success`,
-    cancel_url: `${APP_URL}/settings?billing=cancelled`,
-    // Idempotency-ish: one open checkout per (user, price) at a time is
-    // fine; Stripe dedupes nothing here, but the webhook's
-    // StripeWebhookEvent guard makes a double-complete harmless.
+    return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
     allow_promotion_codes: true,
   });
 
-  return NextResponse.json({ url: session.url });
+  return NextResponse.json({ clientSecret: session.client_secret });
 }

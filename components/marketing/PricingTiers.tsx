@@ -103,29 +103,17 @@ export function PricingTiers({ isAuthed = false }: { isAuthed?: boolean }) {
   const { dir } = useLocale();
   const t = dict.landing.pricing;
 
-  // Signed-in pricing CTA → Stripe Checkout for that tier + cadence.
-  // Signed-out keeps the /signup link (acquisition). Free tier always
-  // routes to signup.
-  async function checkout(planKey: string) {
+  // Signed-in pricing CTA → our EMBEDDED checkout page for that tier +
+  // cadence (stays on taqreer.ai). Signed-out keeps the /signup link
+  // (acquisition). Free tier always routes to signup.
+  function checkout(planKey: string) {
     if (planKey === "free") {
       window.location.href = "/signup";
       return;
     }
     const lookupKey = `tier_${planKey}_${billing}`;
     setBusy(lookupKey);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ lookupKey }),
-      });
-      const data = (await res.json().catch(() => null)) as { url?: string } | null;
-      if (data?.url) window.location.href = data.url;
-      else setBusy(null);
-    } catch {
-      setBusy(null);
-    }
+    window.location.href = `/checkout?price=${lookupKey}`;
   }
 
   return (

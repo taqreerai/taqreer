@@ -12,8 +12,10 @@
 // cancel dates, dunning status).
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { dateFnsLocale } from "@/lib/i18n/date";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 import { TIERS, TIER_ORDER, TOPUP_PACKS } from "@/lib/credits/cost";
@@ -40,11 +42,18 @@ const YEARLY_PER_MONTH: Record<"plus" | "pro" | "max", number> = {
 export function BillingSection() {
   const dict = useDict();
   const { locale } = useLocale();
+  const router = useRouter();
   const t = dict.components.billing;
   const credits = useCreditBalance();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [cadence, setCadence] = useState<Cadence>("monthly");
   const [busy, setBusy] = useState<string | null>(null);
+
+  // Paid purchases go to our EMBEDDED checkout page (stays on
+  // taqreer.ai); only the portal still leaves to Stripe-hosted.
+  function buy(lookupKey: string) {
+    router.push(`${localizedHref("/checkout", locale)}?price=${lookupKey}`);
+  }
 
   useEffect(() => {
     let live = true;
@@ -234,7 +243,7 @@ export function BillingSection() {
                     type="button"
                     disabled={busy !== null}
                     onClick={() =>
-                      go("/api/stripe/checkout", { lookupKey }, lookupKey)
+                      buy(lookupKey)
                     }
                     className={`mt-2 w-full py-1.5 text-xs ${isUpgrade ? "btn-gradient" : "btn-pill"}`}
                   >
@@ -268,7 +277,7 @@ export function BillingSection() {
                 <button
                   type="button"
                   disabled={busy !== null}
-                  onClick={() => go("/api/stripe/checkout", { lookupKey }, lookupKey)}
+                  onClick={() => buy(lookupKey)}
                   className="btn-pill mt-2 w-full py-1.5 text-xs"
                 >
                   {busy === lookupKey ? t.loading : t.buy}
