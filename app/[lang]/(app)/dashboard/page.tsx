@@ -4,6 +4,8 @@ import type { ProjectsGridProject } from "@/components/app/ProjectsGrid";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { isLocale } from "@/lib/i18n/config";
 
 // Fresh SSR every navigation. Without this Next.js may serve a
 // cached render from before the Inngest thumbnail-render job
@@ -151,14 +153,25 @@ export default async function DashboardPage({
         p.thumbnailUrls.length === 0),
   }));
 
+  // Greeting above the launcher. First name only; falls back to a name-less
+  // variant when we don't have one yet (fresh OAuth user with no metadata name).
+  const dict = await getDictionary(isLocale(lang) ? lang : "ar");
+  const firstName = (dbUser.name ?? "").trim().split(/\s+/)[0] ?? "";
+  const greeting = firstName
+    ? dict.quickActions.greeting.replace("{name}", firstName)
+    : dict.quickActions.greetingAnon;
+
   return (
     <div className="page-container pb-16">
-      {/* Centered launcher — the 4 flow cards. §22: the height leaves just
-          enough so the HomeLibrary toggle header + the TOP of the thumbnails
-          peek at the bottom of the first screen (Lovable-style), inviting a
-          scroll to the projects / templates grid. */}
+      {/* Centered launcher — a welcome line + the 4 flow cards. §22: the height
+          leaves just enough so the HomeLibrary toggle header + the TOP of the
+          thumbnails peek at the bottom of the first screen (Lovable-style),
+          inviting a scroll to the projects / templates grid. */}
       <section className="flex min-h-[calc(100vh-9rem)] items-center justify-center">
         <div className="w-full">
+          <h1 className="mx-auto mb-8 max-w-3xl text-balance text-center text-2xl font-semibold text-white sm:text-3xl">
+            {greeting}
+          </h1>
           <QuickActions />
         </div>
       </section>

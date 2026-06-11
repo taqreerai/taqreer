@@ -91,6 +91,8 @@
     "noProjects": "No projects yet. Start from the cards above."
   },
   "quickActions": {
+    "greeting": "Hello {name} 👋, what's the plan for today?",
+    "greetingAnon": "Hello 👋, what's the plan for today?",
     "create": { "title": "Create", "desc": "a new presentation" },
     "enhance": { "title": "Enhance", "desc": "an existing presentation" },
     "mimic": { "title": "Mimic", "desc": "a presentation's style" },
