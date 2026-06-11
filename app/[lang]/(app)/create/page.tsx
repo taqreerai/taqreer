@@ -1076,7 +1076,7 @@ function ContentDropzone({
         className={`flex w-full items-center gap-3 rounded-xl border border-dashed p-2.5 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           dragging
             ? "border-foreground/40 bg-foreground/[0.04]"
-            : "border-foreground/20 bg-black/20 hover:border-foreground/30"
+            : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
         } min-h-[44px]`}
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">

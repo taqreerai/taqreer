@@ -1088,7 +1088,7 @@ export default function MimicFlow({
                   // Template mode — the design reference is the chosen
                   // template (locked, no upload). Reuses the dropzone's
                   // "ready" visual vocabulary, non-interactive.
-                  <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-black/20 p-4 text-center">
+                  <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-4 text-center">
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]">
                       <span
                         className="material-symbols-outlined text-emerald-300"
@@ -1270,7 +1270,7 @@ function FileDropzone({
         className={`flex w-full rounded-xl border border-dashed transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${axis} ${
           dragging
             ? "border-foreground/40 bg-foreground/[0.04]"
-            : "border-foreground/20 bg-black/20 hover:border-foreground/30"
+            : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
         } ${heightCls}`}
       >
         {/* Icon container — slightly smaller in horizontal mode so

@@ -9,7 +9,6 @@
 // Lives at `app/page.tsx` (NOT inside a route group) because of a Next 16.2.6 +
 // Turbopack route-resolution bug with `(marketing)/page.tsx`.
 
-import Image from "next/image";
 import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
@@ -19,6 +18,7 @@ import { BidiSection } from "@/components/marketing/BidiSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
+import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
@@ -231,9 +231,7 @@ export default async function LandingPage({
           </div>
           <div className="flex flex-col items-center justify-between pt-8 text-sm text-muted md:flex-row">
             <div className="mb-4 flex items-center gap-2 md:mb-0">
-              <Image
-                src="/logo-light.svg"
-                alt="taqreer.ai logo"
+              <ThemeLogo
                 width={120}
                 height={28}
                 className="h-7 w-auto object-contain opacity-80"

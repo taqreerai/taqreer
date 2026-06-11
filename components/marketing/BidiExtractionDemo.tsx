@@ -85,7 +85,7 @@ export function BidiExtractionDemo({
                 <Sentence fixed={fixed} />
               </div>
 
-              <div className="text-end text-[11px] font-medium tracking-wide text-foreground/20">
+              <div className="text-end text-[11px] font-medium tracking-wide text-foreground/45">
                 01 / 12
               </div>
             </div>

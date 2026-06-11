@@ -113,7 +113,7 @@ export function LogoRow({
             setDragging(false);
             acceptSvg(event.dataTransfer.files?.[0]);
           }}
-          className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-black/20 transition-colors ${ZONE_H} ${
+          className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-overlay-soft transition-colors ${ZONE_H} ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
               : "border-foreground/15 hover:border-foreground/30"

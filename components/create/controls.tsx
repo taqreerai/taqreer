@@ -527,12 +527,9 @@ export function Toggle({
           dir === "rtl" ? { right: value ? 22 : 2 } : { left: value ? 22 : 2 }
         }
         transition={{ type: "spring", stiffness: 500, damping: 35 }}
-        // ON: white disc on the coloured (accent) track. OFF: `bg-foreground`
-        // (white in dark, dark in light) so it contrasts with the faint OFF
-        // track in each theme. Shadow lifts it in light.
-        className={`absolute top-0.5 h-5 w-5 rounded-full shadow-sm ${
-          value ? "bg-white" : "bg-foreground"
-        }`}
+        // White disc in both states + themes (user direction). The shadow lifts
+        // it off the faint OFF track in light.
+        className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
       />
     </button>
   );

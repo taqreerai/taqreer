@@ -7,10 +7,10 @@
 // from the left. Strings come from the active-locale dictionary.
 
 import Link from "next/link";
-import Image from "next/image";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
+import { ThemeLogo } from "@/components/brand/ThemeLogo";
 
 export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
   const { locale } = useLocale();
@@ -29,9 +29,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-20 items-center justify-between">
           <Link href={localizedHref("/", locale)} className="flex flex-shrink-0 items-center gap-2">
-            <Image
-              src="/logo-light.svg"
-              alt="taqreer.ai logo"
+            <ThemeLogo
               width={140}
               height={32}
               className="h-8 w-auto object-contain"

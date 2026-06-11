@@ -756,7 +756,7 @@ function FakeDropzone({
 }) {
   return (
     <div
-      className="flex items-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-black/20 p-2.5"
+      className="flex items-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-2.5"
       aria-disabled
     >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
@@ -849,7 +849,7 @@ function FakeFontSlot({
 }) {
   return (
     <div
-      className="flex items-center justify-between rounded-md border border-[var(--tq-border-hairline)] bg-black/20 px-2"
+      className="flex items-center justify-between rounded-md border border-[var(--tq-border-hairline)] bg-overlay-soft px-2"
       style={{ height: 28 }}
     >
       <span className="text-[10px] text-[var(--tq-text-muted)]">{label}</span>

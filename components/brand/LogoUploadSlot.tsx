@@ -192,7 +192,7 @@ export function LogoUploadSlot({
   const containerStyle: React.CSSProperties = fillHeight
     ? {}
     : { minHeight: slotHeightPx, height: slotHeightPx };
-  const containerClass = `relative flex w-full items-center justify-center rounded-xl border border-dashed border-foreground/15 bg-black/20 px-3${
+  const containerClass = `relative flex w-full items-center justify-center rounded-xl border border-dashed border-foreground/15 bg-overlay-soft px-3${
     fillHeight ? " h-full" : ""
   }`;
   return (

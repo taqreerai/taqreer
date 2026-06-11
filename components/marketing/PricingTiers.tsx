@@ -112,7 +112,7 @@ export function PricingTiers() {
               label: (
                 <>
                   {t.yearly}{" "}
-                  <span className="text-xs font-normal text-[var(--tq-violet)]">
+                  <span className="text-xs font-normal text-[var(--tq-discount-accent)]">
                     {t.discount}
                   </span>
                 </>
@@ -170,18 +170,14 @@ function PricingCard({
     // No glow / no lift on the popular card (user direction).
     <div className="surface-card relative flex w-full flex-col rounded-2xl p-8 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]">
       {tier.popular && (
-        // Same look as the hero's social-proof pill (.hero-stat-pill + dot), but
-        // an OPAQUE pre-composited violet-over-bg fill so the card's top border
-        // line never shows through it (user direction).
-        <div
-          className="hero-stat-pill absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium"
-          style={{
-            backgroundColor: "color-mix(in oklab, var(--tq-violet) 16%, var(--tq-bg))",
-          }}
-        >
+        // Same look as the hero's social-proof pill (.hero-stat-pill): a SOLID
+        // opaque accent fill (purple in dark / blue in light) with white text +
+        // a white dot. Solid so the card's top border never shows through and
+        // the "Popular" label stays high-contrast in both themes.
+        <div className="hero-stat-pill absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium">
           <span
             className="h-1.5 w-1.5 rounded-full"
-            style={{ background: "var(--tq-violet)" }}
+            style={{ background: "#fff" }}
           />
           {pricing.mostPopular}
         </div>

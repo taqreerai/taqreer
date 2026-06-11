@@ -15,9 +15,9 @@
 // same session reuses it. Children rendered inside the modal still use
 // `AuthAnimations` for the existing route-change fade/slide.
 
-import Image from "next/image";
 import Link from "next/link";
 import { AuthAnimations } from "./AuthAnimations";
+import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { AuthMarqueeBackground } from "@/components/auth/AuthMarqueeBackground";
 import { getMarqueeColumns } from "@/lib/auth/marquee-projects";
 import type { Metadata } from "next";
@@ -85,13 +85,12 @@ export default async function AuthLayout({
             href={localizedHref("/", lang)}
             className="mb-8 flex flex-shrink-0 justify-center cursor-pointer"
           >
-            <Image
-              src="/logo-light.svg"
-              alt="taqreer.ai"
+            <ThemeLogo
               width={140}
               height={40}
               className="h-6 w-auto"
               priority
+              alt="taqreer.ai"
             />
           </Link>
 

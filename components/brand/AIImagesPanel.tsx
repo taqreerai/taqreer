@@ -29,7 +29,7 @@ export function AIImagesPanel({
       }`}
     >
       <span
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--tq-violet)]/25 text-foreground"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--tq-violet)]/25 text-[var(--tq-violet)]"
         aria-hidden
       >
         <span className="material-symbols-outlined" style={{ fontSize: 20 }}>

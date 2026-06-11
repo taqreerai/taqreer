@@ -968,7 +968,7 @@ function DataDropzone({
         className={`flex h-full min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           dragging
             ? "border-foreground/40 bg-foreground/[0.04]"
-            : "border-foreground/20 bg-black/20 hover:border-foreground/30"
+            : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
         }`}
       >
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]">

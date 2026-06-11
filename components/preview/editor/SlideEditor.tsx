@@ -200,10 +200,10 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   .tqe-ov{position:fixed;pointer-events:none;z-index:2147483646;box-sizing:border-box;display:none}
   .tqe-hover{border:2px solid #10B981}
   .tqe-sel{border:2px solid #15B04F}
-  /* Rubber-band marquee — a subtle brand-violet rect (--tq-violet at low opacity,
-     1px border), never a hardcoded blue. Brand RGB is mirrored here because the
-     iframe doesn't load the app stylesheet. */
-  .tqe-marquee{border:1px solid rgba(125,45,255,0.55);background:rgba(125,45,255,0.12)}
+  /* Rubber-band marquee — a subtle brand-blue rect (the brand accent at low
+     opacity, 1px border). Brand RGB is mirrored here because the iframe doesn't
+     load the app stylesheet. */
+  .tqe-marquee{border:1px solid rgba(0,87,255,0.55);background:rgba(0,87,255,0.12)}
   .tqe-caret{position:fixed;width:2px;pointer-events:none;z-index:2147483646;display:none;animation:tqe-caret-blink 1.06s infinite}
   @keyframes tqe-caret-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
   [contenteditable="true"]{outline:none}

@@ -878,7 +878,7 @@ export default function EnhanceContentPage() {
                   className={`flex h-full min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     dragging
                       ? "border-foreground/40 bg-foreground/[0.04]"
-                      : "border-foreground/20 bg-black/20 hover:border-foreground/30"
+                      : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
                   }`}
                 >
                   <span

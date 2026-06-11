@@ -130,7 +130,7 @@ export function BrandFontPicker({
               setDragging(false);
               if (!atCap) addFiles(event.dataTransfer.files);
             }}
-            className={`flex h-16 items-center gap-2 rounded-xl border border-dashed bg-black/20 px-3 transition-colors ${
+            className={`flex h-16 items-center gap-2 rounded-xl border border-dashed bg-overlay-soft px-3 transition-colors ${
               atCap ? "cursor-not-allowed" : "cursor-pointer"
             } ${hasPills ? "justify-start" : "justify-center"} ${
               dragging

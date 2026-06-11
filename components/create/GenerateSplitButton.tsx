@@ -93,7 +93,7 @@ export function GenerateSplitButton({
           the visual left, arrow on the visual right. */}
       <div
         dir="ltr"
-        className="btn-gradient-anim relative flex h-11 items-stretch transition-shadow"
+        className="btn-gradient-anim group relative flex h-11 items-stretch transition-shadow"
         style={{ borderRadius: 9999 }}
       >
         {/* Generate half — `motion.button` with `layout` so the pill
@@ -111,7 +111,7 @@ export function GenerateSplitButton({
           onClick={onGenerate}
           disabled={disabled || loading}
           aria-label={label}
-          className="relative z-10 inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          className="relative z-10 inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
           style={{ borderRadius: "9999px 0 0 9999px" }}
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
@@ -131,7 +131,7 @@ export function GenerateSplitButton({
             the glass-border opacity token (--tq-border-hairline). */}
         <span
           aria-hidden
-          className="my-2 w-px bg-[var(--tq-border-hairline)]"
+          className="my-2 w-px bg-[var(--tq-border-hairline)] group-hover:bg-white/25"
         />
         <button
           type="button"
@@ -139,7 +139,7 @@ export function GenerateSplitButton({
           disabled={disabled || loading}
           aria-label={presetMenuOpen ? dict.flows.generate.closeQualityMenu : dict.flows.generate.chooseQuality}
           aria-expanded={presetMenuOpen}
-          className="relative z-10 inline-flex w-10 items-center justify-center bg-transparent text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          className="relative z-10 inline-flex w-10 items-center justify-center bg-transparent disabled:cursor-not-allowed disabled:opacity-60"
           style={{ borderRadius: "0 9999px 9999px 0" }}
         >
           <span

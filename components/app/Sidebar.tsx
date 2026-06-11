@@ -15,6 +15,7 @@ import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
 import { AllNotificationsModal } from "@/components/app/AllNotificationsModal";
 import { notificationStore, useNotifications } from "@/lib/notifications/store";
@@ -260,7 +261,7 @@ export function Sidebar({
           <div className={`absolute start-0 flex items-center h-[40px] transition-opacity duration-300 ${
             isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}>
-            <Image src="/logo-light.svg" alt="taqreer.ai logo" width={110} height={28} className="object-contain" />
+            <ThemeLogo width={110} height={28} className="object-contain" />
             <span className="badge-purple me-3 mt-1">{dict.common.pro}</span>
           </div>
         </div>

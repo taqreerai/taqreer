@@ -80,14 +80,12 @@ function InlineSwitch({
       }}
     >
       <span
-        className={`absolute top-1/2 h-[0.5em] w-[0.5em] -translate-y-1/2 rounded-full transition-[inset-inline-start] duration-300 ${
-          on ? "bg-white" : "bg-foreground"
-        }`}
+        className="absolute top-1/2 h-[0.5em] w-[0.5em] -translate-y-1/2 rounded-full bg-white transition-[inset-inline-start] duration-300"
         style={{
           insetInlineStart: on ? "calc(100% - 0.5em - 0.11em)" : "0.11em",
-          // ON: white on the accent track. OFF: bg-foreground (dark in light) so
-          // it shows on the near-white OFF track. Shadow lifts the white knob.
-          boxShadow: on ? "0 1px 3px rgba(0,0,0,0.3)" : "none",
+          // Always white — matches the canonical Toggle knob. The shadow lifts it
+          // off both the accent track (ON) and the near-white OFF track (light).
+          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
         }}
       />
     </button>

@@ -130,7 +130,7 @@ export function CompactUploadZone({
         // (visual right in RTL) holds the icon, the end side holds
         // the label + sub-text stacked vertically — same pattern
         // /mimic's inline FileDropzone uses.
-        className={`flex w-full rounded-xl border border-dashed bg-black/20 transition-colors ${
+        className={`flex w-full rounded-xl border border-dashed bg-overlay-soft transition-colors ${
           horizontal
             ? "flex-row items-center gap-3 p-2.5 text-start"
             : "flex-col items-center justify-center gap-2 text-center"

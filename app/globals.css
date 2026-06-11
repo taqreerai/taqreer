@@ -16,7 +16,7 @@
  *  ‼️ CURRENT SYSTEM (2026-06): flat + SOLID (shadcn-style). Surfaces are solid
  *  `--tq-surface` with a hairline border (`.surface-card/-popover/-menu/-modal`);
  *  NO blur, NO shadow, NO transparency — do not add `shadow-*` /
- *  `backdrop-blur`. One accent `--tq-purple #8B5CF6`; the only gradient is
+ *  `backdrop-blur`. One accent: BLUE `--tq-purple` (#3380FF dark / #0057FF light); the only gradient is
  *  `.btn-gradient-anim` (AI). Toggles mirror with `dir`. The landing is the ref.
  *
  *
@@ -159,22 +159,23 @@
   /* `*-rgb` variants are kept only where consumed in `rgba(var(...), α)`
      expressions; `--tq-magenta-rgb` had zero consumers app-wide and
      was dropped 2026-05-22. */
-  /* §21 flat redesign — the brand palette collapses to a SINGLE purple.
-     `--tq-purple` is the one accent (solid buttons, toggles, sliders,
-     active / selected states). The legacy names (`--tq-blue / -violet /
-     -lavender / -magenta`) are kept as ALIASES pointing at the same
-     purple so the ~26 files that still reference them recolour with no
-     edits. The multi-colour AI mesh gradient does NOT use these tokens
-     (it hardcodes its own hexes) — so the AI buttons keep their gradient. */
-  --tq-purple:       #8B5CF6;
-  --tq-purple-rgb:   139, 92, 246;
-  --tq-purple-hover: #7C3AED;
+  /* FINAL palette (2026-06-11) — the brand collapses to a SINGLE BLUE accent.
+     Main blue = #0057FF (the locked brand blue). Dark mode uses a BRIGHTER blue
+     (#3380FF) so the accent pops on the near-black bg; light mode uses the main
+     blue (see the `.light` override). The token is still NAMED `--tq-purple`
+     (kept so the ~26 files referencing it recolour with zero edits) but it now
+     resolves to blue in both themes — there is NO purple anywhere. The legacy
+     aliases (`--tq-blue / -violet / -lavender / -magenta`) point at it, and the
+     AI mesh gradient's own hexes were re-shaded to blue too. */
+  --tq-purple:       #3380FF;            /* dark: brighter blue accent */
+  --tq-purple-rgb:   51, 128, 255;
+  --tq-purple-hover: #0057FF;            /* dark: deeper blue (rest of .btn-gradient) */
   --tq-blue:        var(--tq-purple);
-  --tq-blue-rgb:    139, 92, 246;
+  --tq-blue-rgb:    51, 128, 255;
   --tq-magenta:     var(--tq-purple);
   --tq-magenta-hot: var(--tq-purple);
   --tq-violet:      var(--tq-purple);
-  --tq-violet-rgb:  139, 92, 246;
+  --tq-violet-rgb:  51, 128, 255;
   --tq-lavender:    var(--tq-purple);
 
   /* Per-format export-icon accent tints — file-type semantics
@@ -300,14 +301,15 @@
      SlidePresenceStack (added 2026-05-23 — was an inline rgba). */
   --tq-avatar-ring:   rgba(255, 255, 255, 0.4);
 
-  /* Brand-gradient stops, also exposed as standalone accent tokens so the two
-     non-purple brand colours can be referenced without raw hex. */
-  --tq-brand-blue:    #370BF4;
-  --tq-brand-purple:  #7D2DFF;
+  /* Brand-gradient stops, also exposed as standalone accent tokens. Both are now
+     BLUE (the brand is blue-only): a deep main blue + a brighter blue. The name
+     `--tq-brand-purple` is kept for back-compat but holds the bright blue. */
+  --tq-brand-blue:    #0057FF;
+  --tq-brand-purple:  #3380FF;
 
-  /* 5. Gradients */
-  --tq-gradient-brand:  linear-gradient(135deg, #370BF4 0%, #7D2DFF 100%);
-  --tq-gradient-full:   linear-gradient(135deg, #370BF4 0%, #7D2DFF 50%, #E036B8 100%);
+  /* 5. Gradients — all-blue ramps (deep → bright), no purple/magenta. */
+  --tq-gradient-brand:  linear-gradient(135deg, #0057FF 0%, #3380FF 100%);
+  --tq-gradient-full:   linear-gradient(135deg, #0042E0 0%, #0057FF 50%, #66A3FF 100%);
   /* Canonical fallback when JS-side per-user gradient picker isn't
      available (e.g. SSR before client hydration, legacy class-only
      consumers). Per-user variants are NOT defined as CSS vars
@@ -317,7 +319,7 @@
      failed to paint in some Chrome paint paths (gradient resolved
      fine in the OM but rendered as transparent fill at composite
      time); inlining the literal bypasses that. */
-  --tq-gradient-avatar: linear-gradient(135deg, #370BF4 0%, #E036B8 100%);
+  --tq-gradient-avatar: linear-gradient(135deg, #0057FF 0%, #66A3FF 100%);
 
   /* 6. Border Radius */
   /* Single consumed radius token (`.btn-pill` etc.). The full
@@ -356,6 +358,12 @@
      light (0) so a mono logo stays visible on either card. */
   --logo-invert: 1;
 
+  /* Pricing yearly-discount label colour. Sits inside the segmented toggle's
+     active pill (= bg-foreground: white in dark / BLACK in light). Dark: the
+     violet accent reads on the white pill. Light: a LIGHTER blue so it stays
+     visible on the black pill AND on the near-white inactive track. */
+  --tq-discount-accent: var(--tq-violet);
+
   /* 9. Background Blobs */
   --bg-blob-opacity-1: 0.28;
   --bg-blob-opacity-2: 0.22;
@@ -384,16 +392,18 @@
   --tq-dot:             rgba(0, 0, 0, 0.14);
   --tq-studio-dot:      rgba(0, 0, 0, 0.07);
   --tq-bg-strong:       rgba(0, 0, 0, 0.04);
-  /* Accent → brand BLUE in light mode (user direction): the solid purple accent
-     (buttons / toggles / active states / sliders) becomes blue. The aliases
-     --tq-violet / --tq-blue / --tq-lavender are `var(--tq-purple)`, so they
-     follow automatically; the *-rgb literals (used in rgba()) are flipped too. */
-  --tq-purple:       #370BF4;
-  --tq-purple-hover: #2A06C7;
-  --tq-purple-rgb:   55, 11, 244;
-  --tq-violet-rgb:   55, 11, 244;
-  --tq-blue-rgb:     55, 11, 244;
+  /* Light mode = the MAIN blue #0057FF at rest, a darker blue on hover. (Dark
+     mode uses the brighter #3380FF — see :root.) Aliases --tq-violet/-blue/
+     -lavender are `var(--tq-purple)`, so they follow; the *-rgb literals flip. */
+  --tq-purple:       #0057FF;
+  --tq-purple-hover: #0046CC;
+  --tq-purple-rgb:   0, 87, 255;
+  --tq-violet-rgb:   0, 87, 255;
+  --tq-blue-rgb:     0, 87, 255;
   --logo-invert:     0;
+  /* Lighter blue for the yearly-discount label so it reads on the BLACK active
+     pill (bg-foreground in light) and on the near-white track. */
+  --tq-discount-accent: #5b8def;
 }
 
 /* Monochrome logo (brand-kit + flow-card uploads) — flips white↔black with the
@@ -401,6 +411,13 @@
 .logo-monochrome {
   filter: brightness(0) invert(var(--logo-invert));
 }
+
+/* Theme-aware app wordmark (ThemeLogo): white mark on dark, brand-coloured mark
+   on light. Default theme is dark → show `.logo-on-dark`, hide `.logo-on-light`;
+   `:root.light` swaps them. */
+.logo-on-light { display: none; }
+:root.light .logo-on-dark { display: none; }
+:root.light .logo-on-light { display: inline-block; }
 
 /* ─── Global cursor defaults ─── */
 button, a, [role="button"] {
@@ -611,10 +628,12 @@ textarea.input-dark {
 }
 
 @theme inline {
-  --color-brand-purple-400: #C084FC;
-  --color-brand-purple-500: #A855F7;
-  --color-brand-purple-600: #9333EA;
-  --color-brand-purple-900: #3B0764;
+  /* Blue scale (names kept for back-compat — e.g. `selection:bg-brand-purple-500`
+     in the root layout; values are blue so the selection highlight reads blue). */
+  --color-brand-purple-400: #66A3FF;
+  --color-brand-purple-500: #3380FF;
+  --color-brand-purple-600: #0057FF;
+  --color-brand-purple-900: #00226B;
   --color-brand-dark: #0A0710;
 
   --color-brand-gray-800: #1F2937;
@@ -646,7 +665,7 @@ textarea.input-dark {
   --color-surface-container-highest: #242424;
 
   --color-primary: var(--tq-purple);
-  --color-on-primary: #490080;
+  --color-on-primary: #00204D;
   --color-primary-container: var(--color-brand-purple-900);
   --color-on-primary-container: var(--color-brand-purple-400);
 
@@ -692,9 +711,9 @@ textarea.input-dark {
   --font-label-sm: "Cairo", sans-serif;
   --font-label-lg: "Cairo", sans-serif;
 
-  --background-image-gradient-text: linear-gradient(90deg, #E879F9 0%, #A855F7 50%, #3B82F6 100%);
+  --background-image-gradient-text: linear-gradient(90deg, #66A3FF 0%, #2E7DFF 50%, #0057FF 100%);
   --background-image-card-gradient: linear-gradient(180deg, rgba(31, 41, 55, 0.4) 0%, rgba(17, 24, 39, 0.8) 100%);
-  --background-image-button-gradient: linear-gradient(90deg, #A855F7 0%, #6366F1 100%);
+  --background-image-button-gradient: linear-gradient(90deg, #3380FF 0%, #0057FF 100%);
 
   --font-sans: "Cairo", var(--font-cairo), ui-sans-serif, system-ui, sans-serif;
 }
@@ -818,7 +837,8 @@ html.app-shell-scroll body {
 
 /* ─── Text Gradient ─── */
 .text-gradient {
-  background: linear-gradient(90deg, #E879F9 0%, #A855F7 50%, #3B82F6 100%);
+  /* All-blue headline ramp (light → bright → main blue); reads on both themes. */
+  background: linear-gradient(90deg, #66A3FF 0%, #2E7DFF 50%, #0057FF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -898,10 +918,10 @@ html.app-shell-scroll body {
      The ring never dips below the normal-state tone, so the page
      background can never bleed through. */
   background:
-    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #66A3FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
     var(--tq-border-hairline);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -958,6 +978,15 @@ html.app-shell-scroll body {
 /* §24: hover = the lighter purple (flipped — see `.btn-gradient` above). */
 .btn-gradient:hover:not(:disabled) {
   background: var(--tq-purple);
+}
+/* Light mode flips the rest/hover shades (user direction): rest = the normal
+   blue, hover = the darker blue (the reverse of the dark theme's deep-rest /
+   light-hover). --tq-purple is the normal blue, --tq-purple-hover the darker. */
+:root.light .btn-gradient {
+  background: var(--tq-purple);
+}
+:root.light .btn-gradient:hover:not(:disabled) {
+  background: var(--tq-purple-hover);
 }
 
 /* ─── Animated Mesh-Gradient Button ─────────────────────────────────
@@ -1054,10 +1083,10 @@ html.app-shell-scroll body {
      on top as moving highlights, so the ring never dips below the
      normal-state border tone. */
   background:
-    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #66A3FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
     var(--tq-border-hairline);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1073,19 +1102,19 @@ html.app-shell-scroll body {
    idle — the drift continues uninterrupted, only the visual surface
    transitions from "ring-only" to "full fill". */
 .btn-gradient-anim:hover {
-  /* The hover fill is a dark mesh (#3300FF base) in BOTH themes, so the text
+  /* The hover fill is a dark mesh (#0042E0 base) in BOTH themes, so the text
      must be white on hover — even in light, where the rest text is dark. This
      keeps the hover identical to the dark version. */
   color: #fff;
   /* Dark #27074C blob + solid base dropped — bright blobs over the
-     deepest brand colour (#3300FF) for the CTA backdrop. */
+     deepest brand colour (#0042E0) for the CTA backdrop. */
   background:
-    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 60%),
-    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 60%),
-    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 60%),
-    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #66A3FF 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 60%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 60%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 35%),
-    #3300FF;
+    #0042E0;
   /* No `box-shadow` on hover — buttons are flat app-wide. The
      full mesh fill + brightness shift already give the hover
      state strong enough affordance. */
@@ -1165,10 +1194,10 @@ html.app-shell-scroll body {
   /* 2 px stroke, ~4 px gap (user direction). */
   padding: 2px;
   background:
-    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #3300FF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #E036B8 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #66A3FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
     var(--tq-border-hairline);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1842,9 +1871,9 @@ html.app-shell-scroll body {
    canvas `lighter` compositing). `--yo` (glowYOffset) nudges them down. */
 .tq-aurora-a {
   background:
-    radial-gradient(60% 72% at 25% 100%, rgba(55, 11, 244, 0.7) 0%, transparent 100%),
-    radial-gradient(66% 78% at 50% 103%, rgba(124, 58, 237, 0.72) 0%, transparent 100%),
-    radial-gradient(52% 64% at 40% 95%, rgba(79, 70, 229, 0.6) 0%, transparent 100%);
+    radial-gradient(60% 72% at 25% 100%, rgba(0, 87, 255, 0.7) 0%, transparent 100%),
+    radial-gradient(66% 78% at 50% 103%, rgba(51, 128, 255, 0.72) 0%, transparent 100%),
+    radial-gradient(52% 64% at 40% 95%, rgba(0, 66, 224, 0.6) 0%, transparent 100%);
   background-blend-mode: screen;
   transform-origin: 50% 100%;
   animation: tq-aurora-a 13s ease-in-out infinite;
@@ -1852,8 +1881,8 @@ html.app-shell-scroll body {
 }
 .tq-aurora-b {
   background:
-    radial-gradient(60% 72% at 78% 100%, rgba(147, 51, 234, 0.68) 0%, transparent 100%),
-    radial-gradient(52% 64% at 62% 96%, rgba(109, 40, 217, 0.6) 0%, transparent 100%);
+    radial-gradient(60% 72% at 78% 100%, rgba(51, 128, 255, 0.68) 0%, transparent 100%),
+    radial-gradient(52% 64% at 62% 96%, rgba(0, 87, 255, 0.6) 0%, transparent 100%);
   background-blend-mode: screen;
   mix-blend-mode: screen;
   transform-origin: 50% 100%;

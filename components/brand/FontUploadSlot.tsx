@@ -140,7 +140,7 @@ export function FontUploadSlot({
           // the row shrinks to 30 px (matching the persistent-text
           // input on /create) and the label switches to text-xs +
           // smaller icon.
-          className={`flex w-full items-center gap-2 rounded-xl border border-dashed bg-black/20 transition-colors ${
+          className={`flex w-full items-center gap-2 rounded-xl border border-dashed bg-overlay-soft transition-colors ${
             compact ? "px-2.5 py-1" : "px-3 py-2"
           } ${
             alignStart ? "justify-start text-start" : "justify-center text-center"
