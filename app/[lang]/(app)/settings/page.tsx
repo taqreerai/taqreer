@@ -220,14 +220,14 @@ export default function SettingsPage() {
               </div>
             )}
             <div>
-              <p className="font-semibold text-white text-sm">{displayName}</p>
+              <p className="font-semibold text-foreground text-sm">{displayName}</p>
               <p className="text-muted text-xs">{user?.email}</p>
             </div>
           </div>
 
           <form onSubmit={handleSaveProfile} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-white">{dict.pages.settings.profile.fullName}</label>
+              <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.profile.fullName}</label>
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={dict.pages.settings.profile.fullNamePlaceholder} className="input-dark" />
             </div>
             <div>
@@ -255,16 +255,16 @@ export default function SettingsPage() {
           <form onSubmit={handleChangePassword} className="space-y-4">
             {!isGoogleUser && (
               <div>
-                <label className="block text-sm font-medium mb-2 text-white">{dict.pages.settings.password.current}</label>
+                <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.password.current}</label>
                 <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" className="input-dark" />
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium mb-2 text-white">{dict.pages.settings.password.new}</label>
+              <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.password.new}</label>
               <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="••••••••" className="input-dark" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-white">{dict.pages.settings.password.confirm}</label>
+              <label className="block text-sm font-medium mb-2 text-foreground">{dict.pages.settings.password.confirm}</label>
               <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="••••••••" className="input-dark" />
             </div>
             <StatusMsg msg={pwMsg} />
@@ -308,7 +308,7 @@ export default function SettingsPage() {
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="surface-modal rounded-2xl p-8 max-w-md w-full mt-[20vh]"
             >
-              <h3 className="text-xl font-bold mb-2 text-white">{dict.pages.settings.deleteAccount.confirmTitle}</h3>
+              <h3 className="text-xl font-bold mb-2 text-foreground">{dict.pages.settings.deleteAccount.confirmTitle}</h3>
               <p className="text-muted text-sm mb-8">{dict.pages.settings.deleteAccount.confirmBody}</p>
               <div className="flex gap-3">
                 <button

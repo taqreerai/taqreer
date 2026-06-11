@@ -87,7 +87,7 @@ export function TemplateDeleteConfirmDialog({
             >
               <h3
                 id="template-delete-title"
-                className="mb-2 text-xl font-bold text-white"
+                className="mb-2 text-xl font-bold text-foreground"
               >
                 {dict.dialogs.deleteTemplate.title}
               </h3>

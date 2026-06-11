@@ -50,11 +50,11 @@ function FlowColumn({
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
     >
-      <div className="w-fit text-[var(--tq-text-muted)] transition-colors group-hover:text-white">
+      <div className="w-fit text-[var(--tq-text-muted)] transition-colors group-hover:text-foreground">
         <AnimatedIcon ref={iconRef} name={icon} size={40} strokeWidth={1.5} />
       </div>
       <div>
-        <h3 className="mb-2 text-lg font-medium text-white transition-colors group-hover:text-[var(--tq-violet)]">
+        <h3 className="mb-2 text-lg font-medium text-foreground transition-colors group-hover:text-[var(--tq-violet)]">
           {title}
         </h3>
         <p className="text-sm leading-relaxed text-muted">{description}</p>

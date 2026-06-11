@@ -259,10 +259,10 @@ export function SaveAsTemplateDialog({
                   paragraph). The "what does this do" copy lives in
                   the body instead — keeps the header reading like a
                   toolbar, not a wall of explanation. */}
-              <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+              <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
                 <h2
                   id="save-tpl-title"
-                  className="text-base font-semibold text-white"
+                  className="text-base font-semibold text-foreground"
                 >
                   {dict.dialogs.saveTemplate.title}
                 </h2>
@@ -271,7 +271,7 @@ export function SaveAsTemplateDialog({
                   onClick={onCancel}
                   disabled={saving}
                   aria-label={dict.common.close}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined">close</span>
                 </button>
@@ -283,7 +283,7 @@ export function SaveAsTemplateDialog({
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 {/* One-line context note — replaces the long header
                     description so the header stays compact. */}
-                <p className="mb-4 text-xs text-white/50 leading-relaxed">
+                <p className="mb-4 text-xs text-foreground/50 leading-relaxed">
                   {dict.dialogs.saveTemplate.description}
                 </p>
                 <BrandPreview preview={preview} error={previewError} />
@@ -297,10 +297,10 @@ export function SaveAsTemplateDialog({
                     ariaLabel={dict.dialogs.saveTemplate.shareCommunity}
                   />
                   <div className="flex-1 select-none">
-                    <div className="text-sm font-medium text-white">
+                    <div className="text-sm font-medium text-foreground">
                       {dict.dialogs.saveTemplate.shareCommunity}
                     </div>
-                    <div className="text-xs text-white/50 mt-0.5 leading-relaxed">
+                    <div className="text-xs text-foreground/50 mt-0.5 leading-relaxed">
                       {dict.dialogs.saveTemplate.shareCommunityDesc}
                     </div>
                   </div>
@@ -317,7 +317,7 @@ export function SaveAsTemplateDialog({
                   "مسح الكل". Both pills carry equal visual weight; Save
                   conveys primacy via copy + placement, not a different
                   button style — matches the rest of the glass system. */}
-              <footer className="flex items-center justify-end gap-2 border-t border-white/[0.08] px-4 py-3">
+              <footer className="flex items-center justify-end gap-2 border-t border-foreground/[0.08] px-4 py-3">
                 <button
                   type="button"
                   onClick={onCancel}
@@ -433,13 +433,13 @@ function BrandPreview({
         // the loaded values byte-for-byte so the moment data arrives
         // nothing nudges.
         <div className="animate-pulse">
-          <div className="h-[35px] w-2/3 rounded bg-white/[0.05]" />
-          <div className="mt-2 h-[14px] w-1/2 rounded bg-white/[0.05]" />
+          <div className="h-[35px] w-2/3 rounded bg-foreground/[0.05]" />
+          <div className="mt-2 h-[14px] w-1/2 rounded bg-foreground/[0.05]" />
           <div className="mt-5 flex gap-2">
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="rounded-[9px] bg-white/[0.05]"
+                className="rounded-[9px] bg-foreground/[0.05]"
                 style={{ width: 32, height: 32 }}
               />
             ))}

@@ -257,12 +257,12 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
         className="surface-card flex flex-col items-center justify-center gap-3 p-12 text-center"
       >
         <span
-          className="material-symbols-outlined text-[40px] text-white/40"
+          className="material-symbols-outlined text-[40px] text-foreground/40"
           aria-hidden
         >
           id_card
         </span>
-        <h2 className="text-lg font-semibold text-white">
+        <h2 className="text-lg font-semibold text-foreground">
           {dict.pages.brandKits.emptyTitle}
         </h2>
         <p className="max-w-md text-sm leading-relaxed text-muted">

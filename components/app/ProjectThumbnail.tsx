@@ -254,7 +254,7 @@ export function ProjectThumbnail({
           <div
             role="status"
             aria-label={dict.components.projectThumbnail.preparingTemplate}
-            className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-foreground"
           >
             <ParagraphWriteIcon size={32} />
           </div>
@@ -276,7 +276,7 @@ export function ProjectThumbnail({
         {actions.favoriteState ? (
           <span
             aria-label={dict.components.projectThumbnail.favorite}
-            className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-white"
+            className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-foreground"
           >
             star
           </span>
@@ -293,10 +293,10 @@ export function ProjectThumbnail({
       <div dir={dir} className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           {/* Title + 3-dots color is driven by INLINE style (not
-              Tailwind `text-white`/`text-muted` utilities) because
+              Tailwind `text-foreground`/`text-muted` utilities) because
               the custom `.text-muted` rule in globals.css lives
               OUTSIDE Tailwind's `@layer utilities` and beats the
-              layered `.text-white` rule even when only `text-white`
+              layered `.text-foreground` rule even when only `text-foreground`
               is on the className — Tailwind v4's @layer cascade
               gives unlayered rules higher priority. Inline-style
               sidesteps the entire layer fight. */}
@@ -319,7 +319,7 @@ export function ProjectThumbnail({
               disabled={actions.renameSaving}
               maxLength={MAX_TITLE_LENGTH}
               aria-label={dict.components.projectThumbnail.projectName}
-              className="w-full truncate rounded-md border border-white/15 bg-white/[0.04] px-1.5 py-0.5 text-xs font-semibold leading-tight text-white outline-none transition-colors focus:border-white/40 disabled:opacity-60"
+              className="w-full truncate rounded-md border border-foreground/15 bg-foreground/[0.04] px-1.5 py-0.5 text-xs font-semibold leading-tight text-foreground outline-none transition-colors focus:border-foreground/40 disabled:opacity-60"
             />
           ) : (
             <p
@@ -367,13 +367,13 @@ export function ProjectThumbnail({
           // sit flush with the thumbnail's left edge. Same alignment
           // formula used in TemplateTile.
           //
-          // `hover:text-white!` (Tailwind v4 important modifier) is
+          // `hover:text-foreground!` (Tailwind v4 important modifier) is
           // REQUIRED because the inline `style.color` below sets a
           // color on every render, and inline styles beat unlayered
           // utility rules in normal specificity. Without `!` the
           // muted color held even when the cursor was on the
           // button — user reported "no hover on projects" 2026-05-23.
-          className="-mt-0.5 -me-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:text-white!"
+          className="-mt-0.5 -me-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:text-foreground!"
           style={{
             // Stays white when favorited (even idle) so the tile reads
             // as "starred" at a glance, paired with the filled-star

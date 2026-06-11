@@ -201,7 +201,7 @@ function LandingTemplateTile({
       {isMultiSlide && hoverIndex !== null ? (
         <span
           dir="ltr"
-          className="pointer-events-none absolute bottom-2 end-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white"
+          className="pointer-events-none absolute bottom-2 end-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground"
         >
           {hoverIndex + 1} / {slides.length}
         </span>

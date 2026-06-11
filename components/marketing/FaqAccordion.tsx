@@ -34,7 +34,7 @@ export function FaqAccordion() {
                   className={`text-base font-medium transition-colors ${
                     isOpen
                       ? "text-[var(--tq-violet)]"
-                      : "text-white hover:text-[var(--tq-violet)]"
+                      : "text-foreground hover:text-[var(--tq-violet)]"
                   }`}
                 >
                   {item.q}

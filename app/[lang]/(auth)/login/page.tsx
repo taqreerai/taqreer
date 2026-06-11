@@ -205,13 +205,13 @@ export default function LoginPage() {
       >
         <span className="whitespace-nowrap">
           {t.login.noAccount}
-          <Link href={localizedHref("/signup", locale)} className="text-white hover:underline cursor-pointer">
+          <Link href={localizedHref("/signup", locale)} className="text-foreground hover:underline cursor-pointer">
             {t.login.createAccount}
           </Link>
         </span>
         <Link
           href={localizedHref("/forgot-password", locale)}
-          className="text-xs text-white hover:underline cursor-pointer whitespace-nowrap"
+          className="text-xs text-foreground hover:underline cursor-pointer whitespace-nowrap"
         >
           {t.login.forgotPassword}
         </Link>

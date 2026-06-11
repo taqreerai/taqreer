@@ -557,17 +557,17 @@ export function ShareDialog({
               className="surface-modal pointer-events-auto flex w-[min(100vw-24px,640px)] max-h-[min(85vh,720px)] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
-              <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+              <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
                 <h2
                   id="share-title"
-                  className="text-base font-semibold text-white truncate"
+                  className="text-base font-semibold text-foreground truncate"
                   title={projectTitle}
                 >
                   {tab === "share" || !showExportTab
                     ? dict.dialogs.share.title
                     : dict.common.export}{" "}
                   ·{" "}
-                  <span className="text-white/60 font-normal">
+                  <span className="text-foreground/60 font-normal">
                     {projectTitle}
                   </span>
                 </h2>
@@ -576,7 +576,7 @@ export function ShareDialog({
                   onClick={onClose}
                   disabled={anyBusy}
                   aria-label={dict.common.close}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined">close</span>
                 </button>
@@ -610,7 +610,7 @@ export function ShareDialog({
                     entirely when `showExportTab` is false (editor
                     toolbox use case — share-only, no rail needed). */}
                 {showExportTab ? (
-                  <div className="flex shrink-0 flex-col gap-2 border-e border-white/[0.08] px-3 py-5">
+                  <div className="flex shrink-0 flex-col gap-2 border-e border-foreground/[0.08] px-3 py-5">
                     <TabPill
                       label={dict.dialogs.share.title}
                       icon="person_add"
@@ -719,7 +719,7 @@ export function ShareDialog({
                   Uses `.btn-gradient` (PATTERN 2 — primary CTA) to
                   match the template-modal "استخدامه كقالب" button so
                   the modals read as one family. */}
-              <footer className="flex items-center justify-between gap-2 border-t border-white/[0.08] px-4 py-3">
+              <footer className="flex items-center justify-between gap-2 border-t border-foreground/[0.08] px-4 py-3">
                 <button
                   type="button"
                   onClick={copyLink}
@@ -745,7 +745,7 @@ export function ShareDialog({
                     : dict.dialogs.share.copyLink}
                 </button>
                 <div className="inline-flex items-center gap-2">
-                  <span className="text-xs text-white/60">
+                  <span className="text-xs text-foreground/60">
                     {state?.publicAccessLevel === "view"
                       ? dict.dialogs.share.publicLinkEnabled
                       : dict.dialogs.share.publicLinkDisabled}
@@ -790,7 +790,7 @@ function TabPill({
       onClick={onClick}
       aria-pressed={active}
       className={`relative flex items-center justify-start gap-2 rounded-full px-4 py-2 text-xs transition-colors ${
-        active ? "text-white" : "text-white/55 hover:text-white"
+        active ? "text-foreground" : "text-foreground/55 hover:text-foreground"
       }`}
       style={{ minWidth: 110 }}
     >
@@ -852,7 +852,7 @@ function ShareTabContent({
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="mb-2 text-sm font-medium text-white">
+        <h3 className="mb-2 text-sm font-medium text-foreground">
           {dict.dialogs.share.invitePeople}
         </h3>
 
@@ -893,7 +893,7 @@ function ShareTabContent({
               placeholder={dict.dialogs.share.emailPlaceholder}
               dir="ltr"
               disabled={inviteBusy || !state}
-              className="flex-1 bg-transparent px-4 text-end text-sm text-white placeholder:text-white/35 focus:outline-none disabled:opacity-50"
+              className="flex-1 bg-transparent px-4 text-end text-sm text-foreground placeholder:text-foreground/35 focus:outline-none disabled:opacity-50"
             />
             <AccessChipDropdown
               value={inviteRole}
@@ -917,7 +917,7 @@ function ShareTabContent({
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-medium text-white">
+        <h3 className="mb-2 text-sm font-medium text-foreground">
           {dict.dialogs.share.peopleWithAccess}
         </h3>
 
@@ -975,7 +975,7 @@ function ShareTabContent({
           </AnimatePresence>
 
           {state && state.shares.length === 0 ? (
-            <li className="text-xs text-white/40 pe-1 pt-1">
+            <li className="text-xs text-foreground/40 pe-1 pt-1">
               {dict.dialogs.share.noInvites}
             </li>
           ) : null}
@@ -1046,8 +1046,8 @@ function PersonRow({
           status string (text-end under RTL = left) to disagree —
           the visual right edge was the spec, so pin it physically. */}
       <div className="min-w-0 flex-1 text-end">
-        <div className="truncate text-sm text-white">{displayName}</div>
-        <div className="truncate text-[11px] text-white/40">{email}</div>
+        <div className="truncate text-sm text-foreground">{displayName}</div>
+        <div className="truncate text-[11px] text-foreground/40">{email}</div>
       </div>
       {role === "owner" ? (
         <AccessChipDropdown
@@ -1069,7 +1069,7 @@ function PersonRow({
           onClick={onRevoke}
           disabled={busy}
           aria-label={dict.dialogs.share.remove}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-foreground/40 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-40"
         >
           <span
             className="material-symbols-outlined"
@@ -1107,7 +1107,7 @@ function ExportTabContent({
   if (loadError) {
     return (
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-white">
+        <h3 className="text-sm font-medium text-foreground">
           {dict.dialogs.share.exportPresentation}
         </h3>
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -1136,7 +1136,7 @@ function ExportTabSkeleton() {
   // fetch lands.
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-medium text-white">
+      <h3 className="text-sm font-medium text-foreground">
         {dict.dialogs.share.exportFormat}
       </h3>
       <ul className="space-y-2">
@@ -1146,17 +1146,17 @@ function ExportTabSkeleton() {
             className="flex h-[60px] items-center gap-3 rounded-xl px-3 py-2.5"
             style={{ border: "1px solid var(--tq-border-hairline)" }}
           >
-            <span className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-white/[0.05]" />
+            <span className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-foreground/[0.05]" />
             <div className="flex-1 space-y-1.5">
-              <div className="h-3 w-20 animate-pulse rounded bg-white/[0.05]" />
-              <div className="h-2.5 w-32 animate-pulse rounded bg-white/[0.05]" />
+              <div className="h-3 w-20 animate-pulse rounded bg-foreground/[0.05]" />
+              <div className="h-2.5 w-32 animate-pulse rounded bg-foreground/[0.05]" />
             </div>
           </li>
         ))}
       </ul>
       <div className="space-y-2 pt-2">
-        <p className="text-xs text-white/50">{dict.dialogs.share.orShareOn}</p>
-        <div className="h-8 w-24 animate-pulse rounded-full bg-white/[0.05]" />
+        <p className="text-xs text-foreground/50">{dict.dialogs.share.orShareOn}</p>
+        <div className="h-8 w-24 animate-pulse rounded-full bg-foreground/[0.05]" />
       </div>
     </div>
   );
@@ -1182,7 +1182,7 @@ function ExportTabBody({
   });
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-medium text-white">
+      <h3 className="text-sm font-medium text-foreground">
         {dict.dialogs.share.exportFormat}
       </h3>
       <ul className="space-y-2">
@@ -1234,7 +1234,7 @@ function ExportTabBody({
       ) : null}
 
       <div className="space-y-2 pt-2">
-        <p className="text-xs text-white/50">{dict.dialogs.share.orShareOn}</p>
+        <p className="text-xs text-foreground/50">{dict.dialogs.share.orShareOn}</p>
         <LinkedInShareButton projectId={projectId} />
       </div>
     </div>
@@ -1264,7 +1264,7 @@ function ExportRow({
         type="button"
         onClick={onClick}
         disabled={disabled || running}
-        className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-white/[0.04] disabled:opacity-50"
+        className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-foreground/[0.04] disabled:opacity-50"
         style={{
           border: "1px solid var(--tq-border-hairline)",
         }}
@@ -1274,7 +1274,7 @@ function ExportRow({
           style={{ background: accent }}
         >
           <span
-            className="material-symbols-outlined text-white"
+            className="material-symbols-outlined text-foreground"
             style={{ fontSize: 22 }}
             aria-hidden
           >
@@ -1282,11 +1282,11 @@ function ExportRow({
           </span>
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-sm text-white">{label}</div>
-          <div className="text-[11px] text-white/45">{sub}</div>
+          <div className="text-sm text-foreground">{label}</div>
+          <div className="text-[11px] text-foreground/45">{sub}</div>
         </div>
         <span
-          className="material-symbols-outlined text-white/40 transition-colors group-hover:text-white"
+          className="material-symbols-outlined text-foreground/40 transition-colors group-hover:text-foreground"
           style={{ fontSize: 20 }}
           aria-hidden
         >

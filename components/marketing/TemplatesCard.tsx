@@ -26,7 +26,7 @@ export function TemplatesCard({
           block re-anchors RTL for natural Arabic reading. */}
       <div dir="ltr" className="flex flex-col items-stretch gap-8 md:flex-row">
         <div dir={dir} className="flex flex-1 flex-col justify-center md:py-4">
-          <h3 className="mb-3 text-xl font-medium leading-snug text-white">
+          <h3 className="mb-3 text-xl font-medium leading-snug text-foreground">
             {dict.landing.templatesCard.title}
           </h3>
           <p className="mb-6 text-sm leading-relaxed text-muted">

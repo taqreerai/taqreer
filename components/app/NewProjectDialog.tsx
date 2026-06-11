@@ -81,7 +81,7 @@ export function NewProjectDialog({
                 <div>
                   <h3
                     id="new-project-title"
-                    className="mb-1 text-xl font-bold text-white"
+                    className="mb-1 text-xl font-bold text-foreground"
                   >
                     {dict.newProjectDialog.title}
                   </h3>
@@ -93,7 +93,7 @@ export function NewProjectDialog({
                   type="button"
                   onClick={onClose}
                   aria-label={dict.common.close}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/5 hover:text-white"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-foreground/5 hover:text-foreground"
                 >
                   <span
                     className="material-symbols-outlined"
@@ -121,12 +121,12 @@ export function NewProjectDialog({
                       className="qa-card group relative flex cursor-pointer flex-col gap-3 p-4 text-start no-underline transition-all duration-200"
                     >
                       <div>
-                        <span className="material-symbols-outlined text-[20px] text-muted transition-colors group-hover:text-white">
+                        <span className="material-symbols-outlined text-[20px] text-muted transition-colors group-hover:text-foreground">
                           {card.icon}
                         </span>
                       </div>
                       <div>
-                        <h4 className="mb-0.5 text-base font-semibold leading-snug text-white">
+                        <h4 className="mb-0.5 text-base font-semibold leading-snug text-foreground">
                           {copy.title}
                         </h4>
                         <p className="text-[12px] leading-relaxed text-muted">

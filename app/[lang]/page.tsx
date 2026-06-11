@@ -213,12 +213,12 @@ export default async function LandingPage({
           <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
             {footerGroups.map((group) => (
               <div key={group.title} className="md:px-8 md:first:pe-0">
-                <h4 className="mb-6 font-medium text-white">{group.title}</h4>
+                <h4 className="mb-6 font-medium text-foreground">{group.title}</h4>
                 <ul className="space-y-3 text-sm text-muted">
                   {group.links.map((link) => (
                     <li key={link.label}>
                       <a
-                        className="transition-colors hover:text-white"
+                        className="transition-colors hover:text-foreground"
                         href={link.href}
                       >
                         {link.label}

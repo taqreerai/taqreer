@@ -86,7 +86,7 @@ export function TrashConfirmDialog({
           >
             <h3
               id="trash-confirm-title"
-              className="mb-2 text-xl font-bold text-white"
+              className="mb-2 text-xl font-bold text-foreground"
             >
               {dict.dialogs.trashConfirm.title}
             </h3>

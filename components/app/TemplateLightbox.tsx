@@ -203,11 +203,11 @@ export function TemplateLightbox({
               className="surface-modal pointer-events-auto flex max-h-[90vh] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
-              <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+              <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <h2
                     id="tpl-lbx-title"
-                    className="truncate text-base font-semibold text-white"
+                    className="truncate text-base font-semibold text-foreground"
                   >
                     {dict.components.lightbox.title}
                   </h2>
@@ -215,7 +215,7 @@ export function TemplateLightbox({
                 </div>
                 <div className="flex items-center gap-3">
                   {isMulti ? (
-                    <span className="text-xs text-white/50" dir="ltr">
+                    <span className="text-xs text-foreground/50" dir="ltr">
                       {index + 1} / {total}
                     </span>
                   ) : null}
@@ -223,7 +223,7 @@ export function TemplateLightbox({
                     type="button"
                     onClick={onClose}
                     aria-label={dict.common.close}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
                   >
                     <span className="material-symbols-outlined">close</span>
                   </button>
@@ -265,7 +265,7 @@ export function TemplateLightbox({
                       }}
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-white/40">
+                    <div className="flex h-full w-full items-center justify-center text-foreground/40">
                       <span className="material-symbols-outlined text-[40px]">
                         hourglass_empty
                       </span>
@@ -290,7 +290,7 @@ export function TemplateLightbox({
                 // max-width; the inner `w-max mx-auto` centers the thumbs
                 // when they fit and lets them overflow-scroll (without
                 // clipping the first thumb, which `justify-center` would).
-                <div className="overflow-x-auto border-t border-white/[0.08] px-5 py-3 [scrollbar-width:thin]">
+                <div className="overflow-x-auto border-t border-foreground/[0.08] px-5 py-3 [scrollbar-width:thin]">
                   <div className="mx-auto flex w-max items-center gap-2">
                     {slides.map((src, i) => {
                       const active = i === index;
@@ -331,7 +331,7 @@ export function TemplateLightbox({
                   When the parent's seed request is in flight,
                   `useBusy` dims the button + swaps the icon to a
                   spinner glyph so the user sees the click registered. */}
-              <footer className="flex items-center justify-end border-t border-white/[0.08] px-5 py-3">
+              <footer className="flex items-center justify-end border-t border-foreground/[0.08] px-5 py-3">
                 <button
                   type="button"
                   onClick={onUseTemplate}
@@ -386,7 +386,7 @@ function ArrowButton({
       onClick={onClick}
       disabled={!enabled}
       aria-label={ariaLabel}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-white/25"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-foreground/25"
     >
       <span className="material-symbols-outlined">
         {side === "left" ? "chevron_left" : "chevron_right"}

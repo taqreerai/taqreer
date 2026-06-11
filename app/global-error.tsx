@@ -43,12 +43,12 @@ export default function GlobalError({
 
   return (
     <html dir={locale === "ar" ? "rtl" : "ltr"} lang={locale}>
-      <body className="page-container flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--tq-bg)] text-white font-cairo">
+      <body className="page-container flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--tq-bg)] text-foreground font-cairo">
         <h2 className="text-2xl">{t.title}</h2>
         <p className="text-muted">{t.subtitle}</p>
         <button
           onClick={reset}
-          className="rounded-lg bg-[var(--tq-blue)] px-6 py-3 text-base text-white cursor-pointer"
+          className="rounded-lg bg-[var(--tq-blue)] px-6 py-3 text-base text-foreground cursor-pointer"
         >
           {t.retry}
         </button>

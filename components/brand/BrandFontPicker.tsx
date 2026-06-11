@@ -73,7 +73,7 @@ export function BrandFontPicker({
     <div className="space-y-3">
       {/* pb-1 (4px) + the stack's space-y-3 (12px) = a 16px title→selector
           gap, unified with the logo section's gap-4 across every flow. */}
-      <span className="block pb-1 text-xs font-semibold text-white/70">
+      <span className="block pb-1 text-xs font-semibold text-foreground/70">
         {dict.flows.fonts.fonts}
       </span>
 
@@ -94,9 +94,9 @@ export function BrandFontPicker({
           flow's submit prefers uploaded font families when present, else the
           chosen Google family. */}
       <div className="flex items-center gap-2" aria-hidden>
-        <span className="h-px flex-1 bg-white/10" />
-        <span className="shrink-0 text-[10px] text-white/40">{dict.flows.fonts.orUpload}</span>
-        <span className="h-px flex-1 bg-white/10" />
+        <span className="h-px flex-1 bg-foreground/10" />
+        <span className="shrink-0 text-[10px] text-foreground/40">{dict.flows.fonts.orUpload}</span>
+        <span className="h-px flex-1 bg-foreground/10" />
       </div>
 
       <div className="space-y-2">
@@ -135,7 +135,7 @@ export function BrandFontPicker({
             } ${hasPills ? "justify-start" : "justify-center"} ${
               dragging
                 ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
-                : "border-white/15 hover:border-white/30"
+                : "border-foreground/15 hover:border-foreground/30"
             }`}
           >
             <button
@@ -146,7 +146,7 @@ export function BrandFontPicker({
               }}
               disabled={atCap}
               aria-label={dict.flows.fonts.uploadFonts}
-              className="flex shrink-0 items-center justify-center text-white/70 transition-colors hover:text-white disabled:cursor-not-allowed disabled:text-white/30"
+              className="flex shrink-0 items-center justify-center text-foreground/70 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:text-foreground/30"
             >
               <span
                 className="material-symbols-outlined"
@@ -162,17 +162,17 @@ export function BrandFontPicker({
                   <span
                     key={`${u.name}-${index}`}
                     onClick={(event) => event.stopPropagation()}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-white bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-foreground bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
                   >
                     <span
-                      className="material-symbols-outlined text-white/60"
+                      className="material-symbols-outlined text-foreground/60"
                       style={{ fontSize: 13 }}
                     >
                       font_download
                     </span>
                     <span className="max-w-[120px] truncate">{u.name}</span>
                     {u.faces.length > 1 ? (
-                      <span className="text-[10px] text-white/40">
+                      <span className="text-[10px] text-foreground/40">
                         {dict.flows.fonts.weights.replace("{count}", String(u.faces.length))}
                       </span>
                     ) : null}
@@ -183,7 +183,7 @@ export function BrandFontPicker({
                         removeAt(index);
                       }}
                       aria-label={dict.flows.brand.removeFont.replace("{label}", u.name)}
-                      className="flex h-4 w-4 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+                      className="flex h-4 w-4 items-center justify-center rounded-full text-foreground/50 transition-colors hover:bg-foreground/10 hover:text-foreground"
                     >
                       <span
                         className="material-symbols-outlined"
@@ -197,13 +197,13 @@ export function BrandFontPicker({
               </div>
             ) : (
               <>
-                <span className="text-xs font-semibold text-white">
+                <span className="text-xs font-semibold text-foreground">
                   {atCap
                     ? dict.flows.fonts.maxFonts.replace("{max}", String(MAX_UPLOADED_FONTS))
                     : dict.flows.fonts.uploadFonts}
                 </span>
                 {atCap ? null : (
-                  <span className="text-[10px] text-white/40">
+                  <span className="text-[10px] text-foreground/40">
                     {dict.flows.fonts.fontFormats.replace("{max}", String(MAX_UPLOADED_FONTS))}
                   </span>
                 )}

@@ -52,8 +52,8 @@ export function BrandKitDropdown({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={` flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-          open ? "border-white/40" : "border-white/15 hover:border-white/30"
+        className={` flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+          open ? "border-foreground/40" : "border-foreground/15 hover:border-foreground/30"
         }`}
         style={{ background: "var(--tq-surface)" }}
       >
@@ -86,10 +86,10 @@ export function BrandKitDropdown({
                 onSelect(kit.id);
                 setOpen(false);
               }}
-              className="flex w-full items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-start text-sm text-white/80 transition-colors hover:bg-white/5 hover:text-white"
+              className="flex w-full items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-start text-sm text-foreground/80 transition-colors hover:bg-foreground/5 hover:text-foreground"
             >
               <span
-                className="material-symbols-outlined text-white/50"
+                className="material-symbols-outlined text-foreground/50"
                 style={{ fontSize: 15 }}
               >
                 palette

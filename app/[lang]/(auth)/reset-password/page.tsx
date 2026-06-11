@@ -135,7 +135,7 @@ export default function ResetPasswordPage() {
           className="bg-yellow-500/15 border border-yellow-500/40 rounded-xl p-3 text-yellow-200 text-sm"
         >
           {t.reset.staleLinkPrefix}
-          <Link href={localizedHref("/forgot-password", locale)} className="text-white hover:underline">
+          <Link href={localizedHref("/forgot-password", locale)} className="text-foreground hover:underline">
             {t.reset.staleLinkLink}
           </Link>
           .
@@ -196,7 +196,7 @@ export default function ResetPasswordPage() {
         {t.reset.rememberedPassword}
         <Link
           href={localizedHref("/login", locale)}
-          className="text-white hover:underline cursor-pointer"
+          className="text-foreground hover:underline cursor-pointer"
         >
           {t.reset.login}
         </Link>

@@ -58,14 +58,14 @@ export function CardHeader({ icon, title }: { icon: string; title: string }) {
     // distance from the card's top edge as it is from the separator — i.e.
     // visually centred in the header region. (This balance holds regardless of
     // the row height, since the top padding above and pb-4 below are equal.)
-    <header className="flex items-center gap-2 border-b border-white/[0.08] pb-4">
+    <header className="flex items-center gap-2 border-b border-foreground/[0.08] pb-4">
       <span
-        className="material-symbols-outlined text-white"
+        className="material-symbols-outlined text-foreground"
         style={{ fontSize: 18 }}
       >
         {icon}
       </span>
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
     </header>
   );
 }
@@ -125,8 +125,8 @@ export function SegmentedToggle<T extends string>({
         ? "px-3 py-1 text-xs font-semibold"
         : "px-2.5 py-1 text-[10px] font-semibold";
   const activeBgCls =
-    variant === "primary" ? "bg-[var(--tq-blue)]" : "bg-white";
-  const activeTextCls = variant === "primary" ? "text-white" : "text-black";
+    variant === "primary" ? "bg-[var(--tq-blue)]" : "bg-foreground";
+  const activeTextCls = variant === "primary" ? "text-foreground" : "text-black";
   // Stable layoutId so the sliding background pill is unique to THIS
   // toggle instance — without it, two SegmentedToggles on the same
   // page would share the indicator and animate from one to the other
@@ -159,7 +159,7 @@ export function SegmentedToggle<T extends string>({
             // triggering a smooth slide).
             className={`relative rounded-full transition-colors ${segCls} ${
               fullWidth ? "flex flex-1 items-center justify-center" : ""
-            } ${active ? activeTextCls : "text-white/60 hover:text-white"}`}
+            } ${active ? activeTextCls : "text-foreground/60 hover:text-foreground"}`}
           >
             {active ? (
               <motion.span
@@ -186,8 +186,8 @@ export function SegmentedToggle<T extends string>({
 
 // Pill — shared chooser primitive. Two states:
 //   • idle   — matches the dashboard bell button: glass surface,
-//              border-white/15, text-white/60 → border-white/40 +
-//              text-white on hover.
+//              border-foreground/15, text-foreground/60 → border-foreground/40 +
+//              text-foreground on hover.
 //   • active — same glass surface (no purple gradient), but the
 //              stroke turns full white and the text turns full white.
 //              Reads as "selected" without competing with the brand
@@ -222,8 +222,8 @@ export function Pill({
         size === "compact" ? "px-2 py-0.5 text-[11px]" : "px-3 py-1.5 text-sm"
       } ${
         active
-          ? "text-white"
-          : "text-white/60 hover:text-white"
+          ? "text-foreground"
+          : "text-foreground/60 hover:text-foreground"
       }`}
       style={{
         background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
@@ -305,10 +305,10 @@ export function PositionDropdown({
         // wrapping to a second line when the parent row is tight
         // (the row has flex-wrap which would otherwise break the
         // button itself across rows).
-        className={` flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={` flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-semibold text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           fullWidth ? "w-full justify-between" : "shrink-0"
         } ${
-          open ? "border-white/40" : "border-white/15 hover:border-white/30"
+          open ? "border-foreground/40" : "border-foreground/15 hover:border-foreground/30"
         }`}
         style={{
           background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
@@ -359,8 +359,8 @@ export function PositionDropdown({
                   }
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     active
-                      ? "border-white text-white"
-                      : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
+                      ? "border-foreground text-foreground"
+                      : "border-foreground/15 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
                   }`}
                   style={{
                     background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
@@ -436,7 +436,7 @@ export function PositionPicker({
             // always, stroke + text bump to full-white when active
             // (no purple gradient).
             className={` flex h-11 items-center justify-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              active ? "text-white" : "text-white/60 hover:text-white"
+              active ? "text-foreground" : "text-foreground/60 hover:text-foreground"
             }`}
             style={{
               background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
@@ -510,7 +510,7 @@ export function Toggle({
       aria-checked={value}
       aria-label={accessibleLabel}
       className={`relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ease-out disabled:opacity-50 ${
-        value ? "bg-[var(--tq-violet)]" : "bg-white/10"
+        value ? "bg-[var(--tq-violet)]" : "bg-foreground/10"
       }`}
     >
       {/* Knob — framer-motion spring matches the SegmentedToggle's sliding
@@ -524,7 +524,7 @@ export function Toggle({
           dir === "rtl" ? { right: value ? 22 : 2 } : { left: value ? 22 : 2 }
         }
         transition={{ type: "spring", stiffness: 500, damping: 35 }}
-        className="absolute top-0.5 h-5 w-5 rounded-full bg-white"
+        className="absolute top-0.5 h-5 w-5 rounded-full bg-foreground"
       />
     </button>
   );
@@ -538,7 +538,7 @@ export function Toggle({
   // than the toggle's natural content.
   return (
     <div className="inline-flex items-center justify-between gap-3">
-      <span className="text-sm text-white">{label}</span>
+      <span className="text-sm text-foreground">{label}</span>
       {switchEl}
     </div>
   );
@@ -556,7 +556,7 @@ export function Toggle({
 //
 // Why we INLINE the pill styles instead of using `.btn-pill`:
 // `.btn-pill` lives OUTSIDE `@layer utilities` in globals.css and
-// beats any Tailwind `text-white`/`border-white/40` utility we'd add
+// beats any Tailwind `text-foreground`/`border-foreground/40` utility we'd add
 // to flip the active state. Already burned by this with `.text-muted`
 // — sidestepping the layer-cascade fight is cheaper than re-shuffling
 // globals.css for a 2-button control.
@@ -594,8 +594,8 @@ export function LanguagePills({
             onClick={() => onChange(opt.code)}
             className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
               isActive
-                ? "border-white/40 text-white"
-                : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
+                ? "border-foreground/40 text-foreground"
+                : "border-foreground/15 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
             }`}
           >
             {optLabel}
@@ -663,8 +663,8 @@ export function ExclusionDropdown({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={` flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-          open ? "border-white/40" : "border-white/15 hover:border-white/30"
+        className={` flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+          open ? "border-foreground/40" : "border-foreground/15 hover:border-foreground/30"
         }`}
         style={{
           background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
@@ -731,12 +731,12 @@ function ExclusionItem({
       role="checkbox"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-white/5"
+      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs text-foreground transition-colors hover:bg-foreground/5"
     >
       <span className="whitespace-nowrap">{label}</span>
       <span
         className={`material-symbols-outlined transition-opacity ${
-          checked ? "opacity-100 text-white" : "opacity-0"
+          checked ? "opacity-100 text-foreground" : "opacity-0"
         }`}
         style={{ fontSize: 16 }}
       >
@@ -777,7 +777,7 @@ export function InlinePaletteSwatch({
       <button
         type="button"
         onClick={() => setPickerOpen((v) => !v)}
-        className="block h-7 w-7 shrink-0 rounded-md border border-white/15 transition-shadow hover:shadow-md"
+        className="block h-7 w-7 shrink-0 rounded-md border border-foreground/15 transition-shadow hover:shadow-md"
         style={{ backgroundColor: value }}
         aria-label={dict.flows.controls.colorN.replace("{n}", String(index + 1))}
       />
@@ -786,7 +786,7 @@ export function InlinePaletteSwatch({
         onClick={onRemove}
         disabled={!removable}
         aria-label={dict.flows.controls.removeColor}
-        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
+        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-foreground transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
           close

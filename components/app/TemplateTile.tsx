@@ -264,7 +264,7 @@ export function TemplateTile({
         <div
           role="status"
           aria-label={dict.components.templateTile.preparing}
-          className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-foreground"
         >
           <ParagraphWriteIcon size={32} />
         </div>
@@ -333,7 +333,7 @@ export function TemplateTile({
           // legible over any cover image without hardcoding a colour. Stays
           // visible while its menu is open so the trigger doesn't vanish
           // out from under the open popover.
-          className={`absolute top-2 end-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tq-bg-dim)] text-white transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${
+          className={`absolute top-2 end-2 z-20 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tq-bg-dim)] text-foreground transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${
             menuRect ? "opacity-100" : "opacity-0"
           }`}
         >

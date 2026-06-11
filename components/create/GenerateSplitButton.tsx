@@ -111,12 +111,12 @@ export function GenerateSplitButton({
           onClick={onGenerate}
           disabled={disabled || loading}
           aria-label={label}
-          className="relative z-10 inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="relative z-10 inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-60"
           style={{ borderRadius: "9999px 0 0 9999px" }}
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
           {loading ? (
-            <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
+            <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/30 border-t-white" />
           ) : (
             <span
               className="material-symbols-outlined leading-none"
@@ -139,7 +139,7 @@ export function GenerateSplitButton({
           disabled={disabled || loading}
           aria-label={presetMenuOpen ? dict.flows.generate.closeQualityMenu : dict.flows.generate.chooseQuality}
           aria-expanded={presetMenuOpen}
-          className="relative z-10 inline-flex w-10 items-center justify-center bg-transparent text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="relative z-10 inline-flex w-10 items-center justify-center bg-transparent text-foreground disabled:cursor-not-allowed disabled:opacity-60"
           style={{ borderRadius: "0 9999px 9999px 0" }}
         >
           <span
@@ -164,7 +164,7 @@ export function GenerateSplitButton({
             transition={{ type: "spring", bounce: 0.25, duration: 0.25 }}
             className=" absolute start-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           >
-            <div className="px-3 py-2 text-[11px] text-white/40">
+            <div className="px-3 py-2 text-[11px] text-foreground/40">
               {dict.flows.generate.generationQuality}
             </div>
             {QUALITY_PRESETS.map((preset) => {
@@ -180,8 +180,8 @@ export function GenerateSplitButton({
                   }}
                   className={`flex w-full items-center gap-3 px-3 py-2.5 text-start text-sm transition-colors ${
                     active
-                      ? "bg-white/[0.06] text-white"
-                      : "text-white/70 hover:bg-white/[0.04] hover:text-white"
+                      ? "bg-foreground/[0.06] text-foreground"
+                      : "text-foreground/70 hover:bg-foreground/[0.04] hover:text-foreground"
                   }`}
                 >
                   {/* Left cluster (visual right in RTL): check + label.
@@ -213,11 +213,11 @@ export function GenerateSplitButton({
                         {dict.flows.generate.thinking}
                       </span>
                     ) : (
-                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white/50 bg-[var(--tq-surface)]">
+                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-foreground/50 bg-[var(--tq-surface)]">
                         {dict.flows.generate.fast}
                       </span>
                     )}
-                    <span className="text-[11px] text-white/40 tabular-nums" dir="ltr">
+                    <span className="text-[11px] text-foreground/40 tabular-nums" dir="ltr">
                       {dict.flows.generate.etaMin.replace("{eta}", String(eta))}
                     </span>
                   </span>

@@ -16,12 +16,12 @@ export function NotFoundContent({ recovery }: { recovery: "home" | "dashboard" }
 
   return (
     <>
-      <ParagraphWriteIcon size={88} className="text-white" mode="break" />
-      <p className="max-w-md whitespace-pre-line text-base leading-relaxed text-white/70">
+      <ParagraphWriteIcon size={88} className="text-foreground" mode="break" />
+      <p className="max-w-md whitespace-pre-line text-base leading-relaxed text-foreground/70">
         {t.messagePrefix}
         <Link
           href={`${localizedHref("/", locale)}#contact`}
-          className="text-white underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white"
+          className="text-foreground underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white"
         >
           {t.reportLink}
         </Link>
@@ -29,7 +29,7 @@ export function NotFoundContent({ recovery }: { recovery: "home" | "dashboard" }
       </p>
       <Link
         href={localizedHref(recovery === "home" ? "/" : "/dashboard", locale)}
-        className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-5 py-2 text-sm font-medium text-white transition-colors hover:border-white/40 hover:bg-white/[0.08]"
+        className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-foreground/[0.04] px-5 py-2 text-sm font-medium text-foreground transition-colors hover:border-foreground/40 hover:bg-foreground/[0.08]"
       >
         {recovery === "home" ? t.backHome : t.backDashboard}
       </Link>

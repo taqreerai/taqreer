@@ -65,7 +65,7 @@ export default function ForgotPasswordPage() {
         <div className="bg-blue-500/20 border border-blue-500/40 rounded-xl p-4">
           <p className="text-blue-200 text-sm">{t.forgot.successBody}</p>
         </div>
-        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+        <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
           {t.signup.backToLogin}
         </Link>
       </motion.div>
@@ -115,7 +115,7 @@ export default function ForgotPasswordPage() {
 
       <motion.p {...fadeUp(0.2)} className="text-sm text-muted">
         {t.forgot.rememberedPassword}
-        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+        <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
           {t.forgot.login}
         </Link>
       </motion.p>

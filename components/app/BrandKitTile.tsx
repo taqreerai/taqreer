@@ -104,7 +104,7 @@ export function BrandKitTile({
                 // White (not violet) per user direction 2026-05-27 —
                 // the chip should read as a neutral "this is the
                 // default" marker, not a brand-coloured accent.
-                className="material-symbols-outlined shrink-0 text-white"
+                className="material-symbols-outlined shrink-0 text-foreground"
                 style={{
                   fontSize: 14,
                   fontVariationSettings: "'FILL' 1, 'wght' 500",
@@ -114,7 +114,7 @@ export function BrandKitTile({
                 star
               </span>
             ) : null}
-            <h3 className="truncate text-sm font-semibold leading-snug text-white">
+            <h3 className="truncate text-sm font-semibold leading-snug text-foreground">
               {kit.name}
             </h3>
           </div>
@@ -129,7 +129,7 @@ export function BrandKitTile({
           onClick={handleDotsClick}
           aria-label={dict.components.brandKitTile.options}
           aria-haspopup="menu"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-white/5 hover:text-white"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-foreground/5 hover:text-foreground"
         >
           <span
             className="material-symbols-outlined"
@@ -148,7 +148,7 @@ export function BrandKitTile({
           monochromatic by the /create logo policy). Fallback when
           no logo: the kit's "B" initial in a neutral chip. */}
       <div
-        className="relative flex h-32 w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.02]"
+        className="relative flex h-32 w-full items-center justify-center rounded-xl border border-foreground/[0.08] bg-foreground/[0.02]"
         aria-hidden
       >
         {kit.logoDisplayUrl ? (
@@ -161,7 +161,7 @@ export function BrandKitTile({
           />
         ) : (
           <span
-            className="material-symbols-outlined text-[40px] text-white/30"
+            className="material-symbols-outlined text-[40px] text-foreground/30"
             aria-hidden
           >
             image
@@ -183,7 +183,7 @@ export function BrandKitTile({
               kit.colors.slice(0, 6).map((hex, idx) => (
                 <span
                   key={`${hex}-${idx}`}
-                  className="h-5 w-5 rounded-full border border-white/15 shadow-sm"
+                  className="h-5 w-5 rounded-full border border-foreground/15 shadow-sm"
                   style={{ backgroundColor: hex }}
                   title={hex}
                 />
@@ -198,7 +198,7 @@ export function BrandKitTile({
             {dict.components.brandKitTile.fonts}
           </span>
           <span
-            className="max-w-[140px] truncate text-[12px] font-medium text-white"
+            className="max-w-[140px] truncate text-[12px] font-medium text-foreground"
             title={kit.fontHeadingName ?? undefined}
           >
             {kit.fontHeadingName ?? "—"}

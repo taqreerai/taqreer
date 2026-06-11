@@ -153,14 +153,14 @@ function ResultRow({
           onSelect(project);
         }}
         className={`flex w-full items-center gap-3 rounded-xl p-2 text-end transition-colors ${
-          isActive ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+          isActive ? "bg-foreground/[0.06]" : "hover:bg-foreground/[0.04]"
         }`}
       >
         {/* Thumbnail — first slide if available, placeholder
             icon otherwise. Aspect mirrors the project's format
             so 9:16 decks don't get squished. */}
         <div
-          className={`relative shrink-0 overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.02] ${thumbAspect}`}
+          className={`relative shrink-0 overflow-hidden rounded-md border border-foreground/[0.08] bg-foreground/[0.02] ${thumbAspect}`}
           aria-hidden
         >
           {thumbnail ? (
@@ -173,7 +173,7 @@ function ResultRow({
               decoding="async"
             />
           ) : (
-            <span className="flex h-full w-full items-center justify-center text-white/30">
+            <span className="flex h-full w-full items-center justify-center text-foreground/30">
               <span
                 className="material-symbols-outlined"
                 style={{ fontSize: 18 }}
@@ -184,7 +184,7 @@ function ResultRow({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-white">
+          <p className="truncate text-sm font-medium text-foreground">
             {project.title}
           </p>
           <p className="mt-0.5 text-[11px] text-muted">
@@ -388,7 +388,7 @@ export function HeaderSearch({
           </span>
           <input
             ref={inputRef}
-            className="min-w-0 flex-1 bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-muted"
+            className="min-w-0 flex-1 bg-transparent py-3.5 text-sm text-foreground outline-none placeholder:text-muted"
             placeholder={dict.components.search.placeholder}
             type="text"
             value={query}
@@ -434,11 +434,11 @@ export function HeaderSearch({
         </div>
         {/* Footer hint */}
         <div className="flex items-center gap-1.5 border-t border-[var(--tq-border-hairline)] px-4 py-2.5 text-[11px] text-muted">
-          <kbd className="rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
+          <kbd className="rounded border border-foreground/15 bg-foreground/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
             ↵
           </kbd>
           <span>{dict.components.search.toOpen}</span>
-          <kbd className="ms-3 rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
+          <kbd className="ms-3 rounded border border-foreground/15 bg-foreground/[0.04] px-1.5 py-0.5 font-sans text-[10px] leading-none">
             esc
           </kbd>
           <span>{dict.components.search.toClose}</span>

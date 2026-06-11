@@ -168,7 +168,7 @@ export function TemplateActionsMenu({
               closeAfter
               onClose={onClose}
             />
-            <li aria-hidden className="my-1 h-px bg-white/[0.08]" />
+            <li aria-hidden className="my-1 h-px bg-foreground/[0.08]" />
             <MenuItem
               icon="delete"
               label={dict.menus.templateActions.delete}

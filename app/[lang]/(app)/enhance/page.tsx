@@ -877,15 +877,15 @@ export default function EnhanceContentPage() {
                   disabled={stage === "extracting" || stage === "submitting"}
                   className={`flex h-full min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     dragging
-                      ? "border-white/40 bg-white/[0.04]"
-                      : "border-white/20 bg-black/20 hover:border-white/30"
+                      ? "border-foreground/40 bg-foreground/[0.04]"
+                      : "border-foreground/20 bg-black/20 hover:border-foreground/30"
                   }`}
                 >
                   <span
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]"
                   >
                     {stage === "extracting" ? (
-                      <span className="spinner h-5 w-5 rounded-full border-2 border-white/20 border-t-white" />
+                      <span className="spinner h-5 w-5 rounded-full border-2 border-foreground/20 border-t-white" />
                     ) : stage === "ready" ? (
                       <span
                         className="material-symbols-outlined text-emerald-300"
@@ -895,14 +895,14 @@ export default function EnhanceContentPage() {
                       </span>
                     ) : file ? (
                       <span
-                        className="material-symbols-outlined text-white/80"
+                        className="material-symbols-outlined text-foreground/80"
                         style={{ fontSize: "22px" }}
                       >
                         description
                       </span>
                     ) : (
                       <span
-                        className="material-symbols-outlined text-white/80"
+                        className="material-symbols-outlined text-foreground/80"
                         style={{ fontSize: "22px" }}
                       >
                         cloud_upload
@@ -915,10 +915,10 @@ export default function EnhanceContentPage() {
                     // Replaces the drop-prompt entirely so the dropzone
                     // doubles as a file chip without pushing extra height.
                     <div className="w-full px-2">
-                      <p className="truncate text-sm font-semibold text-white">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {readableFileName(file.name)}
                       </p>
-                      <p className="mt-0.5 text-xs text-white/60">
+                      <p className="mt-0.5 text-xs text-foreground/60">
                         {formatFileSize(file.size, dict)}
                         {stage === "extracting"
                           ? ` · ${prepStageLabel(prepStage, dict)} ${prepPercent}%`
@@ -930,14 +930,14 @@ export default function EnhanceContentPage() {
                       </p>
                       {stage === "extracting" ? (
                         <div
-                          className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10"
+                          className="mt-2 h-1 w-full overflow-hidden rounded-full bg-foreground/10"
                           role="progressbar"
                           aria-valuenow={prepPercent}
                           aria-valuemin={0}
                           aria-valuemax={100}
                         >
                           <div
-                            className="h-full rounded-full bg-white/70 transition-[width] duration-300 ease-out"
+                            className="h-full rounded-full bg-foreground/70 transition-[width] duration-300 ease-out"
                             style={{ width: `${prepPercent}%` }}
                           />
                         </div>
@@ -947,14 +947,14 @@ export default function EnhanceContentPage() {
                     // No file — drop prompt.
                     <>
                       <div>
-                        <p className="text-sm font-semibold text-white">
+                        <p className="text-sm font-semibold text-foreground">
                           {dict.flows.enhance.dragDrop}
                         </p>
-                        <p className="mt-0.5 text-xs text-white/60">
+                        <p className="mt-0.5 text-xs text-foreground/60">
                           {dict.flows.enhance.clickToSelect}
                         </p>
                       </div>
-                      <p className="text-[10px] text-white/40">
+                      <p className="text-[10px] text-foreground/40">
                         {dict.flows.enhance.fileHint}
                       </p>
                     </>
@@ -977,7 +977,7 @@ export default function EnhanceContentPage() {
                       removeFile();
                     }}
                     aria-label={dict.flows.removeFile}
-                    className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                    className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
                   >
                     <span
                       className="material-symbols-outlined"
@@ -1003,15 +1003,15 @@ export default function EnhanceContentPage() {
                 pb-4 balances the card's p-4 top padding so the title sits
                 centred in the strip; z-30 lifts the open menu above the
                 later rows. */}
-            <header className="relative z-30 border-b border-white/[0.08] pb-4">
+            <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
               <div className="relative flex items-center gap-2">
                 <span
-                  className="material-symbols-outlined text-white"
+                  className="material-symbols-outlined text-foreground"
                   style={{ fontSize: 18 }}
                 >
                   palette
                 </span>
-                <h3 className="text-sm font-semibold text-white">
+                <h3 className="text-sm font-semibold text-foreground">
                   {dict.flows.brandCard}
                 </h3>
                 {kitOptions.length > 0 ? (
@@ -1035,7 +1035,7 @@ export default function EnhanceContentPage() {
                 left. Uses the shared InlinePaletteSwatch + the same
                 add/remove/update handlers. */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-white/70">
+              <span className="text-xs font-semibold text-foreground/70">
                 {dict.flows.colors}
               </span>
               <div className="flex items-center gap-1.5">
@@ -1054,7 +1054,7 @@ export default function EnhanceContentPage() {
                     type="button"
                     onClick={addColor}
                     aria-label={dict.flows.addColor}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
                   >
                     <span
                       className="material-symbols-outlined"
@@ -1087,7 +1087,7 @@ export default function EnhanceContentPage() {
                 leftover height (matches /create); gap-4 unifies the
                 title→zone gap with الخطوط. */}
             <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
+              <span className="block text-xs font-semibold text-foreground/70">
                 {dict.flows.logo}
               </span>
               <LogoRow
@@ -1109,7 +1109,7 @@ export default function EnhanceContentPage() {
                 bottom, so no mt-auto (it would otherwise eat the slack and
                 stop the logo zone from growing). */}
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
-              <span className="text-xs font-semibold text-white/70">
+              <span className="text-xs font-semibold text-foreground/70">
                 {dict.flows.saveAsDefault}
               </span>
               <Toggle

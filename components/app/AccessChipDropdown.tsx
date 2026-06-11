@@ -306,7 +306,7 @@ function RoleItem({
         aria-checked={active}
         onClick={onClick}
         className={`dropdown-item flex !items-start gap-2 !py-2 ${
-          active ? "!text-white" : ""
+          active ? "!text-foreground" : ""
         }`}
       >
         <span
@@ -318,7 +318,7 @@ function RoleItem({
         </span>
         <span className="flex-1 text-start">
           <div className="text-sm">{label}</div>
-          <div className="text-[11px] text-white/50">{description}</div>
+          <div className="text-[11px] text-foreground/50">{description}</div>
         </span>
       </button>
     </li>

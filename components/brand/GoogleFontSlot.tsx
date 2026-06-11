@@ -117,7 +117,7 @@ export function GoogleFontSlot({
             }
           }}
           aria-label={open ? dict.flows.brand.closeMenu : dict.flows.brand.openMenu}
-          className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center justify-center text-white/60 transition-colors hover:text-white"
+          className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center justify-center text-foreground/60 transition-colors hover:text-foreground"
         >
           <span
             className={`material-symbols-outlined block leading-none transition-transform ${
@@ -150,7 +150,7 @@ export function GoogleFontSlot({
           }}
         >
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-white/40">{dict.flows.brand.noResults}</p>
+            <p className="px-3 py-2 text-xs text-foreground/40">{dict.flows.brand.noResults}</p>
           ) : (
             filtered.map((font) => {
               const isActive = selected === font.family;
@@ -169,8 +169,8 @@ export function GoogleFontSlot({
                   // text with a faint hover lift.
                   className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
                     isActive
-                      ? "text-white"
-                      : "border-transparent text-white/70 hover:bg-white/5"
+                      ? "text-foreground"
+                      : "border-transparent text-foreground/70 hover:bg-foreground/5"
                   }`}
                   style={
                     isActive
@@ -184,7 +184,7 @@ export function GoogleFontSlot({
                   <span className="flex items-center gap-2">
                     <span>{font.family}</span>
                     <span
-                      className={`text-[10px] ${isActive ? "text-white/80" : "text-white/40"}`}
+                      className={`text-[10px] ${isActive ? "text-foreground/80" : "text-foreground/40"}`}
                     >
                       {font.arabic ? dict.flows.brand.scriptArabicLatin : dict.flows.brand.scriptLatin}
                     </span>
@@ -209,7 +209,7 @@ export function GoogleFontSlot({
           // dir + text-start → right in RTL, left in LTR); default is BiDi-aware
           // (dir=auto picks direction from the sample's own script).
           dir={alignStart ? undefined : "auto"}
-          className={`mt-3 ${sampleSizeClass} text-start text-white`}
+          className={`mt-3 ${sampleSizeClass} text-start text-foreground`}
           style={
             selected
               ? { fontFamily: `"${selected}", system-ui, sans-serif` }

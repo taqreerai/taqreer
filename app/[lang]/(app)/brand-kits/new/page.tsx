@@ -203,7 +203,7 @@ export default function NewBrandKitPage() {
         <div className="mt-6 w-full max-w-[360px]">
           <label
             htmlFor="brand-kit-name"
-            className="mb-1.5 block text-xs font-semibold text-white/70"
+            className="mb-1.5 block text-xs font-semibold text-foreground/70"
           >
             {dict.pages.brandKits.nameLabel}
           </label>
@@ -233,7 +233,7 @@ export default function NewBrandKitPage() {
             {/* Palette row — label on the visual right, swatches + add
                 tile on the visual left (matches /create). */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-white/70">
+              <span className="text-xs font-semibold text-foreground/70">
                 {dict.flows.colors}
               </span>
               <div className="flex items-center gap-1.5">
@@ -252,7 +252,7 @@ export default function NewBrandKitPage() {
                     type="button"
                     onClick={addColor}
                     aria-label={dict.flows.addColor}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
                   >
                     <span
                       className="material-symbols-outlined"
@@ -281,7 +281,7 @@ export default function NewBrandKitPage() {
                 No save toggle here — this page IS the save — so the logo zone
                 runs to the card's bottom edge. */}
             <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
+              <span className="block text-xs font-semibold text-foreground/70">
                 {dict.flows.logo}
               </span>
               <LogoRow
@@ -304,7 +304,7 @@ export default function NewBrandKitPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/brand-kits"
-              className="rounded-full border border-white/15 px-5 py-2 text-sm text-white/70 transition-colors hover:border-white/30 hover:text-white"
+              className="rounded-full border border-foreground/15 px-5 py-2 text-sm text-foreground/70 transition-colors hover:border-foreground/30 hover:text-foreground"
             >
               {dict.common.cancel}
             </Link>

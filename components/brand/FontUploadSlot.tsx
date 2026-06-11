@@ -98,12 +98,12 @@ export function FontUploadSlot({
         >
           <div className="flex min-w-0 items-center gap-2">
             <span
-              className="material-symbols-outlined text-white/80"
+              className="material-symbols-outlined text-foreground/80"
               style={{ fontSize: 16 }}
             >
               font_download
             </span>
-            <span className="truncate text-xs font-semibold text-white">{file.name}</span>
+            <span className="truncate text-xs font-semibold text-foreground">{file.name}</span>
           </div>
           <button
             type="button"
@@ -112,7 +112,7 @@ export function FontUploadSlot({
               onRemove();
             }}
             aria-label={dict.flows.brand.removeFont.replace("{label}", label)}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
               close
@@ -147,18 +147,18 @@ export function FontUploadSlot({
           } ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
-              : "border-white/15 hover:border-white/30"
+              : "border-foreground/15 hover:border-foreground/30"
           }`}
           style={{ height: compact ? 30 : 44 }}
         >
           <span
-            className="material-symbols-outlined text-white/70"
+            className="material-symbols-outlined text-foreground/70"
             style={{ fontSize: compact ? 14 : 18 }}
           >
             font_download
           </span>
-          <span className={`${compact ? "text-[11px]" : "text-xs"} font-semibold text-white`}>{label}</span>
-          {compact ? null : <span className="text-[10px] text-white/40">— WOFF / TTF / OTF</span>}
+          <span className={`${compact ? "text-[11px]" : "text-xs"} font-semibold text-foreground`}>{label}</span>
+          {compact ? null : <span className="text-[10px] text-foreground/40">— WOFF / TTF / OTF</span>}
         </button>
       )}
       {hideSample ? null : (
@@ -169,7 +169,7 @@ export function FontUploadSlot({
           // (inherit dir + text-start → right in RTL, left in LTR).
           // hideSample=true skips this paragraph entirely (see prop doc).
           dir={alignStart ? undefined : "auto"}
-          className={`${sampleSizeClass} text-start text-white${family ? ` ${family}` : ""}`}
+          className={`${sampleSizeClass} text-start text-foreground${family ? ` ${family}` : ""}`}
         >
           {sampleText}
         </p>

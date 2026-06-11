@@ -92,7 +92,7 @@ export function LogoRow({
             type="button"
             onClick={onRemove}
             aria-label={dict.flows.brand.removeLogo}
-            className="absolute end-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/40 text-white/70 transition-colors hover:bg-black/60 hover:text-white"
+            className="absolute end-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/40 text-foreground/70 transition-colors hover:bg-black/60 hover:text-foreground"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
               close
@@ -116,17 +116,17 @@ export function LogoRow({
           className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-black/20 transition-colors ${ZONE_H} ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
-              : "border-white/15 hover:border-white/30"
+              : "border-foreground/15 hover:border-foreground/30"
           }`}
         >
           <span
-            className="material-symbols-outlined text-white/70"
+            className="material-symbols-outlined text-foreground/70"
             style={{ fontSize: 20 }}
           >
             image
           </span>
-          <span className="text-xs font-semibold text-white">{dict.flows.brand.svgLogo}</span>
-          <span className="text-[10px] text-white/40">{dict.flows.brand.svgOnly}</span>
+          <span className="text-xs font-semibold text-foreground">{dict.flows.brand.svgLogo}</span>
+          <span className="text-[10px] text-foreground/40">{dict.flows.brand.svgOnly}</span>
         </button>
       )}
     </div>

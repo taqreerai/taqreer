@@ -98,7 +98,7 @@ export function LanguageMenu({ className = "" }: { className?: string }) {
           aria-label={dict.language.label}
           aria-haspopup="menu"
           aria-expanded={open}
-          className={`flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/[0.06] hover:text-white ${className}`}
+          className={`flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-foreground/[0.06] hover:text-foreground ${className}`}
         >
           <span className="material-symbols-outlined text-[20px]">translate</span>
         </button>

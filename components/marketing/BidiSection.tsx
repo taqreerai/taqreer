@@ -80,7 +80,7 @@ function InlineSwitch({
       }}
     >
       <span
-        className="absolute top-1/2 h-[0.5em] w-[0.5em] -translate-y-1/2 rounded-full bg-white transition-[inset-inline-start] duration-300"
+        className="absolute top-1/2 h-[0.5em] w-[0.5em] -translate-y-1/2 rounded-full bg-foreground transition-[inset-inline-start] duration-300"
         style={{ insetInlineStart: on ? "calc(100% - 0.5em - 0.11em)" : "0.11em" }}
       />
     </button>

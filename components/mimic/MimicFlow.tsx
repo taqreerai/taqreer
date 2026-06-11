@@ -831,7 +831,7 @@ export default function MimicFlow({
               // still treats as empty.
               inert={contentTextReady}
             >
-              <div className="flex items-center gap-2 text-[11px] text-white/40">
+              <div className="flex items-center gap-2 text-[11px] text-foreground/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
                 <span>{dict.flows.or}</span>
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
@@ -873,15 +873,15 @@ export default function MimicFlow({
                       header: pb-4 balances the card's p-4 top padding so the
                       title sits centred in the strip; z-30 lifts the open
                       menu above the later rows. */}
-                  <header className="relative z-30 border-b border-white/[0.08] pb-4">
+                  <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
                     <div className="relative flex items-center gap-2">
                       <span
-                        className="material-symbols-outlined text-white"
+                        className="material-symbols-outlined text-foreground"
                         style={{ fontSize: 18 }}
                       >
                         palette
                       </span>
-                      <h3 className="text-sm font-semibold text-white">
+                      <h3 className="text-sm font-semibold text-foreground">
                         {dict.flows.brandCard}
                       </h3>
                       {kitOptions.length > 0 ? (
@@ -904,7 +904,7 @@ export default function MimicFlow({
                       swatches + add tile on the visual left as a
                       single horizontal cluster (matches /create). */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-white/70">
+                    <span className="text-xs font-semibold text-foreground/70">
                       {dict.flows.colors}
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -923,7 +923,7 @@ export default function MimicFlow({
                           type="button"
                           onClick={addColor}
                           aria-label={dict.flows.addColor}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
                         >
                           <span
                             className="material-symbols-outlined"
@@ -956,7 +956,7 @@ export default function MimicFlow({
                       leftover height (matches /create); gap-4 unifies the
                       title→zone gap with الخطوط. */}
                   <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
-                    <span className="block text-xs font-semibold text-white/70">
+                    <span className="block text-xs font-semibold text-foreground/70">
                       {dict.flows.logo}
                     </span>
                     <LogoRow
@@ -977,7 +977,7 @@ export default function MimicFlow({
                       to the bottom, so no mt-auto (it would eat the slack
                       and stop the logo zone from growing). */}
                   <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
-                    <span className="text-xs font-semibold text-white/70">
+                    <span className="text-xs font-semibold text-foreground/70">
                       {dict.flows.saveAsDefault}
                     </span>
                     <Toggle
@@ -1030,7 +1030,7 @@ export default function MimicFlow({
                       damping 35) matching the SegmentedToggle's
                       indicator spring. */}
               <div className="flex min-h-[24px] items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-white/70">
+                <span className="text-xs font-semibold text-foreground/70">
                   {dict.flows.slideCount}
                 </span>
                 <motion.div
@@ -1088,7 +1088,7 @@ export default function MimicFlow({
                   // Template mode — the design reference is the chosen
                   // template (locked, no upload). Reuses the dropzone's
                   // "ready" visual vocabulary, non-interactive.
-                  <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-4 text-center">
+                  <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-black/20 p-4 text-center">
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]">
                       <span
                         className="material-symbols-outlined text-emerald-300"
@@ -1097,10 +1097,10 @@ export default function MimicFlow({
                         check_circle
                       </span>
                     </span>
-                    <p className="truncate px-2 text-sm font-semibold text-white">
+                    <p className="truncate px-2 text-sm font-semibold text-foreground">
                       {templateSeed!.title?.trim() || dict.flows.mimic.templateReady}
                     </p>
-                    <p className="text-xs text-white/60">
+                    <p className="text-xs text-foreground/60">
                       {dict.flows.mimic.templateSelected}
                     </p>
                   </div>
@@ -1173,7 +1173,7 @@ function PaletteSwatch({
       <button
         type="button"
         onClick={() => setPickerOpen((v) => !v)}
-        className="block h-7 w-7 shrink-0 rounded-md border border-white/15 transition-shadow hover:shadow-md"
+        className="block h-7 w-7 shrink-0 rounded-md border border-foreground/15 transition-shadow hover:shadow-md"
         style={{ backgroundColor: value }}
         aria-label={dict.flows.controls.colorN.replace("{n}", String(index + 1))}
       />
@@ -1182,7 +1182,7 @@ function PaletteSwatch({
         onClick={onRemove}
         disabled={!removable}
         aria-label={dict.flows.controls.removeColor}
-        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
+        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-foreground transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
           close
@@ -1269,8 +1269,8 @@ function FileDropzone({
         disabled={disabled}
         className={`flex w-full rounded-xl border border-dashed transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${axis} ${
           dragging
-            ? "border-white/40 bg-white/[0.04]"
-            : "border-white/20 bg-black/20 hover:border-white/30"
+            ? "border-foreground/40 bg-foreground/[0.04]"
+            : "border-foreground/20 bg-black/20 hover:border-foreground/30"
         } ${heightCls}`}
       >
         {/* Icon container — slightly smaller in horizontal mode so
@@ -1283,7 +1283,7 @@ function FileDropzone({
           }`}
         >
           {stage === "extracting" ? (
-            <span className="spinner h-5 w-5 rounded-full border-2 border-white/20 border-t-white" />
+            <span className="spinner h-5 w-5 rounded-full border-2 border-foreground/20 border-t-white" />
           ) : stage === "ready" ? (
             <span
               className="material-symbols-outlined text-emerald-300"
@@ -1293,14 +1293,14 @@ function FileDropzone({
             </span>
           ) : file ? (
             <span
-              className="material-symbols-outlined text-white/80"
+              className="material-symbols-outlined text-foreground/80"
               style={{ fontSize: horizontal ? "18px" : "22px" }}
             >
               description
             </span>
           ) : (
             <span
-              className="material-symbols-outlined text-white/80"
+              className="material-symbols-outlined text-foreground/80"
               style={{ fontSize: horizontal ? "18px" : "22px" }}
             >
               cloud_upload
@@ -1315,10 +1315,10 @@ function FileDropzone({
             they have the vertical real estate). */}
         {file ? (
           <div className={`min-w-0 ${horizontal ? "flex-1" : "w-full px-2"}`}>
-            <p className="truncate text-sm font-semibold text-white">
+            <p className="truncate text-sm font-semibold text-foreground">
               {readableFileName(file.name)}
             </p>
-            <p className="mt-0.5 truncate text-xs text-white/60">
+            <p className="mt-0.5 truncate text-xs text-foreground/60">
               {formatFileSize(file.size, dict.flows.unitKB, dict.flows.unitMB)}
               {stage === "extracting"
                 ? ` · ${dict.flows.analyzing}`
@@ -1331,7 +1331,7 @@ function FileDropzone({
           </div>
         ) : (
           <div className={`min-w-0 ${horizontal ? "flex-1" : ""}`}>
-            <p className="truncate text-sm font-semibold text-white">
+            <p className="truncate text-sm font-semibold text-foreground">
               {horizontal
                 ? dict.flows.mimic.dragOrClick
                 : dict.flows.mimic.dragDrop}
@@ -1342,15 +1342,15 @@ function FileDropzone({
                 stacked also keeps its longer "أو انقر" caption above
                 it for the larger ref-file dropzone. */}
             {horizontal ? (
-              <p className="mt-0.5 truncate text-[11px] text-white/40">
+              <p className="mt-0.5 truncate text-[11px] text-foreground/40">
                 {dict.flows.mimic.fileHint}
               </p>
             ) : (
               <>
-                <p className="mt-0.5 text-xs text-white/60">
+                <p className="mt-0.5 text-xs text-foreground/60">
                   {dict.flows.mimic.clickToSelect}
                 </p>
-                <p className="mt-1 text-[10px] text-white/40">
+                <p className="mt-1 text-[10px] text-foreground/40">
                   {dict.flows.mimic.fileHint}
                 </p>
               </>
@@ -1367,7 +1367,7 @@ function FileDropzone({
             onRemove();
           }}
           aria-label={dict.flows.removeFile}
-          className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
         >
           <span
             className="material-symbols-outlined"

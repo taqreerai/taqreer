@@ -43,7 +43,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
               <a
                 key={l.href}
                 href={l.href}
-                className="cursor-pointer text-sm text-muted transition-colors hover:text-white"
+                className="cursor-pointer text-sm text-muted transition-colors hover:text-foreground"
               >
                 {l.label}
               </a>

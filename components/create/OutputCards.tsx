@@ -138,14 +138,14 @@ export function CardShell({
       transition={{ layout: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }}
       className="surface-card flex flex-col gap-4 rounded-2xl p-5"
     >
-      <header className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+      <header className="flex items-center gap-2 border-b border-foreground/[0.08] pb-3">
         <span
-          className="material-symbols-outlined text-white"
+          className="material-symbols-outlined text-foreground"
           style={{ fontSize: "18px" }}
         >
           {icon}
         </span>
-        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       </header>
       <motion.div
         layout={layoutEnabled}
@@ -158,7 +158,7 @@ export function CardShell({
 }
 
 export function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-semibold text-white/80">{children}</p>;
+  return <p className="text-xs font-semibold text-foreground/80">{children}</p>;
 }
 
 // Number stepper for the custom slide-count input. All three controls
@@ -185,7 +185,7 @@ export function SlideCountStepper({
   const compact = size === "compact";
   const stepBtnClasses = `flex ${
     compact ? "h-6 w-6" : "h-8 w-8"
-  } shrink-0 items-center justify-center rounded-full border text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40`;
+  } shrink-0 items-center justify-center rounded-full border text-foreground transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-40`;
   const stepBtnStyle = {
     background: "rgba(255, 255, 255, var(--tq-tint-opacity))",
     borderColor: "rgba(255, 255, 255, var(--tq-border-opacity))",
@@ -290,7 +290,7 @@ export function InlineStepper({
         onClick={() => onChange(clamp(value - 1))}
         disabled={value <= min}
         aria-label={dict.flows.output.decrease}
-        className="flex h-5 w-5 items-center justify-center rounded-full text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-5 w-5 items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
           remove
@@ -307,14 +307,14 @@ export function InlineStepper({
           onChange(Number.isFinite(n) ? clamp(n) : min);
         }}
         aria-label={dict.flows.slideCount}
-        className="no-spinner w-6 bg-transparent text-center text-[11px] text-white outline-none"
+        className="no-spinner w-6 bg-transparent text-center text-[11px] text-foreground outline-none"
       />
       <button
         type="button"
         onClick={() => onChange(clamp(value + 1))}
         disabled={value >= max}
         aria-label={dict.flows.output.increase}
-        className="flex h-5 w-5 items-center justify-center rounded-full text-white transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-5 w-5 items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
           add
@@ -407,16 +407,16 @@ function SizeChoice({
     >
       <span className="flex flex-col items-start leading-tight">
         <span
-          className={`text-xs font-semibold ${active ? "text-white" : "text-white/70"}`}
+          className={`text-xs font-semibold ${active ? "text-foreground" : "text-foreground/70"}`}
         >
           {label}
         </span>
-        <span className={`text-[10px] ${active ? "text-white/70" : "text-white/40"}`}>
+        <span className={`text-[10px] ${active ? "text-foreground/70" : "text-foreground/40"}`}>
           {sub}
         </span>
       </span>
       <span
-        className="rounded-sm border border-white/30 bg-white/10"
+        className="rounded-sm border border-foreground/30 bg-foreground/10"
         style={{ height: 18, aspectRatio: ratio }}
       />
     </button>
@@ -616,7 +616,7 @@ export function OutputContentCard({
           card stays short and the free-text card has the matching
           height density. Only the design-style pills + slide count
           live here now. */}
-      <div className="border-t border-white/[0.06] pt-3">
+      <div className="border-t border-foreground/[0.06] pt-3">
         <SectionLabel>{dict.flows.output.generationRules}</SectionLabel>
         <div className="pt-2">
           <div className="flex flex-wrap gap-1.5">
@@ -674,7 +674,7 @@ export function LogoPositionFields({
 }) {
   const dict = useDict();
   return (
-    <div className="space-y-2 border-t border-white/[0.06] pt-3">
+    <div className="space-y-2 border-t border-foreground/[0.06] pt-3">
       <SectionLabel>{dict.flows.output.logoPosition}</SectionLabel>
       <div className="grid grid-cols-2 gap-3">
         <PositionPicker

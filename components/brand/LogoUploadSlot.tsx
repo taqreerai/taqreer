@@ -192,7 +192,7 @@ export function LogoUploadSlot({
   const containerStyle: React.CSSProperties = fillHeight
     ? {}
     : { minHeight: slotHeightPx, height: slotHeightPx };
-  const containerClass = `relative flex w-full items-center justify-center rounded-xl border border-dashed border-white/15 bg-black/20 px-3${
+  const containerClass = `relative flex w-full items-center justify-center rounded-xl border border-dashed border-foreground/15 bg-black/20 px-3${
     fillHeight ? " h-full" : ""
   }`;
   return (
@@ -219,7 +219,7 @@ export function LogoUploadSlot({
         // in LTR) — same corner /create's old logo card used for
         // the close button. start-2/top-2 = ~8 px inset from the
         // border so it sits clear of the dashed edge.
-        className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/40 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+        className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/40 text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
           close

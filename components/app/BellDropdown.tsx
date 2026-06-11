@@ -486,7 +486,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
         // header pass 2026-05-30). Just the bell glyph with a white/60 →
         // white hover lift, matching the toggle + theme / language icons.
         // `relative` is kept so the unread badge can anchor to the corner.
-        className="relative flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white"
+        className="relative flex h-11 w-11 items-center justify-center text-foreground/60 transition-colors hover:text-foreground"
       >
         <span className="material-symbols-outlined text-[22px]">notifications</span>
         {unread > 0 ? (
@@ -494,7 +494,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
           // brand `--tq-blue` is violet-leaning at badge size; same
           // rule as PreviewActionBar / SlideNavSidebar comment-count
           // chips (memory: feedback_badge_blue).
-          <span className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
+          <span className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-foreground shadow">
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
@@ -537,10 +537,10 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
               >
             <div className="flex items-center justify-between px-4 py-3">
-              <p className="text-sm font-semibold text-white">{dict.dialogs.notifications.bellTitle}</p>
+              <p className="text-sm font-semibold text-foreground">{dict.dialogs.notifications.bellTitle}</p>
               {unread > 0 ? (
                 // Sky-blue info chip — see badge color note above.
-                <span className="rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-medium leading-none text-white">
+                <span className="rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-medium leading-none text-foreground">
                   {dict.dialogs.notifications.bellNew.replace("{count}", String(unread))}
                 </span>
               ) : null}
@@ -549,10 +549,10 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
             <div className="max-h-[360px] overflow-y-auto">
               {visible.length === 0 ? (
                 <div className="px-4 py-10 text-center">
-                  <span className="material-symbols-outlined mb-2 block text-[40px] text-white/30">
+                  <span className="material-symbols-outlined mb-2 block text-[40px] text-foreground/30">
                     inbox
                   </span>
-                  <p className="text-xs text-white/50">{dict.dialogs.notifications.none}</p>
+                  <p className="text-xs text-foreground/50">{dict.dialogs.notifications.none}</p>
                 </div>
               ) : (
                 visible.map((n) => (
@@ -561,7 +561,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-white/[0.08] px-3 py-3">
+            <div className="flex items-center justify-between gap-2 border-t border-foreground/[0.08] px-3 py-3">
               <button
                 type="button"
                 onClick={handleClearAll}
@@ -730,7 +730,7 @@ function BellToast({
         // the chevron underneath looked offset toward the centre.
         // `top-3` stays unchanged — the chevron is below the close-X
         // via the spacer in NotificationRow, not a top-offset match.
-        className="absolute end-4 top-3 flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
+        className="absolute end-4 top-3 flex h-6 w-6 items-center justify-center rounded-md text-foreground/40 transition-colors hover:bg-foreground/10 hover:text-foreground"
       >
         <span className="material-symbols-outlined text-[16px]">close</span>
       </button>
@@ -874,11 +874,11 @@ export function NotificationRow({
       tabIndex={clickable ? 0 : undefined}
       onClick={clickable ? () => onClick?.(n) : undefined}
       onKeyDown={clickable ? handleRowKeyDown : undefined}
-      className={`group relative flex w-full items-start gap-3 px-4 ${compact ? "py-3.5" : "py-4"} text-start transition-colors hover:bg-white/[0.04] ${
+      className={`group relative flex w-full items-start gap-3 px-4 ${compact ? "py-3.5" : "py-4"} text-start transition-colors hover:bg-foreground/[0.04] ${
         clickable ? "cursor-pointer" : "cursor-default"
-      } ${n.read ? "opacity-50" : ""} focus-visible:bg-white/[0.06] focus-visible:outline-none`}
+      } ${n.read ? "opacity-50" : ""} focus-visible:bg-foreground/[0.06] focus-visible:outline-none`}
     >
-      <span className="material-symbols-outlined flex-shrink-0 text-[22px] text-white">
+      <span className="material-symbols-outlined flex-shrink-0 text-[22px] text-foreground">
         {iconGlyph}
       </span>
       <div className="min-w-0 flex-1">
@@ -899,7 +899,7 @@ export function NotificationRow({
               just to read a 2-line message. Bumped 2026-05-24. */}
           <p
             ref={titleRef}
-            className={`overflow-hidden text-[13px] font-medium leading-snug text-white transition-[max-height] duration-300 ease-in-out ${
+            className={`overflow-hidden text-[13px] font-medium leading-snug text-foreground transition-[max-height] duration-300 ease-in-out ${
               expanded || transitioning ? "break-words" : "line-clamp-2"
             }`}
             style={{ maxHeight: expanded ? 200 : 40 }}
@@ -914,7 +914,7 @@ export function NotificationRow({
           // needing the chevron, only long ones truncate.
           <p
             ref={descRef}
-            className={`mt-1 overflow-hidden text-[11px] leading-relaxed text-white/55 transition-[max-height] duration-300 ease-in-out ${
+            className={`mt-1 overflow-hidden text-[11px] leading-relaxed text-foreground/55 transition-[max-height] duration-300 ease-in-out ${
               expanded || transitioning
                 ? "break-words"
                 : `line-clamp-2 ${compact ? "max-w-[220px]" : ""}`
@@ -939,7 +939,7 @@ export function NotificationRow({
           vertical band. */}
       <div className="flex flex-shrink-0 flex-col items-end gap-1">
         {showTime ? (
-          <span className="text-[10px] text-white/40" dir="ltr">
+          <span className="text-[10px] text-foreground/40" dir="ltr">
             {formatNotificationTime(n.createdAt)}
           </span>
         ) : (
@@ -957,7 +957,7 @@ export function NotificationRow({
             onClick={handleToggleExpand}
             aria-label={expanded ? dict.dialogs.notifications.collapse : dict.dialogs.notifications.showFull}
             aria-expanded={expanded}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-foreground/40 transition-colors hover:bg-foreground/10 hover:text-foreground"
           >
             <span
               className={`material-symbols-outlined text-[16px] transition-transform ${
@@ -973,7 +973,7 @@ export function NotificationRow({
             type="button"
             onClick={handleDelete}
             aria-label={dict.dialogs.notifications.delete}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 opacity-0 transition-all hover:bg-white/10 hover:text-white group-hover:opacity-100"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-foreground/40 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground group-hover:opacity-100"
           >
             <span className="material-symbols-outlined text-[16px]">close</span>
           </button>

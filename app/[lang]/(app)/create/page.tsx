@@ -688,7 +688,7 @@ export default function CreatePage() {
                 card's leftover vertical space. */}
             <div className="flex flex-1 flex-col space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-white/70">
+                <span className="text-xs font-semibold text-foreground/70">
                   {t.language}
                 </span>
                 <SegmentedToggle
@@ -726,7 +726,7 @@ export default function CreatePage() {
               }`}
               inert={hasText}
             >
-              <div className="flex items-center gap-2 text-[11px] text-white/40">
+              <div className="flex items-center gap-2 text-[11px] text-foreground/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
                 <span>{t.or}</span>
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
@@ -765,7 +765,7 @@ export default function CreatePage() {
                 cards. z-30 lifts the whole header — and the saved-kit menu
                 that drops out of it — above the later palette/font/logo rows,
                 which would otherwise paint on top of the open menu. */}
-            <header className="relative z-30 border-b border-white/[0.08] pb-4">
+            <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
               {/* The title row is the positioning context for the saved-kit
                   pill, so the pill centres on the TITLE (top-1/2 of this row),
                   not the full header — keeping it level with the title while
@@ -773,12 +773,12 @@ export default function CreatePage() {
                   never grows the row or shifts the separator off the others. */}
               <div className="relative flex items-center gap-2">
                 <span
-                  className="material-symbols-outlined text-white"
+                  className="material-symbols-outlined text-foreground"
                   style={{ fontSize: 18 }}
                 >
                   palette
                 </span>
-                <h3 className="text-sm font-semibold text-white">
+                <h3 className="text-sm font-semibold text-foreground">
                   {t.brandCard}
                 </h3>
                 {kitOptions.length > 0 ? (
@@ -801,7 +801,7 @@ export default function CreatePage() {
                 add tile on the visual left as a single horizontal
                 cluster. */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-white/70">
+              <span className="text-xs font-semibold text-foreground/70">
                 {t.colors}
               </span>
               <div className="flex items-center gap-1.5">
@@ -820,7 +820,7 @@ export default function CreatePage() {
                     type="button"
                     onClick={addColor}
                     aria-label={t.addColor}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
                   >
                     <span
                       className="material-symbols-outlined"
@@ -849,7 +849,7 @@ export default function CreatePage() {
                 leftover height (LogoRow's zone is flex-1 + min-h-20), filling
                 the gap above the save toggle instead of leaving dead space. */}
             <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="block text-xs font-semibold text-white/70">
+              <span className="block text-xs font-semibold text-foreground/70">
                 {t.logo}
               </span>
               <LogoRow
@@ -870,7 +870,7 @@ export default function CreatePage() {
                 (fonts+colors AND logo), backed by the same state,
                 so the user can flip the toggle from either card. */}
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
-              <span className="text-xs font-semibold text-white/70">
+              <span className="text-xs font-semibold text-foreground/70">
                 {t.saveAsDefault}
               </span>
               <Toggle
@@ -900,7 +900,7 @@ export default function CreatePage() {
 
             <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <div className="flex min-h-[24px] items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-white/70">
+                <span className="text-xs font-semibold text-foreground/70">
                   {t.slideCount}
                 </span>
                 {/* `layout` on the controls container so the
@@ -968,7 +968,7 @@ export default function CreatePage() {
             </div>
 
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="text-xs font-semibold text-white/70">
+              <span className="text-xs font-semibold text-foreground/70">
                 {t.slideNumbering}
               </span>
               <Toggle
@@ -1075,13 +1075,13 @@ function ContentDropzone({
         disabled={submitting}
         className={`flex w-full items-center gap-3 rounded-xl border border-dashed p-2.5 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           dragging
-            ? "border-white/40 bg-white/[0.04]"
-            : "border-white/20 bg-black/20 hover:border-white/30"
+            ? "border-foreground/40 bg-foreground/[0.04]"
+            : "border-foreground/20 bg-black/20 hover:border-foreground/30"
         } min-h-[44px]`}
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
           <span
-            className="material-symbols-outlined text-white/80"
+            className="material-symbols-outlined text-foreground/80"
             style={{ fontSize: 18 }}
           >
             {file ? "description" : "cloud_upload"}
@@ -1090,19 +1090,19 @@ function ContentDropzone({
 
         {file ? (
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">
+            <p className="truncate text-sm font-semibold text-foreground">
               {readableFileName(file.name)}
             </p>
-            <p className="mt-0.5 truncate text-xs text-white/60">
+            <p className="mt-0.5 truncate text-xs text-foreground/60">
               {formatFileSize(file.size, t.unitKB, t.unitMB)}
             </p>
           </div>
         ) : (
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">
+            <p className="truncate text-sm font-semibold text-foreground">
               {t.dropTitle}
             </p>
-            <p className="mt-0.5 truncate text-[11px] text-white/40">
+            <p className="mt-0.5 truncate text-[11px] text-foreground/40">
               {t.dropSubtitle}
             </p>
           </div>
@@ -1117,7 +1117,7 @@ function ContentDropzone({
             onRemove();
           }}
           aria-label={t.removeFile}
-          className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
         >
           <span
             className="material-symbols-outlined"

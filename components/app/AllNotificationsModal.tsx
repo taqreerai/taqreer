@@ -172,10 +172,10 @@ export function AllNotificationsModal({
               clearPhase === "collapsing" ? "panel-closing" : ""
             }`}
           >
-            <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+            <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
               <div>
-                <h2 className="text-base font-semibold text-white">{dict.dialogs.notifications.title}</h2>
-                <p className="text-xs text-white/50">
+                <h2 className="text-base font-semibold text-foreground">{dict.dialogs.notifications.title}</h2>
+                <p className="text-xs text-foreground/50">
                   {items.length === 0
                     ? dict.dialogs.notifications.none
                     : dict.dialogs.notifications.count.replace(
@@ -188,7 +188,7 @@ export function AllNotificationsModal({
                 type="button"
                 onClick={onClose}
                 aria-label={dict.common.close}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
               >
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -197,10 +197,10 @@ export function AllNotificationsModal({
             <div className="flex-1 overflow-y-auto py-1">
               {items.length === 0 ? (
                 <div className="px-6 py-16 text-center">
-                  <span className="material-symbols-outlined mb-3 block text-[48px] text-white/30">
+                  <span className="material-symbols-outlined mb-3 block text-[48px] text-foreground/30">
                     inbox
                   </span>
-                  <p className="text-sm text-white/50">{dict.dialogs.notifications.noneToShow}</p>
+                  <p className="text-sm text-foreground/50">{dict.dialogs.notifications.noneToShow}</p>
                 </div>
               ) : (
                 // AnimatePresence + layout per row: deleting any item
@@ -234,7 +234,7 @@ export function AllNotificationsModal({
             </div>
 
             {items.length > 0 ? (
-              <footer className="flex items-center justify-end border-t border-white/[0.08] px-4 py-3">
+              <footer className="flex items-center justify-end border-t border-foreground/[0.08] px-4 py-3">
                 <button
                   type="button"
                   onClick={handleClearAll}

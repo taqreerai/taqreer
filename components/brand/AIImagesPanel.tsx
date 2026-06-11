@@ -29,7 +29,7 @@ export function AIImagesPanel({
       }`}
     >
       <span
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--tq-violet)]/25 text-white"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--tq-violet)]/25 text-foreground"
         aria-hidden
       >
         <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
@@ -37,10 +37,10 @@ export function AIImagesPanel({
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-white">
+        <span className="block text-sm font-semibold text-foreground">
           {dict.flows.brand.aiImagesTitle}
         </span>
-        <span className="block text-[11px] text-white/55">
+        <span className="block text-[11px] text-foreground/55">
           {dict.flows.brand.aiImagesDesc}
         </span>
       </div>

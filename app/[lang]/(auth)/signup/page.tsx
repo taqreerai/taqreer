@@ -145,7 +145,7 @@ export default function SignupPage() {
         <div className="bg-green-500/20 border border-green-500/40 rounded-xl p-4">
           <p className="text-green-200 text-sm">{t.signup.successBody}</p>
         </div>
-        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+        <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
           {t.signup.backToLogin}
         </Link>
       </motion.div>
@@ -241,7 +241,7 @@ export default function SignupPage() {
 
       <motion.p {...fadeUp(0.3)} className="text-sm text-muted">
         {t.signup.haveAccount}
-        <Link href={localizedHref("/login", locale)} className="text-white hover:underline cursor-pointer">
+        <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
           {t.signup.login}
         </Link>
       </motion.p>

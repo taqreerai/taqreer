@@ -98,7 +98,7 @@ export function BrandKitRenameDialog({
             >
               <h3
                 id="brand-kit-rename-title"
-                className="mb-4 text-xl font-bold text-white"
+                className="mb-4 text-xl font-bold text-foreground"
               >
                 {dict.dialogs.renameKit.title}
               </h3>

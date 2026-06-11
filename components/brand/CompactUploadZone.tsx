@@ -51,8 +51,8 @@ export function CompactUploadZone({
   // PNG only", "Max 5 MB"). Renders in both stacked and horizontal
   // modes when provided.
   subText,
-  // Renders the primary `label` in muted color (text-white/40)
-  // instead of the default `text-white`. Used by the logo upload
+  // Renders the primary `label` in muted color (text-foreground/40)
+  // instead of the default `text-foreground`. Used by the logo upload
   // slots on /create + /enhance + /mimic where the empty-state
   // label doubles as a format hint ("SVG فقط") and should read as
   // a sub-message, not a CTA. Callers flip this OFF as soon as a
@@ -137,7 +137,7 @@ export function CompactUploadZone({
         } ${
           dragging
             ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
-            : "border-white/15 hover:border-white/30"
+            : "border-foreground/15 hover:border-foreground/30"
         } ${horizontal ? "" : compact ? "gap-1.5 p-2.5" : "p-4"} ${
           fillHeight ? "h-full" : ""
         }`}
@@ -151,7 +151,7 @@ export function CompactUploadZone({
           }`}
         >
           <span
-            className="material-symbols-outlined text-white/80"
+            className="material-symbols-outlined text-foreground/80"
             style={{ fontSize: horizontal ? 18 : 22 }}
           >
             upload
@@ -161,7 +161,7 @@ export function CompactUploadZone({
           <div className="min-w-0 flex-1">
             <p
               className={`truncate font-semibold ${
-                muted ? "text-[11px] text-white/40" : "text-sm text-white"
+                muted ? "text-[11px] text-foreground/40" : "text-sm text-foreground"
               }`}
             >
               {label}
@@ -171,11 +171,11 @@ export function CompactUploadZone({
                 nothing so the row stays a single line in the empty
                 + no-subText case. */}
             {subText ? (
-              <p className="mt-0.5 truncate text-[11px] text-white/40">
+              <p className="mt-0.5 truncate text-[11px] text-foreground/40">
                 {subText}
               </p>
             ) : file && !hideFilename ? (
-              <p className="mt-0.5 truncate text-[11px] text-white/60">
+              <p className="mt-0.5 truncate text-[11px] text-foreground/60">
                 {file.name}
               </p>
             ) : null}
@@ -184,18 +184,18 @@ export function CompactUploadZone({
           <>
             <span
               className={`font-semibold ${
-                muted ? "text-[11px] text-white/40" : "text-sm text-white"
+                muted ? "text-[11px] text-foreground/40" : "text-sm text-foreground"
               }`}
             >
               {label}
             </span>
             {file && !hideFilename ? (
-              <span className="max-w-full truncate text-xs text-white/60">
+              <span className="max-w-full truncate text-xs text-foreground/60">
                 {file.name}
               </span>
             ) : null}
             {subText ? (
-              <span className="mt-0.5 truncate text-[10px] text-white/40">
+              <span className="mt-0.5 truncate text-[10px] text-foreground/40">
                 {subText}
               </span>
             ) : null}

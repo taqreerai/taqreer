@@ -110,13 +110,13 @@ export function LibraryImageModal({
               onClick={(e) => e.stopPropagation()}
               className="surface-modal pointer-events-auto flex max-h-[90vh] w-full max-w-[920px] flex-col overflow-hidden rounded-2xl"
             >
-              <header className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
-                <h2 className="truncate text-base font-semibold text-white">
+              <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
+                <h2 className="truncate text-base font-semibold text-foreground">
                   {image.projectTitle}
                 </h2>
                 <div className="flex items-center gap-3">
                   {isMulti ? (
-                    <span className="text-xs text-white/50" dir="ltr">
+                    <span className="text-xs text-foreground/50" dir="ltr">
                       {safeIndex + 1} / {total}
                     </span>
                   ) : null}
@@ -124,7 +124,7 @@ export function LibraryImageModal({
                     type="button"
                     onClick={onClose}
                     aria-label={dict.common.close}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
                   >
                     <span className="material-symbols-outlined">close</span>
                   </button>
@@ -157,7 +157,7 @@ export function LibraryImageModal({
                 />
               </div>
 
-              <footer className="flex items-center justify-end border-t border-white/[0.08] px-5 py-3">
+              <footer className="flex items-center justify-end border-t border-foreground/[0.08] px-5 py-3">
                 <a
                   href={`/api/library/images/${image.id}`}
                   download
@@ -201,7 +201,7 @@ function ArrowButton({
       onClick={onClick}
       disabled={!enabled}
       aria-label={ariaLabel}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-white/25"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-foreground/25"
     >
       <span className="material-symbols-outlined">
         {side === "left" ? "chevron_left" : "chevron_right"}

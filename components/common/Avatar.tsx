@@ -98,7 +98,7 @@ export function Avatar({
       // out to the parent's start and made the `start-1` offset on
       // the stack disappear. Inline-flex keeps the chip sized to its
       // explicit `width` style and the inset position holds.
-      className="inline-flex items-center justify-center rounded-full font-semibold text-white"
+      className="inline-flex items-center justify-center rounded-full font-semibold text-foreground"
       style={{
         ...sizeStyle,
         ...dim,

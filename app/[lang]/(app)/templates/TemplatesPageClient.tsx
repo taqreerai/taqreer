@@ -208,7 +208,7 @@ export function TemplatesPageClient({
                 <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
                   dashboard_customize
                 </span>
-                <h3 className="mb-2 text-base font-semibold text-white">
+                <h3 className="mb-2 text-base font-semibold text-foreground">
                   {t.emptyTitle}
                 </h3>
                 <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">
@@ -222,7 +222,7 @@ export function TemplatesPageClient({
                 <span className="material-symbols-outlined mb-4 text-[42px] text-muted/40">
                   filter_alt_off
                 </span>
-                <h3 className="mb-2 text-base font-semibold text-white">
+                <h3 className="mb-2 text-base font-semibold text-foreground">
                   {t.noResultsTitle}
                 </h3>
                 <p className="mb-5 max-w-[320px] text-sm leading-7 text-muted">

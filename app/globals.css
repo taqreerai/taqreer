@@ -129,7 +129,7 @@
  *                            `.tq-h1`. 14 px muted + tight 4 px gap
  *                            from h1 + 24 px below. Use when an
  *                            h1 has a descriptive line beneath.
- *    text-white              Primary text  (Tailwind utility)
+ *    text-foreground              Primary text  (Tailwind utility)
  *    .text-muted             Secondary text (#b4b4b4)
  *
  *  Form
@@ -341,7 +341,7 @@
 
   /* Flip-aware overlay tints — white-over-dark by default; the .light theme
      swaps them to black-over-light so hover / subtle-fill tints still read.
-     Consumed via the `bg-overlay-*` utilities (replacing hardcoded `bg-white/x`
+     Consumed via the `bg-overlay-*` utilities (replacing hardcoded `bg-foreground/x`
      during the light-theme sweep). */
   --tq-overlay-soft:   rgba(255, 255, 255, 0.05);
   --tq-overlay:        rgba(255, 255, 255, 0.10);
@@ -392,7 +392,7 @@ button, a, [role="button"] {
 }
 
 .settings-card-title {
-  color: white;
+  color: var(--tq-text-primary);
   font-weight: 600;
   font-size: 0.875rem;
   margin-bottom: 12px;
@@ -453,9 +453,9 @@ button, a, [role="button"] {
      the same family as `.input-search` + every surface card.
      §21 flattened this: no blur, no Settings preset. Was
      hardcoded `rgba(...,0.05)` + `blur(8px)` before 2026-05-27. */
-  background: rgba(255, 255, 255, var(--tq-tint-opacity));
-  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
-  color: white;
+  background: var(--tq-overlay-soft);
+  border: 1px solid var(--tq-border-hairline);
+  color: var(--tq-text-primary);
   /* Fully rounded ends — visual rhyme with `.btn-pill` so inputs +
      buttons read as the same family. Padding bumped horizontally
      so glyphs/text don't sit against the curved edge. Applies to
@@ -603,8 +603,8 @@ textarea.input-dark {
   --color-on-surface-variant: var(--tq-text-primary);
 
   /* shadcn-style semantic aliases for the light-theme sweep — convert hardcoded
-     `text-white` → `text-foreground`, `text-white/60` → `text-muted-foreground`,
-     `border-white/10` → `border-border`, `bg-white/x` → `bg-overlay-*`. All
+     `text-foreground` → `text-foreground`, `text-foreground/60` → `text-muted-foreground`,
+     `border-foreground/10` → `border-border`, `bg-foreground/x` → `bg-overlay-*`. All
      resolve to flip-aware --tq tokens. */
   --color-foreground: var(--tq-text-primary);
   --color-muted-foreground: var(--tq-text-muted);
@@ -903,7 +903,9 @@ html.app-shell-scroll body {
      §24: colours FLIPPED — rest = the deeper purple, hover = the lighter one
      (user direction: make the inverted pricing-CTA style the app-wide default). */
   background: var(--tq-purple-hover);
-  color: var(--tq-text-primary);
+  /* Fixed white — the button bg is purple in BOTH themes, so the text must stay
+     white (not --tq-text-primary, which flips dark on light). */
+  color: #fff;
   /* No `box-shadow` and no shadow transition — the button system
      was de-shadowed app-wide on 2026-05-22 (user feedback: flat
      surfaces only, the shadows competed with the chrome and
@@ -1246,9 +1248,9 @@ html.app-shell-scroll body {
 }
 
 .btn-pill:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: white;
+  background: var(--tq-overlay);
+  border-color: var(--tq-border-hairline);
+  color: var(--tq-text-primary);
 }
 
 .btn-pill:disabled {
@@ -1289,8 +1291,8 @@ html.app-shell-scroll body {
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
+  background: var(--tq-overlay-soft);
+  color: var(--tq-text-primary);
 }
 
 /* ─── Header ─── */

@@ -156,7 +156,7 @@ export function LibraryImageCard({
             aria-label={dict.dialogs.libraryImage.download
               .replace("{role}", roleLabel)
               .replace("{title}", image.projectTitle)}
-            className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--tq-bg-dim)] text-white transition-colors hover:text-white"
+            className="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--tq-bg-dim)] text-foreground transition-colors hover:text-foreground"
           >
             <span className="material-symbols-outlined text-[18px]">
               download
@@ -165,7 +165,7 @@ export function LibraryImageCard({
         </div>
         <p
           dir={dir}
-          className="min-w-0 truncate text-[11px] font-semibold text-white"
+          className="min-w-0 truncate text-[11px] font-semibold text-foreground"
         >
           {image.projectTitle}
         </p>

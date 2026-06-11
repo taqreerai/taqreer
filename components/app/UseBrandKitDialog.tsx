@@ -103,7 +103,7 @@ export function UseBrandKitDialog({
                 <div>
                   <h3
                     id="use-brand-kit-title"
-                    className="mb-1 text-xl font-bold text-white"
+                    className="mb-1 text-xl font-bold text-foreground"
                   >
                     {dict.useBrandKitDialog.title}
                   </h3>
@@ -118,7 +118,7 @@ export function UseBrandKitDialog({
                   onClick={onClose}
                   disabled={busy}
                   aria-label={dict.common.close}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
                 >
                   <span
                     className="material-symbols-outlined"
@@ -152,15 +152,15 @@ export function UseBrandKitDialog({
                         <span
                           className={`material-symbols-outlined text-[20px] transition-colors ${
                             isPicking
-                              ? "text-white"
-                              : "text-muted group-hover:text-white"
+                              ? "text-foreground"
+                              : "text-muted group-hover:text-foreground"
                           }`}
                         >
                           {isPicking ? "progress_activity" : card.icon}
                         </span>
                       </div>
                       <div>
-                        <h4 className="mb-0.5 text-base font-semibold leading-snug text-white">
+                        <h4 className="mb-0.5 text-base font-semibold leading-snug text-foreground">
                           {copy.title}
                         </h4>
                         <p className="text-[12px] leading-relaxed text-muted">

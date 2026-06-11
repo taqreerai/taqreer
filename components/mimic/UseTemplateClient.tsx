@@ -97,7 +97,7 @@ export default function UseTemplateClient({
     return (
       <div className="page-container flex w-full justify-center" dir={dir}>
         <div className="mt-[20vh] flex flex-col items-center gap-4">
-          <span className="spinner h-8 w-8 rounded-full border-2 border-white/20 border-t-white" />
+          <span className="spinner h-8 w-8 rounded-full border-2 border-foreground/20 border-t-white" />
           <p className="tq-subhead">{dict.flows.mimic.preparingTemplate}</p>
         </div>
       </div>

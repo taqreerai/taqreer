@@ -45,8 +45,8 @@ type Props = {
 function pillClass(isActive: boolean): string {
   return `inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
     isActive
-      ? "border-white/40 text-white"
-      : "border-white/15 text-white/60 hover:border-white/40 hover:text-white"
+      ? "border-foreground/40 text-foreground"
+      : "border-foreground/15 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
   }`;
 }
 
@@ -187,8 +187,8 @@ export function ProjectsFilterBar({
                 title={hex}
                 className={`relative h-6 w-6 rounded-full border-2 transition-all ${
                   selected
-                    ? "border-white scale-110"
-                    : "border-white/20 hover:border-white/60"
+                    ? "border-foreground scale-110"
+                    : "border-foreground/20 hover:border-foreground/60"
                 }`}
                 style={{ backgroundColor: hex }}
               >

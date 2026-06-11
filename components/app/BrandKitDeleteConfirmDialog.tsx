@@ -71,7 +71,7 @@ export function BrandKitDeleteConfirmDialog({
             >
               <h3
                 id="brand-kit-delete-title"
-                className="mb-2 text-xl font-bold text-white"
+                className="mb-2 text-xl font-bold text-foreground"
               >
                 {dict.dialogs.deleteKit.title}
               </h3>

@@ -417,7 +417,7 @@ function DemoQACard({
       {/* Icon at the top; title + desc pinned to the bottom. Demo cards show the
           FULL text (no truncation — user direction) and wrap as needed. */}
       <div
-        className="shrink-0 transition-colors group-hover:text-white"
+        className="shrink-0 transition-colors group-hover:text-foreground"
         style={{ color: "var(--tq-text-muted)" }}
       >
         <AnimatedIcon
@@ -428,7 +428,7 @@ function DemoQACard({
         />
       </div>
       <div className="mt-auto w-full">
-        <h3 className="text-[11px] font-semibold leading-snug text-white">
+        <h3 className="text-[11px] font-semibold leading-snug text-foreground">
           {copy.title}
         </h3>
         <p className="mt-0.5 text-[9px] leading-relaxed text-[var(--tq-text-muted)]">
@@ -454,7 +454,7 @@ function DemoTopBar({ dir }: { dir: "rtl" | "ltr" }) {
         <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
           search
         </span>
-        <kbd className="rounded border border-white/15 bg-white/[0.04] px-1 py-0.5 text-[8px] font-medium leading-none">
+        <kbd className="rounded border border-foreground/15 bg-foreground/[0.04] px-1 py-0.5 text-[8px] font-medium leading-none">
           ⌘K
         </kbd>
       </div>
@@ -511,7 +511,7 @@ function DashboardBody({
       <section className="surface-card shrink-0 rounded-2xl p-3">
         <div className="mb-2.5 flex items-center justify-between">
           <div className="flex items-center gap-0.5 rounded-full bg-[var(--tq-surface)] p-0.5 text-[9px]">
-            <span className="rounded-full bg-white/10 px-2.5 py-1 font-medium text-white">
+            <span className="rounded-full bg-foreground/10 px-2.5 py-1 font-medium text-foreground">
               {lib.myProjects}
             </span>
             <span className="px-2.5 py-1 text-[var(--tq-text-muted)]">
@@ -565,7 +565,7 @@ function PlaceholderTile({
           "remember we are trying to replicate a miniature of the
           dashboard". */}
       <div className="px-0.5 text-end">
-        <p className="truncate text-[10px] font-semibold leading-tight text-white">
+        <p className="truncate text-[10px] font-semibold leading-tight text-foreground">
           {title}
         </p>
         <p className="truncate text-[9px] text-[var(--tq-text-muted)]">
@@ -665,7 +665,7 @@ function FlowBody({
           there instead") so the dashboard chrome now owns the back
           affordance. Title stays centered inside the flow body. */}
       <header className="mb-5 text-center">
-        <h1 className="text-lg font-bold text-white">{flow.title}</h1>
+        <h1 className="text-lg font-bold text-foreground">{flow.title}</h1>
         <p className="mt-1 text-[11px] text-[var(--tq-text-muted)]">
           {flow.subtitle}
         </p>
@@ -756,20 +756,20 @@ function FakeDropzone({
 }) {
   return (
     <div
-      className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 bg-black/20 p-2.5"
+      className="flex items-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-black/20 p-2.5"
       aria-disabled
     >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
         <span
-          className="material-symbols-outlined text-white/80"
+          className="material-symbols-outlined text-foreground/80"
           style={{ fontSize: 14 }}
         >
           {icon}
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-semibold text-white">{title}</p>
-        <p className="mt-0.5 truncate text-[10px] text-white/40">{hint}</p>
+        <p className="truncate text-[11px] font-semibold text-foreground">{title}</p>
+        <p className="mt-0.5 truncate text-[10px] text-foreground/40">{hint}</p>
       </div>
     </div>
   );
@@ -781,12 +781,12 @@ function FakePalette({ colors }: { colors: string[] }) {
       {colors.map((c, i) => (
         <div
           key={i}
-          className="h-5 w-5 rounded-md border border-white/20"
+          className="h-5 w-5 rounded-md border border-foreground/20"
           style={{ background: c }}
           aria-hidden
         />
       ))}
-      <div className="flex h-5 w-5 items-center justify-center rounded-md border border-dashed border-white/20 text-white/60">
+      <div className="flex h-5 w-5 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60">
         <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
           add
         </span>
@@ -809,7 +809,7 @@ function FakeSegmented({
           key={i}
           className={`rounded-full px-2 py-0.5 text-[10px] ${
             i === active
-              ? "bg-white/10 text-white"
+              ? "bg-foreground/10 text-foreground"
               : "text-[var(--tq-text-muted)]"
           }`}
         >
@@ -829,11 +829,11 @@ function FakeToggle({ on, dir }: { on: boolean; dir: "rtl" | "ltr" }) {
   return (
     <div
       className={`relative h-4 w-7 rounded-full transition-colors ${
-        on ? "tq-switch-on" : "bg-white/10"
+        on ? "tq-switch-on" : "bg-foreground/10"
       }`}
     >
       <div
-        className="absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all"
+        className="absolute top-0.5 h-3 w-3 rounded-full bg-foreground transition-all"
         style={{ [on ? end : start]: 2 } as React.CSSProperties}
       />
     </div>
@@ -853,7 +853,7 @@ function FakeFontSlot({
       style={{ height: 28 }}
     >
       <span className="text-[10px] text-[var(--tq-text-muted)]">{label}</span>
-      <span className="truncate text-[11px] font-semibold text-white">
+      <span className="truncate text-[11px] font-semibold text-foreground">
         {family}
       </span>
     </div>
@@ -869,7 +869,7 @@ function FieldRow({
 }) {
   return (
     <div className="flex min-h-[20px] items-center justify-between gap-2">
-      <span className="text-[11px] font-semibold text-white/70">{label}</span>
+      <span className="text-[11px] font-semibold text-foreground/70">{label}</span>
       {children}
     </div>
   );
@@ -887,12 +887,12 @@ function FlowCard({ card }: { card: FlowCardSpec }) {
           outlined"> + bold title + border-b`. */}
       <div className="flex items-center gap-2 border-b border-[var(--tq-border-hairline)] pb-2">
         <span
-          className="material-symbols-outlined text-white"
+          className="material-symbols-outlined text-foreground"
           style={{ fontSize: 14 }}
         >
           {card.icon}
         </span>
-        <span className="text-xs font-semibold text-white">{card.title}</span>
+        <span className="text-xs font-semibold text-foreground">{card.title}</span>
       </div>
       <div className="flex flex-1 flex-col gap-2">{card.body}</div>
     </div>
@@ -938,7 +938,7 @@ function getFlows(
                 <FakeSegmented options={[c.arabic, c.english]} active={0} />
               </FieldRow>
               <FakeTextarea placeholder={c.textareaPlaceholder} rows={3} />
-              <div className="flex items-center gap-2 text-[10px] text-white/40">
+              <div className="flex items-center gap-2 text-[10px] text-foreground/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
                 <span>{c.or}</span>
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />

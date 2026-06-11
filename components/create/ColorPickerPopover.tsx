@@ -339,7 +339,7 @@ export function ColorPickerPopover({
             }}
           >
             <div
-              className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white shadow-md"
+              className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-foreground shadow-md"
               style={{
                 left: `${hsv.s * 100}%`,
                 top: `${(1 - hsv.v) * 100}%`,
@@ -359,7 +359,7 @@ export function ColorPickerPopover({
             }}
           >
             <div
-              className="pointer-events-none absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-white shadow-md"
+              className="pointer-events-none absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-foreground shadow-md"
               style={{
                 left: `${(hsv.h / 360) * 100}%`,
                 background: `hsl(${hsv.h}, 100%, 50%)`,
@@ -370,7 +370,7 @@ export function ColorPickerPopover({
           {/* Hex input + live swatch */}
           <div className="mt-2.5 flex items-center gap-2">
             <span
-              className="h-6 w-6 shrink-0 rounded border border-white/15"
+              className="h-6 w-6 shrink-0 rounded border border-foreground/15"
               style={{ background: hsvToHex(hsv.h, hsv.s, hsv.v) }}
             />
             <input
@@ -395,7 +395,7 @@ export function ColorPickerPopover({
                 onClick={() => applyPreset(preset)}
                 aria-label={preset}
                 title={preset}
-                className="h-5 w-5 rounded border border-white/15 transition-transform hover:scale-110"
+                className="h-5 w-5 rounded border border-foreground/15 transition-transform hover:scale-110"
                 style={{ background: preset }}
               />
             ))}

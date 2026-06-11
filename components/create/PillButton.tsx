@@ -61,8 +61,8 @@ export function PillButton({
     variant === "primary"
       ? "btn-gradient text-white"
       : variant === "secondary"
-        ? "btn-pill text-white"
-        : "btn-pill text-white/60 border-transparent hover:border-white/15 hover:text-white";
+        ? "btn-pill text-foreground"
+        : "btn-pill text-foreground/60 border-transparent hover:border-foreground/15 hover:text-foreground";
   const variantStyle =
     variant === "primary" ? { borderRadius: 9999 } : undefined;
 
@@ -77,7 +77,7 @@ export function PillButton({
       className={`relative inline-flex items-center justify-center font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${sizeClasses} ${variantClasses}`}
     >
       {loading ? (
-        <span className="spinner h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
+        <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/30 border-t-white" />
       ) : icon ? (
         <span
           className="material-symbols-outlined leading-none"
