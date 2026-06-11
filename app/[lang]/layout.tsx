@@ -31,6 +31,16 @@ export async function generateMetadata({
   const { lang } = await params;
   const locale = isLocale(lang) ? lang : "ar";
   const dict = await getDictionary(locale);
+
+  // Per-page hreflang: the proxy forwards the request path as `x-pathname`, so
+  // we can map THIS page to its sibling-locale URLs (e.g. /ar/pricing ↔
+  // /en/pricing) rather than just the locale roots. Relative hrefs resolve
+  // against `metadataBase`.
+  const pathname = (await headers()).get("x-pathname") ?? `/${locale}`;
+  const logical = stripLocale(pathname);
+  const subpath = logical === "/" ? "" : logical;
+  const localeHref = (l: string) => `/${l}${subpath}`;
+
   return {
     metadataBase: new URL("https://taqreer.ai"),
     title: dict.meta.siteTitle,
@@ -38,10 +48,19 @@ export async function generateMetadata({
     // Keywords target both languages regardless of UI locale (SEO).
     keywords: ["presentations", "AI", "Arabic", "PowerPoint", "عروض تقديمية", "ذكاء اصطناعي", "تقرير", "Taqreer"],
     authors: [{ name: "taqreer.ai" }],
+    alternates: {
+      canonical: localeHref(locale),
+      languages: {
+        ar: localeHref("ar"),
+        en: localeHref("en"),
+        // x-default → Arabic (the product's default locale).
+        "x-default": localeHref("ar"),
+      },
+    },
     openGraph: {
       title: dict.meta.siteTitle,
       description: dict.meta.ogDescription,
-      url: "https://taqreer.ai",
+      url: localeHref(locale),
       siteName: "taqreer.ai",
       images: [
         {
@@ -52,6 +71,8 @@ export async function generateMetadata({
         },
       ],
       locale: locale === "en" ? "en_US" : "ar_SA",
+      // Declare the other locale so crawlers know the page exists in both.
+      alternateLocale: locale === "en" ? ["ar_SA"] : ["en_US"],
       type: "website",
     },
     twitter: {
