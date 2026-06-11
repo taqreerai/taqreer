@@ -4,7 +4,7 @@
 // helpers narrow + classify it so callers don't re-declare the literal
 // union (it lived duplicated in the dashboard page + /api/usage/plan).
 
-export const KNOWN_PLANS = ["free", "plus", "pro"] as const;
+export const KNOWN_PLANS = ["free", "starter", "plus", "pro"] as const;
 export type KnownPlan = (typeof KNOWN_PLANS)[number];
 
 export function isKnownPlan(plan: string): plan is KnownPlan {

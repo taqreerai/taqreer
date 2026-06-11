@@ -27,6 +27,9 @@ model User {
   sessions       Session[]
   subscriptions  Subscription[]
   usageEvents    UsageEvent[]
+  creditAccount  CreditAccount?
+  topupGrants    TopupGrant[]
+  creditHolds    CreditHold[]
   projectShares  ProjectShare[]
   comments       Comment[]
   // Notifications addressed TO this user (recipientUserId). The
@@ -509,6 +512,92 @@ model Subscription {
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ─── Credit ledger (context/subscriptionmodel.md §7, Phase 1) ───────
+//
+// Money model: `subscriptionBalance` is the monthly allotment bucket
+// (reset to `monthlyAllotment` each cycle, NO rollover). Top-up packs
+// live in their own `TopupGrant` rows because they follow different
+// rules - they survive the monthly reset and expire 12 months after
+// purchase. The user's spendable balance is always
+//   subscriptionBalance + Σ TopupGrant.amountRemaining (unexpired)
+// and is never stored denormalized anywhere else.
+//
+// Concurrency: every mutation locks the user's CreditAccount row
+// (SELECT … FOR UPDATE) inside one transaction, so two simultaneous
+// generations can never both pass the balance check (the "atomic
+// consume is the only money gate" rule, §5).
+model CreditAccount {
+  userId              String    @id
+  // Spendable remainder of the CURRENT cycle's allotment. Spent
+  // before top-ups (it evaporates at reset; top-ups keep).
+  subscriptionBalance Int       @default(0)
+  // The tier's per-cycle grant. 0 for Free (signup grant is one-time
+  // and lands in subscriptionBalance without a refill).
+  monthlyAllotment    Int       @default(0)
+  // Next reset boundary; mirrors Stripe current_period_end once
+  // billing is live. Null for Free (nothing to reset).
+  allotmentResetAt    DateTime?
+  // One-time Free signup grant guard - set when the 400-credit grant
+  // is issued so a re-signup / re-login can never re-grant.
+  signupGrantedAt     DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// One row per purchased top-up pack. Drawn down FIFO by expiry date
+// (soonest-expiring first) AFTER the subscription bucket. `sourceKey`
+// is the idempotency key for the grant - the Stripe event id once
+// live, a sim key during testing - so a replayed webhook can't
+// double-grant.
+model TopupGrant {
+  id              String   @id @default(cuid())
+  userId          String
+  amountGranted   Int
+  amountRemaining Int
+  expiresAt       DateTime
+  sourceKey       String   @unique
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+// Hotel-style pre-authorization for one generation job. The hold
+// debits the balance up-front for the maximum the job may cost; on
+// completion `settle` charges the actual amount (clamped to the hold
+// - the user can never pay more than they were shown) and returns the
+// remainder; `release` returns everything (failure / pre-emit cancel).
+//
+// `jobKey` is the idempotency anchor: re-running the same job (an
+// Inngest retry) finds the existing hold instead of debiting again,
+// and a second settle/release is a no-op returning the first outcome.
+//
+// `fromSubscription` + `topupTakes` record exactly which buckets
+// funded the hold so refunds flow back to the SAME sources - a refund
+// must never convert expiring top-up credits into resettable
+// subscription credits or vice versa.
+model CreditHold {
+  id               String   @id @default(cuid())
+  userId           String
+  jobKey           String   @unique
+  amountHeld       Int
+  // Final charge once settled; null while held. 0 == fully released.
+  amountCharged    Int?
+  // held | settled | released
+  status           String   @default("held")
+  fromSubscription Int      @default(0)
+  // [{ grantId, amount }] - top-up draw-downs backing this hold.
+  topupTakes       Json?
+  // { flow, preset, slides?, estimateShown? … } for the audit trail.
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
 model UsageEvent {
   id        String   @id @default(cuid())
   userId    String
@@ -517,6 +606,10 @@ model UsageEvent {
   metadata  Json?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The credit trail + the popup's "recent usage" list both read
+  // per-user newest-first.
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 // Phase 16.E — bell notifications.

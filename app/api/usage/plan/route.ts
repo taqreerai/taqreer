@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getStartOfMonthUTC } from "@/lib/utils";
 import { normalizePlan } from "@/lib/plan";
 
-const planLimits = { free: 10, plus: 60, pro: 90 };
+const planLimits = { free: 10, starter: 30, plus: 60, pro: 90 };
 
 export async function GET() {
   const supabase = await createClient();
