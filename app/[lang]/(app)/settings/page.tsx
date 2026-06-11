@@ -164,45 +164,46 @@ export default function SettingsPage() {
             2026-06-11, lovable-style settings reference). Logical grid
             sides so AR mirrors automatically. */}
         <div className="settings-card surface-card rounded-xl">
-          <h2 className="settings-card-title">{dict.pages.settings.profile.title}</h2>
-          <div className="settings-divider" />
+          {/* Header row: card title at the start, avatar + name + email
+              at the end - ABOVE the divider, so there's no duplicated
+              "الملف الشخصي" row (user direction 2026-06-12). */}
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="settings-card-title !mb-0">{dict.pages.settings.profile.title}</h2>
+            <div className="flex items-center gap-3">
+              <div className="text-end">
+                <p className="text-sm font-semibold text-foreground">{displayName}</p>
+                <p className="text-xs text-muted">{user?.email}</p>
+              </div>
+              {avatarUrl ? (
+                <Image
+                  src={avatarUrl}
+                  alt={displayName}
+                  width={48}
+                  height={48}
+                  // `no-referrer` for Google profile pics — see
+                  // components/common/Avatar.tsx for the full rationale.
+                  referrerPolicy="no-referrer"
+                  className="rounded-full object-cover w-12 h-12 tq-avatar-ring"
+                />
+              ) : (
+                <div
+                  // Per-user gradient — same picker the dashboard
+                  // sidebar + presence avatars use.
+                  className="w-12 h-12 rounded-full tq-avatar-fallback text-lg"
+                  style={{
+                    backgroundImage: avatarGradientForSeed(
+                      user?.id ?? user?.email ?? displayName,
+                    ),
+                  }}
+                >
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="settings-divider !mt-3" />
 
           <form onSubmit={handleSaveProfile}>
-            <div className="settings-row">
-              <div>
-                <p className="settings-row-title">{dict.pages.settings.profile.title}</p>
-                <p className="settings-row-desc">{user?.email}</p>
-              </div>
-              <div className="flex items-center justify-end gap-3">
-                <p className="text-sm font-semibold text-foreground">{displayName}</p>
-                {avatarUrl ? (
-                  <Image
-                    src={avatarUrl}
-                    alt={displayName}
-                    width={48}
-                    height={48}
-                    // `no-referrer` for Google profile pics — see
-                    // components/common/Avatar.tsx for the full rationale.
-                    referrerPolicy="no-referrer"
-                    className="rounded-full object-cover w-12 h-12 tq-avatar-ring"
-                  />
-                ) : (
-                  <div
-                    // Per-user gradient — same picker the dashboard
-                    // sidebar + presence avatars use.
-                    className="w-12 h-12 rounded-full tq-avatar-fallback text-lg"
-                    style={{
-                      backgroundImage: avatarGradientForSeed(
-                        user?.id ?? user?.email ?? displayName,
-                      ),
-                    }}
-                  >
-                    {displayName.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
-            </div>
-
             <div className="settings-row">
               <div>
                 <p className="settings-row-title">{dict.pages.settings.profile.fullName}</p>
@@ -215,7 +216,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="settings-row border-b-0">
+            <div className="settings-row">
               <div>
                 <p className="settings-row-title">{dict.pages.settings.profile.email}</p>
               </div>
@@ -247,7 +248,7 @@ export default function SettingsPage() {
               <p className="settings-row-title">{dict.pages.settings.password.new}</p>
               <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="••••••••" className="input-dark" />
             </div>
-            <div className="settings-row border-b-0">
+            <div className="settings-row">
               <p className="settings-row-title">{dict.pages.settings.password.confirm}</p>
               <div className="flex items-center gap-3">
                 <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="••••••••" className="input-dark" />
@@ -261,10 +262,10 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Delete Account ── */}
-        <div className="settings-card surface-card-danger rounded-xl">
+        <div className="settings-card surface-card rounded-xl">
           <h2 className="settings-card-title text-red-400">{dict.pages.settings.deleteAccount.title}</h2>
           <div className="settings-divider" />
-          <div className="settings-row border-b-0">
+          <div className="settings-row">
             <p className="settings-row-desc">{dict.pages.settings.deleteAccount.warning}</p>
             <div className="flex justify-end">
               <button

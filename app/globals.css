@@ -465,6 +465,14 @@ button, a, [role="button"] {
   }
 }
 
+/* The card's own bottom edge acts as the final divider - the last
+   row never draws one (user direction 2026-06-12). Declared here
+   because this rule loads AFTER Tailwind's utilities, so a `border-b-0`
+   utility on the row would lose the cascade. */
+.settings-row:last-child {
+  border-bottom: none;
+}
+
 .settings-row-title {
   color: var(--tq-text-primary);
   font-weight: 600;
