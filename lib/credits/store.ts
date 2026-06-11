@@ -1,0 +1,130 @@
+"use client";
+
+// Client-side credit balance store - the ONE source every credit surface
+// reads (sidebar avatar ring, profile-popup breakdown, settings card,
+// GenerateSplitButton estimates), so they can never show different
+// numbers. Same subscribe/notify shape as lib/notifications/store.ts.
+//
+// Data flow:
+//   1. Hydrate from GET /api/credits on first consumer mount.
+//   2. Live updates ride the EXISTING per-user Supabase channel - the
+//      notification store owns that channel and re-dispatches
+//      `credit.balance.changed` as a DOM CustomEvent (same decoupling
+//      as share.revoked). The event is POINTER-ONLY (the user topic is
+//      a public broadcast channel, so the balance never rides the
+//      socket); this store reacts by refetching the auth-gated API and
+//      applying the result in place (realtime = in-place state, never
+//      router.refresh).
+
+import { useEffect, useSyncExternalStore } from "react";
+
+export const CREDIT_BALANCE_EVENT = "taqreer:credit-balance-changed";
+
+export type CreditRecentEvent = {
+  id: string;
+  eventType: string;
+  amount: number;
+  metadata: unknown;
+  createdAt: string;
+};
+
+export type CreditData = {
+  plan: string;
+  balance: {
+    total: number;
+    subscription: number;
+    topup: number;
+    monthlyAllotment: number;
+    allotmentResetAt: string | null;
+  };
+  // The ring denominator: this cycle's grant + active pack principal.
+  capacity: number;
+  recent: CreditRecentEvent[];
+};
+
+type Listener = () => void;
+
+class CreditStore {
+  private data: CreditData | null = null;
+  private listeners = new Set<Listener>();
+  private hydrating = false;
+  private hydrated = false;
+  private refetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    if (typeof window !== "undefined") {
+      window.addEventListener(CREDIT_BALANCE_EVENT, () => {
+        // Pointer-only signal: refetch the auth-gated route. Debounced
+        // so a burst of settles costs one fetch.
+        this.scheduleRefetch();
+      });
+    }
+  }
+
+  private emit(): void {
+    for (const l of this.listeners) l();
+  }
+
+  private scheduleRefetch(): void {
+    if (this.refetchTimer) clearTimeout(this.refetchTimer);
+    this.refetchTimer = setTimeout(() => {
+      this.refetchTimer = null;
+      void this.refetch();
+    }, 250);
+  }
+
+  async refetch(): Promise<void> {
+    try {
+      const res = await fetch("/api/credits", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = (await res.json()) as CreditData;
+      this.data = data;
+      this.emit();
+    } catch {
+      /* network blip - last snapshot stays */
+    }
+  }
+
+  ensureHydrated(): void {
+    if (this.hydrated || this.hydrating) return;
+    this.hydrating = true;
+    void this.refetch().finally(() => {
+      this.hydrating = false;
+      this.hydrated = true;
+    });
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  getSnapshot = (): CreditData | null => this.data;
+}
+
+export const creditStore = new CreditStore();
+
+const ssrSnapshot = (): CreditData | null => null;
+
+/**
+ * The shared balance. `null` until the first fetch resolves (or when
+ * signed out) - consumers render their no-data state.
+ */
+export function useCreditBalance(): CreditData | null {
+  const data = useSyncExternalStore(
+    (listener) => creditStore.subscribe(listener),
+    creditStore.getSnapshot,
+    ssrSnapshot,
+  );
+  useEffect(() => {
+    creditStore.ensureHydrated();
+  }, []);
+  return data;
+}
+
+/** Latin-digit thousands formatting (1,234) - brand rule: Latin numerals. */
+export function formatCredits(n: number): string {
+  return n.toLocaleString("en-US");
+}

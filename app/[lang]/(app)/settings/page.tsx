@@ -11,12 +11,6 @@ import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import type { User } from "@supabase/supabase-js";
 
 type Msg = { type: "success" | "error"; text: string } | null;
-type PlanUsageData = {
-  plan: string;
-  usageCount: number;
-  limit: number;
-  renewalDate: string | null;
-};
 
 function StatusMsg({ msg }: { msg: Msg }) {
   if (!msg) return null;
@@ -33,7 +27,6 @@ export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [planUsage, setPlanUsage] = useState<PlanUsageData | null>(null);
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,19 +48,6 @@ export default function SettingsPage() {
       setLoading(false);
     });
   }, [supabase.auth]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    fetch("/api/usage/plan")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: PlanUsageData | null) => {
-        setPlanUsage(data);
-      })
-      .catch(() => {
-        setPlanUsage(null);
-      });
-  }, [user]);
 
   const avatarUrl: string | null = user?.user_metadata?.avatar_url ?? null;
   const displayName: string =
@@ -169,15 +149,9 @@ export default function SettingsPage() {
       {/* §settings (2026-06-09): one centered column — cards stacked a row each
           at a comfortable reading width, instead of the old 2-col grid. */}
       <div className="mx-auto flex w-full max-w-2xl flex-col">
-      {/* Plan banner — full width at top */}
-      {planUsage ? (
-        <PlanUsage
-          plan={planUsage.plan}
-          usageCount={planUsage.usageCount}
-          limit={planUsage.limit}
-          renewalDate={planUsage.renewalDate ? new Date(planUsage.renewalDate) : null}
-        />
-      ) : null}
+      {/* Plan banner - full width at top. Self-feeding from the shared
+          credit store (same number as the avatar ring + profile menu). */}
+      <PlanUsage />
 
       {/* Page title */}
       <h1 className="tq-h1 mt-8 mb-6">{dict.pages.settings.title}</h1>

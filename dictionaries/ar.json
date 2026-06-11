@@ -328,7 +328,9 @@
       "generationQuality": "جودة التوليد",
       "thinking": "تفكير",
       "fast": "سريع",
-      "etaMin": "~{eta} د"
+      "etaMin": "~{eta} د",
+      "balance": "رصيدك: {count} نقطة",
+      "creditsEstimate": "\u2248 {credits} نقطة"
     },
     "fonts": {
       "fonts": "الخطوط",
@@ -552,7 +554,8 @@
     "accessChip": { "aria": "مستوى الوصول", "view": "عرض", "comment": "تعليق", "edit": "تعديل", "viewOnly": "يستطيع المشاهدة فقط", "viewAndComment": "يستطيع المشاهدة والتعليق", "editFull": "يستطيع التعديل الكامل" }
   },
   "components": {
-    "planUsage": { "plan": "الخطة {plan}", "free": "مجاني", "plus": "بلس", "pro": "احترافي", "usageThisMonth": "استخدام العروض التقديمية هذا الشهر", "usedPercent": "تم استخدام {percentage}%", "usageCount": "{count} / {limit} عرضًا", "upgrade": "ترقية الخطة", "renewalDate": "تاريخ التجديد: {date}", "noRenewal": "لا يوجد تاريخ تجديد" },
+    "planUsage": { "plan": "الخطة {plan}", "free": "مجاني", "starter": "أساسي", "plus": "بلس", "pro": "احترافي", "creditUsage": "استخدام الرصيد لهذه الدورة", "usedPercent": "تم استخدام {percentage}%", "creditsLeft": "متبقٍ {count} / {limit} نقطة", "upgrade": "ترقية الخطة", "renewalDate": "تاريخ التجديد: {date}", "noRenewal": "لا يوجد تاريخ تجديد" },
+    "credits": { "title": "الرصيد", "ringLabel": "الرصيد: متبقٍ {remaining} من {total}", "subscriptionSplit": "نقاط الخطة", "topupSplit": "نقاط الشحن", "renews": "يتجدد: {date}", "noRenewal": "لا يوجد تاريخ تجديد", "recentUsage": "آخر العمليات", "events": { "generation": "إنشاء عرض", "aiEdit": "تعديل بالذكاء الاصطناعي", "nameGen": "توليد عنوان", "refund": "استرداد", "topup": "شراء رصيد إضافي", "renewal": "تجديد الخطة", "welcome": "رصيد الترحيب", "reset": "تجديد شهري", "expired": "انتهاء صلاحية الشحن" } },
     "search": { "searching": "جارٍ البحث...", "noResults": "لا توجد نتائج لـ \"{query}\"", "placeholder": "ابحث في مشاريعك...", "resultsAria": "نتائج البحث في المشاريع", "emptyHint": "ابدأ بالكتابة للبحث في مشاريعك", "toOpen": "للفتح", "toClose": "للإغلاق" },
     "pagination": { "aria": "ترقيم الصفحات", "previousPage": "الصفحة السابقة", "nextPage": "الصفحة التالية", "pageN": "الصفحة {n}" },
     "recentProjects": { "title": "أحدث المشاريع", "emptyTitle": "لا توجد مشاريع بعد", "emptyDesc": "ابدأ بإنشاء أول عرض تقديمي وسيظهر هنا فور حفظه.", "createProject": "إنشاء مشروع" },

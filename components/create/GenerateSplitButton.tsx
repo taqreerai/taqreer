@@ -29,6 +29,8 @@ import {
   type Quality,
 } from "@/lib/types/quality";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { generationCost } from "@/lib/credits/cost";
+import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 
 export function GenerateSplitButton({
   onGenerate,
@@ -82,6 +84,11 @@ export function GenerateSplitButton({
 
   const effectiveSlideCount =
     slideCount && slideCount > 0 ? slideCount : 8;
+  // Live balance for the per-preset credit estimate (§3a of the
+  // subscription model: model choice is a cost choice, made with the
+  // price in view). Null until the first fetch - rows render without
+  // the credit chip rather than with a wrong number.
+  const credits = useCreditBalance();
 
   return (
     <div ref={splitButtonRef} className="relative">
@@ -162,13 +169,23 @@ export function GenerateSplitButton({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 4 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.25 }}
-            className=" absolute start-0 bottom-full z-30 mb-2 w-72 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
+            className=" absolute start-0 bottom-full z-30 mb-2 w-80 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           >
-            <div className="px-3 py-2 text-[11px] text-foreground/40">
-              {dict.flows.generate.generationQuality}
+            <div className="flex items-center justify-between px-3 py-2 text-[11px] text-foreground/40">
+              <span>{dict.flows.generate.generationQuality}</span>
+              {credits ? (
+                <span dir="ltr" className="tabular-nums">
+                  {dict.flows.generate.balance.replace(
+                    "{count}",
+                    formatCredits(credits.balance.total),
+                  )}
+                </span>
+              ) : null}
             </div>
             {QUALITY_PRESETS.map((preset) => {
               const eta = estimateMinutes(preset.key, effectiveSlideCount);
+              const cost = generationCost(preset.key, effectiveSlideCount);
+              const affordable = credits ? cost <= credits.balance.total : true;
               const active = quality === preset.key;
               return (
                 <button
@@ -220,6 +237,23 @@ export function GenerateSplitButton({
                     <span className="text-[11px] text-foreground/40 tabular-nums" dir="ltr">
                       {dict.flows.generate.etaMin.replace("{eta}", String(eta))}
                     </span>
+                    {/* Per-preset credit estimate - the same cost table
+                        the ledger charges from (lib/credits/cost.ts), so
+                        the shown number IS the held number. Amber when
+                        the current balance doesn't cover it. */}
+                    {credits ? (
+                      <span
+                        className={`text-[11px] tabular-nums ${
+                          affordable ? "text-foreground/60" : "text-amber-400"
+                        }`}
+                        dir="ltr"
+                      >
+                        {dict.flows.generate.creditsEstimate.replace(
+                          "{credits}",
+                          formatCredits(cost),
+                        )}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               );
