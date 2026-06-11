@@ -74,17 +74,14 @@ export async function POST(request: Request) {
   }
 
   const isSubscription = spec.grant.kind === "subscription";
-  // EMBEDDED checkout (user direction 2026-06-11: keep people on
-  // taqreer.ai, our branding) - the form mounts inside /checkout via
-  // @stripe/react-stripe-js EmbeddedCheckout. We return the session's
-  // client_secret instead of a redirect URL. On completion Stripe
-  // redirects within OUR page to return_url (the {CHECKOUT_SESSION_ID}
-  // template lets the return page confirm status).
+  // ELEMENTS checkout (user direction 2026-06-12: fully custom form):
+  // the session powers our OWN payment page at /checkout, built from
+  // Payment Element components and themed via the Appearance API -
+  // Arabic labels, our tokens, our layout. We return the session's
+  // client_secret; on confirm Stripe redirects to return_url (the
+  // {CHECKOUT_SESSION_ID} template lets the return page verify).
   const session = await stripe.checkout.sessions.create({
-    // `embedded_page` is the 2026-04-22.dahlia name for embedded
-    // checkout (was `embedded` on older API versions) - the form mounts
-    // in our page via @stripe/react-stripe-js EmbeddedCheckout.
-    ui_mode: "embedded_page",
+    ui_mode: "elements",
     mode: isSubscription ? "subscription" : "payment",
     customer: customerId,
     line_items: [{ price: price.id, quantity: 1 }],
