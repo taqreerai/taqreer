@@ -167,7 +167,6 @@ async function main() {
     preset: Quality;
     slideInput: SlideEstimateInput;
     outcome: GenOutcome;
-    condense?: boolean;
     jobKey?: string;
     now?: Date;
   }): Promise<GenResult> {
@@ -210,7 +209,6 @@ async function main() {
         preset: opts.preset,
         holdSlides: preflight.holdSlides,
         estimateShown: preflight.holdCredits,
-        condense: opts.condense ?? false,
       },
       now: opts.now,
       ...quiet,
@@ -524,7 +522,7 @@ async function main() {
       before: blocked.before,
       after: blocked.after,
       expected:
-        "blocked insufficient_credits, balance untouched (160), options: condensed 6 @ 160, no cheaper preset, top-up gap 40",
+        "blocked insufficient_credits, balance untouched (160), offers: reduce to 6 @ 160 or top up 40 (no cheaper preset exists on Free)",
       observed: `${blocked.status} (${blocked.blockedReason}); balance ${blocked.before}→${blocked.after}; options ${JSON.stringify(opts)}`,
       pass:
         blocked.status === "blocked" &&
@@ -532,43 +530,32 @@ async function main() {
         blocked.before === 160 &&
         blocked.after === 160 &&
         opts !== null &&
-        opts.condensedSlides === 6 &&
-        opts.condensedCredits === 160 &&
+        opts.reducedSlides === 6 &&
+        opts.reducedCredits === 160 &&
         opts.cheaperPresets.length === 0 &&
         opts.topupGap === 40,
     });
 
-    // 3.2 The user picks the condensed option → charged only for what
-    // they chose, deck is authored at 6 slides (summarized, not cut).
-    const condensed = await fakeGenerate({
+    // 3.2 The user picks the reduce offer → the deck is simply a normal
+    // generation at the smaller count, charged exactly that price.
+    const reduced = await fakeGenerate({
       userId: user.id,
       plan: "free",
       flow: "create",
       preset: "sonnet-fast",
       slideInput: { kind: "fixed", count: 6 },
-      condense: true,
       outcome: { kind: "success", produce: 6 },
     });
-    assertEstimateInvariant(condensed);
-    const condensedHold = await prisma.creditHold.findUnique({
-      where: { jobKey: condensed.jobKey },
-    });
-    const condenseFlag =
-      (condensedHold?.metadata as { condense?: boolean } | null)?.condense ===
-      true;
-    check("3.2", "Condensed deck: charged exactly the affordable size", {
-      before: condensed.before,
-      after: condensed.after,
-      held: condensed.held,
-      charged: condensed.charged,
-      refunded: condensed.refunded,
-      expected:
-        "charged 160 (6 slides), balance 160→0, condense flag on the job",
-      observed: `charged ${condensed.charged}, balance ${condensed.before}→${condensed.after}, condense=${condenseFlag}`,
-      pass:
-        condensed.charged === 160 &&
-        condensed.after === 0 &&
-        condenseFlag === true,
+    assertEstimateInvariant(reduced);
+    check("3.2", "Reduced deck: charged exactly the affordable size", {
+      before: reduced.before,
+      after: reduced.after,
+      held: reduced.held,
+      charged: reduced.charged,
+      refunded: reduced.refunded,
+      expected: "charged 160 (6 slides), balance 160→0",
+      observed: `charged ${reduced.charged}, balance ${reduced.before}→${reduced.after}`,
+      pass: reduced.charged === 160 && reduced.after === 0,
     });
   }
 

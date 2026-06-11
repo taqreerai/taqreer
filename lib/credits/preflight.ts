@@ -6,12 +6,17 @@
 //   1. flow locked for the tier            → upgrade
 //   2. preset locked for the tier          → upgrade
 //   3. slide count above the tier cap      → block (never truncate; §5)
-//   4. cost above the spendable balance    → block with options:
-//        a. condensed deck at the size the balance affords (the deck is
-//           SUMMARIZED to fit - the condense flag rides the brief so the
-//           prompt compresses content, never cuts it off)
-//        b. a cheaper unlocked preset that affords the full size
-//        c. the top-up gap (needs N, you have M)
+//   4. cost above the spendable balance    → block with TWO offers
+//      (user direction 2026-06-11 - simplified from the earlier
+//      condensed/cheaper/top-up triple):
+//        a. reduce the slide count to what the balance affords (the
+//           deck is simply AUTHORED at the smaller count - no special
+//           summarize machinery; the brief's slide count already
+//           drives how content is distributed)
+//        b. top up the gap (needs N, you have M)
+//      `cheaperPresets` stays in the payload as supporting info (the
+//      preset menu shows per-preset prices anyway) but is not one of
+//      the primary offers.
 // Only after all four pass may the caller place the hold.
 
 import type { Quality } from "@/lib/types/quality";
@@ -30,7 +35,7 @@ import {
 import { getBalance, type BalanceSnapshot } from "@/lib/credits/server";
 
 // A deck below this is not a deck (cover + body + closing).
-export const MIN_CONDENSED_SLIDES = 3;
+export const MIN_REDUCED_SLIDES = 3;
 
 export type PresetQuote = {
   preset: Quality;
@@ -70,12 +75,12 @@ export type PreflightBlocked = {
     | "insufficient_credits";
   // For slide_cap_exceeded: the cap that was exceeded.
   slideCap?: number;
-  // For insufficient_credits - the three honest ways forward.
+  // For insufficient_credits - the two offers (+ supporting info).
   options?: {
-    // Largest summarized deck the balance affords on the chosen preset
-    // (null when even MIN_CONDENSED_SLIDES doesn't fit).
-    condensedSlides: number | null;
-    condensedCredits: number | null;
+    // Largest deck the balance affords on the chosen preset
+    // (null when even MIN_REDUCED_SLIDES doesn't fit) - offer (a).
+    reducedSlides: number | null;
+    reducedCredits: number | null;
     // Unlocked presets whose FULL-size cost fits the balance.
     cheaperPresets: Quality[];
     // needs − have.
@@ -152,8 +157,8 @@ export async function preflightGenerate(args: {
 
   if (quote.holdCredits > balance.total) {
     const affordable = maxAffordableSlides(effective, balance.total);
-    const condensedSlides =
-      affordable >= MIN_CONDENSED_SLIDES
+    const reducedSlides =
+      affordable >= MIN_REDUCED_SLIDES
         ? Math.min(affordable, quote.holdSlides)
         : null;
     const cheaperPresets = tier.presets.filter((p) => {
@@ -167,10 +172,10 @@ export async function preflightGenerate(args: {
       balance,
       reason: "insufficient_credits",
       options: {
-        condensedSlides,
-        condensedCredits:
-          condensedSlides !== null
-            ? generationCost(effective, condensedSlides)
+        reducedSlides,
+        reducedCredits:
+          reducedSlides !== null
+            ? generationCost(effective, reducedSlides)
             : null,
         cheaperPresets: [...cheaperPresets],
         topupGap: quote.holdCredits - balance.total,
