@@ -429,7 +429,6 @@ export function Sidebar({
             {profileOpen && dropdownPos && (
               <motion.div
                 ref={dropdownRef}
-                layout
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -456,16 +455,9 @@ export function Sidebar({
                 role="menu"
                 className="surface-menu rounded-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
               >
-                <AnimatePresence mode="popLayout" initial={false}>
                 {langView ? (
                   // ── Language sub-view (drilldown from the "Language >" row) ──
-                  <motion.div
-                    key="lang"
-                    initial={{ opacity: 0, x: dir === "rtl" ? -14 : 14 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: dir === "rtl" ? -14 : 14 }}
-                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  >
+                  <>
                     <button
                       type="button"
                       onClick={() => setLangView(false)}
@@ -496,16 +488,10 @@ export function Sidebar({
                         <span>{code === "ar" ? dict.language.ar : dict.language.en}</span>
                       </button>
                     ))}
-                  </motion.div>
+                  </>
                 ) : (
                   // ── Main view ──
-                  <motion.div
-                    key="main"
-                    initial={{ opacity: 0, x: dir === "rtl" ? 14 : -14 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: dir === "rtl" ? 14 : -14 }}
-                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  >
+                  <>
                     <div className="px-3 py-2">
                       <p className="font-semibold text-foreground text-sm truncate">{name}</p>
                       <p className="text-muted text-xs truncate">{email}</p>
@@ -595,9 +581,8 @@ export function Sidebar({
                       <span className="material-symbols-outlined text-[18px]">logout</span>
                       <span>{dict.profileMenu.signOut}</span>
                     </button>
-                  </motion.div>
+                  </>
                 )}
-                </AnimatePresence>
               </motion.div>
             )}
           </AnimatePresence>,
