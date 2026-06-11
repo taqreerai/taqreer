@@ -347,6 +347,10 @@
   --tq-overlay:        rgba(255, 255, 255, 0.10);
   --tq-overlay-strong: rgba(255, 255, 255, 0.18);
 
+  /* Dot-field colour (MagneticGlow backdrop) — light dots on dark by default;
+     .light swaps to dark dots so the texture stays visible on white. */
+  --tq-dot: rgba(236, 238, 245, 0.14);
+
   /* 9. Background Blobs */
   --bg-blob-opacity-1: 0.28;
   --bg-blob-opacity-2: 0.22;
@@ -372,6 +376,14 @@
   --tq-overlay-soft:    rgba(0, 0, 0, 0.04);
   --tq-overlay:         rgba(0, 0, 0, 0.06);
   --tq-overlay-strong:  rgba(0, 0, 0, 0.10);
+  --tq-dot:             rgba(0, 0, 0, 0.14);
+}
+
+/* Tooltips stay a DARK chip in both themes (inverted on light) — a white-on-
+   white tooltip is invisible. Keep the dark surface + white text on .light. */
+:root.light .sidebar-tooltip {
+  background: oklch(0.205 0 0);
+  color: #fff;
 }
 
 /* ─── Global cursor defaults ─── */
@@ -507,7 +519,7 @@ textarea.input-dark {
    state and switch the cursor to the default arrow. */
 .input-dark[readonly]:focus,
 .input-dark[readonly] {
-  border-color: rgba(255, 255, 255, var(--tq-border-opacity));
+  border-color: var(--tq-border-hairline);
   background: rgba(255, 255, 255, 0.05);
   cursor: default;
 }
@@ -847,7 +859,7 @@ html.app-shell-scroll body {
   inset: 0;
   border-radius: 14px;
   padding: 1px;
-  background: rgba(255, 255, 255, var(--tq-border-opacity));
+  background: var(--tq-border-hairline);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -875,7 +887,7 @@ html.app-shell-scroll body {
     radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
-    rgba(255, 255, 255, var(--tq-border-opacity));
+    var(--tq-border-hairline);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1031,7 +1043,7 @@ html.app-shell-scroll body {
     radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
-    rgba(255, 255, 255, var(--tq-border-opacity));
+    var(--tq-border-hairline);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1138,7 +1150,7 @@ html.app-shell-scroll body {
     radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #9326C9 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #7D2DFF 0%, transparent 70%),
     radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
-    rgba(255, 255, 255, var(--tq-border-opacity));
+    var(--tq-border-hairline);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1309,7 +1321,7 @@ html.app-shell-scroll body {
      near-black fill (100% opaque — user direction) so the fixed nav fully
      occludes content scrolling beneath it (matches the dark dashboard chrome). */
   background-color: var(--tq-bg);
-  border-bottom: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
+  border-bottom: 1px solid var(--tq-border-hairline);
 }
 
 /* ─── Toggle Switch (on state) ─── */
@@ -1337,10 +1349,11 @@ html.app-shell-scroll body {
 
 /* ─── Badges ─── */
 .badge-purple {
-  /* §21: aligned to the single accent purple (#8B5CF6). */
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #C4B5FD;
+  /* Opaque purple + white text (was a faint tint with light-lavender text that
+     read low-contrast on light). Solid reads in both themes. */
+  background: var(--tq-purple);
+  border: 1px solid var(--tq-purple);
+  color: #fff;
   border-radius: 9999px;
   font-size: 10px;
   padding: 2px 8px;
@@ -1351,14 +1364,14 @@ html.app-shell-scroll body {
 .surface-empty-state {
   background: var(--tq-surface);
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
+  border: 1px solid var(--tq-border-hairline);
 }
 
 /* ─── Plan Banner ─── */
 .plan-banner {
   background: var(--tq-surface);
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
+  border: 1px solid var(--tq-border-hairline);
   position: relative;
   isolation: isolate;
 }
@@ -1622,9 +1635,11 @@ html.app-shell-scroll body {
    as the brand colour. Folded out of an inline `style` in Hero.tsx
    so the surface stays token-driven, no hardcoded color. */
 .hero-stat-pill {
-  background: rgba(var(--tq-violet-rgb), 0.12);
-  color: color-mix(in oklab, var(--tq-violet) 30%, white);
-  border: 1px solid rgba(var(--tq-violet-rgb), 0.3);
+  /* Opaque purple + white text (was a faint violet tint that read low-contrast
+     on light). Solid reads clearly in both themes. */
+  background: var(--tq-purple);
+  color: #fff;
+  border: 1px solid var(--tq-purple);
 }
 
 .group:hover .nav-icon {
@@ -1673,7 +1688,7 @@ html.app-shell-scroll body {
   padding: 0.5rem 2.5rem 0.5rem 1rem;
   color: white;
   background: rgba(255, 255, 255, var(--tq-tint-opacity));
-  border: 1px solid rgba(255, 255, 255, var(--tq-border-opacity));
+  border: 1px solid var(--tq-border-hairline);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 

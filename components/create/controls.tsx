@@ -126,7 +126,10 @@ export function SegmentedToggle<T extends string>({
         : "px-2.5 py-1 text-[10px] font-semibold";
   const activeBgCls =
     variant === "primary" ? "bg-[var(--tq-blue)]" : "bg-foreground";
-  const activeTextCls = variant === "primary" ? "text-foreground" : "text-black";
+  // default: the pill is `bg-foreground` (white in dark, black in light), so the
+  // text must be its inverse `bg` colour to contrast in BOTH themes. primary:
+  // solid purple pill → always white text.
+  const activeTextCls = variant === "primary" ? "text-white" : "text-background";
   // Stable layoutId so the sliding background pill is unique to THIS
   // toggle instance — without it, two SegmentedToggles on the same
   // page would share the indicator and animate from one to the other
@@ -524,7 +527,10 @@ export function Toggle({
           dir === "rtl" ? { right: value ? 22 : 2 } : { left: value ? 22 : 2 }
         }
         transition={{ type: "spring", stiffness: 500, damping: 35 }}
-        className="absolute top-0.5 h-5 w-5 rounded-full bg-foreground"
+        // White knob in both themes (the physical switch metaphor) — on the
+        // purple ON track and the faint OFF track it must read as a light disc,
+        // not flip dark. Shadow lifts it off the light-mode OFF track.
+        className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm"
       />
     </button>
   );

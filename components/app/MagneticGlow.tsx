@@ -48,7 +48,7 @@ export function MagneticGlow({
           className="absolute inset-0"
           style={{
             backgroundImage:
-              "radial-gradient(circle, rgba(236,238,245,0.14) 0.9px, transparent 1.1px)",
+              "radial-gradient(circle, var(--tq-dot) 0.9px, transparent 1.1px)",
             backgroundSize: "23px 23px",
           }}
         />
