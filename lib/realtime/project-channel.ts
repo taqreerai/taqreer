@@ -33,7 +33,10 @@ import type {
   RealtimePresenceState,
 } from "@supabase/supabase-js";
 import { getRealtimeBrowserClient } from "./supabase-browser";
-import { realtimePrivateMode } from "./token-manager";
+import {
+  realtimePrivateMode,
+  getRealtimeAccessToken,
+} from "./token-manager";
 
 // What we put on the wire for presence. Keep this minimal — every key
 // here goes across the socket on every viewer's tab.
@@ -206,6 +209,15 @@ export async function openProjectChannel(
   // `private` is part of the join - resolve the rollout mode first.
   const isPrivate = await realtimePrivateMode();
   const client = getRealtimeBrowserClient();
+  // Push the minted token to the socket BEFORE subscribe - private
+  // joins authorize at join time and the `accessToken` option alone
+  // doesn't reliably feed the first join (verified empirically). The
+  // token's `topics` claim must already include this project (the
+  // caller runs `ensureProjectTopic` first).
+  if (isPrivate) {
+    const token = await getRealtimeAccessToken();
+    if (token) await client.realtime.setAuth(token);
+  }
   const topic = `project:${projectId}`;
 
   const channel = client.channel(topic, {

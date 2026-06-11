@@ -27,7 +27,10 @@
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getRealtimeBrowserClient } from "./supabase-browser";
-import { realtimePrivateMode } from "./token-manager";
+import {
+  realtimePrivateMode,
+  getRealtimeAccessToken,
+} from "./token-manager";
 
 // Broadcast event names — typed union so emitters + consumers agree
 // on the wire format. Add new entries here BEFORE emitting them; the
@@ -106,6 +109,14 @@ export async function openUserChannel(
   // (secret not configured server-side) keeps pre-hardening behaviour.
   const isPrivate = await realtimePrivateMode();
   const client = getRealtimeBrowserClient();
+  // Private joins are authorized AT join time, so the socket must
+  // already carry the minted token - push it via setAuth BEFORE
+  // subscribe (the `accessToken` client option alone doesn't reliably
+  // feed the realtime socket for the first join; verified empirically).
+  if (isPrivate) {
+    const token = await getRealtimeAccessToken();
+    if (token) await client.realtime.setAuth(token);
+  }
   const topic = `user:${supabaseUserId}`;
 
   const channel = client.channel(topic, {
