@@ -199,8 +199,13 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
           <p className="text-sm font-semibold text-foreground">
             {checkout.lineItems[0]?.name}
           </p>
-          <p className="mt-0.5 text-lg font-bold text-foreground tabular-nums" dir="ltr">
-            {amount}
+          {/* The paragraph follows the page direction (so it aligns
+              with the title in AR); only the amount string itself is
+              BiDi-isolated - Stripe pre-formats it ("58.57 ر.س.") and
+              a dir=ltr on the whole line dragged it to the far edge in
+              RTL. */}
+          <p className="mt-0.5 text-lg font-bold text-foreground tabular-nums">
+            <bdi dir="ltr">{amount}</bdi>
             {!isTopup && (
               <span className="text-xs font-normal text-muted"> {dict.landing.pricing.perMonth}</span>
             )}
