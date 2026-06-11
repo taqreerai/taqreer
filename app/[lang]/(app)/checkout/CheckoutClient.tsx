@@ -111,7 +111,8 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
     // Lives INSIDE the dashboard chrome (sidebar + top bar stay) -
     // back link + title + our form.
     <div className="page-container">
-      <div className="mx-auto w-full max-w-4xl pb-16">
+      {/* Same content frame as /billing so titles + width line up. */}
+      <div className="mx-auto w-full max-w-7xl pb-16">
         <Link
           href={localizedHref("/billing", locale)}
           className="mb-4 inline-flex items-center gap-1 text-sm text-muted no-underline transition-colors hover:text-foreground"
@@ -186,10 +187,12 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
   }
 
   return (
-    // Two cards in one row (user direction 2026-06-12): order details
-    // + email on the start side, the payment fields + pay button on
-    // the end side. Stacks on small screens.
-    <div className="grid items-start gap-6 lg:grid-cols-[1fr_1.2fr]">
+    // Two cards in one row (user direction 2026-06-12): card 1 is the
+    // whole order - currency, email, card fields. Card 2 carries the
+    // pay button. The "Save my information" (Link) block renders
+    // INSIDE Stripe's sealed payment iframe and cannot be moved out of
+    // card 1; its `.Block` styling keeps it reading as its own panel.
+    <div className="grid items-start gap-6 lg:grid-cols-[1.2fr_1fr]">
       <div className="surface-card flex flex-col gap-5 rounded-2xl p-6">
         {/* Order summary: line item + total (Stripe pre-formats the
             amount string in the session currency). */}
@@ -227,11 +230,11 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
             autoComplete="email"
           />
         </div>
+
+        <PaymentElement options={{ layout: "tabs" }} />
       </div>
 
-      <div className="surface-card flex flex-col gap-5 rounded-2xl p-6">
-        <PaymentElement options={{ layout: "tabs" }} />
-
+      <div className="surface-card flex flex-col gap-4 rounded-2xl p-6">
         {payError ? (
           <p className="text-sm text-[rgb(220,38,38)]" role="alert">
             {payError}

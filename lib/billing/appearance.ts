@@ -64,6 +64,8 @@ export function checkoutAppearance(): Appearance {
       colorTextPlaceholder: resolveColor("--tq-text-muted"),
       colorDanger: "rgb(220, 38, 38)",
       fontFamily: "Cairo, sans-serif",
+      // Breathing room between rows (user direction 2026-06-12).
+      spacingGridRow: "20px",
       // Resting surface radius (blocks, tabs, dropdown panels) - the
       // 14px `surface-card` / textarea radius.
       borderRadius: "14px",
@@ -71,6 +73,10 @@ export function checkoutAppearance(): Appearance {
       focusOutline: `1px solid ${resolveColor("--tq-purple")}`,
     },
     rules: {
+      // Same label-to-field gap as our own form fields (`mb-2`).
+      ".Label": {
+        marginBottom: "8px",
+      },
       // Mirror `.input-dark` exactly: pill ends, overlay-soft fill,
       // hairline border, same padding.
       ".Input": {
@@ -79,10 +85,6 @@ export function checkoutAppearance(): Appearance {
         borderRadius: "9999px",
         padding: "12px 20px",
         boxShadow: "none",
-      },
-      // Selects (country) share the input recipe.
-      ".Dropdown": {
-        backgroundColor: inputBg,
       },
       ".Block": {
         border: `1px solid ${hairline}`,
