@@ -64,14 +64,9 @@ risk — confirm before wiring Phase 2.
 - **Realtime**: notifications fan-out is wired — give it an end-to-end cross-tab
   pass before relying on it in prod (local dev can't deliver broadcasts; the
   status poll is the fallback).
-- **Studio zoom**: zoom is preview-only — the edit iframe can't be CSS-scaled
-  (coords don't follow). Next step is an edit⇄preview toggle + zoom on the inline
-  `SlideRenderer`.
 - **Pre-launch**: server-side HTML sanitization for generated decks (see the
   top-of-file TODO in `components/slides/SlideRenderer.tsx`); a couple of
   prompt-level fidelity tweaks (gradient text, contrast).
-- **Design**: rule on the two file-type export tints (`--tq-export-html` violet /
-  `--tq-export-png` magenta) — the only non-blue brand hues left.
 
 ---
 
@@ -87,9 +82,6 @@ the generating shell (disabled, streaming) transitions seamlessly into the edito
   `forAi` drives partial regen); restore from per-slide history.
 - Undo/redo is a client stack; history = checkpoints on Save + 10-min idle.
 - Realtime events drive **in-place state updates, never `router.refresh`**.
-
-(So the old "Preview Window is review-only, no manual editor" rule is retired —
-the editor exists.)
 
 ---
 
