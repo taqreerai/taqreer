@@ -26,7 +26,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
 
   return (
     <nav className="absolute top-0 right-0 left-0 z-50">
-      <div className="rule-bottom mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-20 items-center justify-between">
           <Link href={localizedHref("/", locale)} className="flex flex-shrink-0 items-center gap-2">
             <Image

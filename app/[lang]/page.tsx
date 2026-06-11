@@ -1,11 +1,10 @@
-// Public landing page (/). Swiss-grid layout: the whole page sits in a centered
-// max-w-7xl FRAME with left/right vertical hairlines (border-x), but the
-// horizontal section separators span the FULL viewport width (laravel.com
-// style) via the `.rule-top` / `.rule-y` utilities — so the horizontals cross
-// past the inner verticals out to the screen edges. <main> clips horizontal
-// overflow so the 100vw rules never add a scrollbar. Single-column section
-// headers are centered; only the 2-column BiDi band is right-aligned. The only
-// page motion left is the hero's own 3D demo + the trusted-by marquee.
+// Public landing page (/). Simple stacked layout: a centered max-w-7xl column
+// on the panel background with the bottom aurora glow (MagneticGlow, dots off).
+// No swiss-grid frame: the vertical border-x + the full-bleed `.rule-*`
+// separators were removed (2026-06-11) in favour of plain section spacing, so
+// the page reads like the app rather than a marketing grid. Single-column
+// section headers are centered; only the 2-column BiDi band is right-aligned.
+// The only page motion left is the hero's own 3D demo + the trusted-by marquee.
 //
 // Lives at `app/page.tsx` (NOT inside a route group) because of a Next 16.2.6 +
 // Turbopack route-resolution bug with `(marketing)/page.tsx`.
@@ -75,10 +74,10 @@ function SectionHeader({
   );
 }
 
-// Full-bleed top hairline (spans the whole viewport, laravel.com style) even
-// though the section sits in the centered max-w-7xl frame. `.rule-y` adds a
-// matching bottom line — both defined in globals.css.
-const RULE = "rule-top";
+// Section separators removed (no swiss grid) — sections lean on their own
+// vertical padding now. `RULE` kept as an empty string so the section className
+// templates below don't each need editing.
+const RULE = "";
 const PX = "px-4 sm:px-6 lg:px-8";
 
 export default async function LandingPage({
@@ -121,15 +120,15 @@ export default async function LandingPage({
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
       <LandingNav isAuthed={!!user} />
 
-      {/* FRAME — left/right vertical hairlines wrapping the whole page; every
-          horizontal rule below spans this width and meets them. */}
-      <div className="relative mx-auto max-w-7xl border-x border-[var(--tq-border-hairline)]">
+      {/* Centered content column (no frame hairlines — sections stack on the
+          dotted + aurora backdrop, matching the dashboard). */}
+      <div className="relative mx-auto max-w-7xl">
         <Hero projectCount={projectCount} />
 
-        {/* Trusted-by — animated full-width marquee, no edge fade (the frame
-            verticals are the boundary). */}
+        {/* Trusted-by — animated full-width marquee with edge-fade mask
+            (`.mask-edges`) so the logos dissolve at both ends. */}
         <section className={`${RULE} py-8`}>
-          <div className="relative w-full overflow-hidden" dir="ltr">
+          <div className="mask-edges relative w-full overflow-hidden" dir="ltr">
             <div className="animate-marquee-rtl pause-on-hover flex w-max opacity-50 grayscale">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-16 px-8">
@@ -144,9 +143,8 @@ export default async function LandingPage({
           </div>
         </section>
 
-        {/* Flows — 4-column backbone band. The band's own border-y is the
-            section's bottom separator (so the next section adds no border-t). */}
-        <section id="features" className={RULE}>
+        {/* Flows — 4 gapped cards (dashboard-style), no backbone dividers. */}
+        <section id="features">
           <ScrollReveal direction="up" className={`${PX} pt-32 pb-12`}>
             <SectionHeader
               eyebrow={dict.landing.sections.features.eyebrow}
@@ -154,7 +152,7 @@ export default async function LandingPage({
               subtitle={dict.landing.sections.features.subtitle}
             />
           </ScrollReveal>
-          <ScrollReveal direction="up" className="rule-y">
+          <ScrollReveal direction="up" className={`${PX} pb-12`}>
             <FeatureFlowCards />
           </ScrollReveal>
         </section>
@@ -193,12 +191,10 @@ export default async function LandingPage({
           </ScrollReveal>
         </section>
 
-        {/* FAQ — header right-aligned, accordion full-width so its row rules
-            meet the frame verticals. */}
+        {/* FAQ — centered header over the full-width accordion. */}
         <section id="faq" className={`${RULE} pt-32 pb-32`}>
-          <ScrollReveal direction="right" className={`${PX} mb-8`}>
+          <ScrollReveal direction="up" className={`${PX} mb-8`}>
             <SectionHeader
-              align="right"
               eyebrow={dict.landing.sections.faq.eyebrow}
               title={dict.landing.sections.faq.title}
               subtitle={dict.landing.sections.faq.subtitle}
@@ -211,7 +207,7 @@ export default async function LandingPage({
 
         {/* Footer — line separators, no background block. */}
         <footer className={`${RULE} ${PX} pt-20 pb-8`}>
-          <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-0 md:divide-x md:divide-[var(--tq-border-hairline)]">
+          <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
             {footerGroups.map((group) => (
               <div key={group.title} className="md:px-8 md:first:pe-0">
                 <h4 className="mb-6 font-medium text-white">{group.title}</h4>
@@ -230,7 +226,7 @@ export default async function LandingPage({
               </div>
             ))}
           </div>
-          <div className="flex flex-col items-center justify-between border-t border-[var(--tq-border-hairline)] pt-8 text-sm text-muted md:flex-row">
+          <div className="flex flex-col items-center justify-between pt-8 text-sm text-muted md:flex-row">
             <div className="mb-4 flex items-center gap-2 md:mb-0">
               <Image
                 src="/logo-light.svg"

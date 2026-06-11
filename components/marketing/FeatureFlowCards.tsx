@@ -2,11 +2,11 @@
 
 // ─── Landing feature-flow columns ─────────────────────────────────
 //
-// The four flows (Create / Enhance / Mimic / Datasheet) as a 4-column, 1-row
-// band split by vertical hairlines — modeled on Stripe's "backbone of global
-// commerce" stat row. RTL: content right-aligned, columns flow right→left.
-// Hover (Stripe-style): the column gets a faint fill, its AnimatedIcon plays,
-// and the title tints violet.
+// The four flows (Create / Enhance / Mimic / Datasheet) as 4 gapped cards that
+// match the dashboard's QuickActions — each uses the shared `.qa-card` (rounded
+// surface + idle hairline ring + animated mesh ring on hover). RTL: content
+// right-aligned, cards flow right→left. Hover plays the AnimatedIcon + tints the
+// title violet (the qa-card supplies the ring + slow zoom).
 
 import { useRef } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
@@ -21,7 +21,7 @@ const FLOW_ICONS = ["add_circle", "auto_fix_high", "content_copy", "dataset"];
 export function FeatureFlowCards() {
   const dict = useDict();
   return (
-    <div className="grid grid-cols-1 divide-y divide-[var(--tq-border-hairline)] lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {dict.landing.flowCards.map((card, i) => (
         <FlowColumn
           key={i}
@@ -46,7 +46,7 @@ function FlowColumn({
   const iconRef = useRef<AnimatedIconHandle>(null);
   return (
     <div
-      className="group flex flex-col gap-5 p-8 transition-colors duration-300 hover:bg-white/[0.02]"
+      className="qa-card group flex flex-col gap-5 p-8"
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
     >
