@@ -57,6 +57,10 @@ import {
   type ProjectChannelHandle,
   type ViewerPresence,
 } from "@/lib/realtime/project-channel";
+import {
+  ensureProjectTopic,
+  releaseProjectTopic,
+} from "@/lib/realtime/token-manager";
 
 import type { ProjectRole } from "@/lib/api/project-access";
 
@@ -1454,15 +1458,15 @@ export function DeckView({
     let cancelled = false;
     let localHandle: ProjectChannelHandle | null = null;
     (async () => {
-      // Pre-flight auth gate. Cheap (~1 row prisma lookup via
-      // resolveProjectAccess); avoids opening a socket for viewers
-      // who lost access between SSR + mount.
+      // Pre-flight auth gate + private-channel token: one round-trip
+      // mints the Realtime JWT whose `topics` claim must already list
+      // `project:{id}` BEFORE the channel subscribes (the policy is
+      // evaluated at join). Doubles as the old realtime-token access
+      // check - the server refuses the topic for viewers who lost
+      // access between SSR + mount.
       try {
-        const tokenRes = await fetch(
-          `/api/projects/${encodeURIComponent(projectId)}/realtime-token`,
-          { credentials: "same-origin" },
-        );
-        if (!tokenRes.ok) return;
+        const allowed = await ensureProjectTopic(projectId);
+        if (!allowed) return;
       } catch {
         return;
       }
@@ -1471,7 +1475,11 @@ export function DeckView({
       // works) — otherwise everyone's metas collide into one bucket
       // and the dispatcher only surfaces the most-recent tracker, so
       // one viewer sees the other but not vice-versa.
-      localHandle = openProjectChannel(projectId, currentUserId);
+      localHandle = await openProjectChannel(projectId, currentUserId);
+      if (cancelled) {
+        void localHandle.close();
+        return;
+      }
       localHandle.onPresenceSync((state) => {
         if (!cancelled) {
           // Subscribe to external source: the channel owns this state,
@@ -1786,6 +1794,8 @@ export function DeckView({
       cancelled = true;
       presenceHandleRef.current = null;
       localHandle?.close();
+      // Future token re-mints stop carrying this project's topic.
+      releaseProjectTopic(projectId);
     };
     // `canComment` is read inside the broadcast handlers; including it
     // in deps reopens the channel when a role upgrade lands so the

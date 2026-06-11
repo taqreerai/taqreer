@@ -161,62 +161,82 @@ class NotificationStore {
   // handler fetches the full formatted row via REST and upserts via
   // `pushFromServer`. Failures swallow silently — the row will land
   // on the next hydrate / visibility-regain regardless.
+  //
+  // The channel topic keys on the SUPABASE auth id (`this.userId`) -
+  // the private-channel policy authorizes against the session identity,
+  // not the prisma id (see lib/realtime/user-channel.ts). Open is async
+  // (first call fetches the realtime auth token); a user switch during
+  // the round-trip closes the late handle instead of installing it.
   private openChannelForCurrentUser(): void {
-    if (!this.prismaUserId) return;
-    try {
-      const handle = openUserChannel(this.prismaUserId);
-      handle.on("notification.created", (payload) => {
-        // Capture the prismaUserId at handler-bind time so a later
-        // user switch doesn't fetch into the wrong recipient's list.
-        const recipientAtBind = this.prismaUserId;
-        if (!payload?.notificationId) return;
-        (async () => {
-          try {
-            const res = await fetch(
-              `/api/notifications?ids=${encodeURIComponent(payload.notificationId)}`,
-              { credentials: "same-origin" },
-            );
-            if (!res.ok) return;
-            if (this.prismaUserId !== recipientAtBind) return;
-            const data = (await res.json()) as { notifications?: Notification[] };
-            const row = data.notifications?.[0];
-            if (row) this.pushFromServer(row);
-          } catch {
-            /* network blip — caught on next hydrate */
-          }
-        })();
+    if (!this.userId) return;
+    const userAtOpen = this.userId;
+    openUserChannel(this.userId)
+      .then((handle) => {
+        if (this.userId !== userAtOpen) {
+          // Signed out / switched accounts while the open was in
+          // flight - this handle belongs to the previous user.
+          handle.close().catch(() => {
+            /* socket already gone - fine */
+          });
+          return;
+        }
+        this.installChannelHandlers(handle);
+        this.channel = handle;
+      })
+      .catch((err) => {
+        console.warn("[notifications] openUserChannel failed", err);
       });
-      // Access-revoked handler — when the owner removes this user
-      // from the project's share list, the server broadcasts
-      // `share.revoked` on this channel. We dispatch a DOM event
-      // so any page-level listener can react (the preview/project
-      // pages redirect to /dashboard when the revoked projectId
-      // matches the URL). Decoupled via CustomEvent rather than a
-      // direct router import so this lib stays page-agnostic.
-      handle.on("share.revoked", (payload) => {
-        if (!payload?.projectId) return;
-        if (typeof window === "undefined") return;
-        window.dispatchEvent(
-          new CustomEvent("taqreer:share-revoked", {
-            detail: { projectId: payload.projectId },
-          }),
-        );
-      });
-      // Credit balance nudges - re-dispatched as a DOM event for the
-      // credit store (lib/credits/store.ts). Same CustomEvent decoupling
-      // as share.revoked: this store owns the ONLY user-channel
-      // subscription, other stores listen on window instead of opening
-      // a second channel on the same topic. Pointer-only by design -
-      // the store refetches GET /api/credits; the balance never rides
-      // the (public) socket.
-      handle.on("credit.balance.changed", () => {
-        if (typeof window === "undefined") return;
-        window.dispatchEvent(new CustomEvent("taqreer:credit-balance-changed"));
-      });
-      this.channel = handle;
-    } catch (err) {
-      console.warn("[notifications] openUserChannel failed", err);
-    }
+  }
+
+  private installChannelHandlers(handle: UserChannelHandle): void {
+    handle.on("notification.created", (payload) => {
+      // Capture the prismaUserId at handler-bind time so a later
+      // user switch doesn't fetch into the wrong recipient's list.
+      const recipientAtBind = this.prismaUserId;
+      if (!payload?.notificationId) return;
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/notifications?ids=${encodeURIComponent(payload.notificationId)}`,
+            { credentials: "same-origin" },
+          );
+          if (!res.ok) return;
+          if (this.prismaUserId !== recipientAtBind) return;
+          const data = (await res.json()) as { notifications?: Notification[] };
+          const row = data.notifications?.[0];
+          if (row) this.pushFromServer(row);
+        } catch {
+          /* network blip - caught on next hydrate */
+        }
+      })();
+    });
+    // Access-revoked handler - when the owner removes this user
+    // from the project's share list, the server broadcasts
+    // `share.revoked` on this channel. We dispatch a DOM event
+    // so any page-level listener can react (the preview/project
+    // pages redirect to /dashboard when the revoked projectId
+    // matches the URL). Decoupled via CustomEvent rather than a
+    // direct router import so this lib stays page-agnostic.
+    handle.on("share.revoked", (payload) => {
+      if (!payload?.projectId) return;
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(
+        new CustomEvent("taqreer:share-revoked", {
+          detail: { projectId: payload.projectId },
+        }),
+      );
+    });
+    // Credit balance nudges - re-dispatched as a DOM event for the
+    // credit store (lib/credits/store.ts). Same CustomEvent decoupling
+    // as share.revoked: this store owns the ONLY user-channel
+    // subscription, other stores listen on window instead of opening
+    // a second channel on the same topic. Pointer-only by design -
+    // the store refetches GET /api/credits; the balance never rides
+    // the socket.
+    handle.on("credit.balance.changed", () => {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(new CustomEvent("taqreer:credit-balance-changed"));
+    });
   }
 
   // Fetches the user's last 50 notifications and merges them in by

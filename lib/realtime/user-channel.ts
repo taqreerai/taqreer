@@ -11,10 +11,13 @@
 //   recipient shouldn't see) and lets the bell live independent of
 //   any project context.
 //
-// Topic shape: `user:{prismaUserId}`. Prisma id (not Supabase auth id)
-// to match the rest of the realtime payload conventions — the bell
-// fan-out helper writes Notification.recipientUserId as a Prisma id
-// and broadcasts to that same topic without translation.
+// Topic shape: `user:{supabaseUserId}` (the auth uid, NOT the prisma
+// id). The private-channel policy on realtime.messages authorizes a
+// join by matching the topic against the minted token's `topics`
+// claim, and the token route derives that claim from the Supabase
+// session - so the topic must carry the identity Supabase knows.
+// Server-side, `broadcastToUser` still ACCEPTS a prisma id (what every
+// fan-out path holds) and resolves it to the supabase id at send time.
 //
 // Subscribe ordering:
 //   Same pattern as project-channel.ts — pre-register one Supabase
@@ -24,6 +27,7 @@
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getRealtimeBrowserClient } from "./supabase-browser";
+import { realtimePrivateMode } from "./token-manager";
 
 // Broadcast event names — typed union so emitters + consumers agree
 // on the wire format. Add new entries here BEFORE emitting them; the
@@ -86,13 +90,23 @@ export type UserChannelHandle = {
  * the close — typically wired through `notificationStore.setUser` so
  * the channel lifecycle tracks the auth lifecycle (open on login,
  * close on logout, re-open on user change).
+ *
+ * Async since the private-channel hardening: the first open per tab
+ * round-trips /api/realtime/token to learn whether private mode is on
+ * (and to warm the token the socket will present at join).
  */
-export function openUserChannel(prismaUserId: string): UserChannelHandle {
-  if (!prismaUserId || typeof prismaUserId !== "string") {
-    throw new Error("[realtime] openUserChannel: prismaUserId is required");
+export async function openUserChannel(
+  supabaseUserId: string,
+): Promise<UserChannelHandle> {
+  if (!supabaseUserId || typeof supabaseUserId !== "string") {
+    throw new Error("[realtime] openUserChannel: supabaseUserId is required");
   }
+  // Resolve the rollout mode BEFORE creating the channel - `private`
+  // is part of the join, not toggleable afterwards. Public fallback
+  // (secret not configured server-side) keeps pre-hardening behaviour.
+  const isPrivate = await realtimePrivateMode();
   const client = getRealtimeBrowserClient();
-  const topic = `user:${prismaUserId}`;
+  const topic = `user:${supabaseUserId}`;
 
   const channel = client.channel(topic, {
     config: {
@@ -100,6 +114,7 @@ export function openUserChannel(prismaUserId: string): UserChannelHandle {
       // suspenders — only the SERVER writes to this topic, but the
       // self-flag costs nothing.
       broadcast: { self: false, ack: false },
+      private: isPrivate,
     },
   });
 

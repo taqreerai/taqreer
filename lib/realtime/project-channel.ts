@@ -33,6 +33,7 @@ import type {
   RealtimePresenceState,
 } from "@supabase/supabase-js";
 import { getRealtimeBrowserClient } from "./supabase-browser";
+import { realtimePrivateMode } from "./token-manager";
 
 // What we put on the wire for presence. Keep this minimal — every key
 // here goes across the socket on every viewer's tab.
@@ -186,17 +187,24 @@ export type ViewerPresence = Record<string, PresenceViewer>;
  *   consumers (e.g. anonymous public-view) that don't track presence.
  *
  * Caller responsibilities:
+ *  - Call `ensureProjectTopic(projectId)` (token-manager) BEFORE this,
+ *    so the minted token already lists the project topic at join time.
  *  - Call `close()` on cleanup (e.g. component unmount).
  *  - Call `track({...})` after the channel joins to broadcast your
  *    presence; subsequent track calls update the payload.
+ *
+ * Async since the private-channel hardening: the first open per tab
+ * round-trips /api/realtime/token to learn whether private mode is on.
  */
-export function openProjectChannel(
+export async function openProjectChannel(
   projectId: string,
   presenceKey: string | null,
-): ProjectChannelHandle {
+): Promise<ProjectChannelHandle> {
   if (!projectId || typeof projectId !== "string") {
     throw new Error("[realtime] openProjectChannel: projectId is required");
   }
+  // `private` is part of the join - resolve the rollout mode first.
+  const isPrivate = await realtimePrivateMode();
   const client = getRealtimeBrowserClient();
   const topic = `project:${projectId}`;
 
@@ -205,6 +213,7 @@ export function openProjectChannel(
       // Don't echo our own broadcasts back to us — every emitter
       // already knows what it sent.
       broadcast: { self: false, ack: false },
+      private: isPrivate,
       // Per-viewer presence key. Supabase uses this to bucket metas;
       // empty / shared keys collide everybody's presence into one
       // bucket and the dispatcher only sees the most-recent meta —

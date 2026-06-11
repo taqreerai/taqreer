@@ -19,6 +19,7 @@
 //   Server-side fan-out is the trusted path; clients never see this key.
 
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { prisma } from "@/lib/prisma";
 import type {
   ProjectBroadcastEvent,
   ProjectBroadcastPayloadMap,
@@ -27,6 +28,16 @@ import type {
   UserBroadcastEvent,
   UserBroadcastPayloadMap,
 } from "./user-channel";
+
+// Private-channel rollout switch - the SAME signal /api/realtime/token
+// uses to decide whether browsers get minted tokens. When the secret is
+// configured, clients join with `private: true`, so the server's sends
+// must declare the channel private too (the flag is part of the join);
+// the service-role key bypasses the realtime.messages policies either
+// way. Read per call (not module-level) so tests / env reloads behave.
+function realtimePrivateMode(): boolean {
+  return Boolean(process.env.SUPABASE_JWT_SECRET);
+}
 
 /**
  * Emit one broadcast message to the project channel.
@@ -100,7 +111,10 @@ export async function broadcastToProject<E extends ProjectBroadcastEvent>(
       });
       const topic = `project:${projectId}`;
       const channel = admin.channel(topic, {
-        config: { broadcast: { self: false, ack: false } },
+        config: {
+          broadcast: { self: false, ack: false },
+          private: realtimePrivateMode(),
+        },
       });
       try {
         // The Supabase JS client requires subscribe() before send().
@@ -164,7 +178,13 @@ export async function broadcastToProject<E extends ProjectBroadcastEvent>(
 }
 
 /**
- * Emit a broadcast on a user-scoped channel (topic `user:{prismaUserId}`).
+ * Emit a broadcast on a user-scoped channel.
+ *
+ * Callers keep passing the PRISMA user id (it's what every fan-out
+ * path holds), but the wire topic is `user:{supabaseUserId}` - the
+ * private-channel policy can only check `auth.uid()`-adjacent claims,
+ * and the prisma↔supabase mapping lives in OUR database, so the
+ * server resolves it here, once, at the trust boundary.
  *
  * Same overall shape as `broadcastToProject` — transient admin client
  * per call, race against the 3 s overall cap, never throw. Used by
@@ -187,15 +207,41 @@ export async function broadcastToUser<E extends UserBroadcastEvent>(
     console.warn("[realtime] broadcastToUser skipped — Supabase env missing");
     return;
   }
+  let supabaseUserId: string | null = null;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: prismaUserId },
+      select: { supabaseUserId: true },
+    });
+    supabaseUserId = user?.supabaseUserId ?? null;
+  } catch (err) {
+    console.warn("[realtime] broadcastToUser user lookup failed", {
+      prismaUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  if (!supabaseUserId) {
+    // No auth identity → no live tab to deliver to (the user can't be
+    // signed in). The persisted row (notification etc.) still lands.
+    console.warn("[realtime] broadcastToUser skipped - no supabaseUserId", {
+      prismaUserId,
+    });
+    return;
+  }
+  const resolvedTopic = `user:${supabaseUserId}`;
   await withTimeout(
     (async () => {
       const admin = createSupabaseAdminClient(url, serviceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         realtime: { params: { eventsPerSecond: 10 } },
       });
-      const topic = `user:${prismaUserId}`;
+      const topic = resolvedTopic;
       const channel = admin.channel(topic, {
-        config: { broadcast: { self: false, ack: false } },
+        config: {
+          broadcast: { self: false, ack: false },
+          private: realtimePrivateMode(),
+        },
       });
       try {
         await new Promise<void>((resolve) => {
