@@ -7,9 +7,10 @@
 
 export function CreditRing({
   fraction,
-  size = 40,
-  stroke = 2,
+  size = 48,
+  stroke = 3,
   label,
+  className = "absolute -inset-1 -rotate-90",
 }: {
   // Remaining share of the cycle's credits, 0..1.
   fraction: number;
@@ -17,6 +18,10 @@ export function CreditRing({
   stroke?: number;
   // Localized aria description ("Credits: X of Y remaining").
   label: string;
+  // Default draws a 48px ring around the avatar's 40px container
+  // (-inset-1) so there's clear air between avatar fill and arc, and
+  // a thicker stroke for legibility (user direction 2026-06-11).
+  className?: string;
 }) {
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
@@ -26,7 +31,7 @@ export function CreditRing({
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className="absolute inset-0 -rotate-90"
+      className={className}
       role="img"
       aria-label={label}
     >

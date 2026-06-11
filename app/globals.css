@@ -615,9 +615,12 @@ textarea.input-dark {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(239, 68, 68, 0.10);
-  border: 1px solid rgba(248, 113, 113, 0.30);
-  color: rgb(254, 202, 202);
+  /* OPAQUE solid red (user direction 2026-06-11): the old 10%-alpha
+     tint was near-invisible on light surfaces. Solid fill, white
+     text, readable in BOTH themes. */
+  background: rgb(220, 38, 38);
+  border: 1px solid transparent;
+  color: #fff;
   border-radius: 9999px;
   font-weight: 600;
   cursor: pointer;
@@ -625,8 +628,7 @@ textarea.input-dark {
 }
 
 .btn-pill-danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(248, 113, 113, 0.50);
+  background: rgb(239, 68, 68);
 }
 
 .btn-pill-danger:disabled {

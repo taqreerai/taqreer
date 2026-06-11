@@ -16,9 +16,39 @@ import { HeaderSearch } from "@/components/app/HeaderSearch";
 import { BellDropdown } from "@/components/app/BellDropdown";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
+import Link from "next/link";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
+import { useCreditBalance } from "@/lib/credits/store";
+import { normalizePlan } from "@/lib/plan";
 import { Tooltip } from "@/components/common/Tooltip";
+
+// Current-plan chip at the cluster's start edge (user direction
+// 2026-06-11): AR reads SEARCH | BELL | BADGE toward the right edge,
+// EN mirrors. Links to /billing. Hidden until the balance loads.
+function PlanBadge() {
+  const dict = useDict();
+  const { locale } = useLocale();
+  const credits = useCreditBalance();
+  if (!credits) return null;
+  const plan = normalizePlan(credits.plan);
+  const planNames: Record<string, string> = {
+    free: dict.components.planUsage.free,
+    plus: dict.components.planUsage.plus,
+    pro: dict.components.planUsage.pro,
+    max: dict.components.planUsage.max,
+  };
+  return (
+    <Link
+      href={localizedHref("/billing", locale)}
+      className="badge-purple no-underline"
+      aria-label={dict.components.billing.title}
+    >
+      {planNames[plan] ?? plan}
+    </Link>
+  );
+}
 
 // Server-health indicator — a small pill with a colored dot (green/amber/red)
 // for the upstream provider status, status label on hover (shared animated
@@ -69,7 +99,14 @@ export function TopUtilityBar() {
       >
         {/* Search — pinned to the inline start (right in RTL, left in LTR; the
             cluster inherits direction from the chrome locale). */}
-        <div className="pointer-events-auto flex items-center gap-1">
+        {/* Order from the start edge: plan badge (edge) → bell → search
+            (user direction 2026-06-11). AR reads SEARCH | BELL | BADGE
+            toward the right edge; EN mirrors. */}
+        <div className="pointer-events-auto flex items-center gap-1.5">
+          <PlanBadge />
+          {/* Notifications bell - this instance also boots the
+              notification store + owns the live toast stack. */}
+          <BellDropdown />
           <Tooltip label={dict.topBar.search} placement="bottom">
             <button
               type="button"
@@ -83,10 +120,6 @@ export function TopUtilityBar() {
               </kbd>
             </button>
           </Tooltip>
-          {/* Notifications bell - moved here from the sidebar profile menu
-              (user direction 2026-06-11). This instance also boots the
-              notification store + owns the live toast stack. */}
-          <BellDropdown />
         </div>
 
         {/* Theme + language — pinned to the end (visual left). Theme is still an

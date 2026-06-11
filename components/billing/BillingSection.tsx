@@ -195,7 +195,8 @@ export function BillingSection() {
                 label: (
                   <>
                     {pricing.yearly}{" "}
-                    <span className="text-xs font-normal text-[var(--tq-discount-accent)]">
+                    {/* Solid blue chip + white text - same as landing. */}
+                    <span className="rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[10px] font-medium text-white">
                       {pricing.discount}
                     </span>
                   </>

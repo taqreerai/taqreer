@@ -106,7 +106,7 @@ export function Sidebar({
   const router = useRouter();
   const { locale, dir } = useLocale();
   const dict = useDict();
-  const { user, avatarUrl, name, email } = useUser();
+  const { user, loading: userLoading, avatarUrl, name, email } = useUser();
   const supabase = createClient();
   // Shared credit balance - the same store feeds the avatar ring here,
   // the breakdown in the profile menu below, and the settings card, so
@@ -389,7 +389,13 @@ export function Sidebar({
                     .replace("{total}", formatCredits(credits.capacity))}
                 />
               ) : null}
-              {avatarUrl ? (
+              {userLoading ? (
+                // Neutral placeholder until the auth user lands - no
+                // letter, no per-user gradient, so there's no "U" →
+                // avatar swap flash on reload (user direction
+                // 2026-06-11).
+                <div className="w-[36px] h-[36px] rounded-full bg-[var(--tq-surface)]" />
+              ) : avatarUrl ? (
                 <Image
                   src={avatarUrl}
                   alt={name}
