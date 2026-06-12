@@ -10,8 +10,13 @@ import { ReturnClient } from "./ReturnClient";
 export default async function CheckoutReturnPage({
   searchParams,
 }: {
-  searchParams: Promise<{ session_id?: string }>;
+  searchParams: Promise<{ session_id?: string; ctx?: string }>;
 }) {
-  const { session_id } = await searchParams;
-  return <ReturnClient sessionId={session_id ?? null} />;
+  const { session_id, ctx } = await searchParams;
+  return (
+    <ReturnClient
+      sessionId={session_id ?? null}
+      ctx={ctx === "tab" ? "tab" : null}
+    />
+  );
 }

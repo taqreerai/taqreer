@@ -24,6 +24,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/billing/stripe";
 import { specByLookupKey, grantToMetadata } from "@/lib/billing/prices";
 import { getOrCreateStripeCustomer } from "@/lib/billing/customer";
+import { normalizePlan } from "@/lib/plan";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -38,18 +39,32 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     lookupKey?: string;
+    ctx?: string;
   } | null;
   const spec = body?.lookupKey ? specByLookupKey(body.lookupKey) : undefined;
   if (!spec) {
     return NextResponse.json({ error: "Unknown price" }, { status: 400 });
   }
+  // ctx=tab: checkout opened in a fresh tab from the credit-gate
+  // dialog; the return page then offers "close this tab" instead of
+  // redirecting (the original tab keeps the user's flow state).
+  const ctx = body?.ctx === "tab" ? "tab" : null;
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, name: true, plan: true },
   });
   if (!dbUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Top-up packs REFILL a subscription - they are not sold to Free
+  // accounts (user direction 2026-06-12: free users subscribe first).
+  if (spec.grant.kind === "topup" && normalizePlan(dbUser.plan) === "free") {
+    return NextResponse.json(
+      { error: "topup_requires_subscription" },
+      { status: 403 },
+    );
   }
 
   const customerId = await getOrCreateStripeCustomer({
@@ -98,7 +113,7 @@ export async function POST(request: Request) {
             },
           },
         }),
-    return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
+    return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}${ctx ? "&ctx=tab" : ""}`,
     allow_promotion_codes: true,
   });
 

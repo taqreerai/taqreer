@@ -258,11 +258,19 @@ export function BillingSection() {
         </div>
       </section>
 
-      {/* ── Top-up packs ── */}
+      {/* ── Top-up packs ── subscriber refills only (user direction
+          2026-06-12); Free accounts see the cards muted with a
+          "pick a plan first" hint, and the checkout API refuses topup
+          lookupKeys for free plans server-side. */}
       <section>
         <h2 className="text-lg font-semibold text-foreground">{t.packsTitle}</h2>
-        <p className="mt-0.5 text-xs text-muted">{t.packsHint}</p>
-        <div className="mt-4 grid gap-6 md:grid-cols-2 xl:grid-cols-4" dir={dir}>
+        <p className="mt-0.5 text-xs text-muted">
+          {plan === "free" ? t.topupSubscribersOnly : t.packsHint}
+        </p>
+        <div
+          className={`mt-4 grid gap-6 md:grid-cols-2 xl:grid-cols-4 ${plan === "free" ? "opacity-60" : ""}`}
+          dir={dir}
+        >
           {TOPUP_PACKS.map((pack) => {
             const lookupKey = `topup_${pack.key}`;
             return (
@@ -278,9 +286,9 @@ export function BillingSection() {
                 </span>
                 <button
                   type="button"
-                  disabled={busy !== null}
+                  disabled={busy !== null || plan === "free"}
                   onClick={() => buy(lookupKey)}
-                  className="btn-pill mt-4 w-full py-2.5 text-sm"
+                  className="btn-pill mt-4 w-full py-2.5 text-sm disabled:opacity-50"
                 >
                   {busy === lookupKey ? t.loading : t.buy}
                 </button>

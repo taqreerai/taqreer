@@ -23,7 +23,8 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { NoticeCard } from "@/components/common/NoticeCard";
 import { TOPUP_PACKS } from "@/lib/credits/cost";
-import { formatCredits } from "@/lib/credits/store";
+import { formatCredits, useCreditBalance } from "@/lib/credits/store";
+import { normalizePlan } from "@/lib/plan";
 
 // The 402 body POST /api/projects returns when preflight blocks.
 export type CreditGatePayload = {
@@ -70,6 +71,11 @@ export function CreditGateDialog({
   const { locale, dir } = useLocale();
   const t = dict.components.creditGate;
   const open = gate !== null;
+  // Top-ups are a SUBSCRIBER refill (user direction 2026-06-12). Free
+  // users get the subscribe offer instead - they have no plan to
+  // refill.
+  const credits = useCreditBalance();
+  const isFree = !credits || normalizePlan(credits.plan) === "free";
 
   useEffect(() => {
     if (!open) return;
@@ -158,11 +164,33 @@ export function CreditGateDialog({
                         </span>
                       </button>
                     ) : null}
-                    {coveringPack ? (
-                      <Link
-                        href={pricingHref}
-                        onClick={onClose}
-                        className="btn-gradient flex w-full items-center justify-between px-5 py-3 text-sm no-underline"
+                    {isFree ? (
+                      // Free user: subscribing IS the offer. New tab so
+                      // the flow behind the dialog keeps its filled-in
+                      // state; the balance refreshes live on grant.
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.open(pricingHref, "_blank")
+                        }
+                        className="btn-gradient flex w-full items-center justify-center px-5 py-3 text-sm font-medium"
+                      >
+                        {t.subscribeCta}
+                      </button>
+                    ) : coveringPack ? (
+                      // Subscriber: straight to checkout for the
+                      // smallest covering pack - in a NEW TAB so the
+                      // flow state survives the payment round-trip
+                      // (user-reported loss 2026-06-12).
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.open(
+                            `${localizedHref("/checkout", locale)}?price=topup_${coveringPack.key}&ctx=tab`,
+                            "_blank",
+                          )
+                        }
+                        className="btn-gradient flex w-full items-center justify-between px-5 py-3 text-sm"
                       >
                         <span className="font-medium">
                           {t.topupCta.replace(
@@ -182,10 +210,10 @@ export function CreditGateDialog({
                             ${coveringPack.priceUsd}
                           </span>
                         </span>
-                      </Link>
+                      </button>
                     ) : null}
                     <p className="text-center text-[11px] text-muted">
-                      {t.topupHint}
+                      {isFree ? t.subscribeHint : t.topupHint}
                     </p>
                   </div>
                   <div className="mt-6 flex justify-end">

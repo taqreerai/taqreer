@@ -44,8 +44,12 @@ export async function GET() {
 
   const plan = normalizePlan(dbUser.plan);
   const now = new Date();
-  const [balance, recent, topupGranted] = await Promise.all([
+  const [balance, account, recent, topupGranted] = await Promise.all([
     getBalance(dbUser.id, now),
+    prisma.creditAccount.findUnique({
+      where: { userId: dbUser.id },
+      select: { signupGrantedAt: true },
+    }),
     prisma.usageEvent.findMany({
       where: { userId: dbUser.id, eventType: { in: RECENT_EVENT_TYPES } },
       orderBy: { createdAt: "desc" },
@@ -72,11 +76,17 @@ export async function GET() {
 
   // The ring's "used vs remaining" denominator: the cycle's grant
   // (monthly allotment, or the one-time signup grant for Free) plus
-  // the granted principal of still-active top-up packs.
+  // the granted principal of still-active top-up packs. The Free
+  // signup grant only counts if it was actually ISSUED - accounts
+  // predating the grant wiring have signupGrantedAt null, and adding
+  // a phantom 400 made the ring read "340 / 900" after a 500 top-up
+  // (user-reported 2026-06-12).
   const cycleGrant =
     balance.monthlyAllotment > 0
       ? balance.monthlyAllotment
-      : TIERS.free.signupGrant;
+      : account?.signupGrantedAt
+        ? TIERS.free.signupGrant
+        : 0;
   const capacity = Math.max(
     balance.total,
     cycleGrant + (topupGranted._sum.amountGranted ?? 0),

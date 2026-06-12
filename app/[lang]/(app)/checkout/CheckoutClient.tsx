@@ -22,7 +22,13 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { getStripe } from "@/lib/billing/stripe-client";
 import { checkoutAppearance, CHECKOUT_FONTS } from "@/lib/billing/appearance";
 
-export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
+export function CheckoutClient({
+  lookupKey,
+  ctx = null,
+}: {
+  lookupKey: string | null;
+  ctx?: "tab" | null;
+}) {
   const dict = useDict();
   const { locale, dir } = useLocale();
   const t = dict.checkout;
@@ -38,7 +44,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ lookupKey }),
+      body: JSON.stringify({ lookupKey, ctx }),
     });
     if (res.status === 401) {
       router.push(localizedHref("/login", locale));
@@ -48,7 +54,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
     const data = (await res.json()) as { clientSecret?: string };
     if (!data.clientSecret) throw new Error("no client secret");
     return data.clientSecret;
-  }, [lookupKey, locale, router]);
+  }, [lookupKey, ctx, locale, router]);
 
   // Provider options are init-only and the appearance reads computed
   // CSS tokens from `document`, so build them AFTER mount (client
