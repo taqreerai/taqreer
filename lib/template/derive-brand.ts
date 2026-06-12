@@ -131,11 +131,17 @@ export function deriveBrandSnapshot(input: DeriveInput): BrandSnapshot | null {
   // (defensive — shouldn't happen for a normal deck since the
   // background + at least one accent are always referenced).
   const usedColors = collectColorsFromSlides(manifest);
-  const filteredPalette = manifest.theme.palette.filter((hex) =>
-    usedColors.has(normalizeHex(hex)),
+  // Dedupe by normalized value, keeping first-occurrence order: Claude
+  // sometimes declares the same color twice in theme.palette (or as
+  // both #FFF and #FFFFFF) - duplicates rendered as repeated swatches
+  // and crashed React keying in the preview (2026-06-12).
+  const filteredPalette = dedupeHexes(
+    manifest.theme.palette.filter((hex) => usedColors.has(normalizeHex(hex))),
   );
   const palette =
-    filteredPalette.length >= 2 ? filteredPalette : [...manifest.theme.palette];
+    filteredPalette.length >= 2
+      ? filteredPalette
+      : dedupeHexes(manifest.theme.palette);
 
   const snapshot: BrandSnapshot = {
     schemaVersion: BRAND_SNAPSHOT_VERSION,
@@ -170,6 +176,21 @@ function isSlideFormat(value: unknown): value is SlideFormat {
     typeof value === "string" &&
     (SLIDE_FORMATS as readonly string[]).includes(value)
   );
+}
+
+// First-occurrence dedupe by normalized hex value - "#FFF" and
+// "#FFFFFF" count as the same color; the first spelling wins so
+// Claude's ordering intent survives.
+function dedupeHexes(hexes: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const hex of hexes) {
+    const key = normalizeHex(hex);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(hex);
+  }
+  return out;
 }
 
 // Normalize a hex color literal to a canonical lowercase 6-digit form
