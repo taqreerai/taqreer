@@ -1468,25 +1468,12 @@ html.app-shell-scroll body {
 .plan-banner {
   background: var(--tq-surface);
   border-radius: 14px;
-  border: 1px solid var(--tq-border-hairline);
+  /* ONE solid accent border (user direction 2026-06-12) - same blue as
+     the current-tier outline on the pricing cards. Replaces the old
+     hairline + 45%-masked stroke double border. */
+  border: 1px solid var(--tq-purple);
   position: relative;
   isolation: isolate;
-}
-
-.plan-banner::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 14px;
-  padding: 1px;
-  /* §21: solid purple edge (was the multi-colour brand gradient stroke). */
-  background: var(--tq-purple);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  opacity: 0.45;
-  pointer-events: none;
 }
 
 /* ─── Dividers ─── */

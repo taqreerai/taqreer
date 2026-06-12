@@ -280,14 +280,6 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
   const [uploading, setUploading] = useState(false);
   const dirty = useRef(false);
 
-  // Read by the rAF (every frame) to drive the selection-outline's visibility,
-  // without effect-timing races. `selectingRef` = a selection change is in
-  // flight (pointer went down on a DIFFERENT element); stay hidden until the box
-  // lands on the new target, so the OLD element's border can't flash in between.
-  // (The old `editingRef` popover/pill-press hide was dropped 2026-06-12 - the
-  // outline now only hides during contenteditable text editing.)
-  const selectingRef = useRef(false);
-
   // ── position: a rAF loop reads the live selection box(es) (.tqe-sel) and writes
   // the pill's left/top every frame, so it always tracks the current selection.
   // For a multi-text selection it anchors over the UNION of every box. ──
@@ -338,31 +330,29 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
         }
         el.style.visibility = "visible";
 
-        // Selection-outline visibility. Hide while EDITING (popover open / pill
-        // pressed) so the live change is observable; ALSO hide while a single
-        // selection change is in flight until the box has LANDED on the current
-        // target — the selection commits on `click`, and SlideEditor re-places the
-        // box a frame later, so the OLD element's border would otherwise flash
-        // during the mousedown→click gap. A MARQUEE set commits on mouseup (no such
-        // gap), so it's considered landed as soon as its boxes are drawn.
+        // Selection-outline visibility (user direction 2026-06-12: the
+        // border stays visible from selection until EDITING starts).
+        // The only hide condition is the target being contenteditable.
+        // The old editingRef (popover/pill-press) and selectingRef /
+        // box-landed guards were dropped - the landed-check latched
+        // "hidden" after a click and kept the border invisible until
+        // the next pointer event, the exact flicker the user reported.
         if (selBoxes.length) {
-          let onTarget = true;
+          // Pill placement still locks once the box has landed on the
+          // current target (single-select), so an edit that resizes
+          // the element doesn't slide the controls mid-interaction.
           if (!multi) {
             const selRect = selBoxes[0].getBoundingClientRect();
             const tr = target.getBoundingClientRect();
             const bcx = selRect.left + selRect.width / 2;
             const bcy = selRect.top + selRect.height / 2;
-            onTarget = bcx >= tr.left && bcx <= tr.right && bcy >= tr.top && bcy <= tr.bottom;
+            if (bcx >= tr.left && bcx <= tr.right && bcy >= tr.top && bcy <= tr.bottom) {
+              placed = true;
+            }
+          } else {
+            placed = true;
           }
-          // Box(es) settled → lock the pill where it is.
-          if (onTarget) placed = true;
-          // Outline stays visible through popover-open / pill-press now
-          // (user direction 2026-06-12: "border stays until editing
-          // starts") - it only hides while the target is actually in
-          // text-edit mode (contenteditable), plus the in-flight
-          // selection guard against the old element's border flashing.
-          const hidden =
-            target.isContentEditable || selectingRef.current || !onTarget;
+          const hidden = target.isContentEditable;
           for (const b of selBoxes) b.style.visibility = hidden ? "hidden" : "visible";
         }
       }
@@ -403,46 +393,21 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
     return () => document.removeEventListener("mousedown", onDown);
   }, [onDismiss]);
 
-  // ── Iframe pointer events drive two things the parent document never sees
-  // (the popovers' own outside-click listeners + the deselect handler all live on
-  // the PARENT doc). On pointer-down inside the iframe: (1) close any open popover
-  // immediately — before the new element is even selected, since selection only
-  // lands on `click`; (2) raise the "selection in flight" flag so the OLD
-  // element's outline stays hidden through the mousedown→click gap. ──
+  // ── Iframe pointer events: the popovers' own outside-click listeners live on
+  // the PARENT doc, so a pointer-down inside the iframe closes any open popover
+  // here (before the new element is even selected - selection lands on `click`).
   useEffect(() => {
-    // A new target means the previous in-flight selection has landed → clear the
-    // flag (the rAF's "box not on target yet" check covers the brief window until
-    // SlideEditor re-places the box).
-    selectingRef.current = false;
     const idoc = target.ownerDocument;
-    const onDown = (e: MouseEvent) => {
+    const onDown = () => {
       setColorOpen(false);
       setMoreOpen(false);
       setFontOpen(false);
-      // Single-select only: pointer down on a DIFFERENT element than the current
-      // selection → a selection change is coming (it only lands on `click`). Mark
-      // it so the outline stays hidden through the mousedown→click gap, so the OLD
-      // element's border can't flash. A MARQUEE commits on mouseup (no such gap),
-      // so the multi path skips this guard. Cleared on the target/effect re-run.
-      if (multi) return;
-      const leaf = (e.target as HTMLElement | null)?.closest?.("[data-tq-cc]") ?? null;
-      if (leaf !== target) selectingRef.current = true;
-    };
-    // Gesture ended on the CURRENT element (re-click to edit / drag-back → no
-    // selection change, so the target-change clear won't fire) → clear here so the
-    // outline isn't left stuck hidden.
-    const onClick = (e: MouseEvent) => {
-      if (multi) return;
-      const leaf = (e.target as HTMLElement | null)?.closest?.("[data-tq-cc]") ?? null;
-      if (leaf === target) selectingRef.current = false;
     };
     idoc.addEventListener("mousedown", onDown);
-    idoc.addEventListener("click", onClick);
     return () => {
       idoc.removeEventListener("mousedown", onDown);
-      idoc.removeEventListener("click", onClick);
     };
-  }, [target, multi]);
+  }, [target]);
 
   // ── commit ONCE on deselect/re-target (cleanup captures the OLD target set).
   // A run of tweaks across the whole selection is ONE save per affected slide: we

@@ -93,7 +93,12 @@ export function UpgradeModal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="surface-modal pointer-events-auto flex max-h-[90vh] w-full max-w-6xl flex-col rounded-2xl"
+              // Success step shrinks to the standard dialog width
+              // (max-w-md, same as the other confirm modals); the
+              // plans/checkout steps need the wide panel.
+              className={`surface-modal pointer-events-auto flex max-h-[90vh] w-full flex-col rounded-2xl ${
+                done ? "max-w-md" : "max-w-6xl"
+              }`}
             >
               {/* Header row: title + contextual hint + close. */}
               <div className="flex items-start justify-between gap-3 px-8 pt-7">

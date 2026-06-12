@@ -111,7 +111,10 @@ export function TopUtilityBar({
             (user direction 2026-06-11). AR reads SEARCH | BELL | BADGE
             toward the right edge; EN mirrors. */}
         <div className="pointer-events-auto flex items-center gap-1.5">
-          {avatar}
+          {/* me-1 widens the avatar→tier-pill gap: the disc fills its
+              box edge-to-edge while neighbors are padded buttons, so
+              the raw gap-1.5 read as touching (user report 2026-06-12). */}
+          {avatar ? <span className="me-1 flex items-center">{avatar}</span> : null}
           <PlanBadge />
           {/* Notifications bell - this instance also boots the
               notification store + owns the live toast stack. */}
