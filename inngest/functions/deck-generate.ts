@@ -1751,6 +1751,20 @@ export const deckGenerate = inngest.createFunction(
         const warmedKeys = new Set<string>();
         const warmedGenidsForCap = new Set<string>();
         let cancelObserved = false;
+        // Hard slide ceiling = the credits we HELD for (the user's budget).
+        // Auto slide-count lets the model decide how many slides to make,
+        // and the free-text content can push it past what was paid for
+        // (prompt-injection / under-estimate). The settle already clamps
+        // the CHARGE to the hold, but without this the overflow slides are
+        // free COMPUTE we still pay Anthropic for. Capping the stream at
+        // holdSlides makes the model physically unable to exceed the
+        // budget. null = legacy/uncharged job → no cap (preserve old
+        // behavior). brief.slideCount is already pinned to holdSlides, so
+        // an obedient deck lands exactly here and nothing truncates.
+        const slideCeiling =
+          (data as { credit?: { holdSlides?: number } }).credit?.holdSlides ??
+          null;
+        let cappedOut = false;
         let lastCancelCheckAt = 0;
         let lastThinkingWriteAt = 0;
         let lastWriteAt = 0;
@@ -1779,6 +1793,21 @@ export const deckGenerate = inngest.createFunction(
           /data-label="([^"]*)"/.exec(html)?.[1] ?? null;
 
         const ingestSlide = (parsed: ParsedSlide) => {
+          // Budget ceiling reached: drop every further section (covers
+          // flush() too) and abort the stream once, below. Charge stays
+          // == hold == authored.
+          if (slideCeiling !== null && slides.length >= slideCeiling) {
+            if (!cappedOut) {
+              cappedOut = true;
+              logger.warn("deck_slide_cap_hit", {
+                ceiling: slideCeiling,
+                attempted: slides.length + 1,
+                jobId,
+              });
+              stream.controller.abort();
+            }
+            return;
+          }
           if (tFirstSection === null) tFirstSection = Date.now();
           const rawCss = extractLeadingStyleCss(splitter.getInterstitialHtml());
           if (rawCss !== rawCssSeen) {
@@ -1966,6 +1995,22 @@ export const deckGenerate = inngest.createFunction(
         try {
           message = await stream.finalMessage();
         } catch (err) {
+          if (cappedOut) {
+            // Budget ceiling hit: we aborted the stream ourselves after
+            // the ceiling-th slide CLOSED. This is a NORMAL completion at
+            // the paid size, not a cancel - flush the (already-complete)
+            // buffer, build the manifest, and fall through to the normal
+            // settle (charge == hold). The ingestSlide guard drops any
+            // section flush() surfaces beyond the ceiling.
+            for (const parsed of splitter.flush()) ingestSlide(parsed);
+            logger.info("deck_generate_capped_to_budget", {
+              jobId,
+              kept: slides.length,
+              ceiling: slideCeiling,
+            });
+            await writeProgress("saving", slides.length, slides.length);
+            return { manifest: assembleManifest(), usage, stoppedEarly: false };
+          }
           if (cancelObserved) {
             // Keeps-partial: only FULLY CLOSED <section>s count - the
             // splitter is deliberately NOT flushed here, so a slide cut
