@@ -135,7 +135,7 @@ export function PricingTiers({ isAuthed = false }: { isAuthed?: boolean }) {
                   {/* Solid blue chip + white text - readable on the
                       active (white) and idle segment in BOTH themes
                       (user direction 2026-06-11). */}
-                  <span className="me-1 ms-0.5 rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[10px] font-medium text-white">
+                  <span className="-me-1.5 rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[10px] font-medium text-white">
                     {t.discount}
                   </span>
                 </>

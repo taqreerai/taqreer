@@ -80,6 +80,10 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   Fable pricing decision (600+80 vs keep 500+28) before live billing.
 - Legal pages: ToS/Privacy/Refund, bilingual, + minimal cookie banner.
   None exist in the repo. LLM draft + user review.
+- Billing UI gap: the user's plan never shows its CADENCE (monthly vs
+  yearly) anywhere - surface it on /plans plan summary + /billing
+  (subscription mirror already stores the price's lookup_key/interval;
+  read it from /api/billing/summary). User request 2026-06-13.
 - Email deliverability: SPF/DKIM/DMARC on the sending domain (GoDaddy DNS)
   — true blocker, auth emails land in spam without it. Branded bilingual
   Supabase auth templates (signup confirm / email change / password reset).
