@@ -768,7 +768,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
                   width: 16,
                   height: 16,
                   borderRadius: "50%",
-                  border: "1px solid var(--tq-border-hairline)",
+                  border: "1px solid var(--tq-border-focus)",
                   // MIXED set (selected elements have DIFFERENT colours) → a
                   // multi-hue wheel so the user can tell at a glance they picked
                   // different colours, instead of a single (misleading) swatch
@@ -829,7 +829,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
                 width: 16,
                 height: 16,
                 borderRadius: "50%",
-                border: "1px solid var(--tq-border-hairline)",
+                border: "1px solid var(--tq-border-focus)",
                 background: svgColor,
                 cursor: "pointer",
               }}
@@ -1063,7 +1063,10 @@ function RegenImageIcon() {
 // only have two controls so a ⋯ menu would be overkill.
 function OpacityControl({ value, onChange }: { value: number; onChange: (pct: number) => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    // Even breathing room: inset from the divider on the start side and the
+    // pill edge on the end side; % hugs the track (was a fixed right-aligned
+    // box that read as a hole between knob and label).
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginInline: 8 }}>
       <input
         type="range"
         min={0}
@@ -1075,7 +1078,7 @@ function OpacityControl({ value, onChange }: { value: number; onChange: (pct: nu
         className="h-1.5 w-[48px] cursor-pointer"
         style={{ accentColor: "var(--tq-violet)" }}
       />
-      <span className="w-[34px] shrink-0 text-right text-[11px] tabular-nums text-foreground">
+      <span className="shrink-0 text-[11px] tabular-nums text-foreground">
         {value}%
       </span>
     </div>
