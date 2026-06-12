@@ -51,3 +51,12 @@ Launch = remove `COMING_SOON` from the server .env + `pm2 reload taqreer-prod`.
 - Inngest Cloud (event/signing keys) to replace the dev-server process.
 - Sentry/uptime monitoring accounts (user creates with dev@taqreer.ai).
 - Mail subdomain DNS (SPF/DKIM/DMARC) on GoDaddy for Resend.
+
+## Gotcha log
+
+- 2026-06-13: thumbnails/exports silently stuck - Puppeteer's Chrome needs
+  system libs Ubuntu doesn't ship (libnspr4, libnss3, libatk, libgbm,
+  libasound2t64, ...). Installed via apt; if the server is ever rebuilt run:
+  `apt-get install -y libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0
+  libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3
+  libxrandr2 libgbm1 libasound2t64 libpango-1.0-0 libcairo2 fonts-liberation`
