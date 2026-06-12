@@ -182,6 +182,7 @@ function SlideRendererImpl({
       // on every navigation — it only runs for a box filled live this session.
       if (!url || img.getAttribute("src") === url) continue;
       img.setAttribute("src", url);
+      if (img.style.opacity === "0") img.style.removeProperty("opacity"); // stale placeholder value
       img.classList.add("tq-genimg-in"); // one-shot fade for live-injected boxes
       touched = true;
     }

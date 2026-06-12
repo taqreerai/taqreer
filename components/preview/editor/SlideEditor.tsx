@@ -219,7 +219,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   @keyframes tq-genimg-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
   img[data-genimage]:not([src]){background-color:var(--tq-bg-dim,rgba(12,12,12,0.55))!important;background-image:linear-gradient(110deg,rgba(255,255,255,0.05) 30%,rgba(255,255,255,0.18) 50%,rgba(255,255,255,0.05) 70%)!important;background-size:200% 100%!important;background-repeat:no-repeat!important;animation:tq-genimg-shimmer 1.4s ease-in-out infinite}
   @keyframes tq-genimg-fadein{from{opacity:0}to{opacity:1}}
-  img[data-genimage].tq-genimg-in{animation:tq-genimg-fadein 450ms ease both}
+  img[data-genimage].tq-genimg-in{animation:tq-genimg-fadein 450ms ease backwards}
   @media (prefers-reduced-motion:reduce){img[data-genimage]:not([src]){animation:none;background-position:50% 0}img[data-genimage].tq-genimg-in{animation:none}}
 </style></head><body><div id="tqe-stage">${bodyHtml}</div><!--r:${reloadKey}--></body></html>`;
     // scale intentionally excluded — it's presentation, applied live via the
@@ -252,6 +252,20 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       // unique constraint). A fresh srcDoc → fresh document → re-wires.
       if (doc.__tqWired) return;
       doc.__tqWired = true;
+
+      // Normalize FILLED gen-images saved with their transient streaming
+      // state (2026-06-12): the placeholder's inline opacity:0 and the
+      // one-shot fade class both got serialized into older decks. The
+      // class's animation used to pin opacity at 1 (masking the stale 0
+      // AND freezing the opacity slider); strip both so inline opacity
+      // is the editable source of truth. Placeholders WITHOUT src keep
+      // their shimmer + class untouched.
+      for (const img of doc.querySelectorAll<HTMLImageElement>(
+        "img[data-genimage][src]",
+      )) {
+        img.classList.remove("tq-genimg-in");
+        if (img.style.opacity === "0") img.style.removeProperty("opacity");
+      }
 
       // Tag every element with a stable id; flag visual leaves (the editable units).
       let i = 0;

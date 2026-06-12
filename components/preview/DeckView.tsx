@@ -838,8 +838,16 @@ export function DeckView({
   // now), optionally rebuild the editor iframe (undo/redo change content the
   // iframe DOESN'T already show — an in-canvas edit does, so it skips the
   // reload), mark dirty, and persist in place.
+  // Unsaved LOCAL edits flag (2026-06-12): edits are local-first (no
+  // server version bump until Save), so the version-pointer comparator
+  // below can't see them - the toolbar save icon stayed a checkmark
+  // through live edits (user report). Set on every local content
+  // apply (edit / undo / redo), cleared when a save lands.
+  const [localDirty, setLocalDirty] = useState(false);
+
   const applyContentLocally = useCallback(
     (slideKey: string, html: string, opts?: { reload?: boolean }) => {
+      setLocalDirty(true);
       setManifest((prev) =>
         prev
           ? {
@@ -1135,6 +1143,11 @@ export function DeckView({
       );
       if (!img || img.getAttribute("src") === url) continue;
       img.setAttribute("src", url);
+      // The streamed placeholder carries inline opacity:0 - clear it so
+      // the fade lands on the inline-editable value (slider fix
+      // 2026-06-12; the fill-mode change in globals.css is the other
+      // half - see img[data-genimage].tq-genimg-in).
+      if (img.style.opacity === "0") img.style.removeProperty("opacity");
       img.classList.add("tq-genimg-in");
     }
   }, [filledImages, editorDoc]);
@@ -3652,6 +3665,7 @@ export function DeckView({
   // post-save (which shouldn't happen in normal flow but would
   // otherwise read as "saved" silently).
   const isSaved = (() => {
+    if (localDirty) return false;
     if (savedVersionId == null) return false;
     if (initialVersionId == null) return false;
     if (savedVersionId !== initialVersionId) return false;
@@ -4025,6 +4039,7 @@ export function DeckView({
                   onSaved={(payload) => {
                     setSavedVersionId(payload.savedVersionId);
                     setSavedSlideVersions(payload.savedSlideVersions);
+                    setLocalDirty(false);
                   }}
                   // Save first snapshots pending edits as history checkpoints.
                   onBeforeSave={flushCheckpoints}

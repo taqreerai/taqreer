@@ -2315,7 +2315,10 @@ img[data-genimage]:not([src]) {
   }
 }
 img[data-genimage].tq-genimg-in {
-  animation: tq-genimg-fadein 450ms ease both;
+  /* `backwards` (NOT `both`): a forwards-fill pins opacity at the
+     keyframe end value forever, overriding inline opacity - that froze
+     the editor's image opacity slider (root-caused 2026-06-12). */
+  animation: tq-genimg-fadein 450ms ease backwards;
 }
 
 /* Honour reduced-motion: drop the placeholder shimmer + the fade-in (matches

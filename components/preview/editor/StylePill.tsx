@@ -464,6 +464,45 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
     [target],
   );
 
+  // Image alignment (2026-06-12): snap the image to a canvas side on
+  // either axis. PHYSICAL sides on purpose - image placement is
+  // spatial, not reading-order. Absolutely-positioned images move via
+  // their insets (centering = both insets 0 + auto margins, which
+  // needs an explicit size - pinned from the computed px when none is
+  // set); in-flow images use block + auto margins (horizontal only -
+  // vertical is a no-op without a positioned context).
+  const alignImage = useCallback(
+    (side: "left" | "center" | "right" | "top" | "middle" | "bottom") => {
+      const win = target.ownerDocument.defaultView ?? window;
+      const cs = win.getComputedStyle(target);
+      const abs = cs.position === "absolute" || cs.position === "fixed";
+      const set = (p: string, v: string) => target.style.setProperty(p, v);
+      const horizontal = side === "left" || side === "center" || side === "right";
+      if (abs) {
+        if (horizontal) {
+          if (side === "center" && !target.style.width) set("width", cs.width);
+          set("left", side === "right" ? "auto" : "0");
+          set("right", side === "left" ? "auto" : "0");
+          set("margin-left", side === "center" ? "auto" : "0");
+          set("margin-right", side === "center" ? "auto" : "0");
+        } else {
+          if (side === "middle" && !target.style.height) set("height", cs.height);
+          set("top", side === "bottom" ? "auto" : "0");
+          set("bottom", side === "top" ? "auto" : "0");
+          set("margin-top", side === "middle" ? "auto" : "0");
+          set("margin-bottom", side === "middle" ? "auto" : "0");
+        }
+      } else if (horizontal) {
+        set("display", "block");
+        set("margin-left", side === "left" ? "0" : "auto");
+        set("margin-right", side === "right" ? "0" : "auto");
+      }
+      dirty.current = true;
+      force((n) => n + 1);
+    },
+    [target],
+  );
+
   // Apply a picked font family (null = reset to the deck's theme font). Set the
   // inline font-family AND lazy-load the css2 face INTO THE IFRAME so the preview
   // renders immediately; on save the family persists in the slide HTML and the
@@ -760,7 +799,10 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
             </div>
           </div>
           <Divider />
-          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {/* dir=ltr: alignment is SPATIAL - left button leftmost in
+              both UI locales (the RTL row reversed them; user report
+              2026-06-12). */}
+          <div dir="ltr" style={{ display: "flex", alignItems: "center", gap: 2 }}>
             {aligns.map((a) => (
               <Btn key={a} active={align === a && !alignMixed} onClick={() => setStyle("text-align", a)} label={`Align ${a}`}>
                 <AlignIcon a={a} />
@@ -813,13 +855,38 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
       {/* Image: replace via upload → swap the src. */}
       {kind === "image" && (
         <>
+          {/* Canvas-side alignment - physical, both axes. dir=ltr so
+              "left" sits leftmost in both UI locales. */}
+          <div dir="ltr" style={{ display: "flex", alignItems: "center", gap: 2, marginInlineEnd: 6 }}>
+            {(
+              [
+                ["left", "align_horizontal_left"],
+                ["center", "align_horizontal_center"],
+                ["right", "align_horizontal_right"],
+                ["top", "align_vertical_top"],
+                ["middle", "align_vertical_center"],
+                ["bottom", "align_vertical_bottom"],
+              ] as const
+            ).map(([side, glyph]) => (
+              <Btn key={side} onClick={() => alignImage(side)} label={`Align ${side}`}>
+                <span className="material-symbols-outlined" style={{ fontSize: 17 }} aria-hidden>
+                  {glyph}
+                </span>
+              </Btn>
+            ))}
+          </div>
+          <Divider />
           <button
             type="button"
             aria-label={t.replaceImage}
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
             className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-foreground/85 transition-colors hover:text-foreground disabled:opacity-60"
-            style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
+            style={{
+              background: "var(--tq-surface)",
+              border: "1px solid var(--tq-border-hairline)",
+              marginInlineStart: 6,
+            }}
           >
             <ReplaceIcon />
             {uploading ? t.uploading : t.replace}
@@ -835,7 +902,9 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
               boxes (data-genid + data-genimage). Opens a surface-popover prompt
               editor pre-filled with the box's prompt. */}
           {isAiImage && onRegenImage && (
-            <div style={{ position: "relative" }}>
+            // marginInline: 6 each side - the regen button used to hug
+            // the trailing divider (user feedback 2026-06-12).
+            <div style={{ position: "relative", marginInline: 6 }}>
               <button
                 type="button"
                 data-regen-toggle="true"
