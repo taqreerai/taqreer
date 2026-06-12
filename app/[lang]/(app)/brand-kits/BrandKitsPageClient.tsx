@@ -341,7 +341,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
             active={sel.active}
             selected={sel.selected.has(kit.id)}
             onToggle={() => sel.toggle(kit.id)}
-            radiusClassName="rounded-3xl"
+            outlineClassName="h-full w-full rounded-3xl"
           >
             <BrandKitTile
               kit={kit}

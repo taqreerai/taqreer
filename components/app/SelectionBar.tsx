@@ -35,11 +35,12 @@ export function SelectionBar({
       {open ? (
         <motion.div
           dir={dir}
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 16 }}
+          exit={{ opacity: 0, y: -16 }}
           transition={{ duration: 0.18, ease: "easeOut" }}
-          className="fixed bottom-6 left-1/2 z-[900] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-2 py-2"
+          // Top-centered (user direction 2026-06-12; was bottom).
+          className="fixed top-6 left-1/2 z-[900] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-2 py-2"
           role="toolbar"
           aria-label={t.select}
         >

@@ -18,15 +18,19 @@ export function SelectableTile({
   // templates) render a dimmed lock circle and ignore clicks.
   disabled = false,
   onToggle,
-  // Matches the wrapped tile's corner radius so the outline hugs it.
-  radiusClassName = "rounded-[14px]",
+  // The outline + check circle sit on the tile's THUMBNAIL area only
+  // (user direction 2026-06-12), not the footer text below it. The
+  // default matches the aspect-video rounded-[14px] thumbnails of
+  // projects / templates / library; brand-kits (single full-card
+  // tiles) pass their own full-height shape.
+  outlineClassName = "aspect-video w-full rounded-[14px]",
   children,
 }: {
   active: boolean;
   selected: boolean;
   disabled?: boolean;
   onToggle: () => void;
-  radiusClassName?: string;
+  outlineClassName?: string;
   children: React.ReactNode;
 }) {
   const dict = useDict();
@@ -48,14 +52,19 @@ export function SelectableTile({
             onToggle();
           }
         }}
-        className={`absolute inset-0 z-20 ${radiusClassName} ${
+        className={`absolute inset-0 z-20 ${
           disabled ? "cursor-not-allowed" : "cursor-pointer"
-        } ${
-          selected
-            ? "outline outline-2 -outline-offset-1 outline-[var(--tq-purple)]"
-            : ""
         }`}
       >
+        {/* Outline layer - thumbnail-shaped, anchored to the tile top. */}
+        <span
+          aria-hidden
+          className={`absolute inset-x-0 top-0 ${outlineClassName} ${
+            selected
+              ? "outline outline-2 -outline-offset-1 outline-[var(--tq-purple)]"
+              : ""
+          }`}
+        />
         <span
           className={`absolute start-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border text-white ${
             disabled
