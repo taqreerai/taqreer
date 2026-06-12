@@ -1,6 +1,6 @@
 # Launch progress + continuation guide
 
-Updated 2026-06-13. Read this + context/deploy.md to resume launch work in a
+Updated 2026-06-13 (end of day). Read this + context/deploy.md to resume launch work in a
 fresh session. The launch plan's full reasoning lives in the conversation
 that produced it; this file is the operational state.
 
@@ -37,6 +37,18 @@ DONE:
 - First prod generation verified end-to-end (opus-fast, 5 slides; server
   load peaked at 0.02). Found+fixed: model styling by role name without the
   class → withCanvasClass now mirrors data-role into the class list.
+- Thumbnails + exports unblocked: Puppeteer's Chrome was missing system libs
+  (see deploy.md gotcha log); installed, test deck thumbnails rendered 5/5.
+- GitHub reset to mirror local (force-pushed main; dev had no drift).
+  Workflow locked in: small fixes deploy directly (deploy.sh auto-pushes
+  dev+main); big changes PR dev→main for CodeRabbit BEFORE deploying;
+  deploy.sh refuses a dirty tree (--force for emergencies).
+- Day-1 live polish shipped: pill swatch borders visible both themes,
+  opacity-row spacing, avatar↔pill header gap, instant profile-menu email
+  (useUser paints from cached session, getUser verifies after).
+- Docs consolidated to 4 files (context / architecture / deploy / this one);
+  subscriptionmodel + billing-plan + admin-panel-plan folded into context.md
+  (full text recoverable from git history).
 - Inngest = self-hosted dev server (pm2 taqreer-inngest, :8288), 12 functions
   connected. INTERIM — replace with Inngest Cloud keys before launch.
 - SSH password login disabled; root password that was shared in chat is dead.
@@ -84,7 +96,7 @@ Phase C — Hardening:
 - Admin panel v1 READ-ONLY (users, subscriptions, revenue, generations +
   failures, signups), role-gated server-side (User.role exists). Actions
   (credits/refunds/tier) stay psql + Stripe dashboard for the first weeks.
-  Spec: context/admin-panel-plan.md. No "online now" (no presence infra).
+  Spec folded into context.md §Admin panel. No "online now" (no presence infra).
 - Final /security-review over the whole diff before launch.
 
 Phase D — Cheap pre-launch polish:

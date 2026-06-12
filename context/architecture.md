@@ -2,7 +2,7 @@
 
 > A reference map of the app: stack, routes, i18n, theming, design system,
 > components, flows, backend. **Line numbers are approximate** — grep the symbol,
-> don't trust `:NN`. Last reviewed 2026-06-11.
+> don't trust `:NN`. Last reviewed 2026-06-13.
 
 ## Contents
 1. [Stack & top-level layout](#1-stack--top-level-layout)
@@ -24,9 +24,10 @@
 - **Tailwind v4, CSS-first** — no `tailwind.config`; theme lives in `@theme` / `@theme inline` blocks inside [app/globals.css](app/globals.css). Lightning CSS minifier (quirks — see §10).
 - **Bilingual (Arabic + English)** — every page URL carries a locale segment (`/ar/…`, `/en/…`). `<html dir>` + `<html lang>` are set per-locale by the `[lang]` layout. RTL/BiDi quality is the product differentiator (see §3).
 - **Light + dark themes** — `tq_theme` cookie, SSR-applied, no flash (see §4).
-- **Data**: Prisma → local Postgres (docker-compose, `localhost:5432`). **Supabase** = auth + storage + realtime only (NOT the app DB).
+- **Data**: Prisma → Postgres (dev: docker-compose `localhost:5432`; prod: server-local `taqreer_prod`). **Supabase** = auth + storage + realtime only (NOT the app DB; same Supabase project serves dev AND prod).
 - **Generation**: Anthropic Claude (Opus 4.8 default) streams HTML slides via **Inngest** background jobs; gpt-image-2 for generated images.
-- **Edge gate**: [proxy.ts](proxy.ts) (Next middleware) — redirects bare URLs to a locale prefix, then refreshes the Supabase session. Skips both for `/api` and static-file requests.
+- **Edge gate**: [proxy.ts](proxy.ts) (Next middleware) — redirects bare URLs to a locale prefix, applies the **coming-soon gate** (`COMING_SOON=1` env → every page rewrites to `/{lang}/coming-soon` unless the `tq_preview` cookie is set; `/preview?key=<COMING_SOON_KEY>` sets it; API routes never gated), then refreshes the Supabase session. Skips locale+session work for static files.
+- **Production**: LIVE at https://taqreer.ai on Hetzner — see [deploy.md](deploy.md). `./deploy.sh` rsyncs the LOCAL tree, builds on the server, atomic-swaps, pm2-reloads, and pushes dev+main to GitHub.
 - **Root layout**: [app/[lang]/layout.tsx](app/[lang]/layout.tsx) — Cairo + Poppins fonts, `<html dir lang>` from the locale, `themeClass` from the `tq_theme` cookie, Material Symbols, wraps children in `LocaleProvider` (dictionary → client).
 
 ---
@@ -50,11 +51,14 @@ Auth-gated SSR (redirects to `/[lang]/login?next=`).
 | `/projects`, `/favorites`, `/templates`, `/library` | grids (client filter + paginate) | default |
 | `/brand-kits`, `/brand-kits/new` | saved brand identities | default |
 | `/settings` | plan banner + profile / password / delete; label-start control-end `.settings-row` rows | default |
-| `/billing` | plan summary + dunning, change-plan cards (landing-size, popular pill), top-up packs; linked from the user menu, the popup upgrade pill, and the popup credits card | default |
+| `/plans` | plan summary, change-plan cards (landing-size, popular pill), top-up packs (subscriber-only) | default |
+| `/billing` | money admin: cancel/resume + payment methods (SetupIntent) + dunning; `BillingTabs` ties plans/billing/invoices | default |
+| `/invoices` | invoice history + Stripe hosted PDFs | default |
 | `/checkout`, `/checkout/return` | OUR Elements payment form (Checkout Sessions `ui_mode: elements`); return page auto-redirects to `/dashboard` on success | default |
 | `/create`, `/enhance`, `/mimic`, `/datasheet`, `/use-template/[id]` | the 4 creation flows | flow |
 | `/project/[projectId]` | **unified studio** — generation AND editing (`DeckView`) | studio (chrome-less) |
 | `/preview/[projectId]` | back-compat redirect → `/project` | — |
+| `/coming-soon` | pre-launch gate page (proxy rewrites here while `COMING_SOON=1`) | public |
 
 ---
 
@@ -161,16 +165,17 @@ The brand runs on a **single blue accent**. The accent token is named `--tq-purp
 
 ### Tier-1 primitives
 - **Controls** ([components/create/controls.tsx](components/create/controls.tsx)): `SegmentedToggle<T>` (spring 500/35), `Toggle` (RTL, always-white knob), `PositionDropdown`, etc.
-- **`GenerateSplitButton`** ([components/create/GenerateSplitButton.tsx](components/create/GenerateSplitButton.tsx)) — the AI split-button CTA (mesh).
+- **`GenerateSplitButton`** ([components/create/GenerateSplitButton.tsx](components/create/GenerateSplitButton.tsx)) — the AI split-button CTA (mesh); preset rows carry fast/thinking + tier-gate pills, gated rows open `UpgradeModal`.
+- **`DesignStylePicker`** ([components/create/DesignStylePicker.tsx](components/create/DesignStylePicker.tsx)) — trigger row + gallery modal with static CSS mini-previews (monochrome + one blue), shared by all 4 flows.
 - **Brand** ([components/brand/](components/brand/)): `CompactUploadZone`, `FontUploadSlot`, `GoogleFontSlot`, `LogoRow`, `LogoUploadSlot`, `AIImagesPanel`, **`ThemeLogo`**.
 - **i18n / theme**: `LocaleProvider`, `LanguageMenu`, `ThemeToggle`, `TopUtilityBar`.
 - **`ColorPickerPopover`**, **`Avatar`**, **`AnimatedIcon`** (+ `ParagraphWriteIcon`), **`SlideRenderer`**.
 
 ### Dashboard ([components/app/](components/app/))
-`HomeLibrary`, `QuickActions`, `ProjectsGrid`, `ProjectThumbnail`, `TemplateTile`, `BrandKitTile`, `Pagination` (dir-aware chevrons), `PlanUsage`, `MyTemplates`, `Sidebar`, `DashboardShell`, `BellDropdown`.
+`HomeLibrary`, `QuickActions`, `ProjectsGrid`, `ProjectThumbnail`, `TemplateTile`, `BrandKitTile`, `Pagination` (dir-aware chevrons), `PlanUsage`, `MyTemplates`, `Sidebar`, `DashboardShell`, `BellDropdown`, **`ProfileAvatar` + `ProfileMenuContent`** (extracted; Sidebar and the studio `UserMenu` compose them), **multi-select bulk delete** (`lib/hooks/useMultiSelect` + `SelectableTile` + `SelectionBar` + `BulkDeleteConfirmDialog` — select-all = visible page only; delete intersects with current-filter deletable ids).
 
 ### Billing ([components/billing/](components/billing/), [components/common/](components/common/))
-`BillingSection` (the /billing page body), `CreditGateDialog` (402 offers in the 4 flows), **`NoticeCard`** (app-wide confirm/outcome pattern, bare glyphs — also the checkout return states). Credit store: [lib/credits/store.ts](lib/credits/store.ts) — ONE balance feeding the avatar ring, popup breakdown, and plan banner, ticked by the `credit.balance.changed` nudge.
+`BillingSection` (the /plans body; `variant="modal"` + `minTier` reuse inside **`UpgradeModal`** — gated-preset upsell with in-modal **`EmbeddedCheckout`**, `redirect:'if_required'`), `BillingTabs`, `ManageBilling`, `InvoicesList`, `CreditGateDialog` (402 offers; opens UpgradeModal), **`NoticeCard`** (app-wide confirm/outcome pattern, bare glyphs — also the checkout return states). Credit store: [lib/credits/store.ts](lib/credits/store.ts) — ONE balance feeding the avatar ring, popup breakdown, and plan banner, ticked by the `credit.balance.changed` nudge.
 
 ### Dialogs / portal menus
 Sibling overlay+panel pattern on `surface-modal`: `NewProjectDialog`, `ShareDialog`, `SaveAsTemplateDialog`, confirm dialogs, `TemplateLightbox`, `AllNotificationsModal`. Menus: `ProjectActionsMenu`, `TemplateActionsMenu`, `BrandKitActionsMenu`, `ExportMenu`, `LanguageMenu`.
@@ -214,7 +219,7 @@ StripeWebhookEvent = webhook idempotency claims; User.stripeCustomerId)
 `Presentation.currentVersionId` = active; `savedVersionId` + `savedSlideVersions` = pinned saved snapshot.
 
 ### Inngest ([inngest/functions/](inngest/functions/))
-`deck-generate` (brief → **holdCredits** → Claude streams `<section>` HTML → `StreamingHtmlSplitter` → `lib/deck/scope-css` + `lib/deck/scaffold` → seed versions → manifest → **settleHold** → image-warm + thumbnails; release in onFailure; cancel keeps partial + charges streamed slides). Plus `deck-regenerate-partial` (hold/settle, jobKey `regen:{versionId}`), `credits-maintenance` (daily 03:00 — stuck holds >24h, top-up expiry, monthly drip), `deck-image-warm` (gpt-image-2, bill-once), `extract-source`, `brand-analyze`, `thumbnail-render` (Puppeteer→WebP), `template-render`.
+`deck-generate` (brief → **holdCredits** → Claude streams `<section>` HTML → `StreamingHtmlSplitter` → `lib/deck/scope-css` + `lib/deck/scaffold` (scopes CSS under `.tq-canvas`, enforces the canvas frame, and mirrors `data-role` into the section class so role-name CSS like `.cover h1` resolves) → seed versions → manifest → **settleHold** → image-warm + thumbnails; release in onFailure; cancel keeps partial + charges streamed slides). Plus `deck-regenerate-partial` (hold/settle, jobKey `regen:{versionId}`), `credits-maintenance` (daily 03:00 — stuck holds >24h, top-up expiry, monthly drip), `deck-image-warm` (gpt-image-2, bill-once), `extract-source`, `brand-analyze`, `thumbnail-render` (Puppeteer→WebP), `template-render`.
 
 ### Credits & billing ([lib/credits/](lib/credits/), [lib/billing/](lib/billing/))
 - **Ledger** (`lib/credits/server.ts`): hold/settle/charge/grants/reset — all atomic via per-user `SELECT FOR UPDATE`, idempotent; balance changes broadcast a pointer-only `credit.balance.changed` nudge (clients refetch `GET /api/credits`).
@@ -244,6 +249,6 @@ Projects (create [**credit preflight 402**]/save/regenerate[-partial]/retry/canc
 - **Turbopack sometimes serves a stale globals.css chunk** after an edit — make a second real content change to force a clean recompile, then verify via `document.styleSheets`.
 - **`set-state-in-effect` is a lint error here** — derive initial state in the `useState` initializer, not a mount effect.
 - **Page scroll is on `<body>`** (so the RTL scrollbar sits left); `scrollbar-gutter: stable` is required (modals lock `overflow:hidden`).
-- **`dev` is the only branch.** Never `git checkout -b`. Push on request / milestone / >3 commits.
+- **`dev` is the only working branch.** Never `git checkout -b`. Review by size (2026-06-13): small fixes deploy directly via `./deploy.sh` (auto-pushes dev+main); big changes PR `dev → main` for CodeRabbit BEFORE deploying.
 - **Run `/security-review`** after new API routes, upload/auth/sanitize edits, schema changes, Inngest prompt edits.
 - Editor iframe reload needs `reloadKey` baked into `srcDoc` — see [components/preview/editor/SlideEditor.tsx](components/preview/editor/SlideEditor.tsx).

@@ -5,9 +5,11 @@ Bilingual (Arabic + English) AI presentation platform. The user provides content
 patched `dom-to-pptx` + custom OOXML post-processor exports a high-fidelity PPTX.
 Decks are generated **and** edited in a full in-canvas studio.
 
-> **Structured map** (stack, routes, i18n, theming, design system, components,
-> flows, backend): **[context/architecture.md](architecture.md)**. This file is
-> the higher-level status + handover. Change history is the git log.
+> The 4 living docs: this file (status + handover) ·
+> **[architecture.md](architecture.md)** (structured map) ·
+> **[deploy.md](deploy.md)** (production runbook) ·
+> **[launch-progress.md](launch-progress.md)** (active launch tracker —
+> updated as work lands). Change history is the git log.
 
 ---
 
@@ -15,116 +17,123 @@ Decks are generated **and** edited in a full in-canvas studio.
 
 | Area | State |
 |---|---|
+| **LIVE on https://taqreer.ai** (Hetzner, behind coming-soon gate) | ✅ 2026-06-13 |
 | HTML-first generation (all 4 flows author `<section>` HTML) | ✅ |
 | Flows: **Create / Enhance / Mimic / Datasheet** (+ use-template) | ✅ |
 | **In-canvas studio editor** (`/project/[id]`, `DeckView`) — generate ⟶ edit | ✅ |
-| Per-slide versioning, comments, AI partial-regen | ✅ |
+| Per-slide versioning, comments, AI partial-regen, image align/opacity | ✅ |
 | Export: **PPTX · PDF · PNG · HTML** | ✅ |
-| Templates (library + use-template flow) | ✅ |
-| **Bilingual** `[lang]` (ar/en, chrome dir vs canvas dir) | ✅ |
-| **Light / dark themes** (`tq_theme` cookie, no flash) | ✅ |
-| **Blue design system** (flat, one accent) + brand guidelines page | ✅ |
-| Realtime (project/user channels, **private + HS256 mint**) + notifications | ✅ |
-| **Credits + billing (Stripe, test mode)** — ledger, gating, /billing, Elements checkout | ✅ test mode |
-| Admin panel | ⏳ planned (spec only) |
+| Templates · multi-select bulk delete on all library pages | ✅ |
+| **Bilingual** `[lang]` (ar/en) · **light/dark** · **blue design system** | ✅ |
+| Realtime (private channels, HS256 mint) + notifications | ✅ |
+| **Credits + billing (Stripe TEST mode)** — ledger, gating, embedded checkout, upgrade modal | ✅ test mode |
+| Design-style picker (9 styles, CSS mini-previews) on all 4 flows | ✅ |
+| Admin panel | ⏳ read-only v1 planned (Phase C) |
 
-The product is functionally complete end-to-end, **including monetization in
-Stripe test mode**. What separates it from launch is the live-mode pass (below)
-and a few polish items.
-
----
-
-## Billing & credits — BUILT (test mode, 2026-06-12)
-
-Sources of truth: **[context/subscriptionmodel.md](subscriptionmodel.md)** (LOCKED
-tiers Free $0 / Plus $15 / Pro $30 / Max $70 + the credit model) and
-**[context/billing-plan.md](billing-plan.md)** (surfaces, journeys, build order).
-What exists and is verified:
-
-- **Credit ledger** (`lib/credits/`): CreditAccount + TopupGrant (FIFO, 12-mo
-  expiry, survive resets) + CreditHold; hotel-style hold→settle (charge clamped
-  to hold), per-user row lock, idempotent by jobKey/sourceKey. Sim-tested 30/30.
-- **Wired into the pipeline**: preflight 402 in `POST /api/projects` (reduce-
-  slides / cheaper-preset / top-up offers), hold/settle in `deck-generate` +
-  `deck-regenerate-partial` (keeps-partial cancel), signup grant with
-  anti-farming (gmail normalize + IP velocity), daily `credits-maintenance`
-  cron (stuck holds, top-up expiry, monthly drip). Auto-upgrade is DISABLED in
-  code (the margin-risk decision stands).
-- **Stripe (test mode)**: products/prices by lookup_key with grant metadata,
-  webhook → ledger grants (StripeWebhookEvent idempotency, sig-verified raw
-  body, 5/5 harness), restricted Customer Portal (cancel / payment method /
-  invoices only), Subscription mirror on our DB (webhooks only write it).
-- **UI**: `/billing` page (plan summary + dunning, landing-size change-plan
-  cards, top-up packs), **`/checkout` = our own Elements payment form**
-  (Checkout Sessions `ui_mode: elements`, PaymentElement + currency selector,
-  Appearance API themed from live tokens, dark/light reactive, full Arabic),
-  `/checkout/return` auto-redirects to dashboard, CreditGateDialog in the 4
-  flows, balance in avatar ring + popup + plan banner (one store, live nudge).
-
-**Remaining before launch (the live-mode pass)**:
-1. Real paid generation test (hold → real Claude stream → settle) — awaiting
-   user go (small Opus spend).
-2. Live keys + Stripe Tax (KSA/UAE) + dashboard branding (Background #FFFFFF,
-   Button #0057FF — live mode only, sandbox can't set it) + $1 smoke test +
-   refund-path check with a real card.
-3. Premium-template gating (tiers promise it; nothing enforces it yet).
-4. Production webhook endpoint + cron deploy config.
-
-**Admin panel** is spec-only: **[context/admin-panel-plan.md](admin-panel-plan.md)**
-(Stripe wiring, PostHog visitor analytics; `User.role` + Notification fan-out +
-`UsageEvent` already exist as a head start).
+Functionally complete end-to-end including monetization in test mode and a
+verified production pipeline (first prod deck generated, thumbnailed, billed
+2026-06-13). What separates it from public launch is tracked PHASE BY PHASE in
+**[launch-progress.md](launch-progress.md)** — that file is the active
+worklist; this one is the stable overview.
 
 ---
 
-## Small open polish items (not major builds)
+## Production (summary — full runbook in deploy.md)
 
-- **i18n**: enable the `no-literal-string` lint, add hreflang / per-locale OG
-  images. (`User.locale` persistence + the string/direction sweep are done.)
-- **Realtime**: notifications fan-out is wired — give it an end-to-end cross-tab
-  pass before relying on it in prod (local dev can't deliver broadcasts; the
-  status poll is the fallback). Billing notification types (credited / payment
-  failed / subscription ending) ride the same untested fan-out.
-- **Pre-launch**: server-side HTML sanitization for generated decks (see the
-  top-of-file TODO in `components/slides/SlideRenderer.tsx`); a couple of
-  prompt-level fidelity tweaks (gradient text, contrast).
+- Hetzner CPX22 (`ssh taqreer`), nginx + TLS → pm2 `taqreer-prod` :3100,
+  Postgres 16 `taqreer_prod` local to the box, Supabase = auth/storage/realtime
+  (same project as dev). Nightly backups. Inngest self-hosted interim.
+- **Coming-soon gate**: every page shows coming-soon until
+  `/preview?key=taqreer2025` sets the `tq_preview` cookie. Flag lives in the
+  server env (`COMING_SOON=1`); launch = remove it + reload.
+- **Deploy = `./deploy.sh`** — rsyncs the LOCAL tree (git-free; local folder is
+  the source of truth), builds on the server, atomic swap, pm2 reload, then
+  pushes `dev` AND `main` to GitHub so the repo mirrors production.
+- **Review policy by size** (user direction 2026-06-13): small fixes deploy
+  straight from `dev` (auto-merged to main); big changes go through a
+  `dev → main` PR for CodeRabbit BEFORE deploying.
 
 ---
 
-## How the studio works (it's a real editor now)
+## Pricing & credits — locked numbers (code = lib/credits/cost.ts)
+
+Tiers (renamed 2026-06-11; monthly reset, no rollover; Free = one-time grant):
+
+| | **Free $0** | **Plus $15** | **Pro $30** | **Max $70** |
+|---|---|---|---|---|
+| Credits | 400 once | 2,000/mo | 5,000/mo | 12,000/mo |
+| Slide cap | 10 | 30 | 60 | 75 (system cap) |
+| Presets | opus-fast | + opus-balanced | + fable-low | all |
+| Flows | create only | all 4 | all | all |
+| Premium templates | ✗ | ✗ | ✓ | ✓ |
+
+- Presets (2026-06-12 lineup): **opus-fast** (default, 100+10/slide, ~$0.10
+  COGS) · **opus-balanced** (400+22, ~$1.30 measured) · **fable-low**
+  (experimental 500+28, ~$3.23 measured — pricing decision still open).
+- Ledger: hotel-style hold→settle clamped to hold, FIFO top-up grants (12-mo
+  expiry), per-user row lock, idempotent, pointer-only balance broadcasts.
+  Sim 30/30 + real-money verified. **Auto-upgrade DISABLED in code.**
+- Top-ups are subscriber-only refills (free users see subscribe CTAs).
+- Stripe: Checkout Sessions `ui_mode: elements` — our own themed form on
+  `/checkout` AND inside the gated-preset **UpgradeModal**
+  (`redirect:'if_required'`, payment completes in-modal). Webhook → ledger
+  grants. Embedded money admin: `/plans` (change plan + packs), `/billing`
+  (cancel/resume + payment methods), `/invoices`. The Stripe-hosted portal is
+  deleted.
+
+Launch blockers for billing (Phase B): live keys, Stripe Tax (KSA 15%/UAE 5%),
+mada + Apple Pay, prod webhook, real-card smoke, premium-template gating.
+
+---
+
+## Admin panel (deferred to Phase C — read-only v1)
+
+Decisions (2026-06-09/13): read-only first (users, subscriptions/tier, revenue,
+generations + failures, signups), server-side role gating (`User.role` exists),
+actions stay psql + Stripe dashboard for the first weeks, no presence ("online
+now") — PostHog live view covers it. Head start already in code: `User.role`,
+Notification fan-out, `UsageEvent`, token telemetry on Job.
+
+---
+
+## How the studio works
 
 `/project/[id]` (`DeckView`) is one surface for **both** generation and editing —
-the generating shell (disabled, streaming) transitions seamlessly into the editor
-(enabled), no remount. In the editor:
-- **Manual edits** happen in-canvas: text + style via `StylePill`/`MorePopover`/
-  `FontControl`, layer reorder in `LayersPanel`, slide reorder in `SlideNavSidebar`.
-  Edits are an **in-place content save** (no new version).
+the generating shell (disabled, streaming) transitions seamlessly into the
+editor (enabled), no remount. In the editor:
+- **Manual edits** in-canvas: text + style via `StylePill`/`MorePopover`/
+  `FontControl` (incl. 6-way image align + opacity), layer reorder in
+  `LayersPanel`, slide reorder in `SlideNavSidebar`. Edits are an **in-place
+  content save** (no new version); the toolbox save icon reflects dirty state.
 - **AI path**: full regenerate or per-slide partial regen (a comment flagged
-  `forAi` drives partial regen); restore from per-slide history.
+  `forAi`); restore from per-slide history.
 - Undo/redo is a client stack; history = checkpoints on Save + 10-min idle.
 - Realtime events drive **in-place state updates, never `router.refresh`**.
+- Header strip = full-width `TopUtilityBar` with avatar (dashboard replica),
+  tier pill, bell, export/share opening downward.
 
 ---
 
 ## Conventions & non-negotiables
 
-- **`dev` is the only branch.** Never `git checkout -b`. CodeRabbit reviews
-  `dev → main` PRs. Push on request / milestone / >3 commits.
+- **`dev` is the only working branch.** Never `git checkout -b`. Review by
+  size: small fixes deploy directly; big changes PR `dev → main` for
+  CodeRabbit first. `deploy.sh` refuses a dirty tree.
 - **Design discipline**: never hardcode visuals — tokens / add a class to
   `app/globals.css` first; read the globals.css legend before any visual change;
-  reuse existing primitives. The design system is flat + **one blue accent**.
+  reuse existing primitives. Flat system, **one blue accent**.
 - **Bilingual**: translate **and** mirror direction (logical CSS only);
   `stripLocale()` before any pathname check; `localizedHref`/`switchLocaleHref`
   for internal nav; **Latin numerals only**; **no em dash** in copy.
-- **Both themes**: verify visuals in light *and* dark (flip and compare).
+- **Both themes**: verify visuals in light *and* dark.
 - **Realtime → in-place state**, never `router.refresh`.
-- **Don't reintroduce coordinate math** — the HTML pivot deleted bbox arithmetic /
-  RTL coordinate mirroring; the browser does layout.
-- **`dom-to-pptx` / `bidi-postprocess` changes** run through the export spike
-  first; the library is **patched via patch-package** (postinstall applies it).
+- **Don't reintroduce coordinate math** — the browser does layout.
+- **`dom-to-pptx` / `bidi-postprocess`** are patched via patch-package; changes
+  run through the export spike first.
 - **Run `/security-review`** after new API routes, upload/auth/sanitize edits,
   schema changes, or Inngest prompt-pipeline edits.
-- Stale-chunk gotcha: a globals.css edit sometimes needs a second real change to
-  force a clean Turbopack recompile.
+- Deck HTML lives in TWO stores (PresentationVersion = viewer; SlideVersion =
+  per-slide history) — manual repairs must patch both.
 
 ---
 
@@ -138,34 +147,17 @@ npm install                  # postinstall auto-applies the dom-to-pptx patch
 #   DATABASE_URL=postgresql://taqreer_user:...@localhost:5432/taqreer   # docker, NOT supabase
 #   ANTHROPIC_API_KEY=sk-ant-...
 #   NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY=...
-#   INNGEST_EVENT_KEY / INNGEST_SIGNING_KEY=...
+#   INNGEST_EVENT_KEY / INNGEST_SIGNING_KEY=...   (+ INNGEST_DEV=1)
 
 docker compose up -d         # postgres 16 + redis 7
 npx prisma migrate deploy    # local only — DATABASE_URL must be localhost
-
 npm run dev                  # Next.js :3000
 npx inngest-cli@latest dev   # Inngest dev server :8288
-
-# helpful scripts (scripts/):
-npx tsx scripts/wipe-decks.ts            # wipe decks + storage (keeps users)
-npx tsx scripts/setup-storage.ts         # one-time Supabase bucket setup (idempotent)
 ```
 
 ---
 
-## Reference docs
-
-- **[context/architecture.md](architecture.md)** — the structured architecture +
-  design-system map.
-- **[context/subscriptionmodel.md](subscriptionmodel.md)** — pricing / credit /
-  billing source of truth (numbers + ledger).
-- **[context/billing-plan.md](billing-plan.md)** — billing architecture
-  (surfaces, journeys, Stripe's role, build status).
-- **[context/admin-panel-plan.md](admin-panel-plan.md)** — admin panel spec.
-- **Memory** (`~/.claude/projects/-Users-osama-taqreer/memory/`, loaded each
-  session via `MEMORY.md`) — workflow rules + project context; re-read when in
-  doubt.
-
----
-
-*Living document — current state, not a changelog. History is the git log.*
+*Living document — current state, not a changelog. History is the git log.
+Superseded docs (subscriptionmodel, billing-plan, admin-panel-plan) were folded
+into this file + launch-progress.md on 2026-06-13; recover full text from git
+history if ever needed.*
