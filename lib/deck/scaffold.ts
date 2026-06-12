@@ -28,8 +28,17 @@ const CANVAS_CLASS = "tq-canvas";
 // broken slide). Capture groups: 1=double, 2=single, 3=unquoted.
 const CLASS_ATTR = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
 
+// Mirror the section's data-role value into its class list. The model
+// sometimes styles slides BY ROLE NAME (`.cover h1{…}`) while only marking
+// the section `data-role="cover"` (observed 2026-06-13, opus-fast: the whole
+// cover rendered default-size). The role vocabulary is pipeline-controlled
+// (cover/content/section/closing), so the mirrored class is safe; when the
+// model used real classes the extra one matches no rules and is inert.
+const ROLE_ATTR = /\bdata-role\s*=\s*"([a-z-]+)"/i;
+
 export function withCanvasClass(sectionHtml: string): string {
   return sectionHtml.replace(/<section\b([^>]*)>/i, (full, attrs: string) => {
+    const role = attrs.match(ROLE_ATTR)?.[1] ?? null;
     const classMatch = attrs.match(CLASS_ATTR);
     if (classMatch) {
       const raw = classMatch[1] ?? classMatch[2] ?? classMatch[3] ?? "";
@@ -37,6 +46,7 @@ export function withCanvasClass(sectionHtml: string): string {
       // to double (covers the unquoted case too).
       const quote = classMatch[2] !== undefined ? "'" : '"';
       const classes = raw.split(/\s+/).filter(Boolean);
+      if (role && !classes.includes(role)) classes.push(role);
       if (!classes.includes(CANVAS_CLASS)) classes.unshift(CANVAS_CLASS);
       const newAttrs = attrs.replace(
         CLASS_ATTR,
@@ -45,7 +55,8 @@ export function withCanvasClass(sectionHtml: string): string {
       return `<section${newAttrs}>`;
     }
     void full;
-    return `<section class="${CANVAS_CLASS}"${attrs}>`;
+    const classes = role ? `${CANVAS_CLASS} ${role}` : CANVAS_CLASS;
+    return `<section class="${classes}"${attrs}>`;
   });
 }
 
