@@ -198,8 +198,13 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
      in-flow spot. The lift is now applied in JS (enterEdit), position-aware: only add
      position:relative when the element is statically positioned. */
   .tqe-ov{position:fixed;pointer-events:none;z-index:2147483646;box-sizing:border-box;display:none}
-  .tqe-hover{border:2px solid #10B981}
-  .tqe-sel{border:2px solid #15B04F}
+  /* Hover + selection boxes: 1px WHITE border under
+     mix-blend-mode:difference, so the visible color is the inverse of
+     whatever sits underneath - white over black, black over white,
+     inverted over any hue. Always visible regardless of slide colors
+     (user direction 2026-06-12; replaced the bold green). */
+  .tqe-hover{border:1px solid #fff;mix-blend-mode:difference}
+  .tqe-sel{border:1px solid #fff;mix-blend-mode:difference}
   /* Rubber-band marquee — a subtle brand-blue rect (the brand accent at low
      opacity, 1px border). Brand RGB is mirrored here because the iframe doesn't
      load the app stylesheet. */
