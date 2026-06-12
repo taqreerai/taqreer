@@ -419,9 +419,19 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         // Shift+click TOGGLES the clicked leaf in/out of the current selection
         // (additive multi-select, complements the marquee). Shift on empty
         // canvas is a no-op — it must NOT clear the set.
+        // Selection is about to change → drop the hover box NOW. The
+        // hover and selection boxes are both 1px white under
+        // mix-blend-mode:difference; stacked on the same element the
+        // two inversions CANCEL and the border reads as invisible
+        // until the next mousemove suppresses the hover (the
+        // "disappears on click, returns on move" flicker, root-caused
+        // 2026-06-12). onMove would hide it a frame later anyway;
+        // clearing here removes the overlap window entirely.
+        const clearHover = () => { lastHover = null; place(hover, null); };
         if (e.shiftKey) {
           if (!unit) return;
           e.preventDefault();
+          clearHover();
           const cur = selectedRef.current;
           onSelectRef.current(
             cur.includes(unit)
@@ -432,6 +442,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         }
         if (!unit) { onSelectRef.current([]); return; } // empty / bg → deselect
         e.preventDefault();
+        clearHover();
         // First click on a text leaf SELECTS it; clicking it AGAIN (when it's the
         // SOLE selection) drops into edit mode — like Figma/Canva. Text edit is
         // single-element only, so a marquee set never enters edit on re-click. A

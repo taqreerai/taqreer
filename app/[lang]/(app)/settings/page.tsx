@@ -40,6 +40,11 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailMsg, setEmailMsg] = useState<Msg>(null);
+  // Supabase "secure email change" keeps the change PENDING until both
+  // the current and the new address confirm. `new_email` is set on the
+  // auth user while pending - drives the inline pending chip so the row
+  // never claims success early (user feedback 2026-06-12).
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -55,15 +60,17 @@ export default function SettingsPage() {
       setUser(user);
       setName(user?.user_metadata?.full_name || user?.user_metadata?.name || "");
       setEmail(user?.email ?? "");
+      setPendingEmail(user?.new_email ?? null);
       setLoading(false);
     });
   }, [supabase.auth]);
 
-  // Arrival from the email-change confirm link (?email_changed=1):
-  // re-fetch the auth user (the link verified server-side, so getUser
-  // returns the NEW email), mirror it into Prisma via user-sync (which
-  // also fires the bell notification), confirm inline, and strip the
-  // flag from the URL so a refresh doesn't replay all this.
+  // Arrival from an email-change confirm link (?email_changed=1):
+  // re-fetch the auth user and report HONESTLY. With secure email
+  // change, one click only confirms one side - `new_email` stays set
+  // until the second link is clicked, so success copy waits for the
+  // email to actually flip (user feedback 2026-06-12). user-sync
+  // mirrors the flip into Prisma + fires the bell notification.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("email_changed") !== "1") return;
@@ -74,13 +81,21 @@ export default function SettingsPage() {
       if (fresh) {
         setUser(fresh);
         setEmail(fresh.email ?? "");
+        setPendingEmail(fresh.new_email ?? null);
       }
-      try {
-        await fetch("/api/auth/user-sync", { method: "POST" });
-      } catch {
-        // Next sync reconciles; the auth email is already updated.
+      if (fresh?.new_email) {
+        // First of the two confirmations - the pending chip (rendered
+        // off pendingEmail) carries the remaining-step instruction; no
+        // transient message needed on top of it.
+        setEmailMsg(null);
+      } else {
+        try {
+          await fetch("/api/auth/user-sync", { method: "POST" });
+        } catch {
+          // Next sync reconciles; the auth email is already updated.
+        }
+        setEmailMsg({ type: "success", text: dict.pages.settings.profile.emailChanged });
       }
-      setEmailMsg({ type: "success", text: dict.pages.settings.profile.emailChanged });
       window.history.replaceState(null, "", window.location.pathname);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,9 +172,10 @@ export default function SettingsPage() {
     if (error) {
       setEmailMsg({ type: "error", text: dict.pages.settings.profile.emailError });
     } else {
-      // Supabase sent the confirmation link; auth email flips (and
-      // user-sync mirrors it into Prisma on the next session) only
-      // after the user clicks it.
+      // Auth email flips only after the confirmation link(s); with
+      // secure email change BOTH addresses get one. Surface the
+      // pending state via the chip + honest copy.
+      setPendingEmail(next);
       setEmailMsg({ type: "success", text: dict.pages.settings.profile.emailPending });
     }
     setEmailSaving(false);
@@ -288,6 +304,28 @@ export default function SettingsPage() {
                 <p className="settings-row-title">{dict.pages.settings.profile.email}</p>
                 {emailMsg ? (
                   <p className="settings-row-desc">{emailMsg.text}</p>
+                ) : null}
+                {/* Pending email-change chip: visible as long as the
+                    auth user carries `new_email` (secure email change =
+                    both addresses must confirm), inlining WHICH inbox
+                    still needs the click. Persistent across reloads -
+                    not a transient toast. */}
+                {pendingEmail ? (
+                  <p className="settings-row-desc mt-1 flex items-center gap-1.5">
+                    <span
+                      className="material-symbols-outlined leading-none text-[var(--tq-status-warn-dot)]"
+                      style={{ fontSize: 14 }}
+                      aria-hidden
+                    >
+                      schedule
+                    </span>
+                    <span>
+                      {dict.pages.settings.profile.emailAwaiting.replace(
+                        "{email}",
+                        pendingEmail,
+                      )}
+                    </span>
+                  </p>
                 ) : null}
               </div>
               {isGoogleUser ? (

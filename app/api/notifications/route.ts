@@ -287,6 +287,21 @@ function formatNotificationRow(
       href = "/billing";
       break;
     }
+    case "billing.plan_changed": {
+      kind = "success";
+      const planKey = typeof payload.plan === "string" ? payload.plan : "";
+      // Tier labels are the SAME Latin names in both locales.
+      const planName = planKey.charAt(0).toUpperCase() + planKey.slice(1);
+      const credits =
+        typeof payload.credits === "number" ? payload.credits : 0;
+      title = n.billing.planChangedTitle.replace("{plan}", planName);
+      desc = n.billing.planChangedDesc.replace(
+        "{credits}",
+        credits.toLocaleString("en-US"),
+      );
+      href = "/plans";
+      break;
+    }
     case "account.email_changed": {
       kind = "success";
       const email = typeof payload.email === "string" ? payload.email : "";

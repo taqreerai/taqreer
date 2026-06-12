@@ -58,6 +58,8 @@ export type NotificationType =
   | "billing.credited"
   | "billing.payment_failed"
   | "billing.subscription_ending"
+  // A subscription purchase/upgrade activated a (new) plan.
+  | "billing.plan_changed"
   // Account-scoped: the user's email change was confirmed (sole
   // recipient = the user, allowSelfEcho).
   | "account.email_changed";
@@ -108,6 +110,12 @@ export type NotificationPayloadMap = {
     reason: "renewal" | "topup" | "welcome";
   };
   "billing.payment_failed": Record<string, never>;
+  "billing.plan_changed": {
+    // Tier key ("plus" | "pro" | "max") - reader renders the Latin label.
+    plan: string;
+    // The monthly allotment granted with the activation.
+    credits: number;
+  };
   "account.email_changed": {
     // The NEW address, post-confirmation.
     email: string;

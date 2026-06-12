@@ -411,9 +411,11 @@ function BrandPreview({
             {preview.brand.language === "ar" ? dict.dialogs.saveTemplate.langArabic : "English"} · {preview.brand.format}
           </div>
           <div className="mt-5 flex gap-2">
-            {preview.brand.palette.map((hex) => (
+            {preview.brand.palette.map((hex, i) => (
               <div
-                key={hex}
+                // Index in the key: extracted palettes can repeat a hex
+                // (two #FFFFFF swatches crashed the keying, 2026-06-12).
+                key={`${hex}-${i}`}
                 title={hex.toUpperCase()}
                 style={{
                   background: hex,

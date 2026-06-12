@@ -142,6 +142,21 @@ export async function POST(request: Request) {
             session.subscription as string | null,
             grant.plan,
           );
+          // Purchase/upgrade activation - tell the user (renewals are
+          // covered by invoice.payment_succeeded's "credited" path;
+          // this session-scoped emit fires once per checkout).
+          const { TIERS } = await import("@/lib/credits/cost");
+          await fanOutNotification({
+            type: "billing.plan_changed",
+            projectId: null,
+            actorPrismaUserId: null,
+            recipientUserIds: [prismaUserId],
+            allowSelfEcho: true,
+            payload: {
+              plan: grant.plan,
+              credits: TIERS[grant.plan].monthlyAllotment,
+            },
+          }).catch(() => {});
         }
         break;
       }
