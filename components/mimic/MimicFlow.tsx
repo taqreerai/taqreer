@@ -107,7 +107,7 @@ const CARD_W_CLASS = "w-[360px]";
 // items-stretch on the row already equalizes across siblings; min-h
 // pins them all to the /enhance baseline so when the branding card
 // is hidden the remaining 2 cards keep that exact height.
-const CARD_MIN_H_CLASS = "min-h-[540px]";
+const CARD_MIN_H_CLASS = "min-h-[440px]";
 
 // Segmented-toggle option values — the labels are resolved at render
 // from the dictionary (dict.flows.auto / dict.flows.custom) and mapped

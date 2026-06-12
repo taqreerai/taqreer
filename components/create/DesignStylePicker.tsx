@@ -47,7 +47,17 @@ const BAR = "var(--tq-text-muted)";
 const BAR_SOFT = "color-mix(in srgb, var(--tq-text-muted) 45%, transparent)";
 const ACCENT = "var(--tq-purple)";
 
-function StyleMini({ k, big = false }: { k: StyleKey | "auto"; big?: boolean }) {
+function StyleMini({
+  k,
+  big = false,
+  // Locale-aware sample word for the Bold/Display preview ("عرض" in
+  // AR, "Deck" in EN).
+  boldSample = "عرض",
+}: {
+  k: StyleKey | "auto";
+  big?: boolean;
+  boldSample?: string;
+}) {
   const base =
     "relative w-full overflow-hidden rounded-md border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)]";
   const abs = (s: React.CSSProperties): React.CSSProperties => ({
@@ -93,7 +103,7 @@ function StyleMini({ k, big = false }: { k: StyleKey | "auto"; big?: boolean }) 
           className="flex h-full w-full items-center justify-center font-black text-foreground"
           style={{ fontSize: big ? 34 : 13, lineHeight: 1 }}
         >
-          عرض
+          {boldSample}
         </div>
       )}
       {k === "duotone" && (
@@ -167,7 +177,7 @@ export function DesignStylePicker({
         className="flex w-full items-center gap-3 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-2 text-start transition-colors hover:border-[var(--tq-purple)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         <div className="w-14 shrink-0">
-          <StyleMini k={current?.key ?? "auto"} />
+          <StyleMini k={current?.key ?? "auto"} boldSample={t.boldSample} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-foreground">
@@ -250,7 +260,7 @@ export function DesignStylePicker({
                                   : "border-[var(--tq-border-hairline)] hover:border-[var(--tq-purple)]"
                               }`}
                             >
-                              <StyleMini k={s.key} big />
+                              <StyleMini k={s.key} big boldSample={t.boldSample} />
                               <p className="mt-2 text-[12px] font-semibold text-foreground">
                                 {s.label}
                               </p>
