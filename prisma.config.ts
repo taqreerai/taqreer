@@ -1,7 +1,11 @@
 import { defineConfig } from 'prisma/config'
+import 'dotenv/config'
 
-// CLI datasource (migrate/studio). DATABASE_URL wins so the same config
-// works on the production server; the literal is the local docker fallback.
+// CLI datasource (migrate/studio). When prisma.config.ts exists the CLI
+// skips its automatic .env loading, so dotenv/config above restores it
+// (on the server, /root/taqreer-app/.env carries the prod DATABASE_URL -
+// without this, migrate deploy silently hit the fallback's database).
+// The literal is the local docker fallback (.env.local is dev-server-only).
 export default defineConfig({
   datasource: {
     url:
