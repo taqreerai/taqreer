@@ -33,6 +33,7 @@ const TYPE_ICON: Record<string, string> = {
   "slide.regen.finished": "autorenew",
   "billing.credited": "account_balance_wallet",
   "billing.payment_failed": "credit_card_off",
+  "account.email_changed": "alternate_email",
   "billing.subscription_ending": "event_upcoming",
 };
 
@@ -63,6 +64,7 @@ const TYPE_TINT: Record<string, string> = {
   "slide.regen.finished": "bg-amber-500/12 text-amber-400",
   "billing.credited": "bg-emerald-500/12 text-emerald-400",
   "billing.payment_failed": "bg-red-500/12 text-red-400",
+  "account.email_changed": "bg-emerald-500/12 text-emerald-400",
   "billing.subscription_ending": "bg-amber-500/12 text-amber-400",
 };
 

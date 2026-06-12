@@ -52,7 +52,17 @@ const FEATURES_ENABLED: Record<KnownPlan, number> = {
 // "Pro" carries the landing's popular pill here too.
 const POPULAR_TIER: KnownPlan = "pro";
 
-export function BillingSection() {
+export function BillingSection({
+  // "modal" (UpgradeModal, 2026-06-12): plan cards only - no plan
+  // summary, no top-up packs - and purchases go through onBuy (the
+  // modal swaps to its embedded checkout step) instead of routing to
+  // the /checkout page.
+  variant = "page",
+  onBuy,
+}: {
+  variant?: "page" | "modal";
+  onBuy?: (lookupKey: string) => void;
+} = {}) {
   const dict = useDict();
   const { locale, dir } = useLocale();
   const router = useRouter();
@@ -66,6 +76,10 @@ export function BillingSection() {
   // Paid purchases go to our EMBEDDED checkout page (stays on
   // taqreer.ai); money admin is /billing (also ours - no Stripe pages).
   function buy(lookupKey: string) {
+    if (onBuy) {
+      onBuy(lookupKey);
+      return;
+    }
     setBusy(lookupKey);
     router.push(`${localizedHref("/checkout", locale)}?price=${lookupKey}`);
   }
@@ -97,6 +111,7 @@ export function BillingSection() {
   return (
     <div className="flex flex-col gap-10">
       {/* ── Plan ── */}
+      {variant === "page" ? (
       <section>
         <h2 className="mb-3 text-lg font-semibold text-foreground">{t.planTitle}</h2>
 
@@ -123,6 +138,7 @@ export function BillingSection() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* ── Change plan ── */}
       <section>
@@ -262,6 +278,7 @@ export function BillingSection() {
           2026-06-12); Free accounts see the cards muted with a
           "pick a plan first" hint, and the checkout API refuses topup
           lookupKeys for free plans server-side. */}
+      {variant === "page" ? (
       <section>
         <h2 className="text-lg font-semibold text-foreground">{t.packsTitle}</h2>
         <p className="mt-0.5 text-xs text-muted">
@@ -297,6 +314,7 @@ export function BillingSection() {
           })}
         </div>
       </section>
+      ) : null}
     </div>
   );
 }

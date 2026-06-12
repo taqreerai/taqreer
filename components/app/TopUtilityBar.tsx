@@ -71,10 +71,15 @@ function HealthDot() {
 
 export function TopUtilityBar({
   // Extra controls appended to the END cluster (visual far edge) -
-  // the studio header passes Export/Share + the avatar menu here.
+  // the studio header passes Export/Share here.
   trailing,
+  // Rendered at the START cluster's edge, before the plan badge - the
+  // studio header puts the avatar menu here (next to the tier pill,
+  // user direction 2026-06-12).
+  avatar,
 }: {
   trailing?: React.ReactNode;
+  avatar?: React.ReactNode;
 } = {}) {
   const [searchOpen, setSearchOpen] = useState(false);
   const dict = useDict();
@@ -106,6 +111,7 @@ export function TopUtilityBar({
             (user direction 2026-06-11). AR reads SEARCH | BELL | BADGE
             toward the right edge; EN mirrors. */}
         <div className="pointer-events-auto flex items-center gap-1.5">
+          {avatar}
           <PlanBadge />
           {/* Notifications bell - this instance also boots the
               notification store + owns the live toast stack. */}

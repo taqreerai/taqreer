@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { fanOutNotification } from "@/lib/notifications/server";
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     // grant fires exactly when the row is born.
     const existing = await prisma.user.findUnique({
       where: { supabaseUserId: user.id },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     // `language` is intentionally NOT in `update` — a returning user keeps
@@ -45,6 +46,20 @@ export async function POST(request: Request) {
     // signupGrantedAt server-side (idempotent even if two first syncs
     // race) plus the email-alias + IP-velocity abuse checks. Never
     // fails the sync - a blocked/failed grant just leaves 0 credits.
+    // Email-change confirmation landed (settings flow, 2026-06-12): the
+    // Supabase email differs from the mirrored Prisma row the upsert just
+    // replaced - tell the user via the bell. Fire-and-forget.
+    if (existing && existing.email !== profile.email) {
+      void fanOutNotification({
+        type: "account.email_changed",
+        projectId: null,
+        actorPrismaUserId: dbUser.id,
+        recipientUserIds: [dbUser.id],
+        allowSelfEcho: true,
+        payload: { email: profile.email },
+      });
+    }
+
     if (!existing) {
       await maybeGrantSignupCredits({
         userId: dbUser.id,

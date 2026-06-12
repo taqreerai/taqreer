@@ -31,6 +31,8 @@ import { useDict } from "@/components/i18n/LocaleProvider";
 import { generationCost, TIERS, TIER_ORDER } from "@/lib/credits/cost";
 import { normalizePlan, planLabel } from "@/lib/plan";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import type { KnownPlan } from "@/lib/plan";
 
 export function GenerateSplitButton({
   onGenerate,
@@ -60,6 +62,10 @@ export function GenerateSplitButton({
   const resolvedLabel = label ?? dict.flows.generate.create;
   const resolvedLoadingLabel = loadingLabel ?? dict.flows.generate.creating;
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  // Gated-preset click → upgrade modal (pricing cards + embedded
+  // checkout in place, user direction 2026-06-12). Holds the tier
+  // that gates the clicked preset; null = closed.
+  const [upgradeTier, setUpgradeTier] = useState<KnownPlan | null>(null);
   const splitButtonRef = useRef<HTMLDivElement>(null);
 
   // Close the menu on outside click / Escape. Same shape as the
@@ -202,8 +208,13 @@ export function GenerateSplitButton({
                   key={preset.key}
                   type="button"
                   onClick={() => {
-                    onQualityChange(preset.key);
                     setPresetMenuOpen(false);
+                    // A gated preset doesn't select - it upsells.
+                    if (gated && gateTier) {
+                      setUpgradeTier(gateTier);
+                      return;
+                    }
+                    onQualityChange(preset.key);
                   }}
                   className={`flex w-full items-center gap-3 px-3 py-2.5 text-start text-sm transition-colors ${
                     active
@@ -275,6 +286,12 @@ export function GenerateSplitButton({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <UpgradeModal
+        open={upgradeTier !== null}
+        requiredTier={upgradeTier}
+        onClose={() => setUpgradeTier(null)}
+      />
     </div>
   );
 }

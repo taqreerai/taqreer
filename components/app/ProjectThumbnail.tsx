@@ -408,7 +408,7 @@ export function ProjectThumbnail({
 
       {/* Shared actions menu + the save-as-template / trash / share
           dialogs (portalled), driven by the useProjectActions instance. */}
-      <ProjectActionsDialogs actions={actions} />
+      <ProjectActionsDialogs actions={actions} shared={sharedRole !== null} />
     </div>
   );
 }

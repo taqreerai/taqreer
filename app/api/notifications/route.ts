@@ -287,6 +287,14 @@ function formatNotificationRow(
       href = "/billing";
       break;
     }
+    case "account.email_changed": {
+      kind = "success";
+      const email = typeof payload.email === "string" ? payload.email : "";
+      title = n.account.emailChangedTitle;
+      desc = n.account.emailChangedDesc.replace("{email}", email);
+      href = "/settings";
+      break;
+    }
     default:
       // Unknown type — surface a generic row using payload.title if
       // present (forward-compat for types deployed server-side ahead

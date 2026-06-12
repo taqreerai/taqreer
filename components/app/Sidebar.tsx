@@ -2,29 +2,20 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { stripLocale, localizedHref, switchLocaleHref } from "@/lib/i18n/navigation";
-import { locales, LOCALE_COOKIE, type Locale } from "@/lib/i18n/config";
-import { THEME_COOKIE } from "@/lib/ui-cookies";
+import { stripLocale, localizedHref } from "@/lib/i18n/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { Tooltip } from "@/components/common/Tooltip";
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@/hooks/useUser";
-import { createClient } from "@/lib/supabase/client";
-import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
-import { useCreditBalance, formatCredits } from "@/lib/credits/store";
-import { nextTier } from "@/lib/credits/cost";
-import { normalizePlan, planLabel } from "@/lib/plan";
-import { CreditRing } from "@/components/app/CreditRing";
-import { format } from "date-fns";
-import { dateFnsLocale } from "@/lib/i18n/date";
+import { ProfileAvatar } from "@/components/app/ProfileAvatar";
+import { ProfileMenuContent } from "@/components/app/ProfileMenuContent";
 
 // One sidebar nav link. Each instance owns its own icon ref so the
 // pill's mouseenter / mouseleave can drive the animated icon
@@ -106,20 +97,7 @@ export function Sidebar({
   const router = useRouter();
   const { locale, dir } = useLocale();
   const dict = useDict();
-  const { user, loading: userLoading, avatarUrl, name, email } = useUser();
-  const supabase = createClient();
-  // Shared credit balance - the same store feeds the avatar ring here,
-  // the breakdown in the profile menu below, and the settings card, so
-  // all three always show one number (and tick live on broadcasts).
-  const credits = useCreditBalance();
-  const creditFraction =
-    credits && credits.capacity > 0
-      ? credits.balance.total / credits.capacity
-      : null;
-  // Tier labels are the SAME Latin names in both locales (user
-  // direction 2026-06-11) but still flow through the dict.
-  const currentPlan = credits ? normalizePlan(credits.plan) : null;
-  const upgradeTo = currentPlan ? nextTier(currentPlan) : null;
+  const { name, email } = useUser();
   const [profileOpen, setProfileOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{
     top?: number; bottom?: number; left?: number; right?: number; width: number;
@@ -131,42 +109,6 @@ export function Sidebar({
   // §20: header chrome moved into this profile menu. These overlays are
   // opened by their menu rows below and render via their own body portals.
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-
-  // Theme toggle for the profile menu (mirrors components/app/ThemeToggle): flip
-  // the `.light` class on <html> + persist the `tq_theme` cookie. Synced from the
-  // DOM on mount (SSR already applied the class), so the row icon matches.
-  const [light, setLight] = useState(false);
-  useEffect(() => {
-    setLight(document.documentElement.classList.contains("light"));
-  }, []);
-  // Profile menu sub-view — the language picker is a "Language >" drilldown that
-  // swaps the menu body for a back header + the locale options. Reset to the main
-  // view whenever the menu closes so it always reopens at the top level.
-  const [langView, setLangView] = useState(false);
-  useEffect(() => {
-    if (!profileOpen) setLangView(false);
-  }, [profileOpen]);
-  const toggleTheme = () => {
-    const next = !light;
-    setLight(next);
-    document.documentElement.classList.toggle("light", next);
-    document.cookie = `${THEME_COOKIE}=${next ? "light" : "dark"};path=/;max-age=31536000;samesite=lax`;
-  };
-
-  // Chrome locale switch (mirrors components/i18n/LanguageMenu): swap the locale
-  // segment of the current path, persist the cookie, and best-effort save to the
-  // account. Closes the menu on pick.
-  const chooseLocale = (next: Locale) => {
-    setProfileOpen(false);
-    if (next === locale) return;
-    document.cookie = `${LOCALE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
-    void fetch("/api/me", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ locale: next }),
-    }).catch(() => {});
-    router.push(switchLocaleHref(rawPathname, next));
-  };
 
   // Unread cues moved to the top utility bar's bell (user direction
   // 2026-06-11) - the avatar corner now carries only the credit ring.
@@ -222,12 +164,6 @@ export function Sidebar({
       });
     }
     setProfileOpen((prev) => !prev);
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push(localizedHref("/login", locale));
-    router.refresh();
   };
 
   // Action buttons — `إنشاء / تحسين / محاكاة / من بيانات`.
@@ -371,62 +307,7 @@ export function Sidebar({
             onClick={handleProfileClick}
             className="flex items-center mx-[10px] w-[calc(100%-20px)] h-[56px] rounded-xl transition-colors cursor-pointer"
           >
-            <div className="relative w-[40px] h-[40px] flex justify-center items-center flex-shrink-0">
-              {/* Credit ring - at-a-glance used-vs-remaining around the
-                  avatar. Same store as the menu breakdown + settings
-                  card; hidden until the first balance fetch lands. */}
-              {creditFraction !== null && credits ? (
-                <CreditRing
-                  fraction={creditFraction}
-                  label={dict.components.credits.ringLabel
-                    .replace("{remaining}", formatCredits(credits.balance.total))
-                    .replace("{total}", formatCredits(credits.capacity))}
-                />
-              ) : null}
-              {userLoading ? (
-                // Neutral placeholder until the auth user lands - no
-                // letter, no per-user gradient, so there's no "U" →
-                // avatar swap flash on reload (user direction
-                // 2026-06-11).
-                <div className="w-[36px] h-[36px] rounded-full bg-[var(--tq-surface)]" />
-              ) : avatarUrl ? (
-                <Image
-                  src={avatarUrl}
-                  alt={name}
-                  width={36}
-                  height={36}
-                  // `no-referrer` for Google profile pics — without
-                  // it `lh3.googleusercontent.com` 403s in incognito
-                  // because the global `Referrer-Policy: origin-when-
-                  // cross-origin` from next.config triggers Google's
-                  // hotlink-defence path. Same fix shipped to
-                  // components/common/Avatar.tsx + the Settings page.
-                  referrerPolicy="no-referrer"
-                  className="w-[36px] h-[36px] rounded-full object-cover tq-avatar-ring"
-                />
-              ) : (
-                <div
-                  // Per-user gradient via hash(seed) — same picker the
-                  // presence avatars in SlideNavSidebar use, so the
-                  // dashboard and the editor render the same person
-                  // the same colour. Inline `backgroundImage` overrides
-                  // the canonical single-gradient `background` set on
-                  // `.tq-avatar-fallback`. Seed prefers the supabase
-                  // user id (stable across sessions, matches what
-                  // presence broadcasts use) and falls back to email
-                  // / name so a logged-out preview render still gets
-                  // a stable colour.
-                  className="w-[36px] h-[36px] rounded-full tq-avatar-fallback text-sm"
-                  style={{
-                    backgroundImage: avatarGradientForSeed(
-                      user?.id ?? email ?? name,
-                    ),
-                  }}
-                >
-                  {name.charAt(0).toUpperCase()}
-                </div>
-              )}
-            </div>
+            <ProfileAvatar />
             <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 text-start ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100 pe-1'
             }`}>
@@ -468,237 +349,12 @@ export function Sidebar({
                 role="menu"
                 className="surface-menu rounded-2xl p-2 max-h-[calc(100vh-1.5rem)] overflow-y-auto hide-scrollbar"
               >
-                {langView ? (
-                  // ── Language sub-view (drilldown from the "Language >" row) ──
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setLangView(false)}
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">
-                        {dir === "rtl" ? "chevron_right" : "chevron_left"}
-                      </span>
-                      <span className="font-semibold">{dict.language.label}</span>
-                    </button>
-                    <div className="divider-dark my-1" />
-                    {locales.map((code) => (
-                      <button
-                        key={code}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={code === locale}
-                        onClick={() => chooseLocale(code)}
-                        className="dropdown-item"
-                      >
-                        <span
-                          className="material-symbols-outlined text-[18px]"
-                          style={{ opacity: code === locale ? 1 : 0 }}
-                          aria-hidden
-                        >
-                          check
-                        </span>
-                        <span>{code === "ar" ? dict.language.ar : dict.language.en}</span>
-                      </button>
-                    ))}
-                  </>
-                ) : (
-                  // ── Main view ──
-                  <>
-                    <div className="px-3 py-2">
-                      <p className="flex min-w-0 items-center gap-1.5 font-semibold text-foreground text-sm">
-                        <span className="truncate">{name}</span>
-                        {/* Tier chip - logical gap/flex so it sits after
-                            the name in BOTH directions (start side stays
-                            the name, badge trails it in AR too). */}
-                        {currentPlan ? (
-                          <span className="badge-purple shrink-0">
-                            {planLabel(dict.components.planUsage, currentPlan)}
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-muted text-xs truncate">{email}</p>
-                    </div>
-                    <div className="divider-dark my-1" />
-
-                    {/* ── Credit cards ── reads the SAME store as the
-                        avatar ring and the settings card; updates in
-                        place on the credit.balance.changed nudge. */}
-                    {credits ? (
-                      <>
-                        <div className="flex flex-col gap-2 px-1 py-1">
-                          {/* Upgrade pill - only when a next tier exists.
-                              Fully rounded so its curve matches the CTA
-                              button inside (a tight one-row card read
-                              awkwardly as a square-cornered box). */}
-                          {upgradeTo ? (
-                            <div className="flex items-center justify-between gap-2 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] py-1.5 ps-4 pe-1.5">
-                              <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
-                                <span
-                                  className="material-symbols-outlined leading-none"
-                                  style={{ fontSize: 16 }}
-                                  aria-hidden
-                                >
-                                  bolt
-                                </span>
-                                <span className="truncate">
-                                  {dict.components.credits.upgradeTitle.replace(
-                                    "{tier}",
-                                    planLabel(dict.components.planUsage, upgradeTo),
-                                  )}
-                                </span>
-                              </span>
-                              <Link
-                                href={localizedHref("/plans", locale)}
-                                onClick={() => setProfileOpen(false)}
-                                className="btn-gradient shrink-0 px-3 py-1.5 text-xs no-underline"
-                              >
-                                {dict.components.credits.upgradeCta}
-                              </Link>
-                            </div>
-                          ) : null}
-
-                          {/* Credits card: the WHOLE card links to
-                              /billing (user direction 2026-06-11). */}
-                          <Link
-                            href={localizedHref("/plans", locale)}
-                            onClick={() => setProfileOpen(false)}
-                            className="block rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-3 py-2.5 no-underline transition-colors hover:border-[var(--tq-purple)]"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-semibold text-foreground">
-                                {dict.components.credits.title}
-                              </span>
-                              <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted">
-                                <span className="tabular-nums" dir="ltr">
-                                  {dict.components.credits.creditsLeftShort.replace(
-                                    "{count}",
-                                    formatCredits(credits.balance.total),
-                                  )}
-                                </span>
-                                <span
-                                  className="material-symbols-outlined leading-none"
-                                  style={{ fontSize: 14 }}
-                                  aria-hidden
-                                >
-                                  {dir === "rtl" ? "chevron_left" : "chevron_right"}
-                                </span>
-                              </span>
-                            </div>
-                            <div className="progress-track my-2">
-                              <div
-                                className="progress-bar"
-                                style={{
-                                  width: `${Math.round((creditFraction ?? 0) * 100)}%`,
-                                }}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between text-[11px] text-muted">
-                              <span>{dict.components.credits.subscriptionSplit}</span>
-                              <span className="tabular-nums" dir="ltr">
-                                {formatCredits(credits.balance.subscription)}
-                              </span>
-                            </div>
-                            <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted">
-                              <span>{dict.components.credits.topupSplit}</span>
-                              <span className="tabular-nums" dir="ltr">
-                                {formatCredits(credits.balance.topup)}
-                              </span>
-                            </div>
-                            <p className="mt-1.5 text-[11px] text-muted">
-                              {credits.balance.allotmentResetAt
-                                ? dict.components.credits.renews.replace(
-                                    "{date}",
-                                    format(
-                                      new Date(credits.balance.allotmentResetAt),
-                                      "d MMMM",
-                                      { locale: dateFnsLocale(locale) },
-                                    ),
-                                  )
-                                : dict.components.credits.noRenewal}
-                            </p>
-                          </Link>
-                        </div>
-                        <div className="divider-dark my-1" />
-                      </>
-                    ) : null}
-
-                    {/* ── Header chrome, relocated (§20) ──
-                        The dashboard header is hidden app-wide; its controls live
-                        here as menu rows. Action rows close the menu, then open
-                        their own (body-portalled) overlay. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileOpen(false);
-                        setNewProjectOpen(true);
-                      }}
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                      <span>{dict.profileMenu.newProject}</span>
-                    </button>
-                    {/* Notifications moved to the top utility bar's bell
-                        (user direction 2026-06-11) - no menu row here. */}
-
-                    <div className="divider-dark my-1" />
-
-                    {/* Theme toggle — flips the chrome theme in place (menu stays
-                        open so the colour change is visible). */}
-                    <button
-                      type="button"
-                      onClick={toggleTheme}
-                      aria-pressed={light}
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">
-                        {light ? "dark_mode" : "light_mode"}
-                      </span>
-                      <span>{dict.topBar.theme}</span>
-                    </button>
-
-                    {/* Language — opens the locale sub-view (drilldown). */}
-                    <button
-                      type="button"
-                      onClick={() => setLangView(true)}
-                      aria-haspopup="menu"
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">translate</span>
-                      <span>{dict.language.label}</span>
-                      <span className="material-symbols-outlined text-[18px] ms-auto opacity-50">
-                        {dir === "rtl" ? "chevron_left" : "chevron_right"}
-                      </span>
-                    </button>
-
-                    <div className="divider-dark my-1" />
-
-                    <Link
-                      href={localizedHref("/billing", locale)}
-                      onClick={() => setProfileOpen(false)}
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">credit_card</span>
-                      <span>{dict.profileMenu.billing}</span>
-                    </Link>
-                    <Link
-                      href={localizedHref("/settings", locale)}
-                      onClick={() => setProfileOpen(false)}
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">settings</span>
-                      <span>{dict.profileMenu.settings}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="dropdown-item"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">logout</span>
-                      <span>{dict.profileMenu.signOut}</span>
-                    </button>
-                  </>
-                )}
+                {/* Menu body shared with the studio header's UserMenu -
+                    extracted to ProfileMenuContent 2026-06-12. */}
+                <ProfileMenuContent
+                  onClose={() => setProfileOpen(false)}
+                  onNewProject={() => setNewProjectOpen(true)}
+                />
               </motion.div>
             )}
           </AnimatePresence>,
@@ -716,3 +372,4 @@ export function Sidebar({
     </aside>
   );
 }
+

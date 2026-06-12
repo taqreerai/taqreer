@@ -14,8 +14,13 @@ import type { ProjectActions } from "@/lib/hooks/useProjectActions";
 
 export function ProjectActionsDialogs({
   actions,
+  // True when the tile is a deck SHARED WITH the viewer (not owned).
+  // Owner-only items are omitted - their API routes are owner-scoped
+  // and would 404 ("Project not found") for an invitee (2026-06-12).
+  shared = false,
 }: {
   actions: ProjectActions;
+  shared?: boolean;
 }) {
   return (
     <>
@@ -25,13 +30,13 @@ export function ProjectActionsDialogs({
         projectId={actions.projectId}
         isFavorite={actions.favoriteState}
         onClose={actions.closeMenu}
-        onShare={actions.handleShare}
-        onRename={actions.enterRenameMode}
-        onToggleFavorite={actions.handleToggleFavorite}
+        onShare={shared ? undefined : actions.handleShare}
+        onRename={shared ? undefined : actions.enterRenameMode}
+        onToggleFavorite={shared ? undefined : actions.handleToggleFavorite}
         onCopyLink={actions.handleCopyLink}
-        onUseAsTemplate={actions.handleUseAsTemplate}
-        onSaveAsTemplate={() => actions.setSaveTemplateOpen(true)}
-        onSendToTrash={() => actions.setTrashOpen(true)}
+        onUseAsTemplate={shared ? undefined : actions.handleUseAsTemplate}
+        onSaveAsTemplate={shared ? undefined : (() => actions.setSaveTemplateOpen(true))}
+        onSendToTrash={shared ? undefined : (() => actions.setTrashOpen(true))}
       />
 
       <SaveAsTemplateDialog

@@ -1,29 +1,21 @@
 "use client";
 
-// Compact avatar button + dropdown for surfaces OUTSIDE the dashboard
-// rail (first consumer: the studio header strip, 2026-06-12). The
-// Sidebar's full profile menu stays the dashboard's primary menu; this
-// one carries only the navigation core - Home, Settings, Billing, Sign
-// out - because theme / language / bell already live in the utility
-// strip next to it.
+// Header avatar menu - the SAME avatar (ProfileAvatar: disc + credit
+// ring) and the SAME menu body (ProfileMenuContent) as the dashboard
+// sidebar, just anchored to a header button and opening DOWNWARD.
+// First consumer: the studio header strip (2026-06-12).
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
-import { localizedHref } from "@/lib/i18n/navigation";
 import { useUser } from "@/hooks/useUser";
-import { createClient } from "@/lib/supabase/client";
-import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
+import { ProfileAvatar } from "@/components/app/ProfileAvatar";
+import { ProfileMenuContent } from "@/components/app/ProfileMenuContent";
+import { NewProjectDialog } from "@/components/app/NewProjectDialog";
 
 export function UserMenu() {
-  const dict = useDict();
-  const { locale } = useLocale();
-  const router = useRouter();
-  const { user, avatarUrl, name, email } = useUser();
+  const { user, name, email } = useUser();
   const [open, setOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -43,14 +35,7 @@ export function UserMenu() {
     };
   }, [open]);
 
-  const handleLogout = async () => {
-    setOpen(false);
-    await createClient().auth.signOut();
-    router.push(localizedHref("/login", locale));
-  };
-
   if (!user) return null;
-  const displayName = name || email?.split("@")[0] || "User";
 
   return (
     <div ref={rootRef} className="relative">
@@ -59,28 +44,10 @@ export function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={displayName}
-        className="block h-8 w-8 overflow-hidden rounded-full transition-transform hover:scale-105"
+        aria-label={name || email}
+        className="block cursor-pointer transition-transform hover:scale-105"
       >
-        {avatarUrl ? (
-          <Image
-            src={avatarUrl}
-            alt={displayName}
-            width={32}
-            height={32}
-            referrerPolicy="no-referrer"
-            className="h-8 w-8 rounded-full object-cover"
-          />
-        ) : (
-          <span
-            className="tq-avatar-fallback flex h-8 w-8 items-center justify-center rounded-full text-xs"
-            style={{
-              backgroundImage: avatarGradientForSeed(user.id ?? email ?? displayName),
-            }}
-          >
-            {displayName.charAt(0).toUpperCase()}
-          </span>
-        )}
+        <ProfileAvatar />
       </button>
 
       <AnimatePresence>
@@ -91,44 +58,21 @@ export function UserMenu() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -4 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="surface-menu absolute end-0 top-10 z-50 w-56 rounded-xl p-1.5"
+            // start-0: the avatar lives at the strip's inline-START edge
+            // (right edge in AR), so the menu must expand toward the
+            // content - inset-inline-start pins the correct side in both
+            // directions (end-0 pushed it off-screen in RTL).
+            className="surface-menu absolute start-0 top-12 z-[60] w-64 rounded-2xl p-2 max-h-[calc(100vh-4rem)] overflow-y-auto hide-scrollbar"
           >
-            <div className="px-3 pb-2 pt-1.5">
-              <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
-              <p className="truncate text-xs text-muted">{email}</p>
-            </div>
-            <div className="divider-dark my-1" />
-            <Link
-              href={localizedHref("/dashboard", locale)}
-              onClick={() => setOpen(false)}
-              className="dropdown-item"
-            >
-              <span className="material-symbols-outlined text-[18px]">home</span>
-              <span>{dict.nav.home}</span>
-            </Link>
-            <Link
-              href={localizedHref("/billing", locale)}
-              onClick={() => setOpen(false)}
-              className="dropdown-item"
-            >
-              <span className="material-symbols-outlined text-[18px]">credit_card</span>
-              <span>{dict.profileMenu.billing}</span>
-            </Link>
-            <Link
-              href={localizedHref("/settings", locale)}
-              onClick={() => setOpen(false)}
-              className="dropdown-item"
-            >
-              <span className="material-symbols-outlined text-[18px]">settings</span>
-              <span>{dict.profileMenu.settings}</span>
-            </Link>
-            <button type="button" onClick={handleLogout} className="dropdown-item w-full">
-              <span className="material-symbols-outlined text-[18px]">logout</span>
-              <span>{dict.profileMenu.signOut}</span>
-            </button>
+            <ProfileMenuContent
+              onClose={() => setOpen(false)}
+              onNewProject={() => setNewProjectOpen(true)}
+            />
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <NewProjectDialog open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
     </div>
   );
 }

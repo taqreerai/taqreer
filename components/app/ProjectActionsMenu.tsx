@@ -1,7 +1,10 @@
 "use client";
 
 // Per-tile actions menu opened from the 3-dots button on a
-// ProjectThumbnail. Seven items (RTL order):
+// ProjectThumbnail. Items render only when their callback is provided -
+// shared (non-owned) tiles pass undefined for owner-only actions, whose
+// API routes are owner-scoped and would 404 for an invitee (2026-06-12).
+// Seven items (RTL order):
 //
 //   1. Share          — opens placeholder modal (filled in step 15)
 //   2. Rename         — switches the tile into inline-edit mode
@@ -202,32 +205,38 @@ export function ProjectActionsMenu({
           style={{ top, bottom, left, width: MENU_WIDTH }}
         >
           <ul className="flex flex-col p-1.5">
-            <MenuItem
-              icon="share"
-              label={dict.common.share}
-              onClick={onShare}
-              closeAfter
-              onClose={onClose}
-            />
-            <MenuItem
-              icon="edit"
-              label={dict.common.rename}
-              onClick={onRename}
-              closeAfter
-              onClose={onClose}
-            />
-            <MenuItem
-              icon={isFavorite ? "star" : "star_outline"}
-              iconFilled={isFavorite}
-              label={
-                isFavorite
-                  ? dict.menus.projectActions.removeFavorite
-                  : dict.menus.projectActions.addFavorite
-              }
-              onClick={onToggleFavorite}
-              closeAfter
-              onClose={onClose}
-            />
+            {onShare ? (
+  <MenuItem
+                icon="share"
+                label={dict.common.share}
+                onClick={onShare}
+                closeAfter
+                onClose={onClose}
+              />
+            ) : null}
+            {onRename ? (
+  <MenuItem
+                icon="edit"
+                label={dict.common.rename}
+                onClick={onRename}
+                closeAfter
+                onClose={onClose}
+              />
+            ) : null}
+            {onToggleFavorite ? (
+  <MenuItem
+                icon={isFavorite ? "star" : "star_outline"}
+                iconFilled={isFavorite}
+                label={
+                  isFavorite
+                    ? dict.menus.projectActions.removeFavorite
+                    : dict.menus.projectActions.addFavorite
+                }
+                onClick={onToggleFavorite}
+                closeAfter
+                onClose={onClose}
+              />
+            ) : null}
             <MenuItem
               icon="link"
               label={dict.menus.projectActions.copyLink}
@@ -237,38 +246,46 @@ export function ProjectActionsMenu({
             />
             {/* "Use as a template" — mimic this project now. Navigates
                 to /use-template/project/[id] (forked Mimic flow). */}
-            <MenuItem
-              icon="auto_awesome"
-              label={dict.menus.projectActions.useAsTemplate}
-              onClick={onUseAsTemplate}
-              closeAfter
-              onClose={onClose}
-            />
+            {onUseAsTemplate ? (
+  <MenuItem
+                icon="auto_awesome"
+                label={dict.menus.projectActions.useAsTemplate}
+                onClick={onUseAsTemplate}
+                closeAfter
+                onClose={onClose}
+              />
+            ) : null}
             {/* "Save as a template" — opens SaveAsTemplateDialog via the
                 parent's onSaveAsTemplate handler. The modal fetches
                 /template-preview, renders the live brand preview, then
                 POSTs save-as-template on confirm. */}
-            <MenuItem
-              icon="bookmark_add"
-              label={dict.menus.projectActions.saveAsTemplate}
-              onClick={onSaveAsTemplate}
-              closeAfter
-              onClose={onClose}
-            />
+            {onSaveAsTemplate ? (
+  <MenuItem
+                icon="bookmark_add"
+                label={dict.menus.projectActions.saveAsTemplate}
+                onClick={onSaveAsTemplate}
+                closeAfter
+                onClose={onClose}
+              />
+            ) : null}
             {/* Divider before the destructive action so the row
                 reads as visually separated from the rest. */}
-            <li
-              aria-hidden
-              className="my-1 h-px bg-foreground/[0.08]"
-            />
-            <MenuItem
-              icon="delete"
-              label={dict.menus.projectActions.sendToTrash}
-              destructive
-              onClick={onSendToTrash}
-              closeAfter
-              onClose={onClose}
-            />
+            {onSendToTrash ? (
+  <>
+  <li
+                aria-hidden
+                className="my-1 h-px bg-foreground/[0.08]"
+              />
+              <MenuItem
+                icon="delete"
+                label={dict.menus.projectActions.sendToTrash}
+                destructive
+                onClick={onSendToTrash}
+                closeAfter
+                onClose={onClose}
+              />
+  </>
+            ) : null}
           </ul>
         </motion.div>
       ) : null}

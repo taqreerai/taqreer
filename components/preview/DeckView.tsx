@@ -3691,23 +3691,30 @@ export function DeckView({
           dashboard (plan badge / bell / search / health / theme / language)
           plus, in the trailing slot, the document actions (Export ▾ + Share -
           moved here from the slide-nav footer) and the avatar menu. */}
-      <TopUtilityBar
-        trailing={
-          <>
-            <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
-            {!generating && exportManifest ? (
-              <StudioActions
-                projectId={projectId}
-                projectTitle={projectTitle}
-                manifest={exportManifest}
-                formatFallback={initialFormat}
-                role={role}
-              />
-            ) : null}
-            <UserMenu />
-          </>
-        }
-      />
+      {/* Fixed full-width wrapper: the section is inset by the panel
+          gutters (marginLeft/Right above), so the strip's own
+          `absolute inset-x-0` would inherit those margins. Pinning a
+          zero-height fixed layer to the viewport makes the strip span
+          edge-to-edge like the dashboard chrome. */}
+      <div className="fixed inset-x-0 top-0 z-40 h-0">
+        <TopUtilityBar
+          avatar={<UserMenu />}
+          trailing={
+            !generating && exportManifest ? (
+              <>
+                <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
+                <StudioActions
+                  projectId={projectId}
+                  projectTitle={projectTitle}
+                  manifest={exportManifest}
+                  formatFallback={initialFormat}
+                  role={role}
+                />
+              </>
+            ) : null
+          }
+        />
+      </div>
 
       {/* Right-edge slot: the Slides nav (with a Comments tab for reviewing
           comments). FADED OUT (not unmounted) while commenting — both side

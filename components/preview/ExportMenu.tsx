@@ -109,9 +109,15 @@ export function ExportMenu({
         ),
       )
     : 0;
-  // §22: the trigger now lives at the BOTTOM of the slide-nav, so the menu opens
-  // UPWARD — anchor its bottom edge just above the trigger's top.
-  const bottom = rect ? window.innerHeight - rect.top + ANCHOR_GAP_PX : 0;
+  // Adaptive vertical side (2026-06-12): the trigger moved from the
+  // slide-nav footer to the top header strip, so opening upward would
+  // push the menu off-screen. Open DOWNWARD when the trigger sits in
+  // the top half of the viewport, upward otherwise (covers any future
+  // bottom-anchored reuse).
+  const openDown = rect ? rect.top < window.innerHeight / 2 : true;
+  const top = rect && openDown ? rect.bottom + ANCHOR_GAP_PX : undefined;
+  const bottom =
+    rect && !openDown ? window.innerHeight - rect.top + ANCHOR_GAP_PX : undefined;
 
   return (
     <>
@@ -148,12 +154,12 @@ export function ExportMenu({
                   dir={dir}
                   role="menu"
                   aria-label={dict.editor.export.exportPresentation}
-                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  initial={{ opacity: 0, y: openDown ? -6 : 6, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                  exit={{ opacity: 0, y: openDown ? -6 : 6, scale: 0.98 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                   className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
-                  style={{ bottom, left, width: MENU_WIDTH }}
+                  style={{ top, bottom, left, width: MENU_WIDTH }}
                 >
                   <ul className="flex flex-col p-1.5">
                     {FORMATS.map((f) => {

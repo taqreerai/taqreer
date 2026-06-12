@@ -281,11 +281,11 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
   const dirty = useRef(false);
 
   // Read by the rAF (every frame) to drive the selection-outline's visibility,
-  // without effect-timing races. `editingRef` = hide the outline while editing
-  // (popover open / pill pressed). `selectingRef` = a selection change is in
+  // without effect-timing races. `selectingRef` = a selection change is in
   // flight (pointer went down on a DIFFERENT element); stay hidden until the box
   // lands on the new target, so the OLD element's border can't flash in between.
-  const editingRef = useRef(false);
+  // (The old `editingRef` popover/pill-press hide was dropped 2026-06-12 - the
+  // outline now only hides during contenteditable text editing.)
   const selectingRef = useRef(false);
 
   // ── position: a rAF loop reads the live selection box(es) (.tqe-sel) and writes
@@ -356,7 +356,13 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
           }
           // Box(es) settled → lock the pill where it is.
           if (onTarget) placed = true;
-          const hidden = editingRef.current || selectingRef.current || !onTarget;
+          // Outline stays visible through popover-open / pill-press now
+          // (user direction 2026-06-12: "border stays until editing
+          // starts") - it only hides while the target is actually in
+          // text-edit mode (contenteditable), plus the in-flight
+          // selection guard against the old element's border flashing.
+          const hidden =
+            target.isContentEditable || selectingRef.current || !onTarget;
           for (const b of selBoxes) b.style.visibility = hidden ? "hidden" : "visible";
         }
       }
@@ -464,10 +470,6 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
   // every frame, so it can gate on whether the box has actually landed on the
   // current target, which a state-driven effect can't do race-free.) Mirror the
   // "editing" flag into a ref the rAF reads (can't write a ref during render).
-  useEffect(() => {
-    editingRef.current = colorOpen || moreOpen || fontOpen || pillActive || regenOpen;
-  }, [colorOpen, moreOpen, fontOpen, pillActive, regenOpen]);
-
   // Pointer released anywhere ends the "pressing the pill" state.
   useEffect(() => {
     const onUp = () => setPillActive(false);

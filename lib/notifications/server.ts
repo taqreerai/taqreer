@@ -57,7 +57,10 @@ export type NotificationType =
   // single recipient via recipientUserIds.
   | "billing.credited"
   | "billing.payment_failed"
-  | "billing.subscription_ending";
+  | "billing.subscription_ending"
+  // Account-scoped: the user's email change was confirmed (sole
+  // recipient = the user, allowSelfEcho).
+  | "account.email_changed";
 
 // Per-type payload contracts. The DB column is `Json` (no schema
 // enforcement at the DB layer) — these are the *intended* shapes
@@ -105,6 +108,10 @@ export type NotificationPayloadMap = {
     reason: "renewal" | "topup" | "welcome";
   };
   "billing.payment_failed": Record<string, never>;
+  "account.email_changed": {
+    // The NEW address, post-confirmation.
+    email: string;
+  };
   "billing.subscription_ending": {
     // ISO date the access ends (period end). Rendered Latin-digit.
     date: string;

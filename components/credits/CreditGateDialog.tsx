@@ -15,7 +15,7 @@
 // Sibling-overlay dialog pattern (dim + panel via AnimatePresence)
 // per TemplateDeleteConfirmDialog.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,6 +25,7 @@ import { NoticeCard } from "@/components/common/NoticeCard";
 import { TOPUP_PACKS } from "@/lib/credits/cost";
 import { formatCredits, useCreditBalance } from "@/lib/credits/store";
 import { normalizePlan } from "@/lib/plan";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
 
 // The 402 body POST /api/projects returns when preflight blocks.
 export type CreditGatePayload = {
@@ -76,6 +77,11 @@ export function CreditGateDialog({
   // refill.
   const credits = useCreditBalance();
   const isFree = !credits || normalizePlan(credits.plan) === "free";
+  // In-place purchase (user direction 2026-06-12, replacing the
+  // new-tab checkout): the UpgradeModal stacks over this dialog -
+  // plans step for free users / upgrade CTAs, straight-to-checkout
+  // for the covering top-up pack. Flow state behind both survives.
+  const [upgrade, setUpgrade] = useState<{ lookupKey: string | null } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -102,6 +108,7 @@ export function CreditGateDialog({
     gate.options.reducedCredits != null;
 
   return createPortal(
+    <>
     <AnimatePresence>
       {gate ? (
         <>
@@ -165,30 +172,25 @@ export function CreditGateDialog({
                       </button>
                     ) : null}
                     {isFree ? (
-                      // Free user: subscribing IS the offer. New tab so
-                      // the flow behind the dialog keeps its filled-in
-                      // state; the balance refreshes live on grant.
+                      // Free user: subscribing IS the offer. Opens the
+                      // upgrade modal in place (plans + embedded
+                      // checkout); the balance refreshes live on grant.
                       <button
                         type="button"
-                        onClick={() =>
-                          window.open(pricingHref, "_blank")
-                        }
+                        onClick={() => setUpgrade({ lookupKey: null })}
                         className="btn-gradient flex w-full items-center justify-center px-5 py-3 text-sm font-medium"
                       >
                         {t.subscribeCta}
                       </button>
                     ) : coveringPack ? (
-                      // Subscriber: straight to checkout for the
-                      // smallest covering pack - in a NEW TAB so the
-                      // flow state survives the payment round-trip
-                      // (user-reported loss 2026-06-12).
+                      // Subscriber: straight to the embedded checkout
+                      // for the smallest covering pack - in the
+                      // upgrade modal, so the flow state survives the
+                      // payment (new-tab flow replaced 2026-06-12).
                       <button
                         type="button"
                         onClick={() =>
-                          window.open(
-                            `${localizedHref("/checkout", locale)}?price=topup_${coveringPack.key}&ctx=tab`,
-                            "_blank",
-                          )
+                          setUpgrade({ lookupKey: `topup_${coveringPack.key}` })
                         }
                         className="btn-gradient flex w-full items-center justify-between px-5 py-3 text-sm"
                       >
@@ -271,7 +273,14 @@ export function CreditGateDialog({
           </div>
         </>
       ) : null}
-    </AnimatePresence>,
+    </AnimatePresence>
+    {/* Stacks over this dialog via its own portal (later in body). */}
+    <UpgradeModal
+      open={upgrade !== null}
+      initialLookupKey={upgrade?.lookupKey ?? null}
+      onClose={() => setUpgrade(null)}
+    />
+    </>,
     document.body,
   );
 }

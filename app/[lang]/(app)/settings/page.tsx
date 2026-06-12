@@ -59,6 +59,33 @@ export default function SettingsPage() {
     });
   }, [supabase.auth]);
 
+  // Arrival from the email-change confirm link (?email_changed=1):
+  // re-fetch the auth user (the link verified server-side, so getUser
+  // returns the NEW email), mirror it into Prisma via user-sync (which
+  // also fires the bell notification), confirm inline, and strip the
+  // flag from the URL so a refresh doesn't replay all this.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("email_changed") !== "1") return;
+    void (async () => {
+      const {
+        data: { user: fresh },
+      } = await supabase.auth.getUser();
+      if (fresh) {
+        setUser(fresh);
+        setEmail(fresh.email ?? "");
+      }
+      try {
+        await fetch("/api/auth/user-sync", { method: "POST" });
+      } catch {
+        // Next sync reconciles; the auth email is already updated.
+      }
+      setEmailMsg({ type: "success", text: dict.pages.settings.profile.emailChanged });
+      window.history.replaceState(null, "", window.location.pathname);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const avatarUrl: string | null = user?.user_metadata?.avatar_url ?? null;
   const displayName: string =
     user?.user_metadata?.full_name ||
@@ -119,7 +146,14 @@ export default function SettingsPage() {
     if (!next || next === user?.email) return;
     setEmailSaving(true);
     setEmailMsg(null);
-    const { error } = await supabase.auth.updateUser({ email: next });
+    const { error } = await supabase.auth.updateUser(
+      { email: next },
+      {
+        // Land back HERE after the confirm link (not the marketing
+        // landing). The arrival effect below syncs + confirms.
+        emailRedirectTo: `${window.location.origin}${localizedHref("/settings", locale)}?email_changed=1`,
+      },
+    );
     if (error) {
       setEmailMsg({ type: "error", text: dict.pages.settings.profile.emailError });
     } else {
