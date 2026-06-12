@@ -56,11 +56,17 @@
 //
 // Default = `opus-balanced` — the new mid-tier sweet spot.
 
-export type Quality =
-  | "haiku-fast"
-  | "sonnet-fast"
-  | "opus-fast"
-  | "opus-balanced";
+// ─── 2026-06-12 collapse: ALL-OPUS lineup (+ Fable test tier) ──────
+// Measured same-day, same 5-slide brief, thinking-off:
+//   opus-fast   53s  ~$0.10  disciplined editorial design
+//   sonnet-fast 5-20min  $0.35-1.45  erratic (draft pathology, slow)
+//   haiku-fast  25s  ~$0.02  Word-doc plain (no design)
+// opus-fast beats sonnet on speed AND cost AND quality, and haiku's
+// output undersells the product - both dropped from the menu (keys
+// stay legacy-resolvable in paramsForQuality, existing decks regen
+// fine). fable-low (Claude Fable 5 + adaptive low) added as the
+// experimental top tier to baseline cost/quality.
+export type Quality = "opus-fast" | "opus-balanced" | "fable-low";
 
 export const QUALITY_PRESETS: ReadonlyArray<{
   key: Quality;
@@ -95,23 +101,21 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // stronger) + one light-thinking "تفكير" option (green thinking
   // chip, driven by `thinking: true`). opus-max (effort:high) was
   // retired from the menu 2026-05-29.
-  { key: "haiku-fast",     label: "Haiku 4.5 · سريع",  thinking: false, secsPerSlide: 8,  baseOverheadSecs: 10 },
-  { key: "sonnet-fast",    label: "Sonnet 4.6 · سريع", thinking: false, secsPerSlide: 15, baseOverheadSecs: 15 },
-  { key: "opus-fast",      label: "Opus 4.8 · سريع",   thinking: false, secsPerSlide: 20, baseOverheadSecs: 30 },
+  // ETA constants re-baselined on the 2026-06-12 measured run:
+  // opus-fast streamed a 5-slide deck in 53s wall.
+  { key: "opus-fast",      label: "Opus 4.8 · سريع",   thinking: false, secsPerSlide: 8,  baseOverheadSecs: 25 },
   { key: "opus-balanced",  label: "Opus 4.8 · تفكير",  thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
+  { key: "fable-low",      label: "Fable 5 · تفكير",   thinking: true,  secsPerSlide: 20, baseOverheadSecs: 45 },
 ];
 
-// Default — `opus-balanced` = "Opus · تفكير": Opus 4.8 + adaptive
-// low thinking. The smart-but-fast middle option (~3.4 min / ~$0.68
-// for a 5-slide deck, measured on 4.8 2026-05-29).
-export const DEFAULT_QUALITY: Quality = "opus-balanced";
+// Default — `opus-fast`: measured 2026-06-12 as the best
+// speed/cost/quality point (53s, ~$0.10, disciplined design on a
+// 5-slide deck). Thinking tier stays one click away.
+export const DEFAULT_QUALITY: Quality = "opus-fast";
 
 export function isQuality(value: unknown): value is Quality {
   return (
-    value === "haiku-fast" ||
-    value === "sonnet-fast" ||
-    value === "opus-fast" ||
-    value === "opus-balanced"
+    value === "opus-fast" || value === "opus-balanced" || value === "fable-low"
   );
 }
 

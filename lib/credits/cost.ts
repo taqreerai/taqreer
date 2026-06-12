@@ -23,10 +23,15 @@ export const ALL_FLOWS: readonly Flow[] = [
 
 export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
   {
-    "haiku-fast": { base: 50, perSlide: 5 },
-    "sonnet-fast": { base: 100, perSlide: 10 },
-    "opus-fast": { base: 350, perSlide: 16 },
+    // Re-priced 2026-06-12 off MEASURED COGS (thinking-off Opus 4.8
+    // produced a 5-slide deck for ~$0.10): 100+10 keeps >90% margin
+    // while making the default preset feel cheap. opus-balanced holds
+    // its old price until its 4.8 thinking baseline is measured.
+    // fable-low is PROVISIONAL (Fable 5 is $10/$50 per MTok - 2x
+    // Opus) pending the same baseline.
+    "opus-fast": { base: 100, perSlide: 10 },
     "opus-balanced": { base: 400, perSlide: 22 },
+    "fable-low": { base: 500, perSlide: 28 },
   };
 
 // Haiku title/name generation - flat (§3).
@@ -59,7 +64,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 0,
     signupGrant: 400,
     slideCap: 10,
-    presets: ["haiku-fast", "sonnet-fast"],
+    presets: ["opus-fast"],
     flows: ["create"],
   },
   plus: {
@@ -67,7 +72,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 2000,
     signupGrant: 0,
     slideCap: 30,
-    presets: ["haiku-fast", "sonnet-fast", "opus-fast"],
+    presets: ["opus-fast"],
     flows: ALL_FLOWS,
   },
   pro: {
@@ -75,7 +80,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 5000,
     signupGrant: 0,
     slideCap: 60,
-    presets: ["haiku-fast", "sonnet-fast", "opus-fast", "opus-balanced"],
+    presets: ["opus-fast", "opus-balanced", "fable-low"],
     flows: ALL_FLOWS,
   },
   max: {
@@ -83,7 +88,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 12000,
     signupGrant: 0,
     slideCap: 75,
-    presets: ["haiku-fast", "sonnet-fast", "opus-fast", "opus-balanced"],
+    presets: ["opus-fast", "opus-balanced", "fable-low"],
     flows: ALL_FLOWS,
   },
 };

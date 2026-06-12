@@ -298,12 +298,12 @@ async function main() {
       userId: user.id,
       plan: "plus",
       flow: "create",
-      preset: "sonnet-fast",
+      preset: "opus-fast",
       slideInput: { kind: "fixed", count: 10 },
       outcome: { kind: "success", produce: 10 },
     });
     assertEstimateInvariant(result);
-    check("1.1", "Fixed 10-slide sonnet-fast deck costs exactly 200", {
+    check("1.1", "Fixed 10-slide opus-fast deck costs exactly 200", {
       before: result.before,
       after: result.after,
       held: result.held,
@@ -332,21 +332,21 @@ async function main() {
       outcome: { kind: "success", produce: 9 },
     });
     assertEstimateInvariant(result);
-    // estimate: ceil(1000/100)+2 = 12 → hold 350+12×16 = 542
-    // actual 9 → charge 350+9×16 = 494, release 48
+    // estimate: ceil(1000/100)+2 = 12 → hold 100+12×10 = 220
+    // actual 9 → charge 100+9×10 = 190, release 30
     check("1.2", "Auto count: hold 12-slide max, charge the 9 produced", {
       before: result.before,
       after: result.after,
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 542, charged 494, refunded 48, balance 2000→1506",
+      expected: "held 220, charged 190, refunded 30, balance 2000→1810",
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}, balance ${result.before}→${result.after}`,
       pass:
-        result.held === 542 &&
-        result.charged === 494 &&
-        result.refunded === 48 &&
-        result.after === 1506,
+        result.held === 220 &&
+        result.charged === 190 &&
+        result.refunded === 30 &&
+        result.after === 1810,
     });
   }
 
@@ -358,8 +358,8 @@ async function main() {
       plan: "plus",
       flow: "create",
       preset: "opus-fast",
-      slideInput: { kind: "text", text: words(1000) }, // hold 542 (12 slides)
-      outcome: { kind: "success", produce: 14 }, // raw cost would be 574
+      slideInput: { kind: "text", text: words(1000) }, // hold 220 (12 slides)
+      outcome: { kind: "success", produce: 14 }, // raw cost would be 240
     });
     assertEstimateInvariant(result);
     check("1.3", "Overproduced deck never charges past the shown estimate", {
@@ -368,9 +368,9 @@ async function main() {
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 542, charged clamped to 542 (not 574), refunded 0",
+      expected: "held 220, charged clamped to 220 (not 240), refunded 0",
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}`,
-      pass: result.held === 542 && result.charged === 542 && result.refunded === 0,
+      pass: result.held === 220 && result.charged === 220 && result.refunded === 0,
     });
   }
 
@@ -416,14 +416,14 @@ async function main() {
     });
     const q = quotes.quotes;
     const expectQuotes =
-      q.find((x) => x.preset === "sonnet-fast")?.credits === 240 &&
-      q.find((x) => x.preset === "opus-fast")?.credits === 574 &&
-      q.find((x) => x.preset === "opus-balanced")?.credits === 708;
+      q.find((x) => x.preset === "opus-fast")?.credits === 240 &&
+      q.find((x) => x.preset === "opus-balanced")?.credits === 708 &&
+      q.find((x) => x.preset === "fable-low")?.credits === 892;
     check("2.1", "Create-from-text estimate: 1200 words → 14 slides, 3 quotes", {
       before: 5000,
       after: 5000,
       expected:
-        "14 slides; sonnet 240 / opus-fast 574 / opus-balanced 708 shown before generating",
+        "14 slides; opus-fast 240 / opus-balanced 708 / fable-low 892 shown before generating",
       observed: `${est.slides} slides; quotes ${q.map((x) => `${x.preset}=${x.credits}`).join(", ")}`,
       pass: est.slides === 14 && expectQuotes,
     });
@@ -493,7 +493,7 @@ async function main() {
       userId: user.id,
       plan: "free",
       flow: "create",
-      preset: "sonnet-fast",
+      preset: "opus-fast",
       slideInput: { kind: "fixed", count: 7 },
       outcome: { kind: "success", produce: 7 },
     }); // 170 → 230 left
@@ -510,7 +510,7 @@ async function main() {
       userId: user.id,
       plan: "free",
       flow: "create",
-      preset: "sonnet-fast",
+      preset: "opus-fast",
       slideInput: { kind: "text", text: bigText },
       outcome: { kind: "success", produce: 10 },
     });
@@ -542,7 +542,7 @@ async function main() {
       userId: user.id,
       plan: "free",
       flow: "create",
-      preset: "sonnet-fast",
+      preset: "opus-fast",
       slideInput: { kind: "fixed", count: 6 },
       outcome: { kind: "success", produce: 6 },
     });
@@ -583,7 +583,7 @@ async function main() {
         : null;
     const cheaperOk =
       opts3 !== null &&
-      opts3.cheaperPresets.includes("sonnet-fast") &&
+      opts3.cheaperPresets.includes("opus-fast") &&
       opts3.cheaperPresets.includes("opus-fast");
     const fallback = await fakeGenerate({
       userId: user.id,
@@ -600,13 +600,13 @@ async function main() {
       held: fallback.held,
       charged: fallback.charged,
       expected:
-        "opus-balanced (708) blocked at 600; sonnet+opus-fast offered; opus-fast full 14 slides charged 574",
+        "opus-balanced (708) blocked at 600; opus-fast offered; opus-fast full 14 slides charged 240",
       observed: `blocked=${blocked.blockedReason}, cheaper=${JSON.stringify(opts3?.cheaperPresets)}, fallback charged ${fallback.charged}, balance ${blocked.before}→${fallback.after}`,
       pass:
         blocked.status === "blocked" &&
         cheaperOk &&
-        fallback.charged === 574 &&
-        fallback.after === 26,
+        fallback.charged === 240 &&
+        fallback.after === 360,
     });
   }
 
@@ -690,7 +690,7 @@ async function main() {
       plan: "plus",
       flow: "create",
       preset: "opus-fast",
-      slideInput: { kind: "fixed", count: 30 }, // hold 830
+      slideInput: { kind: "fixed", count: 30 }, // hold 400
       outcome: { kind: "cancel", afterSlides: 25 },
     });
     assertEstimateInvariant(result);
@@ -700,10 +700,10 @@ async function main() {
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 830, charged 750 (350 + 25×16), refunded 80",
+      expected: "held 400, charged 350 (100 + 25×10), refunded 50",
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}`,
       pass:
-        result.held === 830 && result.charged === 750 && result.refunded === 80,
+        result.held === 400 && result.charged === 350 && result.refunded === 50,
     });
 
     // 4.2 Cancel before anything streamed: full release.
@@ -721,11 +721,11 @@ async function main() {
       held: early.held,
       charged: early.charged,
       refunded: early.refunded,
-      expected: "held 830, charged 0, refunded 830, balance unchanged",
+      expected: "held 400, charged 0, refunded 400, balance unchanged",
       observed: `held ${early.held}, charged ${early.charged}, refunded ${early.refunded}, balance ${early.before}→${early.after}`,
       pass:
         early.charged === 0 &&
-        early.refunded === 830 &&
+        early.refunded === 400 &&
         early.before === early.after,
     });
   }
@@ -786,7 +786,7 @@ async function main() {
         userId: user.id,
         plan: "free",
         flow: "create",
-        preset: "sonnet-fast",
+        preset: "opus-fast",
         slideInput: { kind: "fixed", count: 10 },
         outcome: { kind: "success", produce: 10 },
       }),
@@ -794,7 +794,7 @@ async function main() {
         userId: user.id,
         plan: "free",
         flow: "create",
-        preset: "sonnet-fast",
+        preset: "opus-fast",
         slideInput: { kind: "fixed", count: 10 },
         outcome: { kind: "success", produce: 10 },
       }),
@@ -962,7 +962,7 @@ async function main() {
       userId: user.id,
       plan: "free",
       flow: "enhance",
-      preset: "sonnet-fast",
+      preset: "opus-fast",
       slideInput: { kind: "enhance", pageCount: 5 },
       outcome: { kind: "success", produce: 5 },
     });

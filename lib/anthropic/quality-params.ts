@@ -71,6 +71,10 @@ export type AnthropicCallParams = {
 
 const HAIKU = "claude-haiku-4-5";
 const SONNET = "claude-sonnet-4-6";
+// Claude Fable 5 - the tier above Opus ($10/$50 per MTok). Adaptive
+// thinking ONLY: an explicit thinking:disabled returns a 400 on Fable
+// (unlike Opus 4.7/4.8) - always pair it with adaptive.
+const FABLE = "claude-fable-5";
 // Bumped 4-7 → 4-8 (2026-05-29, Opus 4.8 launch). No API-shape change:
 // 4.8 keeps adaptive thinking + output_config.effort and the same
 // $5/$25 pricing, and the migration guide confirms no breaking changes
@@ -108,6 +112,16 @@ export function paramsForQuality(
       return { model: SONNET, thinking: { type: "disabled" }, maxTokens: 128000 };
     case "opus-fast":
       return { model: OPUS, thinking: { type: "disabled" }, maxTokens: 128000 };
+    case "fable-low":
+      // Experimental top tier (2026-06-12) for cost/quality baselining.
+      // Fable rejects thinking:disabled outright - adaptive + effort:low
+      // is the lightest valid config.
+      return {
+        model: FABLE,
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "low" },
+        maxTokens: 128000,
+      };
     // ─── Default + legacy fallback ──────────────────────────────
     // Catches `opus-balanced` (canonical default) AND any legacy
     // quality string from earlier menu shapes — including `opus-max`,

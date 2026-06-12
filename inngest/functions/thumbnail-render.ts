@@ -43,6 +43,7 @@ import puppeteer from "puppeteer";
 import sharp from "sharp";
 import { SlideManifestSchema, dimensionsForFormat } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
+import { CONTRAST_CHECK_SCRIPT, type ContrastViolation } from "@/lib/deck/contrast-check";
 
 const BUCKET = "slide-previews";
 // 800 px wide balances three usage points: dashboard tiles (~300 px),
@@ -168,6 +169,27 @@ export const thumbnailRender = inngest.createFunction(
           }).fonts;
           return docFonts?.ready ?? Promise.resolve();
         });
+
+        // ── Contrast guard (phase 1: detect-only, 2026-06-12) ──
+        // One walk over the already-rendered deck; logs invisible-text
+        // candidates (computed color ≈ effective solid background) so
+        // we can measure frequency before any auto-fix. Never throws -
+        // a guard failure must not cost the user their thumbnails.
+        try {
+          const violations = (await page.evaluate(CONTRAST_CHECK_SCRIPT)) as ContrastViolation[];
+          if (violations.length > 0) {
+            logger.warn("deck_contrast_violations", {
+              projectId,
+              count: violations.length,
+              items: violations,
+            });
+          }
+        } catch (err) {
+          logger.warn("deck_contrast_check_failed", {
+            projectId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
 
         const urls: string[] = [];
         for (const slide of ctx.manifest.slides) {
