@@ -190,7 +190,7 @@
     }
   },
   "flows": {
-    "stylePicker": { "boldSample": "Deck", "dialogTitle": "Choose a design style", "auto": "Auto", "autoDesc": "Claude picks what fits the content", "change": "Change", "descs": { "swiss": "Strict grid, calm whitespace", "corporate": "Clear charts and figures", "minimal": "One element, generous space", "editorial": "Magazine-style columns", "bold": "Huge display headlines", "duotone": "Two tones, full-bleed imagery", "playful": "Free shapes, bold color", "brutalist": "Raw borders, stark contrast" } },
+    "stylePicker": { "boldSample": "Deck", "dialogTitle": "Choose a design style", "auto": "Auto", "autoDesc": "We pick what fits your content", "change": "Change", "descs": { "swiss": "Strict grid, calm whitespace", "corporate": "Clear charts and figures", "minimal": "One element, generous space", "editorial": "Magazine-style columns", "bold": "Huge display headlines", "duotone": "Two tones, full-bleed imagery", "playful": "Free shapes, bold color", "brutalist": "Raw borders, stark contrast" } },
     "contentCard": "Content",
     "language": "Language",
     "contentLanguageAria": "Content language",

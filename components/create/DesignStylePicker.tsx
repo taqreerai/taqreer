@@ -68,11 +68,22 @@ function StyleMini({
     <div className={base} style={{ aspectRatio: "16/9" }} dir="ltr">
       {k === "swiss" && (
         <>
-          <div style={abs({ top: "12%", bottom: "12%", left: "6%", width: "24%", background: ACCENT })} />
-          <div style={abs({ top: "12%", right: "6%", width: "56%", height: "16%", background: BAR })} />
-          <div style={abs({ top: "38%", right: "6%", width: "56%", height: "8%", background: BAR_SOFT })} />
-          <div style={abs({ top: "54%", right: "6%", width: "56%", height: "8%", background: BAR_SOFT })} />
-          <div style={abs({ top: "70%", right: "6%", width: "38%", height: "8%", background: BAR_SOFT })} />
+          {/* The grid itself as hairlines (2 columns x 2 rows) with
+              small text-like dashes in the cells + one blue marker -
+              reads as a layout grid, not content blocks (user
+              direction 2026-06-12). */}
+          <div style={abs({ top: "8%", bottom: "8%", left: "36%", width: 1, background: BAR_SOFT })} />
+          <div style={abs({ top: "8%", bottom: "8%", left: "67%", width: 1, background: BAR_SOFT })} />
+          <div style={abs({ left: "8%", right: "8%", top: "48%", height: 1, background: BAR_SOFT })} />
+          <div style={abs({ top: "16%", left: "10%", width: "18%", height: "7%", background: BAR })} />
+          <div style={abs({ top: "30%", left: "10%", width: "12%", height: "4%", background: BAR_SOFT })} />
+          <div style={abs({ top: "16%", left: "41%", width: "14%", height: "4%", background: BAR_SOFT })} />
+          <div style={abs({ top: "26%", left: "41%", width: "18%", height: "4%", background: BAR_SOFT })} />
+          <div style={abs({ top: "16%", left: "72%", width: "16%", height: "4%", background: BAR_SOFT })} />
+          <div style={abs({ top: "60%", left: "10%", width: "8%", aspectRatio: "1", background: ACCENT })} />
+          <div style={abs({ top: "60%", left: "41%", width: "16%", height: "4%", background: BAR_SOFT })} />
+          <div style={abs({ top: "70%", left: "41%", width: "12%", height: "4%", background: BAR_SOFT })} />
+          <div style={abs({ top: "60%", left: "72%", width: "14%", height: "4%", background: BAR_SOFT })} />
         </>
       )}
       {k === "corporate" && (
