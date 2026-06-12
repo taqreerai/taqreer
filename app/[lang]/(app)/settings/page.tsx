@@ -34,6 +34,13 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState<Msg>(null);
 
+  // Email change (email+password accounts only). Supabase's
+  // updateUser({ email }) sends a confirmation link to the NEW
+  // address; until clicked, auth keeps the old email.
+  const [email, setEmail] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<Msg>(null);
+
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -47,6 +54,7 @@ export default function SettingsPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
       setName(user?.user_metadata?.full_name || user?.user_metadata?.name || "");
+      setEmail(user?.email ?? "");
       setLoading(false);
     });
   }, [supabase.auth]);
@@ -104,6 +112,23 @@ export default function SettingsPage() {
       }
     }
     setSaving(false);
+  };
+
+  const handleChangeEmail = async () => {
+    const next = email.trim();
+    if (!next || next === user?.email) return;
+    setEmailSaving(true);
+    setEmailMsg(null);
+    const { error } = await supabase.auth.updateUser({ email: next });
+    if (error) {
+      setEmailMsg({ type: "error", text: dict.pages.settings.profile.emailError });
+    } else {
+      // Supabase sent the confirmation link; auth email flips (and
+      // user-sync mirrors it into Prisma on the next session) only
+      // after the user clicks it.
+      setEmailMsg({ type: "success", text: dict.pages.settings.profile.emailPending });
+    }
+    setEmailSaving(false);
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -218,11 +243,43 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="settings-row">
+            {/* Email row - EDITABLE for email+password accounts only
+                (user direction 2026-06-12). Google accounts keep the
+                locked input: their email is owned by the provider.
+                Supabase sends a confirmation link to the NEW address;
+                the change lands only after the user clicks it, so the
+                row shows a "check your inbox" notice post-submit. */}
+            <div className="settings-row border-b-0">
               <div>
                 <p className="settings-row-title">{dict.pages.settings.profile.email}</p>
+                {emailMsg ? (
+                  <p className="settings-row-desc">{emailMsg.text}</p>
+                ) : null}
               </div>
-              <input type="email" value={user?.email ?? ""} disabled className="input-dark" />
+              {isGoogleUser ? (
+                <input type="email" value={user?.email ?? ""} disabled className="input-dark" />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input-dark"
+                    dir="ltr"
+                    autoComplete="email"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleChangeEmail}
+                    disabled={emailSaving || email.trim() === (user?.email ?? "")}
+                    className="btn-pill shrink-0 px-5 py-2.5 text-sm disabled:opacity-50 cursor-pointer"
+                  >
+                    {emailSaving
+                      ? dict.pages.settings.profile.saving
+                      : dict.pages.settings.profile.changeEmail}
+                  </button>
+                </div>
+              )}
             </div>
             <StatusMsg msg={profileMsg} />
           </form>
