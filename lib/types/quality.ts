@@ -70,9 +70,9 @@ export type Quality = "opus-fast" | "opus-balanced" | "fable-low";
 
 export const QUALITY_PRESETS: ReadonlyArray<{
   key: Quality;
-  // Display label shown in the GenerateSplitButton dropdown. Format:
-  // `<Model display> · <effort>` so the user sees the exact API config
-  // and can map preset → measured cost in context/pricing.md.
+  // Display label shown in the GenerateSplitButton dropdown - bare
+  // model name; the fast/thinking distinction renders as a PILL next
+  // to it (user direction 2026-06-12), never as a label suffix.
   label: string;
   // Whether the preset uses adaptive extended thinking. Drives the
   // little "thinking" / "no thinking" chip rendered next to the label
@@ -103,9 +103,9 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // retired from the menu 2026-05-29.
   // ETA constants re-baselined on the 2026-06-12 measured run:
   // opus-fast streamed a 5-slide deck in 53s wall.
-  { key: "opus-fast",      label: "Opus 4.8 · سريع",   thinking: false, secsPerSlide: 8,  baseOverheadSecs: 25 },
-  { key: "opus-balanced",  label: "Opus 4.8 · تفكير",  thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
-  { key: "fable-low",      label: "Fable 5 · تفكير",   thinking: true,  secsPerSlide: 20, baseOverheadSecs: 45 },
+  { key: "opus-fast",      label: "Opus 4.8", thinking: false, secsPerSlide: 8,  baseOverheadSecs: 25 },
+  { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
+  { key: "fable-low",      label: "Fable 5",  thinking: true,  secsPerSlide: 20, baseOverheadSecs: 45 },
 ];
 
 // Default — `opus-fast`: measured 2026-06-12 as the best

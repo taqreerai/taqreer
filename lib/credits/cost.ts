@@ -72,7 +72,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 2000,
     signupGrant: 0,
     slideCap: 30,
-    presets: ["opus-fast"],
+    presets: ["opus-fast", "opus-balanced"],
     flows: ALL_FLOWS,
   },
   pro: {

@@ -933,20 +933,21 @@ async function main() {
     });
 
     // 5.2b Preset gate: a tier can never run (or be charged for) a
-    // preset it hasn't unlocked.
+    // preset it hasn't unlocked. (plus unlocked opus-balanced
+    // 2026-06-12 - fable-low is the pro+ gate now.)
     const starterUser = await makeUser("plus");
     const gated = await fakeGenerate({
       userId: starterUser.id,
       plan: "plus",
       flow: "create",
-      preset: "opus-balanced",
+      preset: "fable-low",
       slideInput: { kind: "fixed", count: 20 },
       outcome: { kind: "success", produce: 20 },
     });
     check("5.2b", "Locked preset blocks before any charge", {
       before: gated.before,
       after: gated.after,
-      expected: "starter + opus-balanced → blocked preset_locked, balance unchanged",
+      expected: "plus + fable-low → blocked preset_locked, balance unchanged",
       observed: `${blockedDesc(gated)}, balance ${gated.before}→${gated.after}`,
       pass:
         gated.status === "blocked" &&

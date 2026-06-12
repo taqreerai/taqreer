@@ -25,11 +25,11 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   QUALITY_PRESETS,
-  estimateMinutes,
   type Quality,
 } from "@/lib/types/quality";
 import { useDict } from "@/components/i18n/LocaleProvider";
-import { generationCost } from "@/lib/credits/cost";
+import { generationCost, TIERS, TIER_ORDER } from "@/lib/credits/cost";
+import { normalizePlan, planLabel } from "@/lib/plan";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 
 export function GenerateSplitButton({
@@ -89,6 +89,10 @@ export function GenerateSplitButton({
   // price in view). Null until the first fetch - rows render without
   // the credit chip rather than with a wrong number.
   const credits = useCreditBalance();
+  // Tier gating pill: the lowest tier whose preset list carries each
+  // preset. Rows above the user's plan show that tier name as a pill
+  // (clicking still works - preflight 402s into the upgrade dialog).
+  const userPlan = credits ? normalizePlan(credits.plan) : null;
 
   return (
     <div ref={splitButtonRef} className="relative">
@@ -183,8 +187,14 @@ export function GenerateSplitButton({
               ) : null}
             </div>
             {QUALITY_PRESETS.map((preset) => {
-              const eta = estimateMinutes(preset.key, effectiveSlideCount);
               const cost = generationCost(preset.key, effectiveSlideCount);
+              const gateTier = TIER_ORDER.find((t) =>
+                TIERS[t].presets.includes(preset.key),
+              );
+              const gated =
+                userPlan !== null &&
+                gateTier !== undefined &&
+                TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
               const affordable = credits ? cost <= credits.balance.total : true;
               const active = quality === preset.key;
               return (
@@ -234,9 +244,13 @@ export function GenerateSplitButton({
                         {dict.flows.generate.fast}
                       </span>
                     )}
-                    <span className="text-[11px] text-foreground/40 tabular-nums" dir="ltr">
-                      {dict.flows.generate.etaMin.replace("{eta}", String(eta))}
-                    </span>
+                    {gated && gateTier ? (
+                      // Gated-tier pill - same chip vocabulary as the
+                      // fast/thinking pills, brand-blue tint.
+                      <span className="rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white">
+                        {planLabel(dict.components.planUsage, gateTier)}
+                      </span>
+                    ) : null}
                     {/* Per-preset credit estimate - the same cost table
                         the ledger charges from (lib/credits/cost.ts), so
                         the shown number IS the held number. Amber when
