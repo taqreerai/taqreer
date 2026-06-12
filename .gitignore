@@ -27,3 +27,5 @@ scratch/
 # and screenshots written during in-session browser automation.
 # Never committed.
 .playwright-mcp/
+.next-deploy
+.next-build
