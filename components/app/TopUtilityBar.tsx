@@ -69,7 +69,13 @@ function HealthDot() {
   );
 }
 
-export function TopUtilityBar() {
+export function TopUtilityBar({
+  // Extra controls appended to the END cluster (visual far edge) -
+  // the studio header passes Export/Share + the avatar menu here.
+  trailing,
+}: {
+  trailing?: React.ReactNode;
+} = {}) {
   const [searchOpen, setSearchOpen] = useState(false);
   const dict = useDict();
 
@@ -126,6 +132,7 @@ export function TopUtilityBar() {
           <HealthDot />
           <ThemeToggle />
           <LanguageMenu />
+          {trailing}
         </div>
       </div>
 

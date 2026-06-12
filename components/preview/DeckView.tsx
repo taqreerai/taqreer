@@ -28,6 +28,8 @@ import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
+import { TopUtilityBar } from "@/components/app/TopUtilityBar";
+import { UserMenu } from "@/components/app/UserMenu";
 import {
   GenImageProvider,
   type GenImageFills,
@@ -627,6 +629,10 @@ export function DeckView({
   // include commentMode because changing it resizes the hero).
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridScale, setGridScale] = useState(FALLBACK_SCALE);
+  // Top offset shared by the floating side panels - measured off the
+  // canvas's bounding rect so the panels' top edges align with the
+  // canvas top edge (min 64px to clear the studio header strip).
+  const [panelTop, setPanelTop] = useState(64);
 
   // Comment-feature state.
   //   commentMode: in commenting flow → SlideNavSidebar swaps out for
@@ -1354,6 +1360,9 @@ export function DeckView({
     const recompute = () => {
       const rect = el.getBoundingClientRect();
       if (rect.width > 0 && canvasW > 0) setGridScale(rect.width / canvasW);
+      // Side panels top-align with the CANVAS top edge (user direction
+      // 2026-06-12), floored below the studio header strip.
+      if (rect.top > 0) setPanelTop(Math.max(64, Math.round(rect.top)));
     };
     recompute();
     const ro = new ResizeObserver(recompute);
@@ -3678,10 +3687,27 @@ export function DeckView({
     >
       {fontAssets}
 
-      {/* §22: the StudioHeader bar was removed — the app sidebar rail is the
-          only chrome now. Its Export ▾ + Share actions moved into the slide-nav
-          footer (see `actionsSlot` below); back-to-dashboard is the sidebar
-          logo. */}
+      {/* Studio header strip (2026-06-12): the SAME utility cluster as the
+          dashboard (plan badge / bell / search / health / theme / language)
+          plus, in the trailing slot, the document actions (Export ▾ + Share -
+          moved here from the slide-nav footer) and the avatar menu. */}
+      <TopUtilityBar
+        trailing={
+          <>
+            <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
+            {!generating && exportManifest ? (
+              <StudioActions
+                projectId={projectId}
+                projectTitle={projectTitle}
+                manifest={exportManifest}
+                formatFallback={initialFormat}
+                role={role}
+              />
+            ) : null}
+            <UserMenu />
+          </>
+        }
+      />
 
       {/* Right-edge slot: the Slides nav (with a Comments tab for reviewing
           comments). FADED OUT (not unmounted) while commenting — both side
@@ -3693,6 +3719,7 @@ export function DeckView({
         style={{ pointerEvents: commentMode ? "none" : "auto" }}
       >
       <SlideNavSidebar
+        topOffset={panelTop}
         items={navItems}
         currentIndex={focusedIndex}
         onSelect={(idx) => setCurrentSlideIndex(idx)}
@@ -3747,19 +3774,6 @@ export function DeckView({
             />
           ) : undefined
         }
-        // §22: Export ▾ + Share live in the slide-nav footer now (the
-        // StudioHeader is gone). Only once a completed deck exists.
-        actionsSlot={
-          !generating && exportManifest ? (
-            <StudioActions
-              projectId={projectId}
-              projectTitle={projectTitle}
-              manifest={exportManifest}
-              formatFallback={initialFormat}
-              role={role}
-            />
-          ) : undefined
-        }
       />
       </motion.div>
 
@@ -3773,6 +3787,7 @@ export function DeckView({
           style={{ pointerEvents: commentMode ? "none" : "auto" }}
         >
           <LayersPanel
+            topOffset={panelTop}
             doc={editorDoc}
             // The Layers panel is single-select by design (one row at a time).
             // Show the sole selection, and a row click replaces the whole set

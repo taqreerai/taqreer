@@ -82,6 +82,7 @@ export function LayersPanel({
   onSelect,
   onCommit,
   slideId,
+  topOffset = 16,
 }: {
   // The editor iframe's document (from SlideEditor.onDocReady), or null when the
   // editor isn't mounted yet.
@@ -94,6 +95,9 @@ export function LayersPanel({
   // Deck language — accepted for caller compatibility but unused now that the
   // panel (editor chrome) follows the UI locale via useDict/useLocale.
   language?: "ar" | "en";
+  // Studio: top edge of the floating card - DeckView measures the
+  // canvas top so the panel aligns with it (2026-06-12).
+  topOffset?: number;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -233,9 +237,9 @@ export function LayersPanel({
       }`}
       style={{
         left: 16,
-        // §22: moved up now that the StudioHeader is gone (was 76). Left edge
-        // is clear of the app rail (rail sits on the RTL right).
-        top: 16,
+        // Aligned with the canvas top edge (DeckView measurement,
+        // 2026-06-12); min 64 keeps it clear of the header strip.
+        top: topOffset,
         bottom: 100,
         width: SLIDE_NAV_WIDTH,
         background: "var(--tq-surface)",

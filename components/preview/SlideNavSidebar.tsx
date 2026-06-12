@@ -98,6 +98,7 @@ export function SlideNavSidebar({
   // StudioHeader into the slide-nav footer. The parent (DeckView) builds them
   // (it owns the manifest + ShareDialog) and passes them as a slot.
   actionsSlot,
+  topOffset = 16,
 }: {
   items: NavItem[];
   currentIndex: number | null;
@@ -121,6 +122,9 @@ export function SlideNavSidebar({
   commentsSlot?: ReactNode;
   commentCount?: number;
   actionsSlot?: ReactNode;
+  // Studio: top edge of the floating card - DeckView measures the
+  // canvas top so the panel aligns with it (2026-06-12).
+  topOffset?: number;
   language?: "ar" | "en";
   // Fires when the user clicks the bulk pill. Parent owns the
   // network call + optimistic state update so it can fan the result
@@ -283,10 +287,10 @@ export function SlideNavSidebar({
       style={
         floating
           ? {
-              // §22: no app rail in the editor — sits 16px off the viewport
-              // edge. Moved up now that the StudioHeader is gone (top 76→16).
+              // Aligned with the canvas top edge (DeckView measures it via
+              // `topOffset`, 2026-06-12); 16px off the inline edge.
               right: 16,
-              top: 16,
+              top: topOffset,
               bottom: 100,
               width: SLIDE_NAV_WIDTH,
               background: "var(--tq-surface)",
