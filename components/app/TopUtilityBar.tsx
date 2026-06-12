@@ -35,7 +35,7 @@ function PlanBadge() {
   const plan = normalizePlan(credits.plan);
   return (
     <Link
-      href={localizedHref("/billing", locale)}
+      href={localizedHref("/plans", locale)}
       className="badge-purple no-underline"
       aria-label={dict.components.billing.title}
     >

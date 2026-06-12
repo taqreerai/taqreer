@@ -82,7 +82,7 @@ export function CreditGateDialog({
 
   if (typeof document === "undefined") return null;
 
-  const pricingHref = `${localizedHref("/", locale)}#pricing`;
+  const pricingHref = localizedHref("/plans", locale);
 
   // Smallest pack that covers the gap (falls back to the largest).
   const coveringPack = gate?.options

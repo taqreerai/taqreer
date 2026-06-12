@@ -1,14 +1,15 @@
 "use client";
 
-// /billing page content. Three sections in order (user direction
-// 2026-06-11): Plan (summary + dunning), Change plan (landing-style
-// pricing cards + the design-system monthly/yearly SegmentedToggle),
-// Top-up packs. All money management is Stripe; purchases go to our
-// embedded /checkout page, the portal handles cancel/payment-method.
+// /plans page content (was /billing until the 2026-06-12 embedded-
+// billing split). Three sections in order: Plan (summary), Change plan
+// (landing-style pricing cards + the design-system monthly/yearly
+// SegmentedToggle), Top-up packs. Purchases go to our embedded
+// /checkout page; money ADMIN (cards, cancel/resume, dunning) lives on
+// /billing (ManageBilling), receipts on /invoices.
 //
 // Reads the shared credit store for plan + balance, and
 // /api/billing/summary for the subscription-mirror state (renewal /
-// cancel dates, dunning status).
+// cancel dates).
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -63,7 +64,7 @@ export function BillingSection() {
   const [busy, setBusy] = useState<string | null>(null);
 
   // Paid purchases go to our EMBEDDED checkout page (stays on
-  // taqreer.ai); only the portal still leaves to Stripe-hosted.
+  // taqreer.ai); money admin is /billing (also ours - no Stripe pages).
   function buy(lookupKey: string) {
     setBusy(lookupKey);
     router.push(`${localizedHref("/checkout", locale)}?price=${lookupKey}`);
@@ -85,23 +86,6 @@ export function BillingSection() {
   const plan = summary ? summary.plan : credits ? normalizePlan(credits.plan) : "free";
   const planName = planLabel(dict.components.planUsage, plan);
 
-  async function go(path: string, body?: unknown, key?: string) {
-    setBusy(key ?? path);
-    try {
-      const res = await fetch(path, {
-        method: "POST",
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        credentials: "same-origin",
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      const data = (await res.json().catch(() => null)) as { url?: string } | null;
-      if (data?.url) window.location.href = data.url;
-      else setBusy(null);
-    } catch {
-      setBusy(null);
-    }
-  }
-
   const currentIdx = TIER_ORDER.indexOf(plan);
   const renewDate =
     summary?.currentPeriodEnd && credits
@@ -115,32 +99,6 @@ export function BillingSection() {
       {/* ── Plan ── */}
       <section>
         <h2 className="mb-3 text-lg font-semibold text-foreground">{t.planTitle}</h2>
-
-        {/* Dunning banner */}
-        {summary?.status === "past_due" ? (
-          <div
-            className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
-            style={{
-              background: "var(--tq-status-warn-bg)",
-              borderColor: "var(--tq-status-warn-border)",
-            }}
-          >
-            <span className="flex items-center gap-2 text-sm text-foreground">
-              <span className="material-symbols-outlined text-[var(--tq-status-warn-text)]" style={{ fontSize: 16 }}>
-                credit_card_off
-              </span>
-              {t.pastDue}
-            </span>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => go("/api/stripe/portal", undefined, "portal")}
-              className="btn-pill shrink-0 px-4 py-1.5 text-xs"
-            >
-              {t.pastDueCta}
-            </button>
-          </div>
-        ) : null}
 
         <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-2xl p-5">
           <div className="min-w-0">
@@ -163,16 +121,6 @@ export function BillingSection() {
               </p>
             ) : null}
           </div>
-          {summary?.hasBillingAccount ? (
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => go("/api/stripe/portal", undefined, "portal")}
-              className="btn-pill px-4 py-2 text-sm"
-            >
-              {busy === "portal" ? t.loading : t.manage}
-            </button>
-          ) : null}
         </div>
       </section>
 
@@ -281,11 +229,12 @@ export function BillingSection() {
                       {t.current}
                     </span>
                   ) : isFree ? (
-                    // Downgrade-to-Free happens by cancelling in the portal.
+                    // Downgrade-to-Free = cancel the subscription on
+                    // our /billing page (the portal is gone).
                     <button
                       type="button"
                       disabled={busy !== null || !summary?.hasBillingAccount}
-                      onClick={() => go("/api/stripe/portal", undefined, "portal")}
+                      onClick={() => router.push(localizedHref("/billing", locale))}
                       className="btn-pill block w-full py-3 text-sm disabled:opacity-50"
                     >
                       {t.downgrade}

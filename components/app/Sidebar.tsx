@@ -549,7 +549,7 @@ export function Sidebar({
                                 </span>
                               </span>
                               <Link
-                                href={localizedHref("/billing", locale)}
+                                href={localizedHref("/plans", locale)}
                                 onClick={() => setProfileOpen(false)}
                                 className="btn-gradient shrink-0 px-3 py-1.5 text-xs no-underline"
                               >
@@ -561,7 +561,7 @@ export function Sidebar({
                           {/* Credits card: the WHOLE card links to
                               /billing (user direction 2026-06-11). */}
                           <Link
-                            href={localizedHref("/billing", locale)}
+                            href={localizedHref("/plans", locale)}
                             onClick={() => setProfileOpen(false)}
                             className="block rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-3 py-2.5 no-underline transition-colors hover:border-[var(--tq-purple)]"
                           >

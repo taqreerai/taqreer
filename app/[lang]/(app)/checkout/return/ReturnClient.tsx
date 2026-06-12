@@ -80,7 +80,7 @@ export function ReturnClient({ sessionId }: { sessionId: string | null }) {
               body={t.returnFailedBody}
               actions={
                 <Link
-                  href={localizedHref("/billing", locale)}
+                  href={localizedHref("/plans", locale)}
                   className="btn-pill px-5 py-2.5 text-center text-sm no-underline"
                 >
                   {t.toBilling}

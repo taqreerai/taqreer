@@ -45,7 +45,7 @@ export function PlanUsage() {
                 : dict.components.planUsage.noRenewal}
             </p>
           </div>
-          <Link className="btn-gradient shrink-0 px-8 py-3 no-underline" href={localizedHref("/billing", locale)}>
+          <Link className="btn-gradient shrink-0 px-8 py-3 no-underline" href={localizedHref("/plans", locale)}>
             {dict.components.planUsage.upgrade}
           </Link>
         </div>

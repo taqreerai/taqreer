@@ -102,7 +102,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
 
   // No / unknown price → bounce back to billing.
   useEffect(() => {
-    if (!lookupKey) router.replace(localizedHref("/billing", locale));
+    if (!lookupKey) router.replace(localizedHref("/plans", locale));
   }, [lookupKey, locale, router]);
 
   if (!lookupKey || !options) return null;
@@ -114,7 +114,7 @@ export function CheckoutClient({ lookupKey }: { lookupKey: string | null }) {
       {/* Same content frame as /billing so titles + width line up. */}
       <div className="mx-auto w-full max-w-6xl pb-16">
         <Link
-          href={localizedHref("/billing", locale)}
+          href={localizedHref("/plans", locale)}
           className="mb-4 inline-flex items-center gap-1 text-sm text-muted no-underline transition-colors hover:text-foreground"
         >
           <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
@@ -158,7 +158,7 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
       <div className="surface-card rounded-2xl p-8 text-center">
         <p className="mb-6 text-sm text-muted">{t.error}</p>
         <Link
-          href={localizedHref("/billing", locale)}
+          href={localizedHref("/plans", locale)}
           className="btn-pill px-6 py-2.5 text-sm no-underline"
         >
           {t.back}
