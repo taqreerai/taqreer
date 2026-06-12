@@ -106,6 +106,35 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // ── Coming-soon gate (pre-launch) ────────────────────────────────────────
+  // COMING_SOON=1 locks every page behind the coming-soon screen; visiting
+  // /preview?key=<COMING_SOON_KEY> sets the unlock cookie. API routes are
+  // never gated (webhooks + auth callbacks must keep working). Local dev is
+  // unaffected (the env var is only set on the production server).
+  if (process.env.COMING_SOON === "1" && !isApi) {
+    const gateLocale = localeFromPathname(pathname) ?? defaultLocale;
+    const gatePath = stripLocale(pathname);
+    const unlocked = request.cookies.get("tq_preview")?.value === "1";
+    if (
+      gatePath === "/preview" &&
+      process.env.COMING_SOON_KEY &&
+      searchParams.get("key") === process.env.COMING_SOON_KEY
+    ) {
+      const res = NextResponse.redirect(new URL(`/${gateLocale}`, request.url));
+      res.cookies.set("tq_preview", "1", {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+      });
+      return res;
+    }
+    if (!unlocked && gatePath !== "/coming-soon") {
+      return NextResponse.rewrite(new URL(`/${gateLocale}/coming-soon`, request.url));
+    }
+  }
+
   // Refresh the Supabase session (runs for both pages and API routes).
   const { supabase, response } = await createClient(request);
   const {

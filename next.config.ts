@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  // deploy.sh builds into .next-deploy so a production build can run while
+  // the dev server owns .next; unset = normal .next everywhere else.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   compress: true,
   skipTrailingSlashRedirect: true,
   images: {

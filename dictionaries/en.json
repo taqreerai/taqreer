@@ -348,6 +348,7 @@
     }
   },
   "landing": {
+    "comingSoon": { "title": "Coming soon", "body": "We are building something special. Taqreer is launching soon." },
     "hero": {
       "statusCount": "{count} presentations created so far",
       "poweredBy": "Powered by Claude Design",

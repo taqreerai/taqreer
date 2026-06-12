@@ -348,6 +348,7 @@
     }
   },
   "landing": {
+    "comingSoon": { "title": "قريباً", "body": "نعمل على شيء مميز. تقرير يصل قريباً." },
     "hero": {
       "statusCount": "تم إنشاء {count} عرض تقديمي حتى الآن",
       "poweredBy": "مدعوم بتقنية Claude Design",
