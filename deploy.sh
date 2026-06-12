@@ -29,8 +29,11 @@ if [[ "${1:-}" != "--force" && -n "$(git status --porcelain)" ]]; then
   echo "  Urgent? ./deploy.sh --force"
   exit 1
 fi
-# Keep GitHub's dev mirroring what production runs.
-git push -q origin dev || echo "(push to origin/dev failed - deploying anyway)"
+# Keep GitHub mirroring what production runs: dev AND main follow every
+# deploy (small fixes merge to main directly - no PR; big changes go
+# through a dev->main PR for CodeRabbit BEFORE deploying, so main is
+# already there when this push runs).
+git push -q origin dev dev:main || echo "(github push failed - deploying anyway)"
 
 echo "==> Syncing source to $REMOTE:$APP_DIR"
 rsync -az --delete \
