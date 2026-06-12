@@ -14,7 +14,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import {
   DashboardEmptyState,
   DashboardWidget,
@@ -42,6 +43,7 @@ export function RecentProjects({
   // refresh the grid would stick at 5 tiles until next navigation
   // (the bug user flagged 2026-05-24).
   const dict = useDict();
+  const { locale } = useLocale();
   const router = useRouter();
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
 
@@ -95,7 +97,7 @@ export function RecentProjects({
 
   return (
     <DashboardWidget>
-      <DashboardWidgetHeader title={dict.components.recentProjects.title} href="/projects" />
+      <DashboardWidgetHeader title={dict.components.recentProjects.title} href={localizedHref("/projects", locale)} />
       <ProjectsGrid
         projects={visible}
         gridClassName="grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3"

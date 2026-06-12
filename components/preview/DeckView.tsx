@@ -13,6 +13,7 @@ import {
 import { useRouter, usePathname } from "next/navigation";
 import { stripLocale } from "@/lib/i18n/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { motion, type Variants } from "framer-motion";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
@@ -362,7 +363,7 @@ export function DeckView({
   const canEdit = role === "owner" || role === "edit";
   const canComment = canEdit || role === "comment";
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const router = useRouter();
   // Locale-stripped so route checks compare against unprefixed paths (the
   // pathname is /ar/preview/… after the [lang] move).
@@ -3395,7 +3396,7 @@ export function DeckView({
               ) : null}
               {dict.editor.screen.tryAgain}
             </button>
-            <Link href="/dashboard" className="btn-pill px-6 py-3 text-sm no-underline">
+            <Link href={localizedHref("/dashboard", locale)} className="btn-pill px-6 py-3 text-sm no-underline">
               {dict.editor.screen.backHome}
             </Link>
           </div>
@@ -3462,7 +3463,7 @@ export function DeckView({
               {dict.editor.screen.recreate}
             </Link>
             <Link
-              href="/dashboard"
+              href={localizedHref("/dashboard", locale)}
               // `.btn-pill` lives unlayered in globals.css (see comment
               // at globals.css:1096 — "unlayered specificity beating
               // @layer utilities") so its own padding + font-size win

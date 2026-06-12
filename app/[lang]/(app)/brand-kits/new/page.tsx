@@ -22,6 +22,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
 import {
@@ -64,7 +65,7 @@ type ResolvedFontField = {
 export default function NewBrandKitPage() {
   const router = useRouter();
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
 
   // ─── Form state ────────────────────────────────────────────────
   const [name, setName] = useState<string>("");
@@ -161,7 +162,7 @@ export default function NewBrandKitPage() {
         throw new Error(data?.error ?? dict.pages.brandKits.errSave);
       }
 
-      router.push("/brand-kits");
+      router.push(localizedHref("/brand-kits", locale));
       router.refresh();
     } catch (caughtError) {
       console.error("[brand-kits/new] save failed:", caughtError);
@@ -303,7 +304,7 @@ export default function NewBrandKitPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/brand-kits"
+              href={localizedHref("/brand-kits", locale)}
               className="rounded-full border border-foreground/15 px-5 py-2 text-sm text-foreground/70 transition-colors hover:border-foreground/30 hover:text-foreground"
             >
               {dict.common.cancel}

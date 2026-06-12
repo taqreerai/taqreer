@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 // Toolbar orientation → drives where each ToolButton's tooltip pops. Vertical
 // (left rail): to the right, toward content. Horizontal (Studio bottom bar):
@@ -349,7 +350,7 @@ export function PreviewActionBar({
 }) {
   const router = useRouter();
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
   // Export + Share moved to the StudioHeader (command-bar redesign §16) —
   // useExportActions + the ShareDialog live up there now, not in this bar.
@@ -822,7 +823,7 @@ export function PreviewActionBar({
           <ToolButton
             icon="home"
             label={dict.editor.toolbar.backToDashboard}
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push(localizedHref("/dashboard", locale))}
           />
         </div>
       </div>

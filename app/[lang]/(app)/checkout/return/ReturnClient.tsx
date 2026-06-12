@@ -35,8 +35,13 @@ export function ReturnClient({ sessionId }: { sessionId: string | null }) {
       return;
     }
     let live = true;
+    // 10s cap so a hung status request can't strand the user on the
+    // "processing" state forever (CR finding); abort falls through to
+    // the failed branch, whose copy says no charge was confirmed and
+    // points back to billing.
     fetch(`/api/stripe/checkout/status?session_id=${encodeURIComponent(sessionId)}`, {
       credentials: "same-origin",
+      signal: AbortSignal.timeout(10_000),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { status?: string; paymentStatus?: string } | null) => {

@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { PlanUsage } from "@/components/app/PlanUsage";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import type { User } from "@supabase/supabase-js";
 
@@ -23,6 +24,7 @@ function StatusMsg({ msg }: { msg: Msg }) {
 
 export default function SettingsPage() {
   const dict = useDict();
+  const { locale } = useLocale();
   const [supabase] = useState(() => createClient());
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -125,7 +127,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/auth/delete-account", { method: "POST" });
       if (res.ok) {
-        router.push("/login?deleted=true");
+        router.push(`${localizedHref("/login", locale)}?deleted=true`);
       } else {
         setDeleteLoading(false);
         setShowDeleteModal(false);

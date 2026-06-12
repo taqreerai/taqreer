@@ -6,7 +6,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { DashboardPreview } from "./DashboardPreview";
 
 const containerVariants = {
@@ -31,6 +32,7 @@ const itemVariants = {
 // "تم إنشاء 0 عرض تقديمي حتى الآن" on a fresh DB.
 export function Hero({ projectCount }: { projectCount?: number }) {
   const dict = useDict();
+  const { locale } = useLocale();
 
   // Tracks the demo dashboard's active view as a path string so the
   // browser-chrome URL pill stays in sync with whichever flow the
@@ -150,7 +152,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 Generate button. Pill radius pinned inline since
                 `.btn-gradient-anim` itself doesn't set one. */}
             <motion.a
-              href="/signup"
+              href={localizedHref("/signup", locale)}
               variants={itemVariants}
               className="btn-gradient-anim rounded-full px-8 py-3 text-sm font-medium"
             >

@@ -15,6 +15,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { BrandKitTile, type BrandKitTileData } from "@/components/app/BrandKitTile";
 import { BrandKitActionsMenu } from "@/components/app/BrandKitActionsMenu";
 import { BrandKitDeleteConfirmDialog } from "@/components/app/BrandKitDeleteConfirmDialog";
@@ -42,7 +43,7 @@ async function readApiError(res: Response, fallback: string): Promise<string> {
 export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
   const router = useRouter();
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   // Optimistic removal — flip a kit out of the rendered list as
   // soon as the delete confirms. router.refresh() also fires so
   // the SSR snapshot catches up; this just avoids the lag.
@@ -269,7 +270,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
           {dict.pages.brandKits.emptyDesc}
         </p>
         <Link
-          href="/brand-kits/new"
+          href={localizedHref("/brand-kits/new", locale)}
           className="btn-gradient mt-2 inline-flex items-center gap-2 px-4 py-2 text-sm"
         >
           <span

@@ -12,7 +12,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import {
   ProjectsGrid,
   type ProjectsGridProject,
@@ -55,6 +56,7 @@ export function ProjectsPageClient({
   projects: ProjectsPageProject[];
 }) {
   const dict = useDict();
+  const { locale } = useLocale();
   const t = dict.pages.projects;
   const [search, setSearch] = useState("");
   // null = no filter active on this dimension. Single non-null value
@@ -235,7 +237,7 @@ export function ProjectsPageClient({
               </p>
               <Link
                 className="btn-gradient inline-block px-4 py-1.5 text-xs no-underline"
-                href="/create"
+                href={localizedHref("/create", locale)}
               >
                 {t.createProject}
               </Link>

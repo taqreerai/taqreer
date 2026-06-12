@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import MimicFlow from "@/components/mimic/MimicFlow";
 import {
   fetchUse,
@@ -32,7 +33,7 @@ export default function UseTemplateClient({
   id: string;
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const router = useRouter();
   const [seed, setSeed] = useState<MimicTemplateSeed | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +84,7 @@ export default function UseTemplateClient({
           <p className="tq-subhead text-red-400">{error}</p>
           <button
             type="button"
-            onClick={() => router.push("/templates")}
+            onClick={() => router.push(localizedHref("/templates", locale))}
             className="btn-pill"
           >
             {dict.flows.mimic.backToTemplates}

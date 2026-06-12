@@ -11,7 +11,8 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
@@ -46,6 +47,7 @@ export function LandingTemplatesGrid({
 }) {
   // Lightbox target. null = closed.
   const [preview, setPreview] = useState<LandingTemplate | null>(null);
+  const { locale } = useLocale();
   // "Use template" busy gate — blocks double-clicks while the seed
   // request is in flight (logged-in path only). Mirrors MyTemplates.
   const [useBusy, setUseBusy] = useState(false);
@@ -55,7 +57,7 @@ export function LandingTemplatesGrid({
     if (!preview || useBusy) return;
     // Logged-out → straight to the signup funnel (no seed work).
     if (!isAuthed) {
-      router.push("/signup");
+      router.push(localizedHref("/signup", locale));
       return;
     }
     // Logged-in → mint the Mimic reference behind the CTA's busy

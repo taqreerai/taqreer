@@ -13,6 +13,7 @@ import Link from "next/link";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 type Billing = "monthly" | "yearly";
 
@@ -100,20 +101,21 @@ export function PricingTiers({ isAuthed = false }: { isAuthed?: boolean }) {
   const [billing, setBilling] = useState<Billing>("monthly");
   const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const t = dict.landing.pricing;
 
   // Signed-in pricing CTA → our EMBEDDED checkout page for that tier +
   // cadence (stays on taqreer.ai). Signed-out keeps the /signup link
-  // (acquisition). Free tier always routes to signup.
+  // (acquisition). Free tier always routes to signup. Locale-prefixed
+  // (CR: bare paths dropped the active language).
   function checkout(planKey: string) {
     if (planKey === "free") {
-      window.location.href = "/signup";
+      window.location.href = localizedHref("/signup", locale);
       return;
     }
     const lookupKey = `tier_${planKey}_${billing}`;
     setBusy(lookupKey);
-    window.location.href = `/checkout?price=${lookupKey}`;
+    window.location.href = `${localizedHref("/checkout", locale)}?price=${lookupKey}`;
   }
 
   return (
@@ -191,6 +193,7 @@ function PricingCard({
   busy: boolean;
   onCheckout: () => void;
 }) {
+  const { locale } = useLocale();
   const price = billing === "yearly" ? tier.priceYearly : tier.priceMonthly;
   const footnote =
     billing === "yearly" && !tier.isFree ? pricing.billedYearly : copy.footnote;
@@ -265,7 +268,10 @@ function PricingCard({
             {busy ? "…" : copy.cta}
           </button>
         ) : (
-          <Link href="/signup" className="btn-gradient block w-full py-3 text-sm">
+          <Link
+            href={localizedHref("/signup", locale)}
+            className="btn-gradient block w-full py-3 text-sm"
+          >
             {copy.cta}
           </Link>
         )}
