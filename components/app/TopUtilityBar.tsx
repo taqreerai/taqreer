@@ -36,7 +36,10 @@ function PlanBadge() {
   return (
     <Link
       href={localizedHref("/plans", locale)}
-      className="badge-purple no-underline"
+      // me-2 compensates for the bell button's ~8px internal icon
+      // inset: the badge edge is solid while its neighbors are padded
+      // icon buttons, so the raw gap-1.5 read tighter on this side.
+      className="badge-purple me-2 no-underline"
       aria-label={dict.components.billing.title}
     >
       {planLabel(dict.components.planUsage, plan)}
