@@ -10,6 +10,18 @@ export function useUser() {
   const supabase = createClient();
 
   useEffect(() => {
+    // Instant paint from the locally-cached session (no network) - the menu
+    // mounts its own hook instance on open, and waiting on getUser()'s
+    // round-trip made the email pop in late (user report 2026-06-13).
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser((u) => u ?? session.user);
+        setLoading(false);
+      }
+    });
+
+    // Authoritative refresh: getUser() validates against the server (catches
+    // revoked sessions / stale cached emails) and overwrites the quick value.
     const getUser = async () => {
       const {
         data: { user },
