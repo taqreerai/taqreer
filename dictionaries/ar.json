@@ -190,6 +190,7 @@
     }
   },
   "flows": {
+    "stylePicker": { "dialogTitle": "اختر نمط التصميم", "auto": "تلقائي", "autoDesc": "يختار كلود الأنسب للمحتوى", "change": "تغيير", "descs": { "swiss": "شبكة صارمة وفراغ هادئ", "corporate": "رسوم وأرقام واضحة", "minimal": "عنصر واحد وفراغ واسع", "editorial": "أعمدة كمجلة مطبوعة", "bold": "عناوين ضخمة تملأ الشريحة", "duotone": "لونان وصورة كاملة", "playful": "أشكال حرة وألوان جريئة", "brutalist": "حدود خام وتباين صارخ" } },
     "contentCard": "المحتوى",
     "language": "اللغة",
     "contentLanguageAria": "لغة المحتوى",

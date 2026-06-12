@@ -34,6 +34,7 @@
 // forked Mimic flow (/use-template/[id]). /create only hydrates from a
 // brand kit (sessionStorage or the user's default).
 
+import { DesignStylePicker } from "@/components/create/DesignStylePicker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -115,7 +116,7 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // Cards stretch to fill row when fewer than 4 fit, capping at 1fr
 // share so they never leave gutters on either edge. /enhance + /mimic
 // keep their fixed-width 360 px cards (fewer of them per row).
-const CARD_MIN_H_CLASS = "min-h-[540px]";
+const CARD_MIN_H_CLASS = "min-h-[440px]";
 
 // SLIDE_COUNT_OPTIONS + LANGUAGE_OPTIONS are built inside the component so their
 // labels can come from the active-locale dictionary.
@@ -1015,19 +1016,12 @@ export default function CreatePage() {
                   Polished modal UX comes later. */}
               <div>
                 <SectionLabel>{t.designStyle}</SectionLabel>
-                <div className="flex flex-wrap gap-1.5 pt-2">
-                  {DESIGN_STYLE_OPTIONS.map((style) => (
-                    <Pill
-                      key={style}
-                      active={designStyle === style}
-                      disabled={submitting}
-                      onClick={() =>
-                        onDesignStyle(designStyle === style ? null : style)
-                      }
-                    >
-                      {style}
-                    </Pill>
-                  ))}
+                <div className="pt-2">
+                  <DesignStylePicker
+                    value={designStyle}
+                    onChange={onDesignStyle}
+                    disabled={submitting}
+                  />
                 </div>
               </div>
               <AIImagesPanel

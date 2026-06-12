@@ -44,6 +44,7 @@
 //     at submit) + save-brand-kit toggle + output settings
 //   • GenerateSplitButton + quality presets
 
+import { DesignStylePicker } from "@/components/create/DesignStylePicker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -109,7 +110,7 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // Same min-height + breakpoint math as /create — all four flows
 // share the 4-card row shape. See /create/page.tsx for the viewport
 // math; comment retained here for cross-file traceability.
-const CARD_MIN_H_CLASS = "min-h-[540px]";
+const CARD_MIN_H_CLASS = "min-h-[440px]";
 
 // ─── Helpers ──────────────────────────────────────────────────────
 function formatFileSize(size: number, dict: Dictionary) {
@@ -291,6 +292,7 @@ export default function DatasheetPage() {
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
   const [pagination, setPagination] = useState<boolean>(true);
+  const [designStyle, setDesignStyle] = useState<string | null>(null);
   const [persistentText, setPersistentText] = useState<string>("");
 
   // ─── Submit-level state ────────────────────────────────────────
@@ -511,7 +513,7 @@ export default function DatasheetPage() {
       };
 
       const rules = {
-        designStyle: null,
+        designStyle,
         fixTypos: false,
         pagination,
         persistent: persistentText.trim()
@@ -845,6 +847,18 @@ export default function DatasheetPage() {
                 ariaLabel={dict.flows.slideNumbering}
                 value={pagination}
                 onChange={setPagination}
+              />
+            </div>
+
+            {/* Design-style picker - same control as /create (2026-06-12). */}
+            <div className="space-y-1.5 border-t border-[var(--tq-border-hairline)] pt-3">
+              <span className="block text-xs font-semibold text-foreground/70">
+                {dict.flows.designStyle}
+              </span>
+              <DesignStylePicker
+                value={designStyle}
+                onChange={setDesignStyle}
+                disabled={submitting}
               />
             </div>
 

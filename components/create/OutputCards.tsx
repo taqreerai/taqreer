@@ -14,6 +14,7 @@
 // row with bespoke cards later without copying their CSS recipes.
 
 import React, { useEffect, useState } from "react";
+import { DesignStylePicker } from "@/components/create/DesignStylePicker";
 import { motion } from "framer-motion";
 import {
   Pill,
@@ -619,19 +620,7 @@ export function OutputContentCard({
       <div className="border-t border-foreground/[0.06] pt-3">
         <SectionLabel>{dict.flows.output.generationRules}</SectionLabel>
         <div className="pt-2">
-          <div className="flex flex-wrap gap-1.5">
-            {DESIGN_STYLE_OPTIONS.map((option) => (
-              <Pill
-                key={option}
-                active={designStyle === option}
-                onClick={() =>
-                  onDesignStyle(designStyle === option ? null : option)
-                }
-              >
-                {option}
-              </Pill>
-            ))}
-          </div>
+          <DesignStylePicker value={designStyle} onChange={onDesignStyle} />
         </div>
       </div>
     </CardShell>
