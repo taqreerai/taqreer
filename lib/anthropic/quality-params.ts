@@ -80,20 +80,21 @@ export function paramsForQuality(
 ): AnthropicCallParams {
   switch (quality) {
     case "sonnet-fast":
-      // Was thinking:disabled until 2026-06-12. The thinking-off
-      // pathology (documented on the 2026-05-25/30 incidents for the
-      // JSON era) reappeared in the HTML era: a scratch /create run
-      // drafted the deck in the text channel then re-emitted a refined
-      // copy - 10 sections for a 5-slide deck, with later style blocks
-      // the one-shot CSS capture never saw (white slides). Adaptive +
-      // effort:low gives Sonnet the scratch space to emit ONE clean
-      // deck; the thinking tax at `low` is small (re-baseline cost
-      // before live keys). User direction: fix in config, not prompts.
-      return {
-        model: SONNET,
-        thinking: { type: "adaptive" },
-        outputConfig: { effort: "low" },
-      };
+      // thinking:disabled - MEASURED decision, twice:
+      //   • 2026-06-12 morning: thinking-off drafted the deck in the
+      //     text channel then re-emitted a refined copy (the
+      //     2026-05-25/30 pathology, HTML-era form). Tried adaptive +
+      //     effort:low as the fix...
+      //   • 2026-06-12 afternoon: ...and REVERTED same day. "low" on
+      //     Sonnet 4.6 burned ~100k thinking tokens / ~$1.5 / ~12 min
+      //     on a 5-slide deck (vs ~$0.35 / ~5 min thinking-off). The
+      //     cheap preset cannot carry that tax.
+      // The draft pathology is instead handled downstream in code:
+      // deck-generate's restart guard (drops the draft pass) + rolling
+      // interstitial CSS capture (late style blocks still reach
+      // slides). Occasional double-output token cost stays, but decks
+      // come out correct.
+      return { model: SONNET, thinking: { type: "disabled" } };
     case "opus-fast":
       return { model: OPUS, thinking: { type: "disabled" } };
     // ─── Default + legacy fallback ──────────────────────────────
