@@ -62,7 +62,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
       : base;
     list.sort((a, b) =>
       sort === "name"
-        ? a.projectTitle.localeCompare(b.projectTitle, "ar") ||
+        ? a.projectTitle.localeCompare(b.projectTitle, locale) ||
           b.createdAt.localeCompare(a.createdAt)
         : b.createdAt.localeCompare(a.createdAt),
     );
@@ -89,7 +89,14 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
   };
 
   const handleBulkDelete = async () => {
-    const ids = [...sel.selected];
+    // Intersect with the current search's visible ids (CR PR#57).
+    const deletable = new Set(visible.map((i) => i.id));
+    const ids = [...sel.selected].filter((id) => deletable.has(id));
+    if (ids.length === 0) {
+      setBulkConfirm(false);
+      sel.exit();
+      return;
+    }
     setBulkBusy(true);
     const results = await Promise.allSettled(
       ids.map(async (id) => {

@@ -89,12 +89,21 @@ export default function SettingsPage() {
         // transient message needed on top of it.
         setEmailMsg(null);
       } else {
+        // Honest reporting (CR PR#57): the auth email IS changed, but if
+        // the Prisma mirror fails the app still shows the old address -
+        // match the name-save behavior and say so.
+        let syncOk = false;
         try {
-          await fetch("/api/auth/user-sync", { method: "POST" });
+          const res = await fetch("/api/auth/user-sync", { method: "POST" });
+          syncOk = res.ok;
         } catch {
-          // Next sync reconciles; the auth email is already updated.
+          syncOk = false;
         }
-        setEmailMsg({ type: "success", text: dict.pages.settings.profile.emailChanged });
+        setEmailMsg(
+          syncOk
+            ? { type: "success", text: dict.pages.settings.profile.emailChanged }
+            : { type: "error", text: dict.pages.settings.profile.syncFailed },
+        );
       }
       window.history.replaceState(null, "", window.location.pathname);
     })();

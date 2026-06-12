@@ -59,9 +59,14 @@ export function BillingSection({
   // the /checkout page.
   variant = "page",
   onBuy,
+  // Lowest tier that satisfies the caller's gate (UpgradeModal, CR
+  // PR#57): tiers BELOW it render dimmed with a disabled CTA so a
+  // user chasing a pro-gated feature can't buy plus and stay blocked.
+  minTier,
 }: {
   variant?: "page" | "modal";
   onBuy?: (lookupKey: string) => void;
+  minTier?: KnownPlan | null;
 } = {}) {
   const dict = useDict();
   const { locale, dir } = useLocale();
@@ -175,6 +180,9 @@ export function BillingSection({
             const isCurrent = idx === currentIdx;
             const isUpgrade = idx > currentIdx;
             const isFree = tier === "free";
+            // Below the caller's gate -> visible for context, not buyable.
+            const belowGate =
+              minTier != null && idx < TIER_ORDER.indexOf(minTier);
             const popular = tier === POPULAR_TIER;
             const copy = pricing.tiers[idx];
             const priceUsd = isFree
@@ -191,7 +199,7 @@ export function BillingSection({
                 key={tier}
                 className={`surface-card relative flex w-full flex-col rounded-2xl p-8 ${
                   isCurrent ? "outline outline-1 outline-[var(--tq-purple)]" : ""
-                }`}
+                } ${belowGate ? "opacity-50" : ""}`}
               >
                 {popular && (
                   <div className="hero-stat-pill absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium">
@@ -258,9 +266,9 @@ export function BillingSection({
                   ) : (
                     <button
                       type="button"
-                      disabled={busy !== null}
+                      disabled={busy !== null || belowGate}
                       onClick={() => buy(lookupKey)}
-                      className={`block w-full py-3 text-sm ${
+                      className={`block w-full py-3 text-sm disabled:opacity-50 ${
                         isUpgrade ? "btn-gradient" : "btn-pill"
                       }`}
                     >

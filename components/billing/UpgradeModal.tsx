@@ -162,7 +162,7 @@ export function UpgradeModal({
                     onSuccess={() => setDone(true)}
                   />
                 ) : (
-                  <BillingSection variant="modal" onBuy={(key) => setLookupKey(key)} />
+                  <BillingSection variant="modal" minTier={requiredTier} onBuy={(key) => setLookupKey(key)} />
                 )}
               </div>
             </motion.div>

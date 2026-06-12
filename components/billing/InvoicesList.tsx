@@ -26,15 +26,22 @@ export function InvoicesList() {
   const { locale } = useLocale();
   const t = dict.components.billing;
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let live = true;
     fetch("/api/billing/invoices", { credentials: "same-origin" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { invoices: Invoice[] } | null) => {
-        if (live && d) setInvoices(d.invoices);
+        if (!live) return;
+        // Failure resolves the loading state too (CR PR#57) - the list
+        // used to spin forever on a non-OK response.
+        if (d) setInvoices(d.invoices);
+        else setLoadFailed(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (live) setLoadFailed(true);
+      });
     return () => {
       live = false;
     };
@@ -56,7 +63,9 @@ export function InvoicesList() {
 
   return (
     <div className="surface-card rounded-2xl p-5">
-      {invoices === null ? (
+      {loadFailed ? (
+        <p className="text-sm text-muted">{t.loadFailed}</p>
+      ) : invoices === null ? (
         <p className="text-sm text-muted">{t.loading}</p>
       ) : invoices.length === 0 ? (
         <p className="text-sm text-muted">{t.noInvoices}</p>

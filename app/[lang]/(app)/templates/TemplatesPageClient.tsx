@@ -188,7 +188,14 @@ export function TemplatesPageClient({
   );
 
   const handleBulkDelete = async () => {
-    const ids = [...sel.selected];
+    // Intersect with the current filter's own-template ids (CR PR#57).
+    const deletable = new Set(filtered.filter((t) => t.isMine).map((t) => t.id));
+    const ids = [...sel.selected].filter((id) => deletable.has(id));
+    if (ids.length === 0) {
+      setBulkConfirm(false);
+      sel.exit();
+      return;
+    }
     setBulkBusy(true);
     const results = await Promise.allSettled(
       ids.map(async (id) => {

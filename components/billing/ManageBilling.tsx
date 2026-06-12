@@ -474,7 +474,7 @@ function AddCardInner({ onDone }: { onDone: (savedId: string | null) => void }) 
         <button
           type="button"
           onClick={() => onDone(null)}
-          disabled={saving}
+          disabled={saving || !stripe || !elements}
           className="btn-pill px-4 py-2 text-sm"
         >
           {dict.pages.settings.deleteAccount.cancel}

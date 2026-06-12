@@ -201,7 +201,18 @@ export function ProjectsPageClient({
   );
 
   const handleBulkDelete = async () => {
-    const ids = [...sel.selected];
+    // Intersect with the CURRENT filter's deletable ids (CR PR#57):
+    // cross-page selections survive paging on purpose, but ids the
+    // active filters have hidden must not be silently deleted.
+    const deletable = new Set(
+      filtered.filter((p) => p.sharedRole == null).map((p) => p.id),
+    );
+    const ids = [...sel.selected].filter((id) => deletable.has(id));
+    if (ids.length === 0) {
+      setBulkConfirm(false);
+      sel.exit();
+      return;
+    }
     setBulkBusy(true);
     // Existing per-id route (authz + cleanup identical to single
     // delete); allSettled so one failure does not abort the rest.

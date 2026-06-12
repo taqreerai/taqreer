@@ -26,18 +26,33 @@ export async function getOrCreateStripeCustomer(args: {
     metadata: { prismaUserId: args.prismaUserId },
   });
 
-  // Upsert the billing record with the customer id. (A race here is
-  // benign: stripeCustomerId is @unique, so a second create would
-  // collide and we'd re-read; in practice checkout is user-serialized.)
-  await prisma.subscription.upsert({
-    where: { userId: args.prismaUserId },
-    update: { stripeCustomerId: customer.id },
-    create: {
-      userId: args.prismaUserId,
-      stripeCustomerId: customer.id,
-      plan: "free",
-      status: "active",
-    },
+  // Claim the slot transactionally (CR PR#57): two concurrent
+  // first-time requests each create a Stripe customer; without the
+  // re-check the later upsert silently overwrote the earlier id and a
+  // SetupIntent confirmed against the orphan broke default-card +
+  // renewal flows. Now the FIRST claim wins and the loser deletes its
+  // own just-created customer.
+  const claimedId = await prisma.$transaction(async (tx) => {
+    const current = await tx.subscription.findUnique({
+      where: { userId: args.prismaUserId },
+      select: { stripeCustomerId: true },
+    });
+    if (current?.stripeCustomerId) return current.stripeCustomerId;
+    await tx.subscription.upsert({
+      where: { userId: args.prismaUserId },
+      update: { stripeCustomerId: customer.id },
+      create: {
+        userId: args.prismaUserId,
+        stripeCustomerId: customer.id,
+        plan: "free",
+        status: "active",
+      },
+    });
+    return customer.id;
   });
-  return customer.id;
+  if (claimedId !== customer.id) {
+    // Lost the race - remove the orphan so no card can attach to it.
+    await stripe.customers.del(customer.id).catch(() => {});
+  }
+  return claimedId;
 }

@@ -21,18 +21,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
-  const pm = await stripe.paymentMethods.retrieve(pmId);
-  if (pm.customer !== caller.customerId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  // Explicit Stripe error handling (CR PR#57): a Stripe hiccup should
+  // surface as a clean 502, not an unhandled 500 with a stack trace.
+  try {
+    const pm = await stripe.paymentMethods.retrieve(pmId);
+    if (pm.customer !== caller.customerId) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
-  await stripe.customers.update(caller.customerId, {
-    invoice_settings: { default_payment_method: pmId },
-  });
-  if (caller.subscriptionId) {
-    await stripe.subscriptions.update(caller.subscriptionId, {
-      default_payment_method: pmId,
+    await stripe.customers.update(caller.customerId, {
+      invoice_settings: { default_payment_method: pmId },
     });
+    if (caller.subscriptionId) {
+      await stripe.subscriptions.update(caller.subscriptionId, {
+        default_payment_method: pmId,
+      });
+    }
+  } catch (err) {
+    console.error("[billing/default] stripe call failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json({ error: "Payment provider error" }, { status: 502 });
   }
 
   return NextResponse.json({ ok: true });

@@ -79,7 +79,7 @@ export function EmbeddedCheckout({
       adaptivePricing: { allowed: true },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookupKey]);
+  }, [lookupKey, ctx]);
 
   // Theme reactivity: the toggle flips the `light` class on <html>;
   // rebuild the appearance from the new computed tokens while KEEPING

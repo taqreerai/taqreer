@@ -1815,14 +1815,14 @@ export const deckGenerate = inngest.createFunction(
             scopedStyle = scopeDeckCss(rawCss);
           }
           // ── Deck-restart guard ── the thinking-off draft pathology re-emits
-          // the WHOLE deck (a second data-label="1" cover after slides exist).
-          // Keep the refined second pass: drop everything before it. Mid-deck
-          // section covers are safe — they carry their own label > 1.
-          if (
-            parsed.role === "cover" &&
-            slides.length > 0 &&
-            slideLabel(parsed.html) === "1"
-          ) {
+          // the WHOLE deck (a SECOND role="cover" slide after slides exist).
+          // Keyed off the structured role, not data-label (CR PR#57: the
+          // output contract labels slides with short Arabic names, so the
+          // old `label === "1"` check could never trip). The role
+          // vocabulary reserves "cover" for the single opening slide -
+          // mid-deck dividers are role="section" - so any later cover IS a
+          // restart. Keep the refined second pass: drop everything before it.
+          if (parsed.role === "cover" && slides.length > 0) {
             logger.warn("deck_restart_detected", {
               droppedSlides: slides.length,
               atSlideId: parsed.slideId,

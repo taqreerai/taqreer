@@ -193,7 +193,7 @@ export function ProfileMenuContent({
               <div className="progress-track my-2">
                 <div
                   className="progress-bar"
-                  style={{ width: `${Math.round((creditFraction ?? 0) * 100)}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, Math.round((creditFraction ?? 0) * 100)))}%` }}
                 />
               </div>
               <div className="flex items-center justify-between text-[11px] text-muted">
