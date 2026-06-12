@@ -62,6 +62,10 @@ export type ProjectsGridProject = {
   // with empty thumbnailUrls, so they get the static placeholder
   // instead of a spinner-that-never-resolves.
   thumbnailsPending: boolean;
+  // "edit" | "comment" when the deck is SHARED WITH the viewer
+  // (accepted invite - 2026-06-12); null/undefined for owned decks.
+  // Renders the small shared badge on the tile.
+  sharedRole?: string | null;
 };
 
 type Props = {
@@ -156,6 +160,7 @@ export function ProjectsGrid({
             createdAt={project.createdAt}
             isFavorite={project.isFavorite}
             thumbnailsPending={project.thumbnailsPending}
+            sharedRole={project.sharedRole ?? null}
             // No `onOpen` — tiles navigate to /project/<id> on click
             // (the default in ProjectThumbnail post route-split).
             // Templates can pass `onOpen` later to opt into the

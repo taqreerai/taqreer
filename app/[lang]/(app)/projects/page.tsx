@@ -55,8 +55,25 @@ export default async function ProjectsPage({
     redirect(`/${lang}/dashboard`);
   }
 
+  // Owned projects PLUS decks shared WITH this user (accepted edit /
+  // comment invites - user direction 2026-06-12: an accepted invite
+  // surfaces the deck in the invitee's projects list; it is the SAME
+  // deck, not a copy).
   const projects = await prisma.project.findMany({
-    where: { userId: dbUser.id },
+    where: {
+      OR: [
+        { userId: dbUser.id },
+        {
+          shares: {
+            some: {
+              userId: dbUser.id,
+              acceptedAt: { not: null },
+              accessLevel: { in: ["edit", "comment"] },
+            },
+          },
+        },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -84,6 +101,14 @@ export default async function ProjectsPage({
       // page for the full rationale.
       status: true,
       presentation: { select: { savedVersionId: true } },
+      // Only this user's share rows (empty for owned projects) - the
+      // tile renders the shared badge from it.
+      shares: {
+        where: { userId: dbUser.id, acceptedAt: { not: null } },
+        select: { accessLevel: true },
+        take: 1,
+      },
+      userId: true,
     },
   });
 
@@ -97,8 +122,10 @@ export default async function ProjectsPage({
   //   2. savedVersionId is non-null AND thumbnailUrls is empty —
   //      deck saved but thumbnail-render Inngest job hasn't landed.
   const projectsWithPending = projects.map(
-    ({ presentation, status, ...rest }) => ({
+    ({ presentation, status, shares, userId, ...rest }) => ({
       ...rest,
+      // null = own project; "edit"/"comment" = shared with me.
+      sharedRole: userId === dbUser.id ? null : (shares[0]?.accessLevel ?? null),
       thumbnailsPending:
         status === "queued" ||
         status === "generating" ||

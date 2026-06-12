@@ -78,6 +78,9 @@ type Props = {
   // placeholder icon (spinner that never resolves would be worse UX
   // than acknowledging "no thumbnails available").
   thumbnailsPending?: boolean;
+  // "edit" | "comment" when the deck is shared WITH the viewer
+  // (accepted invite); renders the corner badge. Null/absent = owned.
+  sharedRole?: string | null;
   // Optional click-override. Default behaviour (post route split,
   // 2026-05-21) is to navigate to `/project/<id>` — the canonical
   // working-session route. Pass `onOpen` to opt back into a
@@ -112,6 +115,7 @@ export function ProjectThumbnail({
   createdAt,
   isFavorite,
   thumbnailsPending = false,
+  sharedRole = null,
   onOpen,
   onDeleted,
   onRenamed,
@@ -245,6 +249,19 @@ export function ProjectThumbnail({
             </span>
           )}
         </button>
+
+        {/* Shared-with-me badge - solid accent pill, top start corner
+            (same chip vocabulary as the header plan badge). */}
+        {sharedRole ? (
+          <span className="pointer-events-none absolute start-2 top-2 z-10 flex items-center gap-1 rounded-full bg-[var(--tq-purple)] px-2 py-0.5 text-[10px] font-semibold leading-none text-white">
+            <span className="material-symbols-outlined" style={{ fontSize: 11 }} aria-hidden>
+              group
+            </span>
+            {sharedRole === "edit"
+              ? dict.components.projectThumbnail.sharedEdit
+              : dict.components.projectThumbnail.sharedComment}
+          </span>
+        ) : null}
 
         {/* "Use as a template" loader — dims THIS thumbnail + shows the
             shared paragraph-write animation while the project's PDF +
