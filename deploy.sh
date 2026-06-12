@@ -20,6 +20,23 @@ REMOTE=taqreer
 APP_DIR=/root/taqreer-app
 PORT=3100
 
+# ── Review guard ── deploys should ship REVIEWED code: a clean tree, in sync
+# with origin/main (the CodeRabbit-reviewed branch). `--force` skips the guard
+# for urgent hotfixes - push + PR right after.
+if [[ "${1:-}" != "--force" ]]; then
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "✗ Working tree has uncommitted changes - commit (or stash) first."
+    echo "  Urgent? ./deploy.sh --force"
+    exit 1
+  fi
+  git fetch -q origin main
+  if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+    echo "✗ HEAD is not origin/main - open a PR dev->main, merge after review,"
+    echo "  then deploy from the merged state. Urgent? ./deploy.sh --force"
+    exit 1
+  fi
+fi
+
 echo "==> Syncing source to $REMOTE:$APP_DIR"
 rsync -az --delete \
   --exclude .git \
