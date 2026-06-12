@@ -80,7 +80,20 @@ export function paramsForQuality(
 ): AnthropicCallParams {
   switch (quality) {
     case "sonnet-fast":
-      return { model: SONNET, thinking: { type: "disabled" } };
+      // Was thinking:disabled until 2026-06-12. The thinking-off
+      // pathology (documented on the 2026-05-25/30 incidents for the
+      // JSON era) reappeared in the HTML era: a scratch /create run
+      // drafted the deck in the text channel then re-emitted a refined
+      // copy - 10 sections for a 5-slide deck, with later style blocks
+      // the one-shot CSS capture never saw (white slides). Adaptive +
+      // effort:low gives Sonnet the scratch space to emit ONE clean
+      // deck; the thinking tax at `low` is small (re-baseline cost
+      // before live keys). User direction: fix in config, not prompts.
+      return {
+        model: SONNET,
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "low" },
+      };
     case "opus-fast":
       return { model: OPUS, thinking: { type: "disabled" } };
     // ─── Default + legacy fallback ──────────────────────────────

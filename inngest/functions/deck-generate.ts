@@ -1764,19 +1764,42 @@ export const deckGenerate = inngest.createFunction(
         let tFirstText: number | null = null;
         let tFirstSection: number | null = null;
         let rawBuffer = "";
-        // Claude's OWN design-system `<style>` — everything it streamed before the
-        // first `<section>`. Extracted once (it's complete by the first slide) +
-        // SCOPED under `.tq-canvas` so it can't leak into the app, then reused for
-        // every slide. "" if Claude wrote no `<style>` (we still enforce the
-        // canvas frame + brand vars, so the slide renders, just plain).
-        let scopedStyle: string | null = null;
+        // Claude's OWN design-system `<style>` — SCOPED under `.tq-canvas` so it
+        // can't leak into the app, injected into every slide. The contract is one
+        // leading stylesheet, but drifting runs (2026-06-12: a thinking-off run)
+        // emit ADDITIONAL style blocks between sections — so the CSS is
+        // re-extracted from ALL outside-section html on every ingest and
+        // re-scoped only when it actually grew. "" if Claude wrote no `<style>`
+        // (we still enforce the canvas frame + brand vars, so the slide
+        // renders, just plain).
+        let scopedStyle = "";
+        let rawCssSeen = "";
+
+        const slideLabel = (html: string): string | null =>
+          /data-label="([^"]*)"/.exec(html)?.[1] ?? null;
 
         const ingestSlide = (parsed: ParsedSlide) => {
           if (tFirstSection === null) tFirstSection = Date.now();
-          if (scopedStyle === null) {
-            scopedStyle = scopeDeckCss(
-              extractLeadingStyleCss(splitter.getLeadingHtml()),
-            );
+          const rawCss = extractLeadingStyleCss(splitter.getInterstitialHtml());
+          if (rawCss !== rawCssSeen) {
+            rawCssSeen = rawCss;
+            scopedStyle = scopeDeckCss(rawCss);
+          }
+          // ── Deck-restart guard ── the thinking-off draft pathology re-emits
+          // the WHOLE deck (a second data-label="1" cover after slides exist).
+          // Keep the refined second pass: drop everything before it. Mid-deck
+          // section covers are safe — they carry their own label > 1.
+          if (
+            parsed.role === "cover" &&
+            slides.length > 0 &&
+            slideLabel(parsed.html) === "1"
+          ) {
+            logger.warn("deck_restart_detected", {
+              droppedSlides: slides.length,
+              atSlideId: parsed.slideId,
+            });
+            slides.length = 0;
+            streamingPreview.length = 0;
           }
           const role =
             parsed.role && SLIDE_ROLES.has(parsed.role as never)

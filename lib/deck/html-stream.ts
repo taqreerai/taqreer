@@ -153,4 +153,25 @@ export class StreamingHtmlSplitter {
     const firstStart = spans.length > 0 ? spans[0].start : openStart;
     return firstStart > 0 ? this.buffer.slice(0, firstStart) : "";
   }
+
+  // Everything streamed OUTSIDE top-level sections so far - the leading
+  // design-system `<style>` PLUS anything emitted between sections.
+  // Models drifting off the "one leading stylesheet" contract (seen
+  // 2026-06-12: a thinking-off run defined later classes in
+  // between-section style blocks, leaving slides unstyled) put real CSS
+  // here; the generation loop re-extracts styles from this as slides
+  // arrive instead of capturing only once. Excludes the currently-open
+  // section's bytes.
+  getInterstitialHtml(): string {
+    const { spans, openStart } = scanSections(this.buffer);
+    const parts: string[] = [];
+    let cursor = 0;
+    for (const s of spans) {
+      if (s.start > cursor) parts.push(this.buffer.slice(cursor, s.start));
+      cursor = s.end;
+    }
+    const tailEnd = openStart >= 0 ? openStart : this.buffer.length;
+    if (tailEnd > cursor) parts.push(this.buffer.slice(cursor, tailEnd));
+    return parts.join("\n");
+  }
 }
