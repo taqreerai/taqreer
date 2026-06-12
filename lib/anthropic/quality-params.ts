@@ -63,8 +63,13 @@ export type AnthropicCallParams = {
   model: string;
   thinking: { type: "adaptive" } | { type: "disabled" };
   outputConfig?: { effort: "low" | "medium" | "high" | "xhigh" | "max" };
+  // Per-model output ceiling. Haiku 4.5 rejects requests above 64k
+  // output tokens (API 400: "max_tokens: 128000 > 64000"); Sonnet/Opus
+  // take 128k. The deck stream passes this straight to max_tokens.
+  maxTokens: number;
 };
 
+const HAIKU = "claude-haiku-4-5";
 const SONNET = "claude-sonnet-4-6";
 // Bumped 4-7 → 4-8 (2026-05-29, Opus 4.8 launch). No API-shape change:
 // 4.8 keeps adaptive thinking + output_config.effort and the same
@@ -79,6 +84,12 @@ export function paramsForQuality(
   quality: string | undefined | null,
 ): AnthropicCallParams {
   switch (quality) {
+    case "haiku-fast":
+      // Cheapest + fastest tier (2026-06-12). Haiku 4.5, thinking off -
+      // sonnet-fast was running slow on multi-slide decks; haiku is the
+      // speed/cost floor. Same code guards (restart drop + rolling CSS)
+      // protect the output if it drafts-then-refines.
+      return { model: HAIKU, thinking: { type: "disabled" }, maxTokens: 64000 };
     case "sonnet-fast":
       // thinking:disabled - MEASURED decision, twice:
       //   • 2026-06-12 morning: thinking-off drafted the deck in the
@@ -94,9 +105,9 @@ export function paramsForQuality(
       // interstitial CSS capture (late style blocks still reach
       // slides). Occasional double-output token cost stays, but decks
       // come out correct.
-      return { model: SONNET, thinking: { type: "disabled" } };
+      return { model: SONNET, thinking: { type: "disabled" }, maxTokens: 128000 };
     case "opus-fast":
-      return { model: OPUS, thinking: { type: "disabled" } };
+      return { model: OPUS, thinking: { type: "disabled" }, maxTokens: 128000 };
     // ─── Default + legacy fallback ──────────────────────────────
     // Catches `opus-balanced` (canonical default) AND any legacy
     // quality string from earlier menu shapes — including `opus-max`,
@@ -116,6 +127,7 @@ export function paramsForQuality(
         model: OPUS,
         thinking: { type: "adaptive" },
         outputConfig: { effort: "low" },
+        maxTokens: 128000,
       };
   }
 }

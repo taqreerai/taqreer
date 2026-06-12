@@ -1862,7 +1862,8 @@ export const deckGenerate = inngest.createFunction(
 
         const stream = client.messages.stream({
           model: callParams.model,
-          max_tokens: 128000,
+          // Per-model ceiling - Haiku rejects >64k (API 400).
+          max_tokens: callParams.maxTokens,
           thinking: callParams.thinking,
           system: [
             {
@@ -1908,6 +1909,29 @@ export const deckGenerate = inngest.createFunction(
         stream.on("text", (delta) => {
           if (tFirstText === null) tFirstText = Date.now();
           rawBuffer += delta;
+          // ── Raw-output backstop ── the slide cap counts CLOSED
+          // top-level sections, so a malformed stream (everything
+          // wrapped in one outer <section>, or sections never closing)
+          // slides past it and burns unbounded tokens we pay for - a
+          // cancelled 2026-06-12 run streamed ~95k tokens / ~$1.45 with
+          // ZERO closed sections. Bound the stream by BYTES instead,
+          // structure-independent: a generous ~30k chars per budgeted
+          // slide (real slides run ~9k) + 60k for the leading design
+          // system. Abort follows the cappedOut path (charge what
+          // closed; nothing closed -> error -> onFailure releases).
+          if (!cappedOut && slideCeiling !== null) {
+            const rawCeiling = 60_000 + slideCeiling * 30_000;
+            if (rawBuffer.length > rawCeiling) {
+              cappedOut = true;
+              logger.warn("deck_raw_output_cap_hit", {
+                jobId,
+                rawChars: rawBuffer.length,
+                rawCeiling,
+                closedSlides: slides.length,
+              });
+              stream.controller.abort();
+            }
+          }
           for (const parsed of splitter.push(delta)) ingestSlide(parsed);
           const now = Date.now();
           if (slides.length > 0 && now - lastWriteAt > 800) {

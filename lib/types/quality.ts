@@ -57,6 +57,7 @@
 // Default = `opus-balanced` — the new mid-tier sweet spot.
 
 export type Quality =
+  | "haiku-fast"
   | "sonnet-fast"
   | "opus-fast"
   | "opus-balanced";
@@ -94,6 +95,7 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // stronger) + one light-thinking "تفكير" option (green thinking
   // chip, driven by `thinking: true`). opus-max (effort:high) was
   // retired from the menu 2026-05-29.
+  { key: "haiku-fast",     label: "Haiku 4.5 · سريع",  thinking: false, secsPerSlide: 8,  baseOverheadSecs: 10 },
   { key: "sonnet-fast",    label: "Sonnet 4.6 · سريع", thinking: false, secsPerSlide: 15, baseOverheadSecs: 15 },
   { key: "opus-fast",      label: "Opus 4.8 · سريع",   thinking: false, secsPerSlide: 20, baseOverheadSecs: 30 },
   { key: "opus-balanced",  label: "Opus 4.8 · تفكير",  thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
@@ -106,6 +108,7 @@ export const DEFAULT_QUALITY: Quality = "opus-balanced";
 
 export function isQuality(value: unknown): value is Quality {
   return (
+    value === "haiku-fast" ||
     value === "sonnet-fast" ||
     value === "opus-fast" ||
     value === "opus-balanced"

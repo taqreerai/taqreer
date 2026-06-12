@@ -23,6 +23,7 @@ export const ALL_FLOWS: readonly Flow[] = [
 
 export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
   {
+    "haiku-fast": { base: 50, perSlide: 5 },
     "sonnet-fast": { base: 100, perSlide: 10 },
     "opus-fast": { base: 350, perSlide: 16 },
     "opus-balanced": { base: 400, perSlide: 22 },
@@ -58,7 +59,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 0,
     signupGrant: 400,
     slideCap: 10,
-    presets: ["sonnet-fast"],
+    presets: ["haiku-fast", "sonnet-fast"],
     flows: ["create"],
   },
   plus: {
@@ -66,7 +67,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 2000,
     signupGrant: 0,
     slideCap: 30,
-    presets: ["sonnet-fast", "opus-fast"],
+    presets: ["haiku-fast", "sonnet-fast", "opus-fast"],
     flows: ALL_FLOWS,
   },
   pro: {
@@ -74,7 +75,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 5000,
     signupGrant: 0,
     slideCap: 60,
-    presets: ["sonnet-fast", "opus-fast", "opus-balanced"],
+    presets: ["haiku-fast", "sonnet-fast", "opus-fast", "opus-balanced"],
     flows: ALL_FLOWS,
   },
   max: {
@@ -82,7 +83,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 12000,
     signupGrant: 0,
     slideCap: 75,
-    presets: ["sonnet-fast", "opus-fast", "opus-balanced"],
+    presets: ["haiku-fast", "sonnet-fast", "opus-fast", "opus-balanced"],
     flows: ALL_FLOWS,
   },
 };
