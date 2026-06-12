@@ -29,7 +29,7 @@
     "degraded": "Degraded performance",
     "down": "Service disruption"
   },
-  "common": {
+  "common": { "bulk": { "select": "Select", "toggleItem": "Toggle selection", "selectAll": "Select all", "selectedCount": "{count} selected", "delete": "Delete ({count})", "deleting": "Deleting…", "partialFail": "Could not delete {count} items" },
     "pro": "Pro",
     "close": "Close",
     "cancel": "Cancel",
@@ -521,7 +521,7 @@
     },
     "favorites": { "title": "Favorites", "subtitle": "Projects you starred from the options menu." }
   },
-  "dialogs": {
+  "dialogs": { "bulkDelete": { "projectsTitle": "Delete {count} projects?", "projectsBody": "This permanently deletes the selected projects and their files.", "templatesTitle": "Delete {count} templates?", "templatesBody": "This permanently deletes the selected templates.", "brandKitsTitle": "Delete {count} brand kits?", "brandKitsBody": "This permanently deletes the selected brand kits.", "libraryTitle": "Delete {count} images?", "libraryBody": "Images are removed from your library; decks that already use them keep working.", "confirm": "Delete" },
     "share": {
       "title": "Share", "invitePeople": "Invite people", "emailPlaceholder": "email@example.com", "enterEmail": "Enter an email", "sending": "Sending…", "invite": "Invite",
       "peopleWithAccess": "People with access", "you": "You", "awaitingAcceptance": "Awaiting acceptance", "noInvites": "No one's invited yet.", "fullOwnership": "Full ownership", "remove": "Remove",

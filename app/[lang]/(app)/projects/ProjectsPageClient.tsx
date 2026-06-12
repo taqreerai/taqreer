@@ -29,6 +29,9 @@ import {
   bucketize,
 } from "@/lib/project/derive-color-tags";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import { useMultiSelect } from "@/lib/hooks/useMultiSelect";
+import { SelectionBar, SelectModeToggle } from "@/components/app/SelectionBar";
+import { BulkDeleteConfirmDialog } from "@/components/app/BulkDeleteConfirmDialog";
 
 // 5 columns × 3 rows = 15 tiles per page. The grid component sets
 // the breakpoint at lg:grid-cols-5; on smaller viewports the grid
@@ -79,6 +82,11 @@ export function ProjectsPageClient({
   // ordering deleting a tile would leave a hole on the current
   // page instead of the 16th project sliding up into view.
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+  // Multi-select to delete (2026-06-12). Shared decks are excluded -
+  // the viewer cannot trash what they do not own.
+  const sel = useMultiSelect();
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // Recovers from the save → navigate-too-fast race: if any project
   // has no thumbnails yet, schedule router.refresh() at 3 s and 8 s
@@ -185,6 +193,39 @@ export function ProjectsPageClient({
     setPage(0);
   };
 
+  const selectableIds = useMemo(
+    () => filtered.filter((p) => p.sharedRole == null).map((p) => p.id),
+    [filtered],
+  );
+
+  const handleBulkDelete = async () => {
+    const ids = [...sel.selected];
+    setBulkBusy(true);
+    // Existing per-id route (authz + cleanup identical to single
+    // delete); allSettled so one failure does not abort the rest.
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        const res = await fetch(`/api/projects/${id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        return id;
+      }),
+    );
+    const okIds = results
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+      .map((r) => r.value);
+    setDeletedIds((prev) => new Set([...prev, ...okIds]));
+    const failed = ids.length - okIds.length;
+    setBulkBusy(false);
+    setBulkConfirm(false);
+    sel.exit();
+    if (failed > 0) {
+      window.alert(dict.common.bulk.partialFail.replace("{count}", String(failed)));
+    }
+  };
+
   return (
     <>
       <ProjectsFilterBar
@@ -199,8 +240,10 @@ export function ProjectsPageClient({
         swatchColors={swatchColors}
         selectedColor={colorHex}
         onColorChange={handleColorChange}
+        trailing={<SelectModeToggle active={sel.active} onToggle={sel.toggleMode} />}
       />
       <ProjectsGrid
+        selection={{ active: sel.active, selected: sel.selected, onToggle: sel.toggle }}
         projects={paginated}
         padTo={PAGE_SIZE}
         // ONLY page changes trigger the staggered fade cascade.
@@ -268,6 +311,29 @@ export function ProjectsPageClient({
         }
       />
       <Pagination page={activePage} pageCount={pageCount} onChange={setPage} />
+
+      <SelectionBar
+        open={sel.active}
+        count={sel.selected.size}
+        onSelectAll={() => sel.selectAll(selectableIds)}
+        onDelete={() => setBulkConfirm(true)}
+        onCancel={sel.exit}
+        deleting={bulkBusy}
+      />
+      <BulkDeleteConfirmDialog
+        open={bulkConfirm}
+        title={dict.dialogs.bulkDelete.projectsTitle.replace(
+          "{count}",
+          String(sel.selected.size),
+        )}
+        body={dict.dialogs.bulkDelete.projectsBody}
+        confirmLabel={dict.dialogs.bulkDelete.confirm}
+        busy={bulkBusy}
+        onCancel={() => {
+          if (!bulkBusy) setBulkConfirm(false);
+        }}
+        onConfirm={handleBulkDelete}
+      />
     </>
   );
 }

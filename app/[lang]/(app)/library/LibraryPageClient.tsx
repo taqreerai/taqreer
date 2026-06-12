@@ -18,6 +18,10 @@ import { Pagination } from "@/components/app/Pagination";
 import { SegmentedToggle } from "@/components/create/controls";
 import { LibraryImageCard } from "@/components/app/LibraryImageCard";
 import { LibraryImageModal } from "@/components/app/LibraryImageModal";
+import { useMultiSelect } from "@/lib/hooks/useMultiSelect";
+import { SelectionBar, SelectModeToggle } from "@/components/app/SelectionBar";
+import { BulkDeleteConfirmDialog } from "@/components/app/BulkDeleteConfirmDialog";
+import { SelectableTile } from "@/components/app/SelectableTile";
 
 export type { LibraryImage } from "@/components/app/LibraryImageCard";
 import type { LibraryImage } from "@/components/app/LibraryImageCard";
@@ -42,12 +46,20 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
   // Expand-modal target: index into `visible`. null = closed. (Index,
   // not the image, so the modal's prev/next can walk the whole list.)
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  // Multi-select to delete (2026-06-12). Deletion removes the library
+  // ROW only - decks embedding the image keep their copy (see the
+  // DELETE route note).
+  const sel = useMultiSelect();
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const base = images.filter((img) => !removedIds.has(img.id));
     const list = q
-      ? images.filter((img) => img.projectTitle.toLowerCase().includes(q))
-      : images.slice();
+      ? base.filter((img) => img.projectTitle.toLowerCase().includes(q))
+      : base;
     list.sort((a, b) =>
       sort === "name"
         ? a.projectTitle.localeCompare(b.projectTitle, "ar") ||
@@ -55,7 +67,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
         : b.createdAt.localeCompare(a.createdAt),
     );
     return list;
-  }, [images, search, sort]);
+  }, [images, removedIds, search, sort]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const activePage = Math.max(0, Math.min(page, pageCount - 1));
@@ -74,6 +86,32 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
   const handleSort = (value: SortKey) => {
     setSort(value);
     setPage(0);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...sel.selected];
+    setBulkBusy(true);
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        const res = await fetch(`/api/library/images/${id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        return id;
+      }),
+    );
+    const okIds = results
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+      .map((r) => r.value);
+    setRemovedIds((prev) => new Set([...prev, ...okIds]));
+    const failed = ids.length - okIds.length;
+    setBulkBusy(false);
+    setBulkConfirm(false);
+    sel.exit();
+    if (failed > 0) {
+      window.alert(dict.common.bulk.partialFail.replace("{count}", String(failed)));
+    }
   };
 
   return (
@@ -137,6 +175,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
                 ariaLabel={t.sortAria}
                 size="comfortable"
               />
+              <SelectModeToggle active={sel.active} onToggle={sel.toggleMode} />
             </div>
           </div>
 
@@ -163,12 +202,18 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
                   // (and would animate the backfill on delete, if/when the
                   // library gets a delete action).
                   <motion.div key={img.id} layout>
-                    <LibraryImageCard
-                      image={img}
-                      onOpen={(img) =>
-                        setOpenIndex(visible.findIndex((i) => i.id === img.id))
-                      }
-                    />
+                    <SelectableTile
+                      active={sel.active}
+                      selected={sel.selected.has(img.id)}
+                      onToggle={() => sel.toggle(img.id)}
+                    >
+                      <LibraryImageCard
+                        image={img}
+                        onOpen={(img) =>
+                          setOpenIndex(visible.findIndex((i) => i.id === img.id))
+                        }
+                      />
+                    </SelectableTile>
                   </motion.div>
                 ))}
               </div>
@@ -181,6 +226,29 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
           )}
         </>
       )}
+
+      <SelectionBar
+        open={sel.active}
+        count={sel.selected.size}
+        onSelectAll={() => sel.selectAll(visible.map((i) => i.id))}
+        onDelete={() => setBulkConfirm(true)}
+        onCancel={sel.exit}
+        deleting={bulkBusy}
+      />
+      <BulkDeleteConfirmDialog
+        open={bulkConfirm}
+        title={dict.dialogs.bulkDelete.libraryTitle.replace(
+          "{count}",
+          String(sel.selected.size),
+        )}
+        body={dict.dialogs.bulkDelete.libraryBody}
+        confirmLabel={dict.dialogs.bulkDelete.confirm}
+        busy={bulkBusy}
+        onCancel={() => {
+          if (!bulkBusy) setBulkConfirm(false);
+        }}
+        onConfirm={handleBulkDelete}
+      />
 
       <LibraryImageModal
         open={openIndex !== null}

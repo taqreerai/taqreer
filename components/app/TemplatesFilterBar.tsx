@@ -32,6 +32,8 @@ type Props = {
   swatchColors: string[];
   selectedColor: string | null;
   onColorChange: (next: string | null) => void;
+  // End-edge slot (the multi-select "Select" pill, 2026-06-12).
+  trailing?: React.ReactNode;
   // Per-tab counts so the owner chips can show numbers — gives the
   // user a quick read of "do I have any community templates available?"
   // before clicking the chip.
@@ -59,6 +61,7 @@ export function TemplatesFilterBar({
   onColorChange,
   ownCount,
   communityCount,
+  trailing,
 }: Props) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -188,6 +191,9 @@ export function TemplatesFilterBar({
             );
           })}
         </div>
+      ) : null}
+      {trailing ? (
+        <div className={swatchColors.length > 0 ? "" : "ms-auto"}>{trailing}</div>
       ) : null}
     </section>
   );

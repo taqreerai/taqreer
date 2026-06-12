@@ -30,6 +30,7 @@
 
 import { motion } from "framer-motion";
 import { ProjectThumbnail } from "@/components/app/ProjectThumbnail";
+import { SelectableTile } from "@/components/app/SelectableTile";
 import type { SlideFormat } from "@/lib/schema/slide";
 
 // Fade-in cascade REMOVED 2026-05-25. The per-tile `motion.div` used
@@ -100,6 +101,15 @@ type Props = {
   // Forwarded similarly — used by /favorites to drop a tile when
   // the user un-stars it from this view.
   onFavoriteChange?: (projectId: string, isFavorite: boolean) => void;
+  // Multi-select mode (2026-06-12): when provided AND active, every
+  // tile is wrapped in a SelectableTile overlay (clicks toggle instead
+  // of navigating). Shared-with-me decks are not selectable (the
+  // viewer cannot delete them).
+  selection?: {
+    active: boolean;
+    selected: ReadonlySet<string>;
+    onToggle: (id: string) => void;
+  };
 };
 
 export function ProjectsGrid({
@@ -110,6 +120,7 @@ export function ProjectsGrid({
   emptyState,
   onDeleted,
   onFavoriteChange,
+  selection,
 }: Props) {
   if (projects.length === 0) {
     return <>{emptyState}</>;
@@ -152,6 +163,12 @@ export function ProjectsGrid({
           key={project.id}
           layout
         >
+          <SelectableTile
+            active={selection?.active ?? false}
+            selected={selection?.selected.has(project.id) ?? false}
+            disabled={project.sharedRole != null}
+            onToggle={() => selection?.onToggle(project.id)}
+          >
           <ProjectThumbnail
             projectId={project.id}
             slides={project.thumbnailUrls}
@@ -168,6 +185,7 @@ export function ProjectsGrid({
             onDeleted={onDeleted}
             onFavoriteChange={onFavoriteChange}
           />
+          </SelectableTile>
         </motion.div>
       ))}
       {Array.from({ length: placeholderCount }, (_, i) => (

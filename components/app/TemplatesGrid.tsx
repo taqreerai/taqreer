@@ -27,6 +27,7 @@
 
 import { motion } from "framer-motion";
 import { TemplateTile } from "@/components/app/TemplateTile";
+import { SelectableTile } from "@/components/app/SelectableTile";
 import type { TemplateForBrowse } from "@/app/[lang]/(app)/templates/types";
 
 type Props = {
@@ -38,6 +39,13 @@ type Props = {
   // Fires when the user clicks a tile — parent opens TemplateLightbox
   // with the clicked template's data.
   onOpen: (template: TemplateForBrowse) => void;
+  // Multi-select mode (2026-06-12): community templates are not
+  // selectable (only the owner can delete a template).
+  selection?: {
+    active: boolean;
+    selected: ReadonlySet<string>;
+    onToggle: (id: string) => void;
+  };
 };
 
 export function TemplatesGrid({
@@ -47,6 +55,7 @@ export function TemplatesGrid({
   staggerKey,
   emptyState,
   onOpen,
+  selection,
 }: Props) {
   if (templates.length === 0) {
     return <>{emptyState}</>;
@@ -65,6 +74,12 @@ export function TemplatesGrid({
           key={tpl.id}
           layout
         >
+          <SelectableTile
+            active={selection?.active ?? false}
+            selected={selection?.selected.has(tpl.id) ?? false}
+            disabled={!tpl.isMine}
+            onToggle={() => selection?.onToggle(tpl.id)}
+          >
           <TemplateTile
             template={tpl}
             // Skip opening the lightbox if showcase render hasn't
@@ -75,6 +90,7 @@ export function TemplatesGrid({
               if (tpl.thumbnailUrls.length > 0) onOpen(tpl);
             }}
           />
+          </SelectableTile>
         </motion.div>
       ))}
       {Array.from({ length: placeholderCount }, (_, i) => (

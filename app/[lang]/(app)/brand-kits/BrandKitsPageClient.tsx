@@ -22,6 +22,10 @@ import { BrandKitDeleteConfirmDialog } from "@/components/app/BrandKitDeleteConf
 import { BrandKitRenameDialog } from "@/components/app/BrandKitRenameDialog";
 import { UseBrandKitDialog } from "@/components/app/UseBrandKitDialog";
 import { Pagination } from "@/components/app/Pagination";
+import { useMultiSelect } from "@/lib/hooks/useMultiSelect";
+import { SelectionBar, SelectModeToggle } from "@/components/app/SelectionBar";
+import { BulkDeleteConfirmDialog } from "@/components/app/BulkDeleteConfirmDialog";
+import { SelectableTile } from "@/components/app/SelectableTile";
 import {
   seedFromBrandKit,
   type BrandKitTargetFlow,
@@ -109,6 +113,37 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
   // Delete dialog state.
   const [deleteKit, setDeleteKit] = useState<BrandKitTileData | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Multi-select to delete (2026-06-12).
+  const sel = useMultiSelect();
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const handleBulkDelete = async () => {
+    const ids = [...sel.selected];
+    setBulkBusy(true);
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        const res = await fetch(`/api/brand-kits/${id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        return id;
+      }),
+    );
+    const okIds = results
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+      .map((r) => r.value);
+    setRemovedIds((prev) => new Set([...prev, ...okIds]));
+    const failed = ids.length - okIds.length;
+    setBulkBusy(false);
+    setBulkConfirm(false);
+    sel.exit();
+    router.refresh();
+    if (failed > 0) {
+      window.alert(dict.common.bulk.partialFail.replace("{count}", String(failed)));
+    }
+  };
 
   // Rename dialog state.
   const [renameKit, setRenameKit] = useState<BrandKitTileData | null>(null);
@@ -293,14 +328,27 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
           would just add a second layer of card-on-card visuals that
           fights for the user's attention. Pagination sits below the
           grid in the same flow. */}
+      {/* Select pill - brand-kits has no sort row, so it sits on its
+          own end-aligned row above the grid (mirrors the other pages'
+          position next to their sort controls). */}
+      <div className="mb-4 flex justify-end">
+        <SelectModeToggle active={sel.active} onToggle={sel.toggleMode} />
+      </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {pageKits.map((kit) => (
-          <BrandKitTile
+          <SelectableTile
             key={kit.id}
-            kit={kit}
-            onUse={() => setUseKit(kit)}
-            onMenuOpen={(rect) => handleMenuOpen(kit, rect)}
-          />
+            active={sel.active}
+            selected={sel.selected.has(kit.id)}
+            onToggle={() => sel.toggle(kit.id)}
+            radiusClassName="rounded-3xl"
+          >
+            <BrandKitTile
+              kit={kit}
+              onUse={() => setUseKit(kit)}
+              onMenuOpen={(rect) => handleMenuOpen(kit, rect)}
+            />
+          </SelectableTile>
         ))}
       </div>
       <Pagination page={safePage} pageCount={pageCount} onChange={setPage} />
@@ -343,6 +391,29 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
           if (!deleting) setDeleteKit(null);
         }}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <SelectionBar
+        open={sel.active}
+        count={sel.selected.size}
+        onSelectAll={() => sel.selectAll(visibleKits.map((k) => k.id))}
+        onDelete={() => setBulkConfirm(true)}
+        onCancel={sel.exit}
+        deleting={bulkBusy}
+      />
+      <BulkDeleteConfirmDialog
+        open={bulkConfirm}
+        title={dict.dialogs.bulkDelete.brandKitsTitle.replace(
+          "{count}",
+          String(sel.selected.size),
+        )}
+        body={dict.dialogs.bulkDelete.brandKitsBody}
+        confirmLabel={dict.dialogs.bulkDelete.confirm}
+        busy={bulkBusy}
+        onCancel={() => {
+          if (!bulkBusy) setBulkConfirm(false);
+        }}
+        onConfirm={handleBulkDelete}
       />
 
       <BrandKitRenameDialog

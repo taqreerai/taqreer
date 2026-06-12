@@ -29,6 +29,10 @@ import {
   bucketize,
 } from "@/lib/project/derive-color-tags";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
+import { useMultiSelect } from "@/lib/hooks/useMultiSelect";
+import { SelectionBar, SelectModeToggle } from "@/components/app/SelectionBar";
+import { BulkDeleteConfirmDialog } from "@/components/app/BulkDeleteConfirmDialog";
+import { useRouter } from "next/navigation";
 import {
   prepareTemplateUse,
   redirectToPricingIfGated,
@@ -71,6 +75,12 @@ export function TemplatesPageClient({
   // navigation (no need; the page unmounts) or by the catch on
   // failure (releases the gate so the user can retry).
   const [useBusy, setUseBusy] = useState(false);
+  // Multi-select to delete (own templates only, 2026-06-12).
+  const router = useRouter();
+  const sel = useMultiSelect();
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const handleUseTemplate = async () => {
     if (!preview || useBusy) return;
@@ -110,6 +120,7 @@ export function TemplatesPageClient({
 
   const filtered = useMemo(() => {
     return templates.filter((t) => {
+      if (removedIds.has(t.id)) return false;
       if (owner === "own" && !t.isMine) return false;
       if (owner === "community" && t.isMine) return false;
       // owner === "all" → no owner filter
@@ -123,7 +134,7 @@ export function TemplatesPageClient({
       }
       return true;
     });
-  }, [templates, format, language, owner, colorHex]);
+  }, [templates, removedIds, format, language, owner, colorHex]);
 
   // Filter change → page 0. Driven by per-handler resets instead of
   // a useEffect because `setState` inside an effect trips the
@@ -169,6 +180,38 @@ export function TemplatesPageClient({
     setPage(0);
   };
 
+  const selectableIds = useMemo(
+    () => filtered.filter((t) => t.isMine).map((t) => t.id),
+    [filtered],
+  );
+
+  const handleBulkDelete = async () => {
+    const ids = [...sel.selected];
+    setBulkBusy(true);
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        const res = await fetch(`/api/templates/${id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        return id;
+      }),
+    );
+    const okIds = results
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+      .map((r) => r.value);
+    setRemovedIds((prev) => new Set([...prev, ...okIds]));
+    const failed = ids.length - okIds.length;
+    setBulkBusy(false);
+    setBulkConfirm(false);
+    sel.exit();
+    router.refresh();
+    if (failed > 0) {
+      window.alert(dict.common.bulk.partialFail.replace("{count}", String(failed)));
+    }
+  };
+
   const previewFormat: SlideFormat =
     preview?.brand.format === "9:16" ? "9:16" : "16:9";
 
@@ -192,9 +235,11 @@ export function TemplatesPageClient({
           swatchColors={swatchColors}
           selectedColor={colorHex}
           onColorChange={handleColorChange}
+          trailing={<SelectModeToggle active={sel.active} onToggle={sel.toggleMode} />}
         />
 
         <TemplatesGrid
+          selection={{ active: sel.active, selected: sel.selected, onToggle: sel.toggle }}
           templates={paginated}
           padTo={PAGE_SIZE}
           staggerKey={activePage}
@@ -243,6 +288,29 @@ export function TemplatesPageClient({
 
         <Pagination page={activePage} pageCount={pageCount} onChange={setPage} />
       </div>
+
+      <SelectionBar
+        open={sel.active}
+        count={sel.selected.size}
+        onSelectAll={() => sel.selectAll(selectableIds)}
+        onDelete={() => setBulkConfirm(true)}
+        onCancel={sel.exit}
+        deleting={bulkBusy}
+      />
+      <BulkDeleteConfirmDialog
+        open={bulkConfirm}
+        title={dict.dialogs.bulkDelete.templatesTitle.replace(
+          "{count}",
+          String(sel.selected.size),
+        )}
+        body={dict.dialogs.bulkDelete.templatesBody}
+        confirmLabel={dict.dialogs.bulkDelete.confirm}
+        busy={bulkBusy}
+        onCancel={() => {
+          if (!bulkBusy) setBulkConfirm(false);
+        }}
+        onConfirm={handleBulkDelete}
+      />
 
       <TemplateLightbox
         open={!!preview}

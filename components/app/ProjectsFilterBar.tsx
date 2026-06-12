@@ -37,6 +37,9 @@ type Props = {
   swatchColors: string[];
   selectedColor: string | null;
   onColorChange: (next: string | null) => void;
+  // Rendered at the bar's end edge, after the swatches (the
+  // multi-select "Select" pill, 2026-06-12).
+  trailing?: React.ReactNode;
 };
 
 // Shared pill style — matches the existing LanguagePills component
@@ -62,6 +65,7 @@ export function ProjectsFilterBar({
   swatchColors,
   selectedColor,
   onColorChange,
+  trailing,
 }: Props) {
   const searchId = useId();
   const dict = useDict();
@@ -204,6 +208,9 @@ export function ProjectsFilterBar({
             );
           })}
         </div>
+      ) : null}
+      {trailing ? (
+        <div className={swatchColors.length > 0 ? "" : "ms-auto"}>{trailing}</div>
       ) : null}
     </section>
   );

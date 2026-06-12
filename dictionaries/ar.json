@@ -29,7 +29,7 @@
     "degraded": "أداء منخفض حالياً",
     "down": "انقطاع في الخدمة"
   },
-  "common": {
+  "common": { "bulk": { "select": "تحديد", "toggleItem": "تبديل التحديد", "selectAll": "تحديد الكل", "selectedCount": "تم تحديد {count}", "delete": "حذف ({count})", "deleting": "جارٍ الحذف...", "partialFail": "تعذر حذف {count} من العناصر" },
     "pro": "احترافي",
     "close": "إغلاق",
     "cancel": "إلغاء",
@@ -521,7 +521,7 @@
     },
     "favorites": { "title": "المفضلة", "subtitle": "مشاريعك التي وضعت عليها نجمة من قائمة الخيارات." }
   },
-  "dialogs": {
+  "dialogs": { "bulkDelete": { "projectsTitle": "حذف {count} من المشاريع؟", "projectsBody": "سيتم حذف المشاريع المحددة وملفاتها نهائيًا.", "templatesTitle": "حذف {count} من القوالب؟", "templatesBody": "سيتم حذف القوالب المحددة نهائيًا.", "brandKitsTitle": "حذف {count} من الهويات؟", "brandKitsBody": "سيتم حذف الهويات المحددة نهائيًا.", "libraryTitle": "حذف {count} من الصور؟", "libraryBody": "تُزال الصور من مكتبتك، وتبقى العروض التي تستخدمها تعمل كما هي.", "confirm": "حذف" },
     "share": {
       "title": "مشاركة", "invitePeople": "دعوة أشخاص", "emailPlaceholder": "email@example.com", "enterEmail": "أدخل البريد الإلكتروني", "sending": "جارٍ...", "invite": "دعوة",
       "peopleWithAccess": "الأشخاص الذين لديهم وصول", "you": "أنت", "awaitingAcceptance": "بانتظار القبول", "noInvites": "لا يوجد أشخاص مدعوّون بعد.", "fullOwnership": "ملكية كاملة", "remove": "إزالة",

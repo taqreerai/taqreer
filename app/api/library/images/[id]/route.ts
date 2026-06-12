@@ -155,3 +155,41 @@ export async function GET(
     },
   });
 }
+
+// DELETE /api/library/images/[id] - remove ONE image from the library
+// (multi-select delete, 2026-06-12). Deletes the GeneratedImage ROW
+// only: decks embed the image by its public storage URL, so the
+// storage object stays (deleting it would break every deck that
+// references it). Storage garbage-collection with a reference check is
+// a follow-up. Same ownership gate as GET.
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const dbUser = await prisma.user.findUnique({
+    where: { supabaseUserId: user.id },
+    select: { id: true },
+  });
+  if (!dbUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { count } = await prisma.generatedImage.deleteMany({
+    where: {
+      id,
+      version: { presentation: { project: { userId: dbUser.id } } },
+    },
+  });
+  if (count === 0) {
+    return NextResponse.json({ error: "Image not found" }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true });
+}
