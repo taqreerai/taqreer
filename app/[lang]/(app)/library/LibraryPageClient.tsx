@@ -230,7 +230,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
       <SelectionBar
         open={sel.active}
         count={sel.selected.size}
-        onSelectAll={() => sel.selectAll(visible.map((i) => i.id))}
+        onSelectAll={() => sel.selectAll(paginated.map((i) => i.id))}
         onDelete={() => setBulkConfirm(true)}
         onCancel={sel.exit}
         deleting={bulkBusy}

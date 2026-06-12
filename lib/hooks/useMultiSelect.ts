@@ -43,12 +43,17 @@ export function useMultiSelect() {
     });
   }, []);
 
-  // Toggle-all against the caller's CURRENT selectable id list: if
-  // everything is already selected, clears; otherwise selects all.
+  // Toggle-all against the caller's CURRENT PAGE of selectable ids
+  // (user direction 2026-06-12: select-all = the visible items only).
+  // Union/subtract rather than replace, so selections made on OTHER
+  // pages survive paging around.
   const selectAll = useCallback((ids: string[]) => {
     setSelected((prev) => {
       const all = ids.every((id) => prev.has(id)) && ids.length > 0;
-      return all ? new Set() : new Set(ids);
+      const next = new Set(prev);
+      if (all) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return next;
     });
   }, []);
 

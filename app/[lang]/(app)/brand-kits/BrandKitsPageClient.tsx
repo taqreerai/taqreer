@@ -396,7 +396,7 @@ export function BrandKitsPageClient({ kits }: { kits: BrandKitTileData[] }) {
       <SelectionBar
         open={sel.active}
         count={sel.selected.size}
-        onSelectAll={() => sel.selectAll(visibleKits.map((k) => k.id))}
+        onSelectAll={() => sel.selectAll(pageKits.map((k) => k.id))}
         onDelete={() => setBulkConfirm(true)}
         onCancel={sel.exit}
         deleting={bulkBusy}

@@ -180,9 +180,11 @@ export function TemplatesPageClient({
     setPage(0);
   };
 
+  // Select-all scopes to the CURRENT PAGE only (user direction
+  // 2026-06-12).
   const selectableIds = useMemo(
-    () => filtered.filter((t) => t.isMine).map((t) => t.id),
-    [filtered],
+    () => paginated.filter((t) => t.isMine).map((t) => t.id),
+    [paginated],
   );
 
   const handleBulkDelete = async () => {

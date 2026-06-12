@@ -193,9 +193,11 @@ export function ProjectsPageClient({
     setPage(0);
   };
 
+  // Select-all scopes to the CURRENT PAGE only (user direction
+  // 2026-06-12) - what you see is what you select.
   const selectableIds = useMemo(
-    () => filtered.filter((p) => p.sharedRole == null).map((p) => p.id),
-    [filtered],
+    () => paginated.filter((p) => p.sharedRole == null).map((p) => p.id),
+    [paginated],
   );
 
   const handleBulkDelete = async () => {
