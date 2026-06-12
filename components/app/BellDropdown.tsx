@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   formatNotificationTime,
@@ -75,7 +76,7 @@ function popoverLeft(centerX: number, viewportWidth: number): number {
 
 export function BellDropdown({ headless = false }: { headless?: boolean } = {}) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const router = useRouter();
   // Hide "deck finished" from the BELL only (its list, its toast pop, AND the
   // unread badge — all derive from `items` below). For images decks it fires
@@ -435,10 +436,12 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
       notificationStore.markRead(n.id);
       if (n.href) {
         setOpen(false);
-        router.push(n.href);
+        // Server rows carry BARE app paths; prefix the active locale
+        // (a raw push dropped the language).
+        router.push(localizedHref(n.href, locale));
       }
     },
-    [router],
+    [router, locale],
   );
 
   const handleClearAll = useCallback(() => {
@@ -800,11 +803,18 @@ export function NotificationRow({
       // trivially. Skip during transitioning too: max-height is
       // mid-animation and the comparison is noisy.
       if (expanded || transitioning) return;
-      const title = titleRef.current;
-      const desc = descRef.current;
-      const titleClipped = !!title && title.scrollHeight > title.clientHeight + 1;
-      const descClipped = !!desc && desc.scrollHeight > desc.clientHeight + 1;
-      setIsClipped(titleClipped || descClipped);
+      // "Clipped" = at least MOST of a line hidden, not a few pixels.
+      // Chrome's standardized line-clamp reports scrollHeight ~3px
+      // above clientHeight even for unclipped single-line content
+      // (leading/descender rounding), so the old `+ 1` tolerance made
+      // EVERY row grow a chevron (bug 2026-06-12). Compare against
+      // 80% of the element's own line-height instead.
+      const clipped = (el: HTMLParagraphElement | null) => {
+        if (!el) return false;
+        const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 16;
+        return el.scrollHeight - el.clientHeight >= lineHeight * 0.8;
+      };
+      setIsClipped(clipped(titleRef.current) || clipped(descRef.current));
     };
     measure();
     const ro = new ResizeObserver(measure);

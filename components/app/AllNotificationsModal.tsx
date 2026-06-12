@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { NotificationRow } from "@/components/app/BellDropdown";
 import {
   notificationStore,
@@ -26,7 +27,7 @@ export function AllNotificationsModal({
   items: Notification[];
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const router = useRouter();
   // The bell already calls setUser → store is hydrated. This modal just
   // reads the same snapshot via the `items` prop.
@@ -57,10 +58,11 @@ export function AllNotificationsModal({
       notificationStore.markRead(n.id);
       if (n.href) {
         onClose();
-        router.push(n.href);
+        // Server rows carry BARE app paths; prefix the active locale.
+        router.push(localizedHref(n.href, locale));
       }
     },
-    [router, onClose],
+    [router, onClose, locale],
   );
 
   // Clear-all phase state machine:

@@ -267,14 +267,15 @@ function formatNotificationRow(
             ? "creditedWelcome"
             : "creditedRenewal"
       ];
-      href = "/settings";
+      href = "/plans";
       break;
     }
     case "billing.payment_failed":
       kind = "error";
       title = n.billing.paymentFailedTitle;
       desc = n.billing.paymentFailedDesc;
-      href = "/settings";
+      // The page with payment methods (embedded billing, 2026-06-12).
+      href = "/billing";
       break;
     case "billing.subscription_ending": {
       kind = "warning";
@@ -282,7 +283,8 @@ function formatNotificationRow(
         typeof payload.date === "string" ? payload.date : "";
       title = n.billing.endingTitle.replace("{date}", date);
       desc = n.billing.endingDesc;
-      href = "/settings";
+      // Resume lives on /billing.
+      href = "/billing";
       break;
     }
     default:
