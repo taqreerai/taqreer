@@ -141,8 +141,6 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
   const { locale } = useLocale();
   const t = dict.checkout;
   const state = useCheckoutElements();
-  const [email, setEmail] = useState("");
-  const [emailTouched, setEmailTouched] = useState(false);
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
 
@@ -168,20 +166,28 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
   }
 
   const { checkout } = state;
-  // The session carries the customer's email (we create it against the
-  // Stripe Customer); a typed value overrides it at confirm time.
-  const effectiveEmail = emailTouched ? email : (checkout.email ?? "");
+  // The session is created against the user's Stripe Customer, whose
+  // email is FIXED for the session - Stripe rejects confirm({ email })
+  // when a customer email exists (the bug that froze the pay button),
+  // so the email renders read-only and confirm() takes no override.
   const amount = checkout.total.total.amount;
   const cta = (isTopup ? t.payCta : t.subscribeCta).replace("{amount}", amount);
 
   async function pay() {
     setPaying(true);
     setPayError(null);
-    const result = await checkout.confirm({ email: effectiveEmail });
-    // On success Stripe redirects to return_url; we only come back
-    // here on failure.
-    if (result.type === "error") {
-      setPayError(result.error.message || t.payFailed);
+    try {
+      const result = await checkout.confirm();
+      // On success Stripe redirects to return_url; we only come back
+      // here on failure.
+      if (result.type === "error") {
+        setPayError(result.error.message || t.payFailed);
+        setPaying(false);
+      }
+    } catch {
+      // confirm() REJECTS on integration errors (it doesn't return
+      // them) - surface instead of leaving the button stuck.
+      setPayError(t.payFailed);
       setPaying(false);
     }
   }
@@ -224,11 +230,8 @@ function CheckoutForm({ isTopup }: { isTopup: boolean }) {
           </label>
           <input
             type="email"
-            value={effectiveEmail}
-            onChange={(e) => {
-              setEmailTouched(true);
-              setEmail(e.target.value);
-            }}
+            value={checkout.email ?? ""}
+            disabled
             className="input-dark"
             dir="ltr"
             autoComplete="email"
