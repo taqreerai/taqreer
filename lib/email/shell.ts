@@ -1,10 +1,12 @@
 // Shared production email shell for taqreer.ai transactional emails.
 //
-// One source of truth for the dark, brand-aurora email design (matches the
-// design lab). Email-safe: table layout, inline styles, a baked aurora PNG as
-// a bottom-anchored background (Gmail/Outlook drop CSS blur), a baked icon PNG
-// (no SVG in mail), and a fixed font stack (Cairo loads in Apple Mail/iOS; the
-// rest fall back to native Arabic, SF Arabic / Segoe UI / Tahoma).
+// One source of truth for the dark email design. Email-safe: table layout,
+// inline styles, a flat #111111 canvas (the CSS aurora relied on blur/position
+// which Gmail/Outlook drop, so the glow is dropped, keep it simple), a baked
+// logo-box PNG (our mark + dark tile + hairline border in ONE image, so no SVG
+// in mail and the dark-mode flip can't vanish the glyph), and a fixed font
+// stack (Cairo loads in Apple Mail/iOS; the rest fall back to native Arabic /
+// Segoe UI / Tahoma).
 //
 // Used two ways:
 //   1. Resend senders (welcome / share / contact) call renderEmail() at send
@@ -61,8 +63,7 @@ export const EMAIL_HEAD = `    <meta charset="utf-8" />
 export function renderEmailBody(p: EmailShellParams): string {
   const dir = p.lang === "ar" ? "rtl" : "ltr";
   const base = p.assetBase ?? ASSET_BASE;
-  const aurora = `${base}/email/aurora.png`;
-  const icon = `${base}/email/icon-white.png`;
+  const icon = `${base}/email/icon-box.png`;
 
   const preheader = p.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#111111;">${p.preheader}</div>`
@@ -90,19 +91,13 @@ export function renderEmailBody(p: EmailShellParams): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="${aurora}" style="width:600px;max-width:600px;background:#111111 url('${aurora}') no-repeat bottom center;background-size:600px auto;font-family:${FONT_STACK};">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:${FONT_STACK};">
             <tr>
               <td valign="top" align="center" dir="${dir}" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="${icon}" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="${icon}" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 ${p.eyebrowHtml ?? ""}
                 <h1 style="margin:0;font-size:${p.lang === "ar" ? "30px" : "26px"};font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">${p.title}</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">${p.subHtml}</p>

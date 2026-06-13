@@ -2,9 +2,9 @@
 
 Dashboard: **Authentication -> Emails**. For each template below: paste the **Subject**, switch the body to **Source** mode, `Cmd+A` to select all, then paste the **Body**.
 
-> Heads up: the dashboard **Preview** shows the literal `{{ if }}` tag and renders the Arabic branch first then the English one. That is expected - the preview never evaluates Go conditionals. The real sent email evaluates `.Data.lang` and picks one language. Only a live send proves it.
+> The dashboard **Preview** shows the literal `{{ if }}` tag and renders the Arabic branch first then the English one. That is expected - the preview never evaluates Go conditionals. The real sent email evaluates `.Data.lang` and picks one language.
 
-Arabic is the explicit branch; English is the default (covers older accounts whose metadata has no `lang`).
+Arabic is the explicit branch; English is the default. Flat dark background (no aurora), the logo is a single baked PNG.
 
 ---
 
@@ -39,19 +39,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="rtl" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:30px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">أكّد بريدك الإلكتروني</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">بقيت خطوة واحدة لتفعيل حسابك. اضغط الزر أدناه لتأكيد بريدك الإلكتروني والبدء في إنشاء عروضك على taqreer.ai.</p>
@@ -81,19 +75,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="ltr" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:26px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">Activate your account</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">Thanks for joining taqreer.ai. Confirm your email to activate your account and start building presentations.</p>
@@ -156,19 +144,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="rtl" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:30px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">إعادة تعيين كلمة المرور</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">تلقّينا طلبًا لإعادة تعيين كلمة مرور حسابك. اضغط الزر أدناه لاختيار كلمة مرور جديدة. الرابط صالح لمدة محدودة حفاظًا على أمان حسابك.</p>
@@ -198,19 +180,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="ltr" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:26px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">Reset your password</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">We received a request to reset your password. Choose a new one below. This link is valid for a limited time.</p>
@@ -273,19 +249,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="rtl" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:30px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">تأكيد بريدك الجديد</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">اضغط الزر أدناه لتأكيد عنوان بريدك الإلكتروني الجديد. لن يتم تحديث بريد حسابك حتى يتم التأكيد.</p>
@@ -315,19 +285,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="ltr" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:26px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">Confirm your new email</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">Confirm your new email address below. The change doesn't take effect until you confirm it.</p>
@@ -390,19 +354,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="rtl" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:30px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">تم تغيير كلمة المرور</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">تم تغيير كلمة مرور حسابك بنجاح. إذا لم تكن أنت من قام بهذا التغيير، تواصل معنا فورًا على <a href="mailto:support@taqreer.ai" style="color:#66A3FF;text-decoration:none;">support@taqreer.ai</a>.</p>
@@ -425,19 +383,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="ltr" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:26px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">Your password was changed</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">Your taqreer.ai account password was changed successfully. If this wasn't you, contact us right away at <a href="mailto:support@taqreer.ai" style="color:#66A3FF;text-decoration:none;">support@taqreer.ai</a>.</p>
@@ -493,19 +445,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="rtl" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:30px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">تم تغيير البريد الإلكتروني</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">تم تحديث البريد الإلكتروني المرتبط بحسابك. إذا لم تكن أنت من طلب هذا التغيير، تواصل معنا فورًا على <a href="mailto:support@taqreer.ai" style="color:#66A3FF;text-decoration:none;">support@taqreer.ai</a>.</p>
@@ -528,19 +474,13 @@ Arabic is the explicit branch; English is the default (covers older accounts who
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
-          <!-- Email canvas: 600px, baked aurora PNG bottom-anchored over #111111.
-               height=560 acts as a min-height; the footer row valigns to the bottom. -->
-          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" background="https://taqreer.ai/email/aurora.png" style="width:600px;max-width:600px;background:#111111 url('https://taqreer.ai/email/aurora.png') no-repeat bottom center;background-size:600px auto;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
+          <!-- Email canvas: 600px, flat #111111. height=560 acts as a
+               min-height; the footer row valigns to the bottom. -->
+          <table role="presentation" width="600" height="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="width:600px;max-width:600px;background:#111111;font-family:'Cairo', -apple-system, system-ui, 'Segoe UI', Tahoma, Arial, sans-serif;">
             <tr>
               <td valign="top" align="center" dir="ltr" style="padding:76px 40px 0;text-align:center;">
-                <!-- icon -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 48px;width:62px;height:62px;background:#0A0A0A;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
-                  <tr>
-                    <td align="center" valign="middle" style="height:62px;">
-                      <img src="https://taqreer.ai/email/icon-white.png" width="30" height="30" alt="taqreer.ai" style="display:block;width:30px;height:30px;" />
-                    </td>
-                  </tr>
-                </table>
+                <!-- logo box: single baked PNG (mark + tile + hairline border), flip-proof -->
+                <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:26px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">Your email was changed</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">The email address on your taqreer.ai account was updated. If this wasn't you, contact us right away at <a href="mailto:support@taqreer.ai" style="color:#66A3FF;text-decoration:none;">support@taqreer.ai</a>.</p>
