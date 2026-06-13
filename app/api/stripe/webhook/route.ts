@@ -363,6 +363,10 @@ function cadenceFromSubscriptionObject(
 ): BillingCadence | null {
   const price = sub.items.data[0]?.price;
   const interval = price?.recurring?.interval;
+  // Stripe intervals are day|week|month|year, but BILLING_CATALOG only ever
+  // mints month + year prices, so day/week never reach here. If one somehow
+  // did (a manually-created price), we fall through to grant metadata, then
+  // null - the UI just omits the cadence pill rather than mislabelling.
   if (interval === "month") return "monthly";
   if (interval === "year") return "yearly";
   const grant = parseGrantMetadata(

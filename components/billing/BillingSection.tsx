@@ -107,12 +107,15 @@ export function BillingSection({
   const planName = planLabel(dict.components.planUsage, plan);
 
   const currentIdx = TIER_ORDER.indexOf(plan);
-  const renewDate =
-    summary?.currentPeriodEnd && credits
-      ? format(new Date(summary.currentPeriodEnd), "d MMMM", {
-          locale: dateFnsLocale(locale),
-        })
-      : null;
+  // The renewal date rides on the summary (the billing mirror), so it must
+  // NOT wait on the credit store - gating on `credits` could blank the
+  // renewal/ends-on line (and its cadence hint) while credits are still
+  // loading (CR PR#58).
+  const renewDate = summary?.currentPeriodEnd
+    ? format(new Date(summary.currentPeriodEnd), "d MMMM", {
+        locale: dateFnsLocale(locale),
+      })
+    : null;
   // Billing interval of the active paid subscription (null = free/none) →
   // a muted chip next to the tier badge + a "billed monthly/yearly" hint.
   // (Named subCadence to avoid colliding with the monthly/yearly TOGGLE

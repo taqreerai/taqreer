@@ -110,7 +110,7 @@ export function ManageBilling() {
   // only build the cancel-aware renewal sub-line, which still wants the
   // "billed monthly/yearly" hint when a subscription is active.
   const cadence = summary?.cadence ?? null;
-  const cadenceHint = cadence === "yearly" ? t.yearlyHint : t.monthlyHint;
+  const cadenceHint = cadence ? (cadence === "yearly" ? t.yearlyHint : t.monthlyHint) : null;
   // Action area for the shared plan card: Upgrade (primary) stays on top;
   // Cancel/Resume sits BELOW it when subscribed (user direction 2026-06-13).
   // Renewal sub-line: "ends on" when a cancel is scheduled, else

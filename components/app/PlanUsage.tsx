@@ -35,10 +35,10 @@ export function PlanUsage({
     ? new Date(balance.allotmentResetAt)
     : null;
   // Cadence pill + "billed monthly/yearly" hint (labels live under the
-  // billing dict). Null cadence (free / no sub) → neither renders.
+  // billing dict). Null cadence (free / no sub) → neither computes nor renders.
   const tb = dict.components.billing;
-  const cadenceLabel = cadence === "yearly" ? tb.yearly : tb.monthly;
-  const cadenceHint = cadence === "yearly" ? tb.yearlyHint : tb.monthlyHint;
+  const cadenceLabel = cadence ? (cadence === "yearly" ? tb.yearly : tb.monthly) : null;
+  const cadenceHint = cadence ? (cadence === "yearly" ? tb.yearlyHint : tb.monthlyHint) : null;
 
   return (
     <section>
