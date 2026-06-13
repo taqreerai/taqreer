@@ -129,10 +129,6 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
     • Note: the signup credit grant has alias + IP-velocity farming guards —
       repeat-testing from one inbox/IP grants 0 by design (not a bug).
     • Optional later: point DMARC rua at an inbox we monitor (GoDaddy default).
-    • Cleanup deferred: public/email/{aurora,icon-white}.png + their bake scripts
-      are kept ONLY because the currently-pasted (pre-icon-box) Supabase templates
-      still reference icon-white.png — remove them once the new templates are
-      pasted (deploy.sh rsync --delete would otherwise break the live icon).
 
 Phase C — Hardening:
 - Rate limiting: NONE exists anywhere. Priority order: share-invite email
