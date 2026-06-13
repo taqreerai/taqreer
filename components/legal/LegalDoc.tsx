@@ -1,4 +1,4 @@
-// Legal document body (Terms / Privacy / Refund). PURE CONTENT — the chrome
+// Legal document body (Terms / Privacy / Refund). PURE CONTENT: the chrome
 // (landing background + nav + footer) is provided by app/[lang]/(legal)/layout.
 // Renders a centred prose column, chrome-dir aware via the [lang] layout.
 

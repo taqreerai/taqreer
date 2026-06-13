@@ -35,29 +35,29 @@ const E = LEGAL_META.entityName;
 const BRAND = LEGAL_META.brand;
 const MAIL = LEGAL_META.contactEmail;
 
-// Subprocessors — the third parties that process data to run the service.
+// Subprocessors: the third parties that process data to run the service.
 const SUBPROCESSORS_EN = [
-  "Supabase — authentication, database, and file storage hosting.",
-  "Anthropic (Claude) — the AI that designs your slides from the content you provide.",
-  "OpenAI — AI image generation for slide visuals.",
-  "Stripe — payment processing and billing (we never see or store your full card details).",
-  "Sentry — error monitoring and performance diagnostics.",
-  "Resend — transactional email delivery (e.g. share invitations).",
-  "Hetzner — cloud server hosting (European data centre).",
+  "Supabase: authentication, database, and file storage hosting.",
+  "Anthropic (Claude): the AI that designs your slides from the content you provide.",
+  "OpenAI: AI image generation for slide visuals.",
+  "Stripe: payment processing and billing (we never see or store your full card details).",
+  "Sentry: error monitoring and performance diagnostics.",
+  "Resend: transactional email delivery (e.g. share invitations).",
+  "Hetzner: cloud server hosting (European data centre).",
 ];
 const SUBPROCESSORS_AR = [
-  "Supabase — استضافة المصادقة وقاعدة البيانات وتخزين الملفات.",
-  "Anthropic (Claude) — الذكاء الاصطناعي الذي يصمم شرائحك من المحتوى الذي تقدّمه.",
-  "OpenAI — توليد الصور بالذكاء الاصطناعي لعناصر الشرائح.",
-  "Stripe — معالجة المدفوعات والفوترة (لا نطّلع على بيانات بطاقتك الكاملة ولا نخزّنها).",
-  "Sentry — مراقبة الأخطاء وتشخيص الأداء.",
-  "Resend — إرسال الرسائل البريدية التشغيلية (مثل دعوات المشاركة).",
-  "Hetzner — استضافة الخوادم السحابية (مركز بيانات أوروبي).",
+  "Supabase: استضافة المصادقة وقاعدة البيانات وتخزين الملفات.",
+  "Anthropic (Claude): الذكاء الاصطناعي الذي يصمم شرائحك من المحتوى الذي تقدّمه.",
+  "OpenAI: توليد الصور بالذكاء الاصطناعي لعناصر الشرائح.",
+  "Stripe: معالجة المدفوعات والفوترة (لا نطّلع على بيانات بطاقتك الكاملة ولا نخزّنها).",
+  "Sentry: مراقبة الأخطاء وتشخيص الأداء.",
+  "Resend: إرسال الرسائل البريدية التشغيلية (مثل دعوات المشاركة).",
+  "Hetzner: استضافة الخوادم السحابية (مركز بيانات أوروبي).",
 ];
 
-// ─────────────────────────────────────────────────────────────────────────
+// =========================================================================
 // TERMS & CONDITIONS
-// ─────────────────────────────────────────────────────────────────────────
+// =========================================================================
 const TERMS_EN: LegalDoc = {
   title: "Terms & Conditions",
   intro:
@@ -156,8 +156,8 @@ const TERMS_EN: LegalDoc = {
     {
       heading: "8. Intellectual Property",
       blocks: [
-        `The Service itself — including its software, design system, templates, and ` +
-          `branding — is owned by ${BRAND} and protected by intellectual-property ` +
+        `The Service itself, including its software, design system, templates, and ` +
+          `branding, is owned by ${BRAND} and protected by intellectual-property ` +
           `laws. These Terms grant you a limited, revocable, non-transferable ` +
           `licence to use the Service; they do not transfer any ownership in it to you.`,
       ],
@@ -314,7 +314,7 @@ const TERMS_AR: LegalDoc = {
     {
       heading: "8. الملكية الفكرية",
       blocks: [
-        `الخدمة نفسها — بما فيها برمجياتها ونظام تصميمها وقوالبها وهويتها — مملوكة ` +
+        `الخدمة نفسها، بما فيها برمجياتها ونظام تصميمها وقوالبها وهويتها، مملوكة ` +
           `لـ${BRAND} ومحميّة بقوانين الملكية الفكرية. وتمنحك هذه الشروط ترخيصاً ` +
           `محدوداً قابلاً للإلغاء وغير قابل للنقل لاستخدام الخدمة، ولا تنقل إليك أي ` +
           `ملكية فيها.`,
@@ -377,14 +377,14 @@ const TERMS_AR: LegalDoc = {
   ],
 };
 
-// ─────────────────────────────────────────────────────────────────────────
+// =========================================================================
 // PRIVACY POLICY
-// ─────────────────────────────────────────────────────────────────────────
+// =========================================================================
 const PRIVACY_EN: LegalDoc = {
   title: "Privacy Policy",
   intro:
-    `This Privacy Policy explains how ${E} ("${BRAND}", "we") — a limited liability ` +
-    `company organized in ${LEGAL_META.jurisdiction} — collects, uses, and protects ` +
+    `This Privacy Policy explains how ${E} ("${BRAND}", "we"), a limited liability ` +
+    `company organized in ${LEGAL_META.jurisdiction}, collects, uses, and protects ` +
     `information when you use ${BRAND} at ${LEGAL_META.domain}. ${BRAND} is an online ` +
     `service offered to a global, Arabic- and English-speaking audience, and we aim ` +
     `to honour the data-protection rights that apply to you under your local laws ` +
@@ -448,8 +448,8 @@ const PRIVACY_EN: LegalDoc = {
       heading: "6. Cookies & Similar Technologies",
       blocks: [
         { list: [
-          "Essential cookies — sign-in/session (Supabase), language (tq_locale), theme (tq_theme), and pre-launch access (tq_preview). These are required for the Service to work.",
-          "Diagnostics — Sentry uses identifiers to group errors and record masked session replays (text and media are masked) to help us fix issues.",
+          "Essential cookies: sign-in/session (Supabase), language (tq_locale), theme (tq_theme), and pre-launch access (tq_preview). These are required for the Service to work.",
+          "Diagnostics: Sentry uses identifiers to group errors and record masked session replays (text and media are masked) to help us fix issues.",
         ] },
         `You can control cookies through your browser settings; blocking essential ` +
           `cookies may break parts of the Service.`,
@@ -468,8 +468,8 @@ const PRIVACY_EN: LegalDoc = {
     {
       heading: "8. Security",
       blocks: [
-        `We use technical and organizational measures — including encryption in ` +
-          `transit, access controls, and scoped credentials — to protect your data. ` +
+        `We use technical and organizational measures, including encryption in ` +
+          `transit, access controls, and scoped credentials, to protect your data. ` +
           `No method of transmission or storage is completely secure, and we cannot ` +
           `guarantee absolute security.`,
       ],
@@ -511,8 +511,8 @@ const PRIVACY_EN: LegalDoc = {
 const PRIVACY_AR: LegalDoc = {
   title: "سياسة الخصوصية",
   intro:
-    `توضّح سياسة الخصوصية هذه كيف تجمع ${E} ("${BRAND}"، "نحن") — وهي شركة ذات مسؤولية ` +
-    `محدودة مؤسَّسة في ${LEGAL_META.jurisdictionAr} — المعلومات وتستخدمها وتحميها عند ` +
+    `توضّح سياسة الخصوصية هذه كيف تجمع ${E} ("${BRAND}"، "نحن")، وهي شركة ذات مسؤولية ` +
+    `محدودة مؤسَّسة في ${LEGAL_META.jurisdictionAr}، المعلومات وتستخدمها وتحميها عند ` +
     `استخدامك ${BRAND} على ${LEGAL_META.domain}. و${BRAND} خدمة إلكترونية تُقدَّم لجمهور ` +
     `عالمي ناطق بالعربية والإنجليزية، ونحرص على احترام حقوق حماية البيانات المطبّقة عليك ` +
     `بموجب قوانين بلدك (مثل نظام PDPL السعودي أو نظام GDPR الأوروبي). النسخة الإنجليزية ` +
@@ -574,8 +574,8 @@ const PRIVACY_AR: LegalDoc = {
       heading: "6. ملفات تعريف الارتباط والتقنيات المشابهة",
       blocks: [
         { list: [
-          "ملفات أساسية — تسجيل الدخول/الجلسة (Supabase) واللغة (tq_locale) والسمة (tq_theme) والوصول قبل الإطلاق (tq_preview). وهي لازمة لعمل الخدمة.",
-          "التشخيص — يستخدم Sentry معرّفات لتجميع الأخطاء وتسجيل إعادة تشغيل جلسات مُخفّاة (يُخفّى النص والوسائط) لمساعدتنا في إصلاح المشكلات.",
+          "ملفات أساسية: تسجيل الدخول/الجلسة (Supabase) واللغة (tq_locale) والسمة (tq_theme) والوصول قبل الإطلاق (tq_preview). وهي لازمة لعمل الخدمة.",
+          "التشخيص: يستخدم Sentry معرّفات لتجميع الأخطاء وتسجيل إعادة تشغيل جلسات مُخفّاة (يُخفّى النص والوسائط) لمساعدتنا في إصلاح المشكلات.",
         ] },
         `يمكنك التحكّم بملفات تعريف الارتباط من إعدادات متصفحك؛ وقد يؤدي حجب الملفات ` +
           `الأساسية إلى تعطّل أجزاء من الخدمة.`,
@@ -593,8 +593,8 @@ const PRIVACY_AR: LegalDoc = {
     {
       heading: "8. الأمان",
       blocks: [
-        `نستخدم تدابير تقنية وتنظيمية — منها التشفير أثناء النقل وضوابط الوصول ` +
-          `والصلاحيات المحدودة — لحماية بياناتك. ولا توجد وسيلة نقل أو تخزين آمنة ` +
+        `نستخدم تدابير تقنية وتنظيمية، منها التشفير أثناء النقل وضوابط الوصول ` +
+          `والصلاحيات المحدودة، لحماية بياناتك. ولا توجد وسيلة نقل أو تخزين آمنة ` +
           `تماماً، ولا يمكننا ضمان الأمان المطلق.`,
       ],
     },
@@ -629,9 +629,9 @@ const PRIVACY_AR: LegalDoc = {
   ],
 };
 
-// ─────────────────────────────────────────────────────────────────────────
+// =========================================================================
 // REFUND POLICY
-// ─────────────────────────────────────────────────────────────────────────
+// =========================================================================
 const REFUND_EN: LegalDoc = {
   title: "Refund Policy",
   intro:
@@ -659,8 +659,8 @@ const REFUND_EN: LegalDoc = {
     {
       heading: "3. Billing Errors",
       blocks: [
-        `If you are charged in error — for example a duplicate charge or a charge ` +
-          `after a confirmed cancellation — contact us at ${MAIL} and we will ` +
+        `If you are charged in error, for example a duplicate charge or a charge ` +
+          `after a confirmed cancellation, contact us at ${MAIL} and we will ` +
           `investigate and correct genuine billing errors, including refunding ` +
           `incorrect charges where appropriate.`,
       ],
@@ -718,7 +718,7 @@ const REFUND_AR: LegalDoc = {
     {
       heading: "3. أخطاء الفوترة",
       blocks: [
-        `إذا خُصم منك مبلغ بالخطأ — مثل خصم مكرّر أو خصم بعد إلغاء مؤكَّد — فتواصل معنا ` +
+        `إذا خُصم منك مبلغ بالخطأ، مثل خصم مكرّر أو خصم بعد إلغاء مؤكَّد، فتواصل معنا ` +
           `على ${MAIL} وسنحقّق ونصحّح أخطاء الفوترة الحقيقية، بما في ذلك ردّ المبالغ ` +
           `المخصومة بالخطأ عند الاقتضاء.`,
       ],

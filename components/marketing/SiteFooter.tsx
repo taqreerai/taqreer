@@ -1,4 +1,4 @@
-// Shared site footer — used by the landing (app/[lang]/page.tsx) and the legal
+// Shared site footer: used by the landing (app/[lang]/page.tsx) and the legal
 // pages so they share one chrome. Self-contained (own max-w column + dict
 // fetch) so it can drop into any public page with just a locale.
 
