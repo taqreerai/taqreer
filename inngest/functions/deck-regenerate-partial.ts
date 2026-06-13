@@ -422,6 +422,9 @@ type RegenPartialEvent = {
   // the broadcast is the courtesy signal for OTHER collaborators).
   // Optional for backwards compat with in-flight pre-16.D events.
   actorPrismaUserId?: string | null;
+  // Billing tier captured at enqueue so the `priority.run` CEL can give Max-tier
+  // regens queue priority. Read only by Inngest's scheduler; missing → no boost.
+  tier?: string | null;
 };
 
 export const deckRegeneratePartial = inngest.createFunction(
@@ -429,6 +432,9 @@ export const deckRegeneratePartial = inngest.createFunction(
     id: "deck-regenerate-partial",
     name: "Regenerate Selected Slides with Comments",
     retries: 2,
+    // Max-tier processing priority (matches deck-generate): Max regens jump the
+    // queue under contention. `event.data.tier` is set at enqueue.
+    priority: { run: "event.data.tier == 'max' ? 120 : 0" },
     triggers: [{ event: "deck.regenerate.partial.requested" }],
     // Terminal failure path — runs once after every retry is exhausted.
     // Marks the queued target version `failed` so the UI's status poller

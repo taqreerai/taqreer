@@ -99,6 +99,9 @@ export function SlideNavSidebar({
   // (it owns the manifest + ShareDialog) and passes them as a slot.
   actionsSlot,
   topOffset = 16,
+  // Studio: collapsed → the card slides off the inline edge (kept mounted so the
+  // thumbnails never remount/flash) and DeckView shows a thin reopen handle.
+  collapsed = false,
 }: {
   items: NavItem[];
   currentIndex: number | null;
@@ -125,6 +128,7 @@ export function SlideNavSidebar({
   // Studio: top edge of the floating card - DeckView measures the
   // canvas top so the panel aligns with it (2026-06-12).
   topOffset?: number;
+  collapsed?: boolean;
   language?: "ar" | "en";
   // Fires when the user clicks the bulk pill. Parent owns the
   // network call + optimistic state update so it can fan the result
@@ -287,14 +291,20 @@ export function SlideNavSidebar({
       style={
         floating
           ? {
-              // Aligned with the canvas top edge (DeckView measures it via
-              // `topOffset`, 2026-06-12); 16px off the inline edge.
+              // Vertically CENTERED in the band between the header strip
+              // (topOffset) and the bottom action bar (~100px), capped to that
+              // band so the thumbnail list scrolls inside (user direction
+              // 2026-06-14). 16px off the inline edge. Collapsed → slide fully
+              // off the right edge (still mounted; DeckView shows a handle).
               right: 16,
-              top: topOffset,
-              bottom: 100,
+              top: `calc(50% + ${(topOffset - 100) / 2}px)`,
+              transform: `translateY(-50%)${collapsed ? " translateX(calc(100% + 24px))" : ""}`,
+              maxHeight: `calc(100dvh - ${topOffset + 100}px)`,
               width: SLIDE_NAV_WIDTH,
               background: "var(--tq-surface)",
               borderColor: "var(--tq-border-hairline)",
+              pointerEvents: collapsed ? "none" : undefined,
+              transition: "transform 300ms ease",
             }
           : {
               right: mainSidebarWidth,

@@ -840,6 +840,8 @@ export async function POST(request: Request) {
         // fires harmlessly and the field's there for downstream
         // notification fan-out.
         actorPrismaUserId: result.dbUser.id,
+        // Max-tier processing priority (see deck-generate `priority.run`).
+        tier: result.dbUser.plan,
         ...eventPayload,
       },
     });

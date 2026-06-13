@@ -11,6 +11,7 @@
 // for the menu + dialogs.
 
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { useRouter } from "next/navigation";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 
 // Mirror the server-side cap in /api/projects/[id] PATCH so the input
@@ -51,6 +52,7 @@ export function useProjectActions(
     onFavoriteChange,
   }: UseProjectActionsOptions,
 ) {
+  const router = useRouter();
   // Menu open + the DOMRect it anchors to. Null rect ↔ closed.
   const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   // Optimistic favorite — server response replaces this once the PATCH
@@ -171,6 +173,12 @@ export function useProjectActions(
       if (!res.ok) throw new Error(`delete: ${res.status}`);
       setTrashOpen(false);
       onDeleted?.(projectId);
+      // Invalidate the Router Cache so the deleted deck can't reappear from a
+      // stale RSC payload when the user navigates back to ANY list later (the
+      // optimistic `onDeleted` above only hides it on the current surface, and
+      // that local state is lost on unmount). A delete is a user-initiated
+      // action, so router.refresh is the right tool here (item 14, 2026-06-14).
+      router.refresh();
     } catch (err) {
       // Leave the dialog open so the user can retry / cancel.
       console.error("delete failed", err);

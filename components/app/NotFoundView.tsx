@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/app/DashboardShell";
 import { LandingNav } from "@/components/marketing/LandingNav";
+import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { NotFoundContent } from "@/components/i18n/NotFoundContent";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/ui-cookies";
 
@@ -44,9 +45,11 @@ export async function NotFoundView({
   // from <html dir>; strings come from the dictionary via the child components.
   return (
     <main>
-      <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
+      {/* Same backdrop as the landing (aurora glow over the page base), and no
+          swiss-grid vertical hairlines. */}
+      <MagneticGlow fixed glowYOffset={0.2} dots={false} />
       <LandingNav isAuthed={false} />
-      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center gap-8 border-x border-[var(--tq-border-hairline)] px-6 text-center">
+      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center gap-8 px-6 text-center">
         <NotFoundContent recovery="home" />
       </div>
     </main>

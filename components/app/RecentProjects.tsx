@@ -102,18 +102,16 @@ export function RecentProjects({
         projects={visible}
         gridClassName="grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3"
         onDeleted={(id) => {
-          // Two-step: (1) optimistic hide via the local set so the
-          // tile disappears INSTANTLY (no flash of the deleted card
-          // while the SSR round-trip is in flight); (2) router.refresh
-          // re-runs the dashboard's projects query — the deleted row
-          // is gone server-side, and the next-most-recent project
-          // moves into slot 6, filling the hole.
+          // Optimistic hide via the local set so the tile disappears INSTANTLY
+          // (no flash while the round-trip is in flight). The Router Cache
+          // invalidation + backfill (the 7th project sliding into slot 6) is
+          // handled centrally by useProjectActions' router.refresh now, so we no
+          // longer refresh here (item 14 — avoid the double refetch).
           setDeletedIds((prev) => {
             const next = new Set(prev);
             next.add(id);
             return next;
           });
-          router.refresh();
         }}
         emptyState={
           <DashboardEmptyState

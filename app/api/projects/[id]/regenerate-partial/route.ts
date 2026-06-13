@@ -11,7 +11,7 @@
 // only source of truth is the DB.
 
 import { NextResponse } from "next/server";
-import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
+import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { edbg } from "@/lib/debug/editor-debug";
@@ -261,6 +261,8 @@ export async function POST(
         // Phase 16.D — actor for `slide.regen.{started,finished}`
         // self-echo skip in DeckView's broadcast handlers.
         actorPrismaUserId: access.user.prismaId,
+        // Max-tier processing priority (see deck-regenerate-partial `priority.run`).
+        tier: await tierForUser(access.user.prismaId),
       },
     });
   } catch (error) {

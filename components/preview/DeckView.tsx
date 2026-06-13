@@ -1424,6 +1424,27 @@ export function DeckView({
     };
   }, []);
 
+  // ── Editor rail collapse (item 11, 2026-06-14) ── Both floating rails (Slides
+  // on the right, Layers on the left) collapse to a thin reopen handle and the
+  // canvas reclaims the freed width. Per-rail state so each toggles
+  // independently; a narrow-viewport media query collapses/expands both. Init
+  // false (SSR-safe — no hydration mismatch), then the effect reads the query
+  // and subscribes to changes.
+  const [layersCollapsed, setLayersCollapsed] = useState(false);
+  const [slidesCollapsed, setSlidesCollapsed] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1280px)");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLayersCollapsed(mq.matches);
+    setSlidesCollapsed(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => {
+      setLayersCollapsed(e.matches);
+      setSlidesCollapsed(e.matches);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   // Toolbar is portal'd to document.body so its z-index isn't trapped
   // by any ancestor's stacking context (transform, filter, isolation,
   // opacity != 1, etc.). `bodyMounted` gates the createPortal call so
@@ -3694,9 +3715,14 @@ export function DeckView({
       // The panels sit 16px off each edge (width SLIDE_NAV_WIDTH), so a margin
       // of SLIDE_NAV_WIDTH + 56 leaves a comfortable ~40px breathing gap
       // between the canvas and each panel (was +24 → only ~8px, too tight).
+      // Each gutter shrinks to a thin handle when its rail is collapsed so the
+      // canvas reclaims the width (item 11). Layers (left) only mounts in edit
+      // mode, so its gutter only collapses there. `RAIL_GUTTER` (44) leaves room
+      // for the reopen handle.
       style={{
-        marginLeft: SLIDE_NAV_WIDTH + 56,
-        marginRight: SLIDE_NAV_WIDTH + 56,
+        marginLeft: editMode && layersCollapsed ? 44 : SLIDE_NAV_WIDTH + 56,
+        marginRight: slidesCollapsed ? 44 : SLIDE_NAV_WIDTH + 56,
+        transition: "margin 300ms ease",
       }}
     >
       {fontAssets}
@@ -3762,6 +3788,7 @@ export function DeckView({
         }
         viewersBySlide={viewersBySlide}
         floating
+        collapsed={slidesCollapsed}
         // Cancel pill (generating only). Confirmation modal below.
         onCancelGeneration={
           generating && canEdit ? () => setCancelOpen(true) : undefined
@@ -3809,6 +3836,7 @@ export function DeckView({
         >
           <LayersPanel
             topOffset={panelTop}
+            collapsed={layersCollapsed}
             doc={editorDoc}
             // The Layers panel is single-select by design (one row at a time).
             // Show the sole selection, and a row click replaces the whole set
@@ -3824,6 +3852,53 @@ export function DeckView({
             }
           />
         </motion.div>
+      ) : null}
+
+      {/* Reopen / collapse handles for the floating rails (item 11). Band-centered
+          to match the cards; the chevron points toward the canvas to open and
+          toward the rail to close. Hidden in comment mode (canvas-only surface);
+          the Layers handle only shows while the editor is active. */}
+      {!commentMode ? (
+        <button
+          type="button"
+          onClick={() => setSlidesCollapsed((v) => !v)}
+          aria-label={slidesCollapsed ? dict.editor.nav.expandPanel : dict.editor.nav.collapsePanel}
+          className="fixed z-[31] flex items-center justify-center rounded-xl border text-muted transition-[right] duration-300 hover:text-foreground"
+          style={{
+            right: slidesCollapsed ? 12 : SLIDE_NAV_WIDTH + 22,
+            top: `calc(50% + ${(panelTop - 100) / 2}px)`,
+            transform: "translateY(-50%)",
+            width: 24,
+            height: 56,
+            background: "var(--tq-surface)",
+            borderColor: "var(--tq-border-hairline)",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
+            {slidesCollapsed ? "chevron_left" : "chevron_right"}
+          </span>
+        </button>
+      ) : null}
+      {editMode && !commentMode ? (
+        <button
+          type="button"
+          onClick={() => setLayersCollapsed((v) => !v)}
+          aria-label={layersCollapsed ? dict.editor.nav.expandPanel : dict.editor.nav.collapsePanel}
+          className="fixed z-[31] flex items-center justify-center rounded-xl border text-muted transition-[left] duration-300 hover:text-foreground"
+          style={{
+            left: layersCollapsed ? 12 : SLIDE_NAV_WIDTH + 22,
+            top: `calc(50% + ${(panelTop - 100) / 2}px)`,
+            transform: "translateY(-50%)",
+            width: 24,
+            height: 56,
+            background: "var(--tq-surface)",
+            borderColor: "var(--tq-border-hairline)",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
+            {layersCollapsed ? "chevron_right" : "chevron_left"}
+          </span>
+        </button>
       ) : null}
 
       {/* Universal toolbar. Portal'd to document.body so its z-index
@@ -4189,6 +4264,11 @@ export function DeckView({
                 onDocReady={setEditorDoc}
                 /* selected/onSelect are now the multi-select SET (§20). */
                 onEdit={handleSlideEdit}
+                // ⌘Z / ⌘⇧Z pressed while focus is inside the editor iframe never
+                // reaches the window listener above — the editor forwards them
+                // to the same local history stack.
+                onUndo={handleLocalUndo}
+                onRedo={handleLocalRedo}
                 reloadKey={editorReloadKey}
                 // Locked / mid-regen / comment mode / AI mode: keep the editor
                 // mounted (no SlideEditor→SlideRenderer swap → no canvas flash)

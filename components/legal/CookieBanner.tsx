@@ -1,9 +1,11 @@
 "use client";
 
 // Minimal, non-blocking cookie notice. We use essential cookies + limited
-// (masked) diagnostics, so this is an informational notice with a single
-// dismiss, not a consent wall. Sets `tq_cookie_ack` for a year on dismiss.
-// Bilingual inline copy (it can render on the coming-soon page, outside the
+// (masked) diagnostics, so this is an informational notice with an explicit
+// Accept / Reject, not a consent wall. The choice persists for a year in
+// `tq_cookie_consent` (accept | reject) — either value stops the banner from
+// re-showing. Future analytics (PostHog, Phase D) gate on `accept`. Bilingual
+// inline copy (it can render on the coming-soon page, outside the
 // dictionary-fed app chrome).
 
 import { useEffect, useState } from "react";
@@ -11,41 +13,49 @@ import Link from "next/link";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 
+const CONSENT_COOKIE = "tq_cookie_consent";
+
 const COPY = {
   en: {
     text: "We use essential cookies to run taqreer.ai and limited, masked diagnostics to improve it.",
     learn: "Privacy Policy",
-    ok: "Got it",
+    accept: "Accept",
+    reject: "Reject",
   },
   ar: {
     text: "نستخدم ملفات تعريف ارتباط أساسية لتشغيل taqreer.ai وأدوات تشخيص محدودة ومُخفّاة لتحسينه.",
     learn: "سياسة الخصوصية",
-    ok: "حسناً",
+    accept: "موافقة",
+    reject: "رفض",
   },
 } as const;
 
 export function CookieBanner() {
   const { locale } = useLocale();
   // Start hidden (no SSR flash / no hydration mismatch); reveal after mount
-  // only if the user hasn't acknowledged yet.
+  // only if the user hasn't chosen yet.
   const [show, setShow] = useState(false);
   useEffect(() => {
-    // Exact pair match (not a substring `includes`, which another cookie
-    // happening to contain "tq_cookie_ack=1" could falsely satisfy).
-    const acked = document.cookie
-      .split("; ")
-      .some((entry) => entry === "tq_cookie_ack=1");
-    if (!acked) setShow(true);
+    const cookies = document.cookie.split("; ");
+    // Either a new accept/reject choice OR a legacy `tq_cookie_ack=1` dismissal
+    // counts as decided — don't re-prompt anyone who already responded.
+    const decided =
+      cookies.some((entry) => entry.startsWith(`${CONSENT_COOKIE}=`)) ||
+      cookies.some((entry) => entry === "tq_cookie_ack=1");
+    // Cookies are client-only (unreadable during SSR), so the reveal must run
+    // after mount rather than in the useState initializer.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!decided) setShow(true);
   }, []);
 
   if (!show) return null;
   const t = COPY[locale];
 
-  function dismiss() {
+  function choose(value: "accept" | "reject") {
     // `secure` only over HTTPS — a `secure` cookie is dropped on plain http,
-    // which would break dismissal on non-localhost http (prod is HTTPS).
+    // which would break persistence on non-localhost http (prod is HTTPS).
     const secure = location.protocol === "https:" ? "; secure" : "";
-    document.cookie = `tq_cookie_ack=1; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax${secure}`;
+    document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax${secure}`;
     setShow(false);
   }
 
@@ -61,13 +71,22 @@ export function CookieBanner() {
             {t.learn}
           </Link>
         </p>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="btn-pill shrink-0 px-4 py-1.5 text-sm"
-        >
-          {t.ok}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => choose("reject")}
+            className="btn-pill px-4 py-1.5 text-sm"
+          >
+            {t.reject}
+          </button>
+          <button
+            type="button"
+            onClick={() => choose("accept")}
+            className="btn-gradient px-4 py-1.5 text-sm"
+          >
+            {t.accept}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -39,6 +39,12 @@ type Props = {
   // parent persists it. Carries the slide's id (so a save lands on the right
   // slide even if focus moved) + the serialized section HTML.
   onEdit?: (slideId: string, html: string) => void;
+  // Slide-level undo / redo (⌘Z / ⌘⇧Z). The parent's window keydown listener
+  // never sees keys pressed while focus is INSIDE the iframe, so the editor
+  // forwards them out to the parent's local history stack. While a text box is
+  // actively being edited the browser's native char-level undo wins instead.
+  onUndo?: () => void;
+  onRedo?: () => void;
   // Bump to force the iframe to re-render from `slide.html` (restore / undo /
   // peer edit). The iframe is otherwise PINNED to the slide identity so a
   // self-save — which updates `slide.html` — never blows away the live DOM the
@@ -53,7 +59,7 @@ type Props = {
 
 export function SlideEditor({
   slide, theme, direction, language, width, height, scale,
-  selected, onSelect, onDocReady, onEdit, reloadKey = 0, disabled = false,
+  selected, onSelect, onDocReady, onEdit, onUndo, onRedo, reloadKey = 0, disabled = false,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // Pool of selection boxes — one per selected element. The first is the
@@ -87,6 +93,16 @@ export function SlideEditor({
   useEffect(() => {
     onEditRef.current = onEdit;
   }, [onEdit]);
+  // Same pattern for the undo/redo callbacks (read by the once-attached iframe
+  // keydown bridge).
+  const onUndoRef = useRef(onUndo);
+  const onRedoRef = useRef(onRedo);
+  useEffect(() => {
+    onUndoRef.current = onUndo;
+  }, [onUndo]);
+  useEffect(() => {
+    onRedoRef.current = onRedo;
+  }, [onRedo]);
   // Latest `disabled`, read by the once-attached iframe handlers so lock/regen
   // toggles take effect without re-wiring.
   const disabledRef = useRef(disabled);
@@ -555,11 +571,24 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         window.addEventListener("mouseup", onWindowMarqueeCancel);
       };
 
+      // ⌘Z / ⌘⇧Z bridge — keys pressed while focus is inside the iframe never
+      // reach the parent's window listener, so forward slide-level undo/redo out.
+      // A LIVE text edit keeps the browser's native char-level undo (don't
+      // intercept); otherwise hand off to the parent's local history stack.
+      const onDocKeyDown = (e: KeyboardEvent) => {
+        if (e.key.toLowerCase() !== "z" || e.altKey || !(e.metaKey || e.ctrlKey)) return;
+        if ((doc.activeElement as HTMLElement | null)?.isContentEditable) return;
+        e.preventDefault();
+        if (e.shiftKey) onRedoRef.current?.();
+        else onUndoRef.current?.();
+      };
+
       doc.addEventListener("mousedown", onMouseDown);
       doc.addEventListener("mousemove", onMove);
       doc.addEventListener("mouseleave", onLeave);
       doc.addEventListener("click", onClick);
       doc.addEventListener("dblclick", onDbl);
+      doc.addEventListener("keydown", onDocKeyDown);
       // Sync the live scale onto the freshly-loaded doc (the srcDoc's baked value
       // can be stale if `scale` changed while the iframe was loading).
       doc.documentElement.style.setProperty("--tqe-scale", String(scaleRef.current));

@@ -11,6 +11,7 @@
 // noted in page.tsx — URL state is a v2 add.
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
@@ -60,6 +61,7 @@ export function ProjectsPageClient({
 }) {
   const dict = useDict();
   const { locale } = useLocale();
+  const router = useRouter();
   const t = dict.pages.projects;
   const [search, setSearch] = useState("");
   // null = no filter active on this dimension. Single non-null value
@@ -230,6 +232,9 @@ export function ProjectsPageClient({
       .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
       .map((r) => r.value);
     setDeletedIds((prev) => new Set([...prev, ...okIds]));
+    // Invalidate the Router Cache so the deleted decks can't reappear from a
+    // stale RSC payload on a later navigation (item 14).
+    router.refresh();
     const failed = ids.length - okIds.length;
     setBulkBusy(false);
     setBulkConfirm(false);

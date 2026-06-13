@@ -1,6 +1,25 @@
 import { inngest } from "@/inngest/client";
+import { prisma } from "@/lib/prisma";
 
 type InngestEvent = Parameters<typeof inngest.send>[0];
+
+/**
+ * The billing tier (free/plus/pro/max) for a Prisma user id, or null when the
+ * id is missing/unknown. Stamped onto deck.generate / regen events as `tier` so
+ * the functions' `priority.run` CEL can give Max-tier runs queue priority under
+ * contention (the CEL evaluates at enqueue, before the run, so the value MUST
+ * travel on the event).
+ */
+export async function tierForUser(
+  prismaUserId: string | null | undefined,
+): Promise<string | null> {
+  if (!prismaUserId) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: prismaUserId },
+    select: { plan: true },
+  });
+  return user?.plan ?? null;
+}
 
 /**
  * Send an Inngest event with retry-with-backoff. Necessary because we fire

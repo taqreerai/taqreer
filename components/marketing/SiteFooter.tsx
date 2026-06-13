@@ -38,7 +38,18 @@ const SOCIALS: { label: string; href: string; path: string }[] = [
 
 const PX = "px-4 sm:px-6 lg:px-8";
 
-export async function SiteFooter({ locale }: { locale: "ar" | "en" }) {
+export async function SiteFooter({
+  locale,
+  // The landing renders the footer INSIDE its max-w-7xl column, so the footer's
+  // own padding + inner max-w-7xl would double-inset it and it reads narrower
+  // than the full-width FAQ rows above it. `fullBleed` drops both so the footer
+  // grid spans the full column like the FAQ (user direction 2026-06-14). Legal
+  // pages render it at viewport width, so they keep the default constraint.
+  fullBleed = false,
+}: {
+  locale: "ar" | "en";
+  fullBleed?: boolean;
+}) {
   const dict = await getDictionary(locale);
   const footer = dict.landing.footer.groups;
   // Keyed so the social column can render icons instead of text links.
@@ -50,8 +61,8 @@ export async function SiteFooter({ locale }: { locale: "ar" | "en" }) {
   ];
 
   return (
-    <footer className={`${PX} pt-20 pb-8`}>
-      <div className="mx-auto max-w-7xl">
+    <footer className={`${fullBleed ? "" : PX} pt-20 pb-8`}>
+      <div className={fullBleed ? "" : "mx-auto max-w-7xl"}>
         <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
           {columns.map(({ key, group }) => (
             <div key={key} className="md:px-8 md:first:pe-0">

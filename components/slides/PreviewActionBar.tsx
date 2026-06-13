@@ -715,22 +715,28 @@ export function PreviewActionBar({
             >
               {/* Undo / redo — edit-mode only (they do nothing in AI mode), so
                   they live in this edit slot beside the comment button rather
-                  than the always-visible shared cluster. */}
-              {onUndo ? (
-                <ToolButton
-                  icon="undo"
-                  label={dict.editor.toolbar.undo}
-                  onClick={onUndo}
-                  disabled={applying || !canUndo}
-                />
-              ) : null}
-              {onRedo ? (
-                <ToolButton
-                  icon="redo"
-                  label={dict.editor.toolbar.redo}
-                  onClick={onRedo}
-                  disabled={applying || !canRedo}
-                />
+                  than the always-visible shared cluster. Forced `dir=ltr` so the
+                  pair always reads back-on-the-left, forward-on-the-right in BOTH
+                  languages (nav controls, not locale-mirrored). */}
+              {onUndo || onRedo ? (
+                <div dir="ltr" className="flex items-center gap-1">
+                  {onUndo ? (
+                    <ToolButton
+                      icon="undo"
+                      label={dict.editor.toolbar.undo}
+                      onClick={onUndo}
+                      disabled={applying || !canUndo}
+                    />
+                  ) : null}
+                  {onRedo ? (
+                    <ToolButton
+                      icon="redo"
+                      label={dict.editor.toolbar.redo}
+                      onClick={onRedo}
+                      disabled={applying || !canRedo}
+                    />
+                  ) : null}
+                </div>
               ) : null}
               <ToolButton
                 icon="chat_bubble_outline"

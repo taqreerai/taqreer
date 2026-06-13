@@ -20,7 +20,8 @@ import { dateFnsLocale } from "@/lib/i18n/date";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 import { TIERS, TIER_ORDER, TOPUP_PACKS } from "@/lib/credits/cost";
 import { SegmentedToggle } from "@/components/create/controls";
-import { normalizePlan, planLabel, type KnownPlan } from "@/lib/plan";
+import { PlanUsage } from "@/components/app/PlanUsage";
+import { normalizePlan, type KnownPlan } from "@/lib/plan";
 
 type Cadence = "monthly" | "yearly";
 
@@ -104,7 +105,6 @@ export function BillingSection({
   }, []);
 
   const plan = summary ? summary.plan : credits ? normalizePlan(credits.plan) : "free";
-  const planName = planLabel(dict.components.planUsage, plan);
 
   const currentIdx = TIER_ORDER.indexOf(plan);
   // The renewal date rides on the summary (the billing mirror), so it must
@@ -121,43 +121,24 @@ export function BillingSection({
   // (Named subCadence to avoid colliding with the monthly/yearly TOGGLE
   // state `cadence` used by the change-plan cards below.)
   const subCadence = summary?.cadence ?? null;
-  const cadenceLabel = subCadence === "yearly" ? t.yearly : t.monthly;
   const cadenceHint = subCadence === "yearly" ? t.yearlyHint : t.monthlyHint;
+  // Cancel-aware renewal line for the shared PlanUsage card (mirrors /billing).
+  const planRenewalNote =
+    summary?.cancelAtPeriodEnd && renewDate
+      ? t.endsOn.replace("{date}", renewDate)
+      : renewDate
+        ? `${t.renews.replace("{date}", renewDate)}${subCadence ? ` · ${cadenceHint}` : ""}`
+        : t.noRenewal;
 
   return (
     <div className="flex flex-col gap-10">
-      {/* ── Plan ── */}
+      {/* ── Plan ── the SAME shared card as /billing (user direction
+          2026-06-14); the action slot is hidden since the change-plan cards
+          sit directly below. */}
       {variant === "page" ? (
       <section>
         <h2 className="mb-3 text-lg font-semibold text-foreground">{t.planTitle}</h2>
-
-        <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-2xl p-5">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              {dict.components.planUsage.plan.replace("{plan}", planName)}
-              <span className="badge-purple">{planName}</span>
-              {subCadence ? (
-                <span className="rounded-full bg-overlay-soft px-2 py-0.5 text-[10px] font-medium text-muted">
-                  {cadenceLabel}
-                </span>
-              ) : null}
-            </p>
-            <p className="mt-0.5 text-xs text-muted">
-              {summary?.cancelAtPeriodEnd && renewDate
-                ? t.endsOn.replace("{date}", renewDate)
-                : renewDate
-                  ? `${t.renews.replace("{date}", renewDate)}${subCadence ? ` · ${cadenceHint}` : ""}`
-                  : t.noRenewal}
-            </p>
-            {credits ? (
-              <p className="mt-2 text-xs text-muted tabular-nums" dir="ltr">
-                {dict.components.planUsage.creditsLeft
-                  .replace("{count}", formatCredits(credits.balance.total))
-                  .replace("{limit}", formatCredits(credits.capacity))}
-              </p>
-            ) : null}
-          </div>
-        </div>
+        <PlanUsage hideAction renewalNote={planRenewalNote} />
       </section>
       ) : null}
 
@@ -213,9 +194,10 @@ export function BillingSection({
             return (
               <div
                 key={tier}
-                className={`surface-card relative flex w-full flex-col rounded-2xl p-8 ${
-                  isCurrent ? "outline outline-1 outline-[var(--tq-purple)]" : ""
-                } ${belowGate ? "opacity-50" : ""}`}
+                // Current plan = ONE clean accent border (not an outline ON TOP
+                // of the hairline, which read as a doubled/muted extra border).
+                className={`surface-card relative flex w-full flex-col rounded-2xl p-8 ${belowGate ? "opacity-50" : ""}`}
+                style={isCurrent ? { borderColor: "var(--tq-purple)" } : undefined}
               >
                 {popular && (
                   <div className="hero-stat-pill absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium">

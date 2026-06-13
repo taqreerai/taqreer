@@ -246,6 +246,11 @@ type DeckGenerateEvent = {
   // backwards compat + the initial-create path where no collaborator
   // can possibly be listening yet (broadcast still fires harmlessly).
   actorPrismaUserId?: string | null;
+  // Billing tier (free/plus/pro/max) captured at ENQUEUE time so the function's
+  // `priority.run` CEL can give Max-tier runs queue priority under contention.
+  // Read only by Inngest's scheduler (it evaluates before the run); the function
+  // body never reads it. Missing → treated as no-boost.
+  tier?: string | null;
 };
 
 
@@ -1271,6 +1276,12 @@ export const deckGenerate = inngest.createFunction(
     id: "deck-generate",
     name: "Generate Presentation Deck",
     retries: 3,
+    // Processing priority (the Max-tier perk): Max runs are scheduled as if they
+    // arrived 120s earlier, so they jump ahead of lower tiers when the queue is
+    // contended — no failures, just ordering. `event.data.tier` is set at
+    // enqueue (the CEL evaluates before the run); any non-max / missing tier
+    // gets no boost.
+    priority: { run: "event.data.tier == 'max' ? 120 : 0" },
     triggers: [{ event: "deck.generate.requested" }],
     // ─── Cancellation ─────────────────────────────────────────────
     // POST /api/projects/[id]/cancel sets `Job.cancelRequestedAt`; the

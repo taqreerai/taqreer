@@ -83,6 +83,7 @@ export function LayersPanel({
   onCommit,
   slideId,
   topOffset = 16,
+  collapsed = false,
 }: {
   // The editor iframe's document (from SlideEditor.onDocReady), or null when the
   // editor isn't mounted yet.
@@ -98,6 +99,9 @@ export function LayersPanel({
   // Studio: top edge of the floating card - DeckView measures the
   // canvas top so the panel aligns with it (2026-06-12).
   topOffset?: number;
+  // Studio: collapsed → slide off the left edge (kept mounted); DeckView shows
+  // a thin reopen handle.
+  collapsed?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -237,13 +241,18 @@ export function LayersPanel({
       }`}
       style={{
         left: 16,
-        // Aligned with the canvas top edge (DeckView measurement,
-        // 2026-06-12); min 64 keeps it clear of the header strip.
-        top: topOffset,
-        bottom: 100,
+        // Vertically CENTERED in the band between the header strip (topOffset)
+        // and the bottom action bar (~100px), capped to that band so the layer
+        // list scrolls inside (user direction 2026-06-14). Collapsed → slide off
+        // the left edge (still mounted; DeckView shows a handle).
+        top: `calc(50% + ${(topOffset - 100) / 2}px)`,
+        transform: `translateY(-50%)${collapsed ? " translateX(calc(-100% - 24px))" : ""}`,
+        maxHeight: `calc(100dvh - ${topOffset + 100}px)`,
         width: SLIDE_NAV_WIDTH,
         background: "var(--tq-surface)",
         borderColor: "var(--tq-border-hairline)",
+        pointerEvents: collapsed ? "none" : undefined,
+        transition: "transform 300ms ease",
       }}
     >
       <header className="border-b border-foreground/[0.08] px-1 pb-3 pt-1">

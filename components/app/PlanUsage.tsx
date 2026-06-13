@@ -20,16 +20,22 @@ export function PlanUsage({
   // Replaces the default "renews {date} · billed {cadence}" sub-line.
   // /billing passes its cancel-aware copy ("ends on {date}") here.
   renewalNote,
-}: { action?: ReactNode; renewalNote?: ReactNode } = {}) {
+  // /plans renders this same card for context but its change-plan cards sit
+  // directly below, so it hides the (redundant) action slot entirely.
+  hideAction = false,
+}: { action?: ReactNode; renewalNote?: ReactNode; hideAction?: boolean } = {}) {
   const dict = useDict();
   const { locale } = useLocale();
   const credits = useCreditBalance();
   if (!credits) return null;
 
   const { balance, capacity, plan, cadence } = credits;
-  const used = Math.max(0, capacity - balance.total);
+  // REMAINING share (deplete-as-you-spend), matching the sidebar credit ring +
+  // the profile-menu bar + the "X / Y credits left" number (one consistent
+  // reading everywhere - user direction 2026-06-14).
+  const remaining = Math.max(0, balance.total);
   const percentage =
-    capacity > 0 ? Math.min(100, Math.round((used / capacity) * 100)) : 0;
+    capacity > 0 ? Math.max(0, Math.min(100, Math.round((remaining / capacity) * 100))) : 0;
   const planName = planLabel(dict.components.planUsage, plan);
   const renewalDate = balance.allotmentResetAt
     ? new Date(balance.allotmentResetAt)
@@ -63,7 +69,7 @@ export function PlanUsage({
                   : dict.components.planUsage.noRenewal)}
             </p>
           </div>
-          {action ? (
+          {hideAction ? null : action ? (
             <div className="shrink-0">{action}</div>
           ) : (
             <Link className="btn-gradient shrink-0 px-8 py-3 no-underline" href={localizedHref("/plans", locale)}>
@@ -76,7 +82,7 @@ export function PlanUsage({
             <div className="progress-bar" style={{ width: `${percentage}%` }} />
           </div>
           <div className="flex justify-between text-xs text-muted">
-            <span>{dict.components.planUsage.usedPercent.replace("{percentage}", String(percentage))}</span>
+            <span>{dict.components.planUsage.remainingPercent.replace("{percentage}", String(percentage))}</span>
             <span dir="ltr" className="tabular-nums">
               {dict.components.planUsage.creditsLeft
                 .replace("{count}", formatCredits(balance.total))

@@ -1723,10 +1723,12 @@ html.app-shell-scroll body {
    so the surface stays token-driven, no hardcoded color. */
 .hero-stat-pill {
   /* Opaque purple + white text (was a faint violet tint that read low-contrast
-     on light). Solid reads clearly in both themes. */
-  background: var(--tq-purple);
+     on light). Solid reads clearly in both themes. Uses the SAME fill as
+     `.btn-gradient` (--tq-purple-hover) so the pill matches the CTA blue exactly
+     (user direction 2026-06-14 — they read as different blues otherwise). */
+  background: var(--tq-purple-hover);
   color: #fff;
-  border: 1px solid var(--tq-purple);
+  border: 1px solid var(--tq-purple-hover);
 }
 
 /* ─── Hero fold composition (landing only, 2026-06-11) ───
