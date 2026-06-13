@@ -42,6 +42,8 @@ import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import {
   SlideNavSidebar,
   SLIDE_NAV_WIDTH,
+  RAIL_TOP,
+  RAIL_BOTTOM,
   type NavItem,
 } from "@/components/preview/SlideNavSidebar";
 import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDialog";
@@ -282,18 +284,17 @@ const CHECKPOINT_IDLE_MS = 10 * 60 * 1000; // idle-autosave a history checkpoint
 // panels read the same numbers — any tweak here flows to all three
 // children of the canvas row.
 //
-// No hard width cap: the hero grows to fill whatever horizontal +
-// vertical space the row affords. The two min() candidates (viewport
-// height + row-fit) keep it from overflowing either dimension on
-// their own, so the artificial 1100 px cap that used to live here
-// only ever made the canvas smaller than necessary on wide monitors.
+// CANVAS_MAX_WIDTH caps the hero so it can't balloon to full-screen (and touch
+// the header) when both side rails collapse and the row turns wide — user
+// direction 2026-06-14. The two min() height/row candidates still keep it from
+// overflowing either dimension; the cap just bounds the wide case.
 //
-// HERO_VERTICAL_PADDING_PX = Header (80) + 40 px breathing room
-// above the hero + 40 px breathing room below = 160 total. Must
-// match the wrapper paddings DashboardShell uses for preview
-// routes (pt-[120px] + pb-[40px]); the row's `minHeight: calc(100vh
-// - HERO_VERTICAL_PADDING_PX)` then fits exactly between them.
-const HERO_VERTICAL_PADDING_PX = 180;
+// HERO_VERTICAL_PADDING_PX is the vertical space reserved off the viewport for
+// the height-fit candidate (header strip + bottom action bar + breathing room),
+// kept a touch larger than the row's own paddingTop(72)+paddingBottom(100) so the
+// centered canvas always has clear air above it and never reaches the header.
+const HERO_VERTICAL_PADDING_PX = 220;
+const CANVAS_MAX_WIDTH = 1280;
 
 function isCompleted(projectStatus: string, versionStatus: string | null): boolean {
   return (
@@ -629,10 +630,6 @@ export function DeckView({
   // include commentMode because changing it resizes the hero).
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridScale, setGridScale] = useState(FALLBACK_SCALE);
-  // Top offset shared by the floating side panels - measured off the
-  // canvas's bounding rect so the panels' top edges align with the
-  // canvas top edge (min 64px to clear the studio header strip).
-  const [panelTop, setPanelTop] = useState(64);
 
   // Comment-feature state.
   //   commentMode: in commenting flow → SlideNavSidebar swaps out for
@@ -1373,9 +1370,6 @@ export function DeckView({
     const recompute = () => {
       const rect = el.getBoundingClientRect();
       if (rect.width > 0 && canvasW > 0) setGridScale(rect.width / canvasW);
-      // Side panels top-align with the CANVAS top edge (user direction
-      // 2026-06-12), floored below the studio header strip.
-      if (rect.top > 0) setPanelTop(Math.max(64, Math.round(rect.top)));
     };
     recompute();
     const ro = new ResizeObserver(recompute);
@@ -3672,7 +3666,7 @@ export function DeckView({
   const canRedo =
     !editingDisabled && (focusedStack?.future.length ?? 0) > 0;
 
-  const heroWidthCss = `min(calc((100vh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%)`;
+  const heroWidthCss = `min(calc((100dvh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%, ${CANVAS_MAX_WIDTH}px)`;
 
   // Saved-state comparator. Two halves, both required for "saved":
   //   1. Version pointer matches (catches partial regen + full regen,
@@ -3766,7 +3760,6 @@ export function DeckView({
         style={{ pointerEvents: commentMode ? "none" : "auto" }}
       >
       <SlideNavSidebar
-        topOffset={panelTop}
         items={navItems}
         currentIndex={focusedIndex}
         onSelect={(idx) => setCurrentSlideIndex(idx)}
@@ -3835,7 +3828,6 @@ export function DeckView({
           style={{ pointerEvents: commentMode ? "none" : "auto" }}
         >
           <LayersPanel
-            topOffset={panelTop}
             collapsed={layersCollapsed}
             doc={editorDoc}
             // The Layers panel is single-select by design (one row at a time).
@@ -3854,27 +3846,24 @@ export function DeckView({
         </motion.div>
       ) : null}
 
-      {/* Reopen / collapse handles for the floating rails (item 11). Band-centered
-          to match the cards; the chevron points toward the canvas to open and
-          toward the rail to close. Hidden in comment mode (canvas-only surface);
-          the Layers handle only shows while the editor is active. */}
+      {/* Collapse / reopen the floating rails — a BARE arrow on the rail's
+          canvas-facing edge (no border / no box, user direction 2026-06-14),
+          centered in the same [RAIL_TOP, vh-RAIL_BOTTOM] band as the rails. The
+          chevron points toward the canvas to open, toward the rail to close.
+          Hidden in comment mode; the Layers arrow only shows while editing. */}
       {!commentMode ? (
         <button
           type="button"
           onClick={() => setSlidesCollapsed((v) => !v)}
           aria-label={slidesCollapsed ? dict.editor.nav.expandPanel : dict.editor.nav.collapsePanel}
-          className="fixed z-[31] flex items-center justify-center rounded-xl border text-muted transition-[right] duration-300 hover:text-foreground"
+          className="fixed z-[31] flex items-center justify-center p-1.5 text-muted transition-[right] duration-300 hover:text-foreground"
           style={{
-            right: slidesCollapsed ? 12 : SLIDE_NAV_WIDTH + 22,
-            top: `calc(50% + ${(panelTop - 100) / 2}px)`,
+            right: slidesCollapsed ? 10 : SLIDE_NAV_WIDTH + 16,
+            top: `calc(50% - ${(RAIL_BOTTOM - RAIL_TOP) / 2}px)`,
             transform: "translateY(-50%)",
-            width: 24,
-            height: 56,
-            background: "var(--tq-surface)",
-            borderColor: "var(--tq-border-hairline)",
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
+          <span className="material-symbols-outlined" style={{ fontSize: 22 }} aria-hidden>
             {slidesCollapsed ? "chevron_left" : "chevron_right"}
           </span>
         </button>
@@ -3884,18 +3873,14 @@ export function DeckView({
           type="button"
           onClick={() => setLayersCollapsed((v) => !v)}
           aria-label={layersCollapsed ? dict.editor.nav.expandPanel : dict.editor.nav.collapsePanel}
-          className="fixed z-[31] flex items-center justify-center rounded-xl border text-muted transition-[left] duration-300 hover:text-foreground"
+          className="fixed z-[31] flex items-center justify-center p-1.5 text-muted transition-[left] duration-300 hover:text-foreground"
           style={{
-            left: layersCollapsed ? 12 : SLIDE_NAV_WIDTH + 22,
-            top: `calc(50% + ${(panelTop - 100) / 2}px)`,
+            left: layersCollapsed ? 10 : SLIDE_NAV_WIDTH + 16,
+            top: `calc(50% - ${(RAIL_BOTTOM - RAIL_TOP) / 2}px)`,
             transform: "translateY(-50%)",
-            width: 24,
-            height: 56,
-            background: "var(--tq-surface)",
-            borderColor: "var(--tq-border-hairline)",
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
+          <span className="material-symbols-outlined" style={{ fontSize: 22 }} aria-hidden>
             {layersCollapsed ? "chevron_right" : "chevron_left"}
           </span>
         </button>
@@ -4133,11 +4118,10 @@ export function DeckView({
         dir="ltr"
         className="flex items-center justify-center"
         // §22: center the canvas within the SAME vertical band as the side
-        // panels (Layers / slide-nav sit top:16 → bottom:100), not the raw
-        // viewport — otherwise the slide centers ~42px below the panels' midline
-        // and reads misaligned. Matching their top/bottom insets lines all three
-        // up on one centerline.
-        style={{ minHeight: "100vh", paddingTop: 16, paddingBottom: 100 }}
+        // panels (both rails sit [RAIL_TOP, vh-RAIL_BOTTOM]), not the raw
+        // viewport, so the slide + both rails line up on one centerline AND the
+        // canvas always clears the header strip (paddingTop: RAIL_TOP).
+        style={{ minHeight: "100dvh", paddingTop: RAIL_TOP, paddingBottom: RAIL_BOTTOM }}
       >
         <motion.div
           ref={gridRef}

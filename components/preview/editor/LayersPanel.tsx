@@ -12,7 +12,11 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { buildLayerTree, type LayerNode } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
-import { SLIDE_NAV_WIDTH } from "@/components/preview/SlideNavSidebar";
+import {
+  SLIDE_NAV_WIDTH,
+  RAIL_TOP,
+  RAIL_BOTTOM,
+} from "@/components/preview/SlideNavSidebar";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -82,7 +86,6 @@ export function LayersPanel({
   onSelect,
   onCommit,
   slideId,
-  topOffset = 16,
   collapsed = false,
 }: {
   // The editor iframe's document (from SlideEditor.onDocReady), or null when the
@@ -96,11 +99,8 @@ export function LayersPanel({
   // Deck language — accepted for caller compatibility but unused now that the
   // panel (editor chrome) follows the UI locale via useDict/useLocale.
   language?: "ar" | "en";
-  // Studio: top edge of the floating card - DeckView measures the
-  // canvas top so the panel aligns with it (2026-06-12).
-  topOffset?: number;
   // Studio: collapsed → slide off the left edge (kept mounted); DeckView shows
-  // a thin reopen handle.
+  // a bare edge arrow to reopen.
   collapsed?: boolean;
 }) {
   const dict = useDict();
@@ -241,13 +241,13 @@ export function LayersPanel({
       }`}
       style={{
         left: 16,
-        // Vertically CENTERED in the band between the header strip (topOffset)
-        // and the bottom action bar (~100px), capped to that band so the layer
-        // list scrolls inside (user direction 2026-06-14). Collapsed → slide off
-        // the left edge (still mounted; DeckView shows a handle).
-        top: `calc(50% + ${(topOffset - 100) / 2}px)`,
-        transform: `translateY(-50%)${collapsed ? " translateX(calc(-100% - 24px))" : ""}`,
-        maxHeight: `calc(100dvh - ${topOffset + 100}px)`,
+        // Anchored to the fixed page band [RAIL_TOP, vh - RAIL_BOTTOM] so it's
+        // full-height + matches the Slides rail exactly, centered on the page
+        // (user direction 2026-06-14). Collapsed → slide off the left edge (still
+        // mounted; DeckView shows a bare edge arrow to reopen).
+        top: RAIL_TOP,
+        bottom: RAIL_BOTTOM,
+        transform: collapsed ? "translateX(calc(-100% - 24px))" : undefined,
         width: SLIDE_NAV_WIDTH,
         background: "var(--tq-surface)",
         borderColor: "var(--tq-border-hairline)",

@@ -33,6 +33,13 @@ import type { PresenceViewer } from "@/lib/realtime/project-channel";
 // symmetrically between them). 280 — the nav's thumbnails size to this width.
 export const SLIDE_NAV_WIDTH = 280;
 
+// Studio: both floating rails anchor to this fixed page band (NOT the canvas top
+// — that's vertically centered, which pushed the rails low). `top: RAIL_TOP` +
+// `bottom: RAIL_BOTTOM` gives both rails the SAME height, spanning the usable
+// page below the header strip and above the bottom action bar.
+export const RAIL_TOP = 72; // clears the fixed header strip (~48px) + air
+export const RAIL_BOTTOM = 96; // clears the bottom action bar
+
 type PlaceholderState = "done" | "current" | "pending";
 
 export type NavItem =
@@ -98,9 +105,8 @@ export function SlideNavSidebar({
   // StudioHeader into the slide-nav footer. The parent (DeckView) builds them
   // (it owns the manifest + ShareDialog) and passes them as a slot.
   actionsSlot,
-  topOffset = 16,
   // Studio: collapsed → the card slides off the inline edge (kept mounted so the
-  // thumbnails never remount/flash) and DeckView shows a thin reopen handle.
+  // thumbnails never remount/flash) and DeckView shows a bare edge arrow.
   collapsed = false,
 }: {
   items: NavItem[];
@@ -125,9 +131,6 @@ export function SlideNavSidebar({
   commentsSlot?: ReactNode;
   commentCount?: number;
   actionsSlot?: ReactNode;
-  // Studio: top edge of the floating card - DeckView measures the
-  // canvas top so the panel aligns with it (2026-06-12).
-  topOffset?: number;
   collapsed?: boolean;
   language?: "ar" | "en";
   // Fires when the user clicks the bulk pill. Parent owns the
@@ -291,15 +294,16 @@ export function SlideNavSidebar({
       style={
         floating
           ? {
-              // Vertically CENTERED in the band between the header strip
-              // (topOffset) and the bottom action bar (~100px), capped to that
-              // band so the thumbnail list scrolls inside (user direction
-              // 2026-06-14). 16px off the inline edge. Collapsed → slide fully
-              // off the right edge (still mounted; DeckView shows a handle).
+              // Anchored to the fixed page band [RAIL_TOP, vh - RAIL_BOTTOM] so
+              // it's full-height + matches the Layers rail exactly, and stays
+              // centered on the page regardless of where the canvas sits (user
+              // direction 2026-06-14). 16px off the inline edge. Collapsed →
+              // slide fully off the right edge (still mounted; DeckView shows a
+              // bare edge arrow to reopen).
               right: 16,
-              top: `calc(50% + ${(topOffset - 100) / 2}px)`,
-              transform: `translateY(-50%)${collapsed ? " translateX(calc(100% + 24px))" : ""}`,
-              maxHeight: `calc(100dvh - ${topOffset + 100}px)`,
+              top: RAIL_TOP,
+              bottom: RAIL_BOTTOM,
+              transform: collapsed ? "translateX(calc(100% + 24px))" : undefined,
               width: SLIDE_NAV_WIDTH,
               background: "var(--tq-surface)",
               borderColor: "var(--tq-border-hairline)",
