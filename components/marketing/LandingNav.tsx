@@ -7,8 +7,9 @@
 // from the left. Strings come from the active-locale dictionary.
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
-import { localizedHref } from "@/lib/i18n/navigation";
+import { localizedHref, stripLocale } from "@/lib/i18n/navigation";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
@@ -16,14 +17,21 @@ import { ThemeLogo } from "@/components/brand/ThemeLogo";
 export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
   const { locale } = useLocale();
   const dict = useDict();
+  const pathname = usePathname();
 
-  // In-page anchor links (no locale prefix; they scroll within this page).
+  // On the landing the links are in-page smooth-scroll anchors; on any other
+  // page (the legal pages share this nav) they jump back to the landing's
+  // sections instead of dead `#` anchors.
+  const stripped = stripLocale(pathname);
+  const onLanding = stripped === "/" || stripped === "";
+  const home = localizedHref("/", locale);
+  const sec = (anchor: string) => (onLanding ? anchor : `${home}${anchor}`);
   const navLinks = [
-    { label: dict.landingNav.home, href: "#" },
-    { label: dict.landingNav.features, href: "#features" },
-    { label: dict.landingNav.pricing, href: "#pricing" },
-    { label: dict.landingNav.templates, href: "#templates" },
-    { label: dict.landingNav.faq, href: "#faq" },
+    { label: dict.landingNav.home, href: onLanding ? "#" : home },
+    { label: dict.landingNav.features, href: sec("#features") },
+    { label: dict.landingNav.pricing, href: sec("#pricing") },
+    { label: dict.landingNav.templates, href: sec("#templates") },
+    { label: dict.landingNav.faq, href: sec("#faq") },
   ];
 
   return (
