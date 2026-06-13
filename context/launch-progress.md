@@ -104,12 +104,18 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   as final (content is a DRAFT); copy can be revised in place post-review.
 - ✅ DONE (2026-06-13): Billing UI cadence — monthly/yearly pill + hint on
   /plans, /settings, /billing; PlanUsage is now the shared plan card.
-- Email deliverability: SPF/DKIM/DMARC on the sending domain (GoDaddy DNS)
-  — true blocker, auth emails land in spam without it. Branded bilingual
-  Supabase auth templates (signup confirm / email change / password reset).
-  Current inventory: Resend sends share invites (Arabic-only) + the contact
-  form (department routing, live); Supabase auth emails are default English
-  templates.
+- Email deliverability: DNS AUDITED 2026-06-13 and already in place — Resend
+  DKIM verified (resend._domainkey), SPF (root=Google, send.=amazonses),
+  DMARC p=quarantine, Google Workspace MX. Resend mail (share invites +
+  contact form) is fully authenticated. REAL remaining gap = Supabase auth
+  emails (signup confirm / reset / email change) still go through Supabase's
+  default low-deliverability sender. Fix (runbook + 3 bilingual templates in
+  docs/auth-emails/): (1) Supabase Dashboard -> Auth -> custom SMTP =
+  smtp.resend.com:465, user "resend", pass = a Resend API key (USER enters the
+  key; I don't type secrets), sender no-reply@taqreer.ai; raise the auth email
+  rate limit; (2) paste docs/auth-emails/*.html into the three templates. Then
+  smoke-test each flow in Gmail. Optional later: point DMARC rua at an inbox we
+  monitor (currently GoDaddy default).
 
 Phase C — Hardening:
 - Rate limiting: NONE exists anywhere. Priority order: share-invite email
