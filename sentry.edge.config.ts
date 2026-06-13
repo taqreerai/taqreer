@@ -5,7 +5,8 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
 
-  // Tag dev vs prod so local errors are filterable in the same project.
+  // Report from PRODUCTION only (see sentry.server.config.ts). Still tag env.
+  enabled: process.env.NODE_ENV === "production",
   environment: process.env.NODE_ENV,
 
   sendDefaultPii: true,
