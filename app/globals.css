@@ -227,6 +227,9 @@
   /* 3. Text */
   --tq-text-primary: #ffffff;
   --tq-text-muted:   #b4b4b4;
+  /* Canonical inline-error / destructive label red (same value both themes —
+     reads on dark + light). Replaces hardcoded rgb(220,38,38) in form errors. */
+  --tq-text-danger:  rgb(220, 38, 38);
 
   /* 4. Borders */
   /* §21: canonical hairline for the flat system — a crisp 1px edge. */
@@ -1762,6 +1765,13 @@ html.app-shell-scroll body {
 
 .group:hover .nav-icon {
   color: #ffffff !important;
+}
+
+/* ─── Danger / inline-error Text ─── */
+/* Unlayered (like .text-muted) so it wins over @layer utilities. The single
+   source of truth for form-error red — use instead of hardcoding the rgb. */
+.text-danger {
+  color: var(--tq-text-danger);
 }
 
 /* ─── Muted Text ─── */

@@ -475,7 +475,7 @@ function AddCardInner({ onDone }: { onDone: (savedId: string | null) => void }) 
     <div className="flex flex-col gap-4">
       <PaymentElement options={{ layout: "tabs" }} />
       {error ? (
-        <p className="text-sm text-[rgb(220,38,38)]" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}

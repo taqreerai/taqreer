@@ -131,13 +131,17 @@ export async function proxy(request: NextRequest) {
       return res;
     }
     // Legal pages stay public during coming-soon (Stripe expects reachable
-    // Terms/Privacy/Refund; transparency too).
+    // Terms/Privacy/Refund; transparency too). Strip a trailing slash so the
+    // canonical and `/terms/` forms both stay public (middleware runs before
+    // Next's trailing-slash redirect).
+    const normalizedGatePath =
+      gatePath !== "/" ? gatePath.replace(/\/+$/, "") : gatePath;
     const alwaysPublic =
-      gatePath === "/coming-soon" ||
-      gatePath === "/terms" ||
-      gatePath === "/privacy" ||
-      gatePath === "/refund" ||
-      gatePath === "/contact";
+      normalizedGatePath === "/coming-soon" ||
+      normalizedGatePath === "/terms" ||
+      normalizedGatePath === "/privacy" ||
+      normalizedGatePath === "/refund" ||
+      normalizedGatePath === "/contact";
     if (!unlocked && !alwaysPublic) {
       return NextResponse.rewrite(new URL(`/${gateLocale}/coming-soon`, request.url));
     }

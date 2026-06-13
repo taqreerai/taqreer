@@ -4,8 +4,8 @@
 // is the controlling language (the operating entity is a Wyoming, USA LLC and
 // the Terms are governed by Wyoming law); the Arabic is a courtesy translation.
 //
-// ‼️ FILL THESE before publishing (from the Wyoming Articles of Organization):
-//    LEGAL_META.entityName, LEGAL_META.address, LEGAL_META.effectiveDate.
+// LEGAL_META below is filled from the Wyoming Articles of Organization (PIXEL
+// WOLVES LLC). Confirm `effectiveDate` matches the actual publish date.
 //
 // Long-form content lives here (not in dictionaries/*.json) so it stays out of
 // the per-page client payload and is easy to edit. Short UI strings (page

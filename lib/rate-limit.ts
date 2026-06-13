@@ -18,7 +18,22 @@ export function rateLimit(
 
   if (!existing || existing.resetAt <= now) {
     if (buckets.size >= MAX_BUCKETS) {
+      // Drop expired buckets first.
       for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
+      // If every bucket is still live (a flood of unique keys inside the
+      // window), pruning frees nothing — evict the soonest-to-expire one so the
+      // map stays hard-bounded and can't grow without limit (memory guard).
+      if (buckets.size >= MAX_BUCKETS) {
+        let oldestKey: string | undefined;
+        let oldestResetAt = Infinity;
+        for (const [k, b] of buckets) {
+          if (b.resetAt < oldestResetAt) {
+            oldestResetAt = b.resetAt;
+            oldestKey = k;
+          }
+        }
+        if (oldestKey !== undefined) buckets.delete(oldestKey);
+      }
     }
     buckets.set(key, { count: 1, resetAt: now + windowMs });
     return { ok: true, retryAfterMs: 0 };

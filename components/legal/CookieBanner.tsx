@@ -30,14 +30,22 @@ export function CookieBanner() {
   // only if the user hasn't acknowledged yet.
   const [show, setShow] = useState(false);
   useEffect(() => {
-    if (!document.cookie.includes("tq_cookie_ack=1")) setShow(true);
+    // Exact pair match (not a substring `includes`, which another cookie
+    // happening to contain "tq_cookie_ack=1" could falsely satisfy).
+    const acked = document.cookie
+      .split("; ")
+      .some((entry) => entry === "tq_cookie_ack=1");
+    if (!acked) setShow(true);
   }, []);
 
   if (!show) return null;
   const t = COPY[locale];
 
   function dismiss() {
-    document.cookie = `tq_cookie_ack=1; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+    // `secure` only over HTTPS — a `secure` cookie is dropped on plain http,
+    // which would break dismissal on non-localhost http (prod is HTTPS).
+    const secure = location.protocol === "https:" ? "; secure" : "";
+    document.cookie = `tq_cookie_ack=1; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax${secure}`;
     setShow(false);
   }
 

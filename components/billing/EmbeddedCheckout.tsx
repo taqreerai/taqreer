@@ -235,7 +235,7 @@ function CheckoutForm({
         <PaymentElement options={{ layout: "tabs" }} />
 
         {payError ? (
-          <p className="text-sm text-[rgb(220,38,38)]" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {payError}
           </p>
         ) : null}

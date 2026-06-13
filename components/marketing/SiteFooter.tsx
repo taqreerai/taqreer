@@ -71,7 +71,7 @@ export async function SiteFooter({ locale }: { locale: "ar" | "en" }) {
                         viewBox="0 0 24 24"
                         className="h-5 w-5"
                         fill="currentColor"
-                        aria-hidden
+                        aria-hidden="true"
                       >
                         <path d={s.path} />
                       </svg>

@@ -7,9 +7,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+// `import type` is erased at compile time, so pulling the key type from the
+// server-only departments module is safe here (no runtime import) and keeps
+// the department list defined in one place.
+import type { DepartmentKey } from "@/lib/contact/departments";
 
-type DeptKey = "general" | "sales" | "billing" | "support";
-const DEPT_KEYS: DeptKey[] = ["general", "sales", "billing", "support"];
+const DEPT_KEYS: DepartmentKey[] = ["general", "sales", "billing", "support"];
 
 function DepartmentSelect({
   value,
@@ -17,9 +20,9 @@ function DepartmentSelect({
   options,
   placeholder,
 }: {
-  value: DeptKey | "";
-  onChange: (k: DeptKey) => void;
-  options: { key: DeptKey; label: string }[];
+  value: DepartmentKey | "";
+  onChange: (k: DepartmentKey) => void;
+  options: { key: DepartmentKey; label: string }[];
   placeholder: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -98,7 +101,7 @@ export function ContactForm() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [department, setDepartment] = useState<DeptKey | "">("");
+  const [department, setDepartment] = useState<DepartmentKey | "">("");
   const [message, setMessage] = useState("");
   const [company, setCompany] = useState(""); // honeypot
   const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
@@ -210,7 +213,7 @@ export function ContactForm() {
       </label>
 
       {error ? (
-        <p className="text-sm text-[rgb(220,38,38)]" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       ) : null}
