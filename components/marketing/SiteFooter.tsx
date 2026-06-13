@@ -80,12 +80,14 @@ export async function SiteFooter({ locale }: { locale: "ar" | "en" }) {
                 </div>
               ) : key === "contact" ? (
                 <ul className="space-y-3 text-sm">
-                  <li className="text-muted" dir="ltr">
-                    {LEGAL_META.address}
+                  {/* Block follows the page direction (right-aligned in RTL);
+                      only the LTR content is BiDi-isolated. */}
+                  <li className="text-muted">
+                    <bdi dir="ltr">{LEGAL_META.address}</bdi>
                   </li>
                   <li>
-                    <a className="icon-hover" href="mailto:support@taqreer.ai" dir="ltr">
-                      support@taqreer.ai
+                    <a className="icon-hover" href="mailto:support@taqreer.ai">
+                      <bdi dir="ltr">support@taqreer.ai</bdi>
                     </a>
                   </li>
                   <li>
