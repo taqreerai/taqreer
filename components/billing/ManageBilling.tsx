@@ -271,11 +271,16 @@ export function ManageBilling() {
                         ) : null}
                       </p>
                       {pm.expMonth && pm.expYear ? (
-                        <p className="settings-row-desc" dir="ltr">
-                          {t.expires.replace(
-                            "{date}",
-                            `${String(pm.expMonth).padStart(2, "0")}/${String(pm.expYear).slice(-2)}`,
-                          )}
+                        // Follows the page direction so "تنتهي …" right-aligns
+                        // in RTL (was dir="ltr" → left-stranded under the
+                        // right-anchored card number); the date itself is
+                        // BiDi-isolated so MM/YY still reads LTR.
+                        <p className="settings-row-desc">
+                          {t.expires.split("{date}")[0]}
+                          <bdi dir="ltr">
+                            {`${String(pm.expMonth).padStart(2, "0")}/${String(pm.expYear).slice(-2)}`}
+                          </bdi>
+                          {t.expires.split("{date}")[1]}
                         </p>
                       ) : null}
                     </div>
