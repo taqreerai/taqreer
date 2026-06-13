@@ -131,17 +131,19 @@ function paramsFor(t: Tpl, lang: Lang, assetBase?: string): EmailShellParams {
 }
 
 for (const t of TEMPLATES) {
-  // Supabase: one document, AR + EN bodies under a Go conditional (default AR).
+  // Supabase: one document, AR + EN bodies under a Go conditional. Arabic is the
+  // explicit branch; English is the else/default (covers users whose metadata
+  // has no `lang`, e.g. accounts created before signup started persisting it).
   const supabaseDoc = `<!doctype html>
-<html lang="{{ if eq .Data.lang "en" }}en{{ else }}ar{{ end }}" dir="{{ if eq .Data.lang "en" }}ltr{{ else }}rtl{{ end }}">
+<html lang="{{ if eq .Data.lang "ar" }}ar{{ else }}en{{ end }}" dir="{{ if eq .Data.lang "ar" }}rtl{{ else }}ltr{{ end }}">
   <head>
 ${EMAIL_HEAD}
   </head>
   <body style="margin:0;padding:0;background:#111111;">
-{{ if eq .Data.lang "en" }}
-${renderEmailBody(paramsFor(t, "en"))}
-{{ else }}
+{{ if eq .Data.lang "ar" }}
 ${renderEmailBody(paramsFor(t, "ar"))}
+{{ else }}
+${renderEmailBody(paramsFor(t, "en"))}
 {{ end }}
   </body>
 </html>
