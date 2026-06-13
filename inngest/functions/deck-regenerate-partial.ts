@@ -243,6 +243,8 @@ function buildPartialSystemPrompt(
 
   return `You are regenerating ONE slide of an existing presentation. The rest of the deck is fixed — chrome (header row, footer row, brand mark, pagination), theme (palette, fonts, background), and slide-level margins stay locked.
 
+SAFE AREA. Keep readable content inside a consistent margin, never edge to edge. Pick one inset for the whole deck, about 5% of the canvas.
+
 OUTPUT — STRICT
 - Return ONLY the new HTML for the active slide. No JSON. No markdown fences. No prose. No explanation.
 - Start with the slide root element (typically a single \`<div style="position:relative; width:${width}px; height:${height}px; ...">…</div>\`). Inline \`<style>\` tags are allowed inside the slide HTML.

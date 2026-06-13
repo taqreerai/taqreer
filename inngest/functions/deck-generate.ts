@@ -141,6 +141,8 @@ export const SYSTEM_PROMPT_CREATE_HTML = `You are a world-class presentation des
 
 PLAN IN YOUR THINKING FIRST (before the opening \`<\`). For EACH slide work out: how much content actually fits the fixed frame without overflowing, and the type scale + spacing that leaves real breathing room. Design for FIT — don't pack a slide (especially lists and tables of contents), don't let blocks touch or overlap, never push content past the slide edges. A calmer, slightly emptier slide beats a crammed or clipped one. Commit only the polished result to the output.
 
+SAFE AREA. Keep readable content inside a consistent margin, never edge to edge. Pick one inset for the whole deck, about 5% of the canvas.
+
 OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, no JSON, no \`<!DOCTYPE>\`/\`<html>\`/\`<head>\`/\`<body>\`):
 1. ONE \`<style>\` block FIRST — your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE here and reuse it via classes (this keeps the markup terse).
 2. THEN the slides, each a top-level \`<section data-label="<short Arabic name>" data-role="cover|content|section|stats|quote|image|closing">\`.
