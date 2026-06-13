@@ -36,7 +36,13 @@ export async function GET() {
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true, plan: true },
+    select: {
+      id: true,
+      plan: true,
+      // Cadence of the active paid subscription → the plan banner's
+      // monthly/yearly pill (PlanUsage reads it from this one payload).
+      subscriptions: { select: { cadence: true } },
+    },
   });
   if (!dbUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -94,6 +100,7 @@ export async function GET() {
 
   return NextResponse.json({
     plan,
+    cadence: dbUser.subscriptions[0]?.cadence ?? null,
     balance: {
       total: balance.total,
       subscription: balance.subscription,

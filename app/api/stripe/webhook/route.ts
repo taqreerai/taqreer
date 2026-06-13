@@ -24,7 +24,11 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/billing/stripe";
-import { parseGrantMetadata, specByLookupKey } from "@/lib/billing/prices";
+import {
+  parseGrantMetadata,
+  specByLookupKey,
+  type BillingCadence,
+} from "@/lib/billing/prices";
 import {
   grantTopup,
   grantSubscriptionCycle,
@@ -194,6 +198,7 @@ export async function POST(request: Request) {
           data: {
             stripeSubscriptionId: sub.id,
             stripePriceId: sub.items.data[0]?.price.id ?? null,
+            cadence: cadenceFromSubscriptionObject(sub),
             status: narrowStatus(sub.status),
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             currentPeriodEnd: periodEnd(sub),
@@ -237,6 +242,7 @@ export async function POST(request: Request) {
             plan: "free",
             stripeSubscriptionId: null,
             stripePriceId: null,
+            cadence: null,
             cancelAtPeriodEnd: false,
           },
         });
@@ -303,10 +309,12 @@ async function applySubscriptionGrant(
 ): Promise<void> {
   let end: Date | undefined;
   let priceId: string | null = null;
+  let cadence: BillingCadence | null = null;
   if (subscriptionId) {
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     end = periodEnd(sub) ?? undefined;
     priceId = sub.items.data[0]?.price.id ?? null;
+    cadence = cadenceFromSubscriptionObject(sub);
   }
   await grantSubscriptionCycle({ userId: prismaUserId, plan, periodEnd: end });
   await prisma.subscription.update({
@@ -316,6 +324,7 @@ async function applySubscriptionGrant(
       status: "active",
       stripeSubscriptionId: subscriptionId,
       stripePriceId: priceId,
+      cadence,
       currentPeriodEnd: end ?? null,
       cancelAtPeriodEnd: false,
     },
@@ -342,6 +351,24 @@ function planFromSubscriptionObject(
     const spec = specByLookupKey(price.lookup_key);
     if (spec?.grant.kind === "subscription") return spec.grant.plan;
   }
+  return null;
+}
+
+// The billing interval ("monthly" | "yearly"), mirrored onto the
+// Subscription row so the UI can show cadence without a Stripe round-trip.
+// Primary source is the price's own `recurring.interval` (always present on a
+// subscription price); falls back to our grant metadata, then null.
+function cadenceFromSubscriptionObject(
+  sub: Stripe.Subscription,
+): BillingCadence | null {
+  const price = sub.items.data[0]?.price;
+  const interval = price?.recurring?.interval;
+  if (interval === "month") return "monthly";
+  if (interval === "year") return "yearly";
+  const grant = parseGrantMetadata(
+    (price?.metadata as Record<string, string>) ?? null,
+  );
+  if (grant?.kind === "subscription") return grant.cadence;
   return null;
 }
 

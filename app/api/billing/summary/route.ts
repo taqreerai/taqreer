@@ -32,5 +32,7 @@ export async function GET() {
     status: sub?.status ?? "active",
     cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
     currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
+    // "monthly" | "yearly" | null - drives the cadence chip/hint in the UI.
+    cadence: sub?.cadence ?? null,
   });
 }

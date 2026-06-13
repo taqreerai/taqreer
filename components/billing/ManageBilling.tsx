@@ -26,6 +26,7 @@ import { normalizePlan, planLabel, type KnownPlan } from "@/lib/plan";
 import { getStripe } from "@/lib/billing/stripe-client";
 import { checkoutAppearance, CHECKOUT_FONTS } from "@/lib/billing/appearance";
 import { NoticeCard } from "@/components/common/NoticeCard";
+import { PlanUsage } from "@/components/app/PlanUsage";
 import Link from "next/link";
 
 type Summary = {
@@ -34,6 +35,7 @@ type Summary = {
   status: "active" | "past_due" | "canceled";
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
+  cadence: "monthly" | "yearly" | null;
 };
 
 type PaymentMethod = {
@@ -104,6 +106,45 @@ export function ManageBilling() {
         })
       : null;
   const hasSub = !!periodEnd && summary?.status !== "canceled";
+  // The cadence pill lives in PlanUsage (fed by the credit store). Here we
+  // only build the cancel-aware renewal sub-line, which still wants the
+  // "billed monthly/yearly" hint when a subscription is active.
+  const cadence = summary?.cadence ?? null;
+  const cadenceHint = cadence === "yearly" ? t.yearlyHint : t.monthlyHint;
+  // Action button for the shared plan card: Cancel/Resume when subscribed,
+  // Upgrade otherwise. Renewal sub-line: "ends on" when a cancel is
+  // scheduled, else "renews · billed {cadence}".
+  const planAction = !hasSub ? (
+    <Link
+      href={localizedHref("/plans", locale)}
+      className="btn-gradient shrink-0 px-6 py-2.5 text-sm no-underline"
+    >
+      {t.upgrade}
+    </Link>
+  ) : summary?.cancelAtPeriodEnd ? (
+    <button
+      type="button"
+      disabled={busy !== null}
+      onClick={resumeSub}
+      className="btn-gradient shrink-0 px-6 py-2.5 text-sm"
+    >
+      {busy === "resume" ? t.loading : t.resumeSub}
+    </button>
+  ) : (
+    <button
+      type="button"
+      disabled={busy !== null}
+      onClick={() => setConfirmCancel(true)}
+      className="btn-pill shrink-0 px-6 py-2.5 text-sm"
+    >
+      {t.cancelSub}
+    </button>
+  );
+  const renewalNote = hasSub
+    ? summary?.cancelAtPeriodEnd
+      ? t.endsOn.replace("{date}", periodEnd ?? "")
+      : `${t.renews.replace("{date}", periodEnd ?? "")}${cadence ? ` · ${cadenceHint}` : ""}`
+    : undefined;
 
   async function post(path: string, key: string, body?: unknown): Promise<Response | null> {
     setBusy(key);
@@ -173,58 +214,15 @@ export function ManageBilling() {
         </div>
       ) : null}
 
-      {/* ── Subscription ── */}
-      <section>
+      {/* ── Subscription ── the shared plan card (same as /settings), with
+          Cancel/Resume swapped in for the Upgrade CTA (user direction
+          2026-06-13). */}
+      <div>
         <h2 className="mb-3 text-lg font-semibold text-foreground">
           {t.subscriptionTitle}
         </h2>
-        <div className="surface-card rounded-2xl p-5">
-          {hasSub ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  {dict.components.planUsage.plan.replace("{plan}", planName)}
-                  <span className="badge-purple">{planName}</span>
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  {summary?.cancelAtPeriodEnd
-                    ? t.endsOn.replace("{date}", periodEnd ?? "")
-                    : t.renews.replace("{date}", periodEnd ?? "")}
-                </p>
-              </div>
-              {summary?.cancelAtPeriodEnd ? (
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={resumeSub}
-                  className="btn-gradient px-4 py-2 text-sm"
-                >
-                  {busy === "resume" ? t.loading : t.resumeSub}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => setConfirmCancel(true)}
-                  className="btn-pill px-4 py-2 text-sm"
-                >
-                  {t.cancelSub}
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted">{t.noSubscription}</p>
-              <Link
-                href={localizedHref("/plans", locale)}
-                className="btn-gradient px-4 py-2 text-sm no-underline"
-              >
-                {t.upgrade}
-              </Link>
-            </div>
-          )}
-        </div>
-      </section>
+        <PlanUsage action={planAction} renewalNote={renewalNote} />
+      </div>
 
       {/* ── Payment methods ── */}
       <section>

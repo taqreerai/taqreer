@@ -30,6 +30,7 @@ type Summary = {
   status: "active" | "past_due" | "canceled";
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
+  cadence: "monthly" | "yearly" | null;
 };
 
 // Per-month price shown on the cards (the yearly column shows the
@@ -112,6 +113,13 @@ export function BillingSection({
           locale: dateFnsLocale(locale),
         })
       : null;
+  // Billing interval of the active paid subscription (null = free/none) →
+  // a muted chip next to the tier badge + a "billed monthly/yearly" hint.
+  // (Named subCadence to avoid colliding with the monthly/yearly TOGGLE
+  // state `cadence` used by the change-plan cards below.)
+  const subCadence = summary?.cadence ?? null;
+  const cadenceLabel = subCadence === "yearly" ? t.yearly : t.monthly;
+  const cadenceHint = subCadence === "yearly" ? t.yearlyHint : t.monthlyHint;
 
   return (
     <div className="flex flex-col gap-10">
@@ -125,12 +133,17 @@ export function BillingSection({
             <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
               {dict.components.planUsage.plan.replace("{plan}", planName)}
               <span className="badge-purple">{planName}</span>
+              {subCadence ? (
+                <span className="rounded-full bg-overlay-soft px-2 py-0.5 text-[10px] font-medium text-muted">
+                  {cadenceLabel}
+                </span>
+              ) : null}
             </p>
             <p className="mt-0.5 text-xs text-muted">
               {summary?.cancelAtPeriodEnd && renewDate
                 ? t.endsOn.replace("{date}", renewDate)
                 : renewDate
-                  ? t.renews.replace("{date}", renewDate)
+                  ? `${t.renews.replace("{date}", renewDate)}${subCadence ? ` · ${cadenceHint}` : ""}`
                   : t.noRenewal}
             </p>
             {credits ? (

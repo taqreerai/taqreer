@@ -30,6 +30,9 @@ export type CreditRecentEvent = {
 
 export type CreditData = {
   plan: string;
+  // Billing interval of the active paid subscription (null = free/none) →
+  // drives the plan banner's monthly/yearly pill.
+  cadence: "monthly" | "yearly" | null;
   balance: {
     total: number;
     subscription: number;

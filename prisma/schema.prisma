@@ -515,6 +515,10 @@ model Subscription {
   // The active recurring Price id (price_...) - maps back to tier +
   // cadence via lib/billing/prices.ts. Null when not subscribed.
   stripePriceId    String?
+  // "monthly" | "yearly" - the billing interval, mirrored from the
+  // subscription's price at webhook time so the UI can show it without a
+  // Stripe round-trip. Null when not subscribed.
+  cadence          String?
   plan             String    @default("free")
   // active | past_due | canceled - mirrors Stripe's subscription.status
   // (narrowed). `past_due` drives the Settings dunning banner.
