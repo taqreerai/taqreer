@@ -463,7 +463,7 @@
         "contact": { "title": "Contact", "links": { "email": "Email", "support": "Support", "form": "Contact form" } },
         "links": { "title": "Links", "links": { "features": "Features", "pricing": "Pricing", "faq": "FAQ" } },
         "social": { "title": "Social", "links": { "twitter": "Twitter", "linkedin": "LinkedIn", "instagram": "Instagram" } },
-        "legal": { "title": "Legal", "links": { "privacy": "Privacy policy", "terms": "Terms & conditions" } }
+        "legal": { "title": "Legal", "links": { "privacy": "Privacy policy", "terms": "Terms & conditions", "refund": "Refund policy" } }
       }
     },
     "preview": {

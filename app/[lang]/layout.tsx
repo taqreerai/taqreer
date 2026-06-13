@@ -7,6 +7,7 @@ import { ScrollReset } from "@/components/app/ScrollReset";
 import { isLocale, dirForLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
+import { CookieBanner } from "@/components/legal/CookieBanner";
 import { isAppPath } from "@/lib/app-routes";
 import { stripLocale } from "@/lib/i18n/navigation";
 import { THEME_COOKIE } from "@/lib/ui-cookies";
@@ -131,6 +132,7 @@ export default async function RootLayout({
         <ScrollReset />
         <LocaleProvider locale={lang} dict={dict}>
           {children}
+          <CookieBanner />
         </LocaleProvider>
       </body>
     </html>

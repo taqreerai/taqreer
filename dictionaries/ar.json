@@ -463,7 +463,7 @@
         "contact": { "title": "تواصل", "links": { "email": "البريد الإلكتروني", "support": "الدعم الفني", "form": "نموذج التواصل" } },
         "links": { "title": "روابط", "links": { "features": "المميزات", "pricing": "الأسعار", "faq": "الأسئلة الشائعة" } },
         "social": { "title": "التواصل الاجتماعي", "links": { "twitter": "Twitter", "linkedin": "LinkedIn", "instagram": "Instagram" } },
-        "legal": { "title": "قانوني", "links": { "privacy": "سياسة الخصوصية", "terms": "الشروط والأحكام" } }
+        "legal": { "title": "قانوني", "links": { "privacy": "سياسة الخصوصية", "terms": "الشروط والأحكام", "refund": "سياسة الاسترداد" } }
       }
     },
     "preview": {

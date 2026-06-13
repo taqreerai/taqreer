@@ -130,7 +130,14 @@ export async function proxy(request: NextRequest) {
       });
       return res;
     }
-    if (!unlocked && gatePath !== "/coming-soon") {
+    // Legal pages stay public during coming-soon (Stripe expects reachable
+    // Terms/Privacy/Refund; transparency too).
+    const alwaysPublic =
+      gatePath === "/coming-soon" ||
+      gatePath === "/terms" ||
+      gatePath === "/privacy" ||
+      gatePath === "/refund";
+    if (!unlocked && !alwaysPublic) {
       return NextResponse.rewrite(new URL(`/${gateLocale}/coming-soon`, request.url));
     }
   }

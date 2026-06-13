@@ -25,6 +25,7 @@ import { LandingNav } from "@/components/marketing/LandingNav";
 import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 // Platform-wide "decks created" counter shown in the Hero status chip. Cached 5
 // min; try/catch → 0 on error.
@@ -48,6 +49,10 @@ const FOOTER_LINK_HREFS: Record<string, string> = {
   features: "#features",
   pricing: "#pricing",
   faq: "#faq",
+  // Legal routes (leading "/" → localized below); in-page anchors stay as-is.
+  privacy: "/privacy",
+  terms: "/terms",
+  refund: "/refund",
 };
 
 // Centered (single-column) section header.
@@ -110,10 +115,14 @@ export default async function LandingPage({
   const footerGroups: { title: string; links: { label: string; href: string }[] }[] =
     [footer.contact, footer.links, footer.social, footer.legal].map((group) => ({
       title: group.title,
-      links: Object.entries(group.links).map(([key, label]) => ({
-        label: label as string,
-        href: FOOTER_LINK_HREFS[key] ?? "#",
-      })),
+      links: Object.entries(group.links).map(([key, label]) => {
+        const href = FOOTER_LINK_HREFS[key] ?? "#";
+        return {
+          label: label as string,
+          // Route hrefs ("/…") get the locale prefix; in-page anchors don't.
+          href: href.startsWith("/") ? localizedHref(href, lang) : href,
+        };
+      }),
     }));
 
   return (
