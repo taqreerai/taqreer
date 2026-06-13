@@ -98,6 +98,7 @@ export default function ForgotPasswordPage() {
           <label className="block text-sm font-medium mb-2">{t.emailLabel}</label>
           <input
             type="email"
+            dir="ltr"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="example@email.com"
@@ -114,7 +115,7 @@ export default function ForgotPasswordPage() {
         </button>
       </motion.form>
 
-      <motion.p {...fadeUp(0.2)} className="text-sm text-muted">
+      <motion.p {...fadeUp(0.2)} className="text-center text-sm text-muted">
         {t.forgot.rememberedPassword}
         <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
           {t.forgot.login}

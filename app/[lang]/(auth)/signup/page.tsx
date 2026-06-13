@@ -214,6 +214,7 @@ export default function SignupPage() {
           <label className="block text-sm font-medium mb-2">{t.emailLabel}</label>
           <input
             type="email"
+            dir="ltr"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="example@email.com"
@@ -225,6 +226,7 @@ export default function SignupPage() {
           <label className="block text-sm font-medium mb-2">{t.passwordLabel}</label>
           <input
             type="password"
+            dir="ltr"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
@@ -236,13 +238,13 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
+          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? t.signup.submitting : t.signup.submit}
         </button>
       </motion.form>
 
-      <motion.p {...fadeUp(0.3)} className="text-sm text-muted">
+      <motion.p {...fadeUp(0.3)} className="text-center text-sm text-muted">
         {t.signup.haveAccount}
         <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
           {t.signup.login}

@@ -177,6 +177,7 @@ export default function LoginPage() {
           <label className="block text-sm font-medium mb-2">{t.emailLabel}</label>
           <input
             type="email"
+            dir="ltr"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="example@email.com"
@@ -188,6 +189,7 @@ export default function LoginPage() {
           <label className="block text-sm font-medium mb-2">{t.passwordLabel}</label>
           <input
             type="password"
+            dir="ltr"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
@@ -198,18 +200,19 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
+          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? t.login.submitting : t.login.submit}
         </button>
       </motion.form>
 
-      {/* Footer cluster — signup CTA + forgot-password on opposite ends. */}
+      {/* Footer cluster — signup CTA centered, forgot-password stacked
+          directly under it at the same text size. */}
       <motion.div
         {...fadeUp(0.3)}
-        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm text-muted"
+        className="flex flex-col items-center gap-2 text-center text-sm text-muted"
       >
-        <span className="whitespace-nowrap">
+        <span>
           {t.login.noAccount}
           <Link href={localizedHref("/signup", locale)} className="text-foreground hover:underline cursor-pointer">
             {t.login.createAccount}
@@ -217,7 +220,7 @@ export default function LoginPage() {
         </span>
         <Link
           href={localizedHref("/forgot-password", locale)}
-          className="text-xs text-foreground hover:underline cursor-pointer whitespace-nowrap"
+          className="text-foreground hover:underline cursor-pointer"
         >
           {t.login.forgotPassword}
         </Link>

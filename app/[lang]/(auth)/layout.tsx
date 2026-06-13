@@ -79,11 +79,11 @@ export default async function AuthLayout({
           // gives a heavy frosted-glass read against the marquee —
           // preset "normal" (8 px) → 56 px effective blur. Still
           // tracks the user's Settings glass preset.
-          className="auth-modal surface-modal w-full max-w-md rounded-3xl p-8"
+          className="auth-modal surface-modal w-full max-w-sm rounded-3xl p-6"
         >
           <Link
             href={localizedHref("/", lang)}
-            className="mb-8 flex flex-shrink-0 justify-center cursor-pointer"
+            className="mb-6 flex flex-shrink-0 justify-center cursor-pointer"
           >
             <ThemeLogo
               width={140}
@@ -100,7 +100,7 @@ export default async function AuthLayout({
               (placeholder hrefs); the labels match the landing
               footer's legal group so the wording reads consistent
               when the real pages ship. */}
-          <p className="mt-8 text-center text-xs text-muted">
+          <p className="mt-6 text-center text-xs text-muted">
             {legal.prefix}
             <Link
               href={localizedHref("/#", lang)}

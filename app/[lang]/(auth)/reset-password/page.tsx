@@ -162,6 +162,7 @@ export default function ResetPasswordPage() {
           </label>
           <input
             type="password"
+            dir="ltr"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
@@ -176,6 +177,7 @@ export default function ResetPasswordPage() {
           </label>
           <input
             type="password"
+            dir="ltr"
             value={confirmPw}
             onChange={(e) => setConfirmPw(e.target.value)}
             placeholder="••••••••"
@@ -186,7 +188,7 @@ export default function ResetPasswordPage() {
         <button
           type="submit"
           disabled={loading || hasRecoverySession === false}
-          className="btn-pill w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
+          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
         >
           {loading ? t.reset.submitting : t.reset.submit}
         </button>
