@@ -1,82 +1,52 @@
 #!/bin/bash
-# Deploy the LOCAL working tree to the Hetzner box (178.105.88.35, ssh alias
-# "taqreer"). Deliberately git-free: rsyncs the files on disk (user direction
-# 2026-06-12 - git may have drifted; the local folder is the source of truth).
+# Deploy to the Hetzner box via GIT PUSH-TO-DEPLOY (replaced the old rsync flow
+# 2026-06-14 — recoverable in git history if ever needed).
 #
-# Shape: rsync source, then build ON the server (a 6GB swapfile covers the
-# 4GB RAM; cross-shipping a Mac build broke on Turbopack's content-hashed
-# Prisma externals). The build lands in .next-build and is swapped into
-# .next-deploy atomically, so the running app serves the old build until the
-# new one is complete. Runtime secrets live ONLY in /root/taqreer-app/.env on
-# the server - this script never writes or prints them.
+# How it works:
+#   - `prod` remote = the box's bare repo (taqreer:/root/taqreer-app.git), pushed
+#     over the existing ssh alias (no GitHub deploy key needed).
+#   - Pushing main fires /root/taqreer-app.git/hooks/post-receive (tracked at
+#     scripts/post-receive.sh): it checks main out into the live work-tree
+#     /root/taqreer-app, runs npm ci + prisma migrate deploy, builds into
+#     .next-build, swaps it into .next-deploy ATOMICALLY (the running app serves
+#     the old build until the swap), pm2-reloads, and health-checks /ar.
+#   - Build runs ON the server (6GB swap). Secrets live ONLY in the server .env
+#     (gitignored + untracked, so checkout never touches them). `main` (the SHA
+#     pushed here) is exactly what production runs.
 #
-# First-time cutover (nginx proxy_pass 3000 -> 3100, retiring the old landing
-# pm2 app) is manual - see context/deploy.md.
+# Re-provision the box from scratch:
+#   ssh taqreer 'git init --bare /root/taqreer-app.git'
+#   ssh taqreer 'cat > /root/taqreer-app.git/hooks/post-receive && chmod +x $_' < scripts/post-receive.sh
+#   git remote add prod taqreer:/root/taqreer-app.git
+#
+# Usage:
+#   ./deploy.sh            commit-gated deploy (push main -> build + swap)
+#   ./deploy.sh --force    skip the clean-tree guard (emergencies)
+#   ./deploy.sh --rebuild  rebuild current main on the box WITHOUT a new commit
+#                          (e.g. after changing the server .env)
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
-REMOTE=taqreer
-APP_DIR=/root/taqreer-app
-PORT=3100
+# ── Env-only rebuild: trigger the hook on the current main, no new commit. ──
+if [[ "${1:-}" == "--rebuild" ]]; then
+  echo "==> Forcing a rebuild of the current main on the box"
+  ssh taqreer 'echo "0 0 refs/heads/main" | /root/taqreer-app.git/hooks/post-receive'
+  exit 0
+fi
 
 # ── Guard ── never ship half-finished work: the tree must be committed.
-# (Review policy is by SIZE - small fixes deploy straight from dev; big
-# changes go through a dev->main PR for CodeRabbit first. User direction
-# 2026-06-13.) `--force` skips for emergencies.
+# (Review by SIZE — small fixes deploy straight from dev; big changes go through
+# a dev->main PR for CodeRabbit first.) `--force` skips for emergencies.
 if [[ "${1:-}" != "--force" && -n "$(git status --porcelain)" ]]; then
-  echo "✗ Working tree has uncommitted changes - commit (or stash) first."
-  echo "  Urgent? ./deploy.sh --force"
+  echo "✗ Working tree has uncommitted changes — commit (or stash) first."
+  echo "  Urgent? ./deploy.sh --force    Env-only rebuild? ./deploy.sh --rebuild"
   exit 1
 fi
-# Keep GitHub mirroring what production runs: dev AND main follow every
-# deploy (small fixes merge to main directly - no PR; big changes go
-# through a dev->main PR for CodeRabbit BEFORE deploying, so main is
-# already there when this push runs).
-git push -q origin dev dev:main || echo "(github push failed - deploying anyway)"
 
-echo "==> Syncing source to $REMOTE:$APP_DIR"
-rsync -az --delete \
-  --exclude .git \
-  --exclude node_modules \
-  --exclude '.next*' \
-  --exclude .env.local \
-  --exclude .claude \
-  --exclude scratch \
-  --exclude context \
-  --exclude 'public/email-lab' \
-  --filter 'protect .env' \
-  --filter 'protect node_modules' \
-  --filter 'protect .next-deploy' \
-  --filter 'protect .next-build' \
-  ./ "$REMOTE:$APP_DIR/"
+# Mirror to GitHub (dev AND main follow every deploy), then deploy to the box.
+# The prod push streams the post-receive build output (look for 'HTTP 200').
+git push -q origin dev dev:main || echo "(github push failed — deploying anyway)"
 
-echo "==> Server: install, migrate, build, swap, reload"
-ssh "$REMOTE" bash -s <<REMOTE_SCRIPT
-set -euo pipefail
-cd $APP_DIR
-npm ci --no-audit --no-fund
-npx prisma generate
-npx prisma migrate deploy
-# Build into .next-build while the live app keeps serving .next-deploy
-# (NEXT_PUBLIC_* values bake from the server .env), then swap atomically.
-rm -rf .next-build
-NEXT_DIST_DIR=.next-build npx next build
-rm -rf .next-deploy
-mv .next-build .next-deploy
-if pm2 describe taqreer-prod >/dev/null 2>&1; then
-  pm2 reload taqreer-prod --update-env
-else
-  # NEXT_DIST_DIR=.next-deploy comes from the server .env (Next loads it
-  # before evaluating next.config.ts), so plain \`next start\` finds the build.
-  pm2 start npm --name taqreer-prod -- start -- -p $PORT
-fi
-if ! pm2 describe taqreer-inngest >/dev/null 2>&1; then
-  pm2 start npx --name taqreer-inngest -- inngest-cli dev -u http://localhost:$PORT/api/inngest --no-discovery
-fi
-pm2 save
-REMOTE_SCRIPT
-
-echo "==> Deployed. Health check:"
-sleep 5
-ssh "$REMOTE" "curl -s -o /dev/null -w '%{http_code}\n' http://localhost:$PORT/ar"
+echo "==> Deploying: git push -> box bare repo (post-receive builds, swaps, health-checks)"
+git push prod dev:main

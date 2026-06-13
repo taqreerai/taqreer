@@ -7,11 +7,15 @@ that produced it; this file is the operational state.
 ## How work flows (IMPORTANT for any new session)
 
 - ALL file edits happen LOCALLY in /Users/osama/taqreer. Never edit on the
-  server. The local folder is the single source of truth (user direction:
-  git had drifted; GitHub was force-reset to match local on 2026-06-13).
-- `./deploy.sh` ships local → server: rsync, npm ci, prisma migrate deploy,
-  next build into .next-build, atomic swap to .next-deploy, pm2 reload,
-  health check (expect 200).
+  server. Commit, then deploy.
+- `./deploy.sh` = GIT PUSH-TO-DEPLOY (since 2026-06-14, replaced rsync): pushes
+  dev+main to GitHub, then `git push prod dev:main` to the box's bare repo
+  (taqreer:/root/taqreer-app.git). The tracked post-receive hook
+  (scripts/post-receive.sh) checks main out into the live work-tree, npm ci +
+  prisma migrate deploy, builds into .next-build, atomic-swaps to .next-deploy,
+  pm2 reload, health-checks /ar (expect 200). `--rebuild` re-runs the hook on
+  current main with no new commit (after an .env change); `--force` skips the
+  clean-tree guard. The pushed main SHA is exactly what prod runs.
 - Server access: `ssh taqreer` (root@178.105.88.35, key ~/.ssh/taqreer_hetzner,
   password auth disabled). macOS ssh REQUIRES `IPQoS none` in ~/.ssh/config.
 - Runtime secrets: ONLY in /root/taqreer-app/.env on the server (chmod 600).

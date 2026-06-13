@@ -69,14 +69,19 @@ the depth and are kept current:
   Cloud). Postgres 16 `taqreer_prod` local to the box. Nightly 02:00 backups.
 - **Supabase** = auth + storage + realtime ONLY (NOT the app DB). The SAME
   Supabase project serves dev and prod, so logins + image URLs are shared.
-- **Secrets** live ONLY in `/root/taqreer-app/.env` (chmod 600) — never rsynced
-  over. Includes prod `DATABASE_URL`, `COMING_SOON=1`, `COMING_SOON_KEY`,
-  `NEXT_DIST_DIR`, Stripe/Sentry/etc.
-- **Deploy = `./deploy.sh`**: rsyncs the LOCAL tree (git-free — the local folder
-  is the source of truth; user distrusts git history), builds ON the server
-  (6GB swap) into `.next-build`, atomic-swaps to `.next-deploy`, runs
-  `prisma migrate deploy`, pm2 reloads, health-checks `/ar` (expect 200), and
-  pushes `dev`+`main` to GitHub. `--force` skips the dirty-tree guard.
+- **Secrets** live ONLY in `/root/taqreer-app/.env` (chmod 600) — gitignored +
+  untracked, so `git checkout` on the box never touches them. Includes prod
+  `DATABASE_URL`, `COMING_SOON=1`, `COMING_SOON_KEY`, `NEXT_DIST_DIR`,
+  Stripe/Sentry/etc.
+- **Deploy = `./deploy.sh`** (GIT PUSH-TO-DEPLOY since 2026-06-14, replaced
+  rsync): pushes `dev`+`main` to GitHub, then `git push prod dev:main` to the
+  box's bare repo (`taqreer:/root/taqreer-app.git`). The tracked `post-receive`
+  hook (`scripts/post-receive.sh`) checks main out into the live work-tree,
+  `npm ci` + `prisma migrate deploy`, builds into `.next-build`, ATOMIC-swaps to
+  `.next-deploy`, pm2 reloads, health-checks `/ar` (expect 200). Build runs ON
+  the server (6GB swap); the pushed `main` SHA is exactly what prod runs.
+  `--force` skips the dirty-tree guard; `--rebuild` re-runs the hook on current
+  main with no new commit (e.g. after an `.env` change).
 - **Coming-soon gate** (proxy.ts): `COMING_SOON=1` rewrites every page to
   `/{lang}/coming-soon` unless the `tq_preview` cookie is set;
   `https://taqreer.ai/preview?key=taqreer2025` sets it (30 days). API routes

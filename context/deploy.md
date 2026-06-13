@@ -12,9 +12,10 @@ Set up 2026-06-13 (Phase A). Source of truth is the LOCAL folder, not git.
 
 ## App
 
-- `/root/taqreer-app` — the deployed tree. `.env` (chmod 600) holds ALL
-  runtime secrets + prod overrides; never in the repo, never rsynced over
-  (deploy.sh protects it).
+- `/root/taqreer-app` — the deployed work-tree (a `git checkout -f main` from
+  the bare repo `/root/taqreer-app.git`). `.env` (chmod 600) holds ALL runtime
+  secrets + prod overrides; gitignored + untracked, so `git checkout` never
+  touches it.
 - pm2: `taqreer-prod` (`next start -p 3100`, serves `.next-deploy` via
   `NEXT_DIST_DIR` in the server .env) + `taqreer-inngest` (inngest-cli dev
   server, interim until Inngest Cloud). `pm2-root` systemd unit resurrects
@@ -30,10 +31,20 @@ Set up 2026-06-13 (Phase A). Source of truth is the LOCAL folder, not git.
 
 ## Deploying
 
-`./deploy.sh` from the repo root: rsync source → npm ci → prisma generate +
-migrate deploy → `next build` into `.next-build` (live app keeps serving the
-old build) → atomic swap to `.next-deploy` → pm2 reload. Health-checks
-`/ar` at the end (expect 200).
+GIT PUSH-TO-DEPLOY (replaced rsync 2026-06-14). `./deploy.sh` from the repo
+root: pushes dev+main to GitHub, then `git push prod dev:main` to the box's bare
+repo (`taqreer:/root/taqreer-app.git`). The tracked post-receive hook
+(`scripts/post-receive.sh`, installed at `.../hooks/post-receive`) checks main
+out into `/root/taqreer-app` → npm ci → prisma generate + migrate deploy →
+`next build` into `.next-build` (live app keeps serving the old build) → atomic
+swap to `.next-deploy` → pm2 reload → health-check `/ar` (expect 200). The push
+streams the build output. `--rebuild` re-runs the hook on current main with no
+new commit (after an .env change); `--force` skips the clean-tree guard.
+
+Re-provision the bare repo + hook: `ssh taqreer 'git init --bare
+/root/taqreer-app.git'`, pipe `scripts/post-receive.sh` to
+`.../hooks/post-receive` (chmod +x), then `git remote add prod
+taqreer:/root/taqreer-app.git` locally.
 
 ## Coming-soon gate
 
