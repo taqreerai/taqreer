@@ -93,20 +93,23 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   embedded ui_mode:elements form), prod webhook, real-card smoke test.
   Toggle Stripe's own receipts + payment-failed emails ON (don't own these).
   Fable pricing decision (600+80 vs keep 500+28) before live billing.
-- Legal pages: BUILT (PR #59, not deployed) — bilingual ToS/Privacy/Refund
-  (lib/legal/content.ts) + cookie banner + footer links + gate-exempt routes.
-  Wyoming/US governing law (entity is a Wyoming LLC, NOT Saudi — the shared
-  Articles confirmed this; English controlling), KSA PDPL-aware privacy,
-  standard-SaaS refunds. BLOCKED on: (a) fill LEGAL_META entityName/address/
-  effectiveDate from the Articles (PDF text didn't render — need them typed);
-  (b) counsel review; then deploy. Do NOT deploy with placeholders public.
+- ✅ LIVE (2026-06-13, PR #59 merged + deployed): bilingual ToS/Privacy/Refund
+  (lib/legal/content.ts) + cookie banner + contact form (Resend department
+  routing) + shared SiteFooter + gate-exempt public routes (incl. trailing-slash
+  normalize). LEGAL_META filled from the Articles: PIXEL WOLVES LLC, 5830 E 2nd
+  St Ste 7000 Casper WY 82609, effectiveDate 2026-06-13. Wyoming/US governing
+  law (English controlling), KSA PDPL-aware privacy, standard-SaaS refunds.
+  CodeRabbit findings addressed (rate-limit memory bound, cookie hardening,
+  danger-color token). STILL BLOCKED on counsel review before relying on these
+  as final (content is a DRAFT); copy can be revised in place post-review.
 - ✅ DONE (2026-06-13): Billing UI cadence — monthly/yearly pill + hint on
   /plans, /settings, /billing; PlanUsage is now the shared plan card.
 - Email deliverability: SPF/DKIM/DMARC on the sending domain (GoDaddy DNS)
   — true blocker, auth emails land in spam without it. Branded bilingual
   Supabase auth templates (signup confirm / email change / password reset).
-  Current inventory: Resend sends ONE email (share invite, Arabic-only);
-  Supabase auth emails are default English templates.
+  Current inventory: Resend sends share invites (Arabic-only) + the contact
+  form (department routing, live); Supabase auth emails are default English
+  templates.
 
 Phase C — Hardening:
 - Rate limiting: NONE exists anywhere. Priority order: share-invite email
@@ -130,7 +133,7 @@ Phase D — Cheap pre-launch polish:
   Editor stays desktop-only with a graceful message — do not attempt.
 - PostHog: planned, not wired. Pageviews + key events (signup, first
   generation, export, checkout opened, paid).
-- support@ mailbox + footer contact link.
+- support@ mailbox (the footer contact link + /contact form shipped 2026-06-13).
 
 Launch. Then post-launch backlog (deliberately deferred): lifecycle emails +
 unified template system, admin actions UI, content SEO + structured data,
