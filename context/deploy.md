@@ -1,6 +1,7 @@
 # Production deploy — Hetzner (taqreer.ai)
 
-Set up 2026-06-13 (Phase A). Source of truth is the LOCAL folder, not git.
+Set up 2026-06-13 (Phase A). Deploy = git push-to-deploy (since 2026-06-14);
+the `main` SHA checked out on the box is exactly what production runs.
 
 ## Box
 
@@ -9,6 +10,20 @@ Set up 2026-06-13 (Phase A). Source of truth is the LOCAL folder, not git.
 - macOS gotcha: ssh needs `IPQoS none` in `~/.ssh/config` (the network drops
   DSCP-marked packets; raw TCP works, ssh hangs without it).
 - 6GB swapfile (/swapfile) so Next 16 builds fit next to the running app.
+- Host binaries the flows shell out to (apt — NOT installed by the git deploy,
+  re-install on any box rebuild). Installed 2026-06-14:
+  `apt-get install -y libreoffice-impress poppler-utils fontforge`
+  - `libreoffice-impress` (+ pulls `libreoffice-core`) → PPTX upload → PDF,
+    headless `soffice`/`libreoffice` (`lib/extract/pptx-to-pdf.ts`).
+  - `poppler-utils` → `pdftoppm`/`pdftocairo`, PDF → per-page PNG
+    (`lib/extract/pdf-to-png.ts`).
+  - `fontforge` → OTF → TTF for Arabic font embedding in PPTX export
+    (`lib/export/otf-to-ttf.ts`).
+  - Puppeteer's Chrome is bundled under `/root/.cache/puppeteer` (thumbnails +
+    PDF/PNG export) — `npm ci` restores it.
+  Java is NOT required for PPTX→PDF; add `default-jre-headless` only if a complex
+  deck ever fails to convert. (`/usr/bin` is in the pm2 process PATH, so the app
+  finds all of these without a restart.)
 
 ## App
 
