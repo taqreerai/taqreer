@@ -1,71 +1,57 @@
-# Supabase auth emails — Resend SMTP + branded bilingual templates
+# Supabase auth emails — Resend SMTP + locale-aware templates
 
-Goal: signup-confirm / password-reset / email-change emails go out the
-authenticated `taqreer.ai` path (so they land in the inbox, not spam) and look
-like the product (bilingual, brand blue).
+Goal: signup-confirm / reset / email-change / security-notice emails go out the
+authenticated `taqreer.ai` path (inbox, not spam) and look like the product:
+flat dark, one baked logo-box PNG, brand blue, Latin numerals, no em dash.
 
-DNS state (audited 2026-06-13, already in place, nothing to add):
-- DKIM `resend._domainkey.taqreer.ai` valid (domain verified in Resend)
-- SPF: root includes Google Workspace; `send.taqreer.ai` includes amazonses
-  (Resend envelope) so Resend mail passes SPF
-- DMARC `p=quarantine`, relaxed alignment, passes via DKIM
-- MX: Google Workspace (so contact@/support@/billing@ receive mail)
+Design lives in the shared shell `lib/email/shell.ts` (which ALSO drives the
+code-sent welcome / share-invite / contact emails — one source of truth). The
+CSS aurora glow was dropped after it half-flipped in Gmail dark mode: flat
+`#111111` + a single baked PNG (`public/email/icon-box.png` = mark + tile +
+hairline border, in ONE image so the dark-mode flip can't vanish it).
 
-Optional later: point DMARC `rua` at an address we monitor (currently a GoDaddy
-default). Not a launch blocker.
+## Status (2026-06-13)
 
----
+- ✅ Custom SMTP (Resend) ENABLED in Supabase: `smtp.resend.com:465`, user
+  `resend`, sender `no-reply@taqreer.ai`. Password = a Resend send-only key
+  (entered by Osama; I don't type secrets). Shared dev+prod project.
+- ✅ DNS authenticated: Resend DKIM (`resend._domainkey`), SPF (root=Google,
+  `send.`=amazonses), DMARC `p=quarantine`, Workspace MX.
+- ✅ The 5 templates are generated + PASTED into the dashboard.
 
-## Step 1 - Supabase custom SMTP (Resend)
+REMAINING:
+- ‼️ Site URL is still `http://localhost:3000` → set to `https://taqreer.ai`
+  (Authentication → URL Configuration). It's the default redirect + exposed as
+  `{{ .SiteURL }}`.
+- Bump the auth-email rate limit (currently 30/h) under Auth → Rate Limits.
+- CODE TODO: exempt `/callback` from the coming-soon gate (proxy.ts
+  `alwaysPublic`) so a fresh signup's confirm link + Google OAuth complete
+  pre-launch — today they only work for `tq_preview`-cookie holders.
+- Gmail smoke-test each flow (signup confirm + welcome, reset, email change).
+- Optional later: point DMARC `rua` at an inbox we monitor (GoDaddy default).
 
-Supabase Dashboard -> Project Settings -> Authentication -> SMTP Settings ->
-enable "Custom SMTP" and set:
+## The 5 templates
 
-| Field | Value |
-|---|---|
-| Host | `smtp.resend.com` |
-| Port | `465` |
-| Username | `resend` |
-| Password | a Resend API key (see note) |
-| Sender email | `no-reply@taqreer.ai` |
-| Sender name | `taqreer.ai` |
-| Minimum interval | leave default |
+Edit copy in `scripts/build-supabase-emails.ts`, run
+`npx tsx scripts/build-supabase-emails.ts` → regenerates `docs/auth-emails/*.html`,
+then rebuild the paste sheet. **Paste from `PASTE-INTO-SUPABASE.md`** (subjects +
+bodies, byte-exact) into Authentication → Emails.
 
-Notes:
-- ‼️ The Password is a Resend API key. **You enter this**, not me (I don't type
-  API keys into fields). Reuse the existing send-only key, or better, create a
-  dedicated one in Resend (API Keys -> Create, sending access) named
-  `supabase-smtp` so it can be rotated independently.
-- `no-reply@taqreer.ai` does not need a real mailbox, Resend can send from any
-  address on the verified domain. Set the templates' reply hint to support@.
-- This Supabase project is shared by dev + prod, so this switches BOTH to
-  Resend. That's intended (dev volume is tiny).
-- After saving, send yourself a password-reset from the live site and confirm
-  it arrives from `no-reply@taqreer.ai` and lands in the inbox.
+Each template is ONE document with the AR + EN bodies under a Go conditional:
+`{{ if eq .Data.lang "ar" }}…{{ else }}…{{ end }}` — Arabic is the explicit
+branch, English the default (covers accounts created before signup persisted
+`lang` in user_metadata). The 3 core templates use `{{ .ConfirmationURL }}`.
 
-Supabase's default auth-email rate limit is very low. After custom SMTP is on,
-raise it under Authentication -> Rate Limits (email) to a sane number for
-launch (e.g. 30-100/hour) since Resend can handle it.
-
----
-
-## Step 2 - Templates
-
-Supabase Dashboard -> Authentication -> Email Templates. For each type below,
-paste the matching HTML file into the "Message body" (source) and set the
-Subject. Templates are bilingual (Arabic block first, then English), brand blue,
-Latin numerals, no em dashes.
-
-| Supabase template | File | Subject |
+| Supabase template | File | Notes |
 |---|---|---|
-| Confirm signup | `confirm-signup.html` | `فعّل حسابك في taqreer.ai · Activate your taqreer.ai account` |
-| Reset password | `reset-password.html` | `إعادة تعيين كلمة المرور · Reset your taqreer.ai password` |
-| Change email address | `change-email.html` | `تأكيد بريدك الجديد · Confirm your new taqreer.ai email` |
+| Confirm signup | `confirm-signup.html` | button |
+| Reset password | `reset-password.html` | button |
+| Change email address | `change-email.html` | button |
+| Password changed | `password-changed.html` | security notice, no button — flip ON "Enable notification" |
+| Email changed | `email-changed.html` | security notice, no button — flip ON "Enable notification" |
 
-All three use `{{ .ConfirmationURL }}` as the action link (Supabase populates it).
-The app does not use Magic Link / Invite / Reauthentication, so those defaults
-can stay (or mirror one of these later).
+> Dashboard caveat: the Preview never evaluates Go conditionals, so it shows the
+> literal `{{ if }}` + both branches. The actual send evaluates `.Data.lang`
+> (set by the signup form via `data: { lang }`) and picks one language.
 
-Verify after pasting: trigger each flow on the live site (signup, forgot
-password, settings email change) and confirm the email renders correctly in
-Gmail (LTR + RTL blocks, button works).
+The app doesn't use Magic Link / Invite / Reauthentication — those defaults stay.

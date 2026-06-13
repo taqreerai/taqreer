@@ -114,12 +114,10 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   in Gmail dark mode (kept it simple). Code-sent emails LIVE through the shell:
   welcome (fires on signup via user-sync, with the 400-credit pill + 3 recent
   template covers), share-invite, contact. Five Supabase auth/security templates
-  generated locale-aware (Arabic explicit / English default Go conditional) in
-  docs/auth-emails/ + a paste sheet (docs/auth-emails/PASTE-INTO-SUPABASE.md). The
-  throwaway /email-lab HTML-sender + design lab used to iterate on this are
+  generated + PASTED into Supabase, locale-aware (Arabic explicit / English
+  default Go conditional); source in docs/auth-emails/ + PASTE-INTO-SUPABASE.md.
+  The throwaway /email-lab HTML-sender + design lab used to iterate on this are
   removed. REMAINING:
-    • USER: paste the 5 templates into Supabase Auth -> Emails from the paste
-      sheet (3 core + flip ON the 2 security-notice toggles).
     • USER: Site URL is still http://localhost:3000 -> set to https://taqreer.ai.
     • Bump the auth-email rate limit (currently 30/h) for launch volume.
     • CODE TODO: exempt /callback from the coming-soon gate (proxy.ts
