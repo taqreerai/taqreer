@@ -104,18 +104,35 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   as final (content is a DRAFT); copy can be revised in place post-review.
 - ✅ DONE (2026-06-13): Billing UI cadence — monthly/yearly pill + hint on
   /plans, /settings, /billing; PlanUsage is now the shared plan card.
-- Email deliverability: DNS AUDITED 2026-06-13 and already in place — Resend
-  DKIM verified (resend._domainkey), SPF (root=Google, send.=amazonses),
-  DMARC p=quarantine, Google Workspace MX. Resend mail (share invites +
-  contact form) is fully authenticated. REAL remaining gap = Supabase auth
-  emails (signup confirm / reset / email change) still go through Supabase's
-  default low-deliverability sender. Fix (runbook + 3 bilingual templates in
-  docs/auth-emails/): (1) Supabase Dashboard -> Auth -> custom SMTP =
-  smtp.resend.com:465, user "resend", pass = a Resend API key (USER enters the
-  key; I don't type secrets), sender no-reply@taqreer.ai; raise the auth email
-  rate limit; (2) paste docs/auth-emails/*.html into the three templates. Then
-  smoke-test each flow in Gmail. Optional later: point DMARC rua at an inbox we
-  monitor (currently GoDaddy default).
+- Email deliverability + unified transactional emails: BUILT + DEPLOYED
+  (2026-06-13). DNS audited + in place (Resend DKIM, SPF root=Google/send.=
+  amazonses, DMARC p=quarantine, Workspace MX). Resend custom SMTP is ENABLED in
+  Supabase (smtp.resend.com:465, no-reply@taqreer.ai). One shared dark shell
+  (lib/email/shell.ts): flat #111111 + a SINGLE baked logo-box PNG
+  (public/email/icon-box.png — mark+tile+border in one image so the iOS dark-mode
+  flip can't vanish it). The CSS/PNG aurora glow was DROPPED after it half-flipped
+  in Gmail dark mode (kept it simple). Code-sent emails LIVE through the shell:
+  welcome (fires on signup via user-sync, with the 400-credit pill + 3 recent
+  template covers), share-invite, contact. Five Supabase auth/security templates
+  generated locale-aware (Arabic explicit / English default Go conditional) in
+  docs/auth-emails/ + a paste sheet (docs/auth-emails/PASTE-INTO-SUPABASE.md). The
+  throwaway /email-lab HTML-sender + design lab used to iterate on this are
+  removed. REMAINING:
+    • USER: paste the 5 templates into Supabase Auth -> Emails from the paste
+      sheet (3 core + flip ON the 2 security-notice toggles).
+    • USER: Site URL is still http://localhost:3000 -> set to https://taqreer.ai.
+    • Bump the auth-email rate limit (currently 30/h) for launch volume.
+    • CODE TODO: exempt /callback from the coming-soon gate (proxy.ts
+      alwaysPublic) so a fresh signup's confirm link + Google OAuth complete
+      pre-launch (today they only work for tq_preview-cookie holders).
+    • Gmail smoke-test each flow (signup confirm + welcome, reset, email change).
+    • Note: the signup credit grant has alias + IP-velocity farming guards —
+      repeat-testing from one inbox/IP grants 0 by design (not a bug).
+    • Optional later: point DMARC rua at an inbox we monitor (GoDaddy default).
+    • Cleanup deferred: public/email/{aurora,icon-white}.png + their bake scripts
+      are kept ONLY because the currently-pasted (pre-icon-box) Supabase templates
+      still reference icon-white.png — remove them once the new templates are
+      pasted (deploy.sh rsync --delete would otherwise break the live icon).
 
 Phase C — Hardening:
 - Rate limiting: NONE exists anywhere. Priority order: share-invite email

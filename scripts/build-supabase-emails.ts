@@ -2,13 +2,9 @@
 //
 //   npx tsx scripts/build-supabase-emails.ts
 //
-// Output:
-//   docs/auth-emails/<name>.html   — paste-ready Supabase template. One document
-//                                    with the AR + EN bodies under a
-//                                    `{{ if eq .Data.lang "en" }}` conditional
-//                                    (default = Arabic). Uses prod asset URLs.
-//   public/email-lab/gen-<name>-<lang>.html — localhost preview (relative asset
-//                                    URLs) so the rendered output is verifiable.
+// Output: docs/auth-emails/<name>.html — paste-ready Supabase template. One
+// document with the AR + EN bodies under a `{{ if eq .Data.lang "ar" }}`
+// conditional (Arabic explicit, English default). Uses prod asset URLs.
 //
 // Re-run after editing lib/email/shell.ts or the copy below.
 
@@ -16,7 +12,6 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import {
-  renderEmail,
   renderEmailBody,
   EMAIL_HEAD,
   type EmailShellParams,
@@ -152,14 +147,6 @@ ${renderEmailBody(paramsFor(t, "en"))}
     path.join(root, "docs/auth-emails", `${t.name}.html`),
     supabaseDoc,
   );
-
-  // Localhost previews (relative asset paths so /email/* resolves on :3000).
-  for (const lang of ["ar", "en"] as Lang[]) {
-    fs.writeFileSync(
-      path.join(root, "public/email-lab", `gen-${t.name}-${lang}.html`),
-      renderEmail(paramsFor(t, lang, "")),
-    );
-  }
 }
 
-console.log(`Generated ${TEMPLATES.length} Supabase templates + previews.`);
+console.log(`Generated ${TEMPLATES.length} Supabase templates.`);
