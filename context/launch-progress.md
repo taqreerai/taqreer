@@ -93,8 +93,13 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   embedded ui_mode:elements form), prod webhook, real-card smoke test.
   Toggle Stripe's own receipts + payment-failed emails ON (don't own these).
   Fable pricing decision (600+80 vs keep 500+28) before live billing.
-- Legal pages: ToS/Privacy/Refund, bilingual, + minimal cookie banner.
-  None exist in the repo. LLM draft + user review.
+- Legal pages: BUILT (PR #59, not deployed) — bilingual ToS/Privacy/Refund
+  (lib/legal/content.ts) + cookie banner + footer links + gate-exempt routes.
+  Wyoming/US governing law (entity is a Wyoming LLC, NOT Saudi — the shared
+  Articles confirmed this; English controlling), KSA PDPL-aware privacy,
+  standard-SaaS refunds. BLOCKED on: (a) fill LEGAL_META entityName/address/
+  effectiveDate from the Articles (PDF text didn't render — need them typed);
+  (b) counsel review; then deploy. Do NOT deploy with placeholders public.
 - ✅ DONE (2026-06-13): Billing UI cadence — monthly/yearly pill + hint on
   /plans, /settings, /billing; PlanUsage is now the shared plan card.
 - Email deliverability: SPF/DKIM/DMARC on the sending domain (GoDaddy DNS)
