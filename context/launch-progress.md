@@ -65,10 +65,11 @@ DONE:
   why server errors weren't captured. v10 layout (instrumentation.ts +
   instrumentation-client.ts, deleted sentry.client.config.ts), new project
   taqreerai-66/taqreer, env-tagged, replay masked. Verified: test error →
-  TAQREER-1. Follow-ups: (a) SENTRY_AUTH_TOKEN for readable source maps
-  (currently minified); (b) bot scanners hitting /xxx.php reach the [lang]
-  layout → "Unsupported locale" 500s that now noise Sentry — should 404
-  cleanly; (c) sendDefaultPii + Session Replay on — revisit in Phase B legal.
+  TAQREER-1. SENTRY_AUTH_TOKEN in server .env → source maps upload on deploy
+  (verified: 1028 server + 135 client files). Bot-scanner 500s fixed:
+  getDictionary now notFound()s on an invalid locale → /xxx.php scans 404
+  cleanly (no more Sentry noise). Remaining: (c) sendDefaultPii + Session
+  Replay are ON — revisit privacy in Phase B legal.
 
 REMAINING in Phase A:
 - Inngest Cloud account (dev@taqreer.ai) → event+signing keys into server
@@ -134,9 +135,7 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 ## Open user actions (blocked on Osama)
 
 1. ✅ Supabase redirect URLs for taqreer.ai — DONE.
-2. ✅ Sentry wired (taqreerai-66/taqreer) — DONE. Optional: create a
-   SENTRY_AUTH_TOKEN (Sentry → Settings → Auth Tokens) → server .env for
-   readable source-mapped stack traces.
+2. ✅ Sentry wired (taqreerai-66/taqreer) + source maps uploading — DONE.
 3. Go-ahead for Stripe test webhook creation (then live one in Phase B).
 4. Accounts under dev@taqreer.ai: Inngest Cloud, BetterStack uptime,
    PostHog (when Phase D).

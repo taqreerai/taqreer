@@ -83,7 +83,9 @@ the depth and are kept current:
   never gated. **Launch = remove `COMING_SOON` from the server .env + reload.**
 - **Monitoring**: Sentry wired (org `taqreerai-66`, project `taqreer`), v10
   layout (`instrumentation.ts` + `instrumentation-client.ts`), env-tagged,
-  replay masked. `SENTRY_AUTH_TOKEN` not set yet (→ minified stack traces).
+  replay masked. `SENTRY_AUTH_TOKEN` in the server .env → source maps upload on
+  every deploy (readable stack traces). sendDefaultPii + Replay ON (revisit in
+  Phase B legal).
 
 ---
 
