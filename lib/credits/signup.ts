@@ -21,18 +21,6 @@ import { grantSignupCredits } from "@/lib/credits/server";
 const IP_VELOCITY_LIMIT = 3;
 const IP_VELOCITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-// Trusted IPs (comma-separated, env-driven) skip BOTH abuse guards so the
-// signup -> grant -> welcome flow can be QA'd from a known network without
-// tripping alias-dedupe or IP-velocity. Empty by default (no bypass); set
-// SIGNUP_GRANT_ALLOWLIST_IPS on the server to enable, clear it before relying
-// on the guards for a real launch.
-const ALLOWLIST_IPS = new Set(
-  (process.env.SIGNUP_GRANT_ALLOWLIST_IPS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
-);
-
 /**
  * Canonical inbox identity for alias detection. Lowercases; strips
  * one `+suffix` from the local part; for gmail/googlemail also strips
@@ -58,16 +46,6 @@ export async function maybeGrantSignupCredits(args: {
   // velocity guard rather than failing the signup.
   ip?: string | null;
 }): Promise<{ granted: number; blocked: "email_alias" | "ip_velocity" | null }> {
-  // Trusted/allowlisted IP — skip both guards and grant (QA of the welcome +
-  // grant flow). Audited via the grant event's `allowlisted` flag.
-  if (args.ip && ALLOWLIST_IPS.has(args.ip)) {
-    const result = await grantSignupCredits({
-      userId: args.userId,
-      metadata: { ip: args.ip, allowlisted: true },
-    });
-    return { granted: result.granted, blocked: null };
-  }
-
   const normalized = normalizeEmail(args.email);
   const at = normalized.lastIndexOf("@");
   const domain = at > 0 ? normalized.slice(at + 1) : null;
