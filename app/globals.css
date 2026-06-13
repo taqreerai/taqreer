@@ -1792,6 +1792,20 @@ html.app-shell-scroll body {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Muted glyph/text brightens to foreground on hover (NO background box),
+   theme-aware via the flip tokens. Unlayered on purpose so it beats the
+   unlayered `.text-muted` (a `hover:text-foreground` utility lives in
+   @layer and silently loses, per the note at globals.css line ~1402). Used by
+   the landing nav links + the icon buttons (theme / language / bell / search)
+   in both the nav and the dashboard header. */
+.icon-hover {
+  color: var(--tq-text-muted);
+  transition: color 0.15s ease;
+}
+.icon-hover:hover {
+  color: var(--tq-text-primary);
+}
+
 /* ─── Search Input ─── */
 .input-search {
   width: 100%;

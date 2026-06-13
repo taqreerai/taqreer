@@ -489,7 +489,7 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
         // 2026-06-11) - same h-9 icon-button vocabulary as its
         // neighbours (search / theme / language). `relative` is kept so
         // the unread badge can anchor to the corner.
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-overlay-soft hover:text-foreground"
+        className="icon-hover relative flex h-9 w-9 items-center justify-center rounded-lg"
       >
         <span className="material-symbols-outlined text-[20px]">notifications</span>
         {unread > 0 ? (

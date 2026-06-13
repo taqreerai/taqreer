@@ -36,7 +36,7 @@ export function ThemeToggle() {
         aria-label={dict.topBar.theme}
         aria-pressed={light}
         onClick={toggle}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-overlay-soft hover:text-foreground"
+        className="icon-hover flex h-9 w-9 items-center justify-center rounded-lg"
       >
         {/* Icon shows the target: sun while dark (→ switch to light), moon while light. */}
         <span className="material-symbols-outlined text-[20px]">

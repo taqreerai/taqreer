@@ -126,7 +126,7 @@ export function TopUtilityBar({
               type="button"
               onClick={() => setSearchOpen(true)}
               aria-label={dict.topBar.search}
-              className="flex h-9 items-center gap-2 rounded-lg ps-2 pe-2.5 text-muted transition-colors hover:bg-overlay-soft hover:text-foreground"
+              className="icon-hover flex h-9 items-center gap-2 rounded-lg ps-2 pe-2.5"
             >
               <span className="material-symbols-outlined text-[20px]">search</span>
               <kbd className="rounded border border-border bg-overlay-soft px-1.5 py-0.5 font-sans text-[10px] font-medium leading-none text-muted">

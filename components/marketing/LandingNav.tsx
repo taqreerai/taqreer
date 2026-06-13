@@ -17,18 +17,22 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
   const { locale } = useLocale();
   const dict = useDict();
 
-  // In-page anchor links — no locale prefix (they scroll within this page).
+  // In-page anchor links (no locale prefix; they scroll within this page).
   const navLinks = [
     { label: dict.landingNav.home, href: "#" },
     { label: dict.landingNav.features, href: "#features" },
     { label: dict.landingNav.pricing, href: "#pricing" },
     { label: dict.landingNav.templates, href: "#templates" },
+    { label: dict.landingNav.faq, href: "#faq" },
   ];
 
   return (
     <nav className="absolute top-0 right-0 left-0 z-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-20 items-center justify-between">
+        {/* relative so the link group can be absolutely centred on the page
+            regardless of the logo / actions widths (was drifting off-centre
+            under justify-between). */}
+        <div className="relative flex h-20 items-center justify-between">
           <Link href={localizedHref("/", locale)} className="flex flex-shrink-0 items-center gap-2">
             <ThemeLogo
               width={140}
@@ -37,21 +41,25 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
             />
           </Link>
 
-          <div className="hidden items-center gap-8 md:flex">
+          <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-8 md:flex">
             {navLinks.map((l) => (
               <a
                 key={l.href}
                 href={l.href}
-                className="cursor-pointer text-sm text-muted transition-colors hover:text-foreground"
+                className="icon-hover cursor-pointer text-sm"
               >
                 {l.label}
               </a>
             ))}
           </div>
 
-          <div className="hidden items-center gap-3 md:flex">
-            <ThemeToggle />
-            <LanguageMenu />
+          <div className="hidden items-center gap-2 md:flex">
+            {/* Theme + language as a tight icon pair so they don't read more
+                spaced than the auth pills beside them. */}
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <LanguageMenu />
+            </div>
             {isAuthed ? (
               <Link href={localizedHref("/dashboard", locale)} className="btn-gradient px-5 py-2 text-xs">
                 {dict.landingNav.dashboard}
