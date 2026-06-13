@@ -60,3 +60,11 @@ Launch = remove `COMING_SOON` from the server .env + `pm2 reload taqreer-prod`.
   `apt-get install -y libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0
   libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3
   libxrandr2 libgbm1 libasound2t64 libpango-1.0-0 libcairo2 fonts-liberation`
+
+- 2026-06-13: intermittent 502 Bad Gateway for LOGGED-IN users only. nginx
+  log = "upstream sent too big header" → "no live upstreams". Cause: large
+  Supabase auth cookies make the app emit Set-Cookie response headers bigger
+  than nginx's default 8k proxy buffer; nginx then marks the upstream dead and
+  502s everyone for a few seconds. Fix (in sites-enabled/taqreer `location /`):
+  `proxy_buffer_size 32k; proxy_buffers 8 32k; proxy_busy_buffers_size 64k;`
+  (+ `proxy_read_timeout 300s` for long generation streams). Reload nginx.
