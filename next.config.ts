@@ -36,13 +36,17 @@ const nextConfig: NextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  org: "taqreer",
+  // Org/project of the Sentry account (taqreerai-66 / taqreer).
+  org: "taqreerai-66",
   project: "taqreer",
-  silent: !process.env.CI,
+  // Source-map upload auth token (set SENTRY_AUTH_TOKEN to get readable
+  // stack traces; undefined → upload skipped, errors still captured minified).
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // Upload a wider set of client source files for better stack traces.
   widenClientFileUpload: true,
-  webpack: {
-    treeshake: {
-      removeDebugLogging: true,
-    },
-  },
+  // NOTE: tunnelRoute is deliberately OMITTED - it would create a /monitoring
+  // route that the coming-soon gate + locale middleware (proxy.ts) rewrite,
+  // breaking the tunnel. Revisit (with a proxy exemption) post-launch if
+  // ad-blocker drop-off matters.
+  silent: !process.env.CI,
 });
