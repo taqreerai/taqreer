@@ -17,7 +17,9 @@
 
 // The marquee is fed exclusively by this account's published work.
 // Change this constant to point the wall at a different curator.
-const MARQUEE_OWNER_EMAIL = "taqreermail@gmail.com";
+// Points at the founder's main account (dev@taqreer.ai), whose public
+// templates are the curated landing + auth-marquee + welcome-email source.
+const MARQUEE_OWNER_EMAIL = "dev@taqreer.ai";
 //
 // Output shape: 4 columns × variable thumbs (see `COLUMN_COUNT`).
 // The shuffler interleaves 16:9 and 9:16 formats across columns so
@@ -81,10 +83,15 @@ export const getMarqueeColumns = unstable_cache(
                  generate_subscripts(t."thumbnailUrls", 1) AS slide_index
           FROM "Template" t
           INNER JOIN "User" u ON t."ownerId" = u.id
+          -- Skip templates whose source deck was deleted: their thumbnails
+          -- point at the (now-cleaned) project storage and 404 (broken tiles).
+          -- Source-less templates are kept (their previews are template-owned).
+          LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
           WHERE u.email = ${MARQUEE_OWNER_EMAIL}
             AND t."isPublic" = true
             AND t."thumbnailUrls" IS NOT NULL
             AND array_length(t."thumbnailUrls", 1) > 0
+            AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
         ) slides
         -- Exclude the synthetic typography + palette showcase slides
         -- (stored under the template prefix as showcase-*.webp). Only the
@@ -144,9 +151,11 @@ export type LandingTemplate = {
 const LANDING_TEMPLATE_COUNT = 8;
 
 /**
- * Fetch up to 8 random public curator templates for the landing grid,
- * each with its real deck slides (synthetic typography/palette showcase
- * slides stripped). Same curator-gating + 60 s cache as the marquee.
+ * Fetch up to 8 of the most-recently-published public curator templates for
+ * the landing grid, each with its real deck slides (synthetic typography/
+ * palette showcase slides stripped). Templates whose source deck was deleted
+ * (broken thumbnails) are excluded. Same curator-gating + 60 s cache as the
+ * marquee.
  */
 export const getLandingTemplates = unstable_cache(
   async (): Promise<LandingTemplate[]> => {
@@ -166,11 +175,15 @@ export const getLandingTemplates = unstable_cache(
                t."thumbnailUrls" AS thumbnails
         FROM "Template" t
         INNER JOIN "User" u ON t."ownerId" = u.id
+        -- Exclude templates whose source deck was deleted (broken thumbnails).
+        LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
         WHERE u.email = ${MARQUEE_OWNER_EMAIL}
           AND t."isPublic" = true
           AND t."thumbnailUrls" IS NOT NULL
           AND array_length(t."thumbnailUrls", 1) > 0
-        ORDER BY random()
+          AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
+        -- Most-recently published first ("recent templates"), not random.
+        ORDER BY t."publishedAt" DESC NULLS LAST
         LIMIT ${LANDING_TEMPLATE_COUNT}
       `;
 

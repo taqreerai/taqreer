@@ -44,6 +44,7 @@ rsync -az --delete \
   --exclude .claude \
   --exclude scratch \
   --exclude context \
+  --exclude 'public/email-lab' \
   --filter 'protect .env' \
   --filter 'protect node_modules' \
   --filter 'protect .next-deploy' \
