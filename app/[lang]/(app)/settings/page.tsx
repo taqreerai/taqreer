@@ -338,7 +338,7 @@ export default function SettingsPage() {
                 ) : null}
               </div>
               {isGoogleUser ? (
-                <input type="email" value={user?.email ?? ""} disabled className="input-dark" />
+                <input type="email" dir="ltr" value={user?.email ?? ""} disabled className="input-dark" />
               ) : (
                 <div className="flex items-center gap-3">
                   <input
@@ -381,17 +381,17 @@ export default function SettingsPage() {
             {!isGoogleUser && (
               <div className="settings-row">
                 <p className="settings-row-title">{dict.pages.settings.password.current}</p>
-                <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" className="input-dark" />
+                <input type="password" dir="ltr" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" className="input-dark" />
               </div>
             )}
             <div className="settings-row">
               <p className="settings-row-title">{dict.pages.settings.password.new}</p>
-              <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="••••••••" className="input-dark" />
+              <input type="password" dir="ltr" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="••••••••" className="input-dark" />
             </div>
             <div className="settings-row">
               <p className="settings-row-title">{dict.pages.settings.password.confirm}</p>
               <div className="flex items-center gap-3">
-                <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="••••••••" className="input-dark" />
+                <input type="password" dir="ltr" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="••••••••" className="input-dark" />
                 <button type="submit" disabled={pwLoading} className="btn-pill shrink-0 px-5 py-2.5 text-sm disabled:opacity-50 cursor-pointer">
                   {pwLoading ? dict.pages.settings.password.saving : isGoogleUser ? dict.pages.settings.password.add : dict.pages.settings.password.change}
                 </button>
