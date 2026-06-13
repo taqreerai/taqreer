@@ -18,14 +18,13 @@ import { BidiSection } from "@/components/marketing/BidiSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
-import { ThemeLogo } from "@/components/brand/ThemeLogo";
+import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
-import { localizedHref } from "@/lib/i18n/navigation";
 
 // Platform-wide "decks created" counter shown in the Hero status chip. Cached 5
 // min; try/catch → 0 on error.
@@ -42,18 +41,6 @@ const getProjectCount = unstable_cache(
 );
 
 const TRUSTED_LOGOS = ["TED", "Lattice", "NCR", "PACIFIC FUNDS", "Rakuten", "zendesk", "DELL"];
-
-// In-section anchor hrefs for the footer "links" group, keyed by the stable
-// dict key (NOT the localized label) so the mapping survives translation.
-const FOOTER_LINK_HREFS: Record<string, string> = {
-  features: "#features",
-  pricing: "#pricing",
-  faq: "#faq",
-  // Legal routes (leading "/" → localized below); in-page anchors stay as-is.
-  privacy: "/privacy",
-  terms: "/terms",
-  refund: "/refund",
-};
 
 // Centered (single-column) section header.
 function SectionHeader({
@@ -82,7 +69,6 @@ function SectionHeader({
 // Section separators removed (no swiss grid) — sections lean on their own
 // vertical padding now. `RULE` kept as an empty string so the section className
 // templates below don't each need editing.
-const RULE = "";
 const PX = "px-4 sm:px-6 lg:px-8";
 // Each content section fills ≥ one viewport with its content vertically
 // centered, so scrolling lands on one section at a time (short sections centre;
@@ -107,23 +93,6 @@ export default async function LandingPage({
     getLandingTemplates(),
     getDictionary(lang),
   ]);
-
-  // Footer: build the column array from dict.landing.footer.groups so titles
-  // + link labels are localized. Hrefs for the in-page "links" group come from
-  // the stable dict keys (FOOTER_LINK_HREFS); other groups have no nav target.
-  const footer = dict.landing.footer.groups;
-  const footerGroups: { title: string; links: { label: string; href: string }[] }[] =
-    [footer.contact, footer.links, footer.social, footer.legal].map((group) => ({
-      title: group.title,
-      links: Object.entries(group.links).map(([key, label]) => {
-        const href = FOOTER_LINK_HREFS[key] ?? "#";
-        return {
-          label: label as string,
-          // Route hrefs ("/…") get the locale prefix; in-page anchors don't.
-          href: href.startsWith("/") ? localizedHref(href, lang) : href,
-        };
-      }),
-    }));
 
   return (
     <SmoothScrollProvider>
@@ -222,43 +191,8 @@ export default async function LandingPage({
           </ScrollReveal>
         </section>
 
-        {/* Footer — line separators, no background block. */}
-        <footer className={`${RULE} ${PX} pt-20 pb-8`}>
-          <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
-            {footerGroups.map((group) => (
-              <div key={group.title} className="md:px-8 md:first:pe-0">
-                <h4 className="mb-6 font-medium text-foreground">{group.title}</h4>
-                <ul className="space-y-3 text-sm text-muted">
-                  {group.links.map((link) => (
-                    <li key={link.label}>
-                      <a
-                        className="transition-colors hover:text-foreground"
-                        href={link.href}
-                      >
-                        {link.label}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-col items-center justify-between pt-8 text-sm text-muted md:flex-row">
-            <div className="mb-4 flex items-center gap-2 md:mb-0">
-              <ThemeLogo
-                width={120}
-                height={28}
-                className="h-7 w-auto object-contain opacity-80"
-              />
-            </div>
-            <p>
-              {dict.landing.footer.copyright.replace(
-                "{year}",
-                String(new Date().getFullYear()),
-              )}
-            </p>
-          </div>
-        </footer>
+        {/* Footer — shared with the legal pages (components/marketing/SiteFooter). */}
+        <SiteFooter locale={lang} />
       </div>
     </main>
     </SmoothScrollProvider>

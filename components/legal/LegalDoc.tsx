@@ -1,11 +1,7 @@
-// Server-component renderer for a legal document (Terms / Privacy / Refund).
-// Standalone public page (no app shell) — a centred prose column on the app
-// background, chrome-dir aware via the [lang] layout's <html dir>. Content is
-// the same in both languages structurally, so this stays purely presentational.
+// Legal document body (Terms / Privacy / Refund). PURE CONTENT — the chrome
+// (landing background + nav + footer) is provided by app/[lang]/(legal)/layout.
+// Renders a centred prose column, chrome-dir aware via the [lang] layout.
 
-import Link from "next/link";
-import { ThemeLogo } from "@/components/brand/ThemeLogo";
-import { localizedHref } from "@/lib/i18n/navigation";
 import {
   LEGAL_DOCS,
   LEGAL_META,
@@ -15,28 +11,10 @@ import {
 
 type Locale = "ar" | "en";
 
-// Inline micro-copy (these standalone pages render outside the dictionary-fed
-// app chrome; the global-error page sets the same precedent).
-const UI = {
-  en: {
-    lastUpdated: "Last updated",
-    home: "Back to home",
-    operatedBy: "Operated by",
-    related: "Terms · Privacy · Refunds",
-  },
-  ar: {
-    lastUpdated: "آخر تحديث",
-    home: "العودة للرئيسية",
-    operatedBy: "تشغّلها",
-    related: "الشروط · الخصوصية · الاسترداد",
-  },
+const LABELS = {
+  en: { lastUpdated: "Last updated" },
+  ar: { lastUpdated: "آخر تحديث" },
 } as const;
-
-const RELATED: { kind: LegalKind; href: string }[] = [
-  { kind: "terms", href: "/terms" },
-  { kind: "privacy", href: "/privacy" },
-  { kind: "refund", href: "/refund" },
-];
 
 function Block({ block }: { block: LegalBlock }) {
   if (typeof block === "string") {
@@ -53,23 +31,16 @@ function Block({ block }: { block: LegalBlock }) {
 
 export function LegalDoc({ kind, locale }: { kind: LegalKind; locale: Locale }) {
   const doc = LEGAL_DOCS[kind][locale];
-  const t = UI[locale];
+  const t = LABELS[locale];
 
   return (
-    <main className="page-container mx-auto flex w-full max-w-3xl flex-col px-6 py-10">
-      {/* Header: logo home-link */}
-      <Link
-        href={localizedHref("/", locale)}
-        className="mb-10 inline-flex w-fit items-center no-underline"
-        aria-label={t.home}
-      >
-        <ThemeLogo width={120} height={28} />
-      </Link>
-
+    <article className="mx-auto w-full max-w-3xl pb-16">
       <h1 className="text-3xl font-bold text-foreground">{doc.title}</h1>
       <p className="mt-2 text-xs text-muted">
-        {t.lastUpdated}: {LEGAL_META.effectiveDate} · {t.operatedBy}{" "}
-        {LEGAL_META.entityName}
+        {t.lastUpdated}: {LEGAL_META.effectiveDate}
+      </p>
+      <p className="mt-0.5 text-xs text-muted">
+        {LEGAL_META.entityName} · {LEGAL_META.address}
       </p>
 
       <p className="mt-6 text-[15px] leading-7 text-muted">{doc.intro}</p>
@@ -86,25 +57,6 @@ export function LegalDoc({ kind, locale }: { kind: LegalKind; locale: Locale }) 
           </section>
         ))}
       </div>
-
-      {/* Footer: related docs + home */}
-      <div className="mt-14 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--tq-border-hairline)] pt-6 text-sm">
-        {RELATED.filter((r) => r.kind !== kind).map((r) => (
-          <Link
-            key={r.kind}
-            href={localizedHref(r.href, locale)}
-            className="text-muted no-underline transition-colors hover:text-foreground"
-          >
-            {LEGAL_DOCS[r.kind][locale].title}
-          </Link>
-        ))}
-        <Link
-          href={localizedHref("/", locale)}
-          className="text-muted no-underline transition-colors hover:text-foreground"
-        >
-          {t.home}
-        </Link>
-      </div>
-    </main>
+    </article>
   );
 }

@@ -13,12 +13,12 @@ import { localizedHref } from "@/lib/i18n/navigation";
 
 const COPY = {
   en: {
-    text: "We use essential cookies to run Taqreer and limited, masked diagnostics to improve it.",
+    text: "We use essential cookies to run taqreer.ai and limited, masked diagnostics to improve it.",
     learn: "Privacy Policy",
     ok: "Got it",
   },
   ar: {
-    text: "نستخدم ملفات تعريف ارتباط أساسية لتشغيل تقرير وأدوات تشخيص محدودة ومُخفّاة لتحسينه.",
+    text: "نستخدم ملفات تعريف ارتباط أساسية لتشغيل taqreer.ai وأدوات تشخيص محدودة ومُخفّاة لتحسينه.",
     learn: "سياسة الخصوصية",
     ok: "حسناً",
   },

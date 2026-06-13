@@ -12,17 +12,17 @@
 // titles via these docs' `title`, the cookie banner, footer links) are normal.
 
 export const LEGAL_META = {
-  brand: "Taqreer",
+  brand: "taqreer.ai",
   domain: "taqreer.ai",
-  // TODO(osama): exact registered name from the Wyoming Articles of Organization.
-  entityName: "[COMPANY LEGAL NAME], LLC",
+  entityName: "PIXEL WOLVES LLC",
   jurisdiction: "the State of Wyoming, United States of America",
   jurisdictionAr: "ولاية وايومنغ، الولايات المتحدة الأمريكية",
-  // TODO(osama): registered / principal business address.
-  address: "[REGISTERED BUSINESS ADDRESS]",
+  // Registered-agent / registered-office address (Wyoming). We deliberately do
+  // NOT publish the founder's Saudi residential address.
+  address: "5830 E 2nd St, Ste 7000, Casper, WY 82609, USA",
   contactEmail: "support@taqreer.ai",
-  // TODO(osama): stamp the date these go live.
-  effectiveDate: "[EFFECTIVE DATE]",
+  // Update on publish if the live date differs.
+  effectiveDate: "2026-06-13",
 } as const;
 
 // A block is a paragraph (string) or a bulleted list ({ list }).
@@ -383,10 +383,12 @@ const TERMS_AR: LegalDoc = {
 const PRIVACY_EN: LegalDoc = {
   title: "Privacy Policy",
   intro:
-    `This Privacy Policy explains how ${E} ("${BRAND}", "we") collects, uses, and ` +
-    `protects information when you use ${BRAND} at ${LEGAL_META.domain}. We aim to ` +
-    `comply with applicable data-protection laws, including Saudi Arabia's Personal ` +
-    `Data Protection Law (PDPL) for users in the Kingdom.`,
+    `This Privacy Policy explains how ${E} ("${BRAND}", "we") — a limited liability ` +
+    `company organized in ${LEGAL_META.jurisdiction} — collects, uses, and protects ` +
+    `information when you use ${BRAND} at ${LEGAL_META.domain}. ${BRAND} is an online ` +
+    `service offered to a global, Arabic- and English-speaking audience, and we aim ` +
+    `to honour the data-protection rights that apply to you under your local laws ` +
+    `(for example the Saudi PDPL or the EU GDPR).`,
   sections: [
     {
       heading: "1. Information We Collect",
@@ -475,9 +477,10 @@ const PRIVACY_EN: LegalDoc = {
     {
       heading: "9. Your Rights",
       blocks: [
-        `Subject to applicable law (including the PDPL), you may have the right to ` +
-          `access, correct, delete, or obtain a copy of your personal data, to ` +
-          `withdraw consent, and to object to or restrict certain processing.`,
+        `Subject to applicable law (such as the Saudi PDPL or the EU GDPR), you may ` +
+          `have the right to access, correct, delete, or obtain a copy of your ` +
+          `personal data, to withdraw consent, and to object to or restrict certain ` +
+          `processing.`,
         `To exercise these rights, contact us at ${MAIL}. You also have the right to ` +
           `lodge a complaint with your local data-protection authority.`,
       ],
@@ -508,10 +511,12 @@ const PRIVACY_EN: LegalDoc = {
 const PRIVACY_AR: LegalDoc = {
   title: "سياسة الخصوصية",
   intro:
-    `توضّح سياسة الخصوصية هذه كيف تجمع ${E} ("${BRAND}"، "نحن") المعلومات وتستخدمها ` +
-    `وتحميها عند استخدامك ${BRAND} على ${LEGAL_META.domain}. ونلتزم بقوانين حماية ` +
-    `البيانات المعمول بها، بما فيها نظام حماية البيانات الشخصية (PDPL) في المملكة ` +
-    `العربية السعودية لمستخدمي المملكة. النسخة الإنجليزية هي المُلزِمة عند أي تعارض.`,
+    `توضّح سياسة الخصوصية هذه كيف تجمع ${E} ("${BRAND}"، "نحن") — وهي شركة ذات مسؤولية ` +
+    `محدودة مؤسَّسة في ${LEGAL_META.jurisdictionAr} — المعلومات وتستخدمها وتحميها عند ` +
+    `استخدامك ${BRAND} على ${LEGAL_META.domain}. و${BRAND} خدمة إلكترونية تُقدَّم لجمهور ` +
+    `عالمي ناطق بالعربية والإنجليزية، ونحرص على احترام حقوق حماية البيانات المطبّقة عليك ` +
+    `بموجب قوانين بلدك (مثل نظام PDPL السعودي أو نظام GDPR الأوروبي). النسخة الإنجليزية ` +
+    `هي المُلزِمة عند أي تعارض.`,
   sections: [
     {
       heading: "1. المعلومات التي نجمعها",
@@ -596,9 +601,9 @@ const PRIVACY_AR: LegalDoc = {
     {
       heading: "9. حقوقك",
       blocks: [
-        `وفقاً للقانون المعمول به (بما فيه نظام PDPL)، قد يكون لك الحق في الوصول إلى ` +
-          `بياناتك الشخصية وتصحيحها وحذفها أو الحصول على نسخة منها، وفي سحب الموافقة، ` +
-          `وفي الاعتراض على معالجات معيّنة أو تقييدها.`,
+        `وفقاً للقانون المعمول به (مثل نظام PDPL السعودي أو نظام GDPR الأوروبي)، قد ` +
+          `يكون لك الحق في الوصول إلى بياناتك الشخصية وتصحيحها وحذفها أو الحصول على ` +
+          `نسخة منها، وفي سحب الموافقة، وفي الاعتراض على معالجات معيّنة أو تقييدها.`,
         `لممارسة هذه الحقوق، تواصل معنا على ${MAIL}. ولك أيضاً الحق في تقديم شكوى إلى ` +
           `جهة حماية البيانات المختصة لديك.`,
       ],
