@@ -1,6 +1,6 @@
 // Share-invite email sender. Graceful fallback: if Resend env is absent we log
 // a redacted stub line and return ok instead of throwing, so the share flow
-// keeps working in dev. Rebuilt on the shared email shell (dark + brand aurora);
+// keeps working in dev. Rebuilt on the shared email shell (flat dark);
 // locale-aware (the inviter's UI locale, default Arabic).
 
 import { Resend } from "resend";
