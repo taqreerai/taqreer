@@ -111,34 +111,40 @@ export function ManageBilling() {
   // "billed monthly/yearly" hint when a subscription is active.
   const cadence = summary?.cadence ?? null;
   const cadenceHint = cadence === "yearly" ? t.yearlyHint : t.monthlyHint;
-  // Action button for the shared plan card: Cancel/Resume when subscribed,
-  // Upgrade otherwise. Renewal sub-line: "ends on" when a cancel is
-  // scheduled, else "renews · billed {cadence}".
-  const planAction = !hasSub ? (
-    <Link
-      href={localizedHref("/plans", locale)}
-      className="btn-gradient shrink-0 px-6 py-2.5 text-sm no-underline"
-    >
-      {t.upgrade}
-    </Link>
-  ) : summary?.cancelAtPeriodEnd ? (
-    <button
-      type="button"
-      disabled={busy !== null}
-      onClick={resumeSub}
-      className="btn-gradient shrink-0 px-6 py-2.5 text-sm"
-    >
-      {busy === "resume" ? t.loading : t.resumeSub}
-    </button>
-  ) : (
-    <button
-      type="button"
-      disabled={busy !== null}
-      onClick={() => setConfirmCancel(true)}
-      className="btn-pill shrink-0 px-6 py-2.5 text-sm"
-    >
-      {t.cancelSub}
-    </button>
+  // Action area for the shared plan card: Upgrade (primary) stays on top;
+  // Cancel/Resume sits BELOW it when subscribed (user direction 2026-06-13).
+  // Renewal sub-line: "ends on" when a cancel is scheduled, else
+  // "renews · billed {cadence}".
+  const planAction = (
+    <div className="flex flex-col gap-2">
+      <Link
+        href={localizedHref("/plans", locale)}
+        className="btn-gradient px-6 py-2.5 text-center text-sm no-underline"
+      >
+        {t.upgrade}
+      </Link>
+      {hasSub ? (
+        summary?.cancelAtPeriodEnd ? (
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={resumeSub}
+            className="btn-pill px-6 py-2.5 text-sm"
+          >
+            {busy === "resume" ? t.loading : t.resumeSub}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => setConfirmCancel(true)}
+            className="btn-pill px-6 py-2.5 text-sm"
+          >
+            {t.cancelSub}
+          </button>
+        )
+      ) : null}
+    </div>
   );
   const renewalNote = hasSub
     ? summary?.cancelAtPeriodEnd
