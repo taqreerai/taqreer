@@ -61,11 +61,18 @@ DONE:
   proxy header buffer → bumped proxy_buffer(s) (see deploy.md gotcha log).
 - RTL fix: payment-method card expiry now right-aligns in Arabic (was dir=ltr).
 
+- Sentry WIRED + deployed (2026-06-13): the missing instrumentation.ts was
+  why server errors weren't captured. v10 layout (instrumentation.ts +
+  instrumentation-client.ts, deleted sentry.client.config.ts), new project
+  taqreerai-66/taqreer, env-tagged, replay masked. Verified: test error →
+  TAQREER-1. Follow-ups: (a) SENTRY_AUTH_TOKEN for readable source maps
+  (currently minified); (b) bot scanners hitting /xxx.php reach the [lang]
+  layout → "Unsupported locale" 500s that now noise Sentry — should 404
+  cleanly; (c) sendDefaultPii + Session Replay on — revisit in Phase B legal.
+
 REMAINING in Phase A:
 - Inngest Cloud account (dev@taqreer.ai) → event+signing keys into server
   .env, retire the pm2 dev-server process. Free tier suffices.
-- Sentry: package installed but NOT wired (no config files). User has created
-  the Sentry project (org taqreerai-66); needs the DSN to wire + deploy.
 - Uptime ping (BetterStack free) once user creates account.
 - Stripe TEST webhook endpoint for https://taqreer.ai/api/stripe/webhook
   (awaiting user go; secret goes into server .env as STRIPE_WEBHOOK_SECRET).
@@ -127,7 +134,9 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 ## Open user actions (blocked on Osama)
 
 1. ✅ Supabase redirect URLs for taqreer.ai — DONE.
-2. Sentry DSN (project created, org taqreerai-66) → hand it over to wire.
+2. ✅ Sentry wired (taqreerai-66/taqreer) — DONE. Optional: create a
+   SENTRY_AUTH_TOKEN (Sentry → Settings → Auth Tokens) → server .env for
+   readable source-mapped stack traces.
 3. Go-ahead for Stripe test webhook creation (then live one in Phase B).
 4. Accounts under dev@taqreer.ai: Inngest Cloud, BetterStack uptime,
    PostHog (when Phase D).
