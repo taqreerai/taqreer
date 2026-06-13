@@ -1,6 +1,6 @@
 # Launch progress + continuation guide
 
-Updated 2026-06-13 (end of day). Read this + context/deploy.md to resume launch work in a
+Updated 2026-06-13. Read this + context/deploy.md to resume launch work in a
 fresh session. The launch plan's full reasoning lives in the conversation
 that produced it; this file is the operational state.
 
@@ -52,13 +52,20 @@ DONE:
 - Inngest = self-hosted dev server (pm2 taqreer-inngest, :8288), 12 functions
   connected. INTERIM — replace with Inngest Cloud keys before launch.
 - SSH password login disabled; root password that was shared in chat is dead.
+- Supabase auth redirect URLs (https://taqreer.ai/**) added by user — Google
+  OAuth + email links now return to prod. Verified the callback route works
+  (gate-cookie holders only; gate-blocked callback self-resolves at launch).
+- Cadence feature shipped (PR #58, deployed): monthly/yearly pill + unified
+  PlanUsage plan card on /settings + /billing (+ /plans chip). Migration live.
+- nginx 502 fixed: large Supabase auth cookies overflowed the default 8k
+  proxy header buffer → bumped proxy_buffer(s) (see deploy.md gotcha log).
+- RTL fix: payment-method card expiry now right-aligns in Arabic (was dir=ltr).
 
 REMAINING in Phase A:
-- Supabase dashboard: add https://taqreer.ai/** to auth redirect URLs
-  (USER action; Google OAuth + email links won't return to prod until then).
 - Inngest Cloud account (dev@taqreer.ai) → event+signing keys into server
   .env, retire the pm2 dev-server process. Free tier suffices.
-- Sentry: package installed but NOT wired (no config files). Wire + DSN.
+- Sentry: package installed but NOT wired (no config files). User has created
+  the Sentry project (org taqreerai-66); needs the DSN to wire + deploy.
 - Uptime ping (BetterStack free) once user creates account.
 - Stripe TEST webhook endpoint for https://taqreer.ai/api/stripe/webhook
   (awaiting user go; secret goes into server .env as STRIPE_WEBHOOK_SECRET).
@@ -80,10 +87,8 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   Fable pricing decision (600+80 vs keep 500+28) before live billing.
 - Legal pages: ToS/Privacy/Refund, bilingual, + minimal cookie banner.
   None exist in the repo. LLM draft + user review.
-- Billing UI gap: the user's plan never shows its CADENCE (monthly vs
-  yearly) anywhere - surface it on /plans plan summary + /billing
-  (subscription mirror already stores the price's lookup_key/interval;
-  read it from /api/billing/summary). User request 2026-06-13.
+- ✅ DONE (2026-06-13): Billing UI cadence — monthly/yearly pill + hint on
+  /plans, /settings, /billing; PlanUsage is now the shared plan card.
 - Email deliverability: SPF/DKIM/DMARC on the sending domain (GoDaddy DNS)
   — true blocker, auth emails land in spam without it. Branded bilingual
   Supabase auth templates (signup confirm / email change / password reset).
@@ -121,9 +126,10 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 
 ## Open user actions (blocked on Osama)
 
-1. Supabase redirect URLs for taqreer.ai (5 min, dashboard).
-2. Go-ahead for Stripe test webhook creation (then live one in Phase B).
-3. Accounts under dev@taqreer.ai: Inngest Cloud, Sentry, BetterStack,
+1. ✅ Supabase redirect URLs for taqreer.ai — DONE.
+2. Sentry DSN (project created, org taqreerai-66) → hand it over to wire.
+3. Go-ahead for Stripe test webhook creation (then live one in Phase B).
+4. Accounts under dev@taqreer.ai: Inngest Cloud, BetterStack uptime,
    PostHog (when Phase D).
-4. Fable pricing decision.
-5. Stripe live keys when Phase B starts.
+5. Fable pricing decision.
+6. Stripe live keys when Phase B starts.
