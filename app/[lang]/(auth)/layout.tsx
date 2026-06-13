@@ -103,14 +103,14 @@ export default async function AuthLayout({
           <p className="mt-6 text-center text-xs text-muted">
             {legal.prefix}
             <Link
-              href={localizedHref("/#", lang)}
+              href={localizedHref("/terms", lang)}
               className="underline transition-colors hover:text-foreground"
             >
               {legal.terms}
             </Link>
             {legal.and}
             <Link
-              href={localizedHref("/#", lang)}
+              href={localizedHref("/privacy", lang)}
               className="underline transition-colors hover:text-foreground"
             >
               {legal.privacy}
