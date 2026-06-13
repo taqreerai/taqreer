@@ -99,6 +99,29 @@
     "mimic": { "title": "Mimic", "desc": "a presentation's style" },
     "fromData": { "title": "Datasheet", "desc": "into a presentation" }
   },
+  "contact": {
+    "title": "Contact us",
+    "subtitle": "Pick a department and send us a message. We'll reply to your email.",
+    "nameLabel": "Your name",
+    "namePlaceholder": "Full name",
+    "emailLabel": "Your email",
+    "emailPlaceholder": "you@example.com",
+    "departmentLabel": "Department",
+    "departmentPlaceholder": "Choose a department",
+    "messageLabel": "Message",
+    "messagePlaceholder": "How can we help?",
+    "submit": "Send message",
+    "submitting": "Sending…",
+    "successTitle": "Message sent",
+    "successBody": "Thanks for reaching out. We'll reply to your email soon.",
+    "error": "Could not send your message. Please try again.",
+    "departments": {
+      "general": "General inquiry",
+      "sales": "Sales & pricing",
+      "billing": "Billing & payments",
+      "support": "Support & bug report"
+    }
+  },
   "landingNav": {
     "home": "Home",
     "features": "Features",

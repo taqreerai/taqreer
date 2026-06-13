@@ -99,6 +99,29 @@
     "mimic": { "title": "محاكاة", "desc": "أسلوب عرض تقديمي" },
     "fromData": { "title": "بيانات", "desc": "إلى عرض تقديمي" }
   },
+  "contact": {
+    "title": "تواصل معنا",
+    "subtitle": "اختر القسم وأرسل لنا رسالتك، وسنرد على بريدك الإلكتروني.",
+    "nameLabel": "اسمك",
+    "namePlaceholder": "الاسم الكامل",
+    "emailLabel": "بريدك الإلكتروني",
+    "emailPlaceholder": "you@example.com",
+    "departmentLabel": "القسم",
+    "departmentPlaceholder": "اختر القسم",
+    "messageLabel": "الرسالة",
+    "messagePlaceholder": "كيف يمكننا مساعدتك؟",
+    "submit": "إرسال الرسالة",
+    "submitting": "جارٍ الإرسال…",
+    "successTitle": "تم إرسال رسالتك",
+    "successBody": "شكراً لتواصلك. سنرد على بريدك قريباً.",
+    "error": "تعذّر إرسال رسالتك. حاول مرة أخرى.",
+    "departments": {
+      "general": "استفسار عام",
+      "sales": "المبيعات والأسعار",
+      "billing": "الفوترة والمدفوعات",
+      "support": "الدعم والإبلاغ عن خطأ"
+    }
+  },
   "landingNav": {
     "home": "الرئيسية",
     "features": "المميزات",

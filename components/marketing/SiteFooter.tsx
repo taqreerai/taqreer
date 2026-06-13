@@ -5,6 +5,7 @@
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { localizedHref } from "@/lib/i18n/navigation";
+import { LEGAL_META } from "@/lib/legal/content";
 
 // In-page anchors keep their "#…"; route hrefs ("/…") get the locale prefix.
 const FOOTER_LINK_HREFS: Record<string, string> = {
@@ -77,6 +78,22 @@ export async function SiteFooter({ locale }: { locale: "ar" | "en" }) {
                     </a>
                   ))}
                 </div>
+              ) : key === "contact" ? (
+                <ul className="space-y-3 text-sm">
+                  <li className="text-muted" dir="ltr">
+                    {LEGAL_META.address}
+                  </li>
+                  <li>
+                    <a className="icon-hover" href="mailto:support@taqreer.ai" dir="ltr">
+                      support@taqreer.ai
+                    </a>
+                  </li>
+                  <li>
+                    <a className="icon-hover" href={localizedHref("/contact", locale)}>
+                      {footer.contact.links.form}
+                    </a>
+                  </li>
+                </ul>
               ) : (
                 <ul className="space-y-3 text-sm">
                   {Object.entries(group.links).map(([k, label]) => {

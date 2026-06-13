@@ -136,7 +136,8 @@ export async function proxy(request: NextRequest) {
       gatePath === "/coming-soon" ||
       gatePath === "/terms" ||
       gatePath === "/privacy" ||
-      gatePath === "/refund";
+      gatePath === "/refund" ||
+      gatePath === "/contact";
     if (!unlocked && !alwaysPublic) {
       return NextResponse.rewrite(new URL(`/${gateLocale}/coming-soon`, request.url));
     }
