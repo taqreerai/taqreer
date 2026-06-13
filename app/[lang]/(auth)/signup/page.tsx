@@ -67,7 +67,10 @@ export default function SignupPage() {
         email,
         password,
         options: {
-          data: { full_name: name, name },
+          // `lang` rides into Supabase user_metadata so the locale-aware auth
+          // emails (the `{{ .Data.lang }}` template conditional) + the welcome
+          // email pick the user's language.
+          data: { full_name: name, name, lang: locale },
           // After Supabase verifies the email-confirm token, send the user to our
           // `/callback` handler (proxy re-prefixes the locale; it exchanges the
           // code, syncs the Prisma User row, and lands them on `next`).

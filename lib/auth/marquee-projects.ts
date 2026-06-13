@@ -209,3 +209,45 @@ export const getLandingTemplates = unstable_cache(
   ["landing-templates"],
   { revalidate: 60, tags: ["landing-templates"] },
 );
+
+// ─── Welcome-email template strip ─────────────────────────────────────
+//
+// The 3 most-recent public curator templates, each as a single cover
+// thumbnail, for the welcome email's "or start from a template" strip.
+// Same curator-gating + deleted-source exclusion as the landing grid.
+
+export type WelcomeTemplate = { id: string; cover: string };
+
+export const getWelcomeTemplates = unstable_cache(
+  async (): Promise<WelcomeTemplate[]> => {
+    try {
+      const rows = await prisma.$queryRaw<{ id: string; thumbnails: string[] }[]>`
+        SELECT t.id, t."thumbnailUrls" AS thumbnails
+        FROM "Template" t
+        INNER JOIN "User" u ON t."ownerId" = u.id
+        LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
+        WHERE u.email = ${MARQUEE_OWNER_EMAIL}
+          AND t."isPublic" = true
+          AND t."thumbnailUrls" IS NOT NULL
+          AND array_length(t."thumbnailUrls", 1) > 0
+          AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
+        ORDER BY t."publishedAt" DESC NULLS LAST
+        LIMIT 3
+      `;
+      return rows
+        .map((r) => ({
+          id: r.id,
+          cover:
+            (r.thumbnails ?? []).find(
+              (u) => u && !u.includes("/showcase-"),
+            ) ?? "",
+        }))
+        .filter((t) => t.cover);
+    } catch (err) {
+      console.error("[welcome/templates] query failed", err);
+      return [];
+    }
+  },
+  ["welcome-templates"],
+  { revalidate: 300, tags: ["welcome-templates"] },
+);

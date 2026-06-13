@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { fanOutNotification } from "@/lib/notifications/server";
+import { sendWelcome } from "@/lib/email/send-welcome";
+import { getWelcomeTemplates } from "@/lib/auth/marquee-projects";
 
 export async function POST(request: Request) {
   try {
@@ -73,6 +75,40 @@ export async function POST(request: Request) {
           err instanceof Error ? err.message : String(err),
         );
       });
+
+      // Welcome email — once, fire-and-forget (never blocks/fails the sync).
+      // Locale comes from the signup metadata (set by the signup form), else
+      // the account default. This is the first authenticated sync, so for
+      // confirm-email signups it lands AFTER confirmation, the right moment.
+      const cookieLocale = request.headers
+        .get("cookie")
+        ?.split(";")
+        .map((c) => c.trim())
+        .find((c) => c.startsWith(`${LOCALE_COOKIE}=`))
+        ?.slice(LOCALE_COOKIE.length + 1);
+      const welcomeLocale = isLocale(user.user_metadata?.lang)
+        ? (user.user_metadata.lang as string)
+        : isLocale(cookieLocale)
+          ? cookieLocale
+          : dbUser.language;
+      // Trusted origin for the email links (NOT the spoofable Host header).
+      const appOrigin =
+        process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai";
+      void getWelcomeTemplates()
+        .then((templates) =>
+          sendWelcome({
+            toEmail: profile.email,
+            locale: welcomeLocale,
+            appOrigin,
+            templates,
+          }),
+        )
+        .catch((err) =>
+          console.error(
+            "[user-sync] welcome email failed:",
+            err instanceof Error ? err.message : String(err),
+          ),
+        );
     }
 
     // Seed the locale cookie from the account language so a login on a NEW
