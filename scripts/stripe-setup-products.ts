@@ -9,11 +9,13 @@
 //     archive the old Price and create a fresh one carrying the same
 //     lookup_key (Stripe moves the key to the newest active Price).
 //
-// Usage:  npx tsx scripts/stripe-setup-products.ts          (sync)
+// Usage:  npx tsx scripts/stripe-setup-products.ts          (sync, test key)
 //         npx tsx scripts/stripe-setup-products.ts --list   (show only)
+//         npx tsx scripts/stripe-setup-products.ts --live   (intentional live run)
 //
-// TEST MODE: gated on the key being rk_test_/sk_test_ so a stray run
-// against live keys can't mint live products by accident.
+// LIVE GUARD: with a live key the script refuses to create unless --live
+// is passed, so a stray run can't mint live products by accident. --list
+// stays read-only in either mode.
 
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -25,11 +27,17 @@ async function main() {
   );
 
   const listOnly = process.argv.includes("--list");
-  if (!isStripeTestMode && !listOnly) {
+  const allowLive = process.argv.includes("--live");
+  if (!isStripeTestMode && !listOnly && !allowLive) {
     console.error(
-      "Refusing to create products with a LIVE key. Use --list to inspect, or run with test keys.",
+      "Refusing to create products with a LIVE key. Pass --live to confirm an intentional live run, --list to inspect, or run with test keys.",
     );
     process.exit(1);
+  }
+  if (!isStripeTestMode && allowLive && !listOnly) {
+    console.warn(
+      "LIVE MODE: creating real Products/Prices in the live Stripe account.",
+    );
   }
 
   // Distinct products from the catalog (productKey -> name).
