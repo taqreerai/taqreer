@@ -91,10 +91,12 @@ Tiers (renamed 2026-06-11; monthly reset, no rollover; Free = one-time grant):
   deleted.
 
 Launch blockers for billing (Phase B): live keys, mada + Apple Pay, prod webhook,
-real-card smoke, premium-template gating. GCC VAT (KSA 15%/UAE 5%) is a
-tax-advisor question, not automatic: digital VAT is destination-based (charged
-where the customer is, not seller-location), so selling to KSA/UAE consumers may
-need a non-resident registration - confirm before enabling Stripe Tax.
+real-card smoke, premium-template gating. VAT decision (2026-06-14): DEFER while
+there are no real sales (zero exposure), then migrate billing to a Merchant of
+Record (Paddle / Lemon Squeezy) when revenue is real so the MoR carries all
+VAT/sales-tax registration + remittance worldwide (replaces the custom Stripe
+checkout; ~5%+ fee). Direct Stripe = the VAT obligation is ours; an MoR offloads
+it. Not a launch blocker.
 
 ---
 

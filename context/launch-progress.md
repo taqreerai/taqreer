@@ -136,13 +136,25 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   verification, verify inside the embedded ui_mode:elements form), prod webhook,
   real-card smoke test. Toggle Stripe's own receipts + payment-failed emails ON
   (don't own these). Fable pricing decision (600+80 vs keep 500+28) before live.
-- GCC VAT (tax-advisor question, NOT seller-location based): digital-services
-  VAT is DESTINATION-based, so selling to KSA/UAE CONSUMERS can trigger a
-  non-resident VAT registration (KSA 15% / UAE 5%) even for the US LLC. But it
-  hinges on B2C-vs-B2B (B2B reverse-charges to the buyer), thresholds, and actual
-  GCC sales - confirm whether/when registration is required with a tax pro before
-  turning anything on. Stripe Tax only handles COLLECTION once registered; it
-  does not decide the obligation. Not a code blocker.
+- VAT / tax: DECISION (2026-06-14) - DEFER while there are no real sales (test
+  mode + coming-soon gate = zero taxable supplies = zero exposure; a ZATCA
+  non-resident VAT application was started then abandoned - premature). When real
+  revenue arrives, migrate billing to a MERCHANT OF RECORD (Paddle, or Lemon
+  Squeezy which is Stripe-owned): the MoR becomes seller-of-record and handles ALL
+  VAT/sales-tax registration + collection + remittance worldwide (KSA 15% / UAE 5%
+  / EU / US states), so we never deal with it directly.
+    • Background: digital VAT is DESTINATION-based (charged where the customer is,
+      not the seller), so a US LLC selling to KSA/UAE CONSUMERS can owe a
+      non-resident registration. Direct Stripe = the obligation is OURS (Stripe
+      Tax only calculates/collects once we register; it doesn't remit). An MoR
+      offloads the whole thing.
+    • Trade-off to bank on: switching to an MoR REPLACES the custom Stripe
+      Elements checkout + UpgradeModal + webhook→ledger wiring (a contained
+      billing-layer migration, NOT an app rebuild) and costs more (~5%+ vs Stripe
+      ~2.9%). That delta is the price of zero tax overhead.
+    • Trigger to execute the switch: monthly revenue crosses $X, OR the first
+      customer who needs a real tax invoice. Keep clean per-country sales records
+      meanwhile. NOT a launch blocker; launch on the current Stripe setup.
 - ✅ LIVE (2026-06-13, PR #59 merged + deployed): bilingual ToS/Privacy/Refund
   (lib/legal/content.ts) + cookie banner + contact form (Resend department
   routing) + shared SiteFooter + gate-exempt public routes (incl. trailing-slash

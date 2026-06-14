@@ -172,9 +172,9 @@ cookies). **Remaining**: uptime ping, Stripe test webhook, minor DB cleanups.
 fine at zero volume.)
 
 **Phase B (money + law, all BLOCKERS)**: Stripe live keys + mada/Apple Pay
-+ prod webhook + real-card smoke + premium-template gating; GCC VAT ONLY if a
-tax advisor confirms a non-resident registration (digital VAT is destination-
-based, not seller-location; KSA 15%/UAE 5% on consumers there);
++ prod webhook + real-card smoke + premium-template gating; VAT = DEFER while no
+real sales, then move billing to a Merchant of Record (Paddle / Lemon Squeezy) so
+it carries ALL VAT/sales-tax worldwide (decision 2026-06-14, not a blocker);
 legal pages (ToS/Privacy/Refund, bilingual + cookie banner — none exist yet);
 email deliverability (SPF/DKIM/DMARC + branded bilingual Supabase auth
 templates). **Phase C (hardening)**: rate limiting (NONE exists — share-invite
