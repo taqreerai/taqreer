@@ -135,7 +135,11 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
 - Billing live: Stripe live keys, mada + Apple Pay (dashboard config + domain
   verification, verify inside the embedded ui_mode:elements form), prod webhook,
   real-card smoke test. Toggle Stripe's own receipts + payment-failed emails ON
-  (don't own these). Fable pricing decision (600+80 vs keep 500+28) before live.
+  (don't own these). Fable pricing decision PARKED (2026-06-14): Fable is
+  disabled at Anthropic (upstream), so the fable-low preset is non-shippable and
+  its pricing question is moot for now. Revisit only if/when Anthropic re-enables
+  it. (Implication to handle later: keep fable-low out of the live preset picker
+  so a Pro/Max user can't select a model that errors.)
 - VAT / tax: DECISION (2026-06-14, revised) - STAY ON STRIPE. DEFER VAT while
   there are no real sales (test mode = zero taxable supplies = zero exposure; a
   ZATCA non-resident VAT application was started then abandoned - premature). When
@@ -163,8 +167,8 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   St Ste 7000 Casper WY 82609, effectiveDate 2026-06-13. Wyoming/US governing
   law (English controlling), KSA PDPL-aware privacy, standard-SaaS refunds.
   CodeRabbit findings addressed (rate-limit memory bound, cookie hardening,
-  danger-color token). STILL BLOCKED on counsel review before relying on these
-  as final (content is a DRAFT); copy can be revised in place post-review.
+  danger-color token). Counsel review DONE (2026-06-14): content stands as-is,
+  no longer a blocker. Copy can still be revised in place if anything changes.
 - ✅ DONE (2026-06-13): Billing UI cadence — monthly/yearly pill + hint on
   /plans, /settings, /billing; PlanUsage is now the shared plan card.
 - Email deliverability + unified transactional emails: BUILT + DEPLOYED
@@ -227,5 +231,6 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 3. Go-ahead for Stripe test webhook creation (then live one in Phase B).
 4. Accounts under dev@taqreer.ai: BetterStack uptime, PostHog (when Phase D).
    (Inngest Cloud deferred 2026-06-14 - not needed until there's traffic.)
-5. Fable pricing decision.
-6. Stripe live keys when Phase B starts.
+5. ✅ Fable pricing decision — PARKED (Fable disabled at Anthropic upstream).
+6. ✅ Legal counsel review — DONE (content stands).
+7. Stripe live keys when Phase B starts.
