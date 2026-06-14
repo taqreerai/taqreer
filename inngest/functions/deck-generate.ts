@@ -171,6 +171,19 @@ AVOID (these don't render in export): \`conic-gradient\`, colour-to-alpha gradie
 // instructions outrank earlier ones). The OUTPUT contract is untouched.
 const MIMIC_HTML_ADDENDUM = `MIMIC MODE — this is NOT an original-design task. Override "Design a complete, ORIGINAL slide deck — your own visual system" above: instead REPRODUCE the visual language of the attached DESIGN reference as faithfully as you can — its layout system, type hierarchy, spacing rhythm, shapes, grids, and decorative motifs — applied to this deck's content and recoloured to the injected brand variables (\`var(--brand-1)\`…, \`var(--font-heading)\`/\`var(--font-body)\`). Match the reference's look; don't invent a new one. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
 
+// Mimic's image addendum — used INSTEAD of IMG_ADDENDUM when images mode is ON on
+// a mimic run (opt-in via the GPT-images toggle). The generic IMG_ADDENDUM says
+// "reserve a box where the slide calls for imagery"; mimic instead RECREATES the
+// reference's own imagery (Claude sees the reference PDF visually), and fills
+// empty placeholder boxes with slide-relevant images. Same box contract + safety
+// rails as IMG_ADDENDUM.
+const MIMIC_IMG_ADDENDUM = `MIMIC IMAGES: images mode is ON for this mimic. Study the attached DESIGN reference. Wherever it uses photographic or illustrative imagery (a real image, OR an empty image-placeholder box), reserve a generated-image box in the SAME position and size in your matching slide, and gpt-image fills it while the system handles the box.
+  <img data-genimage="<prompt>" data-genid="<unique-id>" alt="" style="width:…px;height:…px;object-fit:cover;display:block;background:<a brand-tinted placeholder gradient>;"/>
+  • Where the reference shows a REAL image, write a data-genimage prompt that RECREATES it: the same subject, scene, composition, mood, and medium, so the deck keeps the reference's look (you cannot copy the pixels, so describe them precisely).
+  • Where the reference shows an EMPTY placeholder box, write a prompt that reflects THIS slide's own content instead.
+  • Two attributes only: data-genimage (the prompt) + data-genid (unique per box). Set width/height in px so the system requests the right image shape. Keep one consistent medium and mood across the whole deck.
+  • SUBJECT / SCENE / MOOD only: never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names). Stats, data, and charts stay CSS + inline SVG. When text sits on a generated image, add ONE scrim layer for legibility.`;
+
 // Enhance flow's HTML system addendum. Enhance REDESIGNS an existing deck rather
 // than inventing one, so it must neutralise the create prompt's "ORIGINAL / fresh"
 // framing AND its "VARY the composition slide to slide" rule (enhance wants the
@@ -191,8 +204,9 @@ const SLIDE_ROLES = new Set<NonNullable<SlideType["role"]>>([
   "closing",
 ]);
 
-// Images deck = create/scratch flows ONLY (enhance/mimic/data have their own
-// visual handling and never get the override even if the flag leaks on).
+// Images mode = create/scratch + MIMIC (opt-in, 2026-06-14: mimic recreates the
+// reference's imagery via gpt-image, see MIMIC_IMG_ADDENDUM). enhance + data keep
+// their own visual handling and never get the override even if the flag leaks on.
 export function isImagesMode(event: DeckGenerateEvent): boolean {
   const sourceKind = (event.brief as { source?: { kind?: string } } | null)
     ?.source?.kind;
@@ -200,7 +214,6 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
     (event.brief as { imagesMode?: boolean } | null)?.imagesMode === true &&
     (event.type ?? "create") === "create" &&
     sourceKind !== "enhance" &&
-    sourceKind !== "mimic" &&
     sourceKind !== "data"
   );
 }
@@ -1741,7 +1754,14 @@ export const deckGenerate = inngest.createFunction(
         const htmlSourceKind = readSource(data)?.kind;
         const htmlSystem = [
           SYSTEM_PROMPT_CREATE_HTML,
-          isImagesMode(data) ? IMG_ADDENDUM : null,
+          // Mimic with images on recreates the reference's imagery (its own
+          // addendum); every other images-on flow uses the generic reserve-a-box
+          // rules.
+          isImagesMode(data)
+            ? htmlSourceKind === "mimic"
+              ? MIMIC_IMG_ADDENDUM
+              : IMG_ADDENDUM
+            : null,
           htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
         ]
