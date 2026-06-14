@@ -72,7 +72,7 @@ Tiers (renamed 2026-06-11; monthly reset, no rollover; Free = one-time grant):
 
 - Presets (2026-06-12 lineup): **opus-fast** (default, 100+10/slide, ~$0.10
   COGS) · **opus-balanced** (400+22, ~$1.30 measured) · **fable-low**
-  (500+28, ~$3.23 measured — PARKED 2026-06-14: Fable is disabled at Anthropic
+  (500+28, ~$3.23 measured - PARKED 2026-06-14: Fable is disabled at Anthropic
   upstream, so this preset is non-shippable; keep it out of the live picker
   until/unless re-enabled, and the pricing question is moot for now).
 - Ledger: hotel-style hold→settle clamped to hold, FIFO top-up grants (12-mo

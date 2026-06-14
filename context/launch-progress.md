@@ -28,7 +28,7 @@ that produced it; this file is the operational state.
   viewer reads; SlideVersion.slideJson = per-slide history). Manual repairs
   must patch BOTH.
 
-## ⚡ Latest session (2026-06-14) — Stripe LIVE + infra cleanup (READ FIRST)
+## ⚡ Latest session (2026-06-14) - Stripe LIVE + infra cleanup (READ FIRST)
 
 **Stripe is LIVE in production** (was test mode):
 - Live Products/Prices created. `scripts/stripe-setup-products.ts` gained a
@@ -275,11 +275,11 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 
 1. ✅ Supabase redirect URLs for taqreer.ai — DONE.
 2. ✅ Sentry wired (taqreerai-66/taqreer) + source maps uploading — DONE.
-3. ✅ Stripe LIVE keys + products + prod webhook — DONE (2026-06-14).
+3. ✅ Stripe LIVE keys + products + prod webhook - DONE (2026-06-14).
 4. Accounts under dev@taqreer.ai: BetterStack uptime, PostHog (when Phase D).
    (Inngest Cloud deferred 2026-06-14 - not needed until there's traffic.)
-5. ✅ Fable pricing decision — PARKED (Fable disabled at Anthropic upstream).
-6. ✅ Legal counsel review — DONE (content stands).
+5. ✅ Fable pricing decision - PARKED (Fable disabled at Anthropic upstream).
+6. ✅ Legal counsel review - DONE (content stands).
 7. REMAINING billing go-live: mada + Apple Pay (Stripe dashboard) + a real-card
    smoke test + premium-template gating. Verify Supabase signups are OFF (the
    public-site interim guard while there's no rate limiting).

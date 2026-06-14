@@ -155,7 +155,7 @@ session-init brief; the four living docs hold the depth and are kept current:
 | Flows | create only | all 4 | all | all |
 
 - Presets: **opus-fast** (default, 100+10/slide, ~$0.10) · **opus-balanced**
-  (400+22, ~$1.30) · **fable-low** (500+28, ~$3.23 — PARKED: Fable is disabled at
+  (400+22, ~$1.30) · **fable-low** (500+28, ~$3.23 - PARKED: Fable is disabled at
   Anthropic upstream, so fable-low is non-shippable; keep it out of the live
   picker until/unless re-enabled).
 - Ledger: hotel-style hold→settle clamped to hold, FIFO 12-mo top-ups, per-user
