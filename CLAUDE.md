@@ -167,11 +167,14 @@ the depth and are kept current:
 **Phase A (foundation) — essentially done**: site live + coming-soon gate, dev
 data migrated to prod, nightly backups, prod generation verified, Sentry wired,
 Supabase redirect URLs set, nginx 502 fixed (proxy buffer for big Supabase
-cookies). **Remaining**: Inngest Cloud (retire the self-hosted dev server),
-uptime ping, Stripe test webhook, minor DB cleanups.
+cookies). **Remaining**: uptime ping, Stripe test webhook, minor DB cleanups.
+(Inngest Cloud DEFERRED until there's traffic - the self-hosted dev server is
+fine at zero volume.)
 
-**Phase B (money + law, all BLOCKERS)**: Stripe live keys + Tax (KSA 15%/UAE 5%)
-+ mada/Apple Pay + prod webhook + real-card smoke + premium-template gating;
+**Phase B (money + law, all BLOCKERS)**: Stripe live keys + mada/Apple Pay
++ prod webhook + real-card smoke + premium-template gating; GCC VAT ONLY if a
+tax advisor confirms a non-resident registration (digital VAT is destination-
+based, not seller-location; KSA 15%/UAE 5% on consumers there);
 legal pages (ToS/Privacy/Refund, bilingual + cookie banner — none exist yet);
 email deliverability (SPF/DKIM/DMARC + branded bilingual Supabase auth
 templates). **Phase C (hardening)**: rate limiting (NONE exists — share-invite
@@ -180,7 +183,7 @@ role-gated). **Phase D (cheap polish)**: SEO correctness (stale sitemap/robots,
 hreflang, OG), mobile audit of the 5 public surfaces, PostHog, support mailbox.
 
 **Open user actions**: Stripe live keys + test-webhook go-ahead; accounts under
-dev@taqreer.ai (Inngest Cloud, BetterStack, PostHog); Fable pricing decision;
+dev@taqreer.ai (BetterStack, PostHog); Fable pricing decision;
 optional Sentry auth token for source maps.
 
 ---

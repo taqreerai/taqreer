@@ -54,7 +54,8 @@ DONE:
   subscriptionmodel + billing-plan + admin-panel-plan folded into context.md
   (full text recoverable from git history).
 - Inngest = self-hosted dev server (pm2 taqreer-inngest, :8288), 12 functions
-  connected. INTERIM — replace with Inngest Cloud keys before launch.
+  connected. Fine for launch at current (zero) volume; move to Inngest Cloud
+  only when traffic warrants (user direction 2026-06-14, not a blocker).
 - SSH password login disabled; root password that was shared in chat is dead.
 - Supabase auth redirect URLs (https://taqreer.ai/**) added by user — Google
   OAuth + email links now return to prod. Verified the callback route works
@@ -115,8 +116,8 @@ DONE:
     issue was resolved.
 
 REMAINING in Phase A:
-- Inngest Cloud account (dev@taqreer.ai) → event+signing keys into server
-  .env, retire the pm2 dev-server process. Free tier suffices.
+- Inngest Cloud: DEFERRED (user direction 2026-06-14) - no traffic yet, the
+  self-hosted pm2 dev server is fine; revisit when volume warrants. NOT a blocker.
 - Uptime ping (BetterStack free) once user creates account.
 - Stripe TEST webhook endpoint for https://taqreer.ai/api/stripe/webhook
   (awaiting user go; secret goes into server .env as STRIPE_WEBHOOK_SECRET).
@@ -131,11 +132,17 @@ REMAINING in Phase A:
 Phase A — Foundation: infra, backups, monitoring. (≈done, leftovers above)
 
 Phase B — Money + law (parallel tracks), all BLOCKERS:
-- Billing live: Stripe live keys, Stripe Tax (KSA 15% / UAE 5%), mada +
-  Apple Pay (dashboard config + domain verification, verify inside the
-  embedded ui_mode:elements form), prod webhook, real-card smoke test.
-  Toggle Stripe's own receipts + payment-failed emails ON (don't own these).
-  Fable pricing decision (600+80 vs keep 500+28) before live billing.
+- Billing live: Stripe live keys, mada + Apple Pay (dashboard config + domain
+  verification, verify inside the embedded ui_mode:elements form), prod webhook,
+  real-card smoke test. Toggle Stripe's own receipts + payment-failed emails ON
+  (don't own these). Fable pricing decision (600+80 vs keep 500+28) before live.
+- GCC VAT (tax-advisor question, NOT seller-location based): digital-services
+  VAT is DESTINATION-based, so selling to KSA/UAE CONSUMERS can trigger a
+  non-resident VAT registration (KSA 15% / UAE 5%) even for the US LLC. But it
+  hinges on B2C-vs-B2B (B2B reverse-charges to the buyer), thresholds, and actual
+  GCC sales - confirm whether/when registration is required with a tax pro before
+  turning anything on. Stripe Tax only handles COLLECTION once registered; it
+  does not decide the obligation. Not a code blocker.
 - ✅ LIVE (2026-06-13, PR #59 merged + deployed): bilingual ToS/Privacy/Refund
   (lib/legal/content.ts) + cookie banner + contact form (Resend department
   routing) + shared SiteFooter + gate-exempt public routes (incl. trailing-slash
@@ -205,7 +212,7 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 1. ✅ Supabase redirect URLs for taqreer.ai — DONE.
 2. ✅ Sentry wired (taqreerai-66/taqreer) + source maps uploading — DONE.
 3. Go-ahead for Stripe test webhook creation (then live one in Phase B).
-4. Accounts under dev@taqreer.ai: Inngest Cloud, BetterStack uptime,
-   PostHog (when Phase D).
+4. Accounts under dev@taqreer.ai: BetterStack uptime, PostHog (when Phase D).
+   (Inngest Cloud deferred 2026-06-14 - not needed until there's traffic.)
 5. Fable pricing decision.
 6. Stripe live keys when Phase B starts.
