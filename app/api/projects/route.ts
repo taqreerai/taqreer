@@ -6,6 +6,8 @@ import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
+import { decodeSvgBytes } from "@/lib/brand/svg-decode";
+import { isPolychromeSvg } from "@/lib/brand/svg-polychrome";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
 import {
   DEFAULT_QUALITY,
@@ -103,18 +105,23 @@ function safeFontUrl(raw: string | null | undefined): string | null {
 // path would; not a meaningful injection vector beyond what <title> is, and
 // stripping it would silently break a large class of legitimate logos.
 //
-// Returns null on any failure (file missing, fetch failure, non-SVG content,
-// parse error). The caller falls back to the URL-only logo block in that case.
+// Returns { svgMarkup: null, isPolychrome: false } on any failure (file
+// missing, fetch failure, non-SVG content) — the caller then emits the
+// URL-only (true-colour <img>) logo block.
 //
-// Earlier revisions returned a `{ markup, isPolychrome, aspectRatio }` blob.
-// Both extra signals were dropped (2026-05-27, user direction): every
-// supported logo is treated as "flatten to a single contrast color per
-// slide" + a single fixed wrapper size. Less metadata to plumb, less
-// prompt prose to render, faster Claude turnaround.
-async function readLogoSvgMarkup(path: string): Promise<string | null> {
+// `isPolychrome` (re-introduced 2026-06-15, reversing the 2026-05-27 "flatten
+// every logo to one contrast colour" decision): a multicolour mark — a flag, a
+// full-colour logo — must KEEP its own colours, so it's injected as a
+// true-colour <img>; a monochrome wordmark is inlined and recoloured per slide
+// for contrast. The flatten-everything default destroyed multicolour marks
+// (e.g. a flag came out solid white).
+type LogoRead = { svgMarkup: string | null; isPolychrome: boolean };
+const LOGO_READ_NONE: LogoRead = { svgMarkup: null, isPolychrome: false };
+
+async function readLogo(path: string): Promise<LogoRead> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
+  if (!url || !serviceKey) return LOGO_READ_NONE;
   try {
     const admin = createSupabaseAdminClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -122,17 +129,23 @@ async function readLogoSvgMarkup(path: string): Promise<string | null> {
     const { data, error } = await admin.storage
       .from("brand-assets")
       .download(path);
-    if (error || !data) return null;
-    const text = await data.text();
-    if (!text.includes("<svg")) return null;
+    if (error || !data) return LOGO_READ_NONE;
+    // Decode honouring the BOM. UTF-16 logos (common from Illustrator / Corel /
+    // Windows exporters) read as UTF-8 become `<\0s\0v\0g…`, which fails the
+    // `<svg` guard + the colour scan and silently routes the logo to the wrong
+    // path — the original flag bug. See lib/brand/svg-decode.
+    const text = decodeSvgBytes(await data.arrayBuffer());
+    if (!text.includes("<svg")) return LOGO_READ_NONE;
+    const isPolychrome = isPolychromeSvg(text);
     // Run every pattern from the module-scope strip list. See the
     // `SVG_STRIP_PATTERNS` declaration for the per-pattern rationale.
-    return SVG_STRIP_PATTERNS.reduce(
+    const svgMarkup = SVG_STRIP_PATTERNS.reduce(
       (acc, re) => acc.replace(re, ""),
       text,
     );
+    return { svgMarkup, isPolychrome };
   } catch {
-    return null;
+    return LOGO_READ_NONE;
   }
 }
 
@@ -346,6 +359,7 @@ function buildClaudeBrand(
   uploadedFonts: UploadedFontFamilyBrief[],
   logoSignedUrl: string | null,
   logoSvgMarkup: string | null,
+  logoIsPolychrome: boolean,
 ): CreateProjectPayload["brand"] {
   if (!rawBrand) return rawBrand;
   return {
@@ -378,6 +392,9 @@ function buildClaudeBrand(
           // or non-SVG), buildUserMessage emits the URL-only block
           // and Claude falls back to <img src="...">.
           svgMarkup: logoSvgMarkup,
+          // Polychrome (flag / full-colour) → injected as a true-colour <img>;
+          // monochrome → inlined + recoloured per slide. See buildLogoBlock.
+          isPolychrome: logoIsPolychrome,
           exclude: rawBrand.logo.exclude ?? [],
         }
       : rawBrand.logo,
@@ -541,18 +558,16 @@ export async function POST(request: Request) {
   // Storage so pipelining saves a round trip. `svgMarkup` enables
   // the inline-per-slide path (Claude overrides `fill` for per-slide
   // contrast); `signedUrl` is the fallback to <img src=...>.
-  const [logoSignedUrl, logoSvgMarkup] = logoPath
-    ? await Promise.all([
-        signBrandAssetUrl(logoPath),
-        readLogoSvgMarkup(logoPath),
-      ])
-    : [null, null];
+  const [logoSignedUrl, logoRead] = logoPath
+    ? await Promise.all([signBrandAssetUrl(logoPath), readLogo(logoPath)])
+    : [null, LOGO_READ_NONE];
   const claudeBrand = buildClaudeBrand(
     payload.brand,
     font,
     uploadedFonts,
     logoSignedUrl,
-    logoSvgMarkup,
+    logoRead.svgMarkup,
+    logoRead.isPolychrome,
   );
 
   // Auto slide-count when the user defers ("auto" mode on

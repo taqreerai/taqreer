@@ -15,6 +15,7 @@ import { isQuality, type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
+import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
@@ -771,10 +772,20 @@ export const deckRegeneratePartial = inngest.createFunction(
     // the loaded one) so the .slideJson column carries a clean payload — no
     // transient `progress` field left over from the source.
     await step.run("save-new-version", async () => {
+      // The source deck carries the real brand logo, injected into each
+      // slide's `data-tq-logo` marker at generation time. Re-fill the marker
+      // in every REGENERATED slide from that same source logo: a regen copies
+      // chrome out of sibling excerpts, so without this a logo the model
+      // copied (and possibly mangled the signed URL of) would persist. No-op
+      // for decks generated before the marker convention (no marker found).
+      const logoInner = findInjectedLogoInner(source.slides.map((s) => s.html));
       const slides = source.slides.map((s) => {
         const update = regenResults.find((r) => r.slideId === s.slideId);
         if (!update) return s;
-        return { ...s, html: update.html };
+        const html = logoInner
+          ? injectLogoMarkers(update.html, logoInner)
+          : update.html;
+        return { ...s, html };
       });
       const candidate: SlideManifest = {
         version: source.version,

@@ -23,11 +23,11 @@
 // so the actual deck's per-slide contrast logic still picks the right
 // fill per slide background.
 //
-// Polychrome logos flatten to white here too. That's the trade-off:
-// the preview shows a silhouette instead of the real colors. The user
-// already saw the file in their file picker; the preview's job is to
-// confirm "the upload worked, here's what shape it is", not to
-// faithfully reproduce brand colors.
+// Polychrome logos (flags, full-colour marks) are detected via
+// `isPolychromeSvg` and shown in their REAL colours — flattening them to a
+// white silhouette destroyed multicolour marks. Only monochrome
+// wordmarks/icons get the silhouette, so a dark mark still reads on the dark
+// glass. Preview only — the saved SVG bytes are untouched either way.
 //
 // Height contract: container pins at 100 px in both states (matches
 // CompactUploadZone's default minHeight). The card row this slot
@@ -36,6 +36,8 @@
 import { useEffect, useRef, useState } from "react";
 import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { isPolychromeSvg } from "@/lib/brand/svg-polychrome";
+import { decodeSvgBytes } from "@/lib/brand/svg-decode";
 
 // Outer heights pinned to CompactUploadZone's two modes:
 //   • default → 100 px (matches CompactUploadZone's stacked default)
@@ -109,6 +111,38 @@ export function LogoUploadSlot({
   // on). The ref always carries the latest value because it's
   // mutated synchronously inside the sync effect. CR #3 (PR #39).
   const liveObjectUrlRef = useRef<string | null>(null);
+
+  // Polychrome logos (flags, full-colour marks) keep their real colours in the
+  // preview; monochrome wordmarks/icons still flatten to a white/black
+  // silhouette so they read on the glass. Default mono; flip when detected.
+  const [polychrome, setPolychrome] = useState(false);
+
+  useEffect(() => {
+    // Read the SVG bytes (from the picked File, or the saved-kit previewUrl —
+    // both EXTERNAL resources) to decide polychrome. setState lands only in the
+    // async resolution, the sanctioned "subscribe to external state" shape.
+    let cancelled = false;
+    const apply = (svg: string | null) => {
+      if (!cancelled) setPolychrome(!!svg && isPolychromeSvg(svg));
+    };
+    // Read bytes + decode (not `.text()`): a UTF-16 logo read as UTF-8 becomes
+    // `<\0s\0v\0g…` and the colour scan misses every fill (so a flag would read
+    // as mono and get flattened to white). decodeSvgBytes honours the BOM.
+    if (file) {
+      file
+        .arrayBuffer()
+        .then((b) => apply(decodeSvgBytes(b)))
+        .catch(() => apply(null));
+    } else if (previewUrl) {
+      fetch(previewUrl)
+        .then((r) => r.arrayBuffer())
+        .then((b) => apply(decodeSvgBytes(b)))
+        .catch(() => apply(null));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [file, previewUrl]);
 
   useEffect(() => {
     // Skip the setState dance when the file ref is unchanged — React
@@ -201,11 +235,14 @@ export function LogoUploadSlot({
       <img
         src={activePreviewUrl}
         alt={dict.flows.brand.logoPreview}
-        // `brightness(0) invert(1)` flattens any color (mono OR
-        // polychrome) to solid white. See file header for the
-        // rationale — preview only, saved bytes untouched. max-w pins
-        // wide logos so they don't crowd the close button.
-        className="max-w-[140px] object-contain logo-monochrome"
+        // Monochrome wordmarks/icons flatten to a white/black silhouette via
+        // `.logo-monochrome` (`brightness(0) invert()`) so a dark mark still
+        // reads on the dark glass. POLYCHROME logos (flags, full-colour marks)
+        // keep their real colours instead of collapsing to a solid-white blob.
+        // Preview only — the saved SVG bytes are untouched either way.
+        className={`max-w-[140px] object-contain${
+          polychrome ? "" : " logo-monochrome"
+        }`}
         style={{ maxHeight: logoMaxHeightPx }}
       />
       <button
