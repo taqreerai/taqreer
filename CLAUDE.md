@@ -6,9 +6,11 @@ patched `dom-to-pptx` + custom OOXML post-processor exports a high-fidelity PPTX
 Decks are generated **and** edited in a full in-canvas studio. **RTL/BiDi quality
 is the product differentiator.**
 
-**LIVE on https://taqreer.ai** (Hetzner, behind a coming-soon gate) since
-2026-06-13. This file is the merged session-init brief; the four living docs hold
-the depth and are kept current:
+**LIVE on https://taqreer.ai** (Hetzner) since 2026-06-13. As of 2026-06-14: the
+coming-soon gate is **OFF** (site public, new registrations disabled as the
+interim guard), **Stripe billing is LIVE**, and the live prod work-tree is
+**`/root/taqreer`** (renamed from `/root/taqreer-app`). This file is the merged
+session-init brief; the four living docs hold the depth and are kept current:
 - **[context/context.md](context/context.md)** — status + handover + pricing
 - **[context/architecture.md](context/architecture.md)** — full structured map
 - **[context/deploy.md](context/deploy.md)** — production runbook + gotcha log
@@ -69,7 +71,7 @@ the depth and are kept current:
   Cloud). Postgres 16 `taqreer_prod` local to the box. Nightly 02:00 backups.
 - **Supabase** = auth + storage + realtime ONLY (NOT the app DB). The SAME
   Supabase project serves dev and prod, so logins + image URLs are shared.
-- **Secrets** live ONLY in `/root/taqreer-app/.env` (chmod 600) — gitignored +
+- **Secrets** live ONLY in `/root/taqreer/.env` (chmod 600) — gitignored +
   untracked, so `git checkout` on the box never touches them. Includes prod
   `DATABASE_URL`, `COMING_SOON=1`, `COMING_SOON_KEY`, `NEXT_DIST_DIR`,
   Stripe/Sentry/etc.
@@ -85,7 +87,9 @@ the depth and are kept current:
 - **Coming-soon gate** (proxy.ts): `COMING_SOON=1` rewrites every page to
   `/{lang}/coming-soon` unless the `tq_preview` cookie is set;
   `https://taqreer.ai/preview?key=taqreer2025` sets it (30 days). API routes
-  never gated. **Launch = remove `COMING_SOON` from the server .env + reload.**
+  never gated. **CURRENTLY OFF** (`COMING_SOON=0`, 2026-06-14): site is public,
+  new registrations disabled as the interim guard (verify the Supabase signups
+  toggle is OFF). Re-enable: `COMING_SOON=1` + `./deploy.sh --rebuild`.
 - **Monitoring**: Sentry wired (org `taqreerai-66`, project `taqreer`), v10
   layout (`instrumentation.ts` + `instrumentation-client.ts`), env-tagged,
   replay masked. `SENTRY_AUTH_TOKEN` in the server .env → source maps upload on
@@ -160,7 +164,9 @@ the depth and are kept current:
 - Stripe: Checkout Sessions `ui_mode: elements` (our themed form on `/checkout`
   AND inside the gated-preset `UpgradeModal`, `redirect:'if_required'`). Webhook
   → ledger grants. Subscription cadence (monthly/yearly) persisted + shown on the
-  shared `PlanUsage` plan card. **Currently TEST mode.**
+  shared `PlanUsage` plan card. **LIVE mode (2026-06-14)** - live keys + products
+  + prod webhook ("Taqreer prod", 6 events) done; remaining: mada/Apple Pay,
+  real-card smoke test, premium-template gating.
 
 ---
 
@@ -169,12 +175,15 @@ the depth and are kept current:
 **Phase A (foundation) — essentially done**: site live + coming-soon gate, dev
 data migrated to prod, nightly backups, prod generation verified, Sentry wired,
 Supabase redirect URLs set, nginx 502 fixed (proxy buffer for big Supabase
-cookies). **Remaining**: uptime ping, Stripe test webhook, minor DB cleanups.
+cookies). 2026-06-14: prod app dir renamed to `/root/taqreer`, prod DB cleaned +
+wiped to `dev@taqreer.ai` only, Stripe went live (see launch-progress Latest
+session). **Remaining**: uptime ping.
 (Inngest Cloud DEFERRED until there's traffic - the self-hosted dev server is
 fine at zero volume.)
 
-**Phase B (money + law, all BLOCKERS)**: Stripe live keys + mada/Apple Pay
-+ prod webhook + real-card smoke + premium-template gating; VAT = STAY ON STRIPE
+**Phase B (money + law)**: Stripe LIVE keys + products + prod webhook DONE
+(2026-06-14); remaining = mada/Apple Pay + real-card smoke + premium-template
+gating (the upsell modal is now in-place, PR #62). VAT = STAY ON STRIPE
 (decision 2026-06-14, revised) - DEFER while no real sales, then enable Stripe Tax
 (calc/collect/file) + register where required as the seller of record, keeping our
 own checkout. MoR (Paddle / Stripe Managed Payments) shelved as a fallback only if
@@ -186,10 +195,11 @@ email is a spam vector), Inngest concurrency caps, admin panel v1 (read-only,
 role-gated). **Phase D (cheap polish)**: SEO correctness (stale sitemap/robots,
 hreflang, OG), mobile audit of the 5 public surfaces, PostHog, support mailbox.
 
-**Open user actions**: Stripe live keys + test-webhook go-ahead; accounts under
-dev@taqreer.ai (BetterStack, PostHog); optional Sentry auth token for source
-maps. (Fable pricing PARKED - disabled at Anthropic upstream. Legal counsel
-review DONE.)
+**Open user actions**: mada/Apple Pay config + a real-card smoke test +
+premium-template gating (Stripe live keys + products + webhook DONE 2026-06-14);
+verify Supabase signups are OFF; accounts under dev@taqreer.ai (BetterStack,
+PostHog); optional Sentry auth token for source maps. (Fable pricing PARKED -
+disabled at Anthropic upstream. Legal counsel review DONE.)
 
 ---
 

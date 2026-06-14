@@ -7,7 +7,7 @@
 #     over the existing ssh alias (no GitHub deploy key needed).
 #   - Pushing main fires /root/taqreer-app.git/hooks/post-receive (tracked at
 #     scripts/post-receive.sh): it checks main out into the live work-tree
-#     /root/taqreer-app, runs npm ci + prisma migrate deploy, builds into
+#     /root/taqreer, runs npm ci + prisma migrate deploy, builds into
 #     .next-build, swaps it into .next-deploy ATOMICALLY (the running app serves
 #     the old build until the swap), pm2-reloads, and health-checks /ar.
 #   - Build runs ON the server (6GB swap). Secrets live ONLY in the server .env

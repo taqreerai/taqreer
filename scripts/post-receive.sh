@@ -6,12 +6,12 @@
 # the old rsync deploy.sh. Build lands in .next-build and only swaps into
 # .next-deploy on success, so a failed build leaves the running app untouched.
 #
-# Secrets stay in /root/taqreer-app/.env (gitignored + untracked, so checkout
+# Secrets stay in /root/taqreer/.env (gitignored + untracked, so checkout
 # never touches them). Git hooks don't inherit the login PATH — set it here.
 set -euo pipefail
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-APP_DIR=/root/taqreer-app
+APP_DIR=/root/taqreer
 GIT_DIR=/root/taqreer-app.git
 PORT=3100
 

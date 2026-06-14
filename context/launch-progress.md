@@ -1,6 +1,7 @@
 # Launch progress + continuation guide
 
-Updated 2026-06-13. Read this + context/deploy.md to resume launch work in a
+Updated 2026-06-14 (Stripe LIVE + infra cleanup - see the "Latest session"
+block below FIRST). Read this + context/deploy.md to resume launch work in a
 fresh session. The launch plan's full reasoning lives in the conversation
 that produced it; this file is the operational state.
 
@@ -18,13 +19,57 @@ that produced it; this file is the operational state.
   clean-tree guard. The pushed main SHA is exactly what prod runs.
 - Server access: `ssh taqreer` (root@178.105.88.35, key ~/.ssh/taqreer_hetzner,
   password auth disabled). macOS ssh REQUIRES `IPQoS none` in ~/.ssh/config.
-- Runtime secrets: ONLY in /root/taqreer-app/.env on the server (chmod 600).
-  Includes prod DATABASE_URL, COMING_SOON=1, COMING_SOON_KEY, NEXT_DIST_DIR.
+- Runtime secrets: ONLY in /root/taqreer/.env on the server (chmod 600).
+  Includes prod DATABASE_URL, COMING_SOON (currently 0 = gate OFF),
+  COMING_SOON_KEY, NEXT_DIST_DIR, live Stripe keys, SENTRY_AUTH_TOKEN.
 - Prod DB: server-local Postgres 16, db `taqreer_prod`, role `taqreer_app`.
   psql access: `ssh taqreer` then use DATABASE_URL from the app .env.
 - Deck HTML lives in TWO places (PresentationVersion.slideJson = what the
   viewer reads; SlideVersion.slideJson = per-slide history). Manual repairs
   must patch BOTH.
+
+## ⚡ Latest session (2026-06-14) — Stripe LIVE + infra cleanup (READ FIRST)
+
+**Stripe is LIVE in production** (was test mode):
+- Live Products/Prices created. `scripts/stripe-setup-products.ts` gained a
+  `--live` opt-in flag (default still refuses a live key); run it with the live
+  secret to (re)sync. Catalog = lib/billing/prices.ts (resolved by lookup_key).
+- Live webhook "Taqreer prod" (id we_1TiBeN..., 6 events: checkout.session.completed,
+  invoice.payment_succeeded / _failed, customer.subscription.updated / _deleted,
+  charge.refunded) → https://taqreer.ai/api/stripe/webhook.
+- Server .env holds live pk/sk/whsec. The chat-exposed secret was ROLLED (old key
+  set to expire ~2026-06-15). Pre-change .env backup: /root/taqreer/.env.bak.prelive.
+- REMAINING for billing go-live: mada + Apple Pay (Stripe dashboard payment
+  methods + Apple Pay domain-verify taqreer.ai); a REAL-CARD smoke test (only the
+  embedded form RENDER was verified, no payment completed); premium-template
+  gating (gate already enforced server-side; the upsell modal is now in-place, PR #62).
+
+**Prod app dir RENAMED** /root/taqreer-app → **/root/taqreer** (the live work-tree).
+The bare repo stays /root/taqreer-app.git (deploy.sh's `prod` remote unchanged).
+pm2 taqreer-prod cwd + the post-receive hook APP_DIR + backup.sh were re-pointed;
+.env + .next-deploy moved with the dir. On-box backups: post-receive.bak,
+/root/backup.sh.bak. Tracked deploy.sh/post-receive.sh/docs path-synced to match.
+
+**Coming-soon gate is OFF** (COMING_SOON=0) - site is PUBLICLY accessible. Kept
+off because new **registrations are disabled** as the interim guard against budget
+abuse (no rate limiting yet). VERIFY the Supabase "Allow new users to sign up"
+toggle is OFF. Re-enable the gate: COMING_SOON=1 + `./deploy.sh --rebuild`.
+
+**Prod DB cleaned**: dropped the stray empty `taqreer` database (kept taqreer_prod
++ postgres); deleted stale /root/taqreer (old rsync dir, 1.4G) + its dead pm2
+process + nginx-taqreer.bak/.bak2. **ALL users WIPED except dev@taqreer.ai** (now
+FREE) - dsignerarts@gmail.com, pixelwolves.co@gmail.com, yazadsfather@gmail.com,
+credit-sim-ui@example.com + their decks/credits cascade-deleted. Pre-wipe backup:
+/root/backups/pre-userwipe.dump. The deleted accounts still exist in Supabase auth
+(separate; remove in the Supabase dashboard if wanted).
+
+**PR #62 OPEN (dev→main, awaiting CodeRabbit)** - in-place upgrade modal for ALL
+mid-task payment gates (keep the user's journey undisrupted): the credit-gate
+locked notice + the premium-template gate now open the embedded UpgradeModal in
+place instead of a redirect / new tab; deliberate /plans + landing stay pages; the
+dead ctx=tab checkout path was removed. #1 verified live, tsc + eslint clean. NEXT:
+CodeRabbit review → address → merge → deploy. Also this session: VAT = STAY ON
+Stripe (no MoR/Paddle), Fable PARKED (disabled upstream), legal review DONE.
 
 ## Current state (Phase A — DONE except noted)
 
@@ -132,9 +177,11 @@ REMAINING in Phase A:
 Phase A — Foundation: infra, backups, monitoring. (≈done, leftovers above)
 
 Phase B — Money + law (parallel tracks), all BLOCKERS:
-- Billing live: Stripe live keys, mada + Apple Pay (dashboard config + domain
-  verification, verify inside the embedded ui_mode:elements form), prod webhook,
-  real-card smoke test. Toggle Stripe's own receipts + payment-failed emails ON
+- Billing live: ✅ live keys + live products/prices + prod webhook DONE
+  (2026-06-14; see Latest session block). REMAINING: mada + Apple Pay (dashboard
+  config + Apple Pay domain verification, verify inside the embedded
+  ui_mode:elements form), a real-card smoke test, premium-template gating. Toggle
+  Stripe's own receipts + payment-failed emails ON
   (don't own these). Fable pricing decision PARKED (2026-06-14): Fable is
   disabled at Anthropic (upstream), so the fable-low preset is non-shippable and
   its pricing question is moot for now. Revisit only if/when Anthropic re-enables
@@ -228,9 +275,11 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 
 1. ✅ Supabase redirect URLs for taqreer.ai — DONE.
 2. ✅ Sentry wired (taqreerai-66/taqreer) + source maps uploading — DONE.
-3. Go-ahead for Stripe test webhook creation (then live one in Phase B).
+3. ✅ Stripe LIVE keys + products + prod webhook — DONE (2026-06-14).
 4. Accounts under dev@taqreer.ai: BetterStack uptime, PostHog (when Phase D).
    (Inngest Cloud deferred 2026-06-14 - not needed until there's traffic.)
 5. ✅ Fable pricing decision — PARKED (Fable disabled at Anthropic upstream).
 6. ✅ Legal counsel review — DONE (content stands).
-7. Stripe live keys when Phase B starts.
+7. REMAINING billing go-live: mada + Apple Pay (Stripe dashboard) + a real-card
+   smoke test + premium-template gating. Verify Supabase signups are OFF (the
+   public-site interim guard while there's no rate limiting).

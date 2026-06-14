@@ -17,7 +17,7 @@ Decks are generated **and** edited in a full in-canvas studio.
 
 | Area | State |
 |---|---|
-| **LIVE on https://taqreer.ai** (Hetzner, behind coming-soon gate) | ✅ 2026-06-13 |
+| **LIVE on https://taqreer.ai** (Hetzner, coming-soon gate OFF / public) | ✅ 2026-06-13 |
 | HTML-first generation (all 4 flows author `<section>` HTML) | ✅ |
 | Flows: **Create / Enhance / Mimic / Datasheet** (+ use-template) | ✅ |
 | **In-canvas studio editor** (`/project/[id]`, `DeckView`) — generate ⟶ edit | ✅ |
@@ -26,7 +26,7 @@ Decks are generated **and** edited in a full in-canvas studio.
 | Templates · multi-select bulk delete on all library pages | ✅ |
 | **Bilingual** `[lang]` (ar/en) · **light/dark** · **blue design system** | ✅ |
 | Realtime (private channels, HS256 mint) + notifications | ✅ |
-| **Credits + billing (Stripe TEST mode)** — ledger, gating, embedded checkout, upgrade modal | ✅ test mode |
+| **Credits + billing (Stripe LIVE)** — ledger, gating, embedded checkout, in-place upgrade modal | ✅ live 2026-06-14 |
 | Design-style picker (9 styles, CSS mini-previews) on all 4 flows | ✅ |
 | Admin panel | ⏳ read-only v1 planned (Phase C) |
 
@@ -92,8 +92,9 @@ Tiers (renamed 2026-06-11; monthly reset, no rollover; Free = one-time grant):
   (cancel/resume + payment methods), `/invoices`. The Stripe-hosted portal is
   deleted.
 
-Launch blockers for billing (Phase B): live keys, mada + Apple Pay, prod webhook,
-real-card smoke, premium-template gating. VAT decision (2026-06-14, revised): STAY
+Launch blockers for billing (Phase B): live keys + products + prod webhook DONE
+(2026-06-14, Stripe LIVE); remaining: mada + Apple Pay, real-card smoke,
+premium-template gating. VAT decision (2026-06-14, revised): STAY
 ON STRIPE. DEFER VAT while there are no real sales (zero exposure); when revenue is
 real, enable Stripe Tax (auto calc/collect/file) and register where required
 (non-resident KSA/UAE/EU/US states) as the seller of record, keeping our own

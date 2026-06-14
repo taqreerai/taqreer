@@ -27,19 +27,27 @@ the `main` SHA checked out on the box is exactly what production runs.
 
 ## App
 
-- `/root/taqreer-app` — the deployed work-tree (a `git checkout -f main` from
-  the bare repo `/root/taqreer-app.git`). `.env` (chmod 600) holds ALL runtime
-  secrets + prod overrides; gitignored + untracked, so `git checkout` never
-  touches it.
-- pm2: `taqreer-prod` (`next start -p 3100`, serves `.next-deploy` via
-  `NEXT_DIST_DIR` in the server .env) + `taqreer-inngest` (inngest-cli dev
-  server, interim until Inngest Cloud). `pm2-root` systemd unit resurrects
-  both on boot. The old landing pm2 app `taqreer` is stopped, kept as id 0.
+- `/root/taqreer` — the deployed work-tree (a `git checkout -f main` from
+  the bare repo `/root/taqreer-app.git`). **RENAMED 2026-06-14 from
+  `/root/taqreer-app`**; the bare repo KEPT its `-app.git` name, so deploy.sh's
+  `prod` remote is unchanged (only the hook's `APP_DIR` + pm2 cwd + `backup.sh`
+  were re-pointed). `.env` (chmod 600) holds ALL runtime secrets + prod overrides
+  (incl. LIVE Stripe keys + `COMING_SOON=0`); gitignored + untracked, so
+  `git checkout` never touches it. On-box pre-change backups:
+  `/root/taqreer-app.git/hooks/post-receive.bak`, `/root/backup.sh.bak`,
+  `/root/taqreer/.env.bak.prelive`.
+- pm2: `taqreer-prod` (`next start -p 3100` from cwd /root/taqreer, serves
+  `.next-deploy` via `NEXT_DIST_DIR` in the server .env) + `taqreer-inngest`
+  (inngest-cli dev server, interim until Inngest Cloud). `pm2-root` systemd unit
+  resurrects both on boot. (2026-06-14: the dead pm2 `taqreer` id 0 + the stale
+  1.4G old `/root/taqreer` rsync dir were deleted just before the rename.)
 - nginx `sites-enabled/taqreer`: 443 → localhost:3100, certbot-managed TLS
-  (auto-renew timer), `client_max_body_size 50m`. Pre-cutover copy at
-  `/root/nginx-taqreer.bak`.
+  (auto-renew timer), `client_max_body_size 50m`. (The `/root/nginx-taqreer.bak*`
+  copies were removed 2026-06-14; the live config lives in /etc/nginx.)
 - DB: server Postgres 16, db `taqreer_prod`, role `taqreer_app` (password
-  only in the server .env). Supabase stays auth+storage+realtime.
+  only in the server .env). Supabase stays auth+storage+realtime. 2026-06-14: the
+  stray empty `taqreer` db was DROPPED; `taqreer_prod` was WIPED to a single user
+  (`dev@taqreer.ai`, free) - pre-wipe dump at `/root/backups/pre-userwipe.dump`.
   (Supabase Pro Postgres migration still on the table - revisit pre-launch.)
 - Backups: `/root/backup.sh` nightly at 02:00 (cron) — app tree tar +
   `pg_dump -Fc` of DATABASE_URL, keeps last 10 of each in `/root/backups`.
@@ -50,7 +58,7 @@ GIT PUSH-TO-DEPLOY (replaced rsync 2026-06-14). `./deploy.sh` from the repo
 root: pushes dev+main to GitHub, then `git push prod dev:main` to the box's bare
 repo (`taqreer:/root/taqreer-app.git`). The tracked post-receive hook
 (`scripts/post-receive.sh`, installed at `.../hooks/post-receive`) checks main
-out into `/root/taqreer-app` → npm ci → prisma generate + migrate deploy →
+out into `/root/taqreer` → npm ci → prisma generate + migrate deploy →
 `next build` into `.next-build` (live app keeps serving the old build) → atomic
 swap to `.next-deploy` → pm2 reload → health-check `/ar` (expect 200). The push
 streams the build output. `--rebuild` re-runs the hook on current main with no
@@ -63,20 +71,23 @@ taqreer:/root/taqreer-app.git` locally.
 
 ## Coming-soon gate
 
-`COMING_SOON=1` + `COMING_SOON_KEY` in the server .env; logic in proxy.ts.
-Every page rewrites to `/{lang}/coming-soon` unless the `tq_preview` cookie
-is set; `/preview?key=<key>` sets it (30 days). API routes are never gated.
-Launch = remove `COMING_SOON` from the server .env + `pm2 reload taqreer-prod`.
+`COMING_SOON` + `COMING_SOON_KEY` in the server .env; logic in proxy.ts. With
+`COMING_SOON=1` every page rewrites to `/{lang}/coming-soon` unless the
+`tq_preview` cookie is set; `/preview?key=<key>` sets it (30 days). API routes
+are never gated. **CURRENTLY OFF (`COMING_SOON=0`, 2026-06-14)** - the site is
+public, new registrations disabled as the interim guard (verify the Supabase
+signups toggle). Re-enable: set `COMING_SOON=1` in the server .env +
+`./deploy.sh --rebuild`.
 
-## Not done yet (Phase A leftovers)
+## Remaining (was "Phase A leftovers")
 
-- Supabase Auth: add `https://taqreer.ai/**` to redirect URLs (dashboard)
-  or Google login / email links won't return to prod.
-- Stripe webhook endpoint for `https://taqreer.ai/api/stripe/webhook`
-  (test mode) + put its signing secret in the server .env.
-- Inngest Cloud (event/signing keys) to replace the dev-server process.
-- Sentry/uptime monitoring accounts (user creates with dev@taqreer.ai).
-- Mail subdomain DNS (SPF/DKIM/DMARC) on GoDaddy for Resend.
+- ✅ Supabase Auth redirect URLs (`https://taqreer.ai/**`) - DONE.
+- ✅ Stripe LIVE webhook "Taqreer prod" → `/api/stripe/webhook` + signing secret
+  in the server .env - DONE (2026-06-14). Remaining billing go-live: mada +
+  Apple Pay, a real-card smoke test, premium-template gating.
+- ✅ Sentry wired + source maps. ✅ Mail DNS (SPF/DKIM/DMARC) in place for Resend.
+- Inngest Cloud (event/signing keys) - DEFERRED (no traffic; self-hosted fine).
+- Uptime monitoring (BetterStack) - pending, user creates with dev@taqreer.ai.
 
 ## Gotcha log
 
@@ -94,3 +105,17 @@ Launch = remove `COMING_SOON` from the server .env + `pm2 reload taqreer-prod`.
   502s everyone for a few seconds. Fix (in sites-enabled/taqreer `location /`):
   `proxy_buffer_size 32k; proxy_buffers 8 32k; proxy_busy_buffers_size 64k;`
   (+ `proxy_read_timeout 300s` for long generation streams). Reload nginx.
+
+- 2026-06-14 (Stripe products are mode-scoped): live + test mode have SEPARATE
+  Products/Prices. Code resolves a Price by stable `lookup_key`, so going live
+  required running `scripts/stripe-setup-products.ts --live` (the `--live` flag
+  is the explicit opt-in past the live-key guard) to create the live catalog,
+  else every checkout 404s on the lookup_key.
+
+- 2026-06-14 (Stripe test→live customer ids): `getOrCreateStripeCustomer`
+  (lib/billing/customer.ts) returns a user's stored `stripeCustomerId` WITHOUT
+  checking it's a live-mode id. A user carrying a TEST-mode `cus_...` (e.g.
+  migrated from dev) breaks LIVE checkout ("no such customer"). Taking an existing
+  user test→live: null out their Subscription `stripeCustomerId` /
+  `stripeSubscriptionId` / `stripePriceId` so checkout mints a fresh live
+  customer. (Moot now - prod was wiped to dev@taqreer.ai, reset clean.)
