@@ -24,11 +24,17 @@ export async function POST(request: Request) {
       image: user.user_metadata?.avatar_url ?? null,
     };
 
-    // Detect first-ever sync BEFORE the upsert so the one-time signup
-    // grant fires exactly when the row is born.
+    // Read the prior row (for the email-change check) AND its signup-grant
+    // state BEFORE the upsert. The signup grant keys off signupGrantedAt,
+    // not row-existence, so a row another path already created (dashboard /
+    // projects / invite) still gets granted on this first authenticated sync.
     const existing = await prisma.user.findUnique({
       where: { supabaseUserId: user.id },
-      select: { id: true, email: true },
+      select: {
+        id: true,
+        email: true,
+        creditAccount: { select: { signupGrantedAt: true } },
+      },
     });
 
     // `language` is intentionally NOT in `update` — a returning user keeps
@@ -44,10 +50,6 @@ export async function POST(request: Request) {
       select: { id: true, language: true },
     });
 
-    // One-time Free signup grant (billing plan Phase A). Guarded by
-    // signupGrantedAt server-side (idempotent even if two first syncs
-    // race) plus the email-alias + IP-velocity abuse checks. Never
-    // fails the sync - a blocked/failed grant just leaves 0 credits.
     // Email-change confirmation landed (settings flow, 2026-06-12): the
     // Supabase email differs from the mirrored Prisma row the upsert just
     // replaced - tell the user via the bell. Fire-and-forget.
@@ -62,8 +64,17 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!existing) {
-      await maybeGrantSignupCredits({
+    // One-time Free signup grant (billing plan Phase A). GATED ON
+    // signupGrantedAt (the idempotent "already granted" anchor), NOT on
+    // whether THIS request created the User row: four paths upsert the User
+    // (user-sync, dashboard, projects, invite) and the dashboard/invite
+    // ones create it WITHOUT granting, so keying off row-existence skipped
+    // the grant whenever one of those won the race. Idempotent under a row
+    // lock (fires once across racing syncs) and self-heals on a later sync
+    // if an earlier one missed it. Plus the email-alias + IP-velocity abuse
+    // checks. Never fails the sync - a blocked/failed grant just leaves 0.
+    if (!existing?.creditAccount?.signupGrantedAt) {
+      const grant = await maybeGrantSignupCredits({
         userId: dbUser.id,
         email: profile.email,
         ip:
@@ -74,41 +85,47 @@ export async function POST(request: Request) {
           "[user-sync] signup grant failed:",
           err instanceof Error ? err.message : String(err),
         );
+        return null;
       });
 
       // Welcome email — once, fire-and-forget (never blocks/fails the sync).
-      // Locale comes from the signup metadata (set by the signup form), else
-      // the account default. This is the first authenticated sync, so for
-      // confirm-email signups it lands AFTER confirmation, the right moment.
-      const cookieLocale = request.headers
-        .get("cookie")
-        ?.split(";")
-        .map((c) => c.trim())
-        .find((c) => c.startsWith(`${LOCALE_COOKIE}=`))
-        ?.slice(LOCALE_COOKIE.length + 1);
-      const welcomeLocale = isLocale(user.user_metadata?.lang)
-        ? (user.user_metadata.lang as string)
-        : isLocale(cookieLocale)
-          ? cookieLocale
-          : dbUser.language;
-      // Trusted origin for the email links (NOT the spoofable Host header).
-      const appOrigin =
-        process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai";
-      void getWelcomeTemplates()
-        .then((templates) =>
-          sendWelcome({
-            toEmail: profile.email,
-            locale: welcomeLocale,
-            appOrigin,
-            templates,
-          }),
-        )
-        .catch((err) =>
-          console.error(
-            "[user-sync] welcome email failed:",
-            err instanceof Error ? err.message : String(err),
-          ),
-        );
+      // Gated on the grant actually landing (granted > 0): that signal is
+      // atomic under the grant's row lock, so it never double-sends across
+      // racing first-syncs, and a farming-blocked account (0 credits) gets
+      // none. Locale comes from the signup metadata (set by the signup
+      // form), else the account default. This is the first authenticated
+      // sync, so confirm-email signups get it AFTER confirmation.
+      if (grant && grant.granted > 0) {
+        const cookieLocale = request.headers
+          .get("cookie")
+          ?.split(";")
+          .map((c) => c.trim())
+          .find((c) => c.startsWith(`${LOCALE_COOKIE}=`))
+          ?.slice(LOCALE_COOKIE.length + 1);
+        const welcomeLocale = isLocale(user.user_metadata?.lang)
+          ? (user.user_metadata.lang as string)
+          : isLocale(cookieLocale)
+            ? cookieLocale
+            : dbUser.language;
+        // Trusted origin for the email links (NOT the spoofable Host header).
+        const appOrigin =
+          process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai";
+        void getWelcomeTemplates()
+          .then((templates) =>
+            sendWelcome({
+              toEmail: profile.email,
+              locale: welcomeLocale,
+              appOrigin,
+              templates,
+            }),
+          )
+          .catch((err) =>
+            console.error(
+              "[user-sync] welcome email failed:",
+              err instanceof Error ? err.message : String(err),
+            ),
+          );
+      }
     }
 
     // Seed the locale cookie from the account language so a login on a NEW

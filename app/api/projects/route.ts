@@ -433,7 +433,7 @@ export async function POST(request: Request) {
   // it).
   const existingUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true },
+    select: { id: true, creditAccount: { select: { signupGrantedAt: true } } },
   });
   const dbUser = await prisma.user.upsert({
     where: { supabaseUserId: user.id },
@@ -450,11 +450,21 @@ export async function POST(request: Request) {
       plan: "free",
     },
   });
-  if (!existingUser) {
+  // Gate on signupGrantedAt (the idempotent grant anchor), NOT row-
+  // existence - another path (dashboard / user-sync / invite) may have
+  // created the User row first, which would otherwise skip the grant.
+  if (!existingUser?.creditAccount?.signupGrantedAt) {
     await maybeGrantSignupCredits({
       userId: dbUser.id,
       email: dbUser.email,
       ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    }).catch((err) => {
+      // A grant hiccup must never fail project creation - the next
+      // authenticated user-sync grants idempotently.
+      console.error(
+        "[projects] signup grant failed:",
+        err instanceof Error ? err.message : String(err),
+      );
     });
   }
 

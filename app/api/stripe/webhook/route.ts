@@ -191,8 +191,18 @@ export async function POST(request: Request) {
         );
         if (!prismaUserId) break;
         const plan = planFromSubscriptionObject(sub);
-        // Mirror status + cancel flag; if the active plan changed
-        // (immediate upgrade), grant the new cycle.
+        // Read the CURRENTLY stored plan BEFORE mirroring, so we can tell a
+        // real mid-cycle plan change (upgrade) apart from a cancel / payment-
+        // method / flag edit. This event fires on ALL of those, but only an
+        // actual plan change may re-grant: grantSubscriptionCycle SETS the
+        // balance to the full allotment, so re-granting on a cancel refilled
+        // every credit the user had already spent (the cancel-refills
+        // exploit). First grant: checkout.session.completed. Renewals:
+        // invoice.payment_succeeded.
+        const before = await prisma.subscription.findUnique({
+          where: { userId: prismaUserId },
+          select: { plan: true },
+        });
         await prisma.subscription.update({
           where: { userId: prismaUserId },
           data: {
@@ -205,7 +215,7 @@ export async function POST(request: Request) {
             ...(plan ? { plan } : {}),
           },
         });
-        if (plan) {
+        if (plan && plan !== before?.plan) {
           await grantSubscriptionCycle({
             userId: prismaUserId,
             plan,
