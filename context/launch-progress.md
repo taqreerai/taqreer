@@ -75,6 +75,30 @@ DONE:
   cleanly (no more Sentry noise). Remaining: (c) sendDefaultPii + Session
   Replay are ON — revisit privacy in Phase B legal.
 
+- Shipped 2026-06-14 (PR #60, dev→main, CodeRabbit-reviewed): a 14-item polish
+  batch + an editor-layout rework.
+  • Pricing tier copy now matches the actual presets (Free = fast Opus, not
+    "Sonnet"; same gpt-image model across all tiers). **Max "processing priority"
+    is now REAL**: Inngest `priority.run` = `tier=='max' ? 120 : 0` on
+    deck-generate + partial-regen; `tier` is stamped on the event at enqueue from
+    the project OWNER's plan (`tierForUser`, lib/inngest-helpers). Effective once
+    on Inngest Cloud / under load.
+  • Credit graphs unified to REMAINING (avatar ring + profile menu + cards);
+    `/plans` now renders the shared `PlanUsage` card (hideAction) like `/billing`.
+  • Cookie banner: explicit Accept / Reject persisted in `tq_cookie_consent`
+    (1y); the [lang] layout resolves consent on the SERVER + passes
+    `initialDecided` (no first-paint flip, no client cookie parsing).
+  • Editor: Slides/Layers rails collapsible (auto-collapse <1280px) + fixed to a
+    page band (equal height, centered) with bare edge-arrow toggles; canvas
+    width-capped at 1280px so it can't balloon into the header. Undo/redo forced
+    back-left/forward-right; ⌘Z/⌘⇧Z forward out of the editor iframe to the local
+    stack.
+  • Project delete invalidates the Router Cache (router.refresh) so a deleted
+    deck can't reappear from a stale RSC payload on navigation.
+  • Polish: favicon = the email mark, 404 = landing aurora (no swiss lines),
+    landing footer full-bleed, decks pill = CTA blue, one-word AR generate CTA,
+    "you can downgrade anytime" Max footnote, dropped "links" from the AR hero.
+
 REMAINING in Phase A:
 - Inngest Cloud account (dev@taqreer.ai) → event+signing keys into server
   .env, retire the pm2 dev-server process. Free tier suffices.

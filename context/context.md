@@ -46,9 +46,11 @@ worklist; this one is the stable overview.
 - **Coming-soon gate**: every page shows coming-soon until
   `/preview?key=taqreer2025` sets the `tq_preview` cookie. Flag lives in the
   server env (`COMING_SOON=1`); launch = remove it + reload.
-- **Deploy = `./deploy.sh`** — rsyncs the LOCAL tree (git-free; local folder is
-  the source of truth), builds on the server, atomic swap, pm2 reload, then
-  pushes `dev` AND `main` to GitHub so the repo mirrors production.
+- **Deploy = `./deploy.sh`**: GIT PUSH-TO-DEPLOY (since 2026-06-14): pushes
+  `dev`+`main` to GitHub, then `git push prod dev:main` to the box's bare repo;
+  the tracked post-receive hook checks `main` out, runs npm ci + prisma migrate,
+  builds into `.next-build`, atomic-swaps to `.next-deploy`, pm2 reload,
+  health-checks `/ar`. The pushed `main` SHA is exactly what prod runs.
 - **Review policy by size** (user direction 2026-06-13): small fixes deploy
   straight from `dev` (auto-merged to main); big changes go through a
   `dev → main` PR for CodeRabbit BEFORE deploying.
@@ -66,6 +68,7 @@ Tiers (renamed 2026-06-11; monthly reset, no rollover; Free = one-time grant):
 | Presets | opus-fast | + opus-balanced | + fable-low | all |
 | Flows | create only | all 4 | all | all |
 | Premium templates | ✗ | ✗ | ✓ | ✓ |
+| Processing priority | ✗ | ✗ | ✗ | ✓ |
 
 - Presets (2026-06-12 lineup): **opus-fast** (default, 100+10/slide, ~$0.10
   COGS) · **opus-balanced** (400+22, ~$1.30 measured) · **fable-low**
@@ -74,6 +77,12 @@ Tiers (renamed 2026-06-11; monthly reset, no rollover; Free = one-time grant):
   expiry), per-user row lock, idempotent, pointer-only balance broadcasts.
   Sim 30/30 + real-money verified. **Auto-upgrade DISABLED in code.**
 - Top-ups are subscriber-only refills (free users see subscribe CTAs).
+- **Processing priority** (Max perk, built 2026-06-14): Inngest `priority.run`
+  gives `tier == 'max'` generations + regens a +120s scheduling boost under
+  queue contention (effective on Inngest Cloud / under load). `tier` is stamped
+  on the event at enqueue from the project OWNER's plan (`tierForUser`,
+  lib/inngest-helpers). Image quality is identical across tiers (gpt-image-2),
+  and the tier feature copy reflects the actual presets.
 - Stripe: Checkout Sessions `ui_mode: elements` — our own themed form on
   `/checkout` AND inside the gated-preset **UpgradeModal**
   (`redirect:'if_required'`, payment completes in-modal). Webhook → ledger
@@ -107,8 +116,15 @@ editor (enabled), no remount. In the editor:
   content save** (no new version); the toolbox save icon reflects dirty state.
 - **AI path**: full regenerate or per-slide partial regen (a comment flagged
   `forAi`); restore from per-slide history.
-- Undo/redo is a client stack; history = checkpoints on Save + 10-min idle.
-- Realtime events drive **in-place state updates, never `router.refresh`**.
+- Undo/redo is a client stack (toolbar order forced back-left/forward-right);
+  ⌘Z / ⌘⇧Z work from inside the editor iframe (`SlideEditor` forwards them to the
+  local stack). History = checkpoints on Save + 10-min idle.
+- Both floating rails (Slides right, Layers left) are **collapsible** (bare
+  edge-arrow toggles, auto-collapse <1280px), fixed to one page band
+  `[RAIL_TOP, vh-RAIL_BOTTOM]` so they're equal-height + centered; the canvas is
+  width-capped (`CANVAS_MAX_WIDTH` 1280px) so it can't balloon into the header.
+- Realtime events drive **in-place state updates, never `router.refresh`**
+  (deletes call `router.refresh` to invalidate the stale-RSC Router Cache).
 - Header strip = full-width `TopUtilityBar` with avatar (dashboard replica),
   tier pill, bell, export/share opening downward.
 
