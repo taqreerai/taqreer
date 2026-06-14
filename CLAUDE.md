@@ -217,6 +217,20 @@ npx inngest-cli@latest dev   # Inngest dev server :8288
 supabase), `ANTHROPIC_API_KEY`, the `NEXT_PUBLIC_SUPABASE_*` + service-role keys,
 `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` (+ `INNGEST_DEV=1`), Stripe + Sentry.
 
+**Everyday commands** (there is NO test runner — don't hunt for one):
+- `npm run dev` → `next dev` :3000 via scripts/dev.mjs, which deletes an empty
+  shell `ANTHROPIC_API_KEY` so .env.local wins. `npm run build` · `npm start`.
+- `npm run lint` → `eslint .` (flat config eslint.config.mjs; `set-state-in-effect`
+  is enforced as an error).
+- Prisma: `npx prisma generate` after schema edits · `npx prisma migrate dev
+  --name x` to author a local migration (`migrate deploy` only applies existing
+  ones) · `npx prisma studio`. Restart the dev server after any schema change
+  (stale in-memory client).
+- One-off ops run via `tsx scripts/*.ts` against the current `DATABASE_URL`:
+  `credit-sim.ts` (ledger sim) · `stripe-setup-products.ts` (`--live` opts into
+  live mode) · `wipe-decks.ts` · `rerender-thumbnails.ts` ·
+  `cleanup-stale-projects.ts` · `setup-storage.ts` · `build-supabase-emails.ts`.
+
 ---
 
 ## Gotchas
