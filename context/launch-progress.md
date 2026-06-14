@@ -73,7 +73,9 @@ DONE:
   (verified: 1028 server + 135 client files). Bot-scanner 500s fixed:
   getDictionary now notFound()s on an invalid locale → /xxx.php scans 404
   cleanly (no more Sentry noise). Remaining: (c) sendDefaultPii + Session
-  Replay are ON — revisit privacy in Phase B legal.
+  Replay are ON — revisit privacy in Phase B legal. PRODUCTION-ONLY since
+  2026-06-14: Sentry.init is skipped off-prod, so local-dev errors never reach
+  the project (see the PR #61 entry below).
 
 - Shipped 2026-06-14 (PR #60, dev→main, CodeRabbit-reviewed): a 14-item polish
   batch + an editor-layout rework.
@@ -98,6 +100,19 @@ DONE:
   • Polish: favicon = the email mark, 404 = landing aurora (no swiss lines),
     landing footer full-bleed, decks pill = CTA blue, one-word AR generate CTA,
     "you can downgrade anytime" Max footnote, dropped "links" from the AR hero.
+
+- Shipped 2026-06-14 (PR #61, dev→main, CodeRabbit-clean, deployed):
+  • Mimic GPT images (opt-in): a toggle on the reference-design card; with it ON,
+    Claude recreates the reference deck's imagery via gpt-image (same
+    subject/scene/mood) and fills empty placeholders with slide-relevant images
+    (deck-generate MIMIC_IMG_ADDENDUM; isImagesMode now allows mimic, enhance +
+    data still excluded). Default OFF keeps the mimic baseline unchanged. VERIFIED
+    working end-to-end by the user.
+  • Sentry hard-gated to PRODUCTION: skip Sentry.init entirely off-prod (client +
+    server + edge configs + instrumentation.register early-return) so local-dev
+    HMR transients can't reach the project; `enabled:false` alone had let a
+    server-side onRequestError leak. The stray dev "topOffset is not defined"
+    issue was resolved.
 
 REMAINING in Phase A:
 - Inngest Cloud account (dev@taqreer.ai) → event+signing keys into server

@@ -193,7 +193,7 @@ All four creation flows share the 3-card layout (content / brand / output) and c
 
 - **/create** — text OR file (PDF/PPTX/DOCX/TXT). File → `POST /api/extract` then poll `/api/extract/[jobId]`. `source.kind = "scratch"`.
 - **/enhance** — PDF/PPTX upload w/ XHR progress; returns fonts/colors/pageCount/language/textPerSlide; `source.kind = "enhance"` (preserve content + identity, redesign).
-- **/mimic** — design reference → Anthropic doc; `source.kind = "mimic"`. `/use-template/[id]` = same flow seeded from a template.
+- **/mimic** — design reference → Anthropic doc; `source.kind = "mimic"`. `/use-template/[id]` = same flow seeded from a template. Opt-in GPT images (the AIImagesPanel toggle): when on, Claude recreates the reference's imagery + fills empty placeholders via gpt-image (deck-generate `MIMIC_IMG_ADDENDUM`).
 - **/datasheet** — xlsx/csv → `POST /api/datasheet/parse` (sync) → markdown; `source.kind = "data"`.
 
 **Generation prompt** lives in [inngest/functions/deck-generate.ts](inngest/functions/deck-generate.ts) — `SYSTEM_PROMPT_CREATE_HTML` (+ mimic/enhance addenda); LANGUAGE directive per flow; cover carries `data-deck-title` → `Project.title`.
