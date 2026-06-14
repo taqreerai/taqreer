@@ -172,11 +172,11 @@ cookies). **Remaining**: uptime ping, Stripe test webhook, minor DB cleanups.
 fine at zero volume.)
 
 **Phase B (money + law, all BLOCKERS)**: Stripe live keys + mada/Apple Pay
-+ prod webhook + real-card smoke + premium-template gating; VAT = DEFER while no
-real sales, then a Merchant of Record carries ALL VAT/sales-tax worldwide
-(evaluate Stripe Managed Payments + Paddle - user likes Paddle; pick on checkout
-fit + fees; Stripe Tax alone doesn't shift liability; decision 2026-06-14, not a
-blocker);
++ prod webhook + real-card smoke + premium-template gating; VAT = STAY ON STRIPE
+(decision 2026-06-14, revised) - DEFER while no real sales, then enable Stripe Tax
+(calc/collect/file) + register where required as the seller of record, keeping our
+own checkout. MoR (Paddle / Stripe Managed Payments) shelved as a fallback only if
+direct VAT compliance later proves too burdensome; not a blocker;
 legal pages (ToS/Privacy/Refund, bilingual + cookie banner — none exist yet);
 email deliverability (SPF/DKIM/DMARC + branded bilingual Supabase auth
 templates). **Phase C (hardening)**: rate limiting (NONE exists — share-invite

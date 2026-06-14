@@ -136,31 +136,26 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   verification, verify inside the embedded ui_mode:elements form), prod webhook,
   real-card smoke test. Toggle Stripe's own receipts + payment-failed emails ON
   (don't own these). Fable pricing decision (600+80 vs keep 500+28) before live.
-- VAT / tax: DECISION (2026-06-14) - DEFER while there are no real sales (test
-  mode + coming-soon gate = zero taxable supplies = zero exposure; a ZATCA
-  non-resident VAT application was started then abandoned - premature). When real
-  revenue arrives, move to a MERCHANT OF RECORD (MoR) so the platform becomes
-  seller-of-record and handles ALL VAT/sales-tax registration + collection +
-  remittance worldwide (KSA 15% / UAE 5% / EU / US states), so we never deal with
-  it directly. CANDIDATES (evaluate both at the trigger, pick on checkout fit +
-  fees): STRIPE MANAGED PAYMENTS (Stripe's own MoR / "liability shifting" - keeps
-  us in the Stripe ecosystem, least migration) and PADDLE (user likes it
-  2026-06-14 - mature MoR, good branded inline checkout). Lemon Squeezy
-  (Stripe-owned) a third option.
-    • Stripe Tax alone is NOT enough: it automates calc + collect + filing (US
-      direct via TaxJar, global via partners) but you STAY the registered, liable
-      merchant and still register yourself in most markets (incl. KSA/UAE). Only an
-      MoR (Stripe Managed Payments / Paddle) shifts the liability off us.
+- VAT / tax: DECISION (2026-06-14, revised) - STAY ON STRIPE. DEFER VAT while
+  there are no real sales (test mode = zero taxable supplies = zero exposure; a
+  ZATCA non-resident VAT application was started then abandoned - premature). When
+  real revenue arrives, handle tax ON STRIPE: enable STRIPE TAX (auto calc +
+  collect + file; US direct via TaxJar, global via partners) and register where
+  required as triggered (non-resident KSA 15% / UAE 5% / EU / US states). We stay
+  the registered, liable seller-of-record and keep our own pixel-exact Stripe
+  Elements checkout.
     • Background: digital VAT is DESTINATION-based (charged where the customer is,
       not the seller), so a US LLC selling to KSA/UAE CONSUMERS can owe a
-      non-resident registration. An MoR offloads the whole thing.
-    • Trade-off (ANY MoR, incl. Stripe Managed Payments): the payment/checkout
-      surface becomes the MoR's managed component, not our pixel-exact Stripe
-      Elements form, and fees are higher (~5%+ vs ~2.9%). Verify the checkout it
-      gives us + account availability before committing.
-    • Trigger to execute the switch: monthly revenue crosses $X, OR the first
-      customer who needs a real tax invoice. Keep clean per-country sales records
-      meanwhile. NOT a launch blocker; launch on the current Stripe setup.
+      non-resident registration. Stripe Tax computes + collects it; we register +
+      remit (or lean on a filing partner).
+    • MERCHANT OF RECORD (Paddle / Stripe Managed Payments / Lemon Squeezy) was
+      considered (user liked Paddle 2026-06-14) and DROPPED for now: an MoR would
+      shift ALL tax liability off us but replaces our checkout with its managed
+      component and costs ~5%+ vs ~2.9%. Kept on the shelf as a fallback ONLY if
+      direct VAT compliance later proves too burdensome; NOT the plan.
+    • Trigger to act: monthly revenue crosses $X, OR the first customer who needs
+      a real tax invoice. Keep clean per-country sales records meanwhile. NOT a
+      launch blocker; launch on the current Stripe setup.
 - ✅ LIVE (2026-06-13, PR #59 merged + deployed): bilingual ToS/Privacy/Refund
   (lib/legal/content.ts) + cookie banner + contact form (Resend department
   routing) + shared SiteFooter + gate-exempt public routes (incl. trailing-slash
