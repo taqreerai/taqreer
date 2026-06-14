@@ -76,13 +76,21 @@ export class TemplateUseError extends Error {
 export const PRICING_HREF = "/#pricing";
 
 /**
- * If `err` is the premium-gate 402 from the use route (premium template,
- * non-Pro user), send the user to the pricing section and return true
- * (handled). Otherwise return false so the caller can fall through to its
- * own error handling. Shared by every template "use" CTA.
+ * True when `err` is the premium-gate 402 from the use route (premium
+ * template, non-Pro user). In-app callers open the UpgradeModal in place
+ * on this so the user's journey is never interrupted.
+ */
+export function isPremiumGate(err: unknown): boolean {
+  return err instanceof TemplateUseError && err.status === 402;
+}
+
+/**
+ * Marketing-landing variant: on the premium-gate 402, scroll to the
+ * landing pricing section (an in-page anchor, not an app navigation) and
+ * return true (handled). In-app surfaces use isPremiumGate + UpgradeModal.
  */
 export function redirectToPricingIfGated(err: unknown): boolean {
-  if (err instanceof TemplateUseError && err.status === 402) {
+  if (isPremiumGate(err)) {
     window.location.assign(PRICING_HREF);
     return true;
   }

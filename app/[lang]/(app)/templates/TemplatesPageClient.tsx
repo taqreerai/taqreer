@@ -35,8 +35,9 @@ import { BulkDeleteConfirmDialog } from "@/components/app/BulkDeleteConfirmDialo
 import { useRouter } from "next/navigation";
 import {
   prepareTemplateUse,
-  redirectToPricingIfGated,
+  isPremiumGate,
 } from "@/lib/mimic/template-seed";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import type { SlideFormat } from "@/lib/schema/slide";
 import type { TemplateForBrowse } from "./types";
 
@@ -75,6 +76,9 @@ export function TemplatesPageClient({
   // navigation (no need; the page unmounts) or by the catch on
   // failure (releases the gate so the user can retry).
   const [useBusy, setUseBusy] = useState(false);
+  // Premium-template gate (402): open the upgrade modal in place over the
+  // lightbox instead of navigating away, so the user keeps their context.
+  const [gateOpen, setGateOpen] = useState(false);
   // Multi-select to delete (own templates only, 2026-06-12).
   const router = useRouter();
   const sel = useMultiSelect();
@@ -92,8 +96,13 @@ export function TemplatesPageClient({
       await prepareTemplateUse("template", preview.id);
       window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
-      // 402 = premium template, user isn't on Pro → route to pricing.
-      if (redirectToPricingIfGated(err)) return;
+      // 402 = premium template, user isn't on Pro → upgrade in place
+      // (modal stacks over the lightbox; their journey is preserved).
+      if (isPremiumGate(err)) {
+        setGateOpen(true);
+        setUseBusy(false);
+        return;
+      }
       console.warn("[TemplatesPageClient] use prep failed", err);
       setUseBusy(false);
     }
@@ -329,6 +338,11 @@ export function TemplatesPageClient({
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}
+      />
+      <UpgradeModal
+        open={gateOpen}
+        requiredTier="pro"
+        onClose={() => setGateOpen(false)}
       />
     </>
   );

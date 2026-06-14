@@ -25,13 +25,11 @@ import { checkoutAppearance, CHECKOUT_FONTS } from "@/lib/billing/appearance";
 
 export function EmbeddedCheckout({
   lookupKey,
-  ctx = null,
   // Modal mode: confirm with redirect:'if_required' and report success
   // to the caller instead of bouncing through /checkout/return.
   onSuccess,
 }: {
   lookupKey: string;
-  ctx?: "tab" | null;
   onSuccess?: () => void;
 }) {
   const { locale } = useLocale();
@@ -45,7 +43,7 @@ export function EmbeddedCheckout({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ lookupKey, ctx }),
+      body: JSON.stringify({ lookupKey }),
     });
     if (res.status === 401) {
       router.push(localizedHref("/login", locale));
@@ -55,7 +53,7 @@ export function EmbeddedCheckout({
     const data = (await res.json()) as { clientSecret?: string };
     if (!data.clientSecret) throw new Error("no client secret");
     return data.clientSecret;
-  }, [lookupKey, ctx, locale, router]);
+  }, [lookupKey, locale, router]);
 
   // Provider options are init-only and the appearance reads computed
   // CSS tokens from `document`, so build them AFTER mount (client
@@ -79,7 +77,7 @@ export function EmbeddedCheckout({
       adaptivePricing: { allowed: true },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookupKey, ctx]);
+  }, [lookupKey]);
 
   // Theme reactivity: the toggle flips the `light` class on <html>;
   // rebuild the appearance from the new computed tokens while KEEPING

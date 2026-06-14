@@ -11,10 +11,8 @@ type State = "processing" | "success" | "failed";
 
 export function ReturnClient({
   sessionId,
-  ctx = null,
 }: {
   sessionId: string | null;
-  ctx?: "tab" | null;
 }) {
   const dict = useDict();
   const { locale } = useLocale();
@@ -28,16 +26,12 @@ export function ReturnClient({
   // here.
   useEffect(() => {
     if (state !== "success") return;
-    // ctx=tab → this checkout ran in its own tab (credit-gate flow);
-    // the user's work is in the ORIGINAL tab, so we offer "close this
-    // tab" instead of yanking them to the dashboard.
-    if (ctx === "tab") return;
     const id = setTimeout(
       () => router.replace(localizedHref("/dashboard", locale)),
       1500,
     );
     return () => clearTimeout(id);
-  }, [state, router, locale, ctx]);
+  }, [state, router, locale]);
 
   useEffect(() => {
     if (!sessionId) {
@@ -80,18 +74,7 @@ export function ReturnClient({
             <NoticeCard
               icon="check"
               title={t.returnSuccess}
-              body={ctx === "tab" ? t.returnCloseBody : t.returnSuccessBody}
-              actions={
-                ctx === "tab" ? (
-                  <button
-                    type="button"
-                    onClick={() => window.close()}
-                    className="btn-gradient px-5 py-2.5 text-center text-sm"
-                  >
-                    {t.closeTab}
-                  </button>
-                ) : undefined
-              }
+              body={t.returnSuccessBody}
             />
           ) : (
             <NoticeCard

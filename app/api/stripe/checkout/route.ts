@@ -39,16 +39,11 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     lookupKey?: string;
-    ctx?: string;
   } | null;
   const spec = body?.lookupKey ? specByLookupKey(body.lookupKey) : undefined;
   if (!spec) {
     return NextResponse.json({ error: "Unknown price" }, { status: 400 });
   }
-  // ctx=tab: checkout opened in a fresh tab from the credit-gate
-  // dialog; the return page then offers "close this tab" instead of
-  // redirecting (the original tab keeps the user's flow state).
-  const ctx = body?.ctx === "tab" ? "tab" : null;
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
@@ -113,7 +108,7 @@ export async function POST(request: Request) {
             },
           },
         }),
-    return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}${ctx ? "&ctx=tab" : ""}`,
+    return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
     allow_promotion_codes: true,
   });
 

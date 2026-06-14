@@ -14,10 +14,8 @@ import { EmbeddedCheckout } from "@/components/billing/EmbeddedCheckout";
 
 export function CheckoutClient({
   lookupKey,
-  ctx = null,
 }: {
   lookupKey: string | null;
-  ctx?: "tab" | null;
 }) {
   const dict = useDict();
   const { locale, dir } = useLocale();
@@ -54,7 +52,7 @@ export function CheckoutClient({
         </h1>
         <p className="mb-8 mt-2 text-sm text-muted">{t.subtitle}</p>
 
-        <EmbeddedCheckout lookupKey={lookupKey} ctx={ctx} />
+        <EmbeddedCheckout lookupKey={lookupKey} />
       </div>
     </div>
   );

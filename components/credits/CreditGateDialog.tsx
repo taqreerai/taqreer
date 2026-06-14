@@ -16,11 +16,9 @@
 // per TemplateDeleteConfirmDialog.
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
-import { localizedHref } from "@/lib/i18n/navigation";
 import { NoticeCard } from "@/components/common/NoticeCard";
 import { TOPUP_PACKS } from "@/lib/credits/cost";
 import { formatCredits, useCreditBalance } from "@/lib/credits/store";
@@ -69,7 +67,7 @@ export function CreditGateDialog({
   allowReduce?: boolean;
 }) {
   const dict = useDict();
-  const { locale, dir } = useLocale();
+  const { dir } = useLocale();
   const t = dict.components.creditGate;
   const open = gate !== null;
   // Top-ups are a SUBSCRIBER refill (user direction 2026-06-12). Free
@@ -93,8 +91,6 @@ export function CreditGateDialog({
   }, [open, onClose]);
 
   if (typeof document === "undefined") return null;
-
-  const pricingHref = localizedHref("/plans", locale);
 
   // Smallest pack that covers the gap (falls back to the largest).
   const coveringPack = gate?.options
@@ -251,13 +247,13 @@ export function CreditGateDialog({
                   }
                   actions={
                     <>
-                      <Link
-                        href={pricingHref}
-                        onClick={onClose}
-                        className="btn-gradient px-5 py-2.5 text-center text-sm no-underline"
+                      <button
+                        type="button"
+                        onClick={() => setUpgrade({ lookupKey: null })}
+                        className="btn-gradient px-5 py-2.5 text-center text-sm"
                       >
                         {t.seePlans}
-                      </Link>
+                      </button>
                       <button
                         type="button"
                         onClick={onClose}
