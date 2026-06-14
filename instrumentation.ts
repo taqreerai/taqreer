@@ -5,6 +5,9 @@
 import * as Sentry from "@sentry/nextjs";
 
 export async function register() {
+  // PRODUCTION ONLY: don't even load the server/edge configs off-prod, so no
+  // client exists locally and onRequestError below stays a no-op.
+  if (process.env.NODE_ENV !== "production") return;
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
   }

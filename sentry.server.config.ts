@@ -2,19 +2,20 @@
 // instrumentation.ts when NEXT_RUNTIME === "nodejs". DSN from SENTRY_DSN.
 import * as Sentry from "@sentry/nextjs";
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
+// PRODUCTION ONLY (see instrumentation-client.ts). Skip init entirely off-prod
+// so local-dev HMR transients ("X is not defined" mid-edit, stale Turbopack
+// chunks) can never reach the project, even via onRequestError.
+if (process.env.NODE_ENV === "production") {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV,
 
-  // Report from PRODUCTION only: local-dev HMR transients ("X is not defined"
-  // mid-edit, stale Turbopack chunks) were flooding the project. Still tag env.
-  enabled: process.env.NODE_ENV === "production",
-  environment: process.env.NODE_ENV,
+    sendDefaultPii: true,
+    tracesSampleRate: 0.1,
 
-  sendDefaultPii: true,
-  tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
+    // Attach local variable values to stack frames for richer server traces.
+    includeLocalVariables: true,
 
-  // Attach local variable values to stack frames for richer server traces.
-  includeLocalVariables: true,
-
-  enableLogs: true,
-});
+    enableLogs: true,
+  });
+}

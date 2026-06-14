@@ -5,31 +5,32 @@
 // lands if we want a leaner footprint.
 import * as Sentry from "@sentry/nextjs";
 
-Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+// PRODUCTION ONLY. We skip init entirely off-prod instead of relying on
+// `enabled: false` - a long-running dev server's onRequestError still leaked a
+// local-HMR transient into the project. With no init there is no client, so
+// nothing can send and the router-transition export below is a safe no-op.
+if (process.env.NODE_ENV === "production") {
+  Sentry.init({
+    dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    environment: process.env.NODE_ENV,
 
-  // Report from PRODUCTION only (see sentry.server.config.ts): local-dev HMR
-  // transients were flooding the project. Still tag env.
-  enabled: process.env.NODE_ENV === "production",
-  environment: process.env.NODE_ENV,
+    sendDefaultPii: true,
 
-  sendDefaultPii: true,
+    tracesSampleRate: 0.1,
 
-  // 100% traces in dev, 10% in production.
-  tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
+    // Session Replay: 10% of all sessions, 100% of sessions with an error.
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
 
-  // Session Replay: 10% of all sessions, 100% of sessions with an error.
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1.0,
+    enableLogs: true,
 
-  enableLogs: true,
+    // Replay with the project's existing privacy masking (carried over from the
+    // old sentry.client.config.ts): never record text content or media.
+    integrations: [
+      Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
+    ],
+  });
+}
 
-  // Replay with the project's existing privacy masking (carried over from the
-  // old sentry.client.config.ts): never record text content or media.
-  integrations: [
-    Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
-  ],
-});
-
-// App Router navigation instrumentation.
+// App Router navigation instrumentation. No-op without an initialised client.
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

@@ -2,15 +2,15 @@
 // instrumentation.ts when NEXT_RUNTIME === "edge". DSN from SENTRY_DSN.
 import * as Sentry from "@sentry/nextjs";
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
+// PRODUCTION ONLY (see instrumentation-client.ts). Skip init entirely off-prod.
+if (process.env.NODE_ENV === "production") {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV,
 
-  // Report from PRODUCTION only (see sentry.server.config.ts). Still tag env.
-  enabled: process.env.NODE_ENV === "production",
-  environment: process.env.NODE_ENV,
+    sendDefaultPii: true,
+    tracesSampleRate: 0.1,
 
-  sendDefaultPii: true,
-  tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
-
-  enableLogs: true,
-});
+    enableLogs: true,
+  });
+}
