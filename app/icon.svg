@@ -1,8 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- Favicon = the email logo box: white e-bars mark centered in a dark rounded
-       tile with a muted hairline border (matches public/email/icon-box.png). -->
-  <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" fill="#0A0A0A" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>
-  <g transform="translate(16.5 16.5) scale(0.31)" fill="#fff">
-    <path d="M85.48,21.43H14.52V5.7h70.97v15.73ZM85.48,78.57H14.52v15.73h70.97v-15.73ZM65.63,42.13H14.52v15.73h51.12v-15.73Z"/>
-  </g>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 63 63">
+  <defs>
+    <style>
+      .st0 {
+        fill: #fff;
+      }
+
+      .st1 {
+        fill: #0a0a0a;
+      }
+    </style>
+  </defs>
+  <rect class="st1" x="0" y="0" width="63" height="63" rx="13.14" ry="13.14"/>
+  <path class="st0" d="M45.5,20.23h-28v-6.21h28.01v6.21h0ZM45.5,42.77h-28v6.21h28.01v-6.21h0ZM37.67,28.39h-20.17v6.21h20.17v-6.21h0Z"/>
 </svg>
