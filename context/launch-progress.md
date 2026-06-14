@@ -142,9 +142,11 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
   revenue arrives, move to a MERCHANT OF RECORD (MoR) so the platform becomes
   seller-of-record and handles ALL VAT/sales-tax registration + collection +
   remittance worldwide (KSA 15% / UAE 5% / EU / US states), so we never deal with
-  it directly. EVALUATE STRIPE MANAGED PAYMENTS FIRST (Stripe's own MoR /
-  "liability shifting" - keeps us in the Stripe ecosystem, least migration);
-  Paddle or Lemon Squeezy (Stripe-owned) as the fallback.
+  it directly. CANDIDATES (evaluate both at the trigger, pick on checkout fit +
+  fees): STRIPE MANAGED PAYMENTS (Stripe's own MoR / "liability shifting" - keeps
+  us in the Stripe ecosystem, least migration) and PADDLE (user likes it
+  2026-06-14 - mature MoR, good branded inline checkout). Lemon Squeezy
+  (Stripe-owned) a third option.
     • Stripe Tax alone is NOT enough: it automates calc + collect + filing (US
       direct via TaxJar, global via partners) but you STAY the registered, liable
       merchant and still register yourself in most markets (incl. KSA/UAE). Only an
