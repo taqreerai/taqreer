@@ -187,8 +187,9 @@ export async function POST(
         // Phase 16.D — actor for `slide.regen.{started,finished}`
         // self-echo skip in DeckView's broadcast handlers.
         actorPrismaUserId: access.user.prismaId,
-        // Max-tier processing priority (see deck-regenerate-partial `priority.run`).
-        tier: await tierForUser(access.user.prismaId),
+        // Max-tier processing priority is the project OWNER's entitlement (they
+        // are billed for the run), so read the owner's tier, not the actor's.
+        tier: await tierForUser(access.project.user.id),
       },
     });
   } catch (error) {

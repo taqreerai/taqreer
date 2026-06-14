@@ -33,8 +33,8 @@ import type { PresenceViewer } from "@/lib/realtime/project-channel";
 // symmetrically between them). 280 — the nav's thumbnails size to this width.
 export const SLIDE_NAV_WIDTH = 280;
 
-// Studio: both floating rails anchor to this fixed page band (NOT the canvas top
-// — that's vertically centered, which pushed the rails low). `top: RAIL_TOP` +
+// Studio: both floating rails anchor to this fixed page band (NOT the canvas top,
+// which is vertically centered and pushed the rails low). `top: RAIL_TOP` +
 // `bottom: RAIL_BOTTOM` gives both rails the SAME height, spanning the usable
 // page below the header strip and above the bottom action bar.
 export const RAIL_TOP = 72; // clears the fixed header strip (~48px) + air
@@ -264,6 +264,10 @@ export function SlideNavSidebar({
 
   return (
     <aside
+      // Collapsed → off-screen: take it out of the tab order + a11y tree too,
+      // not just pointer events (CR), so hidden controls can't be focused.
+      inert={collapsed}
+      aria-hidden={collapsed || undefined}
       dir={panelDir}
       aria-label={dict.editor.nav.slidesSidebar}
       // Glass surface — built from primitives (no `.surface-card`

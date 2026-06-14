@@ -571,7 +571,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         window.addEventListener("mouseup", onWindowMarqueeCancel);
       };
 
-      // ⌘Z / ⌘⇧Z bridge — keys pressed while focus is inside the iframe never
+      // ⌘Z / ⌘⇧Z bridge: keys pressed while focus is inside the iframe never
       // reach the parent's window listener, so forward slide-level undo/redo out.
       // A LIVE text edit keeps the browser's native char-level undo (don't
       // intercept); otherwise hand off to the parent's local history stack.

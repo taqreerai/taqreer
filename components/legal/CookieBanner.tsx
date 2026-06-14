@@ -3,12 +3,14 @@
 // Minimal, non-blocking cookie notice. We use essential cookies + limited
 // (masked) diagnostics, so this is an informational notice with an explicit
 // Accept / Reject, not a consent wall. The choice persists for a year in
-// `tq_cookie_consent` (accept | reject) — either value stops the banner from
-// re-showing. Future analytics (PostHog, Phase D) gate on `accept`. Bilingual
-// inline copy (it can render on the coming-soon page, outside the
-// dictionary-fed app chrome).
+// `tq_cookie_consent` (accept | reject); either value stops the banner from
+// re-showing. The SERVER layout resolves whether the user has decided (this
+// cookie or the legacy `tq_cookie_ack`) and passes `initialDecided`, so there's
+// no first-paint flip and no client-side cookie parsing. Future analytics
+// (PostHog, Phase D) gate on `accept`. Bilingual inline copy (it can render on
+// the coming-soon page, outside the dictionary-fed app chrome).
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
@@ -30,23 +32,15 @@ const COPY = {
   },
 } as const;
 
-export function CookieBanner() {
+export function CookieBanner({
+  // Resolved on the SERVER (the cookie or the legacy `tq_cookie_ack`): undecided
+  // users see the banner from first paint, decided users never do.
+  initialDecided = false,
+}: {
+  initialDecided?: boolean;
+}) {
   const { locale } = useLocale();
-  // Start hidden (no SSR flash / no hydration mismatch); reveal after mount
-  // only if the user hasn't chosen yet.
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    const cookies = document.cookie.split("; ");
-    // Either a new accept/reject choice OR a legacy `tq_cookie_ack=1` dismissal
-    // counts as decided — don't re-prompt anyone who already responded.
-    const decided =
-      cookies.some((entry) => entry.startsWith(`${CONSENT_COOKIE}=`)) ||
-      cookies.some((entry) => entry === "tq_cookie_ack=1");
-    // Cookies are client-only (unreadable during SSR), so the reveal must run
-    // after mount rather than in the useState initializer.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!decided) setShow(true);
-  }, []);
+  const [show, setShow] = useState(!initialDecided);
 
   if (!show) return null;
   const t = COPY[locale];

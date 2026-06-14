@@ -108,9 +108,15 @@ export default async function RootLayout({
   // (left) at first paint instead of jumping there when DashboardShell mounts.
   const appShell = isAppPath(stripLocale((await headers()).get("x-pathname") ?? ""));
 
+  const cookieStore = await cookies();
   // Theme class on <html> at first paint (no flash) from the tq_theme cookie.
   // :root.light in globals.css flips the neutral tokens; default is dark.
-  const themeClass = (await cookies()).get(THEME_COOKIE)?.value === "light" ? " light" : "";
+  const themeClass = cookieStore.get(THEME_COOKIE)?.value === "light" ? " light" : "";
+  // Cookie-consent: resolve on the server so the banner has no first-paint flip.
+  // A new accept/reject choice OR the legacy ack both count as decided.
+  const cookieConsentDecided =
+    !!cookieStore.get("tq_cookie_consent")?.value ||
+    cookieStore.get("tq_cookie_ack")?.value === "1";
 
   return (
     <html
@@ -132,7 +138,7 @@ export default async function RootLayout({
         <ScrollReset />
         <LocaleProvider locale={lang} dict={dict}>
           {children}
-          <CookieBanner />
+          <CookieBanner initialDecided={cookieConsentDecided} />
         </LocaleProvider>
       </body>
     </html>

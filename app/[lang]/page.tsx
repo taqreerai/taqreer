@@ -191,7 +191,7 @@ export default async function LandingPage({
           </ScrollReveal>
         </section>
 
-        {/* Footer — shared with the legal pages (components/marketing/SiteFooter).
+        {/* Footer - shared with the legal pages (components/marketing/SiteFooter).
             Full-bleed here so it spans the column like the FAQ rows above. */}
         <SiteFooter locale={lang} fullBleed />
       </div>

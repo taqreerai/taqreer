@@ -1278,7 +1278,7 @@ export const deckGenerate = inngest.createFunction(
     retries: 3,
     // Processing priority (the Max-tier perk): Max runs are scheduled as if they
     // arrived 120s earlier, so they jump ahead of lower tiers when the queue is
-    // contended — no failures, just ordering. `event.data.tier` is set at
+    // contended, no failures, just ordering. `event.data.tier` is set at
     // enqueue (the CEL evaluates before the run); any non-max / missing tier
     // gets no boost.
     priority: { run: "event.data.tier == 'max' ? 120 : 0" },

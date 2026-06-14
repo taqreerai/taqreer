@@ -106,7 +106,7 @@ export function RecentProjects({
           // (no flash while the round-trip is in flight). The Router Cache
           // invalidation + backfill (the 7th project sliding into slot 6) is
           // handled centrally by useProjectActions' router.refresh now, so we no
-          // longer refresh here (item 14 — avoid the double refetch).
+          // longer refresh here (item 14, avoid the double refetch).
           setDeletedIds((prev) => {
             const next = new Set(prev);
             next.add(id);

@@ -232,6 +232,10 @@ export function LayersPanel({
 
   return (
     <aside
+      // Collapsed → off-screen: take it out of the tab order + a11y tree too,
+      // not just pointer events (CR), so hidden controls can't be focused.
+      inert={collapsed}
+      aria-hidden={collapsed || undefined}
       dir={dir}
       aria-label={t.title}
       // Drop the clip while dragging (lifted row floats past the edges) OR while

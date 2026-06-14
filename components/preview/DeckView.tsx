@@ -285,7 +285,7 @@ const CHECKPOINT_IDLE_MS = 10 * 60 * 1000; // idle-autosave a history checkpoint
 // children of the canvas row.
 //
 // CANVAS_MAX_WIDTH caps the hero so it can't balloon to full-screen (and touch
-// the header) when both side rails collapse and the row turns wide — user
+// the header) when both side rails collapse and the row turns wide, per user
 // direction 2026-06-14. The two min() height/row candidates still keep it from
 // overflowing either dimension; the cap just bounds the wide case.
 //
@@ -1418,19 +1418,19 @@ export function DeckView({
     };
   }, []);
 
-  // ── Editor rail collapse (item 11, 2026-06-14) ── Both floating rails (Slides
-  // on the right, Layers on the left) collapse to a thin reopen handle and the
-  // canvas reclaims the freed width. Per-rail state so each toggles
-  // independently; a narrow-viewport media query collapses/expands both. Init
-  // false (SSR-safe — no hydration mismatch), then the effect reads the query
-  // and subscribes to changes.
-  const [layersCollapsed, setLayersCollapsed] = useState(false);
-  const [slidesCollapsed, setSlidesCollapsed] = useState(false);
+  // ── Editor rail collapse (item 11) ── Both floating rails (Slides on the
+  // right, Layers on the left) collapse to a thin reopen handle and the canvas
+  // reclaims the freed width. Per-rail state so each toggles independently; a
+  // narrow-viewport media query collapses/expands both. The initial value is
+  // derived in the useState initializer (the repo's set-state-in-effect rule);
+  // the effect only subscribes to later viewport changes.
+  const isNarrowViewport = () =>
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 1280px)").matches;
+  const [layersCollapsed, setLayersCollapsed] = useState(isNarrowViewport);
+  const [slidesCollapsed, setSlidesCollapsed] = useState(isNarrowViewport);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1280px)");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLayersCollapsed(mq.matches);
-    setSlidesCollapsed(mq.matches);
     const onChange = (e: MediaQueryListEvent) => {
       setLayersCollapsed(e.matches);
       setSlidesCollapsed(e.matches);
@@ -3846,7 +3846,7 @@ export function DeckView({
         </motion.div>
       ) : null}
 
-      {/* Collapse / reopen the floating rails — a BARE arrow on the rail's
+      {/* Collapse / reopen the floating rails, a BARE arrow on the rail's
           canvas-facing edge (no border / no box, user direction 2026-06-14),
           centered in the same [RAIL_TOP, vh-RAIL_BOTTOM] band as the rails. The
           chevron points toward the canvas to open, toward the rail to close.
@@ -4249,7 +4249,7 @@ export function DeckView({
                 /* selected/onSelect are now the multi-select SET (§20). */
                 onEdit={handleSlideEdit}
                 // ⌘Z / ⌘⇧Z pressed while focus is inside the editor iframe never
-                // reaches the window listener above — the editor forwards them
+                // reaches the window listener above, the editor forwards them
                 // to the same local history stack.
                 onUndo={handleLocalUndo}
                 onRedo={handleLocalRedo}
