@@ -34,6 +34,29 @@ const NON_COLOUR = new Set([
 function normalizeColour(raw: string): string {
   const c = raw.trim().toLowerCase();
   if (NAMED_TO_HEX[c]) return NAMED_TO_HEX[c];
+  // rgb()/rgba() → hex so `rgb(255,255,255)` === `#ffffff` and a mono logo
+  // written in mixed syntaxes isn't miscounted as polychrome. Comma- OR
+  // space-separated, 0-255 or %; alpha ignored (it's not a distinct hue).
+  const rgb = /^rgba?\(([^)]*)\)$/.exec(c);
+  if (rgb) {
+    const parts = rgb[1].split(/[\s,]+/).filter(Boolean);
+    if (parts.length >= 3) {
+      const toByte = (v: string) =>
+        Math.max(
+          0,
+          Math.min(
+            255,
+            Math.round(
+              (v.endsWith("%") ? (parseFloat(v) / 100) * 255 : parseFloat(v)) ||
+                0,
+            ),
+          ),
+        )
+          .toString(16)
+          .padStart(2, "0");
+      return `#${toByte(parts[0])}${toByte(parts[1])}${toByte(parts[2])}`;
+    }
+  }
   // Expand #rgb / #rgba shorthand to the long form so #fff === #ffffff.
   const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])([0-9a-f]?)$/.exec(c);
   if (short) {
