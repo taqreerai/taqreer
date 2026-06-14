@@ -92,11 +92,12 @@ Tiers (renamed 2026-06-11; monthly reset, no rollover; Free = one-time grant):
 
 Launch blockers for billing (Phase B): live keys, mada + Apple Pay, prod webhook,
 real-card smoke, premium-template gating. VAT decision (2026-06-14): DEFER while
-there are no real sales (zero exposure), then migrate billing to a Merchant of
-Record (Paddle / Lemon Squeezy) when revenue is real so the MoR carries all
-VAT/sales-tax registration + remittance worldwide (replaces the custom Stripe
-checkout; ~5%+ fee). Direct Stripe = the VAT obligation is ours; an MoR offloads
-it. Not a launch blocker.
+there are no real sales (zero exposure), then a Merchant of Record carries all
+VAT/sales-tax registration + remittance worldwide when revenue is real. Evaluate
+Stripe Managed Payments first (Stripe's own MoR, least migration); Paddle / Lemon
+Squeezy as fallback. Stripe Tax alone only automates calc/collect/filing - you
+stay the registered, liable merchant; an MoR shifts the liability off us. Any MoR
+changes the checkout surface + costs ~5%+ vs 2.9%. Not a launch blocker.
 
 ---
 

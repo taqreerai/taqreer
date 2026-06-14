@@ -173,8 +173,10 @@ fine at zero volume.)
 
 **Phase B (money + law, all BLOCKERS)**: Stripe live keys + mada/Apple Pay
 + prod webhook + real-card smoke + premium-template gating; VAT = DEFER while no
-real sales, then move billing to a Merchant of Record (Paddle / Lemon Squeezy) so
-it carries ALL VAT/sales-tax worldwide (decision 2026-06-14, not a blocker);
+real sales, then a Merchant of Record carries ALL VAT/sales-tax worldwide
+(evaluate Stripe Managed Payments first - Stripe's own MoR; Paddle/Lemon Squeezy
+fallback; Stripe Tax alone doesn't shift liability; decision 2026-06-14, not a
+blocker);
 legal pages (ToS/Privacy/Refund, bilingual + cookie banner — none exist yet);
 email deliverability (SPF/DKIM/DMARC + branded bilingual Supabase auth
 templates). **Phase C (hardening)**: rate limiting (NONE exists — share-invite
