@@ -14,6 +14,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 
 const BUCKET = "generated-images";
 
@@ -34,13 +35,15 @@ export function genImageHash(prompt: string): string {
   return createHash("sha256").update(prompt).digest("hex").slice(0, 12);
 }
 
-// Deterministic per-image path — `${projectId}/gen/${genid}-${hash}.png`.
+// Deterministic per-image path — `${projectId}/gen/${genid}-${hash}.jpg`.
 // Stable for a given (projectId, genid, promptHash), which is what lets the
 // warm-during-stream fill, the end-of-deck reconcile, AND the status-route
 // live poll all agree on the same object without a shared DB row mid-stream
-// (context/images.md async fill).
+// (context/images.md async fill). `.jpg` because storeGeneratedImage
+// re-encodes the gpt-image PNG to JPEG (single URL source, so the extension
+// flows to the predictive URL + the existence check too).
 function genImagePath(projectId: string, genid: string, hash: string): string {
-  return `${projectId}/gen/${genid}-${hash}.png`;
+  return `${projectId}/gen/${genid}-${hash}.jpg`;
 }
 
 // Memoised module singleton — the admin client is stateless (no session
@@ -62,10 +65,16 @@ function adminClient() {
 }
 
 /**
- * Upload a base64 PNG and return its permanent public URL.
- * Path is `${projectId}/gen/${genid}-${hash}.png`; upsert so a re-store of
- * the SAME prompt (same hash) overwrites in place, while a CHANGED prompt
- * lands at a fresh path. Throws on missing env / upload error.
+ * Re-encode the gpt-image PNG to JPEG and upload it, returning the permanent
+ * public URL. Path is `${projectId}/gen/${genid}-${hash}.jpg`; upsert so a
+ * re-store of the SAME prompt (same hash) overwrites in place, while a CHANGED
+ * prompt lands at a fresh path. Throws on missing env / upload error.
+ *
+ * Why JPEG: gpt-image-2 returns a lossless PNG (~1-2MB at 1536x1024). These are
+ * opaque, full-bleed photos (no transparency to lose), so JPEG q82 is ~7x
+ * smaller, which shrinks the viewer load AND every export (PPTX/PDF/PNG embed
+ * the stored bytes). If the re-encode ever fails we fall back to the raw PNG
+ * bytes (still valid at the .jpg path — consumers read the content-type).
  */
 export async function storeGeneratedImage(opts: {
   projectId: string;
@@ -75,10 +84,19 @@ export async function storeGeneratedImage(opts: {
 }): Promise<string> {
   const admin = adminClient();
   const path = genImagePath(opts.projectId, opts.genid, opts.hash);
-  const bytes = Buffer.from(opts.b64, "base64");
+  const pngBytes = Buffer.from(opts.b64, "base64");
+
+  let bytes: Buffer = pngBytes;
+  let contentType = "image/png";
+  try {
+    bytes = await sharp(pngBytes).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+    contentType = "image/jpeg";
+  } catch {
+    /* keep the raw PNG bytes on any sharp failure */
+  }
 
   const { error } = await admin.storage.from(BUCKET).upload(path, bytes, {
-    contentType: "image/png",
+    contentType,
     upsert: true, // regenerate overwrites the same path
     cacheControl: "31536000",
   });

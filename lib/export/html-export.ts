@@ -12,6 +12,7 @@ import {
   type BiDiPostprocessStats,
 } from "@/lib/export/bidi-postprocess";
 import { extractGradientIntents } from "@/lib/export/gradient-text";
+import { compressPptxMedia } from "@/lib/export/compress-pptx-media";
 import {
   embedConvertedFontsInPptx,
   type ConvertedFont,
@@ -713,7 +714,36 @@ export async function exportManifestAsPptx(
       slideFormat
     );
 
-    downloadBlob(fixedBlob, fileName);
+    // Recompress embedded media (dom-to-pptx rasterises every image to PNG):
+    // opaque parts → JPEG, transparent stay PNG, long edge capped at 1920px.
+    // Best-effort — a failure ships the uncompressed (but valid) blob.
+    let finalBlob = fixedBlob;
+    try {
+      const mediaStats = {
+        scanned: 0,
+        recompressed: 0,
+        renamed: 0,
+        bytesBefore: 0,
+        bytesAfter: 0,
+      };
+      finalBlob = await compressPptxMedia(
+        fixedBlob,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        JSZip as any,
+        mediaStats,
+      );
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `[html-export] media-compress: ${mediaStats.recompressed}/${mediaStats.scanned} parts, ${(mediaStats.bytesBefore / 1024 / 1024).toFixed(1)}MB → ${(mediaStats.bytesAfter / 1024 / 1024).toFixed(1)}MB`,
+        );
+      }
+    } catch (err) {
+      if (typeof console !== "undefined") {
+        console.warn("[html-export] media-compress skipped:", err);
+      }
+    }
+
+    downloadBlob(finalBlob, fileName);
 
     return { stats, slideCount: slideNodes.length };
   } finally {
