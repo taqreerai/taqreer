@@ -39,8 +39,11 @@ Everything lives under `app/[lang]/`. `[lang]` ∈ `{ ar, en }` (`lib/i18n/confi
 ### `app/[lang]/page.tsx` — landing (public)
 Hero, features, BiDi demo band, pricing, templates, footer. `LandingNav` carries the logo, links, **theme toggle + language menu**, and login/signup (authed → Dashboard).
 
+### `app/[lang]/brand/page.tsx` — LIVE design-system reference (public)
+The canonical design-system doc at **/ar/brand + /en/brand** (replaced the old static `public/brand-guidelines.html`, deleted). Imports the real `globals.css`, so every `--tq-*` token + utility class is a byte-exact replica (16 sections: tokens, logo, type, surfaces, buttons, icons, inputs, menus, toasts, uploads, modals, status, plan/tiers, models/presets, email). Embeds the real `ParagraphWriteIcon` + `ThemeToggle`. Check it before any visual work.
+
 ### `app/[lang]/(auth)/*` — auth modal over a marquee wall ([layout](app/[lang]/(auth)/layout.tsx))
-`/login`, `/signup`, `/forgot-password`, `/reset-password`. Flat `surface-modal` (no glass). `login` sanitizes the user-controlled `?next=` to internal paths only (open-redirect guard).
+`/login`, `/signup`, `/forgot-password`, `/reset-password`. Flat `surface-modal` (no glass), left-aligned eyebrow + title, OUTLINED Google OAuth + an OR divider; the wordmark sits at the page bottom (out of the modal). **Signup is 2-phase**: email → name + password with a live requirements checklist (`/[^\p{L}\p{N}\s]/u` for the special-char rule). **Cloudflare Turnstile (Supabase-native captcha)** on signup-step2 / login / forgot via [components/auth/TurnstileWidget.tsx](components/auth/TurnstileWidget.tsx) + `options.captchaToken` (secret in the Supabase dashboard; `NEXT_PUBLIC_TURNSTILE_SITE_KEY` in env, inlined at build). `login` sanitizes the user-controlled `?next=` to internal paths only (open-redirect guard).
 
 ### `app/[lang]/(app)/*` — protected; wrapped by `DashboardShell` ([layout](app/[lang]/(app)/layout.tsx))
 Auth-gated SSR (redirects to `/[lang]/login?next=`).

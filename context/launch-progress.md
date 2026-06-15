@@ -28,7 +28,60 @@ conversation that produced it; this file is the operational state.
   viewer reads; SlideVersion.slideJson = per-slide history). Manual repairs
   must patch BOTH.
 
-## ⚡ Latest session (2026-06-15) - billing emails + credit/logo bug hunts (READ FIRST)
+## ⚡ Latest session (2026-06-15, later) - design-system route + auth redesign + Turnstile (READ FIRST)
+
+**PR #72 merged + deployed.** Two pieces.
+
+**1. Design system is now a LIVE route.** Replaced the static
+`public/brand-guidelines.html` (hand-copied tokens that drifted) with
+`app/[lang]/brand/page.tsx`, served at **/ar/brand + /en/brand**. It imports the
+real `app/globals.css`, so every `--tq-*` token + utility class is a byte-exact
+replica - 16 sections (tokens/themes, logo, typography, brand+motion+gradients,
+surfaces, buttons, icons, inputs, menus/popovers, toasts, uploads, modals,
+tooltip/status, plan+tiers, models/presets, email shell). Embeds the real
+`ParagraphWriteIcon` + `ThemeToggle`; the old page's aurora copied verbatim;
+panel-colored base + landing-style hero chips. CLAUDE.md + architecture.md
+repointed; static file deleted. **THIS IS NOW THE CANONICAL DESIGN REFERENCE - the
+one design rule is "check /ar/brand before any visual work"** (the old
+design-discipline + flat-redesign memories were folded into it).
+
+Also fixed in globals.css: the ok/warn/down **status tokens had no `.light`
+overrides**, so status chips + `.status-error`/`.status-success` banners were
+near-invisible on white. Added `:root.light` overrides (Tailwind-700 text +
+stronger borders) and made `.status-error`/`.status-success` token-backed. App-wide.
+
+**2. Auth redesign.** Reorganised the auth modal like the user's reference:
+left-aligned eyebrow + title, OUTLINED Google OAuth (vs the solid blue primary CTA),
+OR divider, separators, restored breathing; the wordmark moved OUT of the modal to
+the page bottom (full opacity). Confirm-email + forgot success screens now use the
+canonical message shape (thin blue `mark_email_unread` icon + muted text) with a
+RESEND button + 60s countdown. login/signup/forgot/reset all aligned.
+- **Signup is 2-PHASE**: phase 1 = email (+ Google); phase 2 = full name + password
+  with a LIVE requirements checklist (8 chars / 1 number / 1 special char / no
+  leading-or-trailing whitespace; plain checkmarks, one color), submit gated on all
+  met. Special-char regex is `/[^\p{L}\p{N}\s]/u` (CodeRabbit fix - the old
+  `/[^A-Za-z0-9]/` wrongly accepted Arabic letters + spaces as "special").
+- **Cloudflare Turnstile (Supabase-native captcha)** on signup-step2 / login /
+  forgot: new `components/auth/TurnstileWidget.tsx` (explicit render, theme-aware,
+  no new dep), token passed via `options.captchaToken`. The client does NOT
+  hard-disable the CTA on a missing token - Supabase enforces server-side, so a
+  widget hiccup can't dead-end users. Security review: CLEAN.
+
+**Turnstile config - site key DONE in prod, two USER actions remain:**
+- ✅ Public site key `0x4AAAAAADlVmCigvw9xshMv` → `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+  in the SERVER .env (2026-06-15) + a `./deploy.sh --rebuild`. NEXT_PUBLIC_* vars
+  are inlined at BUILD time, so a plain reload won't pick them up. Widget renders
+  in prod now.
+- ⏳ USER: Supabase Dashboard → Auth → Settings → Bot & Abuse Protection → enable
+  CAPTCHA → Cloudflare Turnstile → paste the SECRET. Until then the widget renders
+  but the token is NOT verified (captcha is decorative, not enforcing).
+- ⏳ USER: in the Cloudflare Turnstile widget settings add `taqreer.ai` + `localhost`
+  to the allowed hostnames, else the widget shows "Unable to connect".
+
+This is the first bot-protection on auth (Phase C item) - real rate limiting still
+doesn't exist (the share-invite + auth endpoints are still uncapped).
+
+## ⚡ Latest session (2026-06-15) - billing emails + credit/logo bug hunts
 
 **Billing emails: we OWN them now** (shipped, deployed). Branded bilingual
 receipt + payment-failed + subscription-ending on our email shell

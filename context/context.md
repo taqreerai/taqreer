@@ -174,6 +174,7 @@ npm install                  # postinstall auto-applies the dom-to-pptx patch
 #   ANTHROPIC_API_KEY=sk-ant-...
 #   NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY=...
 #   INNGEST_EVENT_KEY / INNGEST_SIGNING_KEY=...   (+ INNGEST_DEV=1)
+#   NEXT_PUBLIC_TURNSTILE_SITE_KEY=...            (Cloudflare Turnstile; secret lives in the Supabase Auth dashboard, NEXT_PUBLIC_ so inlined at build)
 
 docker compose up -d         # postgres 16 + redis 7
 npx prisma migrate deploy    # local only — DATABASE_URL must be localhost

@@ -112,6 +112,17 @@ signups toggle). Re-enable: set `COMING_SOON=1` in the server .env +
   is the explicit opt-in past the live-key guard) to create the live catalog,
   else every checkout 404s on the lookup_key.
 
+- 2026-06-15 (NEXT_PUBLIC_* are BUILD-time inlined): adding the Cloudflare
+  Turnstile site key to the server .env did nothing until `./deploy.sh --rebuild`.
+  `NEXT_PUBLIC_*` vars are baked into the client bundle at `next build`, so a pm2
+  reload (or a no-op deploy that finds the box already at HEAD) never picks them
+  up. Any new `NEXT_PUBLIC_*` needs a rebuild. Auth captcha (Turnstile, added PR
+  #72): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is in the server .env; the SECRET lives in
+  the Supabase Auth dashboard (Bot & Abuse Protection → Cloudflare Turnstile), NOT
+  the repo or the box. The widget's allowed-hostnames list (Cloudflare dashboard)
+  must include `taqreer.ai` or it renders "Unable to connect". Client passes the
+  token via `options.captchaToken`; Supabase verifies it server-side.
+
 - 2026-06-14 (Stripe test→live customer ids): `getOrCreateStripeCustomer`
   (lib/billing/customer.ts) returns a user's stored `stripeCustomerId` WITHOUT
   checking it's a live-mode id. A user carrying a TEST-mode `cus_...` (e.g.

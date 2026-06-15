@@ -74,7 +74,8 @@ session-init brief; the four living docs hold the depth and are kept current:
 - **Secrets** live ONLY in `/root/taqreer/.env` (chmod 600) — gitignored +
   untracked, so `git checkout` on the box never touches them. Includes prod
   `DATABASE_URL`, `COMING_SOON=1`, `COMING_SOON_KEY`, `NEXT_DIST_DIR`,
-  Stripe/Sentry/etc.
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public site key, inlined at build; the
+  Turnstile SECRET lives in the Supabase Auth dashboard, NOT here), Stripe/Sentry/etc.
 - **Deploy = `./deploy.sh`** (GIT PUSH-TO-DEPLOY since 2026-06-14, replaced
   rsync): pushes `dev`+`main` to GitHub, then `git push prod dev:main` to the
   box's bare repo (`taqreer:/root/taqreer-app.git`). The tracked `post-receive`
@@ -113,7 +114,10 @@ session-init brief; the four living docs hold the depth and are kept current:
   `/plans` (change plan + packs) · `/billing` (cancel/resume + payment methods)
   · `/invoices` · `/checkout` (our Elements form) · 4 flows `/create /enhance
   /mimic /datasheet` (+ `/use-template/[id]`) · **`/project/[id]` = unified
-  studio (generate AND edit, `DeckView`)** · `/coming-soon`.
+  studio (generate AND edit, `DeckView`)** · `/coming-soon` · **`/brand`** (live
+  design-system reference, replaces the deleted static brand-guidelines.html).
+  **Auth** = 2-phase signup (email ⟶ name+password + live password checklist) +
+  Cloudflare Turnstile captcha on signup/login/forgot; wordmark at page bottom.
 - **i18n** = TWO independent direction axes: **chrome dir** (UI locale,
   `<html dir>`) vs **canvas dir** (deck `manifest.direction` — an Arabic user
   can edit an English deck). Dictionaries `dictionaries/{ar,en}.json` (~895
