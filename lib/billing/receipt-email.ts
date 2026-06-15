@@ -24,7 +24,12 @@ async function recipient(
     where: { id: prismaUserId },
     select: { email: true, language: true },
   });
-  if (!u?.email) return null;
+  if (!u?.email) {
+    // Silent skip otherwise: surface it so a missing recipient is traceable
+    // (e.g. a webhook firing before User.email is populated).
+    console.warn(`[billing-email] no recipient email for user ${prismaUserId}`);
+    return null;
+  }
   return { email: u.email, locale: u.language ?? "ar" };
 }
 
@@ -66,14 +71,17 @@ function planLabel(plan: KnownPlan | null, cadence: Cadence, locale: string): st
   return `${tier} (${word})`;
 }
 
-// The billing interval off the invoice's first line. Cast to a minimal shape
-// so we don't depend on Stripe's evolving InvoiceLineItem.price typing.
-function cadenceFromInvoice(invoice: Stripe.Invoice): Cadence {
-  const line = invoice.lines.data[0] as
-    | { price?: { recurring?: { interval?: string } | null } | null }
-    | undefined;
-  const interval = line?.price?.recurring?.interval;
-  return interval === "year" ? "yearly" : interval === "month" ? "monthly" : null;
+// The billing interval ("monthly"/"yearly") for the receipt's plan label.
+// Read from our own Subscription row (mirrored off the subscription price by
+// applySubscriptionGrant, which runs before the receipt fires) rather than the
+// invoice: Stripe API 2026-04-22.dahlia dropped `line.price`, so the interval
+// is no longer present on the invoice line.
+async function cadenceForUser(prismaUserId: string): Promise<Cadence> {
+  const s = await prisma.subscription.findUnique({
+    where: { userId: prismaUserId },
+    select: { cadence: true },
+  });
+  return (s?.cadence as Cadence) ?? null;
 }
 
 export async function emailReceiptForInvoice(
@@ -94,7 +102,7 @@ export async function emailReceiptForInvoice(
     toEmail: to.email,
     locale: to.locale,
     appOrigin: APP_ORIGIN,
-    planLabel: planLabel(plan, cadenceFromInvoice(invoice), to.locale),
+    planLabel: planLabel(plan, await cadenceForUser(prismaUserId), to.locale),
     amount: money(invoice.amount_paid, invoice.currency),
     dateLabel: dateLabel(invoice.created, to.locale),
     invoiceNumber: invoice.number ?? null,
@@ -141,7 +149,7 @@ export async function emailPaymentFailed(
     toEmail: to.email,
     locale: to.locale,
     appOrigin: APP_ORIGIN,
-    planLabel: planLabel(plan, cadenceFromInvoice(invoice), to.locale),
+    planLabel: planLabel(plan, await cadenceForUser(prismaUserId), to.locale),
     amount: money(invoice.amount_due ?? invoice.amount_paid, invoice.currency),
   });
 }

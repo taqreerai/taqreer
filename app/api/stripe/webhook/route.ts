@@ -467,9 +467,47 @@ function periodEnd(sub: Stripe.Subscription): Date | null {
 }
 
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const line = invoice.lines.data.find((l) => l.subscription);
-  const s = line?.subscription;
-  return typeof s === "string" ? s : (s?.id ?? null);
+  // Stripe API 2026-04-22.dahlia removed the top-level `invoice.subscription`
+  // and `line.subscription` fields and moved the reference into `parent`
+  // details. Read the new locations first, then fall back to the legacy fields
+  // so this stays correct across API versions. (Returning null here previously
+  // made invoice.payment_succeeded break before the grant + receipt: the
+  // initial balance still filled via checkout.session.completed, but the
+  // receipt never sent and renewals never re-granted.)
+  const pick = (
+    s: string | { id?: string } | null | undefined,
+  ): string | null => (typeof s === "string" ? s : (s?.id ?? null));
+
+  const inv = invoice as unknown as {
+    subscription?: string | { id?: string } | null;
+    parent?: {
+      subscription_details?: {
+        subscription?: string | { id?: string } | null;
+      } | null;
+    } | null;
+    lines: {
+      data: Array<{
+        subscription?: string | { id?: string } | null;
+        parent?: {
+          subscription_item_details?: {
+            subscription?: string | { id?: string } | null;
+          } | null;
+        } | null;
+      }>;
+    };
+  };
+
+  const fromInvoiceParent = pick(inv.parent?.subscription_details?.subscription);
+  if (fromInvoiceParent) return fromInvoiceParent;
+  for (const l of inv.lines.data) {
+    const fromLineParent = pick(
+      l.parent?.subscription_item_details?.subscription,
+    );
+    if (fromLineParent) return fromLineParent;
+    const fromLine = pick(l.subscription);
+    if (fromLine) return fromLine;
+  }
+  return pick(inv.subscription);
 }
 
 function formatDate(d: Date): string {

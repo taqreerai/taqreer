@@ -26,24 +26,37 @@ export type SendResult =
   | { ok: true; provider: "resend" | "stub"; messageId?: string }
   | { ok: false; error: string };
 
+// Billing emails go from a dedicated billing@ address (user direction
+// 2026-06-15), distinct from the shared RESEND_FROM_EMAIL (share@) the other
+// transactional emails use. Override via RESEND_FROM_BILLING if needed.
+const BILLING_FROM =
+  process.env.RESEND_FROM_BILLING ?? "taqreer.ai <billing@taqreer.ai>";
+
 async function deliver(
   tag: string,
   toEmail: string,
   subject: string,
   html: string,
 ): Promise<SendResult> {
-  const from = process.env.RESEND_FROM_EMAIL;
   const client = getClient();
-  if (!client || !from) {
+  if (!client) {
     console.info(`[${tag}] Resend not configured — stubbed send`);
     return { ok: true, provider: "stub" };
   }
   try {
-    const res = await client.emails.send({ from, to: toEmail, subject, html });
+    const res = await client.emails.send({
+      from: BILLING_FROM,
+      to: toEmail,
+      subject,
+      html,
+    });
     if (res.error) {
       console.error(`[${tag}] Resend send error:`, res.error.message);
       return { ok: false, error: res.error.message };
     }
+    // Success log (billing observability): every send is traceable, with the
+    // Resend messageId to cross-reference deliverability in the dashboard.
+    console.info(`[${tag}] sent (messageId ${res.data?.id ?? "?"})`);
     return { ok: true, provider: "resend", messageId: res.data?.id };
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
