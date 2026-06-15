@@ -1,9 +1,9 @@
 # Launch progress + continuation guide
 
-Updated 2026-06-14 (Stripe LIVE + infra cleanup - see the "Latest session"
-block below FIRST). Read this + context/deploy.md to resume launch work in a
-fresh session. The launch plan's full reasoning lives in the conversation
-that produced it; this file is the operational state.
+Updated 2026-06-15 (billing emails owned + credit/logo bug fixes - see the
+"Latest session" block below FIRST). Read this + context/deploy.md to resume
+launch work in a fresh session. The launch plan's full reasoning lives in the
+conversation that produced it; this file is the operational state.
 
 ## How work flows (IMPORTANT for any new session)
 
@@ -28,7 +28,45 @@ that produced it; this file is the operational state.
   viewer reads; SlideVersion.slideJson = per-slide history). Manual repairs
   must patch BOTH.
 
-## ⚡ Latest session (2026-06-14) - Stripe LIVE + infra cleanup (READ FIRST)
+## ⚡ Latest session (2026-06-15) - billing emails + credit/logo bug hunts (READ FIRST)
+
+**Billing emails: we OWN them now** (shipped, deployed). Branded bilingual
+receipt + payment-failed + subscription-ending on our email shell
+(`lib/email/billing.ts` + `lib/billing/receipt-email.ts`), fired from the Stripe
+webhook (receipt on `invoice.payment_succeeded` + top-up checkout; payment-failed
+on `invoice.payment_failed`; ending on the cancel false->true transition). Resend,
+locale from `User.language`, Latin numerals, full-width receipt card. **KEEP
+Stripe's native receipts OFF** (Settings -> Customer emails) so users don't get
+two. Preview any time: `tsx scripts/preview-billing-emails.ts <email>`.
+
+**Real-card smoke test DONE** (Plus on dev@). It surfaced two issues, both FIXED:
+- post-checkout UI didn't update until refresh -> `pollPurchaseSettled()` refetches
+  credits + notifications after a confirmed checkout, both surfaces (PR #64).
+- no receipt email -> the billing emails above (PR #65).
+
+**Two credit-ledger bugs found + fixed (PR #63), deployed:**
+- Bug A: new users got 0 signup credits - the dashboard server component upserts
+  the User BEFORE user-sync's `if (!existing)` grant, so it was skipped for every
+  signup. Grant now gates on `CreditAccount.signupGrantedAt` (idempotent, self-
+  heals on next sign-in), in user-sync + projects.
+- Bug B: canceling refilled spent credits - `customer.subscription.updated` called
+  `grantSubscriptionCycle` (which SETs the balance) on every event. Now re-grants
+  only on an actual plan change.
+
+**Logo fix (PR #63):** flag / multicolour logos vanished or corrupted on slides.
+Root cause: a UTF-16-encoded SVG broke `readLogoSvgMarkup`'s `<svg` check -> fell
+to the URL/`<img>` path where Claude hand-copied the ~600-char signed URL and
+mangled it. Fix: `decodeSvgBytes` (BOM/UTF-16), polychrome detection -> mono logos
+inline + recolour per slide (Claude), polychrome injected as a true-colour `<img>`
+by code (no URL for the model to corrupt).
+
+**OPEN - verify before real sales:** the Stripe LIVE price for `tier_plus_monthly`
+may still be the $1 smoke-test price (the app shows $15 again - cost.ts reverted).
+Restore the $15 live price: `tsx scripts/stripe-setup-products.ts --live`.
+
+**`debugflow.md`** (repo root) added - the root-cause-before-fix debugging method.
+
+## ⚡ Latest session (2026-06-14) - Stripe LIVE + infra cleanup
 
 **Stripe is LIVE in production** (was test mode):
 - Live Products/Prices created. `scripts/stripe-setup-products.ts` gained a
@@ -180,9 +218,10 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
 - Billing live: ✅ live keys + live products/prices + prod webhook DONE
   (2026-06-14; see Latest session block). REMAINING: mada + Apple Pay (dashboard
   config + Apple Pay domain verification, verify inside the embedded
-  ui_mode:elements form), a real-card smoke test, premium-template gating. Toggle
-  Stripe's own receipts + payment-failed emails ON
-  (don't own these). Fable pricing decision PARKED (2026-06-14): Fable is
+  ui_mode:elements form), premium-template gating. Real-card smoke test ✅ DONE
+  (2026-06-15). Billing emails ✅ we OWN them now (2026-06-15) - branded receipt +
+  payment-failed + subscription-ending on our shell; KEEP Stripe's native
+  receipts OFF so users don't get two. Fable pricing decision PARKED (2026-06-14): Fable is
   disabled at Anthropic (upstream), so the fable-low preset is non-shippable and
   its pricing question is moot for now. Revisit only if/when Anthropic re-enables
   it. (Implication to handle later: keep fable-low out of the live preset picker
