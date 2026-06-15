@@ -201,13 +201,13 @@ const SAFE_GEN_FILENAME = /^[A-Za-z0-9._-]+-[0-9a-f]{12}\.jpg$/;
 
 /**
  * The set of STORED image FILENAMES under `${projectId}/gen/` (e.g.
- * `img-cover-3f9a1c2b7e44.png`). Used by the status route to surface WARM
+ * `img-cover-3f9a1c2b7e44.jpg`). Used by the status route to surface WARM
  * (during-stream) images BEFORE the end-of-deck reconcile writes their
  * GeneratedImage rows — so the live-fill poll can deliver them while the deck
  * is still generating, in dev (where realtime broadcasts don't arrive) and
  * across the `/preview`→`/project` gap. Returns FILENAMES (not bare genids)
  * because identity is now (genid + promptHash): the caller computes each
- * box's expected `${genid}-${hash}.png` from the live manifest and checks
+ * box's expected `${genid}-${hash}.jpg` from the live manifest and checks
  * membership, so a stale draft hash is never mistaken for the live prompt's
  * image. One storage `list` call.
  */
