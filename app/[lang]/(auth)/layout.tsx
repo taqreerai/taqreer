@@ -79,21 +79,8 @@ export default async function AuthLayout({
           // gives a heavy frosted-glass read against the marquee —
           // preset "normal" (8 px) → 56 px effective blur. Still
           // tracks the user's Settings glass preset.
-          className="auth-modal surface-modal w-full max-w-sm rounded-3xl p-6"
+          className="auth-modal surface-modal w-full max-w-sm rounded-3xl p-7"
         >
-          <Link
-            href={localizedHref("/", lang)}
-            className="mb-6 flex flex-shrink-0 justify-center cursor-pointer"
-          >
-            <ThemeLogo
-              width={140}
-              height={40}
-              className="h-6 w-auto"
-              priority
-              alt="taqreer.ai"
-            />
-          </Link>
-
           <AuthAnimations>{children}</AuthAnimations>
 
           {/* Fine print — Terms + Privacy. Routes don't exist yet
@@ -119,6 +106,17 @@ export default async function AuthLayout({
           </p>
         </div>
       </div>
+
+      {/* App wordmark moved OUT of the modal to the page bottom (user direction):
+          centered, muted, links home. Pinned to the viewport bottom so it does
+          not push the centered modal. */}
+      <Link
+        href={localizedHref("/", lang)}
+        aria-label="taqreer.ai"
+        className="absolute inset-x-0 bottom-6 z-10 mx-auto flex w-fit justify-center"
+      >
+        <ThemeLogo width={120} height={34} className="h-5 w-auto" alt="taqreer.ai" />
+      </Link>
     </div>
   );
 }

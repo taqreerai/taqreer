@@ -103,7 +103,7 @@ export default function ResetPasswordPage() {
         className="space-y-6 text-center"
       >
         <div>
-          <h1 className="text-2xl font-bold mb-2">{t.reset.successTitle}</h1>
+          <h1 className="text-2xl font-bold mb-1.5">{t.reset.successTitle}</h1>
           <p className="text-sm text-muted">{t.reset.successSubtitle}</p>
         </div>
       </motion.div>
@@ -124,8 +124,8 @@ export default function ResetPasswordPage() {
       transition={{ duration: 0.2 }}
       className="space-y-5"
     >
-      <motion.div {...fadeUp(0)} className="text-center">
-        <h1 className="text-2xl font-bold mb-2">{t.reset.title}</h1>
+      <motion.div {...fadeUp(0)} className="text-start">
+        <h1 className="text-2xl font-bold mb-1.5">{t.reset.title}</h1>
         <p className="text-sm text-muted">{t.reset.subtitle}</p>
       </motion.div>
 
@@ -157,7 +157,7 @@ export default function ResetPasswordPage() {
         className="space-y-4"
       >
         <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium mb-1.5">
             {t.reset.newPasswordLabel}
           </label>
           <input
@@ -172,7 +172,7 @@ export default function ResetPasswordPage() {
           <p className="text-xs text-muted mt-1">{t.passwordMinHint}</p>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium mb-1.5">
             {t.reset.confirmPasswordLabel}
           </label>
           <input
@@ -188,7 +188,7 @@ export default function ResetPasswordPage() {
         <button
           type="submit"
           disabled={loading || hasRecoverySession === false}
-          className="btn-gradient w-full px-4 py-3 disabled:opacity-50 cursor-pointer"
+          className="btn-gradient w-full px-4 py-2.5 disabled:opacity-50 cursor-pointer"
         >
           {loading ? t.reset.submitting : t.reset.submit}
         </button>
