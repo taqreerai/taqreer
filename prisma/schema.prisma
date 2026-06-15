@@ -23,8 +23,6 @@ model User {
   templates      Template[]
   brandKits      BrandKit[]
   folders        Folder[]
-  accounts       Account[]
-  sessions       Session[]
   subscriptions  Subscription[]
   usageEvents    UsageEvent[]
   creditAccount  CreditAccount?
@@ -38,32 +36,6 @@ model User {
   // a single inverse query reads cleanly.
   notifications      Notification[] @relation("RecipientNotifications")
   notificationsActed Notification[] @relation("ActorNotifications")
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Project {
@@ -124,12 +96,13 @@ model Project {
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   folder        Folder?       @relation(fields: [folderId], references: [id])
   presentation  Presentation?
-  files         File[]
   jobs          Job[]
   shares        ProjectShare[]
   notifications Notification[]
 
   @@index([userId, isFavorite])
+  @@index([brandKitId])
+  @@index([folderId])
 }
 
 // "Anyone with the link" + per-invitee role on a Project. Three
@@ -321,17 +294,6 @@ model SlideVersion {
   @@index([slideStateId, createdAt(sort: Desc)])
 }
 
-model File {
-  id         String   @id @default(cuid())
-  projectId  String
-  type       String
-  storageUrl String
-  mimeType   String?
-  metadata   Json?
-  createdAt  DateTime @default(now())
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-}
-
 model Comment {
   id             String              @id @default(cuid())
   presentationId String
@@ -367,6 +329,7 @@ model Comment {
   @@index([presentationId, versionId, status])
   @@index([slideId])
   @@index([authorId])
+  @@index([versionId])
 }
 
 model Job {
@@ -402,6 +365,8 @@ model Job {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   project             Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }
 
 // A brand-only snapshot derived from a Project. Stripped of all content
@@ -498,6 +463,8 @@ model Folder {
   updatedAt DateTime  @updatedAt
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects  Project[]
+
+  @@index([userId])
 }
 
 // One row per user, mirroring their Stripe subscription state (billing
@@ -718,4 +685,6 @@ model Notification {
 
   @@index([recipientUserId, createdAt(sort: Desc)])
   @@index([recipientUserId, readAt])
+  @@index([actorUserId])
+  @@index([projectId])
 }

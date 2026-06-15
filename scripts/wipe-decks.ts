@@ -69,7 +69,6 @@ async function main() {
     Presentation: await prisma.presentation.count(),
     PresentationVersion: await prisma.presentationVersion.count(),
     Comment: await prisma.comment.count(),
-    File: await prisma.file.count(),
     Job: await prisma.job.count(),
     BrandKit: await prisma.brandKit.count(),
     Template: await prisma.template.count(),
@@ -87,7 +86,6 @@ async function main() {
   await prisma.comment.deleteMany();
   await prisma.presentationVersion.deleteMany();
   await prisma.presentation.deleteMany();
-  await prisma.file.deleteMany();
   await prisma.job.deleteMany();
   await prisma.project.deleteMany();
   await prisma.brandKit.deleteMany();
