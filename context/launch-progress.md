@@ -22,11 +22,36 @@ conversation that produced it; this file is the operational state.
 - Runtime secrets: ONLY in /root/taqreer/.env on the server (chmod 600).
   Includes prod DATABASE_URL, COMING_SOON (currently 0 = gate OFF),
   COMING_SOON_KEY, NEXT_DIST_DIR, live Stripe keys, SENTRY_AUTH_TOKEN.
-- Prod DB: server-local Postgres 16, db `taqreer_prod`, role `taqreer_app`.
+- Prod DB: **Supabase Pro Postgres** (eu-central-1, session pooler) since 2026-06-16; RLS on all public tables. (Was server-local Postgres 16, now a stopped standby.)
   psql access: `ssh taqreer` then use DATABASE_URL from the app .env.
 - Deck HTML lives in TWO places (PresentationVersion.slideJson = what the
   viewer reads; SlideVersion.slideJson = per-slide history). Manual repairs
   must patch BOTH.
+
+## ⚡ Latest session (2026-06-16) - prod DB moved to Supabase Pro + DB hardening (READ FIRST)
+
+**Prod app DB migrated: server-local Postgres 16 -> Supabase Pro Postgres**
+(AWS eu-central-1, ~4ms from the Nuremberg box). Why: on-box-only `pg_dump`
+backups were a DR SPOF, the box is RAM-tight, Supabase is already paid for.
+- Connection = **session-mode pooler** (port 5432, IPv4, session-consistent for
+  the credit `FOR UPDATE` ledger). `lib/prisma.ts` sets `ssl` on the pg adapter
+  for non-local hosts; `DATABASE_URL` carries NO sslmode (a URL sslmode wipes the
+  adapter ssl object). Schema via `prisma migrate deploy`; data via `pg_dump
+  --data-only` loaded with `SET session_replication_role=replica` (Supabase's
+  postgres role can't `DISABLE TRIGGER ALL`). Row-count parity + a live
+  `FOR UPDATE` ledger op verified.
+- **Security**: Prisma tables in Supabase's `public` schema were exposed via
+  PostgREST with the anon key. Fixed: **RLS enabled on every public table**
+  (migration `enable_rls_public`) - the app bypasses RLS as table owner,
+  PostgREST default-denied (verified anon REST returns []).
+- **Cleanup** (migration `drop_vestigial_index_fks`): dropped vestigial
+  Account/Session/File (0 rows/0 refs; Account held OAuth tokens); indexed 7
+  uncovered FK columns; optimized realtime RLS policies (`(select auth.jwt())`,
+  `supabase/realtime-policies.sql`); ANALYZE. Advisors now 0 errors; remaining
+  info is intentional ("RLS Enabled No Policy" = lockdown) or cold-DB noise
+  ("Unused Index").
+- Local Postgres kept STOPPED as rollback standby (`.env.local-backup` = old
+  URL). Decommission in a few days for RAM. DB password NOT rotated (user call).
 
 ## ⚡ Latest session (2026-06-15, later) - design-system route + auth redesign + Turnstile (READ FIRST)
 
@@ -257,11 +282,10 @@ REMAINING in Phase A:
 - Uptime ping (BetterStack free) once user creates account.
 - Stripe TEST webhook endpoint for https://taqreer.ai/api/stripe/webhook
   (awaiting user go; secret goes into server .env as STRIPE_WEBHOOK_SECRET).
-- Consider: clean ~24 stray empty tables out of the OLD `taqreer` db on the
-  server (a mis-targeted migrate before prisma.config.ts loaded .env).
 - Prune test users from prod DB before launch (credit-sim-ui@example.com etc).
-- Decision deferred: move prod DB to Supabase Pro Postgres (managed
-  backups/PITR) vs keep server-local + current backup script.
+- DONE 2026-06-16: prod DB migrated to Supabase Pro Postgres (see Latest
+  session) - the stray-tables cleanup is moot (clean migrate). Decommission the
+  stopped local Postgres in a few days to reclaim box RAM.
 
 ## Launch plan (agreed sequence)
 

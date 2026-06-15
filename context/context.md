@@ -41,7 +41,7 @@ worklist; this one is the stable overview.
 ## Production (summary — full runbook in deploy.md)
 
 - Hetzner CPX22 (`ssh taqreer`), nginx + TLS → pm2 `taqreer-prod` :3100,
-  Postgres 16 `taqreer_prod` local to the box, Supabase = auth/storage/realtime
+  prod app DB on Supabase Pro Postgres (eu-central-1, 2026-06-16), Supabase = auth/storage/realtime
   (same project as dev). Nightly backups. Inngest self-hosted interim.
 - **Coming-soon gate**: every page shows coming-soon until
   `/preview?key=taqreer2025` sets the `tq_preview` cookie. Flag lives in the

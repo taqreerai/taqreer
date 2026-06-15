@@ -68,9 +68,12 @@ session-init brief; the four living docs hold the depth and are kept current:
 - **Stack on the box**: nginx 443 + Let's Encrypt → pm2 `taqreer-prod` (`next
   start` :3100, serves `.next-deploy` via `NEXT_DIST_DIR`) + pm2
   `taqreer-inngest` (self-hosted inngest dev server :8288, INTERIM until Inngest
-  Cloud). Postgres 16 `taqreer_prod` local to the box. Nightly 02:00 backups.
-- **Supabase** = auth + storage + realtime ONLY (NOT the app DB). The SAME
-  Supabase project serves dev and prod, so logins + image URLs are shared.
+  Cloud). **App DB = Supabase Pro Postgres** (eu-central-1, session pooler)
+  since 2026-06-16; RLS on every public table (app bypasses it as table owner).
+  Old server-local Postgres 16 kept STOPPED as a cold rollback standby.
+- **Supabase** = auth + storage + realtime + **the prod app DB** (Postgres,
+  2026-06-16). The SAME Supabase project serves dev and prod (logins + image
+  URLs shared); dev's app DB stays local docker, only prod moved to Supabase.
 - **Secrets** live ONLY in `/root/taqreer/.env` (chmod 600) — gitignored +
   untracked, so `git checkout` on the box never touches them. Includes prod
   `DATABASE_URL`, `COMING_SOON=1`, `COMING_SOON_KEY`, `NEXT_DIST_DIR`,
@@ -103,7 +106,7 @@ session-init brief; the four living docs hold the depth and are kept current:
 
 - **Next.js 16 App Router** (Turbopack), React 18/19, TS `strict`. **Tailwind v4
   CSS-first** — theme in `@theme` blocks inside globals.css (no tailwind.config).
-- **Data**: Prisma → Postgres (dev docker `localhost:5432`, prod server-local).
+- **Data**: Prisma → Postgres (dev docker `localhost:5432`, prod **Supabase Pro**, eu-central-1 session pooler).
   **Generation**: Anthropic Claude (Opus 4.8 default) streams `<section>` HTML
   via **Inngest** jobs; gpt-image-2 for images.
 - **Edge gate**: [proxy.ts](proxy.ts) — locale-prefix redirect → coming-soon

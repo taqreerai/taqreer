@@ -44,13 +44,20 @@ the `main` SHA checked out on the box is exactly what production runs.
 - nginx `sites-enabled/taqreer`: 443 → localhost:3100, certbot-managed TLS
   (auto-renew timer), `client_max_body_size 50m`. (The `/root/nginx-taqreer.bak*`
   copies were removed 2026-06-14; the live config lives in /etc/nginx.)
-- DB: server Postgres 16, db `taqreer_prod`, role `taqreer_app` (password
-  only in the server .env). Supabase stays auth+storage+realtime. 2026-06-14: the
-  stray empty `taqreer` db was DROPPED; `taqreer_prod` was WIPED to a single user
-  (`dev@taqreer.ai`, free) - pre-wipe dump at `/root/backups/pre-userwipe.dump`.
-  (Supabase Pro Postgres migration still on the table - revisit pre-launch.)
-- Backups: `/root/backup.sh` nightly at 02:00 (cron) — app tree tar +
-  `pg_dump -Fc` of DATABASE_URL, keeps last 10 of each in `/root/backups`.
+- DB: **Supabase Pro Postgres** (AWS eu-central-1, ~4ms from the box) since
+  2026-06-16. App connects via the **session-mode pooler** (port 5432,
+  `postgres.<ref>@aws-1-eu-central-1.pooler.supabase.com`) over TLS - the pg
+  adapter sets `ssl: { rejectUnauthorized: false }` for non-local hosts in
+  `lib/prisma.ts`; the server `.env` `DATABASE_URL` carries NO `sslmode` (a URL
+  sslmode wipes the adapter ssl object). RLS enabled on EVERY public table (the
+  app bypasses it as the table-owner `postgres` role; NEW public tables MUST
+  enable RLS in their migration). Old server-local Postgres 16 (`taqreer_prod`)
+  kept STOPPED as a cold rollback standby (revert: restore `.env.local-backup`'s
+  `DATABASE_URL` + `./deploy.sh --rebuild` + `pm2 restart taqreer-inngest
+  --update-env`); decommission pending.
+- Backups: DB backups now **managed by Supabase** (Pro daily backups; PITR
+  available as a paid add-on). The old `/root/backup.sh` cron (on-box-only
+  `pg_dump`) is obsolete for the DB once local Postgres is decommissioned.
 
 ## Deploying
 
