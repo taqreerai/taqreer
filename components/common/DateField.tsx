@@ -4,7 +4,7 @@
 // `<input type="date">`. Same rationale as ColorPickerPopover: the native
 // picker opens its own window that ignores our chrome, varies per-OS, and
 // is English-only. This gives one visual vocabulary (.surface-menu +
-// tokens, the account-menu dropdown recipe — its hairline flips with the
+// tokens, the account-menu dropdown recipe, its hairline flips with the
 // theme, unlike .surface-popover whose white border vanishes in light),
 // localized month / weekday names + Clear / Today buttons, and
 // full RTL/LTR awareness (the grid flows with the chrome dir, the month
@@ -13,7 +13,7 @@
 //
 // Contract: `value` is a "YYYY-MM-DD" string ("" = unset); `onChange`
 // emits the same. `min` / `max` (also "YYYY-MM-DD") bound the selectable
-// days so a range's start can't pass its end. The field is generic — the
+// days so a range's start can't pass its end. The field is generic, the
 // consumer passes the role label ("From" / "To") so start vs end is clear.
 
 import { useEffect, useRef, useState } from "react";
@@ -35,15 +35,28 @@ import {
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { dateFnsLocale } from "@/lib/i18n/date";
 
-// Local-midnight parse/format so a "YYYY-MM-DD" never drifts a day across
-// time zones (new Date("2026-06-12") would parse as UTC midnight).
+/**
+ * Parse a "YYYY-MM-DD" string to a local-midnight Date. Local (not UTC) so
+ * it never drifts a day across time zones the way `new Date("2026-06-12")`
+ * would. Returns null for empty input or an impossible calendar date.
+ */
 export function parseDateInput(value: string): Date | null {
   if (!value) return null;
   const [y, m, d] = value.split("-").map(Number);
   if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d);
+  const date = new Date(y, m - 1, d);
+  // The Date ctor silently normalizes e.g. Feb 31 to Mar 3; reject those.
+  if (
+    date.getFullYear() !== y ||
+    date.getMonth() !== m - 1 ||
+    date.getDate() !== d
+  ) {
+    return null;
+  }
+  return date;
 }
 
+/** Format a Date to a local "YYYY-MM-DD" string (inverse of parseDateInput). */
 export function formatDateInput(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
@@ -72,7 +85,7 @@ function Calendar({
 
   // Re-mounted on every open (the popover only renders the calendar while
   // open), so this initializer lands on the selected month or today each
-  // time — no rehydrate effect needed.
+  // time, no rehydrate effect needed.
   const [viewMonth, setViewMonth] = useState(() =>
     startOfMonth(value ?? new Date()),
   );
@@ -197,6 +210,11 @@ function Calendar({
   );
 }
 
+/**
+ * A branded date trigger plus popover calendar. `value` / `onChange` speak
+ * the "YYYY-MM-DD" string contract (see parseDateInput); `min` / `max` bound
+ * the selectable range. Localized and RTL/LTR aware via the chrome locale.
+ */
 export function DateField({
   label,
   value,
@@ -211,7 +229,7 @@ export function DateField({
   min?: string;
   max?: string;
 }) {
-  const { dir, locale } = useLocale();
+  const { locale } = useLocale();
   const dict = useDict();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -233,10 +251,6 @@ export function DateField({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  // Physical start edge from the chrome dir so the popover anchors to the
-  // field's start in both directions.
-  const startEdge = dir === "rtl" ? "right" : "left";
 
   return (
     <div ref={rootRef} className="relative">
@@ -276,7 +290,7 @@ export function DateField({
             role="dialog"
             aria-label={label}
             className="surface-menu absolute top-full z-30 mt-2 rounded-2xl p-2"
-            style={{ [startEdge]: 0, width: 280 }}
+            style={{ insetInlineStart: 0, width: 280 }}
             initial={{ scale: 0.96, y: -4 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.96, y: -4 }}

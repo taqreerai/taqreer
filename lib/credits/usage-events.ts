@@ -1,10 +1,10 @@
-// Usage statement — shared shapes + presentation map for the credit
+// Usage statement, shared shapes + presentation map for the credit
 // "Usage" surface (the user-menu page that lists how a user spent and
 // received credits). CLIENT-SAFE: pure data + mapping, no Prisma / env.
 //
 // The API (app/api/usage/ledger) normalizes the raw UsageEvent journal
 // into LedgerRow[]; this module turns each row into an icon + label key
-// the table renders. HOLDS ARE NEVER SHOWN — a hold is transient and
+// the table renders. HOLDS ARE NEVER SHOWN, a hold is transient and
 // settles into a charge/release, so the statement reads the FINAL
 // movements only (mirrors RECENT_EVENT_TYPES in app/api/credits).
 

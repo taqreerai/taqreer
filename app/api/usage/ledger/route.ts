@@ -1,8 +1,8 @@
-// GET /api/usage/ledger — the credit "Usage" statement: how the user
+// GET /api/usage/ledger, the credit "Usage" statement: how the user
 // spent and received credits, newest-first, date-filtered + paginated.
 //
 // Auth-gated (Supabase user → Prisma user). READ-ONLY: no credits are
-// mutated here. Reads the UsageEvent journal (FINAL movements only —
+// mutated here. Reads the UsageEvent journal (FINAL movements only,
 // holds are transient) and joins the CreditHold metadata by jobKey so
 // each spend row knows its flow / preset / slide count and final charge.
 //
@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // Period totals — computed over the WHOLE filtered range (not just the
+  // Period totals, computed over the WHOLE filtered range (not just the
   // page) and only on the first request (the client keeps them across
   // load-more). Spend is summed from settled holds (the authoritative
   // charge); grants from the journal. A job that crosses midnight can

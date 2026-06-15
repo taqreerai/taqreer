@@ -1,6 +1,6 @@
 "use client";
 
-// /usage page body: the credit statement — how the user spent + received
+// /usage page body: the credit statement, how the user spent + received
 // credits, newest-first, with a date filter (presets + a custom range).
 // Built on the SAME `.settings-row` list the InvoicesList uses (the design
 // system renders tabular data as settings rows, NEVER an HTML <table>;
@@ -180,7 +180,7 @@ export function UsageList() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Filter bar — preset pills + (custom) range inputs. */}
+      {/* Filter bar, preset pills + (custom) range inputs. */}
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedToggle
           size="large"
@@ -207,7 +207,7 @@ export function UsageList() {
         ) : null}
       </div>
 
-      {/* Period totals — kept across load-more (server sends them once). */}
+      {/* Period totals, kept across load-more (server sends them once). */}
       {totals && rows && rows.length > 0 ? (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span className="text-muted">
@@ -232,7 +232,7 @@ export function UsageList() {
         </div>
       ) : null}
 
-      {/* Statement — settings-row list inside a card (never a <table>). */}
+      {/* Statement, settings-row list inside a card (never a <table>). */}
       <div className="surface-card rounded-2xl p-5">
         {failed ? (
           <p className="text-sm text-muted">{t.loadFailed}</p>
