@@ -195,7 +195,13 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - api/extract, api/storage (file-upload routes): when a request matches
+     *   the middleware, Next buffers its body to a 10MB default and truncates
+     *   the rest, so a >10MB upload reaches the route as a broken multipart and
+     *   request.formData() throws. These routes do their own auth and proxy.ts
+     *   never reads the body for /api, so skip them entirely (no session-
+     *   refresh loss that matters - the route's getUser() refreshes anyway).
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/extract|api/storage).*)",
   ],
 };
