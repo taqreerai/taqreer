@@ -235,7 +235,11 @@ function CheckoutForm({
       </div>
 
       <div className="surface-card flex flex-col gap-5 rounded-2xl p-6">
-        <PaymentElement options={{ layout: "tabs" }} />
+        {/* Accordion (not tabs): the wallet set (Apple/Google/Cash App/Bank/
+            Card) crams + shrinks in a tab row; accordion stacks each method
+            full-width with breathing room and keeps the recommended one
+            expanded. */}
+        <PaymentElement options={{ layout: "accordion" }} />
 
         {payError ? (
           <p className="text-sm text-danger" role="alert">

@@ -110,6 +110,12 @@ export async function POST(request: Request) {
         }),
     return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
     allow_promotion_codes: true,
+    // Let the user save the card for future payments: shows the opt-in checkbox
+    // in the Payment Element AND auto-redisplays the saved card on the next
+    // checkout (1-click). Needs a customer (set above). Works in both modes; a
+    // subscription already stores the card for renewals, this just makes it
+    // explicit + reusable for top-ups / plan changes.
+    saved_payment_method_options: { payment_method_save: "enabled" },
   });
 
   return NextResponse.json({ clientSecret: session.client_secret });
