@@ -152,7 +152,7 @@ The brand runs on a **single blue accent**. The accent token is named `--tq-purp
 `.btn-pill` (secondary) · `.btn-gradient` (solid-blue primary CTA; light hover = darker, dark hover = brighter) · `.btn-gradient-anim` (AI mesh) · `.input-dark` / `.input-search` · `.dropdown-item` · `.nav-item`/`.nav-active` · `.badge-purple` (blue badge) · `.surface-card/-popover/-menu/-modal` · `.bg-overlay-{soft,-,strong}` · `.tq-content-panel` · `.tq-aurora*` · `.logo-monochrome` / `.logo-on-{dark,light}` · `.text-gradient` · `.hide-scrollbar`. All buttons pill-shaped, flat.
 
 ### Brand guidelines
-**[public/brand-guidelines.html](public/brand-guidelines.html)** — a self-contained, downloadable spec for designers (logo, blue palette, Cairo type, components, glow usage), with a light/dark toggle. Live at `/brand-guidelines.html`.
+**[app/[lang]/brand/page.tsx](app/[lang]/brand/page.tsx)** — the LIVE design-system reference, served at `/ar/brand` + `/en/brand`. A real route under the `[lang]` layout, so it imports the same `app/globals.css` the app ships: every `--tq-*` token and utility class is byte-identical (no hand-copied demo CSS to drift). Covers tokens/themes, surfaces, buttons, icons, inputs, menus/popovers, toasts, upload zones, modals, tooltip/status, plan/progress/tables, and the email shell. Embeds the real `ParagraphWriteIcon` (animated mark) + `ThemeToggle` (in-page light/dark flip). Add new patterns to globals.css first, then document them here. (Replaced the old static `public/brand-guidelines.html`, which re-implemented tokens by hand and drifted.)
 
 ### The 3 discipline rules (non-negotiable, user-flagged)
 1. Never hardcode — use tokens / add a class to globals.css first.

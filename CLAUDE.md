@@ -128,7 +128,8 @@ session-init brief; the four living docs hold the depth and are kept current:
   blur/shadow. Typeface **Cairo only, weights 400-700**. Utilities: `.btn-pill`,
   `.btn-gradient` (solid blue CTA), `.btn-gradient-anim` (AI mesh),
   `.surface-card/-popover/-menu/-modal`, `.badge-purple`, `.bg-overlay-*`,
-  `.tq-content-panel`. Brand spec: `/brand-guidelines.html`.
+  `.tq-content-panel`. Brand spec: **`/ar/brand`** (live design-system route,
+  `app/[lang]/brand/page.tsx` - imports globals.css so it is a true replica).
 - **Studio** (`DeckView`): generating shell (disabled, streaming) ⟶ seamless ⟶
   editor (enabled), no remount. Manual edits = in-place content save (no new
   version); AI path = full regen or per-slide partial regen (comment flagged

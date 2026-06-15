@@ -410,6 +410,20 @@
   /* Lighter blue for the yearly-discount label so it reads on the BLACK active
      pill (bg-foreground in light) and on the near-white track. */
   --tq-discount-accent: #5b8def;
+  /* Status feedback - light overrides. The dark defaults use pale pastel text
+     (ok #6ee7b7 / warn #fcd34d / down #fca5a5) that washes out to near-invisible
+     on the near-white light surfaces (user-flagged 2026-06-15). Light mode needs
+     darker, saturated text (the Tailwind 700 shades) plus a touch more border
+     definition so the chips read on white. The dots keep their saturated hue. */
+  --tq-status-ok-text:     #047857;
+  --tq-status-ok-bg:       rgba(16, 185, 129, 0.12);
+  --tq-status-ok-border:   rgba(16, 185, 129, 0.40);
+  --tq-status-warn-text:   #b45309;
+  --tq-status-warn-bg:     rgba(245, 158, 11, 0.14);
+  --tq-status-warn-border: rgba(245, 158, 11, 0.45);
+  --tq-status-down-text:   #b91c1c;
+  --tq-status-down-bg:     rgba(239, 68, 68, 0.10);
+  --tq-status-down-border: rgba(239, 68, 68, 0.40);
 }
 
 /* Monochrome logo (brand-kit + flow-card uploads) — flips white↔black with the
