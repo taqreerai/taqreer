@@ -21,11 +21,14 @@
 // 2026-05-20 with the Prisma-cascade path.
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const limited = rateLimited(`delete-account:${clientIp(request)}`, 5, 10 * 60_000);
+  if (limited) return limited;
   try {
     const supabase = await createServerClient();
     // `getUser()` (not `getSession()`) — round-trips to Supabase

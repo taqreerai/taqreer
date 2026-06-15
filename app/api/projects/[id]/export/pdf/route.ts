@@ -19,6 +19,7 @@
 // planned for step 15.7 + concurrency.
 
 import { NextResponse } from "next/server";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import puppeteer from "puppeteer";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
@@ -66,9 +67,11 @@ function contentDispositionAttachment(displayName: string): string {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const limited = rateLimited(`export-pdf:${clientIp(request)}`, 30, 5 * 60_000);
+  if (limited) return limited;
   const { id: projectId } = await params;
   // Phase 15.A — view access required (exports allowed for every
   // role that can see the deck per product direction). Trade-off

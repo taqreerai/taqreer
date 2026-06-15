@@ -13,6 +13,7 @@
 //   • path is namespaced to the Supabase user id, so no cross-user writes.
 
 import { NextResponse } from "next/server";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { storeUploadedImage } from "@/lib/images/store";
 
@@ -42,6 +43,8 @@ function sniffImageType(b: Buffer): string | null {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimited(`upload-image:${clientIp(request)}`, 60, 5 * 60_000);
+  if (limited) return limited;
   try {
     const supabase = await createClient();
     const {

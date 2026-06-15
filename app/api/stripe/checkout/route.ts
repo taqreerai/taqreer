@@ -19,6 +19,7 @@
 // customer.subscription.updated.
 
 import { NextResponse } from "next/server";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/billing/stripe";
@@ -29,6 +30,8 @@ import { normalizePlan } from "@/lib/plan";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 export async function POST(request: Request) {
+  const limited = rateLimited(`checkout:${clientIp(request)}`, 15, 10 * 60_000);
+  if (limited) return limited;
   const supabase = await createClient();
   const {
     data: { user },

@@ -1,4 +1,5 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,6 +10,8 @@ function safeFileName(name: string) {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimited(`upload:${clientIp(request)}`, 60, 5 * 60_000);
+  if (limited) return limited;
   try {
     const supabase = await createClient();
     const {

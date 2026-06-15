@@ -20,6 +20,7 @@
 
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectContext } from "@/lib/api/project-context";
 import { sendShareInvite } from "@/lib/email/send-share-invite";
@@ -136,11 +137,16 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const limited = rateLimited(`share:${clientIp(request)}`, 10, 10 * 60_000);
+  if (limited) return limited;
   const { id: projectId } = await params;
   const ctx = await resolveProjectContext(projectId);
   if ("error" in ctx) {
     return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   }
+  // Per-owner backstop on the share-invite (Resend) spam vector.
+  const limitedUser = rateLimited(`share-user:${ctx.project.user.id}`, 10, 10 * 60_000);
+  if (limitedUser) return limitedUser;
 
   // `request.json()` happily returns null / arrays / primitives,
   // which then crash on `"key" in body` further down (TypeError →

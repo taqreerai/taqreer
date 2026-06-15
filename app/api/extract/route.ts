@@ -26,6 +26,7 @@
 // is for the DERIVED slide PNGs the extraction produces.
 
 import { NextResponse } from "next/server";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { inngest } from "@/inngest/client";
 import { createClient } from "@/lib/supabase/server";
@@ -46,6 +47,8 @@ function safeFileName(name: string) {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimited(`extract:${clientIp(request)}`, 20, 5 * 60_000);
+  if (limited) return limited;
   try {
     // ─── Auth ──────────────────────────────────────────────────────
     const supabase = await createClient();

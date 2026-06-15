@@ -17,6 +17,7 @@
 // from the async path planned for step 15.5 + concurrency.
 
 import { NextResponse } from "next/server";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import JSZip from "jszip";
 import puppeteer from "puppeteer";
 import { prisma } from "@/lib/prisma";
@@ -64,9 +65,11 @@ function contentDispositionAttachment(displayName: string): string {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const limited = rateLimited(`export-png:${clientIp(request)}`, 30, 5 * 60_000);
+  if (limited) return limited;
   const { id: projectId } = await params;
   // Phase 15.A — view access required.
   const access = await resolveProjectAccess(projectId, "view");
