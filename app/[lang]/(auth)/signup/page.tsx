@@ -81,7 +81,10 @@ export default function SignupPage() {
     {
       key: "spec",
       label: t.signup.pwReqSpecial,
-      met: /[^A-Za-z0-9]/.test(password),
+      // A real symbol: NOT a letter (any script, so Arabic letters don't count),
+      // NOT a digit, NOT whitespace. Avoids the `[^A-Za-z0-9]` trap that accepted
+      // Arabic letters + spaces as "special".
+      met: /[^\p{L}\p{N}\s]/u.test(password),
     },
     {
       key: "space",
@@ -275,9 +278,7 @@ export default function SignupPage() {
       className="space-y-5"
     >
       {error && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/20 p-3 text-sm text-red-200">
-          {error}
-        </div>
+        <div className="status-error">{error}</div>
       )}
 
       <motion.div

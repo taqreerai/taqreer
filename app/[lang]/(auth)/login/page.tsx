@@ -134,14 +134,10 @@ export default function LoginPage() {
       </div>
 
       {deleted && (
-        <div className="rounded-xl border border-green-500/40 bg-green-500/20 p-3 text-sm text-green-200">
-          {t.login.deletedSuccess}
-        </div>
+        <div className="status-success">{t.login.deletedSuccess}</div>
       )}
       {error && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/20 p-3 text-sm text-red-200">
-          {error}
-        </div>
+        <div className="status-error">{error}</div>
       )}
 
       <button type="button" onClick={handleGoogleLogin} disabled={loading} className={oauthBtn}>

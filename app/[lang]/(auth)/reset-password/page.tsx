@@ -143,10 +143,7 @@ export default function ResetPasswordPage() {
       )}
 
       {error && (
-        <motion.div
-          {...fadeUp(0.05)}
-          className="bg-red-500/20 border border-red-500/40 rounded-xl p-3 text-red-200 text-sm"
-        >
+        <motion.div {...fadeUp(0.05)} className="status-error">
           {error}
         </motion.div>
       )}

@@ -92,9 +92,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/20 p-3 text-sm text-red-200">
-          {error}
-        </div>
+        <div className="status-error">{error}</div>
       )}
 
       <form onSubmit={handleResetRequest} className="space-y-4">

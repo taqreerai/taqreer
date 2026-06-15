@@ -2282,18 +2282,22 @@ html.app-shell-scroll body {
 
 /* ─── Status Messages ─── */
 .status-success {
-  background: rgba(34, 197, 94, 0.15);
-  border: 1px solid rgba(34, 197, 94, 0.30);
-  color: #86efac;
+  /* Token-backed inline success feedback (flips with the theme via the status
+     tokens, which carry .light overrides). Replaces the old hardcoded greens. */
+  background: var(--tq-status-ok-bg);
+  border: 1px solid var(--tq-status-ok-border);
+  color: var(--tq-status-ok-text);
   border-radius: var(--tq-radius-md);
   padding: 12px;
   font-size: 0.875rem;
 }
 
 .status-error {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.30);
-  color: #fca5a5;
+  /* Token-backed inline error feedback (flips with the theme; legible in light
+     now that the down-* tokens have .light overrides). */
+  background: var(--tq-status-down-bg);
+  border: 1px solid var(--tq-status-down-border);
+  color: var(--tq-status-down-text);
   border-radius: var(--tq-radius-md);
   padding: 12px;
   font-size: 0.875rem;
