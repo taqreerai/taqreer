@@ -225,7 +225,7 @@ export async function POST(request: Request) {
         // invoice.payment_succeeded.
         const before = await prisma.subscription.findUnique({
           where: { userId: prismaUserId },
-          select: { plan: true },
+          select: { plan: true, cancelAtPeriodEnd: true },
         });
         await prisma.subscription.update({
           where: { userId: prismaUserId },
@@ -246,8 +246,15 @@ export async function POST(request: Request) {
             periodEnd: periodEnd(sub) ?? undefined,
           });
         }
-        // Cancellation scheduled - tell the user when access ends.
-        if (sub.cancel_at_period_end && periodEnd(sub)) {
+        // Cancellation just SCHEDULED (false -> true transition only) - notify
+        // + email once. Any later subscription.updated while still
+        // cancel_at_period_end (a payment-method edit, etc.) would otherwise
+        // resend the "ending" bell + email.
+        if (
+          sub.cancel_at_period_end &&
+          !before?.cancelAtPeriodEnd &&
+          periodEnd(sub)
+        ) {
           await fanOutNotification({
             type: "billing.subscription_ending",
             projectId: null,
