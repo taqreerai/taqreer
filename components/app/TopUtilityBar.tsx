@@ -83,6 +83,7 @@ export function TopUtilityBar({
 } = {}) {
   const [searchOpen, setSearchOpen] = useState(false);
   const dict = useDict();
+  const { locale } = useLocale();
 
   // ⌘K (Mac) / Ctrl+K — global open shortcut. Ignored while typing in a field
   // other than to open (it preventDefaults the browser's own ⌘K).
@@ -121,6 +122,22 @@ export function TopUtilityBar({
           {/* Notifications bell - this instance also boots the
               notification store + owns the live toast stack. */}
           <BellDropdown />
+          {/* Home - studio header only (`avatar` is the studio signal; the
+              dashboard already has the sidebar home link). A quick exit back to
+              the dashboard, sitting next to the bell. */}
+          {avatar ? (
+            <Tooltip label={dict.nav.home} placement="bottom">
+              <Link
+                href={localizedHref("/dashboard", locale)}
+                aria-label={dict.nav.home}
+                className="icon-hover flex h-9 w-9 items-center justify-center rounded-lg"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  home
+                </span>
+              </Link>
+            </Tooltip>
+          ) : null}
           <Tooltip label={dict.topBar.search} placement="bottom">
             <button
               type="button"

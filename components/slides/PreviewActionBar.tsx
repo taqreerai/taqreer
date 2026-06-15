@@ -626,55 +626,56 @@ export function PreviewActionBar({
                     `pendingAiBounds`); the instruction is typed here. The mesh
                     gradient lives ONLY on this AI hero (the sparkle + the send
                     button), per the frontend consult. */}
-                <div className="surface-popover flex h-9 items-center gap-1.5 rounded-full px-1.5">
-                  {aiBusy ? (
-                    // Submitting — collapse to a compact running label, the mesh
-                    // ring spinning, until the regen settles (§17 states).
-                    <div className="flex items-center gap-2 px-2 text-xs text-foreground/80">
-                      <span className="btn-gradient-anim flex h-5 w-5 items-center justify-center rounded-full">
-                        <span className="spinner h-3 w-3 rounded-full border-2 border-foreground/30 border-t-white" />
-                      </span>
-                      {dict.editor.toolbar.applying}
-                    </div>
-                  ) : (
-                    <>
-                      {/* Instruction input — single line; Enter submits. No scope
-                          chip / sparkle: the drawn region's on-canvas marker is
-                          enough signal, so the composer stays a clean input +
-                          send (user direction — don't over-explain). */}
-                      <input
-                        type="text"
-                        dir="auto"
-                        value={aiInput}
-                        onChange={(e) => setAiInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void handleAiSend();
-                          }
-                        }}
-                        placeholder={
-                          hasAiRegion
-                            ? dict.editor.toolbar.aiPlaceholderRegion
-                            : dict.editor.toolbar.aiPlaceholderNoRegion
-                        }
-                        disabled={focusedSlideLocked}
-                        className="w-[250px] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50"
-                      />
-                      {/* Send (توليد) — the one mesh button; needs an instruction. */}
-                      <button
-                        type="button"
-                        onClick={() => void handleAiSend()}
-                        disabled={!aiInput.trim() || focusedSlideLocked}
-                        aria-label={dict.editor.toolbar.generate}
-                        className="btn-gradient-anim flex h-7 w-7 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
-                      >
-                        <span className="material-symbols-outlined text-[16px] leading-none">
-                          arrow_upward
-                        </span>
-                      </button>
-                    </>
-                  )}
+                <div className="surface-popover flex h-9 items-center gap-1.5 rounded-full px-1">
+                  {/* Instruction input — single line; Enter submits. Stays the
+                      SAME width while applying (never shrinks); it just disables.
+                      No scope chip / sparkle: the drawn region's on-canvas marker
+                      is enough signal, so the composer stays a clean input + send
+                      (user direction — don't over-explain). */}
+                  <input
+                    type="text"
+                    dir="auto"
+                    value={aiInput}
+                    onChange={(e) => setAiInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAiSend();
+                      }
+                    }}
+                    placeholder={
+                      hasAiRegion
+                        ? dict.editor.toolbar.aiPlaceholderRegion
+                        : dict.editor.toolbar.aiPlaceholderNoRegion
+                    }
+                    disabled={focusedSlideLocked || aiBusy}
+                    className="w-[250px] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50"
+                  />
+                  {/* Send (توليد) — the one mesh button. While applying it keeps
+                      its exact shape; the up-arrow morphs into a spinner in place
+                      (no separate spinner chrome / background). */}
+                  <button
+                    type="button"
+                    onClick={() => void handleAiSend()}
+                    disabled={!aiBusy && (!aiInput.trim() || focusedSlideLocked)}
+                    aria-label={
+                      aiBusy
+                        ? dict.editor.toolbar.applying
+                        : dict.editor.toolbar.generate
+                    }
+                    aria-busy={aiBusy || undefined}
+                    className={`btn-gradient-anim flex h-7 w-7 shrink-0 items-center justify-center rounded-full disabled:opacity-40 ${
+                      aiBusy ? "pointer-events-none" : ""
+                    }`}
+                  >
+                    <span
+                      className={`material-symbols-outlined text-[16px] leading-none ${
+                        aiBusy ? "animate-spin" : ""
+                      }`}
+                    >
+                      {aiBusy ? "progress_activity" : "arrow_upward"}
+                    </span>
+                  </button>
                 </div>
                 {/* Regenerate THIS slide — clean, no-instruction redesign. */}
                 {onRegenSlide ? (
