@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { NoticeCard } from "@/components/common/NoticeCard";
+import { pollPurchaseSettled } from "@/lib/billing/poll-purchase";
 
 type State = "processing" | "success" | "failed";
 
@@ -22,10 +23,14 @@ export function ReturnClient({
 
   // Success needs no click - show the confirmation beat, then land the
   // user on the dashboard (user direction 2026-06-11). The credit grant
-  // arrives via webhook + live balance nudge, so there is nothing to do
-  // here.
+  // arrives via the async webhook; the realtime nudge usually catches it,
+  // but it can race the redirect, so we ALSO poll the credit + notification
+  // stores here. They're app-singletons that survive the client-side
+  // navigation, so the dashboard we land on shows the new plan + credits +
+  // bell badge without a manual refresh.
   useEffect(() => {
     if (state !== "success") return;
+    void pollPurchaseSettled();
     const id = setTimeout(
       () => router.replace(localizedHref("/dashboard", locale)),
       1500,

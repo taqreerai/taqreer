@@ -22,6 +22,7 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { getStripe } from "@/lib/billing/stripe-client";
 import { checkoutAppearance, CHECKOUT_FONTS } from "@/lib/billing/appearance";
+import { pollPurchaseSettled } from "@/lib/billing/poll-purchase";
 
 export function EmbeddedCheckout({
   lookupKey,
@@ -172,7 +173,11 @@ function CheckoutForm({
         return;
       }
       // Page flow: Stripe redirects to return_url on success, so this
-      // line is only ever reached in the modal flow.
+      // line is only ever reached in the modal flow. The subscription grant
+      // lands via an async webhook a beat after this confirm resolves, so poll
+      // the credit + notification stores until it does — credits, the new
+      // plan, and the bell badge fill in place with no manual refresh.
+      void pollPurchaseSettled();
       onSuccess?.();
     } catch {
       // confirm() REJECTS on integration errors (it doesn't return

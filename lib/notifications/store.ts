@@ -442,6 +442,15 @@ class NotificationStore {
     this.persist();
     this.emit();
   }
+
+  /** Force a notifications re-hydrate from the server. Used after a purchase
+   *  so the "credited" / "plan changed" row + the bell badge appear without
+   *  waiting on the realtime broadcast (which races the async grant webhook).
+   *  No-op when signed out. */
+  refetch(): void {
+    if (!this.prismaUserId || typeof window === "undefined") return;
+    void this.hydrateFromServer();
+  }
 }
 
 // Module-singleton — survives Fast Refresh because Next reuses the
