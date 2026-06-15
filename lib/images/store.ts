@@ -35,15 +35,22 @@ export function genImageHash(prompt: string): string {
   return createHash("sha256").update(prompt).digest("hex").slice(0, 12);
 }
 
+// Single source for the stored generated-image filename. `.jpg` because
+// storeGeneratedImage re-encodes the gpt-image PNG to JPEG. Used by the path
+// builder, the existence check, the safe-filename guard, AND the status
+// route's warm-fill membership test — keep the extension in exactly ONE place
+// so they can never drift (a .png/.jpg mismatch silently re-bills every image).
+export function genImageFileName(genid: string, hash: string): string {
+  return `${genid}-${hash}.jpg`;
+}
+
 // Deterministic per-image path — `${projectId}/gen/${genid}-${hash}.jpg`.
 // Stable for a given (projectId, genid, promptHash), which is what lets the
 // warm-during-stream fill, the end-of-deck reconcile, AND the status-route
 // live poll all agree on the same object without a shared DB row mid-stream
-// (context/images.md async fill). `.jpg` because storeGeneratedImage
-// re-encodes the gpt-image PNG to JPEG (single URL source, so the extension
-// flows to the predictive URL + the existence check too).
+// (context/images.md async fill).
 function genImagePath(projectId: string, genid: string, hash: string): string {
-  return `${projectId}/gen/${genid}-${hash}.jpg`;
+  return `${projectId}/gen/${genImageFileName(genid, hash)}`;
 }
 
 // Memoised module singleton — the admin client is stateless (no session
@@ -170,7 +177,7 @@ export async function generatedImageExists(
   genid: string,
   hash: string,
 ): Promise<boolean> {
-  const filename = `${genid}-${hash}.png`;
+  const filename = genImageFileName(genid, hash);
   const { data, error } = await adminClient()
     .storage.from(BUCKET)
     .list(`${projectId}/gen`, { search: filename, limit: 1 });
@@ -186,11 +193,11 @@ export async function generatedImageExists(
   return (data ?? []).some((f) => f.name === filename);
 }
 
-// Filenames safe to surface as an <img src> — `${genid}-${hash}.png` where
+// Filenames safe to surface as an <img src> — `${genid}-${hash}.jpg` where
 // genid is SAFE_GENID and hash is lowercase hex. Belt-and-suspenders against
 // any future write path that bypasses the writer-side genid guard, keeping a
 // `../`-style name from ever reaching the client.
-const SAFE_GEN_FILENAME = /^[A-Za-z0-9._-]+-[0-9a-f]{12}\.png$/;
+const SAFE_GEN_FILENAME = /^[A-Za-z0-9._-]+-[0-9a-f]{12}\.jpg$/;
 
 /**
  * The set of STORED image FILENAMES under `${projectId}/gen/` (e.g.

@@ -5,6 +5,7 @@ import {
   listWarmedImageFiles,
   publicGeneratedImageUrl,
   genImageHash,
+  genImageFileName,
 } from "@/lib/images/store";
 import { scanGenImages } from "@/lib/images/slide-images";
 
@@ -344,7 +345,7 @@ export async function GET(
           continue;
         }
         const hash = genImageHash(prompt);
-        if (warmedFiles.has(`${genid}-${hash}.png`)) {
+        if (warmedFiles.has(genImageFileName(genid, hash))) {
           imageFills[genid] = publicGeneratedImageUrl(id, genid, hash);
         }
       }
