@@ -17,6 +17,10 @@
 -- broadcast-sends stay denied, closing the event-spoofing hole that
 -- public channels had.
 --
+-- `auth.jwt()` is wrapped in `(select auth.jwt())` so Postgres evaluates it
+-- ONCE per query (an InitPlan) instead of once per row (Supabase RLS perf
+-- advisor "Auth RLS Initialization Plan"). Same authorization result.
+--
 -- Idempotent: safe to re-run.
 
 drop policy if exists "taqreer receive on claimed topics" on realtime.messages;
@@ -27,7 +31,7 @@ to authenticated
 using (
   realtime.messages.extension in ('broadcast', 'presence')
   and realtime.topic() in (
-    select jsonb_array_elements_text(auth.jwt() -> 'topics')
+    select jsonb_array_elements_text((select auth.jwt()) -> 'topics')
   )
 );
 
@@ -39,6 +43,6 @@ to authenticated
 with check (
   realtime.messages.extension = 'presence'
   and realtime.topic() in (
-    select jsonb_array_elements_text(auth.jwt() -> 'topics')
+    select jsonb_array_elements_text((select auth.jwt()) -> 'topics')
   )
 );
