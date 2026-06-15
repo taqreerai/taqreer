@@ -447,9 +447,11 @@ class NotificationStore {
    *  so the "credited" / "plan changed" row + the bell badge appear without
    *  waiting on the realtime broadcast (which races the async grant webhook).
    *  No-op when signed out. */
-  refetch(): void {
-    if (!this.prismaUserId || typeof window === "undefined") return;
-    void this.hydrateFromServer();
+  refetch(): Promise<void> {
+    if (!this.prismaUserId || typeof window === "undefined") {
+      return Promise.resolve();
+    }
+    return this.hydrateFromServer();
   }
 }
 
