@@ -140,20 +140,28 @@ export function summaryBlock(
   const start = dir === "rtl" ? "right" : "left";
   const end = dir === "rtl" ? "left" : "right";
   const trs = rows
-    .map(
-      (r, i) => `
+    .map((r, i) => {
+      const border =
+        i < rows.length - 1
+          ? "border-bottom:1px solid rgba(255,255,255,0.06);"
+          : "";
+      // Rows sit DIRECTLY in the card table (cell padding = the inset), so
+      // there's no nested table to collapse. Label cell takes the majority so
+      // the value lands hard against the end edge.
+      return `
                   <tr>
-                    <td align="${start}" style="padding:7px 0;font-size:13px;line-height:1.7;color:#b4b4b4;${i < rows.length - 1 ? "border-bottom:1px solid rgba(255,255,255,0.06);" : ""}">${escapeHtml(r.label)}</td>
-                    <td align="${end}" style="padding:7px 0;font-size:13px;line-height:1.7;color:#ffffff;${i < rows.length - 1 ? "border-bottom:1px solid rgba(255,255,255,0.06);" : ""}"><bdi dir="ltr">${escapeHtml(r.value)}</bdi></td>
-                  </tr>`,
-    )
+                    <td align="${start}" width="60%" style="padding:9px 22px;font-size:13px;line-height:1.7;color:#b4b4b4;${border}">${escapeHtml(r.label)}</td>
+                    <td align="${end}" style="padding:9px 22px;font-size:13px;line-height:1.7;color:#ffffff;${border}"><bdi dir="ltr">${escapeHtml(r.value)}</bdi></td>
+                  </tr>`;
+    })
     .join("");
+  // ONE table at an explicit PIXEL width = the email content area (600 canvas
+  // minus the 40px side padding). Gmail honours a px `width` attribute but
+  // shrinks a `width="100%"` table to its content inside the centered content
+  // cell (which is why % collapsed it). `max-width:100%` keeps it responsive,
+  // `align="center"` centers it if a client ever caps it narrower.
   return `
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="400" style="margin:28px auto 0;max-width:400px;width:100%;background:#0A0A0A;border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
-                  <tr><td style="padding:8px 18px;">
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${trs}
-                    </table>
-                  </td></tr>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="520" style="width:520px;max-width:100%;margin:28px auto 0;background:#0A0A0A;border:1px solid rgba(255,255,255,0.08);border-radius:12px;">${trs}
                 </table>`;
 }
 

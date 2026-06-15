@@ -35,6 +35,12 @@ import {
   changePlanKeepBalance,
 } from "@/lib/credits/server";
 import { fanOutNotification } from "@/lib/notifications/server";
+import {
+  emailReceiptForInvoice,
+  emailReceiptForTopup,
+  emailPaymentFailed,
+  emailSubscriptionEnding,
+} from "@/lib/billing/receipt-email";
 import type { KnownPlan } from "@/lib/plan";
 
 // Next.js App Router: raw body for signature verification.
@@ -135,6 +141,16 @@ export async function POST(request: Request) {
           });
           if (result.granted > 0) {
             await notifyCredited(prismaUserId, grant.credits, "topup");
+            await emailReceiptForTopup(
+              prismaUserId,
+              session,
+              grant.credits,
+            ).catch((err) =>
+              console.error(
+                "[stripe] top-up receipt email failed:",
+                err instanceof Error ? err.message : String(err),
+              ),
+            );
           }
         } else {
           // Subscription: the subscription object carries the period
@@ -181,6 +197,14 @@ export async function POST(request: Request) {
           const { TIERS } = await import("@/lib/credits/cost");
           await notifyCredited(prismaUserId, TIERS[plan].monthlyAllotment, "renewal");
         }
+        // Branded receipt (our design), for the initial payment + every
+        // renewal. Caught so a mail hiccup never fails the webhook.
+        await emailReceiptForInvoice(prismaUserId, invoice, plan).catch((err) =>
+          console.error(
+            "[stripe] receipt email failed:",
+            err instanceof Error ? err.message : String(err),
+          ),
+        );
         break;
       }
 
@@ -232,6 +256,18 @@ export async function POST(request: Request) {
             allowSelfEcho: true,
             payload: { date: formatDate(periodEnd(sub)!) },
           }).catch(() => {});
+          // Branded "subscription ending" email.
+          await emailSubscriptionEnding(
+            prismaUserId,
+            plan,
+            cadenceFromSubscriptionObject(sub),
+            periodEnd(sub)!,
+          ).catch((err) =>
+            console.error(
+              "[stripe] subscription-ending email failed:",
+              err instanceof Error ? err.message : String(err),
+            ),
+          );
         }
         break;
       }
@@ -280,6 +316,18 @@ export async function POST(request: Request) {
           allowSelfEcho: true,
           payload: {},
         }).catch(() => {});
+        // Branded payment-failed email (update-your-card).
+        const failedSubId = invoiceSubscriptionId(invoice);
+        const failedPlan = failedSubId
+          ? await planFromSubscription(failedSubId)
+          : null;
+        await emailPaymentFailed(prismaUserId, invoice, failedPlan).catch(
+          (err) =>
+            console.error(
+              "[stripe] payment-failed email failed:",
+              err instanceof Error ? err.message : String(err),
+            ),
+        );
         break;
       }
 
