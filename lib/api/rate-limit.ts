@@ -7,11 +7,22 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 
-/** First IP from x-forwarded-for (nginx sets it), falling back to x-real-ip. */
+/**
+ * The real client IP. nginx is configured to set `X-Real-IP` to `$remote_addr`
+ * (the actual TCP peer, which a client cannot spoof) and to append the real IP
+ * as the LAST `X-Forwarded-For` hop. Prefer `X-Real-IP`; fall back to the last
+ * XFF hop, then "unknown". Do NOT trust the FIRST XFF hop, a client can prepend
+ * arbitrary values there to evade a per-IP limit.
+ */
 export function clientIp(req: Request): string {
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
-  return req.headers.get("x-real-ip")?.trim() || "unknown";
+  if (fwd) {
+    const hops = fwd.split(",");
+    return hops[hops.length - 1]!.trim();
+  }
+  return "unknown";
 }
 
 /**

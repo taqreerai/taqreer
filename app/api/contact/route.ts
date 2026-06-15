@@ -10,26 +10,15 @@ import {
   isDepartment,
 } from "@/lib/contact/departments";
 import { sendContact } from "@/lib/email/send-contact";
-import { rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 
 // Same shape as the share-invite validator: a pragmatic RFC-5322-ish check.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function clientIp(req: Request): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
-  return req.headers.get("x-real-ip")?.trim() || "unknown";
-}
-
 export async function POST(request: Request) {
   // ── Rate limit (5 / 10 min per IP) ──────────────────────────────────────
-  const rl = rateLimit(`contact:${clientIp(request)}`, 5, 10 * 60_000);
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } },
-    );
-  }
+  const limited = rateLimited(`contact:${clientIp(request)}`, 5, 10 * 60_000);
+  if (limited) return limited;
 
   let raw: unknown;
   try {
