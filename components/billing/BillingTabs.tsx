@@ -1,9 +1,9 @@
 "use client";
 
-// Shared tab strip for the billing area: /plans | /billing | /invoices
-// read as one section with three views (embedded-billing plan,
-// 2026-06-12). Pill links on the surface track - same look as the
-// monthly/yearly mini-toggle.
+// Shared tab strip for the billing area: /plans | /billing | /invoices |
+// /usage read as one section (embedded-billing plan, 2026-06-12; usage
+// statement added 2026-06-15). Pill links on the surface track - same
+// look as the monthly/yearly mini-toggle.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -14,6 +14,7 @@ const TABS = [
   { path: "/plans", key: "tabPlans" },
   { path: "/billing", key: "tabBilling" },
   { path: "/invoices", key: "tabInvoices" },
+  { path: "/usage", key: "tabUsage" },
 ] as const;
 
 export function BillingTabs() {

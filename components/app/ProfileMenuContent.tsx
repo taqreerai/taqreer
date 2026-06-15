@@ -266,6 +266,10 @@ export function ProfileMenuContent({
         <span className="material-symbols-outlined text-[18px]">credit_card</span>
         <span>{dict.profileMenu.billing}</span>
       </Link>
+      <Link href={localizedHref("/usage", locale)} onClick={onClose} className="dropdown-item">
+        <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+        <span>{dict.profileMenu.usage}</span>
+      </Link>
       <Link href={localizedHref("/settings", locale)} onClick={onClose} className="dropdown-item">
         <span className="material-symbols-outlined text-[18px]">settings</span>
         <span>{dict.profileMenu.settings}</span>
