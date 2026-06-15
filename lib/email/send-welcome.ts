@@ -7,7 +7,11 @@
 
 import { Resend } from "resend";
 import { renderEmail, templatesStrip } from "./shell";
-import type { WelcomeTemplate } from "@/lib/auth/marquee-projects";
+import {
+  getWelcomeTemplates,
+  type WelcomeTemplate,
+} from "@/lib/auth/marquee-projects";
+import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
 let cachedClient: Resend | null = null;
 function getClient(): Resend | null {
@@ -109,5 +113,50 @@ export async function sendWelcome(
     const message = err instanceof Error ? err.message : "unknown error";
     console.error("[welcome] send threw:", message);
     return { ok: false, error: message };
+  }
+}
+
+// Resolve the new user's locale, then send the welcome ONCE. BOTH routes that
+// can land the signup grant (user-sync + projects) call this when their grant
+// returns granted>0. The grant is row-locked + idempotent, so exactly one of
+// them reports granted>0 — the welcome therefore sends exactly once regardless
+// of which route won the race (the bug it fixes: only user-sync sent it, so
+// when /api/projects granted first the welcome was silently dropped).
+//
+// Fire-and-forget friendly: resolves templates + locale, sends, and swallows
+// its own errors so it never blocks or fails the caller.
+export async function dispatchWelcomeEmail(opts: {
+  toEmail: string;
+  // Supabase user.user_metadata?.lang (the signup-form locale) — preferred.
+  metadataLang: string | null | undefined;
+  // The request "cookie" header — tq_locale fallback.
+  cookieHeader: string | null;
+  // The account's stored language — final fallback.
+  fallbackLocale: string;
+  appOrigin: string;
+}): Promise<void> {
+  const cookieLocale = opts.cookieHeader
+    ?.split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${LOCALE_COOKIE}=`))
+    ?.slice(LOCALE_COOKIE.length + 1);
+  const locale = isLocale(opts.metadataLang)
+    ? (opts.metadataLang as string)
+    : isLocale(cookieLocale)
+      ? (cookieLocale as string)
+      : opts.fallbackLocale;
+  try {
+    const templates = await getWelcomeTemplates();
+    await sendWelcome({
+      toEmail: opts.toEmail,
+      locale,
+      appOrigin: opts.appOrigin,
+      templates,
+    });
+  } catch (err) {
+    console.error(
+      "[welcome] dispatch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
   }
 }

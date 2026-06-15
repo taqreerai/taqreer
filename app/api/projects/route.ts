@@ -20,6 +20,7 @@ import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 import { getDictionary, type Dictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 
@@ -471,7 +472,7 @@ export async function POST(request: Request) {
   // existence - another path (dashboard / user-sync / invite) may have
   // created the User row first, which would otherwise skip the grant.
   if (!existingUser?.creditAccount?.signupGrantedAt) {
-    await maybeGrantSignupCredits({
+    const grant = await maybeGrantSignupCredits({
       userId: dbUser.id,
       email: dbUser.email,
       ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
@@ -482,7 +483,22 @@ export async function POST(request: Request) {
         "[projects] signup grant failed:",
         err instanceof Error ? err.message : String(err),
       );
+      return null;
     });
+    // Welcome email — when THIS route lands the grant (granted > 0), send the
+    // welcome from here too. The grant is row-locked + idempotent, so exactly
+    // one route reports granted>0, so the welcome sends once (the bug: it only
+    // lived in user-sync, so when projects granted first it was dropped).
+    // Fire-and-forget — never blocks project creation.
+    if (grant && grant.granted > 0) {
+      void dispatchWelcomeEmail({
+        toEmail: dbUser.email,
+        metadataLang: user.user_metadata?.lang,
+        cookieHeader: request.headers.get("cookie"),
+        fallbackLocale: dbUser.language,
+        appOrigin: process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai",
+      });
+    }
   }
 
   // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000

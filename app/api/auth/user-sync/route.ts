@@ -4,8 +4,7 @@ import { NextResponse } from "next/server";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { fanOutNotification } from "@/lib/notifications/server";
-import { sendWelcome } from "@/lib/email/send-welcome";
-import { getWelcomeTemplates } from "@/lib/auth/marquee-projects";
+import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 
 export async function POST(request: Request) {
   try {
@@ -89,42 +88,20 @@ export async function POST(request: Request) {
       });
 
       // Welcome email — once, fire-and-forget (never blocks/fails the sync).
-      // Gated on the grant actually landing (granted > 0): that signal is
-      // atomic under the grant's row lock, so it never double-sends across
-      // racing first-syncs, and a farming-blocked account (0 credits) gets
-      // none. Locale comes from the signup metadata (set by the signup
-      // form), else the account default. This is the first authenticated
+      // Gated on the grant actually landing (granted > 0): atomic under the
+      // grant's row lock, so it never double-sends across racing first-syncs
+      // (and the projects route fires the SAME dispatcher when IT wins the
+      // grant, so the welcome sends from whichever route grants). A
+      // farming-blocked account (0 credits) gets none. First authenticated
       // sync, so confirm-email signups get it AFTER confirmation.
       if (grant && grant.granted > 0) {
-        const cookieLocale = request.headers
-          .get("cookie")
-          ?.split(";")
-          .map((c) => c.trim())
-          .find((c) => c.startsWith(`${LOCALE_COOKIE}=`))
-          ?.slice(LOCALE_COOKIE.length + 1);
-        const welcomeLocale = isLocale(user.user_metadata?.lang)
-          ? (user.user_metadata.lang as string)
-          : isLocale(cookieLocale)
-            ? cookieLocale
-            : dbUser.language;
-        // Trusted origin for the email links (NOT the spoofable Host header).
-        const appOrigin =
-          process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai";
-        void getWelcomeTemplates()
-          .then((templates) =>
-            sendWelcome({
-              toEmail: profile.email,
-              locale: welcomeLocale,
-              appOrigin,
-              templates,
-            }),
-          )
-          .catch((err) =>
-            console.error(
-              "[user-sync] welcome email failed:",
-              err instanceof Error ? err.message : String(err),
-            ),
-          );
+        void dispatchWelcomeEmail({
+          toEmail: profile.email,
+          metadataLang: user.user_metadata?.lang,
+          cookieHeader: request.headers.get("cookie"),
+          fallbackLocale: dbUser.language,
+          appOrigin: process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai",
+        });
       }
     }
 
