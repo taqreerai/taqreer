@@ -39,12 +39,14 @@ import {
 export type UserBroadcastEvent =
   | "notification.created"
   | "share.revoked"
-  | "credit.balance.changed";
+  | "credit.balance.changed"
+  | "subscription.changed";
 
 const USER_BROADCAST_EVENTS: readonly UserBroadcastEvent[] = [
   "notification.created",
   "share.revoked",
   "credit.balance.changed",
+  "subscription.changed",
 ];
 
 // Wire payload shapes per event. `server-broadcast.ts` enforces the
@@ -77,6 +79,13 @@ export type UserBroadcastPayloadMap = {
   // Emitted by lib/credits/server.ts after every ledger mutation
   // (hold / settle / grant / reset / expiry).
   "credit.balance.changed": Record<string, never>;
+  // POINTER-ONLY, like credit.balance.changed - the Subscription MIRROR
+  // (status / cancelAtPeriodEnd / currentPeriodEnd) changed. Consumers
+  // (ManageBilling, BillingSection) refetch the auth-gated
+  // GET /api/billing/summary; billing state never rides the socket. Emitted
+  // by the cancel/resume routes + the Stripe webhook's mirror-changing
+  // handlers (payment_failed / subscription.updated / .deleted / grant).
+  "subscription.changed": Record<string, never>;
 };
 
 export type UserChannelHandle = {
@@ -138,6 +147,7 @@ export async function openUserChannel(
     "notification.created": [],
     "share.revoked": [],
     "credit.balance.changed": [],
+    "subscription.changed": [],
   };
 
   // Pre-register one Supabase listener per event name. See project-

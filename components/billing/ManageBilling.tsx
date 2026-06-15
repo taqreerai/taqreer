@@ -57,6 +57,18 @@ const BRAND_LABELS: Record<string, string> = {
   discover: "Discover",
 };
 
+// Inline spinner for an in-flight action button (cancel / resume / card ops).
+function BtnSpinner() {
+  return (
+    <span
+      className="material-symbols-outlined animate-spin align-middle text-[18px] leading-none"
+      aria-hidden
+    >
+      progress_activity
+    </span>
+  );
+}
+
 export function ManageBilling() {
   const dict = useDict();
   const { locale } = useLocale();
@@ -97,6 +109,17 @@ export function ManageBilling() {
     refreshMethods();
   }, [refreshSummary, refreshMethods]);
 
+  // Webhook / other-tab subscription-mirror changes (cancel, resume, dunning
+  // past_due, renewal date) arrive as a `subscription.changed` realtime event,
+  // re-dispatched by the notification store as this DOM event. Refetch the
+  // summary in place - no router.refresh.
+  useEffect(() => {
+    const onChange = () => refreshSummary();
+    window.addEventListener("taqreer:subscription-changed", onChange);
+    return () =>
+      window.removeEventListener("taqreer:subscription-changed", onChange);
+  }, [refreshSummary]);
+
   const plan = summary ? summary.plan : credits ? normalizePlan(credits.plan) : "free";
   const planName = planLabel(dict.components.planUsage, plan);
   const periodEnd =
@@ -131,7 +154,7 @@ export function ManageBilling() {
             onClick={resumeSub}
             className="btn-pill px-6 py-2.5 text-sm"
           >
-            {busy === "resume" ? t.loading : t.resumeSub}
+            {busy === "resume" ? <BtnSpinner /> : t.resumeSub}
           </button>
         ) : (
           <button
@@ -187,18 +210,22 @@ export function ManageBilling() {
 
   async function removeCard(id: string) {
     setCardNotice(null);
-    const res = await post("/api/billing/payment-methods/detach", id, {
-      paymentMethodId: id,
-    });
+    const res = await post(
+      "/api/billing/payment-methods/detach",
+      `remove:${id}`,
+      { paymentMethodId: id },
+    );
     if (res?.status === 409) setCardNotice(t.removeDefaultBlocked);
     if (res?.ok) refreshMethods();
   }
 
   async function makeDefault(id: string) {
     setCardNotice(null);
-    const res = await post("/api/billing/payment-methods/default", id, {
-      paymentMethodId: id,
-    });
+    const res = await post(
+      "/api/billing/payment-methods/default",
+      `default:${id}`,
+      { paymentMethodId: id },
+    );
     if (res?.ok) setDefaultId(id);
   }
 
@@ -293,7 +320,11 @@ export function ManageBilling() {
                         onClick={() => makeDefault(pm.id)}
                         className="btn-pill px-3 py-1.5 text-xs"
                       >
-                        {busy === pm.id ? t.loading : t.setDefault}
+                        {busy === `default:${pm.id}` ? (
+                          <BtnSpinner />
+                        ) : (
+                          t.setDefault
+                        )}
                       </button>
                     ) : null}
                     <button
@@ -302,7 +333,11 @@ export function ManageBilling() {
                       onClick={() => removeCard(pm.id)}
                       className="btn-pill px-3 py-1.5 text-xs"
                     >
-                      {t.removeCard}
+                      {busy === `remove:${pm.id}` ? (
+                        <BtnSpinner />
+                      ) : (
+                        t.removeCard
+                      )}
                     </button>
                   </div>
                 </div>
@@ -387,7 +422,7 @@ export function ManageBilling() {
                       disabled={busy !== null}
                       className="btn-pill-danger px-4 py-3 text-sm"
                     >
-                      {busy === "cancel" ? t.loading : t.confirmCancel}
+                      {busy === "cancel" ? <BtnSpinner /> : t.confirmCancel}
                     </button>
                   </>
                 }

@@ -41,6 +41,7 @@ import {
   emailPaymentFailed,
   emailSubscriptionEnding,
 } from "@/lib/billing/receipt-email";
+import { broadcastToUser } from "@/lib/realtime/server-broadcast";
 import type { KnownPlan } from "@/lib/plan";
 
 // Next.js App Router: raw body for signature verification.
@@ -239,6 +240,10 @@ export async function POST(request: Request) {
             ...(plan ? { plan } : {}),
           },
         });
+        // Mirror changed (cancel/resume/plan/status) → nudge open billing tabs.
+        await broadcastToUser(prismaUserId, "subscription.changed", {}).catch(
+          () => {},
+        );
         if (plan && plan !== before?.plan) {
           await grantSubscriptionCycle({
             userId: prismaUserId,
@@ -299,6 +304,9 @@ export async function POST(request: Request) {
             cancelAtPeriodEnd: false,
           },
         });
+        await broadcastToUser(prismaUserId, "subscription.changed", {}).catch(
+          () => {},
+        );
         break;
       }
 
@@ -315,6 +323,10 @@ export async function POST(request: Request) {
             data: { status: "past_due" },
           })
           .catch(() => {});
+        // Dunning: status flipped to past_due → refresh the banner in place.
+        await broadcastToUser(prismaUserId, "subscription.changed", {}).catch(
+          () => {},
+        );
         await fanOutNotification({
           type: "billing.payment_failed",
           projectId: null,
@@ -394,6 +406,7 @@ async function applySubscriptionGrant(
       cancelAtPeriodEnd: false,
     },
   });
+  await broadcastToUser(prismaUserId, "subscription.changed", {}).catch(() => {});
 }
 
 async function planFromSubscription(

@@ -11,7 +11,7 @@
 // /api/billing/summary for the subscription-mirror state (renewal /
 // cancel dates).
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -91,18 +91,28 @@ export function BillingSection({
     router.push(`${localizedHref("/checkout", locale)}?price=${lookupKey}`);
   }
 
-  useEffect(() => {
-    let live = true;
+  const loadSummary = useCallback(() => {
     fetch("/api/billing/summary", { credentials: "same-origin" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: Summary | null) => {
-        if (live && d) setSummary(d);
+        if (d) setSummary(d);
       })
       .catch(() => {});
-    return () => {
-      live = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  // Refetch the mirror in place on a realtime subscription.changed (cancel /
+  // resume from another tab, webhook-driven dunning / renewal). Re-dispatched
+  // as this DOM event by the notification store.
+  useEffect(() => {
+    const onChange = () => loadSummary();
+    window.addEventListener("taqreer:subscription-changed", onChange);
+    return () =>
+      window.removeEventListener("taqreer:subscription-changed", onChange);
+  }, [loadSummary]);
 
   const plan = summary ? summary.plan : credits ? normalizePlan(credits.plan) : "free";
 

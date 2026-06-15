@@ -237,6 +237,14 @@ class NotificationStore {
       if (typeof window === "undefined") return;
       window.dispatchEvent(new CustomEvent("taqreer:credit-balance-changed"));
     });
+    // Subscription-mirror change (cancel/resume, dunning past_due, renewal
+    // date) - re-dispatched as a DOM event for the billing surfaces
+    // (ManageBilling, BillingSection), which refetch /api/billing/summary.
+    // Same CustomEvent decoupling as credit.balance.changed.
+    handle.on("subscription.changed", () => {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(new CustomEvent("taqreer:subscription-changed"));
+    });
   }
 
   // Fetches the user's last 50 notifications and merges them in by
