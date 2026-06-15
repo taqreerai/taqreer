@@ -226,7 +226,7 @@ export async function POST(request: Request) {
         // invoice.payment_succeeded.
         const before = await prisma.subscription.findUnique({
           where: { userId: prismaUserId },
-          select: { plan: true, cancelAtPeriodEnd: true },
+          select: { plan: true },
         });
         await prisma.subscription.update({
           where: { userId: prismaUserId },
@@ -252,12 +252,20 @@ export async function POST(request: Request) {
           });
         }
         // Cancellation just SCHEDULED (false -> true transition only) - notify
-        // + email once. Any later subscription.updated while still
-        // cancel_at_period_end (a payment-method edit, etc.) would otherwise
-        // resend the "ending" bell + email.
+        // + email once. Detect the transition from Stripe's previous_attributes
+        // (the fields that changed in THIS event), NOT our DB `before`: the
+        // cancel route mirrors cancelAtPeriodEnd into the DB synchronously (the
+        // "cancel button stayed" UX fix), so by the time this webhook runs the
+        // DB row is already true and a DB-based false->true check never fires -
+        // which is why the cancellation email silently stopped sending. Using
+        // previous_attributes also keeps it to once: a later update while still
+        // cancel_at_period_end won't list the flag as changed.
+        const prevAttrs = event.data.previous_attributes as
+          | Partial<Stripe.Subscription>
+          | undefined;
         if (
           sub.cancel_at_period_end &&
-          !before?.cancelAtPeriodEnd &&
+          prevAttrs?.cancel_at_period_end === false &&
           periodEnd(sub)
         ) {
           await fanOutNotification({
