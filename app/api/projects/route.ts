@@ -452,8 +452,17 @@ export async function POST(request: Request) {
   // it).
   const existingUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true, creditAccount: { select: { signupGrantedAt: true } } },
+    select: {
+      id: true,
+      bannedAt: true,
+      creditAccount: { select: { signupGrantedAt: true } },
+    },
   });
+  // A banned user keeps a valid Supabase session; block deck creation (the
+  // signup grant + generation spend) for suspended accounts.
+  if (existingUser?.bannedAt) {
+    return NextResponse.json({ error: "Account suspended" }, { status: 403 });
+  }
   const dbUser = await prisma.user.upsert({
     where: { supabaseUserId: user.id },
     update: {

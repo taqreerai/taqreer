@@ -176,10 +176,13 @@ export async function DELETE(
   }
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true },
+    select: { id: true, bannedAt: true },
   });
   if (!dbUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (dbUser.bannedAt) {
+    return NextResponse.json({ error: "Account suspended" }, { status: 403 });
   }
 
   const { count } = await prisma.generatedImage.deleteMany({

@@ -31,9 +31,11 @@ async function resolveAdmin(): Promise<AdminContext | null> {
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true, role: true },
+    select: { id: true, role: true, bannedAt: true },
   });
-  if (!dbUser || dbUser.role !== "admin") return null;
+  // A banned admin is treated as a non-admin: a still-valid session must not
+  // keep admin power (e.g. self-unban, or granting itself credits).
+  if (!dbUser || dbUser.role !== "admin" || dbUser.bannedAt) return null;
 
   return { userId: dbUser.id, supabaseUserId: user.id };
 }

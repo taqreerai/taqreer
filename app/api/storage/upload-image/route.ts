@@ -15,6 +15,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 import { storeUploadedImage } from "@/lib/images/store";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -52,6 +53,9 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (await isBannedSupabaseUser(user.id)) {
+      return NextResponse.json({ error: "Account suspended" }, { status: 403 });
     }
 
     const form = await request.formData();

@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 
 export type ProjectRole = "owner" | "edit" | "comment" | "view";
 
@@ -26,7 +27,7 @@ const ROLE_RANK: Record<ProjectRole, number> = {
 };
 
 export type ProjectAccessError = {
-  error: "Unauthorized" | "Project not found" | "Forbidden";
+  error: "Unauthorized" | "Project not found" | "Forbidden" | "Account suspended";
   status: 401 | 403 | 404;
 };
 
@@ -67,6 +68,14 @@ export async function resolveProjectAccess(
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // A banned user keeps a valid Supabase session (the ban is a local flag), so
+  // reject any suspended caller before resolving access. Covers a banned owner
+  // AND a banned edit/comment collaborator; anonymous public-view callers have
+  // no account to ban.
+  if (user && (await isBannedSupabaseUser(user.id))) {
+    return { error: "Account suspended", status: 403 };
+  }
 
   // Resolve the caller's app-level email up-front (used both for
   // the share-row email fallback and for the bare-email denial

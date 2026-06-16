@@ -29,6 +29,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 import { parseDatasheet } from "@/lib/extract/datasheet";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
@@ -67,6 +68,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (await isBannedSupabaseUser(user.id)) {
+    return NextResponse.json({ error: "Account suspended" }, { status: 403 });
   }
 
   // ─── Parse multipart body ────────────────────────────────────────

@@ -2,6 +2,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 
 const allowedBuckets = new Set(["source-files", "brand-assets"]);
 
@@ -20,6 +21,9 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (await isBannedSupabaseUser(user.id)) {
+      return NextResponse.json({ error: "Account suspended" }, { status: 403 });
     }
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

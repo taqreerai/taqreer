@@ -24,9 +24,13 @@ async function resolveUser() {
   if (!user) return { error: "Unauthorized" as const, status: 401 };
   const dbUser = await prisma.user.findFirst({
     where: { supabaseUserId: user.id },
-    select: { id: true },
+    select: { id: true, bannedAt: true },
   });
   if (!dbUser) return { error: "User not found" as const, status: 404 };
+  // A banned user keeps a valid Supabase session; suspended accounts can't write.
+  if (dbUser.bannedAt) {
+    return { error: "Account suspended" as const, status: 403 };
+  }
   return { userId: dbUser.id, supabaseUserId: user.id };
 }
 

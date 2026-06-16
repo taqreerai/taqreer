@@ -30,6 +30,7 @@ import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { inngest } from "@/inngest/client";
 import { createClient } from "@/lib/supabase/server";
+import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 import { prisma } from "@/lib/prisma";
 import { type SlideFormat } from "@/lib/schema/slide";
 
@@ -57,6 +58,9 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (await isBannedSupabaseUser(user.id)) {
+      return NextResponse.json({ error: "Account suspended" }, { status: 403 });
     }
 
     // ─── Env check ─────────────────────────────────────────────────
