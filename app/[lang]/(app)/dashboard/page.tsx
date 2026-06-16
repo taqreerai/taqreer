@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 import { clientIpFromHeaders } from "@/lib/api/rate-limit";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale } from "@/lib/i18n/config";
@@ -59,11 +60,25 @@ export default async function DashboardPage({
   // credits. Abuse checks live in maybeGrantSignupCredits; a failure or block
   // just leaves the balance untouched (never breaks the dashboard render).
   if (!existingUser?.creditAccount?.signupGrantedAt) {
-    await maybeGrantSignupCredits({
+    const hdrs = await headers();
+    const grant = await maybeGrantSignupCredits({
       userId: dbUser.id,
       email: dbUser.email,
-      ip: clientIpFromHeaders(await headers()),
+      ip: clientIpFromHeaders(hdrs),
     }).catch(() => null);
+    // Welcome email, once, when THIS path lands the grant - mirrors user-sync
+    // and projects. A user who first materializes on the dashboard (e.g. a
+    // confirm link that landed elsewhere so the client grant never ran) would
+    // otherwise never get it. Fire-and-forget; never blocks the render.
+    if (grant && grant.granted > 0) {
+      void dispatchWelcomeEmail({
+        toEmail: dbUser.email,
+        metadataLang: user.user_metadata?.lang,
+        cookieHeader: hdrs.get("cookie"),
+        fallbackLocale: lang,
+        appOrigin: process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai",
+      });
+    }
   }
 
   const [projects, templates] = await Promise.all([

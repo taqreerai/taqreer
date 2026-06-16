@@ -28,13 +28,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { fanOutNotification } from "@/lib/notifications/server";
+import { siteOrigin } from "@/lib/api/site-origin";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
-  const url = new URL(request.url);
+  // External origin, NOT request.url (= localhost:3100 in a prod route handler).
+  const origin = siteOrigin(request);
 
   const supabase = await createClient();
   const {
@@ -45,8 +47,8 @@ export async function GET(
     // Bounce through login. Build an absolute URL so Supabase's
     // login flow can preserve it through email-confirmation
     // redirects (relative URLs don't round-trip well there).
-    const next = `${url.origin}/api/invitations/${encodeURIComponent(token)}/accept`;
-    const loginUrl = new URL("/login", url.origin);
+    const next = `${origin}/api/invitations/${encodeURIComponent(token)}/accept`;
+    const loginUrl = new URL("/login", origin);
     loginUrl.searchParams.set("next", next);
     return NextResponse.redirect(loginUrl);
   }
@@ -134,6 +136,6 @@ export async function GET(
 
   // Land them inside the deck.
   return NextResponse.redirect(
-    new URL(`/project/${share.projectId}`, url.origin),
+    new URL(`/project/${share.projectId}`, origin),
   );
 }

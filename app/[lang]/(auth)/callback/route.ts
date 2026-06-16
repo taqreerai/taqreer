@@ -2,10 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { isLocale, defaultLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
+import { siteOrigin } from "@/lib/api/site-origin";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  // Redirects MUST be based on the external origin, NOT request.url - in a route
+  // handler on prod request.url is the internal http://localhost:3100 (next
+  // start port behind nginx), which the browser can't reach. See site-origin.
+  const origin = siteOrigin(request);
 
   if (code) {
     const supabase = await createClient();
@@ -55,7 +60,7 @@ export async function GET(request: NextRequest) {
       // interstitial was removed 2026-05-28 — it served only as a 2.5 s
       // checkmark + redirect, which added a noticeable pause without conveying
       // anything the dashboard's own load state doesn't already.
-      const res = NextResponse.redirect(new URL(`/${locale}/dashboard`, request.url));
+      const res = NextResponse.redirect(new URL(`/${locale}/dashboard`, origin));
       res.cookies.set(LOCALE_COOKIE, locale, {
         path: "/",
         maxAge: 31536000,
@@ -66,5 +71,5 @@ export async function GET(request: NextRequest) {
   }
 
   // Return user to login page with error
-  return NextResponse.redirect(new URL("/login", request.url));
+  return NextResponse.redirect(new URL(`/${defaultLocale}/login`, origin));
 }
