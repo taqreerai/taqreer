@@ -126,9 +126,10 @@ export function LiveGlobePanel() {
     window.addEventListener("resize", onResize);
 
     // cobe shades the land dots dark and the ocean light from one baseColor, so
-    // a near-white base gives dark continents on a white sphere; dark base gives
-    // blue continents on a dark sphere.
-    const base: RGB = isLight ? [0.92, 0.92, 0.92] : [0.1, 0.16, 0.36];
+    // a near-white base gives dark continents on a white sphere; a neutral-gray
+    // base gives a grayscale sphere on dark. Both spheres are tint-free: only
+    // the per-country markers carry our blue.
+    const base: RGB = isLight ? [0.92, 0.92, 0.92] : [0.26, 0.26, 0.26];
 
     let raf = 0;
     const globe = createGlobe(canvas, {
@@ -137,13 +138,17 @@ export function LiveGlobePanel() {
       height: width * 2,
       phi: 4.4,
       theta: THETA,
-      dark: isLight ? 0 : 1,
-      diffuse: isLight ? 1.4 : 1.8,
+      dark: isLight ? 0 : 0.67,
+      diffuse: isLight ? 1.4 : 1.2,
       mapSamples: 26000,
-      mapBrightness: isLight ? 6 : 5,
+      // dark: muted continents (mapBrightness) over a dim ocean
+      // (mapBaseBrightness) kept darker than the card so the globe recedes into
+      // the surface, Cloudflare-style.
+      mapBrightness: isLight ? 6 : 4,
+      mapBaseBrightness: isLight ? 0 : 0.05,
       baseColor: base,
       markerColor: OUR_BLUE,
-      glowColor: isLight ? [1, 1, 1] : [0.05, 0.08, 0.15],
+      glowColor: isLight ? [1, 1, 1] : [0.08, 0.08, 0.08],
       markers,
     });
 
@@ -162,9 +167,10 @@ export function LiveGlobePanel() {
           phiRef.current += AUTO_SPEED;
         }
       }
-      // Fade each marker from the base color (at the limb / back) to its full
-      // color (facing the camera), so markers fade in and out as they rotate
-      // instead of floating as dots at the edge.
+      // Fade each marker in/out as it rotates: shrink the size to 0 and dim the
+      // color toward the sphere base near the limb (f = facing fraction, 0 at
+      // the limb / back, 1 facing the camera). Size alone guarantees it vanishes
+      // regardless of how bright the base is, so no dots float at the edge.
       const faded = markers.map((m) => {
         const f = clamp(
           project(m.location[0], m.location[1], phiRef.current, thetaRef.current)
@@ -174,7 +180,7 @@ export function LiveGlobePanel() {
         );
         return {
           location: m.location,
-          size: m.size,
+          size: m.size * f,
           color: [
             lerp(base[0], m.color[0], f),
             lerp(base[1], m.color[1], f),
