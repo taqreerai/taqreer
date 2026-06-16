@@ -11,8 +11,12 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
 export type UserContextError = {
-  error: "Unauthorized" | "User not found" | "Auth backend unavailable";
-  status: 401 | 404 | 503;
+  error:
+    | "Unauthorized"
+    | "User not found"
+    | "Auth backend unavailable"
+    | "Account suspended";
+  status: 401 | 404 | 503 | 403;
 };
 
 export type UserContext = {
@@ -61,9 +65,11 @@ export async function resolveUserContext(): Promise<
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true },
+    select: { id: true, bannedAt: true },
   });
   if (!dbUser) return { error: "User not found", status: 404 };
+  // A banned user keeps a valid Supabase session; reject mutations server-side.
+  if (dbUser.bannedAt) return { error: "Account suspended", status: 403 };
 
   return { userId: dbUser.id, supabaseUserId: user.id };
 }

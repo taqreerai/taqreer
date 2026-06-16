@@ -45,8 +45,16 @@ export default async function AppLayout({
   // it server-side). One indexed lookup per dashboard navigation.
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { role: true },
+    select: { role: true, bannedAt: true },
   });
+
+  // A banned user keeps a valid Supabase session (the ban is a local flag set
+  // by the admin console), so every (app) page sends them to the suspended
+  // notice. /banned lives outside this route group, so there's no redirect loop.
+  if (dbUser?.bannedAt) {
+    redirect(`/${lang}/banned`);
+  }
+
   const isAdmin = dbUser?.role === "admin";
 
   const cookieStore = await cookies();

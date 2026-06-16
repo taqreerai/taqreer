@@ -139,6 +139,11 @@
     "backHome": "Back to home",
     "backDashboard": "Back to the dashboard"
   },
+  "banned": {
+    "title": "Account suspended",
+    "body": "Your access to taqreer.ai has been suspended. If you believe this is a mistake, contact support.",
+    "signOut": "Sign out"
+  },
   "globalError": {
     "title": "Something went wrong",
     "subtitle": "Our team has been notified automatically",

@@ -19,6 +19,9 @@ model User {
   language       String         @default("ar")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+  // Admin ban (set by the admin console). Non-null = banned; blocks app access.
+  bannedAt       DateTime?
+  banReason      String?
   projects       Project[]
   templates      Template[]
   brandKits      BrandKit[]

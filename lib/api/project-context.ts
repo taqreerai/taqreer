@@ -16,8 +16,8 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
 export type ProjectContextError = {
-  error: "Unauthorized" | "Project not found";
-  status: 401 | 404;
+  error: "Unauthorized" | "Project not found" | "Account suspended";
+  status: 401 | 404 | 403;
 };
 
 export type ProjectContext = {
@@ -51,11 +51,16 @@ export async function resolveProjectContext(
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, user: { supabaseUserId: user.id } },
-    select: { id: true, user: { select: { id: true } } },
+    select: { id: true, user: { select: { id: true, bannedAt: true } } },
   });
   if (!project) return { error: "Project not found", status: 404 };
+  // A banned user keeps a valid Supabase session; reject mutations server-side.
+  if (project.user.bannedAt) return { error: "Account suspended", status: 403 };
 
-  return { user: { id: user.id }, project };
+  return {
+    user: { id: user.id },
+    project: { id: project.id, user: { id: project.user.id } },
+  };
 }
 
 /**
@@ -77,7 +82,7 @@ export async function resolveProjectContextWithPresentation(
     where: { id: projectId, user: { supabaseUserId: user.id } },
     select: {
       id: true,
-      user: { select: { id: true } },
+      user: { select: { id: true, bannedAt: true } },
       presentation: {
         select: { id: true, currentVersionId: true },
       },
@@ -90,10 +95,12 @@ export async function resolveProjectContextWithPresentation(
   ) {
     return { error: "Project not found", status: 404 };
   }
+  // A banned user keeps a valid Supabase session; reject mutations server-side.
+  if (project.user.bannedAt) return { error: "Account suspended", status: 403 };
 
   return {
     user: { id: user.id },
-    project: { id: project.id, user: project.user },
+    project: { id: project.id, user: { id: project.user.id } },
     presentation: {
       id: project.presentation.id,
       currentVersionId: project.presentation.currentVersionId,
