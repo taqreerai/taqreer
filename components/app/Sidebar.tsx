@@ -86,9 +86,11 @@ export function Sidebar({
   // true) so the existing collapsed-branch rendering + tooltips just work.
   isCollapsed = true,
   transitionClass = "transition-all duration-300 ease-in-out",
+  isAdmin = false,
 }: {
   isCollapsed?: boolean;
   transitionClass?: string;
+  isAdmin?: boolean;
 }) {
   // Locale-stripped so `pathname === item.path` (unprefixed) still marks the
   // active nav item after the [lang] move (pathname is /ar/dashboard).
@@ -297,6 +299,17 @@ export function Sidebar({
               isCollapsed={isCollapsed}
             />
           ))}
+          {/* Admin console - rendered only for admins (server-driven via the
+              (app) layout's role lookup). English label; internal tool. */}
+          {isAdmin ? (
+            <SidebarNavLink
+              href={localizedHref("/admin", locale)}
+              icon="shield_person"
+              label="Admin"
+              isActive={pathname === "/admin" || pathname.startsWith("/admin/")}
+              isCollapsed={isCollapsed}
+            />
+          ) : null}
         </nav>
 
         {/* ── Profile Area ── (§22: usage bar + dividers removed — the rail is

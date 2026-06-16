@@ -15,12 +15,15 @@ const SIDEBAR_WIDTH = 60;
 
 export function DashboardShell({
   children,
+  isAdmin = false,
 }: {
   children: React.ReactNode;
   // §22: collapse/expand was removed (rail is always collapsed). The prop is
   // kept optional so the server layout can still pass its cookie value without
   // a type error; it's intentionally ignored.
   initialIsCollapsed?: boolean;
+  // Server-resolved (User.role === "admin"); gates the Sidebar's Admin entry.
+  isAdmin?: boolean;
 }) {
   // pathname is locale-prefixed (/ar/dashboard); every route check below compares
   // against unprefixed constants, so strip the locale first. Missing this is what
@@ -112,7 +115,7 @@ export function DashboardShell({
 
   return (
     <div className="dashboard-bg min-h-screen relative opacity-100">
-      <Sidebar />
+      <Sidebar isAdmin={isAdmin} />
 
       {/* The bell now lives in the TopUtilityBar (user direction
           2026-06-11) - that instance boots the notification store and

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/app/DashboardShell";
 import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/ui-cookies";
@@ -40,11 +41,19 @@ export default async function AppLayout({
     redirect(`/${lang}/login?next=/${lang}/dashboard`);
   }
 
+  // role drives the admin-only Sidebar entry (the /admin console also gates on
+  // it server-side). One indexed lookup per dashboard navigation.
+  const dbUser = await prisma.user.findUnique({
+    where: { supabaseUserId: user.id },
+    select: { role: true },
+  });
+  const isAdmin = dbUser?.role === "admin";
+
   const cookieStore = await cookies();
   const initialIsCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
 
   return (
-    <DashboardShell initialIsCollapsed={initialIsCollapsed}>
+    <DashboardShell initialIsCollapsed={initialIsCollapsed} isAdmin={isAdmin}>
       {children}
     </DashboardShell>
   );

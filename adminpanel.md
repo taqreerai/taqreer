@@ -1,7 +1,14 @@
 # Admin / Ops Console - Build Plan
 
-> Status: Phase 0 (static, mock-data console) in progress. UI-first, local-first.
-> Living doc; update as phases land.
+> Status: Phase 0 (static, mock-data console) APPROVED + LOCKED 2026-06-16. UI-first,
+> local-first. Next = Phase 2 wiring, one screen per dev->main PR. Living doc.
+>
+> Locked UX: 4 role-gated screens (Overview, Templates, Users, Broadcast), dark + light
+> (globe + tooltip flip too). Overview = a 5-col grid matching the stat row: Online card
+> (COBE globe + ranked country list) spans 3; a stacked Traffic-by device/browser/os +
+> Users-by-plan column spans 2. Globe = COBE, theme-aware (blue-on-dark / dark-on-white),
+> per-country markers tinted toward #3380FF by traffic, fade in/out on spin, freeze on
+> hover, list-hover rotates to the country. Templates listed always 16:9 (like /projects).
 
 ## Context & goal
 Launch Phase C item. Build a role-gated ops console that consolidates: template
@@ -18,6 +25,13 @@ user bans. Premium-template gating folds in here.
 Almost no net-new plumbing: grants reuse `grantTopup`, broadcasts reuse
 `fanOutNotification`, gating reuses the `user-context` pattern + the existing
 `User.role` field, curation rewires the existing marquee queries.
+
+## Constraints (this internal console only)
+- **English only** - no i18n, no dictionary keys; hardcode English strings.
+- **Dark mode only** - no light-mode support or verification.
+- Force `dir="ltr"` on the admin shell so it always reads LTR regardless of the URL locale.
+- These OVERRIDE the public product's bilingual + light/dark rules wherever this doc
+  mentions ar/en, RTL/LTR, or light/dark below.
 
 ## Information architecture (4 screens, not 7 pages)
 Credits + bans are ACTIONS on the Users screen, not separate pages.
@@ -44,7 +58,7 @@ All data from a typed mock module so the wiring phase swaps the source, not the 
   dev@taqreer.ai so the console is reachable in local dev.
 - Sidebar (components/app/Sidebar.tsx): admin-only entry. Add `role` to the (app)
   layout's user lookup -> thread `isAdmin` through DashboardShell -> Sidebar -> conditional
-  render. dict key `nav.admin` (ar + en).
+  render. English label "Admin" (no dict key).
 - `lib/admin/mock.ts` (new): typed mock arrays (users, templates, stats, broadcasts, geo)
   marked TEMP so wiring removes it cleanly.
 
