@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { PlanUsage } from "@/components/app/PlanUsage";
@@ -26,7 +25,6 @@ export default function SettingsPage() {
   const dict = useDict();
   const { locale } = useLocale();
   const [supabase] = useState(() => createClient());
-  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -211,7 +209,13 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/auth/delete-account", { method: "POST" });
       if (res.ok) {
-        router.push(`${localizedHref("/login", locale)}?deleted=true`);
+        // The account (Prisma row + Supabase auth user) is gone, but the
+        // session cookie still decodes locally: proxy.ts trusts getSession()
+        // while the (app) layout's getUser() now returns null, looping
+        // /dashboard <-> /login. Clear the session, then HARD-navigate so the
+        // proxy re-evaluates with no cookie (a client router.push wouldn't).
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        window.location.href = `${localizedHref("/login", locale)}?deleted=true`;
       } else {
         setDeleteLoading(false);
         setShowDeleteModal(false);

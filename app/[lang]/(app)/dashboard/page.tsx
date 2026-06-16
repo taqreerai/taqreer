@@ -4,6 +4,9 @@ import type { ProjectsGridProject } from "@/components/app/ProjectsGrid";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { clientIpFromHeaders } from "@/lib/api/rate-limit";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale } from "@/lib/i18n/config";
 
@@ -29,7 +32,7 @@ export default async function DashboardPage({
 
   const existingUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true },
+    select: { id: true, creditAccount: { select: { signupGrantedAt: true } } },
   });
   const dbUser = await prisma.user.upsert({
     where: { supabaseUserId: user.id },
@@ -47,6 +50,20 @@ export default async function DashboardPage({
     console.info("Created missing Prisma user for authenticated Supabase user", {
       supabaseUserId: user.id,
     });
+  }
+
+  // One-time signup grant, gated on signupGrantedAt (idempotent under a row
+  // lock). Landing on the dashboard is a 4th user-creation path; without this a
+  // user who never hits user-sync/projects - e.g. one whose confirm link was
+  // mis-redirected so the client grant call never ran on this origin - keeps 0
+  // credits. Abuse checks live in maybeGrantSignupCredits; a failure or block
+  // just leaves the balance untouched (never breaks the dashboard render).
+  if (!existingUser?.creditAccount?.signupGrantedAt) {
+    await maybeGrantSignupCredits({
+      userId: dbUser.id,
+      email: dbUser.email,
+      ip: clientIpFromHeaders(await headers()),
+    }).catch(() => null);
   }
 
   const [projects, templates] = await Promise.all([

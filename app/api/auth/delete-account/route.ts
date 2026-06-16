@@ -77,6 +77,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Expire the caller's session cookies in this response. The Prisma row and
+    // the Supabase auth user are now gone, but the browser's session JWT still
+    // decodes locally - and proxy.ts gates on getSession() (cookie-trusting)
+    // while the app layout uses getUser() (now null), which loops
+    // /dashboard <-> /login. `scope: "local"` clears the cookies without a
+    // server round-trip (the session is already unrevocable). The client also
+    // signs out; this is the server-side belt to that suspenders.
+    await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[delete-account] unexpected error", err);

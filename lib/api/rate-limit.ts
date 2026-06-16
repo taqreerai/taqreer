@@ -8,21 +8,41 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 
 /**
- * The real client IP. nginx is configured to set `X-Real-IP` to `$remote_addr`
- * (the actual TCP peer, which a client cannot spoof) and to append the real IP
- * as the LAST `X-Forwarded-For` hop. Prefer `X-Real-IP`; fall back to the last
- * XFF hop, then "unknown". Do NOT trust the FIRST XFF hop, a client can prepend
- * arbitrary values there to evade a per-IP limit.
+ * The real client IP as a header value, or null when none is usable. The site
+ * sits behind Cloudflare, so prefer `CF-Connecting-IP` (CF sets it to the true
+ * client IP). Fall back to `X-Real-IP` (nginx -> $remote_addr) then the LAST
+ * `X-Forwarded-For` hop; the FIRST XFF hops are client-spoofable. Returns null
+ * so callers can SKIP per-IP logic rather than bucket everyone under a sentinel
+ * (a constant IP silently collapses both rate-limit and signup-velocity
+ * buckets - which is exactly the prod bug this fixes: every request was reading
+ * the nginx/Cloudflare hop, not the user).
+ *
+ * NOTE: `CF-Connecting-IP` is only trustworthy if the origin refuses non-
+ * Cloudflare traffic; pair this with nginx `real_ip` (set_real_ip_from <CF
+ * ranges> + real_ip_header CF-Connecting-IP) so $remote_addr is the real IP too.
+ *
+ * Accepts anything with `.get()` so both a `Request`'s `Headers` and the
+ * `next/headers` `ReadonlyHeaders` (Server Components) work.
  */
-export function clientIp(req: Request): string {
-  const real = req.headers.get("x-real-ip")?.trim();
+export function clientIpFromHeaders(headers: {
+  get(name: string): string | null;
+}): string | null {
+  const cf = headers.get("cf-connecting-ip")?.trim();
+  if (cf) return cf;
+  const real = headers.get("x-real-ip")?.trim();
   if (real) return real;
-  const fwd = req.headers.get("x-forwarded-for");
+  const fwd = headers.get("x-forwarded-for");
   if (fwd) {
     const hops = fwd.split(",");
-    return hops[hops.length - 1]!.trim();
+    const last = hops[hops.length - 1]?.trim();
+    if (last) return last;
   }
-  return "unknown";
+  return null;
+}
+
+/** A non-null IP key for rate-limit buckets ("unknown" when none is present). */
+export function clientIp(req: Request): string {
+  return clientIpFromHeaders(req.headers) ?? "unknown";
 }
 
 /**

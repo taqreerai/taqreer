@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { clientIpFromHeaders } from "@/lib/api/rate-limit";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 
@@ -76,9 +77,7 @@ export async function POST(request: Request) {
       const grant = await maybeGrantSignupCredits({
         userId: dbUser.id,
         email: profile.email,
-        ip:
-          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-          null,
+        ip: clientIpFromHeaders(request.headers),
       }).catch((err) => {
         console.error(
           "[user-sync] signup grant failed:",

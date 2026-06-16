@@ -20,6 +20,7 @@ import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { clientIpFromHeaders } from "@/lib/api/rate-limit";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 import { getDictionary, type Dictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
@@ -475,7 +476,7 @@ export async function POST(request: Request) {
     const grant = await maybeGrantSignupCredits({
       userId: dbUser.id,
       email: dbUser.email,
-      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      ip: clientIpFromHeaders(request.headers),
     }).catch((err) => {
       // A grant hiccup must never fail project creation - the next
       // authenticated user-sync grants idempotently.
