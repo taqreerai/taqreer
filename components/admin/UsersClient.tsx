@@ -13,6 +13,7 @@ import { PLAN_LABEL, type AdminUser, type Plan } from "@/lib/admin/mock";
 const ACCENT = "var(--tq-purple)";
 const MUTED = "var(--tq-text-muted)";
 const PRIMARY = "var(--tq-text-primary)";
+const DANGER = "var(--tq-text-danger)";
 
 const PLAN_OPTIONS: Array<Plan | "all"> = ["all", "free", "plus", "pro", "max"];
 const STATUS_OPTIONS = ["all", "active", "banned"] as const;
@@ -49,8 +50,10 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
   const [grantAmount, setGrantAmount] = useState("");
   const [grantReason, setGrantReason] = useState("");
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [granting, setGranting] = useState(false);
   const [banning, setBanning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = users.filter((u) => {
     const q = query.trim().toLowerCase();
@@ -117,6 +120,23 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
       // leave the modal open so the admin can retry
     } finally {
       setBanning(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/users/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("delete failed");
+      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch {
+      // leave the modal open so the admin can retry
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -273,6 +293,18 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                     {u.banned ? "lock_open" : "block"}
                   </span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(u)}
+                  aria-label="Delete user"
+                  title="Delete user"
+                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  style={{ color: DANGER, background: "var(--tq-overlay-soft)" }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                    delete
+                  </span>
+                </button>
               </div>
             </div>
           ))
@@ -380,6 +412,38 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                 : banTarget?.banned
                   ? "Unban"
                   : "Ban user"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete confirm - permanent, removes the user from everywhere */}
+      <Modal
+        open={deleteTarget !== null}
+        title="Delete user"
+        onClose={() => setDeleteTarget(null)}
+      >
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: MUTED }}>
+            Permanently delete {deleteTarget?.name} ({deleteTarget?.email}) and all
+            their data - decks, credits, and their login. This removes them from
+            everywhere and cannot be undone.
+          </p>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              className="btn-pill flex-1 px-4 py-2.5 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="btn-pill-danger flex-1 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete user"}
             </button>
           </div>
         </div>
