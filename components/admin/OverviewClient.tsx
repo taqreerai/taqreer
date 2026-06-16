@@ -14,7 +14,7 @@ import { DeviceBreakdown } from "@/components/admin/DeviceBreakdown";
 // Client-only (WebGL / three.js): ssr:false so globe.gl never runs on the server.
 const LiveGlobePanel = dynamic(
   () => import("@/components/admin/LiveGlobePanel").then((m) => m.LiveGlobePanel),
-  { ssr: false, loading: () => <div style={{ minHeight: 360 }} /> },
+  { ssr: false, loading: () => <div className="admin-globe-skeleton" /> },
 );
 
 const ACCENT = "var(--tq-purple)";

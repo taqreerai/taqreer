@@ -2399,3 +2399,9 @@ img[data-genimage].tq-genimg-in {
 .spinner {
   animation: spinner 0.8s linear infinite;
 }
+
+/* Admin > Overview: reserves the live-globe height while it lazy-loads (WebGL,
+   client-only) so the layout doesn't jump in. */
+.admin-globe-skeleton {
+  min-height: 360px;
+}

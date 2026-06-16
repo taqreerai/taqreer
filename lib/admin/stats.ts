@@ -56,6 +56,8 @@ export async function getOverviewStats(): Promise<{
   activity: ActivityItem[];
 }> {
   const since30 = new Date(Date.now() - 30 * DAY_MS);
+  // Kick off the activity feed alongside the KPI queries (independent roundtrip).
+  const activityPromise = getRecentActivity();
 
   const [totalUsers, planGroups, activeSubsCount, decks30, spent, balanceUsd] =
     await Promise.all([
@@ -102,7 +104,7 @@ export async function getOverviewStats(): Promise<{
     { key: "credits", label: "Credits spent (30d)", value: fmt(creditsSpent30), spark: [] },
   ];
 
-  const activity = await getRecentActivity();
+  const activity = await activityPromise;
   return { stats, planSplit, activity };
 }
 
