@@ -46,6 +46,16 @@ const YEARLY_PER_MONTH_USD: Record<"plus" | "pro" | "max", number> = {
   max: 63,
 };
 
+// Monthly-equivalent revenue (USD) of one active paid subscription - the admin
+// MRR aggregate sums this. A yearly sub contributes its discounted per-month
+// figure, a monthly sub its full tier price. Single source for both numbers.
+export function monthlyRevenueUsd(
+  plan: "plus" | "pro" | "max",
+  cadence: BillingCadence,
+): number {
+  return cadence === "yearly" ? YEARLY_PER_MONTH_USD[plan] : TIERS[plan].priceUsd;
+}
+
 const PAID_PLANS = KNOWN_PLANS.filter(
   (p): p is "plus" | "pro" | "max" => p !== "free",
 );
