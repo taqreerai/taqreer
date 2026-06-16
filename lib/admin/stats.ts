@@ -13,7 +13,7 @@
 // the cards render value-only until that exists).
 
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/billing/stripe";
+import { getLiveStripeOrNull } from "@/lib/billing/stripe";
 import type { AdminStat, ActivityItem, Plan } from "@/lib/admin/mock";
 
 const PAID_PLANS = ["plus", "pro", "max"] as const;
@@ -31,18 +31,21 @@ function timeAgo(d: Date): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-// Real current Stripe account balance (available + pending) in USD. Resilient:
-// a Stripe hiccup must not blank the whole Overview, so it returns null on
-// failure and the card shows "n/a".
+// Real current LIVE Stripe account balance (available + pending) in USD.
+// Live-only: with no live key in this environment (e.g. local dev on test keys)
+// it returns null and the card shows "n/a" rather than a test-mode figure. Also
+// resilient - a Stripe hiccup returns null instead of blanking the Overview.
 async function getStripeBalanceUsd(): Promise<number | null> {
+  const client = getLiveStripeOrNull();
+  if (!client) return null;
   try {
-    const bal = await stripe.balance.retrieve();
+    const bal = await client.balance.retrieve();
     const cents = [...bal.available, ...bal.pending]
       .filter((b) => b.currency === "usd")
       .reduce((sum, b) => sum + b.amount, 0);
     return cents / 100;
   } catch (err) {
-    console.error("[admin/stats] stripe balance fetch failed", err);
+    console.error("[admin/stats] stripe live balance fetch failed", err);
     return null;
   }
 }
