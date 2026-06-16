@@ -20,13 +20,14 @@ import { defaultLocale } from "@/lib/i18n/config";
 import { siteOrigin } from "@/lib/api/site-origin";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
+// Only the token types our own templates emit (build-supabase-emails.ts). We
+// don't run Supabase magic-link / invite / legacy-signup flows, so accepting
+// those would just widen the verify surface for no use. Matches the 3 documented
+// above.
 const ALLOWED_TYPES = new Set<EmailOtpType>([
   "email",
   "recovery",
   "email_change",
-  "signup",
-  "magiclink",
-  "invite",
 ]);
 
 export async function GET(request: NextRequest) {

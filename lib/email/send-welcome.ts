@@ -6,7 +6,7 @@
 // Resend env is absent so dev signups don't break, never throws.
 
 import { Resend } from "resend";
-import { renderEmail, templatesStrip } from "./shell";
+import { renderEmail, templatesStrip, ltrIsolate } from "./shell";
 import {
   getWelcomeTemplates,
   type WelcomeTemplate,
@@ -21,13 +21,16 @@ function getClient(): Resend | null {
   return cachedClient;
 }
 
+// Brand pre-isolated so it keeps LTR order inside the Arabic copy (Outlook bidi).
+const BR = ltrIsolate("taqreer.ai");
+
 const COPY = {
   ar: {
-    subject: "مرحبًا بك في taqreer.ai",
+    subject: `مرحبًا بك في ${BR}`,
     preheader: "أضفنا 400 رصيد مجاني إلى حسابك لتبدأ أول عرض.",
     credits: "400 رصيد مجاني مضافة لحسابك",
-    title: "مرحبًا بك في taqreer.ai",
-    sub: "ابدأ من فكرة، نص، أو ملف، ودع taqreer.ai يحوّله إلى عرض مصمم وجاهز للتعديل بالعربية أو الإنجليزية. أضفنا رصيدك المجاني، ويمكنك إنشاء أول عرض الآن.",
+    title: `مرحبًا بك في ${BR}`,
+    sub: `ابدأ من فكرة، نص، أو ملف، ودع ${BR} يحوّله إلى عرض مصمم وجاهز للتعديل بالعربية أو الإنجليزية. أضفنا رصيدك المجاني، ويمكنك إنشاء أول عرض الآن.`,
     button: "ابدأ الإنشاء",
     templatesLabel: "أو ابدأ من قالب جاهز",
     footerNote:

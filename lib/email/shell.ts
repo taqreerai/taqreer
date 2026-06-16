@@ -29,6 +29,16 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// Keep a Latin run (the brand) in left-to-right order when it sits inside Arabic
+// (RTL) copy. LRE...PDF (U+202A...U+202C) is honored even by legacy bidi engines
+// (Outlook / Word) that ignore the newer <bdi> / LRI...PDI isolates; on
+// conformant clients (Gmail, Apple Mail, browsers) it is a zero-width visual
+// no-op, so the text still reads exactly as written. Works in plain-text
+// subjects AND HTML bodies. The marks must stay paired, which this guarantees.
+export function ltrIsolate(s: string): string {
+  return `‪${s}‬`;
+}
+
 export type EmailShellParams = {
   lang: "ar" | "en";
   // Plain text (already-escaped or trusted). Title + button label are escaped

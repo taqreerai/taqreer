@@ -12,7 +12,7 @@
 // amounts/dates as strings.
 
 import { Resend } from "resend";
-import { renderEmail, summaryBlock } from "./shell";
+import { renderEmail, summaryBlock, ltrIsolate } from "./shell";
 
 let cachedClient: Resend | null = null;
 function getClient(): Resend | null {
@@ -73,13 +73,16 @@ const dirOf = (lang: "ar" | "en") => (lang === "ar" ? "rtl" : "ltr");
 const SUPPORT_LINK =
   '<a href="mailto:support@taqreer.ai" style="color:#66A3FF;text-decoration:none;">support@taqreer.ai</a>';
 
+// Brand pre-isolated so it keeps LTR order inside the Arabic copy (Outlook bidi).
+const BR = ltrIsolate("taqreer.ai");
+
 type Common = { toEmail: string; locale: string; appOrigin: string };
 
 // ─── 1. Receipt / payment succeeded ───────────────────────────────────
 
 const RECEIPT_COPY = {
   ar: {
-    subject: "إيصال الدفع - taqreer.ai",
+    subject: `إيصال الدفع - ${BR}`,
     preheader: "تم استلام دفعتك، وهذا إيصالك.",
     title: "تم استلام دفعتك",
     sub: "شكرًا لك. تمت معالجة دفعتك بنجاح، وهذا إيصالك. نسخة منه متوفرة دائمًا في سجل الفواتير.",
@@ -149,10 +152,10 @@ export async function sendReceipt(
 
 const FAILED_COPY = {
   ar: {
-    subject: "تعذّر إتمام الدفع - taqreer.ai",
+    subject: `تعذّر إتمام الدفع - ${BR}`,
     preheader: "لم نتمكن من إتمام الدفع، حدّث بطاقتك للاستمرار.",
     title: "تعذّر إتمام الدفع",
-    sub: "لم نتمكن من سحب المبلغ من بطاقتك لاشتراكك في taqreer.ai. حدّث وسيلة الدفع للحفاظ على خطتك، وسنحاول تلقائيًا مرة أخرى.",
+    sub: `لم نتمكن من سحب المبلغ من بطاقتك لاشتراكك في ${BR}. حدّث وسيلة الدفع للحفاظ على خطتك، وسنحاول تلقائيًا مرة أخرى.`,
     rows: { plan: "الخطة", amount: "المبلغ المستحق" },
     button: "تحديث وسيلة الدفع",
     footer: `إذا كنت قد حدّثت بطاقتك بالفعل، يمكنك تجاهل هذه الرسالة. للمساعدة: ${SUPPORT_LINK}.`,
@@ -196,7 +199,7 @@ export async function sendPaymentFailed(
 
 const ENDING_COPY = {
   ar: {
-    subject: "اشتراكك في taqreer.ai ينتهي قريبًا",
+    subject: `اشتراكك في ${BR} ينتهي قريبًا`,
     preheader: "تنتهي خطتك قريبًا، ويمكنك الاستئناف في أي وقت.",
     title: "اشتراكك على وشك الانتهاء",
     sub: "تمت جدولة انتهاء اشتراكك. ستحتفظ بكامل صلاحياتك حتى التاريخ الموضّح أدناه. غيّرت رأيك؟ يمكنك استئناف الاشتراك في أي وقت.",
