@@ -28,11 +28,19 @@ type Copy = {
   footer?: string;
   preheader?: string;
 };
-type Tpl = { name: string; ar: Copy; en: Copy };
+type Tpl = {
+  name: string;
+  ar: Copy;
+  en: Copy;
+  // When set, the action button links to OUR /confirm route (token-hash verify
+  // on taqreer.ai) instead of Supabase's *.supabase.co ConfirmationURL.
+  verify?: { type: "email" | "recovery" | "email_change"; next: string };
+};
 
 const TEMPLATES: Tpl[] = [
   {
     name: "confirm-signup",
+    verify: { type: "email", next: "/dashboard" },
     ar: {
       preheader: "خطوة أخيرة لتفعيل حسابك في taqreer.ai.",
       title: "أكّد بريدك الإلكتروني",
@@ -50,6 +58,7 @@ const TEMPLATES: Tpl[] = [
   },
   {
     name: "reset-password",
+    verify: { type: "recovery", next: "/reset-password" },
     ar: {
       preheader: "استخدم الرابط لاختيار كلمة مرور جديدة.",
       title: "إعادة تعيين كلمة المرور",
@@ -67,6 +76,7 @@ const TEMPLATES: Tpl[] = [
   },
   {
     name: "change-email",
+    verify: { type: "email_change", next: "/settings" },
     ar: {
       preheader: "أكّد العنوان الجديد لتحديث بريد حسابك.",
       title: "تأكيد بريدك الجديد",
@@ -117,8 +127,17 @@ function paramsFor(t: Tpl, lang: Lang, assetBase?: string): EmailShellParams {
     title: c.title,
     subHtml: c.sub,
     buttonLabel: c.button,
-    // Supabase substitutes the action link at send time.
-    buttonHref: c.button ? "{{ .ConfirmationURL }}" : undefined,
+    // Link the button to OUR /confirm route (token-hash verify) so auth emails
+    // stay on taqreer.ai rather than the *.supabase.co verify endpoint (which
+    // Outlook flags as a sender/link mismatch and junks). `&amp;` is the
+    // HTML-escaped separator; the static text isn't run through Go's escaper the
+    // way the {{ }} vars are, so we write it pre-escaped. Falls back to
+    // ConfirmationURL for any future button template without a verify type.
+    buttonHref: c.button
+      ? t.verify
+        ? `{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=${t.verify.type}&amp;next=${encodeURIComponent(`/${lang}${t.verify.next}`)}`
+        : "{{ .ConfirmationURL }}"
+      : undefined,
     footerNoteHtml: c.footer,
     preheader: c.preheader,
     assetBase,

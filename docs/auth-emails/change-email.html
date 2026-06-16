@@ -32,7 +32,7 @@
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:44px auto 0;">
                 <tr>
                   <td align="center" bgcolor="#0057FF" style="background:#0057FF;border-radius:999px;">
-                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">تأكيد البريد الجديد</a>
+                    <a href="{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=email_change&amp;next=%2Far%2Fsettings" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">تأكيد البريد الجديد</a>
                   </td>
                 </tr>
               </table>
@@ -68,7 +68,7 @@
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:44px auto 0;">
                 <tr>
                   <td align="center" bgcolor="#0057FF" style="background:#0057FF;border-radius:999px;">
-                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">Confirm new email</a>
+                    <a href="{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=email_change&amp;next=%2Fen%2Fsettings" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">Confirm new email</a>
                   </td>
                 </tr>
               </table>
