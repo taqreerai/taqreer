@@ -1,19 +1,19 @@
-// Admin Overview aggregates (server-only). Real numbers from Prisma. The geo
-// globe + device/browser breakdown stay mock in the UI - they need analytics
-// infra (CF-IPCountry capture / PostHog) we don't have yet.
+// Admin Overview aggregates (server-only). Real numbers from Prisma + Stripe.
+// The geo globe + device/browser breakdown stay mock in the UI - they need
+// analytics infra (CF-IPCountry capture / PostHog) we don't have yet.
 //
 // Metric definitions (kept simple + honest; revisit as volume grows):
 //   - Total users          : non-admin User rows (matches the Users table).
 //   - Active subscriptions  : Subscription status="active" on a paid plan.
-//   - MRR                   : sum of each active paid sub's monthly-equivalent
-//                             price (yearly subs contribute their per-month).
+//   - Stripe balance        : real current Stripe account balance (available +
+//                             pending, USD) straight from the Stripe API.
 //   - Decks generated (30d) : Presentations created in the last 30 days.
 //   - Credits spent (30d)   : sum of settled CreditHold charges in the last 30d.
 // Sparklines + deltas are omitted for now (they need a daily-snapshot series;
 // the cards render value-only until that exists).
 
 import { prisma } from "@/lib/prisma";
-import { monthlyRevenueUsd } from "@/lib/billing/prices";
+import { stripe } from "@/lib/billing/stripe";
 import type { AdminStat, ActivityItem, Plan } from "@/lib/admin/mock";
 
 const PAID_PLANS = ["plus", "pro", "max"] as const;
@@ -31,6 +31,22 @@ function timeAgo(d: Date): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// Real current Stripe account balance (available + pending) in USD. Resilient:
+// a Stripe hiccup must not blank the whole Overview, so it returns null on
+// failure and the card shows "n/a".
+async function getStripeBalanceUsd(): Promise<number | null> {
+  try {
+    const bal = await stripe.balance.retrieve();
+    const cents = [...bal.available, ...bal.pending]
+      .filter((b) => b.currency === "usd")
+      .reduce((sum, b) => sum + b.amount, 0);
+    return cents / 100;
+  } catch (err) {
+    console.error("[admin/stats] stripe balance fetch failed", err);
+    return null;
+  }
+}
+
 export async function getOverviewStats(): Promise<{
   stats: AdminStat[];
   planSplit: Record<Plan, number>;
@@ -38,41 +54,47 @@ export async function getOverviewStats(): Promise<{
 }> {
   const since30 = new Date(Date.now() - 30 * DAY_MS);
 
-  const [totalUsers, planGroups, activeSubs, decks30, spent] = await Promise.all([
-    prisma.user.count({ where: { role: { not: "admin" } } }),
-    prisma.user.groupBy({
-      by: ["plan"],
-      where: { role: { not: "admin" } },
-      _count: { _all: true },
-    }),
-    prisma.subscription.findMany({
-      where: { status: "active", plan: { in: [...PAID_PLANS] } },
-      select: { plan: true, cadence: true },
-    }),
-    prisma.presentation.count({ where: { createdAt: { gte: since30 } } }),
-    prisma.creditHold.aggregate({
-      _sum: { amountCharged: true },
-      where: { status: "settled", createdAt: { gte: since30 } },
-    }),
-  ]);
+  const [totalUsers, planGroups, activeSubsCount, decks30, spent, balanceUsd] =
+    await Promise.all([
+      prisma.user.count({ where: { role: { not: "admin" } } }),
+      prisma.user.groupBy({
+        by: ["plan"],
+        where: { role: { not: "admin" } },
+        _count: { _all: true },
+      }),
+      prisma.subscription.count({
+        where: { status: "active", plan: { in: [...PAID_PLANS] } },
+      }),
+      prisma.presentation.count({ where: { createdAt: { gte: since30 } } }),
+      prisma.creditHold.aggregate({
+        _sum: { amountCharged: true },
+        where: { status: "settled", createdAt: { gte: since30 } },
+      }),
+      getStripeBalanceUsd(),
+    ]);
 
   const planSplit: Record<Plan, number> = { free: 0, plus: 0, pro: 0, max: 0 };
   for (const g of planGroups) {
     if (g.plan in planSplit) planSplit[g.plan as Plan] = g._count._all;
   }
 
-  let mrrUsd = 0;
-  for (const s of activeSubs) {
-    const plan = s.plan as (typeof PAID_PLANS)[number];
-    mrrUsd += monthlyRevenueUsd(plan, s.cadence === "yearly" ? "yearly" : "monthly");
-  }
-
   const creditsSpent30 = spent._sum.amountCharged ?? 0;
 
   const stats: AdminStat[] = [
     { key: "users", label: "Total users", value: fmt(totalUsers), spark: [] },
-    { key: "subs", label: "Active subscriptions", value: fmt(activeSubs.length), spark: [] },
-    { key: "mrr", label: "MRR", value: `$${fmt(mrrUsd)}`, spark: [] },
+    { key: "subs", label: "Active subscriptions", value: fmt(activeSubsCount), spark: [] },
+    {
+      key: "balance",
+      label: "Stripe balance",
+      value:
+        balanceUsd === null
+          ? "n/a"
+          : `$${balanceUsd.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`,
+      spark: [],
+    },
     { key: "decks", label: "Decks generated (30d)", value: fmt(decks30), spark: [] },
     { key: "credits", label: "Credits spent (30d)", value: fmt(creditsSpent30), spark: [] },
   ];
