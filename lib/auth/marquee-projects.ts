@@ -15,19 +15,28 @@
 // the public surfaces. To rotate accounts (or open up to a list),
 // update the constant or switch to an `IN (...)` filter.
 
-// The marquee is fed exclusively by this account's published work.
-// Change this constant to point the wall at a different curator.
-// Points at the founder's main account (dev@taqreer.ai), whose public
-// templates are the curated landing + auth-marquee + welcome-email source.
-const MARQUEE_OWNER_EMAIL = "dev@taqreer.ai";
-//
 // Output shape: 4 columns × variable thumbs (see `COLUMN_COUNT`).
 // The shuffler interleaves 16:9 and 9:16 formats across columns so
 // the mosaic doesn't end up with all landscape on one side and all
 // portrait on the other.
 
-import { unstable_cache } from "next/cache";
+import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
+
+// The curator account whose ADMIN-FEATURED templates (featuredOrder set) feed
+// every public template surface. Exported for the admin curation console.
+export const MARQUEE_OWNER_EMAIL = "dev@taqreer.ai";
+
+// Bust every cached public template surface after an admin curation write
+// (feature / unfeature / reorder / premium) so the landing marquee + grid +
+// welcome-email strip reflect the change on the next request.
+export function revalidateTemplateSurfaces(): void {
+  // Next 16: the 2-arg form is required; "max" marks the tagged entries stale
+  // (stale-while-revalidate) so the next visit refreshes them.
+  revalidateTag("auth-marquee-columns", "max");
+  revalidateTag("landing-templates", "max");
+  revalidateTag("welcome-templates", "max");
+}
 
 export type MarqueeThumbnail = {
   // Composite key (template id + slide index) so React's `key` prop stays
@@ -89,6 +98,7 @@ export const getMarqueeColumns = unstable_cache(
           LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
           WHERE u.email = ${MARQUEE_OWNER_EMAIL}
             AND t."isPublic" = true
+            AND t."featuredOrder" IS NOT NULL
             AND t."thumbnailUrls" IS NOT NULL
             AND array_length(t."thumbnailUrls", 1) > 0
             AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
@@ -179,11 +189,12 @@ export const getLandingTemplates = unstable_cache(
         LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
         WHERE u.email = ${MARQUEE_OWNER_EMAIL}
           AND t."isPublic" = true
+          AND t."featuredOrder" IS NOT NULL
           AND t."thumbnailUrls" IS NOT NULL
           AND array_length(t."thumbnailUrls", 1) > 0
           AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
-        -- Most-recently published first ("recent templates"), not random.
-        ORDER BY t."publishedAt" DESC NULLS LAST
+        -- Admin-curated featured order (admin console > Templates), not recency.
+        ORDER BY t."featuredOrder" ASC
         LIMIT ${LANDING_TEMPLATE_COUNT}
       `;
 
@@ -228,10 +239,11 @@ export const getWelcomeTemplates = unstable_cache(
         LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
         WHERE u.email = ${MARQUEE_OWNER_EMAIL}
           AND t."isPublic" = true
+          AND t."featuredOrder" IS NOT NULL
           AND t."thumbnailUrls" IS NOT NULL
           AND array_length(t."thumbnailUrls", 1) > 0
           AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
-        ORDER BY t."publishedAt" DESC NULLS LAST
+        ORDER BY t."featuredOrder" ASC
         LIMIT 3
       `;
       return rows

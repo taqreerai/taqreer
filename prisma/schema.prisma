@@ -413,6 +413,12 @@ model Template {
   // regular users' templates stay free. Enforcement is server-side in
   // POST /api/templates/[id]/use (402 for non-owner non-Pro users).
   isPremium       Boolean   @default(false)
+  // Admin curation: manual landing/marquee order (0-based). null = not
+  // featured (won't appear on the public landing marquee/grid); an int = its
+  // slot in the featured ordering. Only the curator account's templates are
+  // featured (admin console > Templates). The public surfaces read
+  // `featuredOrder IS NOT NULL ORDER BY featuredOrder` (lib/auth/marquee-projects).
+  featuredOrder   Int?
   publishedAt     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -420,6 +426,7 @@ model Template {
 
   @@index([isPublic, publishedAt(sort: Desc)])
   @@index([ownerId, createdAt(sort: Desc)])
+  @@index([featuredOrder])
 }
 
 model BrandKit {
