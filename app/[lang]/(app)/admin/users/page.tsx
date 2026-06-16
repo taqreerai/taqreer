@@ -18,7 +18,10 @@ function asPlan(p: string): Plan {
 export default async function AdminUsersPage() {
   await requireAdminPage();
 
+  // Exclude admins from the managed-users list - the console operator (dev@)
+  // isn't someone you grant credits to or ban here, so admins never appear.
   const rows = await prisma.user.findMany({
+    where: { role: { not: "admin" } },
     orderBy: { createdAt: "desc" },
     take: 500,
     select: {
