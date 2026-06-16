@@ -67,6 +67,7 @@ export default function ForgotPasswordPage() {
         </span>
         <h1 className="text-lg font-semibold">{t.forgot.successTitle}</h1>
         <p className="text-sm text-muted">{t.forgot.successBody}</p>
+        <p className="text-xs text-muted">{t.junkHint}</p>
         <Link
           href={localizedHref("/login", locale)}
           className="mt-1 cursor-pointer text-sm text-muted transition-colors hover:text-foreground"

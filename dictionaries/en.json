@@ -213,6 +213,7 @@
       "successSubtitle": "We sent you a link to reset your password",
       "successBody": "Check your email for the password reset link. It may take a few minutes to arrive."
     },
+    "junkHint": "If you don't see it, also check your spam or junk folder.",
     "reset": {
       "title": "Set a new password",
       "subtitle": "Enter the new password for your account.",

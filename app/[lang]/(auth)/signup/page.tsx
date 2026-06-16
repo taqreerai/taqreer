@@ -235,6 +235,7 @@ export default function SignupPage() {
         </span>
         <h1 className="text-lg font-semibold">{t.signup.successTitle}</h1>
         <p className="text-sm text-muted">{t.signup.successBody}</p>
+        <p className="text-xs text-muted">{t.junkHint}</p>
 
         {TURNSTILE_ENABLED && cooldown === 0 ? (
           <TurnstileWidget
