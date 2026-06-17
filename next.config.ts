@@ -33,23 +33,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // PostHog reverse proxy: posthog-js posts capture events to the same-origin
-  // `/ingest/*`, which Next proxies SERVER-SIDE to PostHog EU. Direct browser ->
-  // eu.i.posthog.com requests get 503'd at PostHog's edge (server-side requests
-  // always 200), and this also makes analytics immune to ad-blockers. `/ingest`
-  // is exempted from proxy.ts so the locale middleware leaves it untouched.
-  async rewrites() {
-    return [
-      {
-        source: "/ingest/static/:path*",
-        destination: "https://eu-assets.i.posthog.com/static/:path*",
-      },
-      {
-        source: "/ingest/:path*",
-        destination: "https://eu.i.posthog.com/:path*",
-      },
-    ];
-  },
 };
 
 export default withSentryConfig(nextConfig, {

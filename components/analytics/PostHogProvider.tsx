@@ -38,12 +38,14 @@ function startPostHog(): boolean {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   if (!key) return false;
   posthog.init(key, {
-    // Same-origin reverse proxy (next.config.ts rewrites /ingest/* -> PostHog
-    // EU): routes capture through our own domain so ad-blockers can't drop it,
-    // PostHog's recommended production setup. ui_host keeps the toolbar links
-    // pointing at the real PostHog app.
-    api_host: "/ingest",
-    ui_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    // PostHog MANAGED reverse proxy (d.taqreer.ai, provisioned in PostHog and
+    // CNAME'd to their infra): capture routes through our own subdomain and
+    // PostHog handles the proxy natively. Ad-blocker-proof, and avoids the edge
+    // 503 a hand-rolled Next.js rewrite proxy hit. ui_host points toolbar/links
+    // at the PostHog app. (The server-side Query API still hits eu.i.posthog.com
+    // directly via NEXT_PUBLIC_POSTHOG_HOST - see lib/analytics/posthog.ts.)
+    api_host: "https://d.taqreer.ai",
+    ui_host: "https://eu.posthog.com",
     // App Router soft navigations are captured manually below, so disable the
     // built-in pageview capture to avoid double counting.
     capture_pageview: false,
