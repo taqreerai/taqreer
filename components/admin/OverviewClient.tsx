@@ -14,7 +14,7 @@ import {
   type Plan,
   type CountryVisitors,
 } from "@/lib/admin/mock";
-import type { ChannelRow, DeviceBreakdowns } from "@/lib/analytics/posthog";
+import type { ChannelRow, DeviceBreakdowns, TrafficTotals } from "@/lib/analytics/posthog";
 import { IconCircle } from "@/components/admin/IconCircle";
 import { DeviceBreakdown } from "@/components/admin/DeviceBreakdown";
 import { ChannelSources } from "@/components/admin/ChannelSources";
@@ -172,6 +172,7 @@ export function OverviewClient({
   channels,
   geo,
   onlineNow,
+  traffic,
   device,
 }: {
   stats: AdminStat[];
@@ -180,6 +181,7 @@ export function OverviewClient({
   channels: ChannelRow[] | null;
   geo: CountryVisitors[];
   onlineNow: number;
+  traffic: TrafficTotals;
   device: DeviceBreakdowns;
 }) {
   return (
@@ -194,7 +196,12 @@ export function OverviewClient({
       {/* Live online + map (2/3) and plan split (1/3) */}
       <div className="grid gap-4 lg:grid-cols-5">
         <div className="surface-card rounded-xl p-5 lg:col-span-3">
-          <LiveGlobePanel visitors={geo} onlineNow={onlineNow} />
+          <LiveGlobePanel
+            visitors={geo}
+            onlineNow={onlineNow}
+            uniqueVisitors={traffic.uniqueVisitors}
+            pageviews={traffic.pageviews}
+          />
         </div>
         <div className="flex flex-col gap-4 lg:col-span-2">
           {/* Channels grows to fill the column height (it lists many rows);

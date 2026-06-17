@@ -141,6 +141,26 @@ async function fetchOnline(): Promise<number> {
 
 export const getOnlineNow = memo(fetchOnline, 30_000);
 
+// ─── Traffic totals (geo card header strip) ─────────────────────────────────
+// Unique visitors = distinct persons (30d); pageviews = $pageview count (30d).
+export type TrafficTotals = { uniqueVisitors: number; pageviews: number };
+
+const TOTALS_HOGQL = `
+SELECT count(distinct person_id) AS uniques, countIf(event = '$pageview') AS pageviews
+FROM events
+WHERE timestamp > now() - interval 30 day`;
+
+async function fetchTotals(): Promise<TrafficTotals> {
+  const rows = await posthogQuery(TOTALS_HOGQL);
+  if (!rows || !rows[0]) return { uniqueVisitors: 0, pageviews: 0 };
+  return {
+    uniqueVisitors: Number(rows[0][0]) || 0,
+    pageviews: Number(rows[0][1]) || 0,
+  };
+}
+
+export const getTrafficTotals = memo(fetchTotals);
+
 // ─── Traffic by device / browser / os ───────────────────────────────────────
 const DEVICE_HOGQL = `
 SELECT properties.$device_type AS k, count(distinct person_id) AS n

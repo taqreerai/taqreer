@@ -10,6 +10,7 @@ import {
   getChannelBreakdown,
   getGeoVisitors,
   getOnlineNow,
+  getTrafficTotals,
   getDeviceBreakdowns,
 } from "@/lib/analytics/posthog";
 import { OverviewClient } from "@/components/admin/OverviewClient";
@@ -18,12 +19,13 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminOverviewPage() {
   await requireAdminPage();
-  const [{ stats, planSplit, activity }, channels, geo, onlineNow, device] =
+  const [{ stats, planSplit, activity }, channels, geo, onlineNow, traffic, device] =
     await Promise.all([
       getOverviewStats(),
       getChannelBreakdown(),
       getGeoVisitors(),
       getOnlineNow(),
+      getTrafficTotals(),
       getDeviceBreakdowns(),
     ]);
   return (
@@ -34,6 +36,7 @@ export default async function AdminOverviewPage() {
       channels={channels}
       geo={geo ?? []}
       onlineNow={onlineNow}
+      traffic={traffic}
       device={device}
     />
   );

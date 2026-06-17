@@ -74,9 +74,13 @@ function useIsLight() {
 export function LiveGlobePanel({
   visitors,
   onlineNow,
+  uniqueVisitors,
+  pageviews,
 }: {
   visitors: CountryVisitors[];
   onlineNow: number;
+  uniqueVisitors: number;
+  pageviews: number;
 }) {
   const isLight = useIsLight();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -264,13 +268,33 @@ export function LiveGlobePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-baseline gap-2">
-        <span className="text-2xl font-bold" style={{ color: PRIMARY }}>
-          {formatCount(onlineNow)}
-        </span>
-        <span className="text-sm" style={{ color: MUTED }}>
-          users online now
-        </span>
+      {/* Stat strip: live presence + cumulative 30d totals, divider-separated. */}
+      <div className="flex items-center gap-5">
+        {[
+          { label: "Users online", value: onlineNow },
+          { label: "Unique visitors", value: uniqueVisitors },
+          { label: "Pageviews", value: pageviews },
+        ].map((s, i) => (
+          <div key={s.label} className="flex items-center gap-5">
+            {i > 0 ? (
+              <span
+                className="h-8 w-px"
+                style={{ background: "var(--tq-border-hairline)" }}
+              />
+            ) : null}
+            <div className="flex flex-col gap-1">
+              <span
+                className="text-[11px] font-medium uppercase tracking-wide"
+                style={{ color: MUTED }}
+              >
+                {s.label}
+              </span>
+              <span className="text-2xl font-bold" style={{ color: PRIMARY }}>
+                {formatCount(s.value)}
+              </span>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="flex flex-col items-center gap-6 lg:flex-row">
