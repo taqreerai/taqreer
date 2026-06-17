@@ -1,7 +1,7 @@
 # Launch progress + continuation guide
 
-Updated 2026-06-15 (billing emails owned + credit/logo bug fixes - see the
-"Latest session" block below FIRST). Read this + context/deploy.md to resume
+Updated 2026-06-17 (admin/ops console + PostHog analytics + conversion funnel - see
+the "Latest session" block below FIRST). Read this + context/deploy.md to resume
 launch work in a fresh session. The launch plan's full reasoning lives in the
 conversation that produced it; this file is the operational state.
 
@@ -27,6 +27,56 @@ conversation that produced it; this file is the operational state.
 - Deck HTML lives in TWO places (PresentationVersion.slideJson = what the
   viewer reads; SlideVersion.slideJson = per-slide history). Manual repairs
   must patch BOTH.
+
+## ⚡ Latest session (2026-06-17) - Admin/ops console + PostHog analytics + conversion funnel (READ FIRST)
+
+**Admin/ops console BUILT + LIVE on prod** (Phase C item; went well beyond the
+"read-only v1" spec - it's a full read+write console). Route group
+`app/[lang]/(app)/admin/{layout,page,templates,users,broadcast}`, gated by
+`lib/api/admin-context.ts` requireAdminPage()/requireAdminApi() on `User.role`.
+Grant admin via `tsx scripts/set-admin.ts <email>` (run ON THE BOX against the prod
+DATABASE_URL for prod). **Prod dev@taqreer.ai set role=admin.** Four screens, ALL
+real data (mock retired):
+- Overview: KPI stats / plan split / recent activity (real Prisma + LIVE Stripe
+  balance) + PostHog reads (sources-by-channel, geo globe, online-now, unique
+  visitors / pageviews, device/browser/os, conversion funnel).
+- Templates: curator-only featuring via `Template.featuredOrder` (rewired marquee).
+- Users: real list + credit grants (grantTopup) + ban/unban + hard delete (Prisma
+  cascade + Supabase auth admin delete). Admin excluded from the table + counts.
+- Broadcast: bilingual EN+AR fan-out (fanOutNotification, per-viewer-locale render),
+  AdminBroadcast history, 30-day TTL cron (notifications-cleanup). Bell got a
+  persistent unread dot + Read all; notifications now render by the URL locale (not
+  the browser-wide cookie - fixed a 2-tab cross-locale bug).
+
+**PostHog analytics WIRED (EU project 204126)** - closes the Phase D PostHog item +
+the old "globe/device deferred to PostHog" gap.
+- **Capture** (consent-gated, components/analytics/PostHogProvider.tsx): inits only
+  on tq_cookie_consent=accept; identify(supabase uid) on login; api_host =
+  **https://d.taqreer.ai** = PostHog MANAGED reverse proxy. Root-cause lesson from a
+  long 503 hunt: posthog-js gzip browser requests get 503'd direct AND through a
+  hand-rolled Next rewrite proxy; the MANAGED proxy handles them natively (and dodges
+  ad-blockers). All 6 PostHog setup checks GREEN. Reach for the managed proxy FIRST.
+- **Read** (server-only, lib/analytics/posthog.ts): Query API (HogQL) with the
+  PERSONAL api key, feeding the Overview. Env: NEXT_PUBLIC_POSTHOG_KEY (phc_, public,
+  write) + NEXT_PUBLIC_POSTHOG_HOST (eu.i.posthog.com; used by the read layer) +
+  POSTHOG_PERSONAL_API_KEY (phx_, SECRET) + POSTHOG_PROJECT_ID=204126, in .env.local
+  + prod .env. GOTCHA: prod .env had a STALE phc_ key from a prior setup - keep
+  capture + read on the SAME project.
+- **Conversion funnel** (PR #78, dev->main, AWAITING CodeRabbit): server-side events
+  signed_up -> deck_created -> deck_exported -> purchase_completed (posthog-node,
+  lib/analytics/posthog-server.ts, distinctId = supabase uid) at safe non-locked
+  points (user-sync, projects route after the Inngest send, pdf/png export routes +
+  pptx client-side, stripe webhook); windowFunnel HogQL; ConversionFunnel card.
+
+**Also:** SPF/DKIM/DMARC confirmed (Resend); merged the 2-step signup back to one
+screen (dropped Google from the email path).
+
+**Remaining admin-panel item (optional):** AdminAuditLog - no record of admin writes
+(grants/bans/deletes/broadcasts) yet; do this before granting anyone else admin.
+
+**NEXT: website responsive / mobile layout** = the Phase D mobile audit of the 5
+public surfaces (landing, pricing, signup/login, checkout, deck viewing; editor
+stays desktop-only).
 
 ## ⚡ Latest session (2026-06-16) - prod DB moved to Supabase Pro + DB hardening (READ FIRST)
 
@@ -365,21 +415,24 @@ Phase C — Hardening:
   local redis; Upstash if moving to managed). 1-2 days.
 - Inngest concurrency caps matched to the Anthropic tier's concurrent
   Opus stream limit — queue, don't fail. Hold-release on failure is tested.
-- Admin panel v1 READ-ONLY (users, subscriptions, revenue, generations +
-  failures, signups), role-gated server-side (User.role exists). Actions
-  (credits/refunds/tier) stay psql + Stripe dashboard for the first weeks.
-  Spec folded into context.md §Admin panel. No "online now" (no presence infra).
+- ✅ Admin/ops console DONE + LIVE (2026-06-17) - see the Latest-session block.
+  Shipped a full read+WRITE console (not just read-only): Overview/Templates/Users/
+  Broadcast, all real data, credit grants + bans + deletes + bilingual broadcasts +
+  live "online now" via PostHog. role-gated (User.role; set-admin.ts). Remaining
+  (optional): AdminAuditLog before adding a second admin.
 - Final /security-review over the whole diff before launch.
 
 Phase D — Cheap pre-launch polish:
 - SEO correctness: robots.ts + sitemap.ts are STALE (2 URLs, no ar/en split,
   no hreflang — deferred Phase 5 of the bilingual migration). hreflang +
   sitemap + OG cards + titles pre-launch; structured data/content post.
-- Mobile audit of FIVE public surfaces only: landing, pricing, signup/login,
+- ⏳ NEXT: Mobile audit of FIVE public surfaces only: landing, pricing, signup/login,
   checkout (Apple Pay on mobile Safari matters for GCC), deck VIEWING.
   Editor stays desktop-only with a graceful message — do not attempt.
-- PostHog: planned, not wired. Pageviews + key events (signup, first
-  generation, export, checkout opened, paid).
+- ✅ PostHog DONE (2026-06-17) - capture via the d.taqreer.ai managed proxy
+  (consent-gated) + Query-API read feeding the admin Overview + the conversion
+  funnel ($pageview/$pageleave/$web_vitals + signed_up/deck_created/deck_exported/
+  purchase_completed). All 6 PostHog setup checks green. See the Latest-session block.
 - support@ mailbox (the footer contact link + /contact form shipped 2026-06-13).
 
 Launch. Then post-launch backlog (deliberately deferred): lifecycle emails +
@@ -392,7 +445,8 @@ contrast-guard phase 2 (detect-only logging is live and fine).
 1. ✅ Supabase redirect URLs for taqreer.ai — DONE.
 2. ✅ Sentry wired (taqreerai-66/taqreer) + source maps uploading — DONE.
 3. ✅ Stripe LIVE keys + products + prod webhook - DONE (2026-06-14).
-4. Accounts under dev@taqreer.ai: BetterStack uptime, PostHog (when Phase D).
+4. ✅ PostHog account + EU project 204126 + managed reverse proxy (d.taqreer.ai)
+   created (2026-06-17) - analytics fully wired. REMAINING: BetterStack uptime.
    (Inngest Cloud deferred 2026-06-14 - not needed until there's traffic.)
 5. ✅ Fable pricing decision - PARKED (Fable disabled at Anthropic upstream).
 6. ✅ Legal counsel review - DONE (content stands).
