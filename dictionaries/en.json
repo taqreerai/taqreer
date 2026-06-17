@@ -588,7 +588,7 @@
       "errLoadPreview": "Couldn't load the preview", "errSave": "Couldn't save, try again."
     },
     "notifications": {
-      "title": "All notifications", "none": "No notifications", "noneToShow": "No notifications to show", "count": "{count} notifications", "clearAll": "Clear all",
+      "title": "All notifications", "none": "No notifications", "noneToShow": "No notifications to show", "count": "{count} notifications", "clearAll": "Clear all", "readAll": "Read all",
       "bellTitle": "Notifications", "bellNew": "{count} new", "seeAll": "See all", "delete": "Delete", "collapse": "Collapse", "showFull": "Show full text",
       "devTestTitle": "Test alert #{counter}", "devTestDesc": "This is a test alert to confirm the toast shows under the bell"
     },

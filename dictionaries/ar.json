@@ -588,7 +588,7 @@
       "errLoadPreview": "تعذر تحميل المعاينة", "errSave": "تعذر الحفظ، حاول مرة أخرى."
     },
     "notifications": {
-      "title": "جميع الإشعارات", "none": "لا توجد إشعارات", "noneToShow": "لا توجد إشعارات لعرضها", "count": "{count} إشعار", "clearAll": "مسح الكل",
+      "title": "جميع الإشعارات", "none": "لا توجد إشعارات", "noneToShow": "لا توجد إشعارات لعرضها", "count": "{count} إشعار", "clearAll": "مسح الكل", "readAll": "تحديد الكل كمقروء",
       "bellTitle": "الإشعارات", "bellNew": "{count} جديد", "seeAll": "عرض الكل", "delete": "حذف", "collapse": "طي", "showFull": "عرض النص الكامل",
       "devTestTitle": "اختبار التنبيه #{counter}", "devTestDesc": "هذا تنبيه تجريبي للتأكد من ظهور التوست تحت الجرس"
     },

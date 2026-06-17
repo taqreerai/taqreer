@@ -444,8 +444,8 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
     [router, locale],
   );
 
-  const handleClearAll = useCallback(() => {
-    notificationStore.clearAll();
+  const handleReadAll = useCallback(() => {
+    notificationStore.markAllRead();
   }, []);
 
   return (
@@ -461,28 +461,11 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
       <button
         type="button"
         ref={bellRef}
-        onClick={() => {
-          // Compute `next` from current state and call both setOpen
-          // and markAllRead at the top level — NOT inside the setOpen
-          // updater. React invokes updater functions during render
-          // (twice in StrictMode for idempotency checks), and the
-          // synchronous `emit()` inside `markAllRead` fans out to
-          // store listeners that call setState on subscribed
-          // components — triggering React's "Cannot update a
-          // component while rendering a different component" error.
-          // Bug surfaced 2026-05-24 during PR #33 testing.
-          //
-          // "All-read on bell open" — product decision 2026-05-24.
-          // Fires the moment the popover opens so the unread dot +
-          // badge clear instantly. The store optimistically flips
-          // every local row's `read` to true AND fires the
-          // /api/notifications/read-all call in the background.
-          // We don't gate on `items.length` — markAllRead no-ops
-          // when there's nothing unread to flip.
-          const next = !open;
-          setOpen(next);
-          if (next) notificationStore.markAllRead();
-        }}
+        // Opening the bell no longer auto-marks-read (user direction
+        // 2026-06-17, reversing the 2026-05-24 "all-read on open"). Unread
+        // rows keep their blue dot + the badge persists until the user hits
+        // "Read all" or opens an individual item.
+        onClick={() => setOpen((o) => !o)}
         aria-label={dict.dialogs.notifications.bellTitle}
         aria-expanded={open}
         // Sits in the TopUtilityBar next to search (user direction
@@ -567,11 +550,11 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
             <div className="flex items-center justify-between gap-2 border-t border-foreground/[0.08] px-3 py-3">
               <button
                 type="button"
-                onClick={handleClearAll}
-                disabled={items.length === 0}
+                onClick={handleReadAll}
+                disabled={unread === 0}
                 className="btn-pill"
               >
-                {dict.dialogs.notifications.clearAll}
+                {dict.dialogs.notifications.readAll}
               </button>
               <button
                 type="button"

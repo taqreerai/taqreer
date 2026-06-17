@@ -202,8 +202,8 @@ export function BroadcastClient({
       >
         <div className="space-y-4">
           <p className="text-sm" style={{ color: MUTED }}>
-            This pushes a notification to every user&apos;s bell - all{" "}
-            {recipients.toLocaleString("en-US")} of them - and can&apos;t be unsent.
+            This pushes a notification to every user&apos;s bell (
+            {recipients.toLocaleString("en-US")} users) and can&apos;t be unsent.
           </p>
           <div className="surface-card rounded-lg p-3">
             <div className="text-sm font-medium" style={{ color: PRIMARY }}>
