@@ -112,10 +112,10 @@ export function Hero({ projectCount }: { projectCount?: number }) {
               "0 عرض تقديمي" edge case off the marketing surface. */}
           <motion.div
             variants={itemVariants}
-            className="mb-8 flex w-full justify-center gap-3"
+            className="mb-8 flex w-full flex-wrap justify-center gap-3"
           >
             {formattedCount && (
-              <span className="hero-stat-pill flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium">
+              <span className="hero-stat-pill flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium">
                 <span
                   className="h-1.5 w-1.5 rounded-full"
                   style={{ background: "#fff" }}
@@ -123,7 +123,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 {dict.landing.hero.statusCount.replace("{count}", String(formattedCount))}
               </span>
             )}
-            <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-4 py-1.5 text-xs font-medium text-muted">
+            <span className="whitespace-nowrap rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-4 py-1.5 text-xs font-medium text-muted">
               {dict.landing.hero.poweredBy}
             </span>
           </motion.div>

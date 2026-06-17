@@ -6,6 +6,7 @@
 // chrome direction: in RTL the logo reads at the start (right); in LTR it leads
 // from the left. Strings come from the active-locale dictionary.
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
@@ -18,6 +19,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
   const { locale } = useLocale();
   const dict = useDict();
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // On the landing the links are in-page smooth-scroll anchors; on any other
   // page (the legal pages share this nav) they jump back to the landing's
@@ -83,7 +85,82 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
               </>
             )}
           </div>
+
+          {/* Mobile hamburger — toggles the panel below (md and up uses the
+              inline nav + actions above). */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={locale === "ar" ? "القائمة" : "Menu"}
+            aria-expanded={menuOpen}
+            className="icon-hover -me-1 flex h-10 w-10 items-center justify-center rounded-lg md:hidden"
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              {menuOpen ? (
+                <path d="M6 6l12 12M18 6L6 18" />
+              ) : (
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              )}
+            </svg>
+          </button>
         </div>
+
+        {/* Mobile menu panel — nav links + theme/lang + auth CTAs. Opaque
+            surface so it reads over the hero it overlays. */}
+        {menuOpen ? (
+          <div className="surface-menu mt-2 flex flex-col gap-1 rounded-2xl p-3 md:hidden">
+            {navLinks.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                onClick={() => setMenuOpen(false)}
+                className="icon-hover cursor-pointer rounded-lg px-3 py-2.5 text-sm"
+              >
+                {l.label}
+              </a>
+            ))}
+            <div className="mt-1 mb-2 flex items-center gap-2 px-1">
+              <ThemeToggle />
+              <LanguageMenu />
+            </div>
+            {isAuthed ? (
+              <Link
+                href={localizedHref("/dashboard", locale)}
+                onClick={() => setMenuOpen(false)}
+                className="btn-gradient px-5 py-2.5 text-center text-xs"
+              >
+                {dict.landingNav.dashboard}
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <Link
+                  href={localizedHref("/login", locale)}
+                  onClick={() => setMenuOpen(false)}
+                  className="btn-pill px-4 py-2.5 text-center text-xs"
+                >
+                  {dict.landingNav.login}
+                </Link>
+                <Link
+                  href={localizedHref("/signup", locale)}
+                  onClick={() => setMenuOpen(false)}
+                  className="btn-gradient px-5 py-2.5 text-center text-xs"
+                >
+                  {dict.landingNav.signup}
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </nav>
   );
