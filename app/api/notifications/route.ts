@@ -130,6 +130,7 @@ function formatNotificationRow(
     project: ProjectJoin;
   },
   n: NotifDict,
+  lang: "ar" | "en",
 ): FormattedRow {
   const actor = formatActorName(row.actor, n);
   const project = row.project?.title?.trim() || n.projectFallback;
@@ -310,12 +311,16 @@ function formatNotificationRow(
       href = "/settings";
       break;
     }
-    case "admin.broadcast":
-      // Admin-authored announcement: title + message rendered verbatim (no
-      // template, no actor/project). Not a link target.
-      title = typeof payload.title === "string" ? payload.title : "";
-      desc = typeof payload.message === "string" ? payload.message : undefined;
+    case "admin.broadcast": {
+      // Bilingual announcement: render the VIEWER's locale version verbatim
+      // (no template, no actor/project, not a link target).
+      const side = payload[lang] as
+        | { title?: unknown; message?: unknown }
+        | undefined;
+      title = typeof side?.title === "string" ? side.title : "";
+      desc = typeof side?.message === "string" ? side.message : undefined;
       break;
+    }
     default:
       // Unknown type — surface a generic row using payload.title if
       // present (forward-compat for types deployed server-side ahead
@@ -352,7 +357,8 @@ export async function GET(request: Request) {
   // recipient reading their own bell), resolved from the locale cookie.
   const cookieStore = await cookies();
   const localeRaw = cookieStore.get(LOCALE_COOKIE)?.value;
-  const dict = await getDictionary(isLocale(localeRaw) ? localeRaw : "ar");
+  const lang = isLocale(localeRaw) ? localeRaw : "ar";
+  const dict = await getDictionary(lang);
   const n = dict.notifications;
   // Resolve Prisma user — the notification table FKs on Prisma id,
   // not Supabase auth id. User-sync race tolerance: if the Prisma row
@@ -412,7 +418,7 @@ export async function GET(request: Request) {
     },
   });
 
-  const notifications = rows.map((r) => formatNotificationRow(r, n));
+  const notifications = rows.map((r) => formatNotificationRow(r, n, lang));
 
   return NextResponse.json({ notifications });
 }

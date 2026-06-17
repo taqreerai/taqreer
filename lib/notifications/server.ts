@@ -124,10 +124,11 @@ export type NotificationPayloadMap = {
     email: string;
   };
   "admin.broadcast": {
-    // Admin-authored, free-form. Rendered verbatim in the bell (single
-    // language - the admin writes one message shown to every user).
-    title: string;
-    message: string;
+    // Admin-authored, free-form, BILINGUAL. Each user's bell renders the
+    // version matching their UI locale (the GET route resolves the viewer's
+    // locale from the cookie). Rendered verbatim, no template.
+    en: { title: string; message: string };
+    ar: { title: string; message: string };
   };
   "billing.subscription_ending": {
     // ISO date the access ends (period end). Rendered Latin-digit.

@@ -706,8 +706,12 @@ model Notification {
 // same TTL applied to bell notifications.
 model AdminBroadcast {
   id             String   @id @default(cuid())
-  title          String
-  message        String
+  // Bilingual: the admin authors both, and each user's bell renders the
+  // version matching their UI locale (the notification payload carries both).
+  titleEn        String
+  messageEn      String
+  titleAr        String
+  messageAr      String
   recipientCount Int
   createdAt      DateTime @default(now())
 

@@ -1,10 +1,11 @@
-// POST /api/admin/broadcast - admin sends a platform-wide announcement.
+// POST /api/admin/broadcast - admin sends a bilingual platform-wide announcement.
 //
-// Admin-only (requireAdminApi). Fans a single (one-language) title + message out
-// to EVERY user's bell via fanOutNotification (recipientUserIds = all users,
-// projectId null, actor null so no one is self-echo excluded), then records an
-// AdminBroadcast row for the history list + recipient count. Both the bell rows
-// and this row are pruned after 30 days by the notifications-cleanup cron.
+// Admin-only (requireAdminApi). The admin authors the title + message in BOTH
+// English and Arabic; the notification payload carries both, and each user's
+// bell renders the version matching their UI locale (resolved in the GET route).
+// Fans out to EVERY user (actor null so no one is self-echo excluded), then
+// records an AdminBroadcast row for history. Both are pruned after 30 days by
+// the notifications-cleanup cron.
 
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/api/admin-context";
@@ -14,21 +15,31 @@ import { fanOutNotification } from "@/lib/notifications/server";
 const MAX_TITLE = 120;
 const MAX_MESSAGE = 1000;
 
+const clean = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+const tooLong = (title: string, message: string) =>
+  title.length > MAX_TITLE || message.length > MAX_MESSAGE;
+
 export async function POST(request: Request) {
   const ctx = await requireAdminApi();
   if ("error" in ctx) return ctx.error;
 
   const body = (await request.json().catch(() => null)) as {
-    title?: unknown;
-    message?: unknown;
+    en?: { title?: unknown; message?: unknown };
+    ar?: { title?: unknown; message?: unknown };
   } | null;
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
-  const message = typeof body?.message === "string" ? body.message.trim() : "";
+
+  const titleEn = clean(body?.en?.title);
+  const messageEn = clean(body?.en?.message);
+  const titleAr = clean(body?.ar?.title);
+  const messageAr = clean(body?.ar?.message);
+
   if (
-    !title ||
-    !message ||
-    title.length > MAX_TITLE ||
-    message.length > MAX_MESSAGE
+    !titleEn ||
+    !messageEn ||
+    !titleAr ||
+    !messageAr ||
+    tooLong(titleEn, messageEn) ||
+    tooLong(titleAr, messageAr)
   ) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
@@ -38,22 +49,31 @@ export async function POST(request: Request) {
     const users = await prisma.user.findMany({ select: { id: true } });
     const recipientUserIds = users.map((u) => u.id);
 
-    // System event (actor null) so the whole recipient set receives it; the
-    // fan-out also emits on each user channel so live bells update.
     await fanOutNotification({
       type: "admin.broadcast",
       projectId: null,
       actorPrismaUserId: null,
-      payload: { title, message },
+      payload: {
+        en: { title: titleEn, message: messageEn },
+        ar: { title: titleAr, message: messageAr },
+      },
       recipientUserIds,
     });
 
     const broadcast = await prisma.adminBroadcast.create({
-      data: { title, message, recipientCount: recipientUserIds.length },
+      data: {
+        titleEn,
+        messageEn,
+        titleAr,
+        messageAr,
+        recipientCount: recipientUserIds.length,
+      },
       select: {
         id: true,
-        title: true,
-        message: true,
+        titleEn: true,
+        messageEn: true,
+        titleAr: true,
+        messageAr: true,
         recipientCount: true,
         createdAt: true,
       },
