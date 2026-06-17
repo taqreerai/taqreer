@@ -8,8 +8,10 @@
 
 import dynamic from "next/dynamic";
 import { PLAN_LABEL, type AdminStat, type ActivityItem, type Plan } from "@/lib/admin/mock";
+import type { ChannelRow } from "@/lib/analytics/posthog";
 import { IconCircle } from "@/components/admin/IconCircle";
 import { DeviceBreakdown } from "@/components/admin/DeviceBreakdown";
+import { ChannelSources } from "@/components/admin/ChannelSources";
 
 // Client-only (WebGL / three.js): ssr:false so globe.gl never runs on the server.
 const LiveGlobePanel = dynamic(
@@ -161,10 +163,12 @@ export function OverviewClient({
   stats,
   planSplit,
   activity,
+  channels,
 }: {
   stats: AdminStat[];
   planSplit: Record<Plan, number>;
   activity: ActivityItem[];
+  channels: ChannelRow[] | null;
 }) {
   return (
     <div className="space-y-6">
@@ -181,8 +185,13 @@ export function OverviewClient({
           <LiveGlobePanel />
         </div>
         <div className="flex flex-col gap-4 lg:col-span-2">
-          <DeviceBreakdown />
-          <PlanSplit split={planSplit} />
+          {/* Channels grows to fill the column height (it lists many rows);
+              device + plan share one row below so they don't steal that space. */}
+          <ChannelSources data={channels} />
+          <div className="grid grid-cols-2 gap-4">
+            <DeviceBreakdown />
+            <PlanSplit split={planSplit} />
+          </div>
         </div>
       </div>
 
