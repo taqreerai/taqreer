@@ -11,11 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import createGlobe from "cobe";
-import {
-  MOCK_VISITORS,
-  formatCount,
-  type CountryVisitors,
-} from "@/lib/admin/mock";
+import { formatCount, type CountryVisitors } from "@/lib/admin/mock";
 
 const MUTED = "var(--tq-text-muted)";
 const PRIMARY = "var(--tq-text-primary)";
@@ -75,7 +71,13 @@ function useIsLight() {
   return light;
 }
 
-export function LiveGlobePanel() {
+export function LiveGlobePanel({
+  visitors,
+  onlineNow,
+}: {
+  visitors: CountryVisitors[];
+  onlineNow: number;
+}) {
   const isLight = useIsLight();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const phiRef = useRef(4.4);
@@ -88,20 +90,16 @@ export function LiveGlobePanel() {
   const [tip, setTip] = useState<Tip | null>(null);
 
   const sorted = useMemo(
-    () => [...MOCK_VISITORS].sort((a, b) => b.count - a.count),
-    [],
+    () => [...visitors].sort((a, b) => b.count - a.count),
+    [visitors],
   );
   const max = sorted[0]?.count ?? 1;
-  const total = useMemo(
-    () => MOCK_VISITORS.reduce((s, v) => s + v.count, 0),
-    [],
-  );
 
   // One marker per country; its color trends from a soft blue toward our brand
   // blue (#3380FF) as traffic rises.
   const markers = useMemo(
     () =>
-      MOCK_VISITORS.map((v) => {
+      visitors.map((v) => {
         const t = Math.sqrt(v.count / max);
         return {
           location: [v.lat, v.lng] as [number, number],
@@ -113,7 +111,7 @@ export function LiveGlobePanel() {
           ] as RGB,
         };
       }),
-    [max],
+    [visitors, max],
   );
 
   useEffect(() => {
@@ -239,7 +237,7 @@ export function LiveGlobePanel() {
     const my = e.clientY - rect.top;
     let hit: { v: CountryVisitors; x: number; y: number } | null = null;
     let best = 16;
-    for (const v of MOCK_VISITORS) {
+    for (const v of visitors) {
       const p = project(v.lat, v.lng, phiRef.current, thetaRef.current);
       if (!p.visible) continue;
       const dd = Math.hypot(p.x - mx, p.y - my);
@@ -268,7 +266,7 @@ export function LiveGlobePanel() {
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline gap-2">
         <span className="text-2xl font-bold" style={{ color: PRIMARY }}>
-          {formatCount(total)}
+          {formatCount(onlineNow)}
         </span>
         <span className="text-sm" style={{ color: MUTED }}>
           users online now
@@ -327,6 +325,11 @@ export function LiveGlobePanel() {
 
         {/* Ranked list - hovering a row rotates the globe to that country. */}
         <div className="flex w-full flex-col gap-1">
+          {sorted.length === 0 ? (
+            <p className="px-2 py-1.5 text-sm" style={{ color: MUTED }}>
+              No visitor data yet.
+            </p>
+          ) : null}
           {sorted.map((v) => (
             <div
               key={v.code}

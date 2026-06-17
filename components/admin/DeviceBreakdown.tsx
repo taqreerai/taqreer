@@ -1,30 +1,26 @@
 "use client";
 
 // Admin > Overview "Traffic by device / browser / OS" card. A small segmented
-// toggle switches the breakdown; each is a list of labelled bars. Mock data
-// (lib/admin/mock.ts) for Phase 0.
+// toggle switches the breakdown; each is a list of labelled bars. Data is real
+// (PostHog $device_type / $browser / $os), passed from the server page.
 
 import { useState } from "react";
-import {
-  MOCK_DEVICE,
-  MOCK_BROWSER,
-  MOCK_OS,
-  type Breakdown,
-} from "@/lib/admin/mock";
+import type { DeviceBreakdowns } from "@/lib/analytics/posthog";
 
 const MUTED = "var(--tq-text-muted)";
 const PRIMARY = "var(--tq-text-primary)";
 const ACCENT = "var(--tq-purple)";
 
-const TABS: Array<{ key: string; label: string; data: Breakdown[] }> = [
-  { key: "device", label: "Device", data: MOCK_DEVICE },
-  { key: "browser", label: "Browser", data: MOCK_BROWSER },
-  { key: "os", label: "OS", data: MOCK_OS },
+type TabKey = "device" | "browser" | "os";
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: "device", label: "Device" },
+  { key: "browser", label: "Browser" },
+  { key: "os", label: "OS" },
 ];
 
-export function DeviceBreakdown() {
-  const [active, setActive] = useState("device");
-  const data = TABS.find((t) => t.key === active)?.data ?? MOCK_DEVICE;
+export function DeviceBreakdown({ data }: { data: DeviceBreakdowns }) {
+  const [active, setActive] = useState<TabKey>("device");
+  const rows = data[active];
 
   return (
     <div className="surface-card flex flex-1 flex-col gap-4 rounded-xl p-5">
@@ -53,32 +49,38 @@ export function DeviceBreakdown() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {data.map((d) => (
-          <div key={d.label} className="flex items-center gap-3">
-            <span
-              className="w-20 flex-shrink-0 truncate text-sm"
-              style={{ color: PRIMARY }}
-            >
-              {d.label}
-            </span>
-            <div
-              className="h-1.5 flex-1 overflow-hidden rounded-full"
-              style={{ background: "var(--tq-overlay-soft)" }}
-            >
+      {rows.length === 0 ? (
+        <p className="text-sm" style={{ color: MUTED }}>
+          No traffic yet.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {rows.map((d) => (
+            <div key={d.label} className="flex items-center gap-3">
+              <span
+                className="w-20 flex-shrink-0 truncate text-sm"
+                style={{ color: PRIMARY }}
+              >
+                {d.label}
+              </span>
               <div
-                style={{ width: `${d.pct}%`, height: "100%", background: ACCENT }}
-              />
+                className="h-1.5 flex-1 overflow-hidden rounded-full"
+                style={{ background: "var(--tq-overlay-soft)" }}
+              >
+                <div
+                  style={{ width: `${d.pct}%`, height: "100%", background: ACCENT }}
+                />
+              </div>
+              <span
+                className="w-9 flex-shrink-0 text-end text-sm tabular-nums"
+                style={{ color: MUTED }}
+              >
+                {d.pct}%
+              </span>
             </div>
-            <span
-              className="w-9 flex-shrink-0 text-end text-sm tabular-nums"
-              style={{ color: MUTED }}
-            >
-              {d.pct}%
-            </span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

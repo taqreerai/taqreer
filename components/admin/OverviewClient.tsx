@@ -7,8 +7,14 @@
 // English-only, dark-only, LTR (forced by the admin layout).
 
 import dynamic from "next/dynamic";
-import { PLAN_LABEL, type AdminStat, type ActivityItem, type Plan } from "@/lib/admin/mock";
-import type { ChannelRow } from "@/lib/analytics/posthog";
+import {
+  PLAN_LABEL,
+  type AdminStat,
+  type ActivityItem,
+  type Plan,
+  type CountryVisitors,
+} from "@/lib/admin/mock";
+import type { ChannelRow, DeviceBreakdowns } from "@/lib/analytics/posthog";
 import { IconCircle } from "@/components/admin/IconCircle";
 import { DeviceBreakdown } from "@/components/admin/DeviceBreakdown";
 import { ChannelSources } from "@/components/admin/ChannelSources";
@@ -164,11 +170,17 @@ export function OverviewClient({
   planSplit,
   activity,
   channels,
+  geo,
+  onlineNow,
+  device,
 }: {
   stats: AdminStat[];
   planSplit: Record<Plan, number>;
   activity: ActivityItem[];
   channels: ChannelRow[] | null;
+  geo: CountryVisitors[];
+  onlineNow: number;
+  device: DeviceBreakdowns;
 }) {
   return (
     <div className="space-y-6">
@@ -182,14 +194,14 @@ export function OverviewClient({
       {/* Live online + map (2/3) and plan split (1/3) */}
       <div className="grid gap-4 lg:grid-cols-5">
         <div className="surface-card rounded-xl p-5 lg:col-span-3">
-          <LiveGlobePanel />
+          <LiveGlobePanel visitors={geo} onlineNow={onlineNow} />
         </div>
         <div className="flex flex-col gap-4 lg:col-span-2">
           {/* Channels grows to fill the column height (it lists many rows);
               device + plan share one row below so they don't steal that space. */}
           <ChannelSources data={channels} />
           <div className="grid grid-cols-2 gap-4">
-            <DeviceBreakdown />
+            <DeviceBreakdown data={device} />
             <PlanSplit split={planSplit} />
           </div>
         </div>

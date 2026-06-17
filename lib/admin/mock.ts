@@ -60,6 +60,9 @@ export const MOCK_ACTIVITY: ActivityItem[] = [
 // `name` must match world-atlas (Natural Earth) country names so globe.gl can
 // tint the right country; lat/lng drive the "rotate to country" interaction.
 
+// `name` must match world-atlas (Natural Earth) country names so the globe can
+// label the right country; lat/lng (PostHog GeoIP centroids) drive the
+// "rotate to country" interaction. Rows now come from lib/analytics/posthog.ts.
 export type CountryVisitors = {
   name: string;
   code: string;
@@ -67,22 +70,6 @@ export type CountryVisitors = {
   lng: number;
   count: number;
 };
-
-export const MOCK_VISITORS: CountryVisitors[] = [
-  { name: "Saudi Arabia", code: "SA", lat: 24, lng: 45, count: 1670 },
-  { name: "United States of America", code: "US", lat: 38, lng: -97, count: 266 },
-  { name: "Morocco", code: "MA", lat: 32, lng: -6, count: 217 },
-  { name: "Germany", code: "DE", lat: 51, lng: 10, count: 80 },
-  { name: "Egypt", code: "EG", lat: 27, lng: 30, count: 72 },
-  { name: "United Kingdom", code: "GB", lat: 54, lng: -2, count: 64 },
-  { name: "Netherlands", code: "NL", lat: 52, lng: 5, count: 59 },
-  { name: "Finland", code: "FI", lat: 64, lng: 26, count: 53 },
-  { name: "Romania", code: "RO", lat: 46, lng: 25, count: 48 },
-  { name: "Canada", code: "CA", lat: 56, lng: -106, count: 48 },
-  { name: "France", code: "FR", lat: 46, lng: 2, count: 34 },
-  { name: "India", code: "IN", lat: 22, lng: 79, count: 28 },
-  { name: "United Arab Emirates", code: "AE", lat: 24, lng: 54, count: 22 },
-];
 
 // 1670 -> "1.67k", 266 -> "266".
 export function formatCount(n: number): string {
@@ -163,26 +150,5 @@ export const MOCK_BROADCASTS: BroadcastItem[] = [
 
 // ─── Traffic by device / browser / os ──────────────────────────────────────
 
+// Rows now come from lib/analytics/posthog.ts (PostHog $device_type/$browser/$os).
 export type Breakdown = { label: string; pct: number };
-
-export const MOCK_DEVICE: Breakdown[] = [
-  { label: "Desktop", pct: 62 },
-  { label: "Mobile", pct: 33 },
-  { label: "Tablet", pct: 5 },
-];
-
-export const MOCK_BROWSER: Breakdown[] = [
-  { label: "Chrome", pct: 56 },
-  { label: "Safari", pct: 25 },
-  { label: "Edge", pct: 9 },
-  { label: "Firefox", pct: 7 },
-  { label: "Other", pct: 3 },
-];
-
-export const MOCK_OS: Breakdown[] = [
-  { label: "Windows", pct: 39 },
-  { label: "iOS", pct: 24 },
-  { label: "Android", pct: 18 },
-  { label: "macOS", pct: 15 },
-  { label: "Linux", pct: 4 },
-];
