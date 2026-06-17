@@ -1585,6 +1585,23 @@ html.app-shell-scroll body {
   animation-play-state: paused;
 }
 
+/* "Trusted by" marquee logos: each source SVG is used as an alpha MASK filled
+   with `currentColor`, so any logo (incl. all-black wordmarks) renders as one
+   muted theme-ink that flips with light/dark - no per-logo, per-theme assets.
+   Pair with a fixed height + per-logo `aspect-ratio` inline (the SVG viewBox is
+   pre-cropped to the logo's content, so it fills the box edge to edge). */
+.trusted-logo {
+  display: inline-block;
+  vertical-align: middle;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
 /* ─── Landing full-bleed section rules ───────────────────────────────────────
    The landing content sits in a centered max-w-7xl frame, but the horizontal
    section separators span the FULL viewport width (laravel.com style) by

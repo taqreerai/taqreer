@@ -40,7 +40,22 @@ const getProjectCount = unstable_cache(
   { revalidate: 300, tags: ["landing-project-count"] }
 );
 
-const TRUSTED_LOGOS = ["TED", "Lattice", "NCR", "PACIFIC FUNDS", "Rakuten", "zendesk", "DELL"];
+// "Trusted by" logos. Each renders as a `currentColor` SVG mask (see
+// `.trusted-logo` in globals.css) so they're monochrome + theme-adaptive on
+// both light and dark. `w`/`h` = the logo's CONTENT box (the public/logos SVG
+// viewBox is pre-cropped to it) and drive the per-logo aspect-ratio. `px` is the
+// per-logo display HEIGHT, hand-tuned for OPTICAL balance: a uniform pixel
+// height makes all-caps wordmarks (EMAAR) read heavier than lowercase ones
+// (mbc) or mark+wordmarks, so caps shrink and lowercase/marks grow.
+const TRUSTED_LOGOS: { file: string; w: number; h: number; px: number; label: string }[] = [
+  { file: "uber", w: 606, h: 210, px: 20, label: "Uber" },
+  { file: "shahid", w: 719, h: 204, px: 23, label: "Shahid" },
+  { file: "etisalat", w: 250, h: 57, px: 22, label: "Etisalat" },
+  { file: "mbc", w: 636, h: 270, px: 26, label: "MBC Group" },
+  { file: "emaar", w: 1617, h: 321, px: 18, label: "Emaar" },
+  { file: "claude", w: 512, h: 110, px: 20, label: "Claude" },
+  { file: "openai", w: 512, h: 126, px: 20, label: "OpenAI" },
+];
 
 // Centered (single-column) section header.
 function SectionHeader({
@@ -116,13 +131,25 @@ export default async function LandingPage({
             (`.mask-edges`) so the logos dissolve at both ends. */}
         <section className="py-24">
           <div className="mask-edges relative w-full overflow-hidden" dir="ltr">
-            <div className="animate-marquee-rtl pause-on-hover flex w-max opacity-50 grayscale">
+            <div className="animate-marquee-rtl pause-on-hover flex w-max items-center text-foreground opacity-50">
+              {/* gap = 2x the group padding so the loop seam keeps the same
+                  rhythm. Wide on desktop (~5 logos in view), tighter on a phone
+                  so it isn't too sparse. */}
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-16 px-8">
+                <div key={i} className="flex items-center gap-24 px-12 lg:gap-44 lg:px-22">
                   {TRUSTED_LOGOS.map((logo) => (
-                    <span key={logo} className="text-xl font-bold tracking-wide">
-                      {logo}
-                    </span>
+                    <span
+                      key={logo.file}
+                      role="img"
+                      aria-label={logo.label}
+                      className="trusted-logo shrink-0"
+                      style={{
+                        height: logo.px,
+                        aspectRatio: `${logo.w} / ${logo.h}`,
+                        WebkitMaskImage: `url(/logos/${logo.file}.svg)`,
+                        maskImage: `url(/logos/${logo.file}.svg)`,
+                      }}
+                    />
                   ))}
                 </div>
               ))}
