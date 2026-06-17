@@ -205,18 +205,21 @@ class NotificationStore {
 
   private installChannelHandlers(handle: UserChannelHandle): void {
     handle.on("notification.created", (payload) => {
-      // Capture the prismaUserId at handler-bind time so a later
-      // user switch doesn't fetch into the wrong recipient's list.
+      // Capture the prismaUserId AND locale at handler-bind time so a later
+      // user switch or locale change doesn't fetch into the wrong recipient's
+      // list or render the row in the wrong language.
       const recipientAtBind = this.prismaUserId;
+      const localeAtBind = this.locale;
       if (!payload?.notificationId) return;
       (async () => {
         try {
           const res = await fetch(
-            `/api/notifications?ids=${encodeURIComponent(payload.notificationId)}&lang=${this.locale}`,
+            `/api/notifications?ids=${encodeURIComponent(payload.notificationId)}&lang=${encodeURIComponent(localeAtBind)}`,
             { credentials: "same-origin" },
           );
           if (!res.ok) return;
-          if (this.prismaUserId !== recipientAtBind) return;
+          if (this.prismaUserId !== recipientAtBind || this.locale !== localeAtBind)
+            return;
           const data = (await res.json()) as { notifications?: Notification[] };
           const row = data.notifications?.[0];
           if (row) this.pushFromServer(row);
@@ -269,15 +272,20 @@ class NotificationStore {
   private async hydrateFromServer(): Promise<void> {
     if (typeof window === "undefined") return;
     const recipientAtStart = this.prismaUserId;
+    const localeAtStart = this.locale;
+    // Abort any prior in-flight hydrate so an older-locale fetch can't resolve
+    // after this one and overwrite the rows in the previous language.
+    if (this.fetchAbort) this.fetchAbort.abort();
     const controller = new AbortController();
     this.fetchAbort = controller;
     try {
-      const res = await fetch(`/api/notifications?lang=${this.locale}`, {
+      const res = await fetch(`/api/notifications?lang=${encodeURIComponent(localeAtStart)}`, {
         credentials: "same-origin",
         signal: controller.signal,
       });
       if (!res.ok) return;
-      if (this.prismaUserId !== recipientAtStart) return;
+      if (this.prismaUserId !== recipientAtStart || this.locale !== localeAtStart)
+        return;
       const data = (await res.json()) as { notifications?: Notification[] };
       const server = Array.isArray(data.notifications) ? data.notifications : [];
       // Upsert by id: server rows replace any local row with the same

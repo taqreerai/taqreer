@@ -697,6 +697,10 @@ model Notification {
   @@index([recipientUserId, readAt])
   @@index([actorUserId])
   @@index([projectId])
+  // Standalone createdAt index for the daily notifications-cleanup TTL sweep,
+  // which range-deletes by createdAt alone (the composite above leads with
+  // recipientUserId, so it can't serve that scan).
+  @@index([createdAt])
 }
 
 // Admin > Broadcast: one row per platform-wide announcement sent from the admin
