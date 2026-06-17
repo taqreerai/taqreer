@@ -21,9 +21,12 @@ export function BidiSection() {
     <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-12">
       {/* Title — order-1 = the reading-start column (right in RTL, left in LTR). */}
       <ScrollReveal direction="right" className="order-1 lg:col-span-5">
-        <h2 className="text-balance text-4xl font-medium leading-tight md:text-5xl">
+        <h2 className="text-center text-4xl font-medium leading-tight md:text-5xl lg:text-start">
           {b.headingPre}{" "}
-          <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} ariaLabel={b.toggleAria} />{" "}
+          <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} ariaLabel={b.toggleAria} />
+          {/* Forced break so the title is ALWAYS two lines (pre + switch / post),
+              at every width — no text-balance reflow. */}
+          <br />
           {b.headingPost}
         </h2>
         {/* Subtitle — fades in when the tech is toggled ON. Its space is
@@ -36,7 +39,7 @@ export function BidiSection() {
           initial={false}
           animate={{ opacity: fixed ? 1 : 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="text-lg leading-relaxed text-muted"
+          className="text-center text-lg leading-relaxed text-muted lg:text-start"
         >
           <span className="mt-5 block whitespace-pre-line">{b.subtitle}</span>
         </motion.p>

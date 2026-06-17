@@ -124,36 +124,39 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
                 key={l.href}
                 href={l.href}
                 onClick={() => setMenuOpen(false)}
-                className="icon-hover cursor-pointer rounded-lg px-3 py-2.5 text-sm"
+                className="icon-hover cursor-pointer rounded-lg px-3 py-2.5 text-center text-sm"
               >
                 {l.label}
               </a>
             ))}
-            <div className="mt-1 mb-2 flex items-center gap-2 px-1">
+            {/* Centered controls + content-width (not full-width) CTAs. */}
+            <div className="mt-2 mb-2 flex items-center justify-center gap-2">
               <ThemeToggle />
               <LanguageMenu />
             </div>
             {isAuthed ? (
-              <Link
-                href={localizedHref("/dashboard", locale)}
-                onClick={() => setMenuOpen(false)}
-                className="btn-gradient px-5 py-2.5 text-center text-xs"
-              >
-                {dict.landingNav.dashboard}
-              </Link>
+              <div className="flex flex-col items-center">
+                <Link
+                  href={localizedHref("/dashboard", locale)}
+                  onClick={() => setMenuOpen(false)}
+                  className="btn-gradient px-6 py-2.5 text-center text-xs"
+                >
+                  {dict.landingNav.dashboard}
+                </Link>
+              </div>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col items-center gap-2">
                 <Link
                   href={localizedHref("/login", locale)}
                   onClick={() => setMenuOpen(false)}
-                  className="btn-pill px-4 py-2.5 text-center text-xs"
+                  className="btn-pill px-6 py-2.5 text-center text-xs"
                 >
                   {dict.landingNav.login}
                 </Link>
                 <Link
                   href={localizedHref("/signup", locale)}
                   onClick={() => setMenuOpen(false)}
-                  className="btn-gradient px-5 py-2.5 text-center text-xs"
+                  className="btn-gradient px-6 py-2.5 text-center text-xs"
                 >
                   {dict.landingNav.signup}
                 </Link>

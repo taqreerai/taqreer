@@ -41,7 +41,7 @@
 // border + bottom-fade mask; this component owns the dashboard content
 // + flow swap.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
@@ -75,7 +75,9 @@ const SIDEBAR_ITEMS: Array<{
   id: View | "projects" | "templates" | "brand-kits" | "favorites" | "settings";
   icon: string;
   // Accessible name for the icon-only nav dot (no visible text label).
-  labelKey: keyof Dictionary["landing"]["preview"]["sidebar"];
+  // Reads the REAL sidebar nav dictionary (dict.nav.*) so the demo can't
+  // drift from the app's own labels.
+  labelKey: keyof Dictionary["nav"];
   group: "home" | "actions" | "library";
   comingSoon?: boolean;
 }> = [
@@ -83,7 +85,7 @@ const SIDEBAR_ITEMS: Array<{
   { id: "create", icon: "add_circle", labelKey: "create", group: "actions" },
   { id: "enhance", icon: "auto_fix_high", labelKey: "enhance", group: "actions" },
   { id: "mimic", icon: "content_copy", labelKey: "mimic", group: "actions" },
-  { id: "datasheet", icon: "dataset", labelKey: "datasheet", group: "actions", comingSoon: true },
+  { id: "datasheet", icon: "dataset", labelKey: "fromData", group: "actions", comingSoon: true },
   { id: "projects", icon: "folder_copy", labelKey: "projects", group: "library" },
   { id: "templates", icon: "grid_view", labelKey: "templates", group: "library" },
   { id: "brand-kits", icon: "id_card", labelKey: "brandKits", group: "library" },
@@ -118,6 +120,49 @@ const VIEW_TO_PATH: Record<View, string> = {
   mimic: "/mimic",
   datasheet: "/datasheet",
 };
+
+// Links this element's internal scroll to the PAGE scroll, so the demo content
+// reveals IN SYNC as the visitor scrolls the landing. There is NO nested wheel
+// capture (no `data-lenis-prevent`), so it can never trap the page scroll at its
+// edges — the page always scrolls; the demo content just follows. Anchored when
+// the view mounts (a flow only mounts on click, i.e. while in view), so it
+// starts at the top, then tracks how far the demo has risen up the viewport.
+function useScrollSyncedToPage<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let base: number | null = null;
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      const max = el.scrollHeight - el.clientHeight;
+      if (max <= 0) {
+        el.scrollTop = 0; // view fits — nothing to reveal
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      const center = rect.top + rect.height / 2;
+      if (base === null) base = center;
+      // How far the demo has travelled UP since this view mounted, normalised
+      // over ~60% of the viewport height → 0..1 → scrollTop (auto-clamped).
+      const progress = (base - center) / (window.innerHeight * 0.6);
+      el.scrollTop = Math.max(0, Math.min(1, progress)) * max;
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
+    apply();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+  return ref;
+}
 
 export function DashboardPreview({
   onPathChange,
@@ -257,7 +302,7 @@ function DemoSidebar({
         <button
           type="button"
           onClick={() => onNavigate("dashboard")}
-          aria-label={dict.landing.preview.sidebar.home}
+          aria-label={dict.nav.home}
           className="pw-hover-trigger flex h-8 w-8 items-center justify-center"
         >
           <ParagraphWriteIcon mode="hover" size={22} />
@@ -363,7 +408,7 @@ function SidebarDot({
       onClick={onClick}
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
-      aria-label={dict.landing.preview.sidebar[item.labelKey]}
+      aria-label={dict.nav[item.labelKey]}
       aria-current={active ? "page" : undefined}
       className={`my-1 flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
         active ? "nav-active" : "nav-item"
@@ -397,7 +442,10 @@ function DemoQACard({
   dir: "rtl" | "ltr";
 }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
-  const copy = dict.landing.preview.quickActions[card.id];
+  // Real dashboard quick-action copy (dict.quickActions.*); the demo's
+  // "datasheet" maps to the app's "fromData" entry.
+  const qaKey = card.id === "datasheet" ? "fromData" : card.id;
+  const copy = dict.quickActions[qaKey];
   return (
     <button
       type="button"
@@ -487,9 +535,12 @@ function DashboardBody({
   dict: Dictionary;
   dir: "rtl" | "ltr";
 }) {
-  const lib = dict.landing.preview.library;
+  const scrollRef = useScrollSyncedToPage<HTMLDivElement>();
   return (
-    <div className="relative z-10 flex h-full flex-col overflow-hidden px-5 pt-11 pb-3">
+    <div
+      ref={scrollRef}
+      className="relative z-10 flex h-full flex-col overflow-y-auto px-5 pt-11 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {/* Centered launcher — the 4 flow cards, vertically centered (Lovable-
           style), exactly like the real dashboard's `min-h items-center` block. */}
       <section className="flex flex-1 items-center justify-center">
@@ -512,13 +563,13 @@ function DashboardBody({
         <div className="mb-2.5 flex items-center justify-between">
           <div className="flex items-center gap-0.5 rounded-full bg-[var(--tq-surface)] p-0.5 text-[9px]">
             <span className="rounded-full bg-foreground/10 px-2.5 py-1 font-medium text-foreground">
-              {lib.myProjects}
+              {dict.nav.projects}
             </span>
             <span className="px-2.5 py-1 text-[var(--tq-text-muted)]">
-              {lib.templates}
+              {dict.nav.templates}
             </span>
           </div>
-          <span className="text-[9px] text-[var(--tq-text-muted)]">{lib.viewAll}</span>
+          <span className="text-[9px] text-[var(--tq-text-muted)]">{dict.homeLibrary.viewAll}</span>
         </div>
         <div className="grid grid-cols-5 gap-2">
           {RECENT_PROJECT_SLIDE_COUNTS.slice(0, 5).map((count, i) => (
@@ -651,13 +702,23 @@ function FlowBody({
   dir: "rtl" | "ltr";
 }) {
   const flow = getFlows(dict, dir)[view];
+  const scrollRef = useScrollSyncedToPage<HTMLDivElement>();
 
   return (
     // `pt-8` (vs the dashboard body's `pt-5`) so the flow title sits
     // visually below the header bar with breathing room — user
     // direction 2026-05-28: "the headlines is too close to the
-    // header" on the previous tight `py-5` spacing.
-    <div className="relative z-10 flex h-full flex-col overflow-y-auto px-6 pt-8 pb-5">
+    // header" on the previous tight `py-5` spacing. The cards overflow
+    // on a phone; the hook reveals them in sync with the PAGE scroll
+    // (no nested wheel capture, so it never traps the scroll).
+    <div
+      ref={scrollRef}
+      className="relative z-10 flex h-full flex-col overflow-y-auto px-6 pt-8 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {/* `my-auto` centres the flow vertically when it fits the window; when the
+          cards overflow on a phone the auto-margins collapse to 0 so it
+          top-anchors and scroll-syncs instead. */}
+      <div className="my-auto w-full">
       {/* Header — title + subhead. The back chip used to live here
           but moved to DemoHeader's right slot 2026-05-28 (user
           direction: "remove Taqreer logo … add العودة للوحة التحكم
@@ -695,6 +756,7 @@ function FlowBody({
         >
           {flow.cta}
         </button>
+      </div>
       </div>
     </div>
   );
@@ -748,11 +810,35 @@ function FakeDropzone({
   icon = "cloud_upload",
   title,
   hint,
+  tall = false,
 }: {
   icon?: string;
   title: string;
   hint: string;
+  // `tall` = the large centered drop area the real flows use as a card's
+  // PRIMARY action (enhance file, datasheet data, mimic reference); it grows
+  // to fill the card. The default compact row is for secondary dropzones.
+  tall?: boolean;
 }) {
+  if (tall) {
+    return (
+      <div
+        className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-4 text-center"
+        aria-disabled
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--tq-surface)]">
+          <span
+            className="material-symbols-outlined text-foreground/80"
+            style={{ fontSize: 18 }}
+          >
+            {icon}
+          </span>
+        </span>
+        <p className="text-[11px] font-semibold text-foreground">{title}</p>
+        <p className="text-[10px] text-foreground/40">{hint}</p>
+      </div>
+    );
+  }
   return (
     <div
       className="flex items-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-2.5"
@@ -770,6 +856,104 @@ function FakeDropzone({
         <p className="truncate text-[11px] font-semibold text-foreground">{title}</p>
         <p className="mt-0.5 truncate text-[10px] text-foreground/40">{hint}</p>
       </div>
+    </div>
+  );
+}
+
+// ─── Real-flow control mirrors ──────────────────────────────────────
+// Small static stand-ins for the real flow primitives (PersistentRow,
+// BrandFontPicker, AIImagesPanel, DesignStylePicker, SlideSizeFields,
+// instructions textarea). All copy reads dict.flows.* so the demo can't
+// drift from the app.
+
+// The project's single typeface (CLAUDE.md: Cairo only). A font family name
+// is data, not translatable copy — so it stays a literal here.
+const DEMO_FONT_FAMILY = "Cairo";
+
+function FakePersistentRow({ dict, dir }: { dict: Dictionary; dir: "rtl" | "ltr" }) {
+  return (
+    <div
+      className="input-dark flex items-center text-[11px] text-[var(--tq-text-muted)]"
+      style={{ padding: "7px 12px", borderRadius: 9999 }}
+      dir={dir}
+      aria-disabled
+    >
+      {dict.flows.brand.persistentPlaceholder}
+    </div>
+  );
+}
+
+function FakeFontPicker({ dict }: { dict: Dictionary }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[11px] font-semibold text-foreground/70">
+        {dict.flows.fonts.fonts}
+      </span>
+      <FakeFontSlot label="Aa" family={DEMO_FONT_FAMILY} />
+      <div className="flex items-center gap-2 text-[9px] text-foreground/40">
+        <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+        <span>{dict.flows.fonts.orUpload}</span>
+        <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+      </div>
+    </div>
+  );
+}
+
+function FakeAIImagesPanel({ dict, dir }: { dict: Dictionary; dir: "rtl" | "ltr" }) {
+  return (
+    <div
+      className="flex items-center gap-2 rounded-xl border border-[var(--tq-border-hairline)] p-2.5"
+      style={{ background: "rgba(var(--tq-violet-rgb), 0.08)" }}
+    >
+      <span
+        className="material-symbols-outlined text-foreground/80"
+        style={{ fontSize: 16 }}
+      >
+        image
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold text-foreground">
+          {dict.flows.brand.aiImagesTitle}
+        </p>
+        <p className="text-[9px] leading-relaxed text-[var(--tq-text-muted)]">
+          {dict.flows.brand.aiImagesDesc}
+        </p>
+      </div>
+      <FakeToggle on dir={dir} />
+    </div>
+  );
+}
+
+function FakeDesignStyleRow({ dict }: { dict: Dictionary }) {
+  return (
+    <FieldRow label={dict.flows.designStyle}>
+      <span className="rounded-full border border-[var(--tq-border-hairline)] bg-black/25 px-2 py-0.5 text-[10px] text-foreground">
+        {dict.flows.stylePicker.auto}
+      </span>
+    </FieldRow>
+  );
+}
+
+function FakeSlideSize({ dict }: { dict: Dictionary }) {
+  // 16:9 / 9:16 are universal aspect tokens (Latin numerals); the label is
+  // localized.
+  return (
+    <FieldRow label={dict.flows.output.slideSize}>
+      <FakeSegmented options={["16:9", "9:16"]} active={0} />
+    </FieldRow>
+  );
+}
+
+function FakeInstructions({ dict, dir }: { dict: Dictionary; dir: "rtl" | "ltr" }) {
+  return (
+    <div className="flex flex-col gap-1.5" dir={dir}>
+      <span className="text-[11px] font-semibold text-foreground/70">
+        {dict.flows.datasheet.instructions}
+      </span>
+      <FakeTextarea
+        placeholder={dict.flows.datasheet.instructionsPlaceholder}
+        rows={2}
+      />
     </div>
   );
 }
@@ -912,278 +1096,204 @@ function FlowCard({ card }: { card: FlowCardSpec }) {
 //   • /datasheet  →  dataset (البيانات) / palette (الهوية البصرية)
 //                    / settings (إعدادات الإخراج)
 
-// Builds the per-flow card specs from the dictionary so all copy follows
-// the UI locale. `dir` is threaded into every `FakeToggle` so the switch
-// knob mirrors with the locale. File-format / aspect-ratio tokens
-// ("16:9", "9:16", "Google", "Sheet 1", "PPTX / PDF") stay as-is.
+// Builds the per-flow card specs from the REAL flow dictionary (dict.flows.*)
+// so the demo's copy + feature set track the actual /create /enhance /mimic
+// /datasheet pages and can't drift. `dir` is threaded into every control that
+// mirrors with the locale. Only universal aspect tokens ("16:9", "9:16") and
+// the typeface name stay literal (they aren't translatable copy).
 function getFlows(
   dict: Dictionary,
   dir: "rtl" | "ltr",
 ): Record<Exclude<View, "dashboard">, FlowSpec> {
-  const p = dict.landing.preview;
-  const c = p.common;
+  const f = dict.flows;
+  const cta = f.generate.create;
+  // The real flows all render ONE consolidated brand-identity card (palette +
+  // fonts + logo + save-default). `withAi` appends the AI-images panel — the
+  // create + mimic flows have it, enhance + datasheet don't.
+  const brandCard = (palette: string[], withAi: boolean): FlowCardSpec => ({
+    icon: "palette",
+    title: f.brandCard,
+    body: (
+      <>
+        <FieldRow label={f.colors}>
+          <FakePalette colors={palette} />
+        </FieldRow>
+        <CardSeparator />
+        <FakeFontPicker dict={dict} />
+        <CardSeparator />
+        <FakeDropzone icon="image" title={f.logo} hint={f.brand.svgOnly} />
+        <FieldRow label={f.saveAsDefault}>
+          <FakeToggle on={false} dir={dir} />
+        </FieldRow>
+        {withAi ? (
+          <>
+            <CardSeparator />
+            <FakeAIImagesPanel dict={dict} dir={dir} />
+          </>
+        ) : null}
+      </>
+    ),
+  });
+  // Brand-gradient swatches (blue -> violet -> purple). Literal token names on
+  // purpose: post-§21 the colour tokens all alias one accent, so this reads
+  // monochrome by design.
+  const TRIAD = ["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"];
   return {
     create: {
-      title: p.create.title,
-      subtitle: p.create.subtitle,
-      cta: p.create.cta,
+      title: f.create.title,
+      subtitle: f.create.subtitle,
+      cta,
       cards: [
         {
           icon: "subject",
-          title: c.content,
+          title: f.contentCard,
           body: (
             <>
-              <FieldRow label={c.language}>
-                <FakeSegmented options={[c.arabic, c.english]} active={0} />
+              <FieldRow label={f.language}>
+                <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} />
               </FieldRow>
-              <FakeTextarea placeholder={c.textareaPlaceholder} rows={3} />
+              <FakeTextarea placeholder={f.contentPlaceholder} rows={3} />
               <div className="flex items-center gap-2 text-[10px] text-foreground/40">
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-                <span>{c.or}</span>
+                <span>{f.or}</span>
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
               </div>
-              <FakeDropzone title={c.dropTitle} hint={c.dropHintMain} />
+              <FakeDropzone title={f.dropTitle} hint={f.dropSubtitle} />
+              <CardSeparator />
+              <FakePersistentRow dict={dict} dir={dir} />
             </>
           ),
         },
-        {
-          icon: "palette",
-          title: c.brandIdentity,
-          body: (
-            <>
-              <FieldRow label={c.colors}>
-                <FakePalette
-                  // Our brand-gradient colours (blue → violet → purple). Literal
-                  // hexes on purpose: the --tq-blue/violet/magenta tokens are all
-                  // aliased to one purple after §21, so tokens here read monochrome.
-                  colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
-                />
-              </FieldRow>
-              <CardSeparator />
-              <FieldRow label={c.font}>
-                <FakeSegmented options={[c.file, "Google"]} active={1} />
-              </FieldRow>
-              <FakeFontSlot label="Aa" family="Cairo" />
-              <CardSeparator />
-              <FakeDropzone icon="image" title={c.uploadLogo} hint={c.logoHint} />
-              <FieldRow label={c.saveDefault}>
-                <FakeToggle on={false} dir={dir} />
-              </FieldRow>
-            </>
-          ),
-        },
+        brandCard(TRIAD, false),
         {
           icon: "settings",
-          title: c.outputSettings,
+          title: f.outputCard,
           body: (
             <>
-              <FieldRow label={c.slideSize}>
-                <FakeSegmented options={["16:9", "9:16"]} active={0} />
+              <FakeSlideSize dict={dict} />
+              <CardSeparator />
+              <FieldRow label={f.slideCount}>
+                <FakeSegmented options={[f.auto, f.custom]} active={0} />
               </FieldRow>
               <CardSeparator />
-              <FieldRow label={c.numSlides}>
-                <FakeSegmented options={[c.auto, c.custom]} active={0} />
+              <FieldRow label={f.slideNumbering}>
+                <FakeToggle on dir={dir} />
               </FieldRow>
               <CardSeparator />
-              <FieldRow label={c.slideNumbering}>
-                <FakeToggle on={true} dir={dir} />
-              </FieldRow>
+              <FakeDesignStyleRow dict={dict} />
               <CardSeparator />
-              <FieldRow label={p.create.designStyle}>
-                <FakeSegmented
-                  options={[c.auto, p.create.professional, p.create.creative]}
-                  active={0}
-                />
-              </FieldRow>
+              <FakeAIImagesPanel dict={dict} dir={dir} />
             </>
           ),
         },
       ],
     },
     enhance: {
-      title: p.enhance.title,
-      subtitle: p.enhance.subtitle,
-      cta: p.enhance.cta,
+      title: f.enhance.title,
+      subtitle: f.enhance.subtitle,
+      cta,
       cards: [
         {
-          icon: "subject",
-          title: p.enhance.originalFile,
+          icon: "upload_file",
+          title: f.enhance.originalFile,
           body: (
-            <>
-              <FakeDropzone
-                icon="upload_file"
-                title={p.enhance.dropTitle}
-                hint={p.enhance.dropHint}
-              />
-              <p className="text-[10px] leading-relaxed text-[var(--tq-text-muted)]">
-                {p.enhance.extractNote}
-              </p>
-              <CardSeparator />
-              <FakeDropzone
-                icon="image"
-                title={p.enhance.uploadLogoOptional}
-                hint={c.logoHint}
-              />
-            </>
+            <FakeDropzone
+              tall
+              icon="upload_file"
+              title={f.enhance.dragDrop}
+              hint={f.enhance.fileHint}
+            />
           ),
         },
-        {
-          icon: "palette",
-          title: c.brandIdentity,
-          body: (
-            <>
-              <FieldRow label={c.colors}>
-                <FakePalette colors={["var(--tq-brand-blue)", "var(--tq-violet)"]} />
-              </FieldRow>
-              <CardSeparator />
-              <FieldRow label={c.font}>
-                <FakeSegmented options={[c.file, "Google"]} active={1} />
-              </FieldRow>
-              <FakeFontSlot label="Aa" family="Cairo" />
-              <CardSeparator />
-              <FieldRow label={c.saveDefault}>
-                <FakeToggle on={false} dir={dir} />
-              </FieldRow>
-            </>
-          ),
-        },
+        brandCard(["var(--tq-brand-blue)", "var(--tq-violet)"], false),
       ],
     },
     mimic: {
-      title: p.mimic.title,
-      subtitle: p.mimic.subtitle,
-      cta: p.mimic.cta,
+      title: f.mimic.title,
+      subtitle: f.mimic.subtitle,
+      cta,
       cards: [
         {
           icon: "subject",
-          title: c.content,
+          title: f.contentCard,
           body: (
             <>
-              <FieldRow label={c.language}>
-                <FakeSegmented options={[c.arabic, c.english]} active={0} />
-              </FieldRow>
-              <FakeTextarea placeholder={c.textareaPlaceholder} rows={4} />
+              <FakeTextarea placeholder={f.contentPlaceholder} rows={3} />
+              <div className="flex items-center gap-2 text-[10px] text-foreground/40">
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+                <span>{f.or}</span>
+                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+              </div>
+              <FakeDropzone title={f.mimic.dragOrClick} hint={f.mimic.fileHint} />
+              <CardSeparator />
+              <FakeSlideSize dict={dict} />
             </>
           ),
         },
-        {
-          icon: "palette",
-          title: c.brandIdentity,
-          body: (
-            <>
-              <FieldRow label={c.colors}>
-                <FakePalette
-                  // Our brand-gradient colours (blue → violet → purple). Literal
-                  // hexes on purpose: the --tq-blue/violet/magenta tokens are all
-                  // aliased to one purple after §21, so tokens here read monochrome.
-                  colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
-                />
-              </FieldRow>
-              <CardSeparator />
-              <FieldRow label={c.font}>
-                <FakeSegmented options={[c.file, "Google"]} active={1} />
-              </FieldRow>
-              <FakeFontSlot label="Aa" family="Cairo" />
-              <CardSeparator />
-              <FakeDropzone icon="image" title={c.uploadLogo} hint={c.logoHint} />
-              <FieldRow label={c.saveDefault}>
-                <FakeToggle on={false} dir={dir} />
-              </FieldRow>
-            </>
-          ),
-        },
+        brandCard(TRIAD, true),
         {
           icon: "auto_awesome",
-          title: p.mimic.whatWeMimic,
+          title: f.mimic.whatToMimic,
           body: (
             <>
-              <FakeDropzone
-                icon="style"
-                title={p.mimic.uploadReference}
-                hint="PPTX / PDF"
-              />
-              <p className="text-[10px] leading-relaxed text-[var(--tq-text-muted)]">
-                {p.mimic.extractNote}
-              </p>
-              <CardSeparator />
-              <FieldRow label={p.mimic.copyText}>
-                <FakeToggle on={false} dir={dir} />
+              <FieldRow label={f.slideCount}>
+                <FakeSegmented options={[f.auto, f.custom]} active={0} />
               </FieldRow>
+              <CardSeparator />
+              <FakeDropzone
+                tall
+                icon="style"
+                title={f.mimic.dragDrop}
+                hint={f.mimic.fileHint}
+              />
             </>
           ),
         },
       ],
     },
     datasheet: {
-      title: p.datasheet.title,
-      subtitle: p.datasheet.subtitle,
-      cta: p.datasheet.cta,
+      title: f.datasheet.title,
+      subtitle: f.datasheet.subtitle,
+      cta,
       cards: [
         {
           icon: "dataset",
-          title: p.datasheet.data,
+          title: f.datasheet.data,
           body: (
             <>
+              <FieldRow label={f.language}>
+                <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} />
+              </FieldRow>
               <FakeDropzone
+                tall
                 icon="dataset"
-                title={p.datasheet.uploadData}
-                hint={p.datasheet.dropHint}
+                title={f.datasheet.dragOrClick}
+                hint={f.datasheet.fileHint}
               />
               <CardSeparator />
-              <FieldRow label={p.datasheet.table}>
-                <FakeSegmented options={[c.auto, "Sheet 1"]} active={0} />
-              </FieldRow>
-              <FieldRow label={p.datasheet.chartType}>
-                <FakeSegmented
-                  options={[c.auto, p.datasheet.columns, p.datasheet.line]}
-                  active={0}
-                />
-              </FieldRow>
+              <FakePersistentRow dict={dict} dir={dir} />
             </>
           ),
         },
-        {
-          icon: "palette",
-          title: c.brandIdentity,
-          body: (
-            <>
-              <FieldRow label={c.colors}>
-                <FakePalette
-                  // Our brand-gradient colours (blue → violet → purple). Literal
-                  // hexes on purpose: the --tq-blue/violet/magenta tokens are all
-                  // aliased to one purple after §21, so tokens here read monochrome.
-                  colors={["var(--tq-brand-blue)", "var(--tq-brand-purple)", "var(--tq-violet)"]}
-                />
-              </FieldRow>
-              <CardSeparator />
-              <FieldRow label={c.font}>
-                <FakeSegmented options={[c.file, "Google"]} active={1} />
-              </FieldRow>
-              <FakeFontSlot label="Aa" family="Cairo" />
-              <CardSeparator />
-              <FakeDropzone icon="image" title={c.uploadLogo} hint={c.logoHint} />
-              <FieldRow label={c.saveDefault}>
-                <FakeToggle on={false} dir={dir} />
-              </FieldRow>
-            </>
-          ),
-        },
+        brandCard(TRIAD, false),
         {
           icon: "settings",
-          title: c.outputSettings,
+          title: f.outputCard,
           body: (
             <>
-              <FieldRow label={c.slideSize}>
-                <FakeSegmented options={["16:9", "9:16"]} active={0} />
+              <FakeSlideSize dict={dict} />
+              <CardSeparator />
+              <FieldRow label={f.slideCount}>
+                <FakeSegmented options={[f.auto, f.custom]} active={0} />
               </FieldRow>
               <CardSeparator />
-              <FieldRow label={c.numSlides}>
-                <FakeSegmented options={[c.auto, c.custom]} active={0} />
+              <FieldRow label={f.slideNumbering}>
+                <FakeToggle on dir={dir} />
               </FieldRow>
               <CardSeparator />
-              <FieldRow label={c.slideNumbering}>
-                <FakeToggle on={true} dir={dir} />
-              </FieldRow>
+              <FakeDesignStyleRow dict={dict} />
+              <CardSeparator />
+              <FakeInstructions dict={dict} dir={dir} />
             </>
           ),
         },

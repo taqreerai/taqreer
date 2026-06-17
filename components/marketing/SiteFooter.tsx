@@ -61,7 +61,7 @@ export async function SiteFooter({
   ];
 
   return (
-    <footer className={`${fullBleed ? "" : PX} pt-20 pb-8`}>
+    <footer className={`${fullBleed ? "px-4 sm:px-6 lg:px-0" : PX} pt-20 pb-8`}>
       <div className={fullBleed ? "" : "mx-auto max-w-7xl"}>
         <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
           {columns.map(({ key, group }) => (
@@ -102,7 +102,10 @@ export async function SiteFooter({
                     </a>
                   </li>
                   <li>
-                    <a className="icon-hover" href={localizedHref("/contact", locale)}>
+                    <a
+                      className="btn-gradient inline-flex w-fit rounded-full px-4 py-2 text-xs font-medium"
+                      href={localizedHref("/contact", locale)}
+                    >
                       {footer.contact.links.form}
                     </a>
                   </li>

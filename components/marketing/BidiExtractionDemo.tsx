@@ -16,10 +16,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
-// One sentence, two arrangements of the SAME tokens. WRONG = logical order shown
-// left-to-right (Arabic reads backwards, the Latin word + number land wrong).
-// FIXED = correct RTL visual order. Run order reverses, each run ("taqreer.ai",
-// "95%") stays intact, exactly what proper bidi does.
+// One sentence in LOGICAL reading order (إطلاق taqreer.ai بنسبة نجاح 95%). The
+// SAME tokens render broken (dir=ltr — Arabic laid out backwards) or correct
+// (dir=rtl); toggling that direction IS the fix. Letting the browser do the
+// bidi (instead of a hand-reversed visual array) keeps the order correct even
+// when the sentence wraps to two lines on a narrow window.
 const TOKENS: Record<string, { t: string; run?: boolean }> = {
   launch: { t: "إطلاق" },
   brand: { t: "taqreer.ai", run: true },
@@ -27,8 +28,7 @@ const TOKENS: Record<string, { t: string; run?: boolean }> = {
   success: { t: "نجاح" },
   num: { t: "95%", run: true },
 };
-const WRONG = ["launch", "brand", "rate", "success", "num"]; // visual L→R (broken)
-const FIXED = ["num", "success", "rate", "brand", "launch"]; // visual L→R (correct)
+const LOGICAL = ["launch", "brand", "rate", "success", "num"]; // reading order
 
 export function BidiExtractionDemo({
   fixed: controlledFixed,
@@ -49,7 +49,10 @@ export function BidiExtractionDemo({
 
       {/* Scene block — flow-lines + the window, both centred, so the lines
           auto-centre on the window (no offset math needed). */}
-      <div className="relative aspect-[1000/460] w-full">
+      {/* Taller box below `lg` so the 86%-wide window (which is proportionally
+          taller than on the wide desktop scene) fits WITHOUT poking out of the
+          block into the title above. Desktop keeps the wide landscape ratio. */}
+      <div className="relative aspect-[3/2] w-full lg:aspect-[1000/460]">
         <FlowLines align={align} />
 
         {/* Slide window. dir=ltr so the chrome (traffic lights left) reads LTR
@@ -58,12 +61,15 @@ export function BidiExtractionDemo({
             centred (lab). */}
         <div
           dir="ltr"
-          className={`absolute top-1/2 z-0 w-[min(540px,86%)] -translate-y-1/2 overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] ${
+          // Centred by default (mobile + lab): the full-width flow-lines cross
+          // straight through it. Only at `lg` does it pin to the outer edge
+          // (left in RTL / right in LTR) for the asymmetric desktop band.
+          className={`absolute top-1/2 left-1/2 z-0 w-[min(540px,86%)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] ${
             align === "left"
-              ? "left-0"
+              ? "lg:left-0 lg:translate-x-0"
               : align === "right"
-                ? "right-0"
-                : "left-1/2 -translate-x-1/2"
+                ? "lg:left-auto lg:right-0 lg:translate-x-0"
+                : ""
           }`}
         >
           <TitleBar title={b.windowTitle} />
@@ -158,18 +164,22 @@ function TitleBar({ title }: { title: string }) {
 }
 
 function Sentence({ fixed }: { fixed: boolean }) {
-  const order = fixed ? FIXED : WRONG;
   return (
-    // dir=ltr so the array order IS the visual L→R order we control.
-    <div dir="ltr" className="flex flex-wrap items-center justify-center gap-2">
-      {order.map((id) => {
+    // Same logical-order tokens both ways; dir=rtl (fixed) lays them out
+    // correctly, dir=ltr shows the broken order. Kept to ONE line (flex-nowrap +
+    // a smaller phone font) so a wrap can never reorder it.
+    <div
+      dir={fixed ? "rtl" : "ltr"}
+      className="flex flex-nowrap items-center justify-center gap-1 sm:gap-2"
+    >
+      {LOGICAL.map((id) => {
         const tok = TOKENS[id];
         return (
           <motion.span
             key={id}
             layout
             transition={{ type: "spring", stiffness: 300, damping: 28 }}
-            className="rounded-lg px-2 py-0.5 text-[22px] leading-snug font-semibold"
+            className="whitespace-nowrap rounded-lg px-1 py-0.5 text-[13px] leading-snug font-semibold sm:px-2 sm:text-[22px]"
             style={
               tok.run
                 ? {

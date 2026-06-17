@@ -1,8 +1,9 @@
 # Launch progress + continuation guide
 
-Updated 2026-06-17 (admin/ops console + PostHog analytics + conversion funnel - see
-the "Latest session" block below FIRST). Read this + context/deploy.md to resume
-launch work in a fresh session. The launch plan's full reasoning lives in the
+Updated 2026-06-17 (admin/ops console + PostHog analytics + conversion funnel +
+landing mobile-responsive pass - see the "Latest session" block below FIRST). Read
+this + context/deploy.md to resume launch work in a fresh session. The launch
+plan's full reasoning lives in the
 conversation that produced it; this file is the operational state.
 
 ## How work flows (IMPORTANT for any new session)
@@ -74,9 +75,21 @@ screen (dropped Google from the email path).
 **Remaining admin-panel item (optional):** AdminAuditLog - no record of admin writes
 (grants/bans/deletes/broadcasts) yet; do this before granting anyone else admin.
 
-**NEXT: website responsive / mobile layout** = the Phase D mobile audit of the 5
-public surfaces (landing, pricing, signup/login, checkout, deck viewing; editor
-stays desktop-only).
+**Landing mobile pass DONE + DEPLOYED (2026-06-17)**: the landing is fully
+responsive on a phone (verified at 390px + desktop, tsc + lint clean). Mobile nav
+menu (centered links + hug-content CTAs), wrapping hero pills, footer mobile
+padding + blue contact CTA, scroll-reveals come bottom-up on mobile, the hero demo
+fits (4:5 below sm) + reveals IN SYNC with the page scroll (no nested-scroll trap),
+and its flow cards were REBUILT to mirror the real flows: repointed off the
+parallel landing.preview namespace onto the real dict.flows.* / nav / quickActions
+keys (no hardcoded English), added the missing real features (persistent input,
+AI-images panel, design-style picker, slide-size, datasheet instructions) and
+dropped the invented controls. BiDi band: centered 2-line title, centered window,
+full-width crossing lines, always-one-line sentence, subtitle above the window.
+Pure frontend (no schema/API/auth), so security review N/A.
+
+**NEXT: the other 4 public surfaces** = pricing, signup/login, checkout (Apple Pay
+on mobile Safari matters for GCC), deck viewing. Editor stays desktop-only.
 
 ## ⚡ Latest session (2026-06-16) - prod DB moved to Supabase Pro + DB hardening (READ FIRST)
 
@@ -426,9 +439,10 @@ Phase D — Cheap pre-launch polish:
 - SEO correctness: robots.ts + sitemap.ts are STALE (2 URLs, no ar/en split,
   no hreflang — deferred Phase 5 of the bilingual migration). hreflang +
   sitemap + OG cards + titles pre-launch; structured data/content post.
-- ⏳ NEXT: Mobile audit of FIVE public surfaces only: landing, pricing, signup/login,
-  checkout (Apple Pay on mobile Safari matters for GCC), deck VIEWING.
-  Editor stays desktop-only with a graceful message — do not attempt.
+- ⏳ Mobile audit of the 5 public surfaces: ✅ LANDING DONE (2026-06-17: nav menu,
+  hero pills + demo, footer, scroll-reveals, BiDi band; see the top pointer).
+  REMAINING: pricing, signup/login, checkout (Apple Pay on mobile Safari matters
+  for GCC), deck VIEWING. Editor stays desktop-only with a graceful message.
 - ✅ PostHog DONE (2026-06-17) - capture via the d.taqreer.ai managed proxy
   (consent-gated) + Query-API read feeding the admin Overview + the conversion
   funnel ($pageview/$pageleave/$web_vitals + signed_up/deck_created/deck_exported/

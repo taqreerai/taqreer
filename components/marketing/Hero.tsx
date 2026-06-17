@@ -243,8 +243,11 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                   960). The DashboardPreview's content scales within
                   this box; its absolutely-positioned inner pane fills
                   the aspect container so the chrome bar above stays
-                  in proportion. */}
-              <div className="relative aspect-[3/2] w-full">
+                  in proportion. Below `sm` the quick-action grid stacks
+                  2×2 (vs 1×4) + the dashboard reads portrait, so the box
+                  goes taller (4:5) to fit the content without clipping;
+                  at `sm`+ it returns to the 3:2 landscape ratio. */}
+              <div className="relative aspect-[4/5] w-full sm:aspect-[3/2]">
                 <DashboardPreview onPathChange={setDemoPath} />
               </div>
             </div>
