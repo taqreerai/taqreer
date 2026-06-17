@@ -38,12 +38,21 @@ function startPostHog(): boolean {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   if (!key) return false;
   posthog.init(key, {
-    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    // Same-origin reverse proxy (next.config.ts rewrites /ingest/* -> PostHog
+    // EU): routes capture through our own domain so ad-blockers can't drop it,
+    // PostHog's recommended production setup. ui_host keeps the toolbar links
+    // pointing at the real PostHog app.
+    api_host: "/ingest",
+    ui_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
     // App Router soft navigations are captured manually below, so disable the
     // built-in pageview capture to avoid double counting.
     capture_pageview: false,
+    // $pageleave (bounce rate + session duration). Explicit `true` is required
+    // because capture_pageview is false (the default only ties pageleave to it).
     capture_pageleave: true,
     autocapture: true,
+    // Core Web Vitals (LCP / INP / CLS) for PostHog's performance tab.
+    capture_performance: { web_vitals: true },
     // Anonymous visitors stay profile-less (privacy + quota); identify() on
     // login upgrades them to a real person profile.
     person_profiles: "identified_only",

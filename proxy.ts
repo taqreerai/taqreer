@@ -201,7 +201,9 @@ export const config = {
      *   request.formData() throws. These routes do their own auth and proxy.ts
      *   never reads the body for /api, so skip them entirely (no session-
      *   refresh loss that matters - the route's getUser() refreshes anyway).
+     * - ingest (PostHog reverse-proxy rewrite -> eu.i.posthog.com): a pure
+     *   pass-through; locale-routing it would break the analytics requests.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/extract|api/storage).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/extract|api/storage|ingest).*)",
   ],
 };
