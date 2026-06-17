@@ -313,6 +313,15 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
     };
   }, []);
 
+  // Push the VIEWING tab's page locale into the store so notification copy
+  // follows THIS tab's URL, not the browser-wide cookie. The setUser boot above
+  // calls setUser async (after /api/me), so the locale lands before the first
+  // hydrate fires (no double fetch). A later locale switch re-hydrates so
+  // already-loaded rows re-render in the new language.
+  useEffect(() => {
+    notificationStore.setLocale(locale === "ar" ? "ar" : "en");
+  }, [locale]);
+
   // Toast notifications — when a NEW notification (created within the
   // last 5 s) appears in the store, it pops up under the bell as a
   // surface-popover toast. Auto-dismisses after 15 s; user can close

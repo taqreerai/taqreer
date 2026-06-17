@@ -103,6 +103,11 @@ class NotificationStore {
   // current `userId`. Without this guard a stale fetch could
   // hydrate the new user with the previous account's notifications.
   private fetchAbort: AbortController | null = null;
+  // The VIEWING tab's UI locale (from the page URL via useLocale, pushed in by
+  // the bell). Notification copy follows THIS, not the browser-wide locale
+  // cookie, so two tabs in different locales each render their own language.
+  // Defaults "ar" until the bell sets it.
+  private locale: "ar" | "en" = "ar";
 
   setUser(userId: string | null, prismaUserId: string | null = null): void {
     if (this.userId === userId && this.prismaUserId === prismaUserId) return;
@@ -129,6 +134,16 @@ class NotificationStore {
     // while offline (multi-device, page reload, etc.).
     if (typeof window !== "undefined" && this.prismaUserId) {
       this.openChannelForCurrentUser();
+      this.hydrateFromServer();
+    }
+  }
+
+  // Set the viewing tab's locale (from the page URL). On a real change, re-fetch
+  // so already-loaded notifications re-render in the new language.
+  setLocale(locale: "ar" | "en"): void {
+    if (this.locale === locale) return;
+    this.locale = locale;
+    if (typeof window !== "undefined" && this.prismaUserId) {
       this.hydrateFromServer();
     }
   }
@@ -197,7 +212,7 @@ class NotificationStore {
       (async () => {
         try {
           const res = await fetch(
-            `/api/notifications?ids=${encodeURIComponent(payload.notificationId)}`,
+            `/api/notifications?ids=${encodeURIComponent(payload.notificationId)}&lang=${this.locale}`,
             { credentials: "same-origin" },
           );
           if (!res.ok) return;
@@ -257,7 +272,7 @@ class NotificationStore {
     const controller = new AbortController();
     this.fetchAbort = controller;
     try {
-      const res = await fetch("/api/notifications", {
+      const res = await fetch(`/api/notifications?lang=${this.locale}`, {
         credentials: "same-origin",
         signal: controller.signal,
       });

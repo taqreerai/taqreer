@@ -353,11 +353,19 @@ export async function GET(request: Request) {
   if (!data?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Notification copy follows the VIEWER's UI locale (this GET is the
-  // recipient reading their own bell), resolved from the locale cookie.
+  // Notification copy follows the VIEWING tab's locale: the bell passes the PAGE
+  // locale as `?lang=` so two tabs in different locales each render their own
+  // language. The browser-wide locale cookie is only a fallback when no param is
+  // sent. Both sources are validated by isLocale, so `lang` is always ar | en.
+  const url = new URL(request.url);
   const cookieStore = await cookies();
-  const localeRaw = cookieStore.get(LOCALE_COOKIE)?.value;
-  const lang = isLocale(localeRaw) ? localeRaw : "ar";
+  const paramLang = url.searchParams.get("lang");
+  const cookieLang = cookieStore.get(LOCALE_COOKIE)?.value;
+  const lang = isLocale(paramLang)
+    ? paramLang
+    : isLocale(cookieLang)
+      ? cookieLang
+      : "ar";
   const dict = await getDictionary(lang);
   const n = dict.notifications;
   // Resolve Prisma user — the notification table FKs on Prisma id,
@@ -374,7 +382,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ notifications: [] });
   }
 
-  const url = new URL(request.url);
   const idsParam = url.searchParams.get("ids");
   let where: { recipientUserId: string; id?: { in: string[] } };
   if (idsParam) {
