@@ -62,7 +62,10 @@ export type NotificationType =
   | "billing.plan_changed"
   // Account-scoped: the user's email change was confirmed (sole
   // recipient = the user, allowSelfEcho).
-  | "account.email_changed";
+  | "account.email_changed"
+  // Admin > Broadcast: a platform-wide announcement. Free-form title + message
+  // authored by an admin (not templated); fanned out to every user.
+  | "admin.broadcast";
 
 // Per-type payload contracts. The DB column is `Json` (no schema
 // enforcement at the DB layer) — these are the *intended* shapes
@@ -119,6 +122,12 @@ export type NotificationPayloadMap = {
   "account.email_changed": {
     // The NEW address, post-confirmation.
     email: string;
+  };
+  "admin.broadcast": {
+    // Admin-authored, free-form. Rendered verbatim in the bell (single
+    // language - the admin writes one message shown to every user).
+    title: string;
+    message: string;
   };
   "billing.subscription_ending": {
     // ISO date the access ends (period end). Rendered Latin-digit.

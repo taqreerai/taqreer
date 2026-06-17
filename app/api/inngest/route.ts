@@ -10,6 +10,7 @@ import {
   thumbnailRender,
   extractSource,
   creditsMaintenance,
+  notificationsCleanup,
 } from "@/inngest/index";
 
 export const { GET, POST, PUT } = serve({
@@ -24,5 +25,6 @@ export const { GET, POST, PUT } = serve({
     thumbnailRender,
     extractSource,
     creditsMaintenance,
+    notificationsCleanup,
   ],
 });

@@ -698,3 +698,18 @@ model Notification {
   @@index([actorUserId])
   @@index([projectId])
 }
+
+// Admin > Broadcast: one row per platform-wide announcement sent from the admin
+// console. The send ALSO writes a Notification per recipient (the bell rows);
+// this standalone log is the curation-side record powering the history list +
+// recipient count. Pruned after 30 days by the notifications-cleanup cron, the
+// same TTL applied to bell notifications.
+model AdminBroadcast {
+  id             String   @id @default(cuid())
+  title          String
+  message        String
+  recipientCount Int
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+}

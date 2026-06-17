@@ -310,6 +310,12 @@ function formatNotificationRow(
       href = "/settings";
       break;
     }
+    case "admin.broadcast":
+      // Admin-authored announcement: title + message rendered verbatim (no
+      // template, no actor/project). Not a link target.
+      title = typeof payload.title === "string" ? payload.title : "";
+      desc = typeof payload.message === "string" ? payload.message : undefined;
+      break;
     default:
       // Unknown type — surface a generic row using payload.title if
       // present (forward-compat for types deployed server-side ahead

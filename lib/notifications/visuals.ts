@@ -36,6 +36,7 @@ const TYPE_ICON: Record<string, string> = {
   "billing.plan_changed": "workspace_premium",
   "account.email_changed": "alternate_email",
   "billing.subscription_ending": "event_upcoming",
+  "admin.broadcast": "campaign",
 };
 
 const KIND_ICON: Record<NotificationKind, string> = {
@@ -68,6 +69,7 @@ const TYPE_TINT: Record<string, string> = {
   "billing.plan_changed": "bg-emerald-500/12 text-emerald-400",
   "account.email_changed": "bg-emerald-500/12 text-emerald-400",
   "billing.subscription_ending": "bg-amber-500/12 text-amber-400",
+  "admin.broadcast": "bg-indigo-500/12 text-indigo-400",
 };
 
 const KIND_TINT: Record<NotificationKind, string> = {
