@@ -51,6 +51,10 @@ export function CookieBanner({
     const secure = location.protocol === "https:" ? "; secure" : "";
     document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax${secure}`;
     setShow(false);
+    // Let the PostHogProvider boot analytics immediately on accept (no reload).
+    if (value === "accept") {
+      window.dispatchEvent(new CustomEvent("taqreer:cookie-consent-accept"));
+    }
   }
 
   return (

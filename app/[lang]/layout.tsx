@@ -8,6 +8,7 @@ import { isLocale, dirForLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import { CookieBanner } from "@/components/legal/CookieBanner";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import { isAppPath } from "@/lib/app-routes";
 import { stripLocale } from "@/lib/i18n/navigation";
 import { THEME_COOKIE } from "@/lib/ui-cookies";
@@ -117,6 +118,11 @@ export default async function RootLayout({
   const cookieConsentDecided =
     !!cookieStore.get("tq_cookie_consent")?.value ||
     cookieStore.get("tq_cookie_ack")?.value === "1";
+  // Analytics consent is the STRICT "accept" only (legacy ack = saw-the-notice,
+  // not consent-to-analytics). PostHog boots from first paint for accepted
+  // returning visitors; everyone else stays untracked until they accept.
+  const cookieConsentAccepted =
+    cookieStore.get("tq_cookie_consent")?.value === "accept";
 
   return (
     <html
@@ -138,6 +144,7 @@ export default async function RootLayout({
         <ScrollReset />
         <LocaleProvider locale={lang} dict={dict}>
           {children}
+          <PostHogProvider initialConsent={cookieConsentAccepted} />
           <CookieBanner initialDecided={cookieConsentDecided} />
         </LocaleProvider>
       </body>
