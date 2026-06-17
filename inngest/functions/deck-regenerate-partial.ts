@@ -433,6 +433,12 @@ export const deckRegeneratePartial = inngest.createFunction(
     id: "deck-regenerate-partial",
     name: "Regenerate Selected Slides with Comments",
     retries: 2,
+    // Same abuse / cost guard as deck-generate: bounded parallel regens per user
+    // (actorPrismaUserId is on every sender) + a global cap.
+    concurrency: [
+      { key: "event.data.actorPrismaUserId", limit: 2 },
+      { limit: 10 },
+    ],
     // Max-tier processing priority (matches deck-generate): Max regens jump the
     // queue under contention. `event.data.tier` is set at enqueue.
     priority: { run: "event.data.tier == 'max' ? 120 : 0" },

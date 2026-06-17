@@ -3,13 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
-import { clientIpFromHeaders } from "@/lib/api/rate-limit";
+import { clientIp, clientIpFromHeaders, rateLimited } from "@/lib/api/rate-limit";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 import { captureServerEvent } from "@/lib/analytics/posthog-server";
 
 export async function POST(request: Request) {
   try {
+    // Flood guard before the Supabase round-trip. The 400-credit grant is
+    // already idempotent (signupGrantedAt); this just stops hammering. Lean
+    // generous - a shared NAT IP hits this on every member's login.
+    const limited = rateLimited(`auth-sync:${clientIp(request)}`, 60, 5 * 60_000);
+    if (limited) return limited;
+
     const supabase = await createClient();
     const {
       data: { user },

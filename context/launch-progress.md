@@ -422,12 +422,21 @@ Phase B — Money + law (parallel tracks), all BLOCKERS:
     • Optional later: point DMARC rua at an inbox we monitor (GoDaddy default).
 
 Phase C — Hardening:
-- Rate limiting: NONE exists anywhere. Priority order: share-invite email
-  route (spam vector burning Resend domain reputation), auth endpoints,
-  export routes (Puppeteer CPU). One middleware + redis counter (server has
-  local redis; Upstash if moving to managed). 1-2 days.
-- Inngest concurrency caps matched to the Anthropic tier's concurrent
-  Opus stream limit — queue, don't fail. Hold-release on failure is tested.
+- ✅ Rate limiting / abuse hardening DONE + DEPLOYED (2026-06-17). An audit found
+  the in-memory fixed-window limiter (lib/rate-limit.ts, keyed by CF-Connecting-IP)
+  already guards most high-risk routes: contact, extract, uploads, exports, the
+  share-invite email (per-user + per-IP), checkout, delete-account. So the old
+  "NONE exists" note was wrong. Closed the remaining gaps:
+  - Inngest concurrency caps on deck-generate + deck-regenerate-partial (the #1
+    Claude-cost abuse vector - the only generation jobs left uncapped): per-user
+    `{ key: event.data.actorPrismaUserId, limit: 2 }` (actorPrismaUserId is
+    server-set on every sender, unspoofable) + a global `{ limit: 10 }`. Queues,
+    doesn't fail. Other jobs were already capped (images 3, extract 2, thumb 2).
+  - IP flood-guards (existing `rateLimited` helper) on POST /api/projects (20/5m),
+    /api/auth/user-sync (60/5m, grant is idempotent), /api/datasheet/parse
+    (20/5m), and the realtime-token GET (60/m, generous - tokens last 30m).
+  Validated: projects POST returns 429 past the limit. In-memory is fine for the
+  single pm2 process; redis is the future multi-instance upgrade. tsc + lint clean.
 - ✅ Admin/ops console DONE + LIVE (2026-06-17) - see the Latest-session block.
   Shipped a full read+WRITE console (not just read-only): Overview/Templates/Users/
   Broadcast, all real data, credit grants + bans + deletes + bilingual broadcasts +

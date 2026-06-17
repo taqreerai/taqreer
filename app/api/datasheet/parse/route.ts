@@ -33,6 +33,7 @@ import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 import { parseDatasheet } from "@/lib/extract/datasheet";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 
 // Smaller than /api/extract's 100 MB — see note at top of file.
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
@@ -56,6 +57,11 @@ const ALLOWED_MIME = new Set([
 // no try/catch around orchestration logic — let unexpected throws
 // surface so genuine bugs aren't masked as "Failed to parse" 500s.
 export async function POST(request: Request) {
+  // Flood guard before the auth + CPU-bound SheetJS parse (a 25 MB xlsx can
+  // hydrate into a far larger in-memory tree). Keyed by IP.
+  const limited = rateLimited(`datasheet:${clientIp(request)}`, 20, 5 * 60_000);
+  if (limited) return limited;
+
   // Resolve the requester's UI locale so the 400-error copy matches the
   // chrome they're looking at (Arabic default for anonymous / legacy).
   const localeRaw = (await cookies()).get(LOCALE_COOKIE)?.value;

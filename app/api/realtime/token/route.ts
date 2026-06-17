@@ -26,10 +26,16 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { mintRealtimeToken } from "@/lib/realtime/mint-token";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 
 const TOKEN_TTL_SECONDS = 1800;
 
 export async function GET(request: Request) {
+  // Generous flood guard only: tokens last 30 min, so a legit client mints a
+  // couple per hour; this just stops a deliberate mint flood. Keyed by IP.
+  const limited = rateLimited(`realtime-token:${clientIp(request)}`, 60, 60_000);
+  if (limited) return limited;
+
   const secret = process.env.SUPABASE_JWT_SECRET;
   if (!secret) {
     return NextResponse.json(

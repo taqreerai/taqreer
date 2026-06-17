@@ -21,7 +21,7 @@ import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
-import { clientIpFromHeaders } from "@/lib/api/rate-limit";
+import { clientIp, clientIpFromHeaders, rateLimited } from "@/lib/api/rate-limit";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 import { getDictionary, type Dictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
@@ -428,6 +428,13 @@ export async function POST(request: Request) {
   // simplifier pass.)
   // Resolve the requester's UI locale once so any user-facing default
   // names (project title, brand-kit name) match the chrome they see.
+
+  // Reject floods cheaply, before the auth + credit + DB work. The real per-user
+  // cost cap is the deck-generate Inngest concurrency limit; this is the HTTP
+  // flood guard, keyed by IP (Cloudflare CF-Connecting-IP).
+  const limited = rateLimited(`projects:${clientIp(request)}`, 20, 5 * 60_000);
+  if (limited) return limited;
+
   const localeRaw = (await cookies()).get(LOCALE_COOKIE)?.value;
   const dict = await getDictionary(isLocale(localeRaw) ? localeRaw : "ar");
 

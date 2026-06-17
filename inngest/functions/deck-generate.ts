@@ -1321,6 +1321,14 @@ export const deckGenerate = inngest.createFunction(
     id: "deck-generate",
     name: "Generate Presentation Deck",
     retries: 3,
+    // Abuse / cost guard: bound parallel generations so one account can't fan
+    // out unlimited Claude-burning runs. Per-user (actorPrismaUserId is on every
+    // sender) limit keeps legit concurrent users unaffected; the global cap
+    // protects the box + the Anthropic quota under a flood.
+    concurrency: [
+      { key: "event.data.actorPrismaUserId", limit: 2 },
+      { limit: 10 },
+    ],
     // Processing priority (the Max-tier perk): Max runs are scheduled as if they
     // arrived 120s earlier, so they jump ahead of lower tiers when the queue is
     // contended, no failures, just ordering. `event.data.tier` is set at
