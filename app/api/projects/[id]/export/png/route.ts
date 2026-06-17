@@ -22,6 +22,7 @@ import JSZip from "jszip";
 import puppeteer from "puppeteer";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { captureServerEvent } from "@/lib/analytics/posthog-server";
 import {
   SlideManifestSchema,
   dimensionsForFormat,
@@ -245,6 +246,14 @@ export async function POST(
   const baseName = safeFileName(project.title || manifest.title, "presentation");
   const filename = `${baseName}-pngs.zip`;
   const body = new Blob([zipBuffer], { type: "application/zip" });
+  // Conversion-funnel step 3/4: a successful export. distinctId = Supabase uid.
+  if (access.user.id) {
+    captureServerEvent(access.user.id, "deck_exported", {
+      project_id: projectId,
+      format: "png",
+      slide_count: manifest.slides.length,
+    });
+  }
   return new NextResponse(body, {
     status: 200,
     headers: {

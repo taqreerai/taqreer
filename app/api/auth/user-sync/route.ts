@@ -6,6 +6,7 @@ import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { clientIpFromHeaders } from "@/lib/api/rate-limit";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
+import { captureServerEvent } from "@/lib/analytics/posthog-server";
 
 export async function POST(request: Request) {
   try {
@@ -74,6 +75,11 @@ export async function POST(request: Request) {
     // if an earlier one missed it. Plus the email-alias + IP-velocity abuse
     // checks. Never fails the sync - a blocked/failed grant just leaves 0.
     if (!existing?.creditAccount?.signupGrantedAt) {
+      // Conversion-funnel step 1/4: fires once per NEW user (this block is the
+      // idempotent first-sync anchor, reached by every signup path).
+      // distinctId = Supabase uid to match the client posthog.identify(user.id).
+      captureServerEvent(user.id, "signed_up", { email: profile.email });
+
       const grant = await maybeGrantSignupCredits({
         userId: dbUser.id,
         email: profile.email,

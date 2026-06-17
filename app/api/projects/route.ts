@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
+import { captureServerEvent } from "@/lib/analytics/posthog-server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
@@ -895,6 +896,19 @@ export async function POST(request: Request) {
         tier: result.dbUser.plan,
         ...eventPayload,
       },
+    });
+
+    // Conversion-funnel step 2/4: a deck generation was enqueued (all 4 flows
+    // route through this handler). After the Inngest send so a failed dispatch
+    // can't emit a false event. distinctId = Supabase uid. Best-effort.
+    captureServerEvent(user.id, "deck_created", {
+      project_id: result.project.id,
+      flow:
+        validatedSource?.kind === "mimic"
+          ? "mimic"
+          : validatedSource?.kind === "data"
+            ? "datasheet"
+            : projectType,
     });
   } catch (error) {
     // Inngest unreachable after retries — mark the rows so the user

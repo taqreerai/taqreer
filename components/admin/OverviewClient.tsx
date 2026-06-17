@@ -14,10 +14,16 @@ import {
   type Plan,
   type CountryVisitors,
 } from "@/lib/admin/mock";
-import type { ChannelRow, DeviceBreakdowns, TrafficTotals } from "@/lib/analytics/posthog";
+import type {
+  ChannelRow,
+  DeviceBreakdowns,
+  TrafficTotals,
+  FunnelStep,
+} from "@/lib/analytics/posthog";
 import { IconCircle } from "@/components/admin/IconCircle";
 import { DeviceBreakdown } from "@/components/admin/DeviceBreakdown";
 import { ChannelSources } from "@/components/admin/ChannelSources";
+import { ConversionFunnel } from "@/components/admin/ConversionFunnel";
 
 // Client-only (WebGL / three.js): ssr:false so globe.gl never runs on the server.
 const LiveGlobePanel = dynamic(
@@ -174,6 +180,7 @@ export function OverviewClient({
   onlineNow,
   traffic,
   device,
+  funnel,
 }: {
   stats: AdminStat[];
   planSplit: Record<Plan, number>;
@@ -183,6 +190,7 @@ export function OverviewClient({
   onlineNow: number;
   traffic: TrafficTotals;
   device: DeviceBreakdowns;
+  funnel: FunnelStep[] | null;
 }) {
   return (
     <div className="space-y-6">
@@ -214,8 +222,11 @@ export function OverviewClient({
         </div>
       </div>
 
-      {/* Activity */}
-      <ActivityFeed items={activity} />
+      {/* Conversion funnel + recent activity */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ConversionFunnel data={funnel} />
+        <ActivityFeed items={activity} />
+      </div>
     </div>
   );
 }

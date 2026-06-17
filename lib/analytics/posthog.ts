@@ -201,3 +201,46 @@ async function fetchDeviceBreakdowns(): Promise<DeviceBreakdowns> {
 }
 
 export const getDeviceBreakdowns = memo(fetchDeviceBreakdowns);
+
+// ─── Conversion funnel ──────────────────────────────────────────────────────
+// signed_up -> deck_created -> deck_exported -> purchase_completed, ORDERED,
+// 30-day window per person. windowFunnel returns the furthest consecutive step
+// each person reached (in order); countIf(level >= n) = persons who reached
+// step n. Events are fired server-side (lib/analytics/posthog-server.ts).
+export type FunnelStep = { label: string; count: number };
+
+const FUNNEL_HOGQL = `
+SELECT
+  countIf(level >= 1) AS signed_up,
+  countIf(level >= 2) AS deck_created,
+  countIf(level >= 3) AS deck_exported,
+  countIf(level >= 4) AS purchased
+FROM (
+  SELECT
+    person_id,
+    windowFunnel(2592000)(
+      toUnixTimestamp(timestamp),
+      event = 'signed_up',
+      event = 'deck_created',
+      event = 'deck_exported',
+      event = 'purchase_completed'
+    ) AS level
+  FROM events
+  WHERE timestamp > now() - interval 30 day
+    AND event IN ('signed_up', 'deck_created', 'deck_exported', 'purchase_completed')
+  GROUP BY person_id
+)`;
+
+async function fetchFunnel(): Promise<FunnelStep[] | null> {
+  const rows = await posthogQuery(FUNNEL_HOGQL);
+  if (!rows || !rows[0]) return null;
+  const r = rows[0];
+  return [
+    { label: "Signed up", count: Number(r[0]) || 0 },
+    { label: "Created a deck", count: Number(r[1]) || 0 },
+    { label: "Exported", count: Number(r[2]) || 0 },
+    { label: "Purchased", count: Number(r[3]) || 0 },
+  ];
+}
+
+export const getFunnel = memo(fetchFunnel);

@@ -21,6 +21,7 @@
 // survives across the React tree without a Context provider.
 
 import { useState, useSyncExternalStore } from "react";
+import posthog from "posthog-js";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { exportManifestAsPptx } from "@/lib/export/html-export";
 import { downloadHtmlDocument } from "@/lib/export/html-document";
@@ -158,6 +159,15 @@ export function useExportActions({
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
         await exportManifestAsPptx(exportManifest, fileName);
+        // Conversion-funnel export step, client-side: PPTX is generated in the
+        // browser (no server route, unlike pdf/png). Consent-gated like all
+        // client capture; distinct_id is the identified user (= Supabase uid),
+        // so it lines up with the server-side funnel events.
+        posthog.capture("deck_exported", {
+          format: "pptx",
+          project_id: projectId,
+          slide_count: manifest.slides.length,
+        });
         setExportPptx({ status: "idle" });
       } catch (error) {
         setExportPptx({

@@ -23,6 +23,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
+import { captureServerEvent } from "@/lib/analytics/posthog-server";
 import { stripe } from "@/lib/billing/stripe";
 import {
   parseGrantMetadata,
@@ -178,6 +179,27 @@ export async function POST(request: Request) {
               credits: TIERS[grant.plan].monthlyAllotment,
             },
           }).catch(() => {});
+        }
+
+        // Conversion-funnel step 4/4: a completed purchase (new subscription or
+        // top-up pack). distinctId MUST be the Supabase uid to match the client
+        // posthog.identify(); the webhook only has the Prisma id, so look it up.
+        const buyer = await prisma.user.findUnique({
+          where: { id: prismaUserId },
+          select: { supabaseUserId: true },
+        });
+        if (buyer?.supabaseUserId) {
+          captureServerEvent(buyer.supabaseUserId, "purchase_completed", {
+            kind: grant.kind,
+            plan: grant.kind === "subscription" ? grant.plan : undefined,
+            cadence: grant.kind === "subscription" ? grant.cadence : undefined,
+            credits: grant.kind === "topup" ? grant.credits : undefined,
+            amount:
+              session.amount_total != null
+                ? session.amount_total / 100
+                : undefined,
+            currency: session.currency ?? undefined,
+          });
         }
         break;
       }
