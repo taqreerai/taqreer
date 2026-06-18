@@ -171,6 +171,39 @@
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
     ]
   },
+  "reportDesign": {
+    "meta": {
+      "title": "AI Report Maker from Your Data | taqreer.ai",
+      "description": "Turn your spreadsheets into AI-designed reports and presentations. Upload an Excel or CSV file and taqreer.ai builds a report with charts, in Arabic and English, ready to edit and export."
+    },
+    "breadcrumb": "Report Design",
+    "hero": {
+      "eyebrow": "From data",
+      "title": "Design reports with AI from your data",
+      "subtitle": "Upload a spreadsheet and taqreer.ai turns it into a designed report and presentation with charts, in Arabic and English, ready to edit and export.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "From a spreadsheet to a report",
+      "subtitle": "Upload an Excel or CSV file, apply your brand, and set the output. This is how turning your data starts."
+    },
+    "why": {
+      "title": "Why taqreer.ai",
+      "subtitle": "Your data becomes a visual story, not just numbers.",
+      "points": [
+        { "title": "Automatic charts", "body": "taqreer.ai reads your data and picks the right charts for each section." },
+        { "title": "Reports in Arabic", "body": "Full right-to-left support and numbers inside Arabic text." },
+        { "title": "Extra instructions", "body": "Add notes that steer the AI toward what matters most in your data." },
+        { "title": "Edit and export", "body": "Tweak any slide in the editor, then export to PowerPoint and PDF." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I design a report with AI?", "a": "Upload an Excel or CSV spreadsheet, choose your brand, and the AI turns it into a report and presentation with charts in minutes." },
+      { "q": "Which file formats are supported?", "a": "taqreer.ai supports Excel files (XLSX, XLS) and CSV files." },
+      { "q": "Are the reports in Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and numbers inside Arabic text, and it supports English too." },
+      { "q": "Can I export to PowerPoint?", "a": "Yes. Export your report as editable PPTX for PowerPoint while preserving the Arabic formatting and charts." }
+    ]
+  },
   "newProjectDialog": {
     "title": "Start a new project",
     "subtitle": "Pick the flow that fits your content, your default brand kit fills in automatically if you've saved one."
