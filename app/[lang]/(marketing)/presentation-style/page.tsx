@@ -14,6 +14,9 @@ import { SectionHeader } from "@/components/marketing/SectionHeader";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
+import { localeAlternates } from "@/lib/seo/alternates";
+
+export const dynamic = "force-static";
 
 function resolve(lang: string): "ar" | "en" {
   return (isLocale(lang) ? lang : defaultLocale) as "ar" | "en";
@@ -33,6 +36,7 @@ export async function generateMetadata(props: {
   return {
     title: t.meta.title,
     description: t.meta.description,
+    alternates: localeAlternates(locale, "presentation-style"),
     openGraph: {
       title: t.meta.title,
       description: t.meta.description,

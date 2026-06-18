@@ -48,7 +48,7 @@ export async function NotFoundView({
       {/* Same backdrop as the landing (aurora glow over the page base), and no
           swiss-grid vertical hairlines. */}
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
-      <LandingNav isAuthed={false} />
+      <LandingNav />
       <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center gap-8 px-6 text-center">
         <NotFoundContent recovery="home" />
       </div>

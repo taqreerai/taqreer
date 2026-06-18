@@ -8,6 +8,10 @@ import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/ui-cookies";
 
+// App pages are auth-gated (cookies + getUser + redirect) — opt the whole group
+// out of the static generation that the [lang] generateStaticParams attempts.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({
   params,
 }: {

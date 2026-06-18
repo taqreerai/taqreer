@@ -8,7 +8,6 @@
 // sidesteps the Next 16 + Turbopack (marketing)/page.tsx resolution bug noted
 // in app/[lang]/page.tsx.
 
-import { createClient } from "@/lib/supabase/server";
 import { isLocale, defaultLocale } from "@/lib/i18n/config";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
@@ -23,10 +22,6 @@ export default async function MarketingLayout({
 }) {
   const { lang } = await params;
   const locale = (isLocale(lang) ? lang : defaultLocale) as "ar" | "en";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   return (
     <main className="relative overflow-x-clip">
@@ -34,7 +29,7 @@ export default async function MarketingLayout({
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
 
-      <LandingNav isAuthed={!!user} />
+      <LandingNav />
 
       {/* pt clears the absolute h-20 nav (80px) + a big gap below it. */}
       <div className="relative mx-auto max-w-7xl px-4 pt-40 sm:px-6 md:pt-48 lg:px-8">

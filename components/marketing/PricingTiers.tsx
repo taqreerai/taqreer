@@ -13,6 +13,7 @@ import Link from "next/link";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useUser } from "@/hooks/useUser";
 import { localizedHref } from "@/lib/i18n/navigation";
 
 type Billing = "monthly" | "yearly";
@@ -97,11 +98,15 @@ function pricingRevealDirection(idx: number): "right" | "left" | "up" {
 // Tier rows here are positional; map index → plan key for checkout.
 const TIER_PLAN_KEYS = ["free", "plus", "pro", "max"] as const;
 
-export function PricingTiers({ isAuthed = false }: { isAuthed?: boolean }) {
+export function PricingTiers() {
   const [billing, setBilling] = useState<Billing>("monthly");
   const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
   const { dir, locale } = useLocale();
+  // Auth resolved client-side (useUser) so the pages that render this can be
+  // static — no server getUser().
+  const { user } = useUser();
+  const isAuthed = !!user;
   const t = dict.landing.pricing;
 
   // Signed-in pricing CTA → our EMBEDDED checkout page for that tier +

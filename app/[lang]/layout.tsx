@@ -2,16 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { Cairo, Poppins } from "next/font/google";
 import "../globals.css";
 import { notFound } from "next/navigation";
-import { headers, cookies } from "next/headers";
 import { ScrollReset } from "@/components/app/ScrollReset";
 import { isLocale, dirForLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import { CookieBanner } from "@/components/legal/CookieBanner";
 import { PostHogProvider } from "@/components/analytics/PostHogProvider";
-import { isAppPath } from "@/lib/app-routes";
-import { stripLocale } from "@/lib/i18n/navigation";
-import { THEME_COOKIE } from "@/lib/ui-cookies";
 import { JsonLd } from "@/components/seo/JsonLd";
 import {
   organizationSchema,
@@ -32,6 +28,21 @@ const poppins = Poppins({
   display: "swap",
 });
 
+// Pre-paint chrome init injected into <head> (runs before the stylesheet, so no
+// theme flash + no app-route scrollbar jump). Sets `.light` from the tq_theme
+// cookie and `.app-shell-scroll` from the first path segment — CLIENT-side, so
+// the layout needs no server cookies()/headers() read, which is the prerequisite
+// for static rendering. Keep the app-route list in sync with lib/app-routes.ts
+// (APP_ROUTE_SEGMENTS).
+const CHROME_INIT = `(function(){try{var m=document.cookie.match(/(?:^|;\\s*)tq_theme=(\\w+)/);if(m&&m[1]==="light")document.documentElement.classList.add("light");var p=location.pathname.split("/").filter(Boolean);var s=(p[0]==="ar"||p[0]==="en")?p[1]:p[0];var A={dashboard:1,projects:1,favorites:1,library:1,templates:1,"brand-kits":1,settings:1,create:1,enhance:1,mimic:1,datasheet:1,project:1,preview:1,"use-template":1};if(s&&A[s])document.documentElement.classList.add("app-shell-scroll");}catch(e){}})();`;
+
+// Prerender both locales so the static-eligible pages (landing, marketing
+// spokes, legal) build to static HTML. App routes (cookies/auth) opt out of
+// static generation and keep rendering on demand.
+export function generateStaticParams() {
+  return [{ lang: "ar" }, { lang: "en" }];
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -41,15 +52,10 @@ export async function generateMetadata({
   const locale = isLocale(lang) ? lang : "ar";
   const dict = await getDictionary(locale);
 
-  // Per-page hreflang: the proxy forwards the request path as `x-pathname`, so
-  // we can map THIS page to its sibling-locale URLs (e.g. /ar/pricing ↔
-  // /en/pricing) rather than just the locale roots. Relative hrefs resolve
-  // against `metadataBase`.
-  const pathname = (await headers()).get("x-pathname") ?? `/${locale}`;
-  const logical = stripLocale(pathname);
-  const subpath = logical === "/" ? "" : logical;
-  const localeHref = (l: string) => `/${l}${subpath}`;
-
+  // Per-page canonical + hreflang live in each page's own generateMetadata (via
+  // localeAlternates) so this layout needs NO per-request headers() read — that's
+  // what lets the marketing pages render statically. The landing sets its own in
+  // app/[lang]/page.tsx.
   return {
     metadataBase: new URL("https://taqreer.ai"),
     title: dict.meta.siteTitle,
@@ -57,19 +63,9 @@ export async function generateMetadata({
     // Keywords target both languages regardless of UI locale (SEO).
     keywords: ["presentations", "AI", "Arabic", "PowerPoint", "عروض تقديمية", "ذكاء اصطناعي", "تقرير", "Taqreer"],
     authors: [{ name: "taqreer.ai" }],
-    alternates: {
-      canonical: localeHref(locale),
-      languages: {
-        ar: localeHref("ar"),
-        en: localeHref("en"),
-        // x-default → Arabic (the product's default locale).
-        "x-default": localeHref("ar"),
-      },
-    },
     openGraph: {
       title: dict.meta.siteTitle,
       description: dict.meta.ogDescription,
-      url: localeHref(locale),
       siteName: "taqreer.ai",
       images: [
         {
@@ -127,34 +123,17 @@ export default async function RootLayout({
   const dir = dirForLocale(lang);
   const dict = await getDictionary(lang);
 
-  // Set the app's body-scroll mode on the SERVER for app routes (path forwarded
-  // as x-pathname by the proxy), so the RTL scrollbar is already on the body
-  // (left) at first paint instead of jumping there when DashboardShell mounts.
-  const appShell = isAppPath(stripLocale((await headers()).get("x-pathname") ?? ""));
-
-  const cookieStore = await cookies();
-  // Theme class on <html> at first paint (no flash) from the tq_theme cookie.
-  // :root.light in globals.css flips the neutral tokens; default is dark.
-  const themeClass = cookieStore.get(THEME_COOKIE)?.value === "light" ? " light" : "";
-  // Cookie-consent: resolve on the server so the banner has no first-paint flip.
-  // A new accept/reject choice OR the legacy ack both count as decided.
-  const cookieConsentDecided =
-    !!cookieStore.get("tq_cookie_consent")?.value ||
-    cookieStore.get("tq_cookie_ack")?.value === "1";
-  // Analytics consent is the STRICT "accept" only (legacy ack = saw-the-notice,
-  // not consent-to-analytics). PostHog boots from first paint for accepted
-  // returning visitors; everyone else stays untracked until they accept.
-  const cookieConsentAccepted =
-    cookieStore.get("tq_cookie_consent")?.value === "accept";
-
   return (
     <html
       lang={lang}
       dir={dir}
-      className={`${cairo.variable} ${poppins.variable}${appShell ? " app-shell-scroll" : ""}${themeClass}`}
+      className={`${cairo.variable} ${poppins.variable}`}
       suppressHydrationWarning
     >
       <head>
+        {/* Pre-paint chrome init (theme + app-shell scroll mode) — see
+            CHROME_INIT. Must run before the stylesheet to avoid a flash. */}
+        <script dangerouslySetInnerHTML={{ __html: CHROME_INIT }} />
         {/* FILL axis range bumped to `0..1` (was `0`) so callers can
             toggle to the filled variant via inline font-variation-
             settings. Used today by the Comment toolbar button to
@@ -178,8 +157,8 @@ export default async function RootLayout({
         <ScrollReset />
         <LocaleProvider locale={lang} dict={dict}>
           {children}
-          <PostHogProvider initialConsent={cookieConsentAccepted} />
-          <CookieBanner initialDecided={cookieConsentDecided} />
+          <PostHogProvider />
+          <CookieBanner />
         </LocaleProvider>
       </body>
     </html>

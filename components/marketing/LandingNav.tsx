@@ -10,15 +10,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
+import { useUser } from "@/hooks/useUser";
 import { localizedHref, stripLocale } from "@/lib/i18n/navigation";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 
-export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
+// Auth state is resolved CLIENT-side (useUser) so the marketing/legal layouts
+// and the landing need no server getUser() — that's what lets those pages render
+// statically. Logged-out nav renders first; it swaps to the authed CTA after
+// hydration for signed-in visitors (who are rarely on these pages anyway).
+export function LandingNav() {
   const { locale } = useLocale();
   const dict = useDict();
   const pathname = usePathname();
+  const { user } = useUser();
+  const isAuthed = !!user;
   const [menuOpen, setMenuOpen] = useState(false);
 
   // On the landing the links are in-page smooth-scroll anchors; on any other

@@ -14,6 +14,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useUser } from "@/hooks/useUser";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
@@ -42,14 +43,16 @@ function scatterDelay(index: number): number {
 
 export function LandingTemplatesGrid({
   templates,
-  isAuthed,
 }: {
   templates: LandingTemplate[];
-  isAuthed: boolean;
 }) {
   // Lightbox target. null = closed.
   const [preview, setPreview] = useState<LandingTemplate | null>(null);
   const { locale } = useLocale();
+  // Auth resolved client-side (useUser) so the pages that render this can be
+  // static — no server getUser().
+  const { user } = useUser();
+  const isAuthed = !!user;
   // "Use template" busy gate — blocks double-clicks while the seed
   // request is in flight (logged-in path only). Mirrors MyTemplates.
   const [useBusy, setUseBusy] = useState(false);

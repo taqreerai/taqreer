@@ -3,6 +3,9 @@ import { ContactForm } from "@/components/contact/ContactForm";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, defaultLocale } from "@/lib/i18n/config";
 import { LEGAL_META } from "@/lib/legal/content";
+import { localeAlternates } from "@/lib/seo/alternates";
+
+export const dynamic = "force-static";
 
 function resolve(lang: string): "ar" | "en" {
   return isLocale(lang) ? (lang as "ar" | "en") : (defaultLocale as "ar" | "en");
@@ -12,8 +15,12 @@ export async function generateMetadata(props: {
   params: Promise<{ lang: string }>;
 }): Promise<Metadata> {
   const { lang } = await props.params;
-  const dict = await getDictionary(resolve(lang));
-  return { title: `${dict.contact.title} · ${LEGAL_META.brand}` };
+  const locale = resolve(lang);
+  const dict = await getDictionary(locale);
+  return {
+    title: `${dict.contact.title} · ${LEGAL_META.brand}`,
+    alternates: localeAlternates(locale, "contact"),
+  };
 }
 
 export default async function ContactPage(props: {

@@ -10,12 +10,30 @@
 // (PostHog, Phase D) gate on `accept`. Bilingual inline copy (it can render on
 // the coming-soon page, outside the dictionary-fed app chrome).
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 
 const CONSENT_COOKIE = "tq_cookie_consent";
+
+// Consent state read CLIENT-SIDE (the layout renders statically, so it can't
+// read the cookie on the server). Server snapshot = "decided" so the banner
+// never renders server-side / at first paint: it appears post-hydration only for
+// genuinely undecided visitors, and decided visitors never see a flash. The
+// decided state only changes via this banner's own choose() (which flips local
+// `dismissed`), so there's nothing external to subscribe to.
+function subscribeConsent() {
+  return () => {};
+}
+function getConsentDecided() {
+  return document.cookie
+    .split("; ")
+    .some((c) => c.startsWith(`${CONSENT_COOKIE}=`) || c === "tq_cookie_ack=1");
+}
+function getConsentDecidedServer() {
+  return true;
+}
 
 const COPY = {
   en: {
@@ -32,17 +50,16 @@ const COPY = {
   },
 } as const;
 
-export function CookieBanner({
-  // Resolved on the SERVER (the cookie or the legacy `tq_cookie_ack`): undecided
-  // users see the banner from first paint, decided users never do.
-  initialDecided = false,
-}: {
-  initialDecided?: boolean;
-}) {
+export function CookieBanner() {
   const { locale } = useLocale();
-  const [show, setShow] = useState(!initialDecided);
+  const decided = useSyncExternalStore(
+    subscribeConsent,
+    getConsentDecided,
+    getConsentDecidedServer,
+  );
+  const [dismissed, setDismissed] = useState(false);
 
-  if (!show) return null;
+  if (decided || dismissed) return null;
   const t = COPY[locale];
 
   function choose(value: "accept" | "reject") {
@@ -50,7 +67,7 @@ export function CookieBanner({
     // which would break persistence on non-localhost http (prod is HTTPS).
     const secure = location.protocol === "https:" ? "; secure" : "";
     document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax${secure}`;
-    setShow(false);
+    setDismissed(true);
     // Let the PostHogProvider boot analytics immediately on accept (no reload).
     if (value === "accept") {
       window.dispatchEvent(new CustomEvent("taqreer:cookie-consent-accept"));

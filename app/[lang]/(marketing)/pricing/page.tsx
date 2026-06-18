@@ -10,13 +10,15 @@
 import type { Metadata } from "next";
 import { isLocale, defaultLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
-import { createClient } from "@/lib/supabase/server";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
+import { localeAlternates } from "@/lib/seo/alternates";
+
+export const dynamic = "force-static";
 
 function resolve(lang: string): "ar" | "en" {
   return (isLocale(lang) ? lang : defaultLocale) as "ar" | "en";
@@ -37,6 +39,7 @@ export async function generateMetadata(props: {
   return {
     title: t.meta.title,
     description: t.meta.description,
+    alternates: localeAlternates(locale, "pricing"),
     openGraph: {
       title: t.meta.title,
       description: t.meta.description,
@@ -60,15 +63,8 @@ export default async function PricingPage(props: {
 }) {
   const { lang } = await props.params;
   const locale = resolve(lang);
-  const supabase = await createClient();
-  const [
-    {
-      data: { user },
-    },
-    dict,
-  ] = await Promise.all([supabase.auth.getUser(), getDictionary(locale)]);
+  const dict = await getDictionary(locale);
   const t = dict.pricing;
-  const isAuthed = !!user;
 
   return (
     <div className="pb-8">
@@ -101,7 +97,7 @@ export default async function PricingPage(props: {
 
       {/* Plans — reuses the landing pricing component (toggle + checkout). */}
       <section className="py-8">
-        <PricingTiers isAuthed={isAuthed} />
+        <PricingTiers />
       </section>
 
       {/* How credits work — 4 points. */}

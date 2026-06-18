@@ -11,7 +11,6 @@ import type { Metadata } from "next";
 import { isLocale, defaultLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { getTemplatesPageList } from "@/lib/auth/marquee-projects";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
@@ -23,6 +22,9 @@ import {
   collectionPageSchema,
   faqPageSchema,
 } from "@/lib/seo/schema";
+import { localeAlternates } from "@/lib/seo/alternates";
+
+export const dynamic = "force-static";
 
 function resolve(lang: string): "ar" | "en" {
   return (isLocale(lang) ? lang : defaultLocale) as "ar" | "en";
@@ -48,6 +50,7 @@ export async function generateMetadata(props: {
   return {
     title: t.meta.title,
     description: t.meta.description,
+    alternates: localeAlternates(locale, "presentation-templates"),
     openGraph: {
       title: t.meta.title,
       description: t.meta.description,
@@ -71,20 +74,11 @@ export default async function TemplatesPage(props: {
 }) {
   const { lang } = await props.params;
   const locale = resolve(lang);
-  const supabase = await createClient();
-  const [
-    {
-      data: { user },
-    },
-    dict,
-    templates,
-  ] = await Promise.all([
-    supabase.auth.getUser(),
+  const [dict, templates] = await Promise.all([
     getDictionary(locale),
     getTemplatesPageList(),
   ]);
   const t = dict.templates;
-  const isAuthed = !!user;
 
   return (
     <div className="pb-8">
@@ -135,7 +129,7 @@ export default async function TemplatesPage(props: {
             <SectionHeader title={t.gallery.title} subtitle={t.gallery.subtitle} />
           </ScrollReveal>
           <ScrollReveal direction="up">
-            <LandingTemplatesGrid templates={templates} isAuthed={isAuthed} />
+            <LandingTemplatesGrid templates={templates} />
           </ScrollReveal>
         </section>
       ) : null}

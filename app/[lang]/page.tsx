@@ -10,7 +10,6 @@
 // Turbopack route-resolution bug with `(marketing)/page.tsx`.
 
 import { unstable_cache } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { Hero } from "@/components/marketing/Hero";
 import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
@@ -29,6 +28,15 @@ import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { faqPageSchema } from "@/lib/seo/schema";
+import { localeAlternates } from "@/lib/seo/alternates";
+import type { Metadata } from "next";
+
+// Fully static: the landing prerenders to HTML at build (auth resolved
+// client-side, data calls cached), so there's no per-request render or DB hit —
+// TTFB is cache-fast. The 'auto' default would otherwise pick dynamic (the
+// proxy.ts middleware matches this route). The vanity count bakes at build and
+// refreshes on each deploy; template curation busts its tag.
+export const dynamic = "force-static";
 
 // Platform-wide "decks created" counter shown in the Hero status chip. Cached 5
 // min; try/catch → 0 on error.
@@ -76,20 +84,31 @@ const PX = "px-4 sm:px-6 lg:px-8";
 // taller ones — pricing/templates/faq — grow past the viewport with the py gap).
 const SECTION = "flex min-h-screen flex-col justify-center py-24";
 
+// Canonical + hreflang for the landing. The root layout no longer emits these
+// (so it can render statically), so the landing owns them here; title /
+// description / OG image inherit from the layout's generateMetadata.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: "ar" | "en" }>;
+}): Promise<Metadata> {
+  const { lang } = await params;
+  const locale = lang === "en" ? "en" : "ar";
+  return {
+    alternates: localeAlternates(locale, ""),
+    openGraph: { url: `/${locale}` },
+  };
+}
+
 export default async function LandingPage({
   params,
 }: {
   params: Promise<{ lang: "ar" | "en" }>;
 }) {
   const { lang } = await params;
-  const supabase = await createClient();
-  const [
-    { data: { user } },
-    projectCount,
-    landingTemplates,
-    dict,
-  ] = await Promise.all([
-    supabase.auth.getUser(),
+  // No auth read here: the nav/pricing/grid resolve auth client-side (useUser),
+  // and the data calls are cached — so this page renders statically (ISR).
+  const [projectCount, landingTemplates, dict] = await Promise.all([
     getProjectCount(),
     getLandingTemplates(),
     getDictionary(lang),
@@ -105,7 +124,7 @@ export default async function LandingPage({
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
-      <LandingNav isAuthed={!!user} />
+      <LandingNav />
 
       {/* Hero sits OUTSIDE the max-w-7xl column: its dashboard preview
           grows with viewport height on tall screens (.hero-preview-frame,
@@ -176,7 +195,7 @@ export default async function LandingPage({
             />
           </ScrollReveal>
           <div className="mt-12">
-            <LandingTemplatesGrid templates={landingTemplates} isAuthed={!!user} />
+            <LandingTemplatesGrid templates={landingTemplates} />
             <div className="mt-10 text-center">
               <a
                 href={localizedHref("/presentation-templates", lang)}
@@ -198,7 +217,7 @@ export default async function LandingPage({
             />
           </ScrollReveal>
           <ScrollReveal direction="up" className="mt-12">
-            <PricingTiers isAuthed={!!user} />
+            <PricingTiers />
           </ScrollReveal>
         </section>
 

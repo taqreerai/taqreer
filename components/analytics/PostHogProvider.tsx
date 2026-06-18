@@ -64,9 +64,13 @@ function startPostHog(): boolean {
 }
 
 export function PostHogProvider({
-  initialConsent,
+  // Optional: on statically-rendered pages the layout can't read the consent
+  // cookie server-side, so this defaults to false. The boot effect's
+  // consentAccepted() fallback (below) reads the cookie on mount, so a returning
+  // accepted visitor is still tracked.
+  initialConsent = false,
 }: {
-  initialConsent: boolean;
+  initialConsent?: boolean;
 }) {
   const pathname = usePathname();
   const { user } = useUser();

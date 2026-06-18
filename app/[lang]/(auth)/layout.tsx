@@ -25,6 +25,11 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 
+// Auth pages (login/signup use useSearchParams, the marquee hits the DB) are
+// inherently dynamic — opt the whole group out of the static generation that the
+// [lang] generateStaticParams would otherwise attempt.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({
   params,
 }: {
