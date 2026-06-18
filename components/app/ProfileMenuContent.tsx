@@ -10,10 +10,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { localizedHref, switchLocaleHref } from "@/lib/i18n/navigation";
 import { locales, LOCALE_COOKIE, type Locale } from "@/lib/i18n/config";
-import { THEME_COOKIE } from "@/lib/ui-cookies";
+import { setUiCookie } from "@/lib/ui-cookies";
+import {
+  subscribeTheme,
+  getThemeIsLight,
+  getThemeIsLightServer,
+  setThemeLight,
+} from "@/lib/theme";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase/client";
@@ -45,19 +51,11 @@ export function ProfileMenuContent({
   const currentPlan = credits ? normalizePlan(credits.plan) : null;
   const upgradeTo = currentPlan ? nextTier(currentPlan) : null;
 
-  // Theme toggle (mirrors components/app/ThemeToggle): flip the `.light`
-  // class on <html> + persist the `tq_theme` cookie. Synced from the DOM
-  // on mount (SSR already applied the class), so the row icon matches.
-  const [light, setLight] = useState(false);
-  useEffect(() => {
-    setLight(document.documentElement.classList.contains("light"));
-  }, []);
-  const toggleTheme = () => {
-    const next = !light;
-    setLight(next);
-    document.documentElement.classList.toggle("light", next);
-    document.cookie = `${THEME_COOKIE}=${next ? "light" : "dark"};path=/;max-age=31536000;samesite=lax`;
-  };
+  // Theme toggle — shared store with components/app/ThemeToggle. Live `light`
+  // class on <html>, read hydration-safely via useSyncExternalStore (no
+  // setState-in-effect); setThemeLight flips the class + persists the cookie.
+  const light = useSyncExternalStore(subscribeTheme, getThemeIsLight, getThemeIsLightServer);
+  const toggleTheme = () => setThemeLight(!light);
 
   // Language picker is a "Language >" drilldown that swaps the menu body
   // for a back header + the locale options. State lives here (the body
@@ -67,7 +65,7 @@ export function ProfileMenuContent({
   const chooseLocale = (next: Locale) => {
     onClose();
     if (next === locale) return;
-    document.cookie = `${LOCALE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
+    setUiCookie(LOCALE_COOKIE, next);
     void fetch("/api/me", {
       method: "PATCH",
       headers: { "content-type": "application/json" },

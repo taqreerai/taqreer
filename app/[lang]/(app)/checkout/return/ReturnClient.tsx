@@ -19,7 +19,10 @@ export function ReturnClient({
   const { locale } = useLocale();
   const t = dict.checkout;
   const router = useRouter();
-  const [state, setState] = useState<State>("processing");
+  // Derive the no-session case from the prop instead of setting it
+  // synchronously in the effect below (avoids a setState-in-effect + a flash of
+  // "processing"); a missing session id can only ever mean "failed".
+  const [state, setState] = useState<State>(sessionId ? "processing" : "failed");
 
   // Success needs no click - show the confirmation beat, then land the
   // user on the dashboard (user direction 2026-06-11). The credit grant
@@ -39,10 +42,8 @@ export function ReturnClient({
   }, [state, router, locale]);
 
   useEffect(() => {
-    if (!sessionId) {
-      setState("failed");
-      return;
-    }
+    // No session id → state already initialized to "failed"; nothing to fetch.
+    if (!sessionId) return;
     let live = true;
     // 10s cap so a hung status request can't strand the user on the
     // "processing" state forever (CR finding); abort falls through to

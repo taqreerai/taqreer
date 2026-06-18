@@ -17,6 +17,7 @@ import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
 import { Tooltip } from "@/components/common/Tooltip";
 import { switchLocaleHref } from "@/lib/i18n/navigation";
 import { locales, LOCALE_COOKIE, type Locale } from "@/lib/i18n/config";
+import { setUiCookie } from "@/lib/ui-cookies";
 
 const MENU_WIDTH = 150;
 const ANCHOR_GAP_PX = 8;
@@ -37,7 +38,7 @@ export function LanguageMenu({ className = "" }: { className?: string }) {
   const choose = (next: Locale) => {
     setOpen(false);
     if (next === locale) return;
-    document.cookie = `${LOCALE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
+    setUiCookie(LOCALE_COOKIE, next);
     // Persist to the account too, so the choice follows the user across
     // browsers/devices (the cookie above is the immediate per-browser effect).
     // Fire-and-forget; anonymous users get a 401 here, which we ignore.

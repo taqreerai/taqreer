@@ -7,27 +7,23 @@
 // Theme is a CHROME concern only — the slide canvas direction/colors are
 // independent (manifest-driven), same as the locale axis.
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Tooltip } from "@/components/common/Tooltip";
 import { useDict } from "@/components/i18n/LocaleProvider";
-import { THEME_COOKIE } from "@/lib/ui-cookies";
+import {
+  subscribeTheme,
+  getThemeIsLight,
+  getThemeIsLightServer,
+  setThemeLight,
+} from "@/lib/theme";
 
 export function ThemeToggle() {
   const dict = useDict();
-  // Resolve from the DOM on mount — SSR already set `.light` from the cookie, so
-  // this just syncs the button's icon to the live state (avoids a hydration
-  // mismatch from guessing the theme on the server render of this component).
-  const [light, setLight] = useState(false);
-  useEffect(() => {
-    setLight(document.documentElement.classList.contains("light"));
-  }, []);
-
-  const toggle = () => {
-    const next = !light;
-    setLight(next);
-    document.documentElement.classList.toggle("light", next);
-    document.cookie = `${THEME_COOKIE}=${next ? "light" : "dark"};path=/;max-age=31536000;samesite=lax`;
-  };
+  // Live theme from the `light` class on <html>, read hydration-safely via
+  // useSyncExternalStore (server snapshot is dark; React reconciles to the real
+  // DOM value on the client after hydration). No setState-in-effect.
+  const light = useSyncExternalStore(subscribeTheme, getThemeIsLight, getThemeIsLightServer);
+  const toggle = () => setThemeLight(!light);
 
   return (
     <Tooltip label={dict.topBar.theme} placement="bottom">

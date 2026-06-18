@@ -45,14 +45,17 @@ export function UpgradeModal({
   const [lookupKey, setLookupKey] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Fresh steps every open.
-  useEffect(() => {
+  // Fresh steps every open — adjust during render (React's "reset state when a
+  // prop changes" pattern) instead of an effect, so it can't cascade. The guard
+  // runs the reset only on the closed→open transition.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setLookupKey(initialLookupKey);
       setDone(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }
 
   useEffect(() => {
     if (!open) return;

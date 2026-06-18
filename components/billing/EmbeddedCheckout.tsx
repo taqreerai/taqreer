@@ -67,6 +67,12 @@ export function EmbeddedCheckout({
   };
   const [options, setOptions] = useState<ProviderOptions | null>(null);
   useEffect(() => {
+    // SSR-safe init the rule can't model: the Stripe appearance reads computed
+    // CSS tokens from `document` (undefined on the server), so options must be
+    // built after mount; and the clientSecret promise must be created exactly
+    // once per lookupKey (rebuilding it opens a new checkout session), so this
+    // can't move to a lazy initializer or useMemo.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOptions({
       clientSecret: fetchClientSecret(),
       elementsOptions: {
