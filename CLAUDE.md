@@ -6,7 +6,7 @@ brand; **Claude designs each slide as HTML**; the browser renders it 1:1; a patc
 generated **and** edited in one in-canvas studio. **RTL/BiDi quality is the product
 differentiator.** Live on https://taqreer.ai.
 
-**📖 Full system reference → [HANDOVER.md](HANDOVER.md)** — stack, branding, routing,
+**📖 Full system reference → [CONTEXT.md](CONTEXT.md)** — stack, branding, routing,
 i18n, auth, the 4 flows, the generation engine + Inngest, export pipeline, the studio,
 data model, credits/billing, platform services, infra/deploy, env vars, API surface,
 repo map. The live design-system reference is the **`/ar/brand`** route (source of
