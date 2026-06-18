@@ -203,12 +203,14 @@ export const getLandingTemplates = unstable_cache(
           id: row.id,
           format: row.format,
           isPremium: row.isPremium,
-          // Drop the synthetic typography + palette showcase slides
-          // (template-prefix showcase-*.webp); keep the real deck
-          // slides (cover + rest) in their stored order.
-          slides: (row.thumbnails ?? []).filter(
-            (url) => url && !url.includes("/showcase-"),
-          ),
+          // Cover slide only (first non-showcase thumbnail). The landing grid no
+          // longer scrubs through all slides on hover — a single-slide tile
+          // renders just the cover (isMultiSlide=false), so we ship one URL per
+          // template instead of the whole deck. The dedicated /presentation-templates
+          // page keeps the full scrub via getTemplatesPageList.
+          slides: (row.thumbnails ?? [])
+            .filter((url) => url && !url.includes("/showcase-"))
+            .slice(0, 1),
         }))
         .filter((tpl) => tpl.slides.length > 0);
     } catch (err) {
