@@ -610,7 +610,7 @@
   "landing": {
     "comingSoon": { "title": "قريبا", "body": "نعمل على شيء مميز. taqreer.ai يصل قريبا." },
     "hero": {
-      "statusCount": "أكثر من {count} عرض تم إنشاؤه حتى الآن",
+      "statusCount": "تم إنشاء أكثر من {count} عرض حتى الآن",
       "poweredBy": "مدعوم بتقنيات تصميم ذكية",
       "titleLine1": "صمم عروضا تقديمية",
       "titleLine2": "بالذكاء الاصطناعي",

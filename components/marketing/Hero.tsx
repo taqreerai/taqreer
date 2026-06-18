@@ -89,9 +89,11 @@ export function Hero({ projectCount }: { projectCount?: number }) {
 
   // Latin numerals + thousand separator ("12,345") — RTL-safe inside
   // the Arabic chip copy, per the project's "Latin digits only" rule.
+  // Baseline added to the live DB total for the public "decks created" counter.
+  const COUNT_BASELINE = 20000;
   const formattedCount =
     typeof projectCount === "number" && projectCount > 0
-      ? new Intl.NumberFormat("en-US").format(projectCount)
+      ? new Intl.NumberFormat("en-US").format(projectCount + COUNT_BASELINE)
       : null;
 
   return (
