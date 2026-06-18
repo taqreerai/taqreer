@@ -132,14 +132,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             variants={itemVariants}
             className="mb-8 w-full text-4xl font-medium leading-tight md:text-6xl"
           >
-            {/* Lead line is optional: AR has a white lead ("حوّل أفكارك إلى")
-                before the gradient; EN is just the gradient phrase, so skip the
-                lead + its <br> to avoid an empty first line. */}
-            {dict.landing.hero.titleLine1 ? (
-              <>
-                {dict.landing.hero.titleLine1} <br />
-              </>
-            ) : null}
+            {dict.landing.hero.titleLine1} <br />
             <span className="text-gradient">{dict.landing.hero.titleLine2}</span>
           </motion.h1>
 

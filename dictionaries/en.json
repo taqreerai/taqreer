@@ -400,8 +400,8 @@
     "hero": {
       "statusCount": "{count} presentations created so far",
       "poweredBy": "Powered by Claude Design",
-      "titleLine1": "",
-      "titleLine2": "Decks worth presenting",
+      "titleLine1": "Turn your ideas into",
+      "titleLine2": "decks worth presenting",
       "subtitle": "taqreer.ai turns your content into fully designed presentations, Arabic and English. It keeps your brand identity and gives you an advanced editor to tweak every slide right in the browser.",
       "cta": "Start free now"
     },
