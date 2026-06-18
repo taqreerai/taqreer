@@ -218,11 +218,11 @@ export const getLandingTemplates = unstable_cache(
     }
   },
   ["landing-templates"],
-  // Cache indefinitely so the landing never pays the cold remote-DB query (~2s)
-  // on a user request. Freshness is preserved by revalidateTag("landing-templates")
-  // in revalidateTemplateSurfaces() on every admin curation write; a deploy also
+  // Long TTL (24h) so the landing stays on the warm cache path instead of paying
+  // the cold remote-DB query (~2s). Freshness on admin curation is preserved by
+  // revalidateTag("landing-templates") in revalidateTemplateSurfaces(); a deploy
   // re-warms it via the /ar health-check.
-  { revalidate: false, tags: ["landing-templates"] },
+  { revalidate: 86400, tags: ["landing-templates"] },
 );
 
 // ─── Welcome-email template strip ─────────────────────────────────────

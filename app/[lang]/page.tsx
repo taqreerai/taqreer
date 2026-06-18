@@ -41,10 +41,10 @@ const getProjectCount = unstable_cache(
     }
   },
   ["landing-project-count"],
-  // Cache indefinitely (vanity counter; undercount-safe) so the landing never
-  // pays the cold remote-DB query (~2s) on a user request. Refreshes on each
-  // deploy (fresh process) — the deploy health-check on /ar re-warms it.
-  { revalidate: false, tags: ["landing-project-count"] }
+  // Long TTL (24h) so the landing stays on the warm cache path instead of paying
+  // the cold remote-DB query (~2s) — vanity counter, undercount-safe. The deploy
+  // /ar health-check re-warms it each release.
+  { revalidate: 86400, tags: ["landing-project-count"] }
 );
 
 // "Trusted by" logos. Each renders as a `currentColor` SVG mask (see
@@ -82,6 +82,7 @@ export default async function LandingPage({
   params: Promise<{ lang: "ar" | "en" }>;
 }) {
   const { lang } = await params;
+  const __t1 = performance.now();
   const supabase = await createClient();
   const [
     { data: { user } },
@@ -90,10 +91,11 @@ export default async function LandingPage({
     dict,
   ] = await Promise.all([
     supabase.auth.getUser(),
-    getProjectCount(),
-    getLandingTemplates(),
+    getProjectCount().then((r) => { console.log("[lt2] count", (performance.now() - __t1).toFixed(0)); return r; }),
+    getLandingTemplates().then((r) => { console.log("[lt2] templates", (performance.now() - __t1).toFixed(0)); return r; }),
     getDictionary(lang),
   ]);
+  console.log("[lt2] data-total", (performance.now() - __t1).toFixed(0));
 
   return (
     <SmoothScrollProvider>
