@@ -19,10 +19,6 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import {
-  prepareTemplateUse,
-  redirectToPricingIfGated,
-} from "@/lib/mimic/template-seed";
 import type { LandingTemplate } from "@/lib/auth/marquee-projects";
 import type { SlideFormat } from "@/lib/schema/slide";
 
@@ -65,8 +61,13 @@ export function LandingTemplatesGrid({
       return;
     }
     // Logged-in → mint the Mimic reference behind the CTA's busy
-    // spinner, then hard-navigate to the (now-cached) use flow.
+    // spinner, then hard-navigate to the (now-cached) use flow. The seed logic
+    // (lib/mimic/template-seed) pulls zod (~280 KB), so it's dynamically
+    // imported here at click-time — it never ships in the static landing bundle.
     setUseBusy(true);
+    const { prepareTemplateUse, redirectToPricingIfGated } = await import(
+      "@/lib/mimic/template-seed"
+    );
     try {
       await prepareTemplateUse("template", preview.id);
       window.location.assign(`/use-template/${preview.id}`);

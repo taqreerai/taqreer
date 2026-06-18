@@ -18,7 +18,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import posthog from "posthog-js";
-import { useUser } from "@/hooks/useUser";
 
 const CONSENT_COOKIE = "tq_cookie_consent";
 const ACCEPT_EVENT = "taqreer:cookie-consent-accept";
@@ -32,6 +31,14 @@ function consentAccepted(): boolean {
 
 // Module-level so a remount (Fast Refresh, route group swap) never double-inits.
 let started = false;
+
+// Read by <PostHogIdentify> (app-only) so it identifies the user only once
+// PostHog is actually booted (consent granted). Kept here because `started` is
+// module-private. PostHogIdentify lives in its own file so the Supabase client
+// (useUser) is NOT pulled into the static marketing bundle — only the app.
+export function posthogStarted(): boolean {
+  return started;
+}
 
 function startPostHog(): boolean {
   if (started) return true;
@@ -73,7 +80,6 @@ export function PostHogProvider({
   initialConsent?: boolean;
 }) {
   const pathname = usePathname();
-  const { user } = useUser();
   // Consent state: seeded from the server-resolved cookie (so an accepted
   // returning visitor captures from first paint) and flipped live on Accept.
   const [analyticsOn, setAnalyticsOn] = useState(initialConsent);
@@ -99,17 +105,8 @@ export function PostHogProvider({
     }
   }, [analyticsOn]);
 
-  // Identify the signed-in user / reset on logout, once PostHog is running.
-  // distinct_id = Supabase auth uid so future server-side events (posthog-node)
-  // link to the same person.
-  useEffect(() => {
-    if (!started) return;
-    if (user) {
-      posthog.identify(user.id, user.email ? { email: user.email } : undefined);
-    } else {
-      posthog.reset();
-    }
-  }, [user, analyticsOn]);
+  // User identify/reset lives in <PostHogIdentify> (mounted only in the (app)
+  // layout) so the Supabase client it needs stays out of the marketing bundle.
 
   // Pageview on each App Router client navigation, once PostHog is booted.
   useEffect(() => {

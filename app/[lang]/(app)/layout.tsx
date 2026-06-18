@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/app/DashboardShell";
+import { PostHogIdentify } from "@/components/analytics/PostHogIdentify";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { isLocale } from "@/lib/i18n/config";
@@ -66,6 +67,7 @@ export default async function AppLayout({
 
   return (
     <DashboardShell initialIsCollapsed={initialIsCollapsed} isAdmin={isAdmin}>
+      <PostHogIdentify />
       {children}
     </DashboardShell>
   );
