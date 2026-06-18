@@ -8,7 +8,16 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { DashboardPreview } from "./DashboardPreview";
+import dynamic from "next/dynamic";
+
+// The dashboard preview is a large (~1,300-line) decorative demo, not SEO
+// content. Load it client-only so it stays out of the landing's SSR — that keeps
+// the server render down to the lightweight text sections. The sized
+// `.hero-preview-frame` holds the space, so there's no layout shift.
+const DashboardPreview = dynamic(
+  () => import("./DashboardPreview").then((m) => m.DashboardPreview),
+  { ssr: false },
+);
 
 const containerVariants = {
   hidden: {},

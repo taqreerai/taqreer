@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   // the dev server owns .next; unset = normal .next everywhere else.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   compress: true,
+  // Drop the `X-Powered-By: Next.js` header (fingerprinting / SEO audit flag).
+  poweredByHeader: false,
   skipTrailingSlashRedirect: true,
   images: {
     remotePatterns: [
