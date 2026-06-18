@@ -237,6 +237,57 @@
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export the redesigned deck as editable PPTX for PowerPoint while preserving the Arabic formatting." }
     ]
   },
+  "arabicPresentations": {
+    "meta": {
+      "title": "Arabic Presentations with True RTL Support | taqreer.ai",
+      "description": "Create Arabic presentations that export to PowerPoint with correct right-to-left direction, proper alignment, numbers and English terms in the right place, and authentic Arabic fonts. taqreer.ai handles bidirectional text end to end."
+    },
+    "breadcrumb": "Arabic Presentations",
+    "hero": {
+      "eyebrow": "Arabic-first",
+      "title": "Arabic presentations, formatted right",
+      "subtitle": "Arabic is more than a translation. taqreer.ai designs and exports your decks with correct right-to-left direction, alignment, numbers, and Arabic fonts that stay intact, even inside PowerPoint.",
+      "cta": "Start free"
+    },
+    "compare": {
+      "title": "Arabic, the way it should look",
+      "subtitle": "Many tools break Arabic text direction when exporting to PowerPoint. These are real examples of what goes wrong, and how taqreer.ai fixes it.",
+      "tryIt": "Try it",
+      "windowTitle": "presentation.pptx",
+      "slideHeader": "Q1",
+      "modes": [
+        { "name": "Direction and alignment", "desc": "Arabic reads from the right. A naive export anchors it to the left and reverses the reading order. taqreer.ai keeps the correct direction and alignment." },
+        { "name": "Numbers and percentages", "desc": "Percentages and dates jump to the wrong side or detach from the sentence. taqreer.ai keeps them in place within the Arabic text." },
+        { "name": "Arabic with Latin", "desc": "Brand names and English terms scatter inside the Arabic sentence. taqreer.ai keeps them as a Latin island in the right spot." },
+        { "name": "Punctuation", "desc": "Commas and question marks land on the wrong side. taqreer.ai places them where they belong in right-to-left text." }
+      ]
+    },
+    "how": {
+      "title": "How Arabic export works",
+      "subtitle": "After designing each slide, taqreer.ai post-processes the PowerPoint file itself so Arabic renders correctly.",
+      "steps": [
+        { "title": "Designed in the browser", "body": "The AI designs each slide as a web page, so the browser handles bidirectional text ordering precisely." },
+        { "title": "High-fidelity export", "body": "taqreer.ai converts the slide to PowerPoint while preserving the layout and fonts instead of rebuilding them." },
+        { "title": "Direction post-processing", "body": "A final pass sets each paragraph's direction, alignment, and text language inside the file, so Arabic shows correctly in PowerPoint." }
+      ]
+    },
+    "why": {
+      "title": "Why taqreer.ai for Arabic",
+      "subtitle": "Bidirectional text is the core of the product, not an afterthought.",
+      "points": [
+        { "title": "Always correct direction", "body": "Every slide exports right-to-left with proper alignment, in the browser and in PowerPoint." },
+        { "title": "Numbers in place", "body": "Percentages, dates, and English terms stay in the right spot inside Arabic text." },
+        { "title": "Authentic Arabic fonts", "body": "Arabic fonts are embedded in the file and their letters stay connected as designed." },
+        { "title": "Clean export", "body": "The deck opens in PowerPoint with its full Arabic layout intact and editable." }
+      ]
+    },
+    "faq": [
+      { "q": "Does taqreer.ai fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first. Every slide is designed and exported with correct right-to-left direction and full support for bidirectional text and Arabic fonts." },
+      { "q": "What happens to Arabic when exporting to PowerPoint?", "a": "Many tools break Arabic direction on export. taqreer.ai post-processes the PowerPoint file to guarantee correct direction, alignment, and the placement of numbers and punctuation inside Arabic text." },
+      { "q": "Do numbers and English words show correctly inside Arabic text?", "a": "Yes. Percentages, dates, and English brand names stay in the correct place inside the Arabic sentence instead of jumping to the wrong side." },
+      { "q": "Do Arabic fonts stay intact after export?", "a": "Yes. Arabic fonts are embedded in the PowerPoint file and their letters stay connected in the correct shape, without falling back to a substitute font." }
+    ]
+  },
   "newProjectDialog": {
     "title": "Start a new project",
     "subtitle": "Pick the flow that fits your content, your default brand kit fills in automatically if you've saved one."
@@ -286,6 +337,7 @@
   "landingNav": {
     "home": "Home",
     "features": "Features",
+    "whyUs": "Why us",
     "pricing": "Pricing",
     "templates": "Templates",
     "faq": "FAQ",

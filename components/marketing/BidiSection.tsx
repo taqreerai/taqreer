@@ -58,7 +58,8 @@ export function BidiSection() {
 // at the inline-START when OFF and slides to the inline-END when ON — so it
 // mirrors with the chrome direction (start=right in RTL, left in LTR). Off-state
 // fill is --tq-card (#111) + a hairline border so it stays visible on the panel.
-function InlineSwitch({
+// Exported so the /arabic-presentations BiDi demos reuse the exact same switch.
+export function InlineSwitch({
   on,
   onToggle,
   ariaLabel,
