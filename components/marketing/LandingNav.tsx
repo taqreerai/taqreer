@@ -10,22 +10,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
-import { useUser } from "@/hooks/useUser";
+import { useIsAuthed } from "@/hooks/useIsAuthed";
 import { localizedHref, stripLocale } from "@/lib/i18n/navigation";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 
-// Auth state is resolved CLIENT-side (useUser) so the marketing/legal layouts
-// and the landing need no server getUser() — that's what lets those pages render
-// statically. Logged-out nav renders first; it swaps to the authed CTA after
-// hydration for signed-in visitors (who are rarely on these pages anyway).
+// Auth state is resolved CLIENT-side (useIsAuthed: a cookie-presence check, no
+// Supabase client) so the marketing/legal layouts and the landing need no server
+// getUser() — that's what lets those pages render statically AND keeps the
+// ~200 KB Supabase bundle off them. Logged-out nav renders first; it swaps to
+// the authed CTA after hydration for signed-in visitors (rarely on these pages).
 export function LandingNav() {
   const { locale } = useLocale();
   const dict = useDict();
   const pathname = usePathname();
-  const { user } = useUser();
-  const isAuthed = !!user;
+  const isAuthed = useIsAuthed();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // On the landing the links are in-page smooth-scroll anchors; on any other

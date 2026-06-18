@@ -106,8 +106,9 @@ export default async function LandingPage({
   params: Promise<{ lang: "ar" | "en" }>;
 }) {
   const { lang } = await params;
-  // No auth read here: the nav/pricing/grid resolve auth client-side (useUser),
-  // and the data calls are cached — so this page renders statically (ISR).
+  // No auth read here: the nav/pricing/grid resolve auth client-side
+  // (useIsAuthed, a cookie check — no Supabase client) and the data calls are
+  // cached, so this page renders statically (ISR) and stays light.
   const [projectCount, landingTemplates, dict] = await Promise.all([
     getProjectCount(),
     getLandingTemplates(),

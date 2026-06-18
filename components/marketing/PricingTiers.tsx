@@ -13,7 +13,7 @@ import Link from "next/link";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
-import { useUser } from "@/hooks/useUser";
+import { useIsAuthed } from "@/hooks/useIsAuthed";
 import { localizedHref } from "@/lib/i18n/navigation";
 
 type Billing = "monthly" | "yearly";
@@ -103,10 +103,9 @@ export function PricingTiers() {
   const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
   const { dir, locale } = useLocale();
-  // Auth resolved client-side (useUser) so the pages that render this can be
-  // static — no server getUser().
-  const { user } = useUser();
-  const isAuthed = !!user;
+  // Auth resolved client-side (useIsAuthed: cookie-presence check, no Supabase
+  // client) so the pages that render this stay static AND light.
+  const isAuthed = useIsAuthed();
   const t = dict.landing.pricing;
 
   // Signed-in pricing CTA → our EMBEDDED checkout page for that tier +
