@@ -8,8 +8,7 @@
 // right-aligned, cards flow right→left. Hover plays the AnimatedIcon + tints the
 // title violet (the qa-card supplies the ring + slow zoom).
 //
-// Cards with a dedicated SEO spoke link to it (hub→spoke). Mimic has no spoke,
-// so it stays a non-link card.
+// All four cards link to a dedicated SEO spoke (hub→spoke).
 
 import { useRef } from "react";
 import Link from "next/link";
@@ -20,12 +19,12 @@ import type { AnimatedIconHandle } from "@/components/icons/types";
 
 // Icons + spoke hrefs are presentational/routing chrome (not localized copy) —
 // kept in source order matching the dictionary's `landing.flowCards`
-// (create / enhance / mimic / datasheet). null = no dedicated spoke (Mimic).
+// (create / enhance / mimic / datasheet).
 const FLOW_ICONS = ["add_circle", "auto_fix_high", "content_copy", "dataset"];
 const FLOW_HREFS: (string | null)[] = [
   "/ai-presentations", // create
   "/redesign", // enhance
-  null, // mimic — no spoke
+  "/presentation-style", // mimic
   "/report-design", // datasheet
 ];
 
@@ -77,7 +76,7 @@ function FlowColumn({
       </div>
     </>
   );
-  // Cards with a spoke are links (hub→spoke); Mimic (no spoke) stays a div.
+  // Cards with a spoke are links (hub→spoke); a null href would stay a div.
   if (href) {
     return (
       <Link href={localizedHref(href, locale)} className={cls} {...handlers}>

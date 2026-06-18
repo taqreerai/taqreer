@@ -237,6 +237,39 @@
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export the redesigned deck as editable PPTX for PowerPoint while preserving the Arabic formatting." }
     ]
   },
+  "presentationStyle": {
+    "meta": {
+      "title": "Match Any Presentation Style with AI | taqreer.ai",
+      "description": "Attach a presentation whose style you like, and taqreer.ai applies its visual spirit to your new content with AI. Arabic and English decks, editable and exportable to PowerPoint."
+    },
+    "breadcrumb": "Presentation Style",
+    "hero": {
+      "eyebrow": "Mimic",
+      "title": "Design your deck in a style you love",
+      "subtitle": "Attach a deck or design you like, and taqreer.ai applies its visual style to your new content in Arabic and English, keeping colors, fonts, and layout consistent.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "From a reference design to your deck",
+      "subtitle": "Attach the deck whose style you like, write your content, and taqreer.ai applies the style to every slide. This is how mimicking starts."
+    },
+    "why": {
+      "title": "Why taqreer.ai",
+      "subtitle": "A style you love, with your own content.",
+      "points": [
+        { "title": "Captures the style", "body": "taqreer.ai analyzes the reference deck's colors, fonts, and layout and applies its spirit to your content." },
+        { "title": "Your new content", "body": "Write or upload your content, and the AI designs new slides in the same style." },
+        { "title": "Arabic-first", "body": "Full right-to-left support and Arabic fonts." },
+        { "title": "Edit and export", "body": "Tweak any slide in the editor, then export to PowerPoint and PDF." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I design a deck in another deck's style?", "a": "Attach the deck whose style you like, write or upload your content, and the AI applies its visual style to new slides in minutes." },
+      { "q": "What does taqreer.ai take from the reference deck?", "a": "It captures the colors, fonts, layout patterns, and overall visual spirit, and applies them to your new content without copying the original content." },
+      { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
+      { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
+    ]
+  },
   "arabicPresentations": {
     "meta": {
       "title": "Arabic Presentations with True RTL Support | taqreer.ai",
