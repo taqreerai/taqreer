@@ -93,20 +93,11 @@
       "title": "Featured templates",
       "subtitle": "Every template is built from a real deck, ready for you to start from."
     },
-    "how": {
-      "title": "How to use a template",
-      "subtitle": "Three steps from template to a deck ready to present.",
-      "steps": [
-        { "title": "Pick a template", "body": "Browse the templates and choose the design closest to your idea and field." },
-        { "title": "Customize with AI", "body": "Add your content and apply your brand: logo, colors, and fonts, and taqreer.ai redesigns the slides automatically." },
-        { "title": "Export and present", "body": "Tweak any slide in the editor, then export to PowerPoint or PDF with Arabic formatting preserved." }
-      ]
-    },
     "why": {
       "title": "Why taqreer.ai templates",
       "subtitle": "Arabic-first, and fully editable.",
       "points": [
-        { "title": "Arabic-first", "body": "Full right-to-left support and Arabic fonts, with no broken formatting." },
+        { "title": "Arabic-first", "body": "Full right-to-left support and Arabic fonts." },
         { "title": "Fully editable", "body": "Change text, colors, slides, and their order right in the editor." },
         { "title": "AI customization", "body": "Turn a template into your own deck: your content and brand in minutes." },
         { "title": "Professional export", "body": "Export to PowerPoint and PDF with the design and text direction preserved." }
@@ -117,12 +108,7 @@
       { "q": "Can I edit a template?", "a": "Completely. Change text, colors, images, slides, and their order in the editor, with autosave." },
       { "q": "Do the templates support Arabic?", "a": "Yes. Every template is Arabic-first with correct right-to-left direction and Arabic fonts." },
       { "q": "How do I use a template?", "a": "Pick a template, add your content and brand, let the AI redesign the deck, then export to PowerPoint." }
-    ],
-    "finalCta": {
-      "title": "Start from a template now",
-      "subtitle": "Create your first presentation free, in Arabic or English.",
-      "cta": "Start free"
-    }
+    ]
   },
   "newProjectDialog": {
     "title": "Start a new project",

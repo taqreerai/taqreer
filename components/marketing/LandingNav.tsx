@@ -32,7 +32,7 @@ export function LandingNav({ isAuthed }: { isAuthed: boolean }) {
     { label: dict.landingNav.home, href: onLanding ? "#" : home },
     { label: dict.landingNav.features, href: sec("#features") },
     { label: dict.landingNav.pricing, href: sec("#pricing") },
-    { label: dict.landingNav.templates, href: sec("#templates") },
+    { label: dict.landingNav.templates, href: localizedHref("/presentation-templates", locale) },
     { label: dict.landingNav.faq, href: sec("#faq") },
   ];
 

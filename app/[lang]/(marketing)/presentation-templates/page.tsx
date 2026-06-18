@@ -28,10 +28,15 @@ function resolve(lang: string): "ar" | "en" {
   return (isLocale(lang) ? lang : defaultLocale) as "ar" | "en";
 }
 
-// Material Symbols icon per how-to-use step (presentation-only + locale-agnostic,
-// so kept out of the dictionary). Order matches dict.templates.how.steps:
-// pick a template → customize with AI → export & present.
-const STEP_ICONS = ["grid_view", "auto_awesome", "slideshow"];
+// Material Symbols icon per "why" point (presentation-only + locale-agnostic, so
+// kept out of the dictionary). Order matches dict.templates.why.points:
+// Arabic-first / fully editable / AI customization / professional export.
+const WHY_ICONS = [
+  "format_textdirection_r_to_l",
+  "edit",
+  "auto_awesome",
+  "download",
+];
 
 export async function generateMetadata(props: {
   params: Promise<{ lang: string }>;
@@ -135,29 +140,6 @@ export default async function TemplatesPage(props: {
         </section>
       ) : null}
 
-      {/* How it works — 3 steps. */}
-      <section className="py-16">
-        <ScrollReveal direction="up" className="pb-10">
-          <SectionHeader title={t.how.title} subtitle={t.how.subtitle} />
-        </ScrollReveal>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {t.how.steps.map((step, i) => (
-            <ScrollReveal key={i} direction="up" delay={i * 0.08}>
-              <div className="surface-card h-full rounded-[14px] p-6">
-                <span
-                  className="material-symbols-outlined mb-4 block text-[32px] leading-none text-[var(--tq-violet)]"
-                  aria-hidden
-                >
-                  {STEP_ICONS[i]}
-                </span>
-                <h3 className="mb-2 text-lg font-medium">{step.title}</h3>
-                <p className="text-sm leading-relaxed text-muted">{step.body}</p>
-              </div>
-            </ScrollReveal>
-          ))}
-        </div>
-      </section>
-
       {/* Why taqreer templates — 4 points. */}
       <section className="py-16">
         <ScrollReveal direction="up" className="pb-10">
@@ -167,6 +149,12 @@ export default async function TemplatesPage(props: {
           {t.why.points.map((point, i) => (
             <ScrollReveal key={i} direction="up" delay={i * 0.06}>
               <div className="surface-card h-full rounded-[14px] p-6">
+                <span
+                  className="material-symbols-outlined mb-4 block text-[32px] leading-none text-[var(--tq-violet)]"
+                  aria-hidden
+                >
+                  {WHY_ICONS[i]}
+                </span>
                 <h3 className="mb-2 text-base font-medium">{point.title}</h3>
                 <p className="text-sm leading-relaxed text-muted">{point.body}</p>
               </div>
@@ -182,24 +170,6 @@ export default async function TemplatesPage(props: {
         </ScrollReveal>
         <ScrollReveal direction="up">
           <FaqAccordion items={t.faq} />
-        </ScrollReveal>
-      </section>
-
-      {/* Final CTA. */}
-      <section className="py-16">
-        <ScrollReveal direction="up">
-          <div className="surface-card mx-auto max-w-3xl rounded-[14px] p-10 text-center">
-            <h2 className="mb-3 text-2xl font-medium md:text-3xl">
-              {t.finalCta.title}
-            </h2>
-            <p className="mx-auto mb-7 max-w-xl text-muted">{t.finalCta.subtitle}</p>
-            <a
-              href={localizedHref("/signup", locale)}
-              className="btn-gradient-anim inline-block rounded-full px-8 py-3 text-sm font-medium"
-            >
-              {t.finalCta.cta}
-            </a>
-          </div>
         </ScrollReveal>
       </section>
     </div>
