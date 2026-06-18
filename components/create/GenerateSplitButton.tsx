@@ -116,7 +116,7 @@ export function GenerateSplitButton({
         {/* Generate half — `motion.button` with `layout` so the pill
             width transitions smoothly when the label switches between
             the idle term ("إنشاء", short) and the loading variant
-            ("جارٍ الإنشاء...", longer). Without `layout` the button
+            ("جار الإنشاء...", longer). Without `layout` the button
             snaps to its new width in one frame, which reads as a
             jarring "expand" the moment loading kicks in. `layout`
             measures the before/after size and tweens. Position

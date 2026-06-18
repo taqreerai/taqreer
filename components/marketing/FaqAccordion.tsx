@@ -8,9 +8,16 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
-export function FaqAccordion() {
+export function FaqAccordion({
+  items,
+}: {
+  // Defaults to the landing FAQ; pass a per-page FAQ (e.g. /templates) to reuse
+  // the same accordion + visuals on a spoke page.
+  items?: { q: string; a: string }[];
+}) {
   const dict = useDict();
   const { dir } = useLocale();
+  const faq = items ?? dict.landing.faq;
 
   // Single-open accordion; first item open initially. Clicking the open item
   // closes it.
@@ -20,7 +27,7 @@ export function FaqAccordion() {
     // shadcn-style: no card pills — each row is just a question + a hairline
     // divider under it, with the answer expanding below.
     <div className="w-full" dir={dir}>
-        {dict.landing.faq.map((item, i) => {
+        {faq.map((item, i) => {
           const isOpen = open === i;
           return (
             <div key={i} className="border-b border-[var(--tq-border-hairline)] px-4 sm:px-6 lg:px-8">

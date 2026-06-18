@@ -22,6 +22,8 @@ import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
+import { SectionHeader } from "@/components/marketing/SectionHeader";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
@@ -59,29 +61,8 @@ const TRUSTED_LOGOS: { file: string; w: number; h: number; px: number; label: st
   { file: "openai", w: 512, h: 126, px: 20, label: "OpenAI" },
 ];
 
-// Centered (single-column) section header.
-function SectionHeader({
-  eyebrow,
-  title,
-  subtitle,
-  align = "center",
-}: {
-  eyebrow: string;
-  title: string;
-  subtitle: string;
-  align?: "center" | "right";
-}) {
-  const isCenter = align === "center";
-  return (
-    <div className={isCenter ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}>
-      <span className="mb-3 block text-sm font-semibold text-[var(--tq-violet)]">
-        {eyebrow}
-      </span>
-      <h2 className="mb-4 text-balance text-3xl font-medium md:text-4xl">{title}</h2>
-      <p className="text-lg leading-relaxed text-muted">{subtitle}</p>
-    </div>
-  );
-}
+// SectionHeader moved to components/marketing/SectionHeader.tsx (shared with the
+// marketing spoke pages, e.g. /templates).
 
 // Section separators removed (no swiss grid) — sections lean on their own
 // vertical padding now. `RULE` kept as an empty string so the section className
@@ -117,7 +98,7 @@ export default async function LandingPage({
       {/* FAQPage structured data, mirrored from the rendered FAQ accordion
           (dict.landing.faq). Eligible for FAQ rich results + a strong source
           for AI answer extraction. */}
-      <JsonLd data={faqPageSchema(dict)} />
+      <JsonLd data={faqPageSchema(dict.landing.faq)} />
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
@@ -193,6 +174,14 @@ export default async function LandingPage({
           </ScrollReveal>
           <div className="mt-12">
             <LandingTemplatesGrid templates={landingTemplates} isAuthed={!!user} />
+            <div className="mt-10 text-center">
+              <a
+                href={localizedHref("/presentation-templates", lang)}
+                className="btn-pill inline-flex px-5 py-2 text-sm"
+              >
+                {dict.landing.sections.templates.viewAll}
+              </a>
+            </div>
           </div>
         </section>
 

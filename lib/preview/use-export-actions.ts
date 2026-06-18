@@ -155,7 +155,7 @@ export function useExportActions({
   // ── PPTX (client-side via dom-to-pptx + BiDi post-processor) ─────
   const runPptx = () =>
     guard(async () => {
-      setExportPptx({ status: "running", message: "جارٍ التصدير..." });
+      setExportPptx({ status: "running", message: "جار التصدير..." });
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
         await exportManifestAsPptx(exportManifest, fileName);
@@ -180,7 +180,7 @@ export function useExportActions({
   // ── PDF (server-side Puppeteer) ──────────────────────────────────
   const runPdf = () =>
     guard(async () => {
-      setExportPdf({ status: "running", message: "جارٍ تصدير PDF..." });
+      setExportPdf({ status: "running", message: "جار تصدير PDF..." });
       try {
         const response = await fetch(`/api/projects/${projectId}/export/pdf`, {
           method: "POST",
@@ -205,7 +205,7 @@ export function useExportActions({
   // ── PNG (server-side Puppeteer, ZIP of canvas-native PNGs) ───────
   const runPng = () =>
     guard(async () => {
-      setExportPng({ status: "running", message: "جارٍ تصدير الصور..." });
+      setExportPng({ status: "running", message: "جار تصدير الصور..." });
       try {
         const response = await fetch(`/api/projects/${projectId}/export/png`, {
           method: "POST",
@@ -233,7 +233,7 @@ export function useExportActions({
   // ── HTML (client-side, raw standalone bundle) ────────────────────
   const runHtml = () =>
     guard(async () => {
-      setExportHtml({ status: "running", message: "جارٍ التحميل..." });
+      setExportHtml({ status: "running", message: "جار التحميل..." });
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
         downloadHtmlDocument(exportManifest, fileName);

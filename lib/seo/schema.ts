@@ -13,7 +13,6 @@
 //     violates the structured-data + spam policies.
 
 import type { Locale } from "@/lib/i18n/config";
-import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 const SITE_URL = "https://taqreer.ai";
 const LOGO_URL = `${SITE_URL}/icon-colored.svg`;
@@ -34,7 +33,7 @@ const ENTITY = {
       "taqreer.ai منصة ذكاء اصطناعي لتصميم العروض التقديمية والتقارير بالعربية والإنجليزية.",
     appName: "taqreer.ai · تصميم عروض تقديمية بالذكاء الاصطناعي",
     appDescription:
-      "صمّم عروضاً تقديمية وتقارير احترافية بالذكاء الاصطناعي بالعربية والإنجليزية. اكتب فكرتك أو ارفع ملفاً، واحصل على عرض مصمم بالكامل قابل للتعديل والتصدير إلى PowerPoint.",
+      "صمم عروضا تقديمية وتقارير احترافية بالذكاء الاصطناعي بالعربية والإنجليزية. اكتب فكرتك أو ارفع ملفا، واحصل على عرض مصمم بالكامل قابل للتعديل والتصدير إلى PowerPoint.",
     features: [
       "تصميم عروض تقديمية بالذكاء الاصطناعي",
       "دعم كامل للعربية واتجاه النص من اليمين إلى اليسار",
@@ -115,16 +114,49 @@ export function softwareApplicationSchema(locale: Locale) {
   };
 }
 
-// FAQPage: built from the landing FAQ (already localized in the dictionary).
-// Eligible for FAQ rich results and a strong source for AI answer extraction.
-export function faqPageSchema(dict: Dictionary) {
+// FAQPage: built from a localized [{q,a}] list (the landing FAQ, or a per-page
+// FAQ). Eligible for FAQ rich results + a strong source for AI answer extraction.
+export function faqPageSchema(items: { q: string; a: string }[]) {
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: dict.landing.faq.map((item) => ({
+    mainEntity: items.map((item) => ({
       "@type": "Question",
       name: item.q,
       acceptedAnswer: { "@type": "Answer", text: item.a },
     })),
+  };
+}
+
+// BreadcrumbList: the path from home to the current page. Helps Google render
+// breadcrumbs in the result + understand site structure.
+export function breadcrumbSchema(items: { name: string; url: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.name,
+      item: it.url.startsWith("http") ? it.url : `${SITE_URL}${it.url}`,
+    })),
+  };
+}
+
+// CollectionPage: marks a page that presents a curated set (e.g. /templates).
+export function collectionPageSchema(opts: {
+  name: string;
+  description: string;
+  path: string;
+  locale: Locale;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: opts.name,
+    description: opts.description,
+    url: `${SITE_URL}${opts.path}`,
+    inLanguage: opts.locale === "ar" ? "ar" : "en",
+    isPartOf: { "@type": "WebSite", name: "taqreer.ai", url: SITE_URL },
   };
 }

@@ -18,7 +18,7 @@
 //      into one card, identical to /create.
 //   3. إعدادات الإخراج (Output) — slide size, count, pagination, and
 //      تعليمات إضافية (moved here from البيانات to take the persistent
-//      element's old spot — optional "ركّز على..." steering text).
+//      element's old spot — optional "ركز على..." steering text).
 //
 // What differs from /create:
 //   1. ACCEPTED FILE TYPES — `.xlsx`, `.xls`, `.csv` (xlsx package
@@ -962,7 +962,7 @@ function InlinePaletteSwatch({
 // "primary input" real estate the textarea does in /create.
 //
 // While parsing: the trigger renders the in-flight filename + a
-// "جارٍ التحليل…" sub-label so the user gets immediate feedback.
+// "جار التحليل…" sub-label so the user gets immediate feedback.
 // On ready: filename + sheet/row count (the "you uploaded ___" line).
 // ───────────────────────────────────────────────────────────────────
 function DataDropzone({

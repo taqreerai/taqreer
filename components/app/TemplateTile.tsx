@@ -50,7 +50,7 @@ export type TemplateTileData = {
   // is safer, but every call site sets it explicitly today.
   isMine: boolean;
   // Current visibility. Drives the menu chip label
-  // ("اجعله عاماً" when private, "اجعله خاصاً" when public).
+  // ("اجعله عاما" when private, "اجعله خاصا" when public).
   // Optimistically updated on toggle before router.refresh re-fetches.
   isPublic: boolean;
   // Premium templates show the "مميز" badge. Optional so callers that

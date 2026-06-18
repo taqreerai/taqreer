@@ -80,7 +80,7 @@ function kindOf(el: HTMLElement): Kind {
 // A decorative fill — a gradient scrim, a background image, or a colour block,
 // with NO content (no text, no img/svg). These have no useful pill controls (you
 // edit a gradient/background from the Layers panel), so the pill SUPPRESSES for
-// them: selecting a تدرّج (or any fill) shows nothing on the canvas.
+// them: selecting a تدرج (or any fill) shows nothing on the canvas.
 function isDecorativeFill(el: HTMLElement): boolean {
   // An <img>/<svg> IS the content leaf, never a decorative fill — even when it
   // carries a `background` placeholder. Gen-image boxes ship with an inline

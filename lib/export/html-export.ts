@@ -355,7 +355,7 @@ function splitMixedScriptFlexChildren(root: HTMLElement): void {
     // signal for "split" is the LAYOUT (flex/grid), not the `dir`.
     //
     // Skipped: ordinary inline emphasis (<p>عربي <strong>bold</strong> نص</p>),
-    // inline language islands (<p>قوالب لـ <span dir="ltr">modern</span>.</p>),
+    // inline language islands (<p>قوالب ل <span dir="ltr">modern</span>.</p>),
     // and any other block-level container with mixed-script inline children.
     const display = window.getComputedStyle(el).display || "";
     const isLayoutContainer =

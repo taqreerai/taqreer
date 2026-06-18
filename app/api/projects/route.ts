@@ -825,7 +825,7 @@ export async function POST(request: Request) {
           slideCount: cappedSlideCount,
           // Persist only the SOURCE KIND — `loadProject`'s
           // `readSourceKind` keys off `source.kind` to pick the
-          // generating-state status copy in DeckView ("جارٍ تحليل
+          // generating-state status copy in DeckView ("جار تحليل
           // البيانات..." for datasheet, etc.). Storing the full
           // SourceMeta here would bloat aiPrompt with the entire
           // parsed-markdown / file_id payload — that data already

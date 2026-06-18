@@ -370,7 +370,7 @@ export function PreviewActionBar({
   // AI composer (§17) — the bottom-bar instruction input. Local text state;
   // `aiSending` covers the brief POST window before `applying` (the optimistic
   // partial-regen flag) takes over, so the busy treatment never flickers off
-  // between the two. `aiBusy` drives the "يُطبّق…" collapse.
+  // between the two. `aiBusy` drives the "يطبق…" collapse.
   const [aiInput, setAiInput] = useState("");
   const [aiSending, setAiSending] = useState(false);
   // True only while the mode-content width is mid-spring. Drives `overflow-x:

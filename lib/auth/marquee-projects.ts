@@ -263,3 +263,53 @@ export const getWelcomeTemplates = unstable_cache(
   ["welcome-templates"],
   { revalidate: 300, tags: ["welcome-templates"] },
 );
+
+// ─── /templates marketing page ────────────────────────────────────────
+//
+// A fuller set of public curator templates for the dedicated /templates SEO
+// page: featured first (admin order), then the rest of the curator's public
+// templates by recency. Same curator-gating + deleted-source exclusion +
+// showcase-slide stripping as the landing grid; just a higher cap.
+
+const TEMPLATES_PAGE_COUNT = 24;
+
+export const getTemplatesPageList = unstable_cache(
+  async (): Promise<LandingTemplate[]> => {
+    try {
+      const rows = await prisma.$queryRaw<
+        { id: string; format: string; isPremium: boolean; thumbnails: string[] }[]
+      >`
+        SELECT t.id,
+               CASE WHEN (t.brand->>'format') = '9:16' THEN '9:16' ELSE '16:9' END AS format,
+               t."isPremium" AS "isPremium",
+               t."thumbnailUrls" AS thumbnails
+        FROM "Template" t
+        INNER JOIN "User" u ON t."ownerId" = u.id
+        LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
+        WHERE u.email = ${MARQUEE_OWNER_EMAIL}
+          AND t."isPublic" = true
+          AND t."thumbnailUrls" IS NOT NULL
+          AND array_length(t."thumbnailUrls", 1) > 0
+          AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
+        -- Featured first (admin order), then the rest of the public set by recency.
+        ORDER BY (t."featuredOrder" IS NULL) ASC, t."featuredOrder" ASC, t."publishedAt" DESC
+        LIMIT ${TEMPLATES_PAGE_COUNT}
+      `;
+      return rows
+        .map((row) => ({
+          id: row.id,
+          format: row.format,
+          isPremium: row.isPremium,
+          slides: (row.thumbnails ?? []).filter(
+            (url) => url && !url.includes("/showcase-"),
+          ),
+        }))
+        .filter((tpl) => tpl.slides.length > 0);
+    } catch (err) {
+      console.error("[templates-page] query failed", err);
+      return [];
+    }
+  },
+  ["templates-page-list"],
+  { revalidate: 300, tags: ["landing-templates", "templates-page-list"] },
+);

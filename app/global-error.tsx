@@ -11,8 +11,8 @@ import { useEffect, useState } from "react";
 const STRINGS = {
   ar: {
     title: "حدث خطأ غير متوقع",
-    subtitle: "تم إبلاغ فريقنا تلقائياً",
-    retry: "حاول مجدداً",
+    subtitle: "تم إبلاغ فريقنا تلقائيا",
+    retry: "حاول مجددا",
   },
   en: {
     title: "Something went wrong",

@@ -156,7 +156,7 @@ function formatNotificationRow(
 
   // 2026-05-26 — all notification copy unified to PASSIVE / verbal-noun
   // forms so the phrasing works for both male AND female actors. The
-  // previous mix (masculine علّق/أعاد + feminine قبلت) read wrong for
+  // previous mix (masculine علق/أعاد + feminine قبلت) read wrong for
   // half the userbase. New shape: "تم {verb} ... من طرف {actor} ...".
   switch (row.type) {
     case "comment.created":

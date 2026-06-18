@@ -149,7 +149,7 @@ export const SourceMimicSchema = z
 // payload stays inside Claude's context window — this field is
 // trusted to be "send-ready" at write time.
 //
-// `userContext` is the optional "ركّز على..." textarea from the
+// `userContext` is the optional "ركز على..." textarea from the
 // /datasheet content card. Lets the user steer Claude toward a
 // specific angle without forcing them to.
 export const SourceDataSchema = z.object({

@@ -900,7 +900,7 @@ export function NotificationRow({
               one line naturally, two-line titles render in full, only
               3+ line titles get the chevron clipped at 2 lines with
               ellipsis. Previously `truncate` (1 line + ellipsis) cut
-              perfectly normal notification titles like "Osama علّقت على
+              perfectly normal notification titles like "Osama علقت على
               شريحة في <project>" mid-word, forcing the user to expand
               just to read a 2-line message. Bumped 2026-05-24. */}
           <p

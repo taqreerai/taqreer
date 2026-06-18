@@ -85,7 +85,7 @@ export function isLatinOnlyGoogleFont(family: string | null | undefined): boolea
 // their coverage; brand identity is Arabic-first).
 export const HEADING_SAMPLE_AR = "أبجد هوز";
 export const HEADING_SAMPLE_LATIN = "Aa Bb Cc";
-export const BODY_SAMPLE_AR = "النص الأساسي يُستخدم في فقرات المحتوى.";
+export const BODY_SAMPLE_AR = "النص الأساسي يستخدم في فقرات المحتوى.";
 export const BODY_SAMPLE_LATIN = "The quick brown fox jumps over the lazy dog.";
 
 // ─── FontSlot state shape ─────────────────────────────────────────

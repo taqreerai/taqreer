@@ -1092,7 +1092,7 @@ function FlowCard({ card }: { card: FlowCardSpec }) {
 //                    / settings (إعدادات الإخراج)
 //   • /enhance    →  subject (الملف الأصلي) / palette (الهوية البصرية)
 //   • /mimic      →  subject (المحتوى) / palette (الهوية البصرية)
-//                    / auto_awesome (ما الذي نُحاكيه)
+//                    / auto_awesome (ما الذي نحاكيه)
 //   • /datasheet  →  dataset (البيانات) / palette (الهوية البصرية)
 //                    / settings (إعدادات الإخراج)
 

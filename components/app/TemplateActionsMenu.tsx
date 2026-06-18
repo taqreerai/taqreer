@@ -5,7 +5,7 @@
 // math, same outside-click + Esc dismissal — with a smaller item set
 // tailored to templates:
 //
-//   1. اجعله عاماً / اجعله خاصاً  — toggles isPublic via PATCH
+//   1. اجعله عاما / اجعله خاصا  — toggles isPublic via PATCH
 //                                   /api/templates/[id]/visibility
 //   2. استخدامه كقالب              — Phase D "use this template" (wired
 //                                   2026-05-22). Calls onUseAsTemplate
