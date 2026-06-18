@@ -1,18 +1,48 @@
 import { MetadataRoute } from "next";
 
+// Sitemap = the list of indexable, public URLs we want crawled. Every entry is
+// a real 200 URL (the locale-prefixed canonical), with hreflang alternates so
+// Google pairs the ar/en versions instead of treating them as duplicates.
+//
+// Excluded on purpose: the bare root "/" (it 307-redirects to a locale), the
+// /brand design-system route (noindex), and all app/auth/project routes
+// (auth-gated + Disallow-ed in robots.ts). Expand ROUTES when phase-2 marketing
+// pages (e.g. /templates, /pricing) ship.
+
+const SITE_URL = "https://taqreer.ai";
+const LOCALES = ["ar", "en"] as const;
+
+const ROUTES: {
+  path: string;
+  changeFrequency: "weekly" | "monthly" | "yearly";
+  priority: number;
+}[] = [
+  { path: "", changeFrequency: "weekly", priority: 1 },
+  { path: "contact", changeFrequency: "monthly", priority: 0.5 },
+  { path: "terms", changeFrequency: "yearly", priority: 0.3 },
+  { path: "privacy", changeFrequency: "yearly", priority: 0.3 },
+  { path: "refund", changeFrequency: "yearly", priority: 0.3 },
+];
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [
-    {
-      url: "https://taqreer.ai",
-      lastModified: new Date(),
-      changeFrequency: "yearly",
-      priority: 1,
-    },
-    {
-      url: "https://taqreer.ai/preview",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-  ];
+  const now = new Date();
+  const href = (locale: string, path: string) =>
+    `${SITE_URL}/${locale}${path ? `/${path}` : ""}`;
+
+  return ROUTES.flatMap((route) =>
+    LOCALES.map((locale) => ({
+      url: href(locale, route.path),
+      lastModified: now,
+      changeFrequency: route.changeFrequency,
+      priority: route.priority,
+      // Per-URL hreflang. x-default → Arabic (the product's default locale).
+      alternates: {
+        languages: {
+          ar: href("ar", route.path),
+          en: href("en", route.path),
+          "x-default": href("ar", route.path),
+        },
+      },
+    }))
+  );
 }

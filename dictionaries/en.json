@@ -69,9 +69,9 @@
     "brandKitDated": "Brand kit · {date}"
   },
   "meta": {
-    "siteTitle": "taqreer.ai · AI Presentations",
-    "siteDescription": "Turn your content into a professional deck in minutes. taqreer.ai builds fully designed presentations in Arabic and English.",
-    "ogDescription": "Turn your content into a professional deck in minutes with AI.",
+    "siteTitle": "taqreer.ai · AI Presentation Maker (Arabic & English)",
+    "siteDescription": "taqreer.ai designs presentations and reports with AI, in Arabic and English. Write a brief or upload a file and get a designed deck you can edit and export to PowerPoint.",
+    "ogDescription": "Design professional presentations and reports with AI, in Arabic and English.",
     "dashboardTitle": "Dashboard | taqreer.ai",
     "dashboardDescription": "Manage your projects and presentations",
     "authTitle": "taqreer.ai · Authentication",
@@ -400,16 +400,16 @@
     "hero": {
       "statusCount": "{count} presentations created so far",
       "poweredBy": "Powered by Claude Design",
-      "titleLine1": "Turn your ideas into",
-      "titleLine2": "decks worth presenting",
-      "subtitle": "taqreer.ai turns your content into fully designed presentations, Arabic and English. It keeps your brand identity and gives you an advanced editor to tweak every slide right in the browser.",
+      "titleLine1": "Design presentations",
+      "titleLine2": "with AI",
+      "subtitle": "taqreer.ai turns your ideas and files into designed presentations and reports with AI, in Arabic and English, while keeping your brand identity, with an advanced editor to fine-tune every slide.",
       "cta": "Start free now"
     },
     "sections": {
       "features": {
         "eyebrow": "Features",
         "title": "Everything you need to create a professional presentation",
-        "subtitle": "Start from raw content, enhance an existing deck, mimic a reference style, or turn your data into slides. taqreer.ai helps at every step."
+        "subtitle": "Start from raw content, enhance an existing deck, mimic a reference style, or turn your data into slides. taqreer.ai designs your presentations and reports with AI."
       },
       "templates": {
         "eyebrow": "Templates",
@@ -498,6 +498,8 @@
     },
     "faq": [
       { "q": "What is taqreer.ai?", "a": "taqreer.ai is an AI platform that turns your content, text, a file, or an idea, into a fully designed professional presentation in Arabic and English within minutes." },
+      { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file in taqreer.ai, choose your brand, and the AI designs a complete presentation in minutes that you can edit and export to PowerPoint." },
+      { "q": "Does taqreer.ai design presentations and reports in Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it turns your ideas and data into designed presentations and reports in Arabic and English." },
       { "q": "Does it fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
       { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus 400 free credits at signup to try the platform." },
       { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },

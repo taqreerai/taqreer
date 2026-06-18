@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cairo, Poppins } from "next/font/google";
 import "../globals.css";
 import { notFound } from "next/navigation";
@@ -12,6 +12,12 @@ import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import { isAppPath } from "@/lib/app-routes";
 import { stripLocale } from "@/lib/i18n/navigation";
 import { THEME_COOKIE } from "@/lib/ui-cookies";
+import { JsonLd } from "@/components/seo/JsonLd";
+import {
+  organizationSchema,
+  webSiteSchema,
+  softwareApplicationSchema,
+} from "@/lib/seo/schema";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -67,10 +73,13 @@ export async function generateMetadata({
       siteName: "taqreer.ai",
       images: [
         {
-          url: "/images/hero/og-image.jpg",
+          url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "taqreer.ai presentations",
+          alt:
+            locale === "en"
+              ? "taqreer.ai: AI presentation and report maker"
+              : "taqreer.ai: تصميم عروض تقديمية وتقارير بالذكاء الاصطناعي",
         },
       ],
       locale: locale === "en" ? "en_US" : "ar_SA",
@@ -82,13 +91,27 @@ export async function generateMetadata({
       card: "summary_large_image",
       title: dict.meta.siteTitle,
       description: dict.meta.ogDescription,
-      images: ["/images/hero/og-image.jpg"],
+      images: ["/og-image.png"],
     },
     icons: {
       icon: "/icon.svg",
     },
+    // Rendered only once NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION is set in .env
+    // (Search Console HTML-tag verification). Undefined → the tag is omitted.
+    verification: {
+      google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    },
   };
 }
+
+// themeColor belongs in `viewport` (Next 16), not `metadata`. Tints the mobile
+// browser chrome to the brand page background per colour scheme.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0A0A0A" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
+};
 
 export default async function RootLayout({
   children,
@@ -141,6 +164,16 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap" rel="stylesheet" />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
+        {/* Site-wide brand entities (Organization + WebSite + the product
+            itself). Localized per UI locale. The landing page adds FAQPage on
+            top. See lib/seo/schema.ts. */}
+        <JsonLd
+          data={[
+            organizationSchema(lang),
+            webSiteSchema(lang),
+            softwareApplicationSchema(lang),
+          ]}
+        />
         <ScrollReset />
         <LocaleProvider locale={lang} dict={dict}>
           {children}

@@ -25,6 +25,8 @@ import { LandingNav } from "@/components/marketing/LandingNav";
 import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { faqPageSchema } from "@/lib/seo/schema";
 
 // Platform-wide "decks created" counter shown in the Hero status chip. Cached 5
 // min; try/catch → 0 on error.
@@ -112,6 +114,10 @@ export default async function LandingPage({
   return (
     <SmoothScrollProvider>
     <main className="relative overflow-x-clip">
+      {/* FAQPage structured data, mirrored from the rendered FAQ accordion
+          (dict.landing.faq). Eligible for FAQ rich results + a strong source
+          for AI answer extraction. */}
+      <JsonLd data={faqPageSchema(dict)} />
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
