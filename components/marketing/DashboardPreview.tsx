@@ -927,7 +927,7 @@ function FakeAIImagesPanel({ dict, dir }: { dict: Dictionary; dir: "rtl" | "ltr"
 function FakeDesignStyleRow({ dict }: { dict: Dictionary }) {
   return (
     <FieldRow label={dict.flows.designStyle}>
-      <span className="rounded-full border border-[var(--tq-border-hairline)] bg-black/25 px-2 py-0.5 text-[10px] text-foreground">
+      <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-2 py-0.5 text-[10px] text-foreground">
         {dict.flows.stylePicker.auto}
       </span>
     </FieldRow>
@@ -981,19 +981,28 @@ function FakePalette({ colors }: { colors: string[] }) {
 function FakeSegmented({
   options,
   active,
+  variant = "default",
 }: {
   options: string[];
   active: number;
+  variant?: "default" | "primary";
 }) {
+  // Mirror the real SegmentedToggle (components/create/controls): a --tq-card
+  // track with a solid active pill. default = inverse (bg-foreground /
+  // text-background); primary = brand-blue + white (the language picker).
+  // Both flip correctly in light + dark — the old bg-black/25 track + faint
+  // bg-foreground/10 active read as a dark pill in light.
+  const activeCls =
+    variant === "primary"
+      ? "bg-[var(--tq-blue)] text-white"
+      : "bg-foreground text-background";
   return (
-    <div className="flex items-center gap-0.5 rounded-full border border-[var(--tq-border-hairline)] bg-black/25 p-0.5">
+    <div className="flex items-center gap-0.5 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-0.5">
       {options.map((label, i) => (
         <span
           key={i}
-          className={`rounded-full px-2 py-0.5 text-[10px] ${
-            i === active
-              ? "bg-foreground/10 text-foreground"
-              : "text-[var(--tq-text-muted)]"
+          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            i === active ? activeCls : "text-foreground/60"
           }`}
         >
           {label}
@@ -1016,7 +1025,7 @@ function FakeToggle({ on, dir }: { on: boolean; dir: "rtl" | "ltr" }) {
       }`}
     >
       <div
-        className="absolute top-0.5 h-3 w-3 rounded-full bg-foreground transition-all"
+        className="absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition-all"
         style={{ [on ? end : start]: 2 } as React.CSSProperties}
       />
     </div>
@@ -1062,7 +1071,7 @@ function CardSeparator() {
   return <div className="border-t border-[var(--tq-border-hairline)]" />;
 }
 
-function FlowCard({ card }: { card: FlowCardSpec }) {
+export function FlowCard({ card }: { card: FlowCardSpec }) {
   return (
     <div className="surface-card flex w-[210px] min-h-[300px] shrink-0 flex-col gap-2.5 rounded-2xl p-3">
       {/* Card header — icon + title + hairline separator. Matches the
@@ -1101,7 +1110,7 @@ function FlowCard({ card }: { card: FlowCardSpec }) {
 // /datasheet pages and can't drift. `dir` is threaded into every control that
 // mirrors with the locale. Only universal aspect tokens ("16:9", "9:16") and
 // the typeface name stay literal (they aren't translatable copy).
-function getFlows(
+export function getFlows(
   dict: Dictionary,
   dir: "rtl" | "ltr",
 ): Record<Exclude<View, "dashboard">, FlowSpec> {
@@ -1150,7 +1159,7 @@ function getFlows(
           body: (
             <>
               <FieldRow label={f.language}>
-                <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} />
+                <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} variant="primary" />
               </FieldRow>
               <FakeTextarea placeholder={f.contentPlaceholder} rows={3} />
               <div className="flex items-center gap-2 text-[10px] text-foreground/40">
@@ -1262,7 +1271,7 @@ function getFlows(
           body: (
             <>
               <FieldRow label={f.language}>
-                <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} />
+                <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} variant="primary" />
               </FieldRow>
               <FakeDropzone
                 tall

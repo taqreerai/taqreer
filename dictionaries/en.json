@@ -138,6 +138,39 @@
       { "q": "What is the difference between monthly and yearly?", "a": "Yearly costs less per month than monthly with the same features. Choose monthly for flexibility or yearly to save." }
     ]
   },
+  "aiPresentations": {
+    "meta": {
+      "title": "AI Presentation Maker (Arabic & English) | taqreer.ai",
+      "description": "Design a complete presentation with AI, in Arabic and English. Write a brief or upload a file, apply your brand, and get a fully designed deck you can edit and export to PowerPoint."
+    },
+    "breadcrumb": "AI Presentations",
+    "hero": {
+      "eyebrow": "Create",
+      "title": "Design presentations with AI",
+      "subtitle": "From an idea or a file to a fully designed deck, in Arabic and English. The AI designs every slide with your brand, and you can still tweak every detail.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "Full control over your deck",
+      "subtitle": "Write your content, apply your colors, fonts, and logo, and set the output. This is how every generation starts."
+    },
+    "why": {
+      "title": "Why taqreer.ai",
+      "subtitle": "Real design for every slide, not just a template.",
+      "points": [
+        { "title": "From idea to deck", "body": "Start from text or a file, and taqreer.ai builds the whole deck in minutes." },
+        { "title": "Designs every slide", "body": "The AI designs each slide around your content, not one fixed template." },
+        { "title": "Arabic-first", "body": "Full right-to-left support and Arabic fonts." },
+        { "title": "Edit and export", "body": "Tweak any slide in the editor, then export to PowerPoint and PDF." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file, choose your brand, and the AI designs a complete deck in minutes that you can edit and export." },
+      { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
+      { "q": "Can I edit the deck after it is generated?", "a": "Yes. Edit text, colors, and slides and reorder them right in the editor, with autosave." },
+      { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
+    ]
+  },
   "newProjectDialog": {
     "title": "Start a new project",
     "subtitle": "Pick the flow that fits your content, your default brand kit fills in automatically if you've saved one."
