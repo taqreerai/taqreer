@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- thumbnail src is a generated storage/data URL; next/image's host allowlist + optimization don't apply */
+
 // Project tile — used by the dashboard RecentProjects widget and
 // (later) /projects page.
 //

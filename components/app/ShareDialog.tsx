@@ -218,6 +218,7 @@ export function ShareDialog({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.dialogs.share error strings are stable per locale; used only in the error path
   }, [open, projectId, initialTab, showExportTab]);
 
   // Lazy-fetch the deck manifest when the modal opens without one
@@ -258,6 +259,7 @@ export function ShareDialog({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.dialogs.share error strings are stable per locale; used only in the error path
   }, [open, projectId, manifest, showExportTab]);
 
   // Measure each tab's border-box height (includes the tab's own
@@ -358,6 +360,7 @@ export function ShareDialog({
     } finally {
       setInviteBusy(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.dialogs.share strings are stable per locale; used only for validation/error messages
   }, [projectId, state, inviteEmail, inviteRole]);
 
   // ─── PATCH role on an existing row (upsert via same endpoint) ────
@@ -462,6 +465,7 @@ export function ShareDialog({
         );
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.dialogs.share error strings are stable per locale; used only in the error path
     [projectId, state],
   );
 
@@ -510,6 +514,7 @@ export function ShareDialog({
     } catch {
       /* clipboard blocked — silent for now */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.dialogs.share strings are stable per locale; used only in the error path
   }, [projectId, state]);
 
   if (typeof window === "undefined") return null;

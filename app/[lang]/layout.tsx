@@ -161,6 +161,7 @@ export default async function RootLayout({
             signal commentMode (outlined → filled). Tiny size bump
             on the variable font file; same axes, just an extra
             value on the FILL axis. */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font -- Material Symbols icon font with variable FILL/GRAD axes we toggle inline; next/font/google doesn't expose those axis controls */}
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap" rel="stylesheet" />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">

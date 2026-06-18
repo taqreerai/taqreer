@@ -21,8 +21,7 @@ import {
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { dateFnsLocale } from "@/lib/i18n/date";
-import { useCreditBalance } from "@/lib/credits/store";
-import { normalizePlan, planLabel, type KnownPlan } from "@/lib/plan";
+import { type KnownPlan } from "@/lib/plan";
 import { getStripe } from "@/lib/billing/stripe-client";
 import { checkoutAppearance, CHECKOUT_FONTS } from "@/lib/billing/appearance";
 import { NoticeCard } from "@/components/common/NoticeCard";
@@ -73,7 +72,6 @@ export function ManageBilling() {
   const dict = useDict();
   const { locale } = useLocale();
   const t = dict.components.billing;
-  const credits = useCreditBalance();
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [methods, setMethods] = useState<PaymentMethod[] | null>(null);
@@ -120,8 +118,6 @@ export function ManageBilling() {
       window.removeEventListener("taqreer:subscription-changed", onChange);
   }, [refreshSummary]);
 
-  const plan = summary ? summary.plan : credits ? normalizePlan(credits.plan) : "free";
-  const planName = planLabel(dict.components.planUsage, plan);
   const periodEnd =
     summary?.currentPeriodEnd
       ? format(new Date(summary.currentPeriodEnd), "d MMMM", {

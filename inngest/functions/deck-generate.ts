@@ -1862,9 +1862,6 @@ export const deckGenerate = inngest.createFunction(
         let scopedStyle = "";
         let rawCssSeen = "";
 
-        const slideLabel = (html: string): string | null =>
-          /data-label="([^"]*)"/.exec(html)?.[1] ?? null;
-
         const ingestSlide = (parsed: ParsedSlide) => {
           // Budget ceiling reached: drop every further section (covers
           // flush() too) and abort the stream once, below. Charge stays

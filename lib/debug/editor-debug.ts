@@ -15,8 +15,6 @@ export function edbg(scope: string, msg: string, data?: unknown): void {
     return;
   }
   const tag = `[editor:${scope}]`;
-  // eslint-disable-next-line no-console
   if (isServer) console.log(tag, msg, data ?? "");
-  // eslint-disable-next-line no-console
   else console.log(`%c${tag}`, "color:#a78bfa;font-weight:700", msg, data ?? "");
 }

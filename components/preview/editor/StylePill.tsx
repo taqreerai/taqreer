@@ -274,7 +274,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
   // (see the layout effect below).
   const [popoverFlipUp, setPopoverFlipUp] = useState(false);
   // True while the pointer is pressed on the pill (clicking/holding a control).
-  const [pillActive, setPillActive] = useState(false);
+  const [, setPillActive] = useState(false);
   // Image "Replace": hidden file input + in-flight upload flag.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);

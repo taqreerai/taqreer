@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- thumbnail src is a generated storage/data URL; next/image's host allowlist + optimization don't apply */
 // Background mosaic behind the auth-page glass modal — 12 vertical
 // columns of project thumbnails, each scrolling slowly in alternating
 // directions. Reads as a "living wall" of decks the platform has

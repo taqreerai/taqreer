@@ -67,7 +67,7 @@ export function LibraryPageClient({ images }: { images: LibraryImage[] }) {
         : b.createdAt.localeCompare(a.createdAt),
     );
     return list;
-  }, [images, removedIds, search, sort]);
+  }, [images, removedIds, search, sort, locale]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const activePage = Math.max(0, Math.min(page, pageCount - 1));

@@ -55,7 +55,6 @@ import {
   type BrandKitOption,
 } from "@/components/brand/BrandKitDropdown";
 import {
-  DESIGN_STYLE_OPTIONS,
   InlineStepper,
   SectionLabel,
   SlideSizeFields,
@@ -66,7 +65,6 @@ import {
 import {
   CardHeader,
   InlinePaletteSwatch,
-  Pill,
   SegmentedToggle,
   Toggle,
   type LanguageCode,
@@ -467,6 +465,7 @@ export default function CreatePage() {
       isCurrent = false;
       controller.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t.parseFailed is a stable i18n string used only in the error path; re-running on locale change is unwanted
   }, [contentFile]);
 
   // ─── Palette handlers ──────────────────────────────────────────

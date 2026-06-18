@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- thumbnail src is a remote storage URL (see next.config remotePatterns); next/image optimization not needed for these decorative covers */
 import React from "react";
 import type { MarqueeThumbnail } from "@/lib/auth/marquee-projects";
 

@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- thumbnail src is a generated storage/data URL; next/image's host allowlist + optimization don't apply */
+
 // Landing-page templates grid — full-wrapper-width 2 × 4 grid of public
 // template covers. No titles, just the thumbnails. Each tile scrubs
 // through its template's slides on mouse-move, mirroring the dashboard's

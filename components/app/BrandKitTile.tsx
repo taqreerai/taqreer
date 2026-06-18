@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- logo src is an uploaded storage/data URL; next/image's host allowlist + optimization don't apply */
+
 // Brand-kit tile rendered on /brand-kits. Shows the saved logo
 // (white silhouette via the canonical `brightness(0) invert(1)`
 // filter that `LogoUploadSlot` uses), palette swatches, and font

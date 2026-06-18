@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- avatar src is a remote (Google/storage) or data URL; next/image's host allowlist + optimization don't apply */
 // Shared user-avatar atom.
 //
 // Two render modes, picked by whether `image` is set:

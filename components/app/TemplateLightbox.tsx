@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- preview src is a generated storage/data URL; next/image's host allowlist + optimization don't apply */
+
 // Template preview lightbox.
 //
 // Smaller, modal-wrapped sibling of ProjectLightbox. The full-screen

@@ -136,9 +136,12 @@ export function BellDropdown({ headless = false }: { headless?: boolean } = {}) 
   // Clear any remaining timers on unmount so they don't fire into a
   // ghost component.
   useEffect(() => {
+    // Capture the ref instance for the cleanup (ref.current is never reassigned,
+    // only mutated) so we don't read a possibly-changed ref at unmount.
+    const timers = timersRef.current;
     return () => {
-      for (const t of timersRef.current.values()) window.clearTimeout(t);
-      timersRef.current.clear();
+      for (const t of timers.values()) window.clearTimeout(t);
+      timers.clear();
     };
   }, []);
 

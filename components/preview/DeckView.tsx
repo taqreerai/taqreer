@@ -1181,6 +1181,7 @@ export function DeckView({
       cancelled = true;
       window.clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setManifestStable is a stable setState dispatch; intentionally not a re-run trigger
   }, [peerRegenInProgress, projectId]);
 
   // How many reserved gen-image boxes does this deck have? Gates the
@@ -1815,6 +1816,7 @@ export function DeckView({
     // listener gate flips on without a refresh. In practice role
     // changes mid-session are rare (Phase 15.E re-invite flow),
     // but keeping the dep set honest avoids the stale-closure trap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bumpEditorIfFocusedChanged + setManifestStable are stable; deps curated intentionally (see note above)
   }, [
     projectId,
     currentUserId,
@@ -1910,6 +1912,7 @@ export function DeckView({
     };
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bumpEditorIfFocusedChanged + setManifestStable are stable; intentionally not re-run triggers
   }, [projectId, canComment]);
 
   // Re-track on slide change + tab-visibility flip. Reads through the
@@ -2240,6 +2243,7 @@ export function DeckView({
     return () => {
       void supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setManifestStable is a stable setState dispatch; intentionally not a re-run trigger
   }, [presentationId, status, applying]);
 
   // Polling — primary feedback channel for progress while Claude streams.
@@ -2442,6 +2446,7 @@ export function DeckView({
       cancelled = true;
       window.clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bumpEditorIfFocusedChanged + setManifestStable are stable; intentionally not re-run triggers
   }, [projectId, status]);
 
   // Start the generation clock when we first enter `generating`. Prefer
@@ -2789,6 +2794,7 @@ export function DeckView({
       cancelled = true;
       window.clearInterval(id);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.editor.errors strings + bumpEditorIfFocusedChanged + setManifestStable are stable; intentionally not re-run triggers
   }, [applying, projectId, projectTitle, router]);
 
   // Translate API failure status codes to Arabic UI messages — used
@@ -2861,6 +2867,7 @@ export function DeckView({
       });
       setComments((prev) => [...prev, data.comment]);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- throwApiError + dict.editor.errors strings are stable; used only in the error path
     [projectId, studioMode],
   );
 
@@ -2887,6 +2894,7 @@ export function DeckView({
         prev.map((c) => (c.id === input.commentId ? data.comment : c)),
       );
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- throwApiError + dict.editor.errors strings are stable; used only in the error path
     [projectId],
   );
 
@@ -2899,6 +2907,7 @@ export function DeckView({
       if (!res.ok) throwApiError(res.status, dict.editor.errors.failedDeleteComment);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- throwApiError + dict.editor.errors strings are stable; used only in the error path
     [projectId],
   );
 
@@ -3085,6 +3094,7 @@ export function DeckView({
     };
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.editor aria strings are stable per locale; intentionally not re-run triggers
   }, [commentMode]);
 
   // ░░░░░░░░░░ TQ-FLOW-TRACKER — TEMPORARY (remove after testing) ░░░░░░░░░░
@@ -3198,6 +3208,7 @@ export function DeckView({
     } finally {
       setRetrying(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.editor.errors.cannotRetry is a stable i18n string; used only in the error path
   }, [projectId, router]);
 
   // Cancel mid-generation. POSTs to /api/projects/[id]/cancel — the
@@ -3241,6 +3252,7 @@ export function DeckView({
       console.error("[deck-view] cancel failed", err);
       setCancelBusy(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.editor.errors.cancelFailed is a stable i18n string; used only in the error path
   }, [projectId, router]);
 
   // Bulk lock / unlock — driven by the SlideNavSidebar footer pill.

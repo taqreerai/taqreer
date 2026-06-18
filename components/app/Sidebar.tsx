@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { stripLocale, localizedHref } from "@/lib/i18n/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { Tooltip } from "@/components/common/Tooltip";
@@ -96,7 +96,6 @@ export function Sidebar({
   // active nav item after the [lang] move (pathname is /ar/dashboard).
   const rawPathname = usePathname() ?? "";
   const pathname = stripLocale(rawPathname);
-  const router = useRouter();
   const { locale, dir } = useLocale();
   const dict = useDict();
   const { name, email } = useUser();

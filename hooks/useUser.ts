@@ -40,6 +40,7 @@ export function useUser() {
     return () => {
       data.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auth listener must subscribe once on mount; re-subscribing per render would leak listeners
   }, []);
 
   const avatarUrl: string | null = user?.user_metadata?.avatar_url ?? null;
