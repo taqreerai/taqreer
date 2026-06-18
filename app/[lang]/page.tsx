@@ -79,18 +79,21 @@ export default async function LandingPage({
   params: Promise<{ lang: "ar" | "en" }>;
 }) {
   const { lang } = await params;
+  const __t0 = performance.now();
   const supabase = await createClient();
+  const __t1 = performance.now();
   const [
     { data: { user } },
     projectCount,
     landingTemplates,
     dict,
   ] = await Promise.all([
-    supabase.auth.getUser(),
-    getProjectCount(),
-    getLandingTemplates(),
+    supabase.auth.getUser().then((r) => { console.log("[lt] getUser", (performance.now() - __t1).toFixed(0)); return r; }),
+    getProjectCount().then((r) => { console.log("[lt] count", (performance.now() - __t1).toFixed(0)); return r; }),
+    getLandingTemplates().then((r) => { console.log("[lt] templates", (performance.now() - __t1).toFixed(0)); return r; }),
     getDictionary(lang),
   ]);
+  console.log("[lt] createClient", (__t1 - __t0).toFixed(0), "data-total", (performance.now() - __t1).toFixed(0));
 
   return (
     <SmoothScrollProvider>
