@@ -1817,6 +1817,18 @@ html.app-shell-scroll body {
   color: var(--tq-text-muted);
 }
 
+/* ─── Prose orphan control ─── */
+/* No lone word on the last line of any paragraph (marketing subtitles,
+   descriptions, FAQ answers, etc.) — user direction 2026-06-18 ("never one
+   word on the 2nd line"). `:where()` keeps specificity 0 so `text-balance`
+   (headings) / `text-nowrap` utilities still win. EXCLUDES deck slides
+   (`.tq-canvas`): slide typography + the export layout are browser-controlled
+   and must not shift. No-op on single-line text; degrades gracefully where
+   `text-wrap: pretty` is unsupported. */
+:where(p:not(.tq-canvas p)) {
+  text-wrap: pretty;
+}
+
 /* ─── Icon Button ─── */
 .btn-icon {
   color: var(--tq-muted);
