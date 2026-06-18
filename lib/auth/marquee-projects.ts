@@ -23,6 +23,23 @@
 import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
+// Marker that separates the Supabase host from the object path in a public URL.
+const STORAGE_PUBLIC_MARKER = "/storage/v1/object/public/";
+
+// Rewrite a Supabase public-storage cover URL to a same-origin `/tpl/` path so
+// it loads from OUR Cloudflare edge instead of cross-origin Supabase storage
+// (which costs a separate DNS+TLS, a per-request cookie, ~200-450 ms of storage
+// wait, and only a 1 h cache). The `/tpl` route (app/tpl/[...path]/route.ts)
+// proxies the object, drops the cookie, and sets a 1-year immutable cache so CF
+// edge-caches each cover. Empty / non-storage inputs pass through unchanged.
+// WEB ONLY — the welcome-EMAIL strip keeps absolute URLs (emails can't resolve
+// a relative /tpl path).
+export function edgeCoverUrl(url: string): string {
+  if (!url) return url;
+  const i = url.indexOf(STORAGE_PUBLIC_MARKER);
+  return i === -1 ? url : "/tpl/" + url.slice(i + STORAGE_PUBLIC_MARKER.length);
+}
+
 // The curator account whose ADMIN-FEATURED templates (featuredOrder set) feed
 // every public template surface. Exported for the admin curation console.
 export const MARQUEE_OWNER_EMAIL = "dev@taqreer.ai";
@@ -210,7 +227,8 @@ export const getLandingTemplates = unstable_cache(
           // page keeps the full scrub via getTemplatesPageList.
           slides: (row.thumbnails ?? [])
             .filter((url) => url && !url.includes("/showcase-"))
-            .slice(0, 1),
+            .slice(0, 1)
+            .map(edgeCoverUrl),
         }))
         .filter((tpl) => tpl.slides.length > 0);
     } catch (err) {
@@ -306,9 +324,9 @@ export const getTemplatesPageList = unstable_cache(
           id: row.id,
           format: row.format,
           isPremium: row.isPremium,
-          slides: (row.thumbnails ?? []).filter(
-            (url) => url && !url.includes("/showcase-"),
-          ),
+          slides: (row.thumbnails ?? [])
+            .filter((url) => url && !url.includes("/showcase-"))
+            .map(edgeCoverUrl),
         }))
         .filter((tpl) => tpl.slides.length > 0);
     } catch (err) {

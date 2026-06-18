@@ -201,7 +201,10 @@ export const config = {
      *   request.formData() throws. These routes do their own auth and proxy.ts
      *   never reads the body for /api, so skip them entirely (no session-
      *   refresh loss that matters - the route's getUser() refreshes anyway).
+     * - tpl (template-cover image proxy, app/tpl/[...path]): a public same-origin
+     *   image route that must NOT be locale-redirected (/tpl/x.webp must stay put,
+     *   not become /ar/tpl/x.webp) and needs no session.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/extract|api/storage).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/extract|api/storage|tpl/).*)",
   ],
 };
