@@ -204,6 +204,39 @@
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export your report as editable PPTX for PowerPoint while preserving the Arabic formatting and charts." }
     ]
   },
+  "redesign": {
+    "meta": {
+      "title": "AI Presentation Redesign | taqreer.ai",
+      "description": "Upload your old presentation and taqreer.ai redesigns it with AI, keeping your content and images, applying your brand, in Arabic and English, ready to edit and export."
+    },
+    "breadcrumb": "Redesign",
+    "hero": {
+      "eyebrow": "Enhance",
+      "title": "Redesign your presentation with AI",
+      "subtitle": "Upload an existing deck in PDF or PowerPoint, and taqreer.ai redesigns it with your brand while keeping your content and images, in Arabic and English.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "From an old deck to a new design",
+      "subtitle": "Upload your deck, apply your brand, and taqreer.ai redesigns every slide. This is how enhancing starts."
+    },
+    "why": {
+      "title": "Why taqreer.ai",
+      "subtitle": "A new design, the same content.",
+      "points": [
+        { "title": "Keeps your content", "body": "taqreer.ai extracts your text and images from the file and redesigns them, without losing anything." },
+        { "title": "Your brand", "body": "Applies your colors, fonts, and logo to every slide automatically." },
+        { "title": "Arabic-first", "body": "Full right-to-left support and Arabic fonts." },
+        { "title": "Edit and export", "body": "Tweak any slide in the editor, then export to PowerPoint and PDF." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I redesign a presentation with AI?", "a": "Upload your deck in PDF or PowerPoint, choose your brand, and the AI redesigns every slide while keeping your content, in minutes." },
+      { "q": "Which file formats are supported?", "a": "taqreer.ai supports uploading decks in PDF and PowerPoint (PPTX)." },
+      { "q": "Does it keep my text and images?", "a": "Yes. taqreer.ai extracts the text, images, and fonts from your file and redesigns them in a new deck without losing content." },
+      { "q": "Can I export to PowerPoint?", "a": "Yes. Export the redesigned deck as editable PPTX for PowerPoint while preserving the Arabic formatting." }
+    ]
+  },
   "newProjectDialog": {
     "title": "Start a new project",
     "subtitle": "Pick the flow that fits your content, your default brand kit fills in automatically if you've saved one."

@@ -7,16 +7,27 @@
 // surface + idle hairline ring + animated mesh ring on hover). RTL: content
 // right-aligned, cards flow right→left. Hover plays the AnimatedIcon + tints the
 // title violet (the qa-card supplies the ring + slow zoom).
+//
+// Cards with a dedicated SEO spoke link to it (hub→spoke). Mimic has no spoke,
+// so it stays a non-link card.
 
 import { useRef } from "react";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import Link from "next/link";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { AnimatedIcon } from "@/components/icons/AnimatedIcon";
 import type { AnimatedIconHandle } from "@/components/icons/types";
 
-// Icons are presentational chrome (not localized copy) — kept in source order
-// matching the dictionary's `landing.flowCards` (create / enhance / mimic /
-// datasheet). Titles + descriptions come from the active locale's dictionary.
+// Icons + spoke hrefs are presentational/routing chrome (not localized copy) —
+// kept in source order matching the dictionary's `landing.flowCards`
+// (create / enhance / mimic / datasheet). null = no dedicated spoke (Mimic).
 const FLOW_ICONS = ["add_circle", "auto_fix_high", "content_copy", "dataset"];
+const FLOW_HREFS: (string | null)[] = [
+  "/ai-presentations", // create
+  "/redesign", // enhance
+  null, // mimic — no spoke
+  "/report-design", // datasheet
+];
 
 export function FeatureFlowCards() {
   const dict = useDict();
@@ -26,6 +37,7 @@ export function FeatureFlowCards() {
         <FlowColumn
           key={i}
           icon={FLOW_ICONS[i]}
+          href={FLOW_HREFS[i]}
           title={card.title}
           description={card.description}
         />
@@ -36,20 +48,24 @@ export function FeatureFlowCards() {
 
 function FlowColumn({
   icon,
+  href,
   title,
   description,
 }: {
   icon: string;
+  href: string | null;
   title: string;
   description: string;
 }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
-  return (
-    <div
-      className="qa-card group flex flex-col gap-5 p-8"
-      onMouseEnter={() => iconRef.current?.startAnimation()}
-      onMouseLeave={() => iconRef.current?.stopAnimation()}
-    >
+  const { locale } = useLocale();
+  const cls = "qa-card group flex flex-col gap-5 p-8";
+  const handlers = {
+    onMouseEnter: () => iconRef.current?.startAnimation(),
+    onMouseLeave: () => iconRef.current?.stopAnimation(),
+  };
+  const inner = (
+    <>
       <div className="w-fit text-[var(--tq-text-muted)] transition-colors group-hover:text-foreground">
         <AnimatedIcon ref={iconRef} name={icon} size={40} strokeWidth={1.5} />
       </div>
@@ -59,6 +75,19 @@ function FlowColumn({
         </h3>
         <p className="text-sm leading-relaxed text-muted">{description}</p>
       </div>
+    </>
+  );
+  // Cards with a spoke are links (hub→spoke); Mimic (no spoke) stays a div.
+  if (href) {
+    return (
+      <Link href={localizedHref(href, locale)} className={cls} {...handlers}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div className={cls} {...handlers}>
+      {inner}
     </div>
   );
 }

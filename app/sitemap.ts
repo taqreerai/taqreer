@@ -22,6 +22,7 @@ const ROUTES: {
   { path: "pricing", changeFrequency: "monthly", priority: 0.8 },
   { path: "ai-presentations", changeFrequency: "weekly", priority: 0.9 },
   { path: "report-design", changeFrequency: "weekly", priority: 0.9 },
+  { path: "redesign", changeFrequency: "weekly", priority: 0.8 },
   { path: "contact", changeFrequency: "monthly", priority: 0.5 },
   { path: "terms", changeFrequency: "yearly", priority: 0.3 },
   { path: "privacy", changeFrequency: "yearly", priority: 0.3 },
