@@ -1,18 +1,10 @@
-// Shared project-load helper for the two routes that view a deck:
-//   • /preview/[id]  — generation phase (deck is mid-streaming)
-//   • /project/[id]  — working session (deck is completed)
-//
-// Both routes need the same hydration payload — title, status,
-// version pointer, manifest, slide states — so the loader lives
-// here and is imported by each route's server component. Each
-// route then adds its own redirect rule on top (preview → project
-// when completed; project → preview when not). Keeping the loader
-// shared means a future schema add (new column on Project /
-// Presentation / Version) needs one edit, not two.
-//
-// Previously this lived inline in `app/(app)/preview/[projectId]/
-// page.tsx`. Extracted 2026-05-21 as part of the /preview ↔
-// /project route split.
+// Project-load helper for the Studio route (/project/[id]) that views a deck.
+// Both the generation phase (deck mid-streaming) and the working session (deck
+// completed) mount there, so one loader returns the full hydration payload:
+// title, status, version pointer, manifest, slide states. The route's server
+// component passes that payload to DeckView. Keeping it in one place means a
+// future schema add (new column on Project / Presentation / Version) needs one
+// edit, not a copy per surface.
 
 import { prisma } from "@/lib/prisma";
 import {

@@ -7,7 +7,7 @@
 // Resolution: Next walks UP from any unmatched URL looking for the
 // nearest `not-found.tsx`. Anything under the `(app)` group —
 // `/dashboard/*`, `/projects/*`, `/favorites/*`, `/settings/*`,
-// `/templates/*`, `/brand-kits/*`, `/project/*`, `/preview/*` — and
+// `/templates/*`, `/brand-kits/*`, `/project/*` — and
 // any in-page `notFound()` calls from those routes resolve HERE,
 // inside the dashboard chrome. URLs entirely outside the group
 // (like `/banana`) bubble up to the global `app/not-found.tsx`,

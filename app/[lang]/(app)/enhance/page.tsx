@@ -12,7 +12,7 @@
 //      logo + position, save-as-default (الهوية البصرية card)
 //   4. Generate button activates as soon as extraction finishes
 //   5. Click Generate → upload logo/font (if any) → POST /api/projects
-//      → /preview/{id}
+//      → /project/{id}
 //
 // Layout: two equal-width glass cards side-by-side under a brief
 // header. The الملف الأصلي card is just the PDF dropzone now; the

@@ -10,8 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { stripLocale } from "@/lib/i18n/navigation";
+import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { motion, type Variants } from "framer-motion";
@@ -368,9 +367,6 @@ export function DeckView({
   const dict = useDict();
   const { dir, locale } = useLocale();
   const router = useRouter();
-  // Locale-stripped so route checks compare against unprefixed paths (the
-  // pathname is /ar/preview/… after the [lang] move).
-  const pathname = stripLocale(usePathname() ?? "");
   // Initial state seeds from server props. The parent (re)keys this component
   // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);
@@ -495,27 +491,6 @@ export function DeckView({
   const [projectStatus] = useState(initialProjectStatus);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
 
-  // Stream-complete navigation. When this DeckView instance is
-  // mounted on /preview/<id> and the version status transitions
-  // (via polling) to "completed", flip the URL over to /project/<id>
-  // so the user lands on the canonical working-session route —
-  // matching what they'd see if they reloaded after completion.
-  //
-  // ONLY forward (preview → project). The inverse direction
-  // (project → preview when status is no longer "completed") is
-  // handled SSR-side at page load; doing it client-side would
-  // produce a jarring URL flip during full regens (the status
-  // briefly transitions through generating before re-completing).
-  // The SSR redirect's job is bookmarks / stale URLs; here we just
-  // forward the post-generation transition.
-  useEffect(() => {
-    if (
-      versionStatus === "completed" &&
-      pathname?.startsWith("/preview/")
-    ) {
-      router.replace(`/project/${projectId}`);
-    }
-  }, [versionStatus, pathname, projectId, router]);
   // Pinned canonical version pointer. Seeded from SSR; mutated by the
   // Save Project button's onSaved callback. Compared against
   // `initialVersionId` in PreviewActionBar to drive the saved/unsaved

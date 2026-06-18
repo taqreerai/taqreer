@@ -54,7 +54,7 @@ export type Notification = {
   desc?: string;
   // If set, the item is clickable in the UI and navigates here on click
   // (also marks the item as read). Useful for "your deck failed" →
-  // /preview/<projectId>.
+  // /project/<projectId>.
   href?: string;
   // ISO timestamp captured at push time. Display formatter renders this
   // as Latin-digit HH:mm for "today" items and DD/MM HH:mm otherwise.

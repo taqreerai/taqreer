@@ -11,7 +11,7 @@
 //   4. Link the share to the current user + set acceptedAt = now.
 //      Idempotent — re-clicking the link is a no-op on already-
 //      accepted rows for the same user (we keep acceptedAt stable).
-//   5. Redirect to /preview/[projectId] so the invitee lands inside
+//   5. Redirect to /project/[projectId] so the invitee lands inside
 //      the deck immediately.
 //
 // Security notes:

@@ -9,7 +9,7 @@
 //   1. Share          — opens placeholder modal (filled in step 15)
 //   2. Rename         — switches the tile into inline-edit mode
 //   3. Favorites      — toggles Project.isFavorite (PATCH /favorite)
-//   4. Copy link      — copies /preview/<id> to clipboard
+//   4. Copy link      — copies /project/<id> to clipboard
 //   5. Use as template— navigates to /use-template/project/<id>: mimic
 //                       this project's design now (renders its deck to
 //                       PDF + mints the Anthropic reference on the fly;

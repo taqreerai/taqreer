@@ -32,12 +32,11 @@ export function DashboardShell({
   const pathname = stripLocale(usePathname() ?? "");
   const router = useRouter();
 
-  // BOTH the working editor (/project) and the generation phase (/preview) are
-  // the full-screen "Studio": full-bleed dotted canvas, no rounded content
-  // panel. §22: the app sidebar rail now renders here too (one chrome
-  // everywhere) and DeckView offsets its own panels for it.
-  const isStudioRoute =
-    pathname.startsWith("/project/") || pathname.startsWith("/preview/");
+  // The Studio (/project) is the full-screen surface: full-bleed dotted canvas,
+  // no rounded content panel. Both deck generation and editing mount here (one
+  // URL). §22: the app sidebar rail now renders here too (one chrome everywhere)
+  // and DeckView offsets its own panels for it.
+  const isStudioRoute = pathname.startsWith("/project/");
 
   // The deck-creation flows + the template "use" surface keep their centered
   // 1280 layout; every other dashboard page runs edge-to-edge.
@@ -64,15 +63,13 @@ export function DashboardShell({
   // Share-revoked listener — `notificationStore` dispatches
   // `taqreer:share-revoked` on its window when the user channel delivers the
   // broadcast. If we're currently viewing the revoked project, hard-redirect to
-  // /dashboard. Mounted in the shell so it covers BOTH route shapes.
+  // /dashboard. Mounted in the shell so it covers the studio route.
   useEffect(() => {
     const onRevoked = (event: Event) => {
       const detail = (event as CustomEvent<{ projectId?: string }>).detail;
       const revokedId = detail?.projectId;
       if (!revokedId) return;
-      const onProject = pathname.startsWith(`/project/${revokedId}`);
-      const onPreview = pathname.startsWith(`/preview/${revokedId}`);
-      if (onProject || onPreview) {
+      if (pathname.startsWith(`/project/${revokedId}`)) {
         router.replace(localizedHref("/dashboard", locale));
       }
     };
