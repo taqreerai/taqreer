@@ -1,7 +1,8 @@
 import { MetadataRoute } from "next";
 
 // PWA / install metadata. Minimal: brand name, dark brand background, and the
-// existing colored icon mark. start_url is the Arabic root (the product default).
+// current white icon mark (/icon.svg, the favicon's boxed mark, visible on any
+// home screen). start_url is the Arabic root (the product default).
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "taqreer.ai",
@@ -12,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#0A0A0A",
     theme_color: "#0A0A0A",
     icons: [
-      { src: "/icon-colored.svg", sizes: "any", type: "image/svg+xml" },
+      { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
     ],
   };
 }

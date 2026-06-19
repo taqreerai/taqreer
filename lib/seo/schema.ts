@@ -15,7 +15,10 @@
 import type { Locale } from "@/lib/i18n/config";
 
 const SITE_URL = "https://taqreer.ai";
-const LOGO_URL = `${SITE_URL}/icon-colored.svg`;
+// Current brand mark (white mark on the brand-dark rounded box, same as the
+// favicon). Boxed rather than the transparent white mark so it stays visible on
+// Google's light brand panel. Was /icon-colored.svg (retired colored mark).
+const LOGO_URL = `${SITE_URL}/icon.svg`;
 
 // Public brand profiles (mirrors components/marketing/SiteFooter.tsx). These are
 // the `sameAs` signals that tie the social presence to the brand entity.
