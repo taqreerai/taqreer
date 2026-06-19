@@ -134,14 +134,19 @@ export default async function RootLayout({
         {/* Pre-paint chrome init (theme + app-shell scroll mode) — see
             CHROME_INIT. Must run before the stylesheet to avoid a flash. */}
         <script dangerouslySetInnerHTML={{ __html: CHROME_INIT }} />
-        {/* FILL axis range bumped to `0..1` (was `0`) so callers can
-            toggle to the filled variant via inline font-variation-
-            settings. Used today by the Comment toolbar button to
-            signal commentMode (outlined → filled). Tiny size bump
-            on the variable font file; same axes, just an extra
-            value on the FILL axis. */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font -- Material Symbols icon font with variable FILL/GRAD axes we toggle inline; next/font/google doesn't expose those axis controls */}
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap" rel="stylesheet" />
+        {/* Material Symbols icons are now a SELF-HOSTED ~12 KB subset (@font-face
+            in globals.css → /fonts/material-symbols.woff2), replacing the old
+            cross-origin Google Fonts stylesheet (~350 KB, render-blocking). The
+            FILL 0..1 axis is preserved for the Comment toolbar's outlined→filled
+            toggle. Preload so the icon glyphs paint without a font-display:block
+            gap. crossOrigin is required even same-origin for font preloads. */}
+        <link
+          rel="preload"
+          href="/fonts/material-symbols.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
         {/* Site-wide brand entities (Organization + WebSite + the product
