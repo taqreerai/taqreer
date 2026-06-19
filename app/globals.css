@@ -831,21 +831,6 @@ html.app-shell-scroll body {
   scrollbar-gutter: stable;
 }
 
-/* Self-hosted Material Symbols icon font: a ~12 KB subset (only the icons the
-   app actually uses; FILL 0..1 kept for the comment-mode filled/outlined toggle,
-   opsz/wght/GRAD pinned to our class defaults below). Replaces the cross-origin
-   Google Fonts <link> — same-origin, Cloudflare-edge-cached, and no
-   render-blocking stylesheet. To add a new icon: regenerate the woff2 from the
-   Google `icon_names=` subset URL (see public/fonts) and verify it renders as a
-   glyph, not its ligature text. font-display:block avoids a ligature-text flash. */
-@font-face {
-  font-family: "Material Symbols Outlined";
-  font-style: normal;
-  font-weight: 200;
-  font-display: block;
-  src: url("/fonts/material-symbols.woff2") format("woff2");
-}
-
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
   font-weight: 200;
