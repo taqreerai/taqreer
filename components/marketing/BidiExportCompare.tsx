@@ -101,13 +101,18 @@ function FixRow({
         <p className="mx-auto mb-6 max-w-md text-center text-base leading-relaxed text-muted lg:mx-0 lg:text-start">
           {desc}
         </p>
-        <div className="flex items-center justify-center gap-3 lg:justify-start">
-          <span className="text-sm font-medium text-foreground/65">{labels.tryIt}</span>
-          {/* Same direction-aware knob switch as the landing BiDi band; sized via
-              the wrapper's font-size (InlineSwitch is em-based). */}
-          <span className="inline-flex items-center text-[30px] leading-none">
-            <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} ariaLabel={name} />
-          </span>
+        {/* Inline label + knob switch, mirroring the landing BiDi heading: the
+            switch is em-based with vertical-align:middle, so it centers on the
+            text the way it does in the heading. (A flex items-center row
+            mis-centered it against Cairo's low glyph box on mobile.) The em
+            size comes from the container's text-[30px]; the label overrides to
+            text-sm and also rides vertical-align:middle, so the two share a
+            center. */}
+        <div className="text-center text-[30px] leading-none lg:text-start">
+          <span className="align-middle text-sm font-medium text-foreground/65">
+            {labels.tryIt}
+          </span>{" "}
+          <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} ariaLabel={name} />
         </div>
       </ScrollReveal>
 
