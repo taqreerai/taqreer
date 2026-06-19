@@ -11,11 +11,12 @@ import { motion } from "framer-motion";
 import { BidiExtractionDemo } from "@/components/marketing/BidiExtractionDemo";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 export function BidiSection() {
   const [fixed, setFixed] = useState(false);
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const b = dict.landing.bidi;
   return (
     <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-12">
@@ -29,6 +30,18 @@ export function BidiSection() {
           <br />
           {b.headingPost}
         </h2>
+        {/* CTA — directly under the heading, persistent; links to the why-us
+            page. It sits ABOVE the subtitle, whose space is always reserved
+            (opacity-only), so the button stays put on toggle and never
+            overlaps the fade-in text. */}
+        <div className="mt-6 text-center lg:text-start">
+          <a
+            href={localizedHref("/arabic-presentations", locale)}
+            className="btn-gradient inline-flex px-5 py-2 text-sm"
+          >
+            {b.cta}
+          </a>
+        </div>
         {/* Subtitle — fades in when the tech is toggled ON. Its space is
             ALWAYS reserved (no height animation): the grid is `items-center`, so
             growing the column on toggle would re-center it and slide the

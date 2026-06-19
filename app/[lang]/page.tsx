@@ -181,18 +181,10 @@ export default async function LandingPage({
           </ScrollReveal>
         </section>
 
-        {/* BiDi band — asymmetric, inline-toggle title. CTA mirrors the
-            templates section's "view all" pill, linking to the why-us page. */}
+        {/* BiDi band: asymmetric inline-toggle title; the CTA now lives inside
+            the title column under the heading (see BidiSection). */}
         <section className={`${SECTION} ${PX}`}>
           <BidiSection />
-          <div className="mt-16 text-center">
-            <a
-              href={localizedHref("/arabic-presentations", lang)}
-              className="btn-gradient inline-flex px-5 py-2 text-sm"
-            >
-              {dict.landing.bidi.cta}
-            </a>
-          </div>
         </section>
 
         {/* Templates */}
