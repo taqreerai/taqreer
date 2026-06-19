@@ -32,6 +32,18 @@ function PlanBadge() {
   const { locale } = useLocale();
   const credits = useCreditBalance();
   if (!credits) return null;
+  // Admin/superuser: an "Admin" chip instead of the plan/billing link
+  // (credits + plans don't apply). Matches the profile-menu chip.
+  if (credits.isAdmin) {
+    return (
+      <span className="badge-purple me-2 inline-flex items-center gap-1">
+        <span className="material-symbols-outlined text-[12px]" aria-hidden>
+          shield_person
+        </span>
+        Admin
+      </span>
+    );
+  }
   const plan = normalizePlan(credits.plan);
   return (
     <Link

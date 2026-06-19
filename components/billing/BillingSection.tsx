@@ -77,7 +77,7 @@ export function BillingSection({
   const pricing = dict.landing.pricing;
   const credits = useCreditBalance();
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [cadence, setCadence] = useState<Cadence>("monthly");
+  const [cadence, setCadence] = useState<Cadence>("yearly");
   const [busy, setBusy] = useState<string | null>(null);
 
   // Paid purchases go to our EMBEDDED checkout page (stays on

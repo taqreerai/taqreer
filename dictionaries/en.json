@@ -644,7 +644,7 @@
     "comingSoon": { "title": "Coming soon", "body": "We are building something special. Taqreer is launching soon." },
     "hero": {
       "statusCount": "More than {count} presentations created so far",
-      "poweredBy": "Powered by Claude Design",
+      "poweredBy": "Powered by Claude",
       "titleLine1": "Design presentations",
       "titleLine2": "with AI",
       "subtitle": "taqreer.ai turns your ideas and files into designed presentations and reports with AI, in Arabic and English, while keeping your brand identity, with an advanced editor to fine-tune every slide.",
@@ -691,6 +691,7 @@
     "bidi": {
       "headingPre": "taqreer.ai tech",
       "headingPost": "for cleaner exports",
+      "cta": "Explore all features",
       "subtitle": "The same text you type for the design exports to PowerPoint\nwith no direction issues.",
       "toggleAria": "Enable export tech",
       "slideHeader": "Q1 performance",

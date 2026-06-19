@@ -220,14 +220,12 @@ export const getLandingTemplates = unstable_cache(
           id: row.id,
           format: row.format,
           isPremium: row.isPremium,
-          // Cover slide only (first non-showcase thumbnail). The landing grid no
-          // longer scrubs through all slides on hover — a single-slide tile
-          // renders just the cover (isMultiSlide=false), so we ship one URL per
-          // template instead of the whole deck. The dedicated /presentation-templates
-          // page keeps the full scrub via getTemplatesPageList.
+          // All non-showcase slides (edge-proxied via /tpl) so the landing
+          // tiles scrub through the whole deck on hover, like the dashboard
+          // tiles. Covers stay edge-cached; the extra slide URLs load lazily
+          // on hover (loading="lazy").
           slides: (row.thumbnails ?? [])
             .filter((url) => url && !url.includes("/showcase-"))
-            .slice(0, 1)
             .map(edgeCoverUrl),
         }))
         .filter((tpl) => tpl.slides.length > 0);

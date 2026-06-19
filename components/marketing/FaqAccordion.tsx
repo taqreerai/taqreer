@@ -30,15 +30,15 @@ export function FaqAccordion({
         {faq.map((item, i) => {
           const isOpen = open === i;
           return (
-            <div key={i} className="border-b border-[var(--tq-border-hairline)] px-4 sm:px-6 lg:px-8">
+            <div key={i} className="border-b border-[var(--tq-border-hairline)]">
               <button
                 type="button"
                 onClick={() => setOpen(isOpen ? null : i)}
                 aria-expanded={isOpen}
-                className="flex w-full items-center justify-between gap-4 py-5 text-end"
+                className="flex w-full items-center justify-between gap-4 py-5 text-start"
               >
                 <span
-                  className={`text-base font-medium transition-colors ${
+                  className={`flex-1 text-base font-medium transition-colors ${
                     isOpen
                       ? "text-[var(--tq-violet)]"
                       : "text-foreground hover:text-[var(--tq-violet)]"

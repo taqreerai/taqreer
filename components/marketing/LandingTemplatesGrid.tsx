@@ -174,7 +174,7 @@ function LandingTemplateTile({
   };
 
   return (
-    <div className="tq-thumbnail relative aspect-video w-full overflow-hidden rounded-[14px]">
+    <div className="tq-thumbnail group relative aspect-video w-full overflow-hidden rounded-[14px]">
       <button
         ref={rootRef}
         type="button"
@@ -188,7 +188,7 @@ function LandingTemplateTile({
           <img
             alt={dict.landing.templatesGrid.coverAlt}
             src={src}
-            className={`h-full w-full ${imgObjectClass}`}
+            className={`h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.06] ${imgObjectClass}`}
             loading="lazy"
             decoding="async"
             draggable={false}
@@ -207,7 +207,7 @@ function LandingTemplateTile({
       {isMultiSlide && hoverIndex !== null ? (
         <span
           dir="ltr"
-          className="pointer-events-none absolute bottom-2 end-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground"
+          className="pointer-events-none absolute bottom-2 end-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white"
         >
           {hoverIndex + 1} / {slides.length}
         </span>

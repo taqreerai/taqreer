@@ -181,9 +181,18 @@ export default async function LandingPage({
           </ScrollReveal>
         </section>
 
-        {/* BiDi band — asymmetric, inline-toggle title. */}
+        {/* BiDi band — asymmetric, inline-toggle title. CTA mirrors the
+            templates section's "view all" pill, linking to the why-us page. */}
         <section className={`${SECTION} ${PX}`}>
           <BidiSection />
+          <div className="mt-16 text-center">
+            <a
+              href={localizedHref("/arabic-presentations", lang)}
+              className="btn-gradient inline-flex px-5 py-2 text-sm"
+            >
+              {dict.landing.bidi.cta}
+            </a>
+          </div>
         </section>
 
         {/* Templates */}
@@ -197,10 +206,10 @@ export default async function LandingPage({
           </ScrollReveal>
           <div className="mt-12">
             <LandingTemplatesGrid templates={landingTemplates} />
-            <div className="mt-10 text-center">
+            <div className="mt-16 text-center">
               <a
                 href={localizedHref("/presentation-templates", lang)}
-                className="btn-pill inline-flex px-5 py-2 text-sm"
+                className="btn-gradient inline-flex px-5 py-2 text-sm"
               >
                 {dict.landing.sections.templates.viewAll}
               </a>
@@ -231,7 +240,7 @@ export default async function LandingPage({
               subtitle={dict.landing.sections.faq.subtitle}
             />
           </ScrollReveal>
-          <ScrollReveal direction="up">
+          <ScrollReveal direction="up" className={PX}>
             <FaqAccordion />
           </ScrollReveal>
         </section>

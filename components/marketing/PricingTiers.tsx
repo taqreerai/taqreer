@@ -99,7 +99,7 @@ function pricingRevealDirection(idx: number): "right" | "left" | "up" {
 const TIER_PLAN_KEYS = ["free", "plus", "pro", "max"] as const;
 
 export function PricingTiers() {
-  const [billing, setBilling] = useState<Billing>("monthly");
+  const [billing, setBilling] = useState<Billing>("yearly");
   const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
   const { dir, locale } = useLocale();

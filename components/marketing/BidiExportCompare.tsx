@@ -105,7 +105,7 @@ function FixRow({
           <span className="text-sm font-medium text-foreground/65">{labels.tryIt}</span>
           {/* Same direction-aware knob switch as the landing BiDi band; sized via
               the wrapper's font-size (InlineSwitch is em-based). */}
-          <span className="text-[26px] leading-none">
+          <span className="inline-flex items-center text-[30px] leading-none">
             <InlineSwitch on={fixed} onToggle={() => setFixed((f) => !f)} ariaLabel={name} />
           </span>
         </div>

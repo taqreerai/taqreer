@@ -75,18 +75,18 @@ export function InlineSwitch({
       aria-checked={on}
       aria-label={ariaLabel}
       onClick={onToggle}
-      className="relative mx-1 inline-block h-[0.72em] w-[1.4em] shrink-0 rounded-full transition-colors duration-300"
+      className="relative mx-1 inline-block h-[0.82em] w-[1.6em] shrink-0 rounded-full transition-colors duration-300"
       style={{
-        verticalAlign: "-0.06em",
+        verticalAlign: "middle",
         background: on ? "var(--tq-gradient-brand)" : "#000",
         border: "1px solid var(--tq-border-hairline)",
         boxShadow: on ? "0 0 18px rgba(var(--tq-violet-rgb),0.5)" : "none",
       }}
     >
       <span
-        className="absolute top-1/2 h-[0.5em] w-[0.5em] -translate-y-1/2 rounded-full bg-white transition-[inset-inline-start] duration-300"
+        className="absolute top-1/2 h-[0.6em] w-[0.6em] -translate-y-1/2 rounded-full bg-white transition-[inset-inline-start] duration-300"
         style={{
-          insetInlineStart: on ? "calc(100% - 0.5em - 0.11em)" : "0.11em",
+          insetInlineStart: on ? "calc(100% - 0.6em - 0.11em)" : "0.11em",
           // Always white — matches the canonical Toggle knob. The shadow lifts it
           // off both the accent track (ON) and the near-white OFF track (light).
           boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
