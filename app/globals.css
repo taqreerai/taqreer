@@ -1796,6 +1796,30 @@ html.app-shell-scroll body {
   max-width: clamp(64rem, 128vh - 16rem, min(80rem, 92vw));
 }
 
+/* ─── Hero copy entrance (landing only) ───
+   CSS-driven fade-up for the hero copy (chip, h1, subtitle, CTA),
+   replacing the previous Framer Motion entrance. Framer baked the
+   `hidden` state (opacity:0) into the SSR HTML and only revealed the
+   copy AFTER the JS bundle downloaded + hydrated, which made the hero
+   subtitle the LCP element with a ~3s render delay (Lighthouse: the
+   page TTFB is ~10ms but the text stayed invisible until JS caught up).
+   A pure-CSS animation runs at first paint with no JS wait, so the text
+   becomes an LCP candidate almost immediately, while keeping the
+   identical staggered fade-up: 0.7s ease-out, 0.15s stagger applied per
+   element via inline animation-delay. `both` holds the 0% state through
+   the stagger delay so there's no opacity:1 flash before it starts
+   (same reasoning as .tile-fade-in). */
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: none; }
+}
+.hero-enter {
+  animation: hero-rise 0.7s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter { animation: none; }
+}
+
 .group:hover .nav-icon {
   color: #ffffff !important;
 }

@@ -19,20 +19,6 @@ const DashboardPreview = dynamic(
   { ssr: false },
 );
 
-const containerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.15 } },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 40 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.7, ease: "easeOut" as const },
-  },
-};
-
 // `projectCount` is the platform-wide total of decks created so far
 // (server-fetched + cached in `app/page.tsx` via `unstable_cache`).
 // Threaded in as a prop so this client component stays
@@ -108,23 +94,18 @@ export function Hero({ projectCount }: { projectCount?: number }) {
   return (
     <section className="glow-effect relative overflow-hidden pt-40 pb-32">
       <div className="relative z-10 mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          // `.hero-fold-copy` reserves the first viewport for the copy
-          // (centered) so the preview's top edge always lands ~180px
-          // above the fold - identical composition on laptop and 4K
-          // (see globals.css "Hero fold composition").
-          className="hero-fold-copy flex flex-col items-center justify-center"
-        >
+        {/* CSS-driven entrance (`.hero-enter`, per-element stagger via
+            animationDelay) instead of Framer Motion: the copy must paint
+            on first load, not after hydration, or the subtitle becomes a
+            ~3s-delayed LCP element (see globals.css "Hero copy entrance").
+            `.hero-fold-copy` reserves the first viewport for the copy
+            (centered) so the preview's top edge always lands ~180px above
+            the fold - identical composition on laptop and 4K. */}
+        <div className="hero-fold-copy flex flex-col items-center justify-center">
           {/* Status chip pair. The violet count chip only renders when
               we have a real positive count from the DB — keeps the
               "0 عرض تقديمي" edge case off the marketing surface. */}
-          <motion.div
-            variants={itemVariants}
-            className="mb-8 flex w-full flex-wrap justify-center gap-3"
-          >
+          <div className="hero-enter mb-8 flex w-full flex-wrap justify-center gap-3">
             {formattedCount && (
               <span className="hero-stat-pill flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium">
                 <span
@@ -137,22 +118,22 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             <span className="whitespace-nowrap rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-4 py-1.5 text-xs font-medium text-muted">
               {dict.landing.hero.poweredBy}
             </span>
-          </motion.div>
+          </div>
 
-          <motion.h1
-            variants={itemVariants}
-            className="mb-8 w-full text-4xl font-medium leading-tight md:text-6xl"
+          <h1
+            className="hero-enter mb-8 w-full text-4xl font-medium leading-tight md:text-6xl"
+            style={{ animationDelay: "0.15s" }}
           >
             {dict.landing.hero.titleLine1} <br />
             <span className="text-gradient">{dict.landing.hero.titleLine2}</span>
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            variants={itemVariants}
-            className="mx-auto mb-12 w-full max-w-xl text-lg leading-relaxed text-muted md:text-xl"
+          <p
+            className="hero-enter mx-auto mb-12 w-full max-w-xl text-lg leading-relaxed text-muted md:text-xl"
+            style={{ animationDelay: "0.3s" }}
           >
             {dict.landing.hero.subtitle}
-          </motion.p>
+          </p>
 
           <div className="mb-20 flex w-full justify-center">
             {/* Single primary CTA. Uses `.btn-gradient-anim` (the
@@ -162,15 +143,15 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 point gets the same visual weight as the in-app
                 Generate button. Pill radius pinned inline since
                 `.btn-gradient-anim` itself doesn't set one. */}
-            <motion.a
+            <a
               href={localizedHref("/signup", locale)}
-              variants={itemVariants}
-              className="btn-gradient-anim rounded-full px-8 py-3 text-sm font-medium"
+              className="hero-enter btn-gradient-anim rounded-full px-8 py-3 text-sm font-medium"
+              style={{ animationDelay: "0.45s" }}
             >
               {dict.landing.hero.cta}
-            </motion.a>
+            </a>
           </div>
-        </motion.div>
+        </div>
 
       </div>
 
