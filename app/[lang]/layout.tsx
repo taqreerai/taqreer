@@ -146,8 +146,24 @@ export default async function RootLayout({
             signal commentMode (outlined → filled). Tiny size bump
             on the variable font file; same axes, just an extra
             value on the FILL axis. */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font -- Material Symbols icon font with variable FILL/GRAD axes we toggle inline; next/font/google doesn't expose those axis controls */}
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap" rel="stylesheet" />
+        {/* Material Symbols loaded ASYNC (injected via JS, not a
+            render-blocking <link>) so the icon stylesheet stays off the
+            critical path - Lighthouse flagged the blocking <link> at
+            ~200ms with no first-paint benefit (icons are chrome, never
+            the LCP). Still GOOGLE-HOSTED: the full font + Google's own
+            base CSS (incl. its font-size:24px default that globals.css
+            relies on). We only changed WHEN it loads, NOT to a
+            self-hosted/subset copy - that broke icons before (see
+            CONTEXT). <noscript> keeps icons working with JS off. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap';document.head.appendChild(l);})();`,
+          }}
+        />
+        <noscript>
+          {/* eslint-disable-next-line @next/next/no-page-custom-font -- Material Symbols icon font; JS-off fallback only */}
+          <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200,0..1,0&display=swap" rel="stylesheet" />
+        </noscript>
       </head>
       <body className="font-sans antialiased overflow-x-hidden selection:bg-brand-purple-500 selection:text-white">
         {/* Site-wide brand entities (Organization + WebSite + the product
