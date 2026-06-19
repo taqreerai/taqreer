@@ -1,9 +1,10 @@
 # SEO runbook
 
-Status as of 2026-06-18: **Phase 1 (foundation) is shipped and live.** What is left is
-mostly *manual* (Search Console, indexing, monitoring) plus the optional Phase 2
-content pages. Nothing in code makes the site rank until Google has crawled + indexed
-it, and that starts in Search Console.
+Status as of 2026-06-19: **Phase 1 (foundation) AND Phase 2 (spoke pages) are shipped
+and live**, and the technical SEO + Core Web Vitals are verified on prod. What is left is
+almost entirely *manual* (Search Console sign-in, indexing, monitoring). Nothing in code
+makes the site rank until Google has crawled + indexed it, and that starts in Search
+Console (the one thing only the site owner can do).
 
 The full strategy + research lives in `~/.claude/plans/elegant-foraging-hoare.md`.
 
@@ -91,10 +92,34 @@ Add the site + submit the same sitemap. Bing also feeds ChatGPT search.
 
 ---
 
-## Phase 2 (next, not yet built)
+## Phase 2 (SHIPPED 2026-06-18/19, live in the sitemap)
 
-Dedicated content-rich sub-pages mapped to keyword clusters, landing stays the hub:
-`/templates`, `/pricing`, `/ai-presentations` (Create flow), `/reports` (Datasheet),
+Dedicated content-rich spoke pages mapped to keyword clusters, landing stays the hub.
+All live + static (SSG) + in the sitemap, both locales:
+`/presentation-templates`, `/pricing`, `/ai-presentations` (Create flow),
+`/report-design` (Datasheet), `/redesign` (Enhance), `/presentation-style` (Mimic),
 `/arabic-presentations` (the BiDi differentiator). Each: real content, in-brand,
-bilingual, per-page metadata + JSON-LD, added to `app/sitemap.ts` + internal links.
-Full spec in the plan file.
+bilingual, per-page metadata + JSON-LD, internal links.
+
+---
+
+## Core Web Vitals + perf (verified live 2026-06-19)
+
+- Marketing pages are static (SSG) + Cloudflare edge-cached: TTFB ~50-120ms (cache HIT).
+- **LCP fixed 3030ms -> ~1160ms**: the hero copy used a Framer Motion `initial="hidden"`
+  entrance that baked `opacity:0` into the SSR HTML, so the LCP text only painted after
+  hydration. Replaced with a CSS `.hero-enter` keyframe (`app/globals.css`) that paints
+  at first load. Material Symbols icon font now loads async (off the critical path).
+- **JSON-LD** is emitted as a single `@graph` (was a top-level array, which has no
+  `@context` and made some structured-data browser extensions throw -> Sentry noise).
+
+---
+
+## robots.txt note (Cloudflare-managed)
+
+Cloudflare prepends its "Content Signals" managed block to our `app/robots.ts` output.
+Net effect: Googlebot is allowed, our `Sitemap:` line + app-route disallows survive, but
+Cloudflare BLOCKS AI crawlers (`GPTBot`, `ClaudeBot`, `CCBot`, `Google-Extended`,
+`Bytespider`, ...). This does not affect Google Search or Google AI Overviews (both use
+Googlebot), only ChatGPT/Claude/Perplexity citation. Toggle in Cloudflare's AI-bot
+setting if AI citation is wanted.
