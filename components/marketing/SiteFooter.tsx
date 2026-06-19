@@ -3,6 +3,7 @@
 // fetch) so it can drop into any public page with just a locale.
 
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
+import { ContactEmail } from "@/components/marketing/ContactEmail";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { LEGAL_META } from "@/lib/legal/content";
@@ -97,9 +98,7 @@ export async function SiteFooter({
                     <bdi dir="ltr">{LEGAL_META.address}</bdi>
                   </li>
                   <li>
-                    <a className="icon-hover" href="mailto:support@taqreer.ai">
-                      <bdi dir="ltr">support@taqreer.ai</bdi>
-                    </a>
+                    <ContactEmail className="icon-hover" />
                   </li>
                   <li>
                     <a

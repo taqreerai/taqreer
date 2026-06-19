@@ -89,8 +89,14 @@ export async function generateMetadata({
       description: dict.meta.ogDescription,
       images: ["/og-image.png"],
     },
+    // Classic /favicon.ico (app/favicon.ico, 16/32/48) for crawlers + legacy
+    // browsers that probe the root path, plus the SVG for modern/theme-aware
+    // tabs. SEO auditors specifically check for /favicon.ico.
     icons: {
-      icon: "/icon.svg",
+      icon: [
+        { url: "/favicon.ico", sizes: "any" },
+        { url: "/icon.svg", type: "image/svg+xml" },
+      ],
     },
     // Rendered only once NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION is set in .env
     // (Search Console HTML-tag verification). Undefined → the tag is omitted.

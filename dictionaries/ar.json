@@ -685,7 +685,8 @@
       "cta": "ابدأ مجانا"
     },
     "templatesGrid": {
-      "previewAria": "معاينة القالب"
+      "previewAria": "معاينة القالب",
+      "coverAlt": "قالب عرض تقديمي"
     },
     "bidi": {
       "headingPre": "تقنية taqreer.ai",

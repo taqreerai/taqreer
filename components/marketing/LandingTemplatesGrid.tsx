@@ -186,8 +186,7 @@ function LandingTemplateTile({
       >
         {src ? (
           <img
-            alt=""
-            aria-hidden
+            alt={dict.landing.templatesGrid.coverAlt}
             src={src}
             className={`h-full w-full ${imgObjectClass}`}
             loading="lazy"

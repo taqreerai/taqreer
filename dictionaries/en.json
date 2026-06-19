@@ -685,7 +685,8 @@
       "cta": "Start for free"
     },
     "templatesGrid": {
-      "previewAria": "Preview the template"
+      "previewAria": "Preview the template",
+      "coverAlt": "presentation template"
     },
     "bidi": {
       "headingPre": "taqreer.ai tech",
