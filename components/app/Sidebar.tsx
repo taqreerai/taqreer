@@ -304,7 +304,7 @@ export function Sidebar({
             <SidebarNavLink
               href={localizedHref("/admin", locale)}
               icon="shield_person"
-              label="Admin"
+              label={dict.common.admin}
               isActive={pathname === "/admin" || pathname.startsWith("/admin/")}
               isCollapsed={isCollapsed}
             />

@@ -133,7 +133,7 @@ export function ProfileMenuContent({
               >
                 shield_person
               </span>
-              Admin
+              {dict.common.admin}
             </span>
           ) : currentPlan ? (
             <span className="badge-purple shrink-0">

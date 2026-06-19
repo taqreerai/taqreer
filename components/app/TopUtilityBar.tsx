@@ -40,7 +40,7 @@ function PlanBadge() {
         <span className="material-symbols-outlined text-[12px]" aria-hidden>
           shield_person
         </span>
-        Admin
+        {dict.common.admin}
       </span>
     );
   }
