@@ -236,7 +236,15 @@ export async function holdCredits(args: {
   metadata?: Prisma.InputJsonValue;
   now?: Date;
   notify?: boolean;
+  // Admin/superuser owner: skip billing entirely. No hold row, no
+  // debit, no event. settleHold later finds no CreditHold and returns
+  // not_found, which every caller already tolerates (the "legacy
+  // uncharged job" path). One switch so no charge site can miss it.
+  waive?: boolean;
 }): Promise<HoldResult> {
+  if (args.waive) {
+    return { ok: true, holdId: "", amountHeld: 0, alreadyHeld: true };
+  }
   const now = args.now ?? new Date();
   if (!Number.isInteger(args.amount) || args.amount <= 0) {
     throw new Error(`[credits] hold amount must be a positive integer, got ${args.amount}`);
@@ -386,7 +394,12 @@ export async function chargeCredits(args: {
   metadata?: Prisma.InputJsonValue;
   now?: Date;
   notify?: boolean;
+  // Admin/superuser owner: skip billing (mirrors holdCredits.waive).
+  waive?: boolean;
 }): Promise<HoldResult> {
+  if (args.waive) {
+    return { ok: true, holdId: "", amountHeld: 0, alreadyHeld: true };
+  }
   const now = args.now ?? new Date();
   if (!Number.isInteger(args.amount) || args.amount <= 0) {
     throw new Error(`[credits] charge amount must be a positive integer, got ${args.amount}`);

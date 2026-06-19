@@ -39,6 +39,9 @@ export async function GET() {
     select: {
       id: true,
       plan: true,
+      // Superuser flag → the chrome swaps the plan/credit UI for an
+      // "Admin" chip and the client picker treats everything unlocked.
+      role: true,
       // Cadence of the active paid subscription → the plan banner's
       // monthly/yearly pill (PlanUsage reads it from this one payload).
       subscriptions: { select: { cadence: true } },
@@ -100,6 +103,7 @@ export async function GET() {
 
   return NextResponse.json({
     plan,
+    isAdmin: dbUser.role === "admin",
     cadence: dbUser.subscriptions[0]?.cadence ?? null,
     balance: {
       total: balance.total,

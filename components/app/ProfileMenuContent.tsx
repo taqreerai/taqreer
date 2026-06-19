@@ -50,6 +50,10 @@ export function ProfileMenuContent({
       : null;
   const currentPlan = credits ? normalizePlan(credits.plan) : null;
   const upgradeTo = currentPlan ? nextTier(currentPlan) : null;
+  // Admin/superuser: show an "Admin" chip in place of the plan badge and
+  // hide the credit cards (credits/gating don't apply). "Admin" is left
+  // unlocalized to match the hardcoded Sidebar admin-console entry.
+  const isAdmin = credits?.isAdmin ?? false;
 
   // Theme toggle — shared store with components/app/ThemeToggle. Live `light`
   // class on <html>, read hydration-safely via useSyncExternalStore (no
@@ -120,7 +124,18 @@ export function ProfileMenuContent({
           <span className="truncate">{name}</span>
           {/* Tier chip - logical gap/flex so it sits after the name in
               BOTH directions. */}
-          {currentPlan ? (
+          {isAdmin ? (
+            <span className="badge-purple inline-flex shrink-0 items-center gap-1">
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 12 }}
+                aria-hidden
+              >
+                shield_person
+              </span>
+              Admin
+            </span>
+          ) : currentPlan ? (
             <span className="badge-purple shrink-0">
               {planLabel(dict.components.planUsage, currentPlan)}
             </span>
@@ -131,8 +146,9 @@ export function ProfileMenuContent({
       <div className="divider-dark my-1" />
 
       {/* ── Credit cards ── reads the SAME store as the avatar ring and
-          the settings card; updates in place on the balance nudge. */}
-      {credits ? (
+          the settings card; updates in place on the balance nudge.
+          Hidden for admins (credits/gating don't apply). */}
+      {credits && !isAdmin ? (
         <>
           <div className="flex flex-col gap-2 px-1 py-1">
             {upgradeTo ? (

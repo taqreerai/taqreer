@@ -30,6 +30,9 @@ export type CreditRecentEvent = {
 
 export type CreditData = {
   plan: string;
+  // Superuser: the chrome shows an "Admin" chip instead of the plan/credit
+  // UI, and the generation picker treats every preset as unlocked.
+  isAdmin?: boolean;
   // Billing interval of the active paid subscription (null = free/none) →
   // drives the plan banner's monthly/yearly pill.
   cadence: "monthly" | "yearly" | null;

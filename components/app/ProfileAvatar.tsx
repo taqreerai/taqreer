@@ -24,8 +24,8 @@ export function ProfileAvatar() {
     <div className="relative w-[40px] h-[40px] flex justify-center items-center flex-shrink-0">
       {/* Credit ring - at-a-glance used-vs-remaining around the avatar.
           Same store as the menu breakdown + settings card; hidden until
-          the first balance fetch lands. */}
-      {creditFraction !== null && credits ? (
+          the first balance fetch lands, and for admins (no credit gating). */}
+      {creditFraction !== null && credits && !credits.isAdmin ? (
         <CreditRing
           fraction={creditFraction}
           label={dict.components.credits.ringLabel

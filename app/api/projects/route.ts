@@ -683,6 +683,9 @@ export async function POST(request: Request) {
     flow: creditFlow,
     preset: quality,
     slideInput,
+    // Admin/superuser: no flow/preset/slide-cap/credit gate. The deck
+    // still generates; the hold is waived in the pipeline (owner role).
+    isAdmin: dbUser.role === "admin",
   });
   if (!preflight.ok) {
     return NextResponse.json(

@@ -99,6 +99,9 @@ export function GenerateSplitButton({
   // preset. Rows above the user's plan show that tier name as a pill
   // (clicking still works - preflight 402s into the upgrade dialog).
   const userPlan = credits ? normalizePlan(credits.plan) : null;
+  // Admin/superuser: every preset is unlocked and no credit cost shows
+  // (the run is never charged). Mirrors the server preflight bypass.
+  const isAdmin = credits?.isAdmin ?? false;
 
   return (
     <div ref={splitButtonRef} className="relative">
@@ -183,7 +186,7 @@ export function GenerateSplitButton({
           >
             <div className="flex items-center justify-between px-3 py-2 text-[11px] text-foreground/40">
               <span>{dict.flows.generate.generationQuality}</span>
-              {credits ? (
+              {credits && !isAdmin ? (
                 <span dir="ltr" className="tabular-nums">
                   {dict.flows.generate.balance.replace(
                     "{count}",
@@ -198,6 +201,7 @@ export function GenerateSplitButton({
                 TIERS[t].presets.includes(preset.key),
               );
               const gated =
+                !isAdmin &&
                 userPlan !== null &&
                 gateTier !== undefined &&
                 TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
@@ -266,7 +270,7 @@ export function GenerateSplitButton({
                         the ledger charges from (lib/credits/cost.ts), so
                         the shown number IS the held number. Amber when
                         the current balance doesn't cover it. */}
-                    {credits ? (
+                    {credits && !isAdmin ? (
                       <span
                         className={`text-[11px] tabular-nums ${
                           affordable ? "text-foreground/60" : "text-amber-400"

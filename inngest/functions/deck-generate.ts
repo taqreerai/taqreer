@@ -1522,7 +1522,7 @@ export const deckGenerate = inngest.createFunction(
       const holdResult = await step.run("credit-hold", async () => {
         const project = await prisma.project.findUnique({
           where: { id: projectId },
-          select: { userId: true },
+          select: { userId: true, user: { select: { role: true } } },
         });
         if (!project) {
           return { ok: false as const, reason: "missing_project" as const };
@@ -1531,6 +1531,8 @@ export const deckGenerate = inngest.createFunction(
           userId: project.userId,
           jobKey: holdJobId,
           amount: credit.holdCredits,
+          // Admin/superuser owner: waive the charge (no hold, no debit).
+          waive: project.user.role === "admin",
           metadata: {
             kind: "deck.generate",
             flow: credit.flow ?? data.type,

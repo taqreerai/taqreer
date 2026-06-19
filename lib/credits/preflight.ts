@@ -25,6 +25,9 @@ import { normalizePlan } from "@/lib/plan";
 import {
   type Flow,
   type SlideEstimateInput,
+  type TierConfig,
+  ALL_FLOWS,
+  SYSTEM_SLIDE_CAP,
   TIERS,
   estimateSlides,
   effectivePreset,
@@ -97,11 +100,23 @@ export async function preflightGenerate(args: {
   flow: Flow;
   preset: Quality;
   slideInput: SlideEstimateInput;
+  // Admin/superuser: all flows + presets unlocked and the credit gate
+  // skipped (the run is waived downstream by holdCredits). The slide
+  // cap rises only to SYSTEM_SLIDE_CAP - 75 is a hard output-token
+  // ceiling, not a tier gate, so an exact request above it still blocks.
+  isAdmin?: boolean;
   now?: Date;
 }): Promise<PreflightResult> {
   const now = args.now ?? new Date();
   const plan = normalizePlan(args.plan);
-  const tier = TIERS[plan];
+  const tier: TierConfig = args.isAdmin
+    ? {
+        ...TIERS[plan],
+        flows: ALL_FLOWS,
+        presets: QUALITY_PRESETS.map((p) => p.key),
+        slideCap: SYSTEM_SLIDE_CAP,
+      }
+    : TIERS[plan];
   const balance = await getBalance(args.userId, now);
   const estimate = estimateSlides(args.slideInput);
 
@@ -118,7 +133,8 @@ export async function preflightGenerate(args: {
       effective: quote.effective,
       unlocked,
       credits: unlocked ? quote.holdCredits : null,
-      affordable: unlocked && quote.holdCredits <= balance.total,
+      affordable:
+        unlocked && (!!args.isAdmin || quote.holdCredits <= balance.total),
     };
   };
   const quotes = QUALITY_PRESETS.map((p) => quoteFor(p.key));
@@ -155,7 +171,7 @@ export async function preflightGenerate(args: {
     slideCap: tier.slideCap,
   });
 
-  if (quote.holdCredits > balance.total) {
+  if (!args.isAdmin && quote.holdCredits > balance.total) {
     const affordable = maxAffordableSlides(effective, balance.total);
     const reducedSlides =
       affordable >= MIN_REDUCED_SLIDES

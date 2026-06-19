@@ -89,9 +89,10 @@ export async function POST(
   if (template.isPremium && !isOwner) {
     const dbUser = await prisma.user.findUnique({
       where: { supabaseUserId: user.id },
-      select: { plan: true },
+      select: { plan: true, role: true },
     });
-    if (!isProPlan(dbUser?.plan)) {
+    // Admins/superusers can use any template, like owners use their own.
+    if (dbUser?.role !== "admin" && !isProPlan(dbUser?.plan)) {
       return NextResponse.json(
         { error: "This template requires a Pro plan" },
         { status: 402 },
