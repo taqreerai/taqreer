@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { REGEN_QUALITY } from "@/lib/types/quality";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -49,7 +50,11 @@ export async function POST(
       { status: 400 },
     );
   }
-  const eventPayload = (latestJob.inputJson ?? {}) as Record<string, unknown>;
+  // Regens always run on the fast Opus preset (override the original deck quality).
+  const eventPayload = {
+    ...((latestJob.inputJson ?? {}) as Record<string, unknown>),
+    quality: REGEN_QUALITY,
+  };
 
   // Compute the next version number inside the transaction and retry on
   // unique-constraint races (PresentationVersion(presentationId, versionNumber)).

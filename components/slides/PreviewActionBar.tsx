@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
@@ -248,6 +248,7 @@ export function PreviewActionBar({
   onToggleCommentMode,
   draftCommentCount,
   focusedSlideLocked,
+  onAddText,
   onUndo,
   onRedo,
   canUndo = false,
@@ -261,8 +262,9 @@ export function PreviewActionBar({
   applying,
   currentVersionId,
   isSaved,
-  onSaved,
-  onBeforeSave,
+  saving,
+  saveError,
+  onSave,
   horizontal = false,
   disabled = false,
 }: {
@@ -295,6 +297,9 @@ export function PreviewActionBar({
   // off the locked slide flips the button back without leaving /
   // re-entering the deck.
   focusedSlideLocked: boolean;
+  // Add a new text box to the focused slide (Edit mode). Inserts at the slide
+  // centre + selects it; owners/edit only.
+  onAddText?: () => void;
   // Undo / redo over the focused slide's version log (same stack as ⌘Z / ⌘⇧Z).
   // `canUndo` / `canRedo` grey the buttons at the ends of history.
   onUndo?: () => void;
@@ -323,22 +328,16 @@ export function PreviewActionBar({
   // Partial regen in flight. Locks the toolbar buttons so the user
   // can't kick off a second job while one is running.
   applying: boolean;
-  // Save-Project state. `currentVersionId` gates the save button
-  // (can't save while there's no version to pin). `isSaved` is the
-  // precomputed display flag — DeckView owns the comparison
-  // (version pointer + per-slide snapshot) so the button can react
-  // to per-slide restores too. `onSaved` ferries the server's
-  // response back to DeckView's local mirrors of both the pinned
-  // version id and the per-slide snapshot.
+  // Cloud save control. `currentVersionId` gates it (can't pin with no version yet).
+  // `isSaved` (DeckView's version-pointer + per-slide-snapshot comparator) drives the
+  // empty-cloud → cloud-checkmark state; `saving` shows the spinner; `saveError`
+  // shows the offline-cloud. `onSave` runs the actual save (DeckView owns it so the
+  // same path fires on leave-canvas).
   currentVersionId: string | null;
   isSaved: boolean;
-  onSaved: (payload: {
-    savedVersionId: string;
-    savedSlideVersions: Record<string, number>;
-  }) => void;
-  // Flush pending edits to history checkpoints (SlideVersions) BEFORE pinning the
-  // saved version, so the saved snapshot reflects the just-checkpointed numbers.
-  onBeforeSave?: () => Promise<void>;
+  saving: boolean;
+  saveError: boolean;
+  onSave: () => void;
   // Studio bottom-bar mode — lay the cluster out as a horizontal row (pill +
   // dividers rotate) instead of the default vertical left-rail strip.
   horizontal?: boolean;
@@ -354,7 +353,6 @@ export function PreviewActionBar({
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
   // Export + Share moved to the StudioHeader (command-bar redesign §16) —
   // useExportActions + the ShareDialog live up there now, not in this bar.
-  const [saveProject, setSaveProject] = useState<ButtonState>({ status: "idle" });
   // Edit⇄AI mode-content resize: the two mode contents are absolutely stacked
   // and cross-FADE (icons fade in place, never slide), while the slot's WIDTH
   // animates between the two contents' measured PIXEL widths via a CSS
@@ -447,52 +445,8 @@ export function PreviewActionBar({
 
   // Save Project — pins Presentation.savedVersionId to the version the
   // deck is currently rendering AND snapshots every slide's
-  // currentVersionNumber, so a later restore can re-arm the button.
-  // Idempotent on the server (re-saving an already-saved version is a
-  // no-op). After success, DeckView's local savedVersionId +
-  // savedSlideVersions are updated via `onSaved` so the button morphs
-  // to its "saved" check without a router.refresh.
-  //
-  // First-save side effects (server-side): freezes Project.slideCount
-  // and Project.dominantColor for the /projects filter columns. Step 8
-  // also dispatches the thumbnail render job from this route.
-  const handleSaveProject = async () => {
-    if (saveProject.status === "running") return;
-    if (!currentVersionId) {
-      setSaveProject({ status: "error", message: dict.editor.toasts.noVersionToSave });
-      return;
-    }
-    setSaveProject({ status: "running", message: dict.editor.toasts.savingProject });
-    try {
-      // Snapshot pending edits as history checkpoints first, so the pinned
-      // saved version captures the new per-slide version numbers.
-      await onBeforeSave?.();
-      const response = await fetch(`/api/projects/${projectId}/save`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? "Save failed");
-      }
-      const data = (await response.json()) as {
-        ok: true;
-        savedVersionId: string;
-        savedSlideVersions: Record<string, number>;
-      };
-      onSaved({
-        savedVersionId: data.savedVersionId,
-        savedSlideVersions: data.savedSlideVersions,
-      });
-      setSaveProject({ status: "success", message: dict.editor.toasts.projectSaved });
-    } catch (error) {
-      setSaveProject({
-        status: "error",
-        message: error instanceof Error ? error.message : dict.editor.toasts.saveFailed,
-      });
-    }
-  };
+  // The save itself (flush checkpoints + pin saved version) lives in DeckView so the
+  // SAME path fires on leave-canvas; this bar just renders the cloud and calls onSave.
 
   // Export pipelines + their busy/error states are owned by the
   // shared `useExportActions` hook (handlers + states aliased above
@@ -515,11 +469,13 @@ export function PreviewActionBar({
   let visibleMessage: { text?: string; kind: "error" | "info" } | null = null;
   if (regen.status === "error") {
     visibleMessage = { text: regen.message, kind: "error" };
-  } else if (saveProject.status === "error") {
-    visibleMessage = { text: saveProject.message, kind: "error" };
   } else if (regen.status === "running") {
     visibleMessage = { text: regen.message, kind: "info" };
   }
+
+  // Cloud save icon: empty cloud = unsaved edits, spinner while saving, cloud-done
+  // when saved, offline-cloud on failure. No text (it's the only save affordance).
+  const cloudIcon = saveError ? "cloud_off" : isSaved ? "cloud_done" : "cloud";
 
   return (
     <ToolbarHorizontalContext.Provider value={horizontal}>
@@ -714,6 +670,17 @@ export function PreviewActionBar({
                 pointerEvents: effectiveMode === "edit" ? "auto" : "none",
               }}
             >
+              {/* Add a text box — edit-mode only, owners/edit. Leads the edit
+                  cluster (it's a content-creation action, distinct from the
+                  history + comment controls beside it). */}
+              {canEdit && onAddText ? (
+                <ToolButton
+                  icon="text_fields"
+                  label={dict.editor.toolbar.addText}
+                  onClick={onAddText}
+                  disabled={applying || commentMode}
+                />
+              ) : null}
               {/* Undo / redo — edit-mode only (they do nothing in AI mode), so
                   they live in this edit slot beside the comment button rather
                   than the always-visible shared cluster. Forced `dir=ltr` so the
@@ -788,28 +755,16 @@ export function PreviewActionBar({
                 onClick={onToggleLock}
               />
             ) : null}
-            {/* Save Project. */}
+            {/* Save = one cloud: empty (unsaved edits) → small circular spinner
+                (saving) → cloud-checkmark (saved), offline-cloud on failure. No text.
+                It auto-fires on leave-canvas; clicking it saves on demand. */}
             <ToolButton
-              icon={isSaved ? "check" : "save"}
+              icon={cloudIcon}
               label={isSaved ? dict.editor.toolbar.saved : dict.editor.toolbar.saveProject}
-              running={saveProject.status === "running"}
-              onClick={handleSaveProject}
+              running={saving}
+              onClick={onSave}
               active={isSaved}
               disabled={applying || commentMode || !currentVersionId}
-              iconNode={
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.span
-                    key={isSaved ? "saved" : "unsaved"}
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{ duration: 0.25 }}
-                    className="material-symbols-outlined text-[18px]"
-                  >
-                    {isSaved ? "check" : "save"}
-                  </motion.span>
-                </AnimatePresence>
-              }
             />
           </div>
         ) : null}

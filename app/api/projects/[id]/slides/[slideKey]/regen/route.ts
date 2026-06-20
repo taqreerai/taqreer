@@ -25,11 +25,11 @@ import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import {
   allocateNextVersionInTx,
-  getOriginalQuality,
   retryOnP2002,
   rollbackVersionAndJob,
   toJson,
 } from "@/lib/api/regen-helpers";
+import { REGEN_QUALITY } from "@/lib/types/quality";
 
 type RegenPayload = { replay?: boolean };
 type CachedComment = {
@@ -85,20 +85,17 @@ export async function POST(
   }
   const replay = parsedBody.replay;
 
-  // Project + originalQuality are independent reads — run them in
-  // parallel to shave a round-trip off the request.
-  const [project, originalQuality] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: {
-        id: true,
-        presentation: {
-          select: { id: true, currentVersionId: true },
-        },
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      presentation: {
+        select: { id: true, currentVersionId: true },
       },
-    }),
-    getOriginalQuality(projectId),
-  ]);
+    },
+  });
+  // Regens always run on the fast Opus preset, not the deck's original quality.
+  const originalQuality = REGEN_QUALITY;
   if (
     !project ||
     !project.presentation ||

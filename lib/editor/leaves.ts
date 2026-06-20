@@ -52,18 +52,74 @@ export function isVisualLeaf(el: Element): boolean {
   return isTextLeaf(el);
 }
 
-// Resolve a click target to the OUTERMOST visual leaf at/above it, or null when the
-// click lands on a layout container or the bare slide bg (→ deselect). An <svg>
-// selects as one unit (never its inner paths).
-export function resolveSelectable(el: Element, sec: Element): HTMLElement | null {
+// True when the element paints something of its OWN — a solid colour, a gradient,
+// or a background image — as opposed to a transparent layout wrapper. This is what
+// promotes a content-free `<div>` (a colour panel, a scrim, a full-bleed overlay)
+// to a selectable object: now that locking is manual (Layers panel), every painted
+// block is grabbable, not just text/img/svg. Needs the live view for the computed
+// style.
+export function hasOwnPaint(el: Element, win: Window): boolean {
+  const cs = win.getComputedStyle(el);
+  if (/gradient|url\(/i.test(cs.backgroundImage)) return true;
+  if (isOpaqueish(cs.backgroundColor)) return true;
+  return hasVisibleBorder(cs);
+}
+
+// A visible border on ANY side — accent bars / card top-rules / framed boxes are
+// often a 2-3px coloured border rather than a filled element, and the user still
+// wants to select them.
+function hasVisibleBorder(cs: CSSStyleDeclaration): boolean {
+  const sides = [
+    ["borderTopWidth", "borderTopColor", "borderTopStyle"],
+    ["borderRightWidth", "borderRightColor", "borderRightStyle"],
+    ["borderBottomWidth", "borderBottomColor", "borderBottomStyle"],
+    ["borderLeftWidth", "borderLeftColor", "borderLeftStyle"],
+  ] as const;
+  for (const [w, c, s] of sides) {
+    if (
+      parseFloat(cs[w]) >= 1 &&
+      cs[s] !== "none" &&
+      isOpaqueish(cs[c])
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Resolve a click target to the selectable object at/above it, or null when the
+// click lands on a transparent wrapper or the bare slide root (→ deselect / let the
+// hit-test fall through to whatever's beneath). Priority: an <svg> selects as one
+// unit; a text run resolves to its OUTERMOST text leaf; an image; otherwise (only
+// when `paint` is enabled) any element that paints its OWN fill (a colour block /
+// scrim / full-bleed overlay). The slide root <section> is never returned (it's the
+// bg + deselect surface — its own fill is edited from the Layers Background row).
+//
+// `paint` lets the caller run a CONTENT-FIRST pass: a full-bleed scrim painted ON
+// TOP of text would otherwise eat every click (its box hit-tests solid even where
+// it's visually transparent), so the hit-test resolves content leaves first and
+// only falls back to painted shapes when nothing else is under the cursor.
+export function resolveSelectable(
+  el: Element,
+  sec: Element,
+  opts: { paint?: boolean } = {},
+): HTMLElement | null {
+  const paint = opts.paint ?? true;
   const svg = el.closest("svg");
   if (svg && svg !== sec && sec.contains(svg)) return svg as unknown as HTMLElement;
+  const win = el.ownerDocument?.defaultView ?? null;
   let n: Element | null = el;
   let best: HTMLElement | null = null;
   while (n && n !== sec) {
-    if (n.tagName === "IMG" || isTextLeaf(n)) best = n as HTMLElement;
-    else break;
-    n = n.parentElement;
+    if (n.tagName === "IMG") return n as HTMLElement;
+    if (isTextLeaf(n)) {
+      best = n as HTMLElement; // keep climbing to the OUTERMOST text leaf
+      n = n.parentElement;
+      continue;
+    }
+    if (best) break; // already resolved a text leaf — its parent is a wrapper, stop
+    if (paint && win && hasOwnPaint(n, win)) return n as HTMLElement; // painted block
+    break; // transparent wrapper → fall through to the next element in the stack
   }
   return best;
 }
@@ -77,12 +133,29 @@ export function isTextEditable(el: Element): boolean {
   return [...el.children].every((c) => INLINE_TAGS.has(c.tagName));
 }
 
+// The element whose z-index actually governs a leaf's stacking: the leaf itself if
+// positioned, else the nearest positioned ancestor (a leaf nested in an absolute
+// block restacks the whole block). Falls back to the leaf. Bounded by the stage.
+// Shared by the Layers reorder AND the pill's bring-to-front / send-to-back so both
+// move the SAME element — otherwise setting z on a static leaf does nothing.
+export function stackingTarget(el: HTMLElement, win: Window, stage: Element): HTMLElement {
+  let n: HTMLElement | null = el;
+  while (n && n !== stage) {
+    if (win.getComputedStyle(n).position !== "static") return n;
+    n = n.parentElement;
+  }
+  return el;
+}
+
 export type LayerNode = {
   el: HTMLElement;
   label: string;
-  // text run · image · svg graphic · gradient fill · the slide bg.
-  kind: "text" | "image" | "graphic" | "gradient" | "background";
-  depth: number; // always 0 — flat list, no nesting / groups
+  // text run · image · svg graphic · gradient fill · solid-colour shape · the slide bg.
+  kind: "text" | "image" | "graphic" | "gradient" | "shape" | "background";
+  depth: number; // always 0 — flat list; the panel folds groups into folders itself
+  // The element's data-tq-group id (virtual grouping), or undefined. The Layers
+  // panel folds same-group leaves into one collapsible folder.
+  group?: string;
 };
 
 // A colour string reads as actually-painted (not fully transparent).
@@ -115,10 +188,16 @@ function fillLeaf(
 ): { label: string; kind: LayerNode["kind"] } | null {
   if ((el.textContent ?? "").trim() !== "") return null;
   if (el.querySelector("img, svg")) return null;
-  const t = fillType(win.getComputedStyle(el));
+  const cs = win.getComputedStyle(el);
+  const t = fillType(cs);
   if (t === "gradient") return { label: "Gradient", kind: "gradient" };
   if (t === "image") return { label: "Image", kind: "image" };
-  // Solid-colour fills (accent bars / blocks) are intentionally NOT listed.
+  // Solid-colour fills (colour panels, scrims, full-bleed overlays) ARE listed
+  // now — they're selectable objects (manual lock replaced the old hard-exclude),
+  // so the Layers panel must surface them for select / lock / reorder / delete.
+  if (t === "color") return { label: "Shape", kind: "shape" };
+  // Border-only decorative elements (accent rules / framed dividers).
+  if (hasVisibleBorder(cs)) return { label: "Shape", kind: "shape" };
   return null;
 }
 
@@ -137,6 +216,10 @@ export function buildLayerTree(section: HTMLElement): LayerNode[] {
     for (const child of [...el.children] as HTMLElement[]) {
       const tag = child.tagName.toLowerCase();
       if (tag === "style" || tag === "script") continue;
+      // Skip empty 0px elements (Claude sometimes emits stray empty divs) — not a
+      // visible layer, and never selectable on the canvas either.
+      const cr = child.getBoundingClientRect();
+      if (cr.width < 1 || cr.height < 1) continue;
       if (tag === "svg") {
         out.push({ el: child, label: "Graphic", kind: "graphic", depth: 0 });
         continue;
@@ -173,6 +256,12 @@ export function buildLayerTree(section: HTMLElement): LayerNode[] {
     }
   };
   walk(section);
+  // Stamp each leaf's group id (virtual grouping) so the panel can fold same-group
+  // leaves into a folder. Read here, in the one place that already walks the DOM.
+  for (const n of out) {
+    const gid = n.el.getAttribute("data-tq-group");
+    if (gid) n.group = gid;
+  }
   // NOTE: the slide BACKGROUND (kind "background") is NOT emitted here — the
   // builder's arg is the editor STAGE, not the slide root, so the panel
   // synthesizes that node from the real slide root and pins it backmost.

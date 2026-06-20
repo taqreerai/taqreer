@@ -462,6 +462,26 @@ export const deckRegeneratePartial = inngest.createFunction(
           // Inngest run already records the original error).
           console.error("partial-regen onFailure: status write failed", e, error);
         });
+      // Un-promote the comments this run applied back to "draft" (mirrors the
+      // in-flight rollbackPartialRegen). Without it they're stranded "applied":
+      // the GET only surfaces drafts and DELETE only allows drafts, so the user
+      // could neither see, retry, nor remove them. Scoped to the source version
+      // + forAi + applied, which is exactly this run's promoted set.
+      if (original.presentationId && original.sourceVersionId) {
+        await prisma.comment
+          .updateMany({
+            where: {
+              presentationId: original.presentationId,
+              versionId: original.sourceVersionId,
+              forAi: true,
+              status: "applied",
+            },
+            data: { status: "draft" },
+          })
+          .catch((e) => {
+            console.error("partial-regen onFailure: comment revert failed", e);
+          });
+      }
       // Failed regens charge nothing - release the credit hold (keyed
       // the same way the hold step keys it; idempotent / not_found-safe).
       try {

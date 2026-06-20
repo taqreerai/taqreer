@@ -334,7 +334,12 @@ export function HeroCommentOverlay({
       // events so it doesn't swallow clicks meant for the canvas
       // below, AND there's no drag handler. Pins below opt back in
       // via their own pointer-events when interactive.
-      className={`absolute inset-0 overflow-hidden ${isInteractive ? "" : "pointer-events-none"}`}
+      // Interactive mode sets pointer-events EXPLICITLY (not "" relying on the
+      // inherited default): `pointer-events` is inherited, and in edit-mode AI /
+      // comment the overlay is mounted inside the artboard frame, which is
+      // `pointer-events:none` — without an explicit `auto` the drag surface would
+      // inherit `none` and the draw-a-region gesture would be dead.
+      className={`absolute inset-0 overflow-hidden ${isInteractive ? "pointer-events-auto" : "pointer-events-none"}`}
       // High enough to sit above the SlideRenderer (z-auto) but BELOW
       // the canvas-gradient-border's ::after (z:2).
       style={{ zIndex: 1 }}
@@ -363,7 +368,18 @@ export function HeroCommentOverlay({
         // the bottom-bar composer and this is just the scoped box. Same
         // treatment as the freshly-drawn pending region rendered below.
         if (c.forAi) {
-          return <AiRegionMarker key={c.id} style={style} />;
+          // Read-only sparkle marker, PLUS a ✕ delete chip while the user is in
+          // AI / comment mode so a stray AI instruction can be removed manually
+          // (regen consumes them on success; this covers "drew it, changed my mind"
+          // and reverted-after-failure drafts).
+          return (
+            <AiRegionMarker
+              key={c.id}
+              style={style}
+              onDelete={isInteractive ? () => onDelete(c.id) : undefined}
+              deleteLabel={dict.editor.comments.deleteComment}
+            />
+          );
         }
         if (!isInteractive) {
           // Read-only marker — clickable to open the preview popup
@@ -592,11 +608,19 @@ function AiRegionMarker({
   style,
   dashed,
   dim,
+  onDelete,
+  deleteLabel,
 }: {
   style: React.CSSProperties;
   dashed?: boolean;
   dim?: boolean;
+  // When provided (a PERSISTED AI comment, not a transient drawn region), a ✕
+  // delete chip appears so the user can remove the AI comment manually — the
+  // sparkle marker is otherwise read-only.
+  onDelete?: () => void | Promise<void>;
+  deleteLabel?: string;
 }) {
+  const [deleting, setDeleting] = useState(false);
   return (
     <div
       aria-hidden
@@ -609,6 +633,33 @@ function AiRegionMarker({
         boxShadow: dim ? "0 0 0 9999px var(--tq-bg-dim)" : undefined,
       }}
     >
+      {onDelete ? (
+        <button
+          type="button"
+          aria-label={deleteLabel}
+          disabled={deleting}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={async (e) => {
+            e.stopPropagation();
+            if (deleting) return;
+            setDeleting(true);
+            try {
+              await onDelete();
+            } finally {
+              setDeleting(false);
+            }
+          }}
+          className="ai-marker-chip pointer-events-auto absolute -left-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full shadow-lg disabled:opacity-60"
+        >
+          {deleting ? (
+            <span className="spinner h-3 w-3 rounded-full border-2 border-white/30 border-t-white" />
+          ) : (
+            <span className="material-symbols-outlined leading-none text-white">
+              close
+            </span>
+          )}
+        </button>
+      ) : null}
       <span className="ai-marker-chip absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full shadow-lg">
         {/* Size owned by `.ai-marker-chip .material-symbols-outlined` in
             globals.css — a Tailwind text-[…] utility loses to the font's own

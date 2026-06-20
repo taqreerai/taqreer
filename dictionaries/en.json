@@ -892,20 +892,17 @@
       "slideLockedComment": "Slide locked, unlock to comment",
       "exitComments": "Exit comment mode",
       "addComment": "Add comment",
+      "addText": "Add text",
       "versionHistory": "Version history",
       "unlockSlide": "Unlock slide",
       "lockSlide": "Lock slide",
       "saved": "Saved",
-      "saveProject": "Save project",
+      "saveProject": "Save",
       "backToDashboard": "Back to dashboard"
     },
     "toasts": {
       "sendingRequest": "Sending request…",
-      "regenFailed": "Design regeneration failed",
-      "noVersionToSave": "No version to save",
-      "savingProject": "Saving project…",
-      "projectSaved": "Project saved",
-      "saveFailed": "Failed to save project"
+      "regenFailed": "Design regeneration failed"
     },
     "nav": {
       "slidesSidebar": "Slides sidebar",
@@ -978,13 +975,20 @@
       "image": "Image",
       "graphic": "Graphic",
       "gradient": "Gradient",
+      "shape": "Shape",
       "background": "Background",
       "layerOne": "layer",
       "layerMany": "layers",
       "title": "Layers",
       "none": "No layers",
       "bgColor": "Background colour",
-      "reorder": "Reorder layer (use arrow keys)"
+      "reorder": "Reorder layer (use arrow keys)",
+      "lock": "Lock layer",
+      "unlock": "Unlock layer",
+      "delete": "Delete layer",
+      "group": "Group",
+      "expand": "Expand group",
+      "collapse": "Collapse group"
     },
     "typography": {
       "weight": "Weight",
@@ -992,7 +996,8 @@
       "transform": "Transform",
       "decoration": "Decoration",
       "opacity": "Opacity",
-      "rounding": "Rounding"
+      "rounding": "Rounding",
+      "align": "Align"
     },
     "fonts": {
       "searchPlaceholder": "Search fonts…",
@@ -1009,7 +1014,14 @@
       "smaller": "Smaller",
       "font": "Font",
       "mixed": "Mixed",
+      "group": "Group",
+      "ungroup": "Ungroup",
+      "bringToFront": "Bring to front",
+      "sendToBack": "Send to back",
+      "lock": "Lock",
+      "unlock": "Unlock",
       "graphicColour": "Graphic colour",
+      "fillColour": "Fill colour",
       "replaceImage": "Replace image",
       "uploading": "Uploading…",
       "replace": "Replace",

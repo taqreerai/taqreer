@@ -17,6 +17,7 @@ import {
   type GoogleFontEntry,
 } from "@/lib/editor/font-search";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { usePopoverPosition } from "@/lib/ui/use-popover-position";
 
 const WIDTH = 252;
 const PREVIEW_LINK_ID = "tq-font-preview-link";
@@ -110,6 +111,10 @@ export function FontControl({
   const arabic = sectioned ? results.filter((r) => r.a === 1) : [];
   const latin = sectioned ? results.filter((r) => r.a === 0) : [];
 
+  // Viewport-aware placement (flip + clamp) for the results dropdown.
+  const popRef = useRef<HTMLDivElement>(null);
+  usePopoverPosition(popRef, open, { placement: flipUp ? "top" : "bottom", align: "start", dir });
+
   return (
     <div style={{ position: "relative" }}>
       {/* The morphing pill: its REAL width springs between the name-fit and the
@@ -154,14 +159,15 @@ export function FontControl({
         )}
       </motion.div>
 
-      {/* Results dropdown — opens on the opposite side from the element (flipUp). */}
+      {/* Results dropdown — viewport-aware (usePopoverPosition flips + clamps). */}
       {open ? (
         <motion.div
+          ref={popRef}
           dir={dir}
-          className={`surface-popover absolute z-30 overflow-hidden rounded-2xl ${
-            flipUp ? "bottom-full mb-2.5" : "top-full mt-2.5"
-          }`}
-          style={{ left: 0, width: WIDTH }}
+          className="surface-popover z-30 overflow-hidden rounded-2xl"
+          // position:fixed + top/left from the hook; start hidden (no flash) + the
+          // hairline border keeps it defined over a light slide.
+          style={{ width: WIDTH, visibility: "hidden", border: "1px solid var(--tq-border-hairline)" }}
           initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           animate={{ scale: 1, y: 0 }}
           transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}

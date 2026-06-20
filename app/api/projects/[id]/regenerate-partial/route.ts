@@ -14,15 +14,14 @@ import { NextResponse } from "next/server";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { edbg } from "@/lib/debug/editor-debug";
 import {
   allocateNextVersionInTx,
-  getOriginalQuality,
   retryOnP2002,
   rollbackVersionAndJob,
   toJson,
   type RegenTx,
 } from "@/lib/api/regen-helpers";
+import { REGEN_QUALITY } from "@/lib/types/quality";
 
 // Promoted comment shape returned from the snapshot tx — what the
 // Inngest dispatch ships to the worker.
@@ -73,10 +72,6 @@ async function runSnapshotAndPromoteTx(args: {
           forAi: true,
         },
         select: { id: true, slideId: true, content: true, boundsJson: true },
-      });
-      edbg("server:partial-regen", "gathered AI (forAi) drafts", {
-        count: drafts.length,
-        slides: Array.from(new Set(drafts.map((d) => d.slideId))),
       });
       if (drafts.length === 0) return { kind: "empty" as const };
 
@@ -210,7 +205,8 @@ export async function POST(
 
   const { promoted, newVersion } = result;
   const targetSlideIds = uniqueSlideIds(promoted);
-  const originalQuality = await getOriginalQuality(project.id);
+  // Regens always run on the fast Opus preset, not the deck's original quality.
+  const originalQuality = REGEN_QUALITY;
 
   // Job row + Inngest dispatch. A failure at either step rolls back
   // the version, the comment promotions, AND (if it got created) the

@@ -6,16 +6,14 @@
 //   • POST /api/projects/[id]/regenerate-partial       — apply-drafts batch
 //
 // Both routes used to carry near-identical:
-//   1. `getOriginalQuality` lookup (newest succeeded deck.generate job)
-//   2. `allocateNextVersion` P2002-retry version-seeding helper
-//   3. `rollbackVersionAndJob` failure-path cleanup
+//   1. `allocateNextVersion` P2002-retry version-seeding helper
+//   2. `rollbackVersionAndJob` failure-path cleanup
 //
 // Lifted here (2026-05-27 simplifier pass) so the two routes can keep
 // their orchestration short and the shared logic stays in one place.
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isQuality, type Quality } from "@/lib/types/quality";
 
 /**
  * Convert `unknown` to `Prisma.InputJsonValue` via a JSON round-trip.
@@ -25,31 +23,6 @@ import { isQuality, type Quality } from "@/lib/types/quality";
  */
 export function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
-}
-
-/**
- * Look up the original deck's quality preset from the most recent
- * SUCCEEDED `deck.generate` Job for this project. The result is
- * forwarded to the partial-regen function so the redesign uses the
- * SAME model + thinking the user picked when first generating —
- * without it every regen burned Opus tier regardless. Falls through
- * to `null` when no successful job exists or the field is missing
- * on older jobs (paramsForQuality then defaults to "medium").
- */
-export async function getOriginalQuality(
-  projectId: string,
-): Promise<Quality | null> {
-  const lastJob = await prisma.job.findFirst({
-    where: {
-      projectId,
-      type: "deck.generate",
-      status: "succeeded",
-    },
-    orderBy: { createdAt: "desc" },
-    select: { inputJson: true },
-  });
-  const lastInput = (lastJob?.inputJson ?? null) as { quality?: unknown } | null;
-  return isQuality(lastInput?.quality) ? lastInput.quality : null;
 }
 
 /**

@@ -113,6 +113,13 @@ export const QUALITY_PRESETS: ReadonlyArray<{
 // 5-slide deck). Thinking tier stays one click away.
 export const DEFAULT_QUALITY: Quality = "opus-fast";
 
+// Quality used by ALL regen paths (partial-regen, per-slide regen, full
+// regenerate). Regens are quick scoped edits, so they always run on the
+// fastest available preset (Opus 4.8, no thinking) rather than inheriting the
+// deck's original quality — which also dodges access-gated presets like Fable 5
+// ("not available" 404s) that a deck may have been generated with.
+export const REGEN_QUALITY: Quality = "opus-fast";
+
 export function isQuality(value: unknown): value is Quality {
   return (
     value === "opus-fast" || value === "opus-balanced" || value === "fable-low"

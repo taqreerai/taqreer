@@ -159,7 +159,10 @@ export function ExportMenu({
                   exit={{ opacity: 0, y: openDown ? -6 : 6, scale: 0.98 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                   className="surface-popover fixed z-[1100] overflow-hidden rounded-2xl"
-                  style={{ top, bottom, left, width: MENU_WIDTH }}
+                  // surface-popover's own border is a white alpha that vanishes in
+                  // light mode; add the theme hairline so the menu always reads as a
+                  // defined surface in both themes.
+                  style={{ top, bottom, left, width: MENU_WIDTH, border: "1px solid var(--tq-border-hairline)" }}
                 >
                   <ul className="flex flex-col p-1.5">
                     {FORMATS.map((f) => {

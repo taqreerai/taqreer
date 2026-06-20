@@ -23,6 +23,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { usePopoverPosition } from "@/lib/ui/use-popover-position";
 
 const PRESETS = [
   "#000000",
@@ -290,18 +291,16 @@ export function ColorPickerPopover({
     onChange(preset);
   };
 
-  // Positioning offsets for the anchor wrapper. "center" uses a negative
-  // `margin-left` of half the fixed width rather than `translateX(-50%)`: a
-  // transform here would make the anchor a backdrop root and kill the glass
-  // surface's blur (the same trap that bit the Bell + History popovers). Pure
-  // layout, no transform — blur intact.
-  const positionStyle: React.CSSProperties = (() => {
-    const startEdge = dir === "rtl" ? "right" : "left";
-    const endEdge = dir === "rtl" ? "left" : "right";
-    if (align === "start") return { [startEdge]: 0 };
-    if (align === "end") return { [endEdge]: 0 };
-    return { left: "50%", marginLeft: -POPOVER_WIDTH / 2 };
-  })();
+  // Viewport-aware placement: anchor to the trigger (the relative wrapper this
+  // popover sits in), prefer the caller's side (flipUp → above), but FLIP + CLAMP
+  // so the 182px-wide, ~300px-tall picker never clips off any edge. Writes
+  // position:fixed + top/left directly (no transform → glass blur intact).
+  usePopoverPosition(wrapperRef, open, {
+    placement: flipUp ? "top" : "bottom",
+    align,
+    gap: 14,
+    dir,
+  });
 
   return (
     <AnimatePresence>
@@ -317,10 +316,16 @@ export function ColorPickerPopover({
         <motion.div
           ref={wrapperRef}
           dir="ltr"
-          className={`${surfaceClassName} absolute z-30 rounded-xl p-2.5 ${
-            flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
-          }`}
-          style={{ ...positionStyle, width: POPOVER_WIDTH }}
+          className={`${surfaceClassName} z-30 rounded-xl p-2.5`}
+          // position:fixed + top/left come from usePopoverPosition; start hidden so
+          // there's no first-frame flash before it's measured + placed. The hairline
+          // border keeps the picker defined against a white slide (surface-card's own
+          // border is a white alpha that vanishes in light mode).
+          style={{
+            width: POPOVER_WIDTH,
+            visibility: "hidden",
+            border: "1px solid var(--tq-border-hairline)",
+          }}
           initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
           animate={{ scale: 1, y: 0 }}
           // `instantExit` (the in-canvas style pill) skips the exit fade: the

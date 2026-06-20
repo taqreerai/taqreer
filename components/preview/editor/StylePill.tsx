@@ -22,6 +22,8 @@ import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
 import { MorePopover } from "./MorePopover";
 import { FontControl } from "./FontControl";
 import { canonicalFamily, googleFontUrl } from "@/lib/editor/font-search";
+import { hasOwnPaint } from "@/lib/editor/leaves";
+import { usePopoverPosition } from "@/lib/ui/use-popover-position";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import type { GenImageAspect } from "@/lib/images/slide-images";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -51,6 +53,17 @@ type Props = {
     prompt: string;
     aspect: GenImageAspect;
   }) => void;
+  // Group / ungroup the current multi-selection (virtual grouping — a shared
+  // data-tq-group id). The pill shows a Group button for a 2+ selection and an
+  // Ungroup button once the set is already a group.
+  onGroup?: () => void;
+  onUngroup?: () => void;
+  // Toggle the per-element lock (data-tq-lock) from the pill — same handler the
+  // Layers panel uses (bumps the canvas Moveable's grabbable set).
+  onToggleLock?: (el: HTMLElement) => void;
+  // Bring to front / send to back — owned by the parent so it uses the SAME
+  // stacking-target z scheme as the Layers reorder and reflects in the sidebar.
+  onRestack?: (dir: "front" | "back") => void;
 };
 
 // Union of a list of rects (viewport coords) → the tight bounding box, or null
@@ -70,31 +83,22 @@ function unionRect(
   return { left, top, right, bottom, width: right - left, height: bottom - top };
 }
 
-type Kind = "text" | "image" | "svg";
+type Kind = "text" | "image" | "svg" | "shape";
 function kindOf(el: HTMLElement): Kind {
   if (el.tagName === "IMG") return "image";
   if (el.tagName.toLowerCase() === "svg" || el.closest("svg")) return "svg";
+  // A painted block with NO content (colour panel / scrim / accent bar / overlay)
+  // is a SHAPE. We classify it with the SAME paint rule the canvas hit-test and
+  // the Layers panel use (`hasOwnPaint`: fill / gradient / bg-image / VISIBLE
+  // BORDER) so the three can never disagree — a border-only shape that the canvas
+  // happily selects no longer falls through to the text pill here. An <img>/<svg>
+  // is the content leaf, never a shape (handled above); a content-bearing box
+  // (text, or a wrapper holding an img/svg) is text-classified, never a shape, so
+  // a gen-image box's inline gradient placeholder can't suppress the image pill.
+  const win = el.ownerDocument.defaultView;
+  const hasContent = (el.textContent ?? "").trim() !== "" || !!el.querySelector("img, svg");
+  if (!hasContent && win && hasOwnPaint(el, win)) return "shape";
   return "text";
-}
-
-// A decorative fill — a gradient scrim, a background image, or a colour block,
-// with NO content (no text, no img/svg). These have no useful pill controls (you
-// edit a gradient/background from the Layers panel), so the pill SUPPRESSES for
-// them: selecting a تدرج (or any fill) shows nothing on the canvas.
-function isDecorativeFill(el: HTMLElement): boolean {
-  // An <img>/<svg> IS the content leaf, never a decorative fill — even when it
-  // carries a `background` placeholder. Gen-image boxes ship with an inline
-  // `background: linear-gradient(…)` (Claude's pre-load placeholder), so the
-  // `backgroundImage` test below would otherwise mis-classify the image as a
-  // fill and suppress the whole pill (no Replace / §19 Regenerate). The
-  // `querySelector("img, svg")` check only catches a WRAPPER containing one,
-  // not the element itself — this guards the element-is-the-img/svg case.
-  if (el.tagName === "IMG" || el.tagName.toLowerCase() === "svg") return false;
-  if ((el.textContent ?? "").trim() !== "") return false;
-  if (el.querySelector("img, svg")) return false;
-  const cs = getComputedStyle(el);
-  if (/gradient|url\(/i.test(cs.backgroundImage)) return true;
-  return !isNoPaint(cs.backgroundColor);
 }
 
 function rgbToHex(rgb: string): string {
@@ -110,6 +114,25 @@ function rgbToHex(rgb: string): string {
 // SVG so its cut-outs / transparent backgrounds are preserved.
 function isNoPaint(c: string): boolean {
   return !c || c === "none" || c === "transparent" || /,\s*0(\.0+)?\)\s*$/.test(c);
+}
+
+// The colour of a shape's first VISIBLE border side, as hex, or null when no
+// side paints a border. Accent bars / card top-rules / framed boxes paint a
+// coloured border rather than a fill, so a no-fill "shape" recolours through
+// here. Side order matches leaves.ts's hasVisibleBorder.
+function firstBorderColor(cs: CSSStyleDeclaration): string | null {
+  const sides = [
+    ["borderTopWidth", "borderTopStyle", "borderTopColor"],
+    ["borderRightWidth", "borderRightStyle", "borderRightColor"],
+    ["borderBottomWidth", "borderBottomStyle", "borderBottomColor"],
+    ["borderLeftWidth", "borderLeftStyle", "borderLeftColor"],
+  ] as const;
+  for (const [w, s, c] of sides) {
+    if (parseFloat(cs[w]) >= 1 && cs[s] !== "none" && !isNoPaint(cs[c])) {
+      return rgbToHex(cs[c]);
+    }
+  }
+  return null;
 }
 
 // The graphic's current paint colour (first inked fill, else first inked
@@ -246,7 +269,7 @@ function Chevron({ up = false }: { up?: boolean }) {
   );
 }
 
-export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage }: Props) {
+export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage, onGroup, onUngroup, onToggleLock, onRestack }: Props) {
   // The primary target — anchors positioning, drives single-element controls
   // (image/svg), and supplies the DISPLAYED value for every text control. A
   // multi-text selection still reads/writes through `targets`.
@@ -310,17 +333,11 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
         const botY = ir.top + box.bottom;
         const pw = el.offsetWidth;
         const ph = el.offsetHeight;
-        // Images: the pill floats INSIDE the image at its top, with a small margin
-        // (Canva-style) — images are big and a pill above them wastes space / can
-        // sit off-canvas. Everything else (incl. a multi-text set): ABOVE the
-        // selection, flipping BELOW when it hugs the canvas top.
-        let top: number;
-        if (kind === "image" && !multi) {
-          top = topY + 12;
-        } else {
-          top = topY - 10 - ph;
-          if (top < ir.top + 4) top = botY + 10;
-        }
+        // Always BELOW the selection (Moveable's rotate handle sits ABOVE the
+        // element, so a pill on top would cover it). Flip ABOVE only when there's
+        // no room below (selection hugging the canvas bottom).
+        let top = botY + 12;
+        if (top > window.innerHeight - ph - 8) top = topY - 10 - ph;
         top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
         const left = Math.max(8, Math.min(cx - pw / 2, window.innerWidth - pw - 8));
         // Hold the placed position; only the first frames (until the box lands) move it.
@@ -464,44 +481,61 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
     [target],
   );
 
-  // Image alignment (2026-06-12): snap the image to a canvas side on
-  // either axis. PHYSICAL sides on purpose - image placement is
-  // spatial, not reading-order. Absolutely-positioned images move via
-  // their insets (centering = both insets 0 + auto margins, which
-  // needs an explicit size - pinned from the computed px when none is
-  // set); in-flow images use block + auto margins (horizontal only -
-  // vertical is a no-op without a positioned context).
-  const alignImage = useCallback(
+  // Align to the CANVAS (not text-align) — snap each selected element to a slide
+  // edge or centre on one axis. Driven by an additive transform translate (the
+  // same channel Moveable's drag writes), measured from the live geometry, so it
+  // works for ANY element regardless of how it's positioned (absolute / in-flow /
+  // already dragged) AND recovers an element dragged off-canvas: the maths uses
+  // the slide-space size + position, never the current (possibly off-screen) one.
+  // Rotation is preserved; the box is the element's axis-aligned bounds.
+  const alignToCanvas = useCallback(
     (side: "left" | "center" | "right" | "top" | "middle" | "bottom") => {
-      const win = target.ownerDocument.defaultView ?? window;
-      const cs = win.getComputedStyle(target);
-      const abs = cs.position === "absolute" || cs.position === "fixed";
-      const set = (p: string, v: string) => target.style.setProperty(p, v);
+      const doc = target.ownerDocument;
+      const stage = doc.getElementById("tqe-stage");
+      if (!stage) return;
+      const sRect = stage.getBoundingClientRect();
+      const stageW = stage.offsetWidth;
+      const stageH = stage.offsetHeight;
+      const scale = sRect.width / stageW || 1;
       const horizontal = side === "left" || side === "center" || side === "right";
-      if (abs) {
+      for (const el of targets) {
+        const r = el.getBoundingClientRect();
+        const w = r.width / scale;
+        const h = r.height / scale;
+        const curX = (r.left - sRect.left) / scale; // element's slide-space x/y
+        const curY = (r.top - sRect.top) / scale;
+        const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+        const rot = Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI * 100) / 100;
+        let tx = m.e;
+        let ty = m.f;
         if (horizontal) {
-          if (side === "center" && !target.style.width) set("width", cs.width);
-          set("left", side === "right" ? "auto" : "0");
-          set("right", side === "left" ? "auto" : "0");
-          set("margin-left", side === "center" ? "auto" : "0");
-          set("margin-right", side === "center" ? "auto" : "0");
+          const want = side === "left" ? 0 : side === "right" ? stageW - w : (stageW - w) / 2;
+          tx = m.e + (want - curX);
         } else {
-          if (side === "middle" && !target.style.height) set("height", cs.height);
-          set("top", side === "bottom" ? "auto" : "0");
-          set("bottom", side === "top" ? "auto" : "0");
-          set("margin-top", side === "middle" ? "auto" : "0");
-          set("margin-bottom", side === "middle" ? "auto" : "0");
+          const want = side === "top" ? 0 : side === "bottom" ? stageH - h : (stageH - h) / 2;
+          ty = m.f + (want - curY);
         }
-      } else if (horizontal) {
-        set("display", "block");
-        set("margin-left", side === "left" ? "0" : "auto");
-        set("margin-right", side === "right" ? "0" : "auto");
+        // setProperty (a method call), not `el.style.transform = …` — a direct
+        // assignment on a prop element trips react-hooks/immutability.
+        el.style.setProperty(
+          "transform",
+          `translate(${Math.round(tx)}px, ${Math.round(ty)}px)` + (rot ? ` rotate(${rot}deg)` : ""),
+        );
       }
       dirty.current = true;
       force((n) => n + 1);
     },
-    [target],
+    [targets, target],
   );
+
+  // Lock / unlock every target. If ALL are locked → unlock; else lock the rest.
+  const allLocked = targets.every((t) => t.hasAttribute("data-tq-lock"));
+  const toggleLockTargets = useCallback(() => {
+    for (const t of targets) {
+      const locked = t.hasAttribute("data-tq-lock");
+      if (allLocked ? locked : !locked) onToggleLock?.(t);
+    }
+  }, [targets, allLocked, onToggleLock]);
 
   // Apply a picked font family (null = reset to the deck's theme font). Set the
   // inline font-family AND lazy-load the css2 face INTO THE IFRAME so the preview
@@ -581,6 +615,12 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
   // so the box shows the gen-image shimmer until the new one lands, derive the
   // aspect from the box's own shape, then hand off to DeckView (route + swap).
   const regenPopoverRef = useRef<HTMLDivElement>(null);
+  // Viewport-aware placement (flip + clamp) for the regen-prompt popover.
+  usePopoverPosition(regenPopoverRef, regenOpen, {
+    placement: popoverFlipUp ? "top" : "bottom",
+    align: "end",
+    dir,
+  });
   const handleRegenConfirm = useCallback(() => {
     const newPrompt = regenPrompt.trim();
     if (!newPrompt) return;
@@ -614,14 +654,15 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
   }, [regenOpen]);
 
   if (!target.isConnected) return null;
-  // Multi-select gate (plan-editor §20): a set of 2+ elements only shows the pill
-  // when EVERY one is text — a mixed / non-text multi-selection shows NO pill. The
-  // single-element pill (length 1) is unchanged: text, image, and svg all qualify.
-  if (multi && !targets.every((t) => kindOf(t) === "text")) return null;
-  // A decorative fill (a gradient scrim, a colour block) has no useful pill — you
-  // edit it from the Layers panel. Suppress the canvas pill entirely. (Single-
-  // element only; an all-text multi-set has no decorative fills by construction.)
-  if (!multi && isDecorativeFill(target)) return null;
+  // Multi-select: an all-text set shows the full text pill (apply-to-all); a MIXED
+  // set (text + image + shape) shows a GROUP-ONLY pill — the per-kind controls
+  // don't apply uniformly, but grouping always does. A 2+ selection that's already
+  // a group shows Ungroup instead.
+  const allText = targets.every((t) => kindOf(t) === "text");
+  const groupOnly = multi && !allText;
+  const groupId = target.getAttribute("data-tq-group");
+  const isGrouped =
+    multi && !!groupId && targets.every((t) => t.getAttribute("data-tq-group") === groupId);
 
   // An AI-generated image box (vs an uploaded/replaced one) carries both
   // data-genid and a non-empty data-genimage prompt — only those can regen.
@@ -638,6 +679,16 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
   const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
+  // A shape paints either a FILL (its background, the common solid block) or,
+  // for a border-only decorative block (accent bar / top-rule / framed box), its
+  // BORDER. The swatch reads + recolours whichever it actually has, so the change
+  // lands on the visible ink and serializes into the exported HTML.
+  const shapeFilled = kind === "shape" && !isNoPaint(cs.backgroundColor);
+  const shapeBorder = kind === "shape" && !shapeFilled ? firstBorderColor(cs) : null;
+  const shapeColor = shapeFilled ? rgbToHex(cs.backgroundColor) : shapeBorder ?? "#000000";
+  const hasShapePaint = shapeFilled || shapeBorder !== null;
+  const setShapeColor = (hex: string) =>
+    setStyle(shapeBorder !== null ? "border-color" : "background-color", hex);
   const opacityRaw = parseFloat(cs.opacity);
   const opacityPct = Math.round((Number.isFinite(opacityRaw) ? opacityRaw : 1) * 100);
   // The element's explicitly-picked Google font (from its inline style), or null
@@ -697,7 +748,10 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
           none → it blurs the slide directly, exactly like the pill. */}
       <div
         className="surface-popover rounded-full"
-        style={{ position: "absolute", inset: 0 }}
+        // surface-popover's own border is a white alpha that vanishes in light
+        // mode (the pill then floats borderless over a light slide); add the
+        // theme hairline so it always reads as a defined surface in both themes.
+        style={{ position: "absolute", inset: 0, border: "1px solid var(--tq-border-hairline)" }}
       />
       <div
         style={{
@@ -708,7 +762,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
           padding: "6px 6px",
         }}
       >
-      {kind === "text" && (
+      {!groupOnly && kind === "text" && (
         <>
           {/* Font family — a pill showing the current font that morphs into a
               search over the full Google Fonts catalog. The 6px end margin
@@ -812,9 +866,9 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
           </div>
         </>
       )}
-      {/* Graphic (svg): recolour swatch + inline opacity (no ⋯ — only two
-          controls, both fit on the pill). */}
-      {kind === "svg" && (
+      {/* Graphic (svg): recolour swatch + inline opacity + canvas-align (no ⋯ —
+          the controls fit on the pill). */}
+      {!groupOnly && kind === "svg" && (
         <>
           <div className="relative flex h-8 items-center justify-center px-1.5">
             <button
@@ -850,32 +904,57 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
             value={opacityPct}
             onChange={(pct) => setStyle("opacity", String(pct / 100))}
           />
+          <Divider />
+          <div style={{ marginInline: 6 }}>
+            <AlignButtons onAlign={alignToCanvas} />
+          </div>
+        </>
+      )}
+      {/* Shape: align + FILL swatch (recolour the painted block). Opacity + corner
+          roundness live in the ⋯ menu. The universal stack/lock cluster + ⋯ are
+          appended after this for every kind. */}
+      {!groupOnly && kind === "shape" && (
+        <>
+          <div style={{ marginInline: 6 }}>
+            <AlignButtons onAlign={alignToCanvas} />
+          </div>
+          <Divider />
+          <div className="relative flex h-8 items-center justify-center px-1.5">
+            <button
+              type="button"
+              aria-label={t.fillColour}
+              onClick={() => {
+                setColorOpen((o) => !o);
+                setMoreOpen(false);
+              }}
+              style={{
+                display: "block",
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                border: "1px solid var(--tq-border-focus)",
+                background: hasShapePaint ? shapeColor : "transparent",
+                cursor: "pointer",
+              }}
+            />
+            <ColorPickerPopover
+              open={colorOpen}
+              value={shapeColor}
+              onChange={setShapeColor}
+              onClose={() => setColorOpen(false)}
+              align="center"
+              flipUp={popoverFlipUp}
+              instantExit
+              surfaceClassName="surface-popover"
+            />
+          </div>
         </>
       )}
       {/* Image: replace via upload → swap the src. */}
-      {kind === "image" && (
+      {!groupOnly && kind === "image" && (
         <>
-          {/* Canvas-side alignment - physical, both axes. dir=ltr so
-              "left" sits leftmost in both UI locales. */}
-          <div dir="ltr" style={{ display: "flex", alignItems: "center", gap: 2, marginInlineEnd: 6 }}>
-            {(
-              [
-                ["left", "align_horizontal_left"],
-                ["center", "align_horizontal_center"],
-                ["right", "align_horizontal_right"],
-                ["top", "align_vertical_top"],
-                ["middle", "align_vertical_center"],
-                ["bottom", "align_vertical_bottom"],
-              ] as const
-            ).map(([side, glyph]) => (
-              <Btn key={side} onClick={() => alignImage(side)} label={`Align ${side}`}>
-                <span className="material-symbols-outlined" style={{ fontSize: 17 }} aria-hidden>
-                  {glyph}
-                </span>
-              </Btn>
-            ))}
-          </div>
-          <Divider />
+          {/* Replace + Regenerate LEAD the image pill (content actions first);
+              canvas-align follows after the divider. */}
           <button
             type="button"
             aria-label={t.replaceImage}
@@ -927,12 +1006,13 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
                   ref={regenPopoverRef}
                   dir={dir}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="surface-popover absolute z-20 rounded-xl p-2.5 text-foreground"
+                  className="surface-popover z-20 rounded-xl p-2.5 text-foreground"
+                  // position:fixed + top/left from usePopoverPosition; start hidden
+                  // (no flash) + hairline border so it reads over a light slide.
                   style={{
                     width: 300,
-                    right: 0,
-                    top: popoverFlipUp ? "auto" : "calc(100% + 8px)",
-                    bottom: popoverFlipUp ? "calc(100% + 8px)" : "auto",
+                    visibility: "hidden",
+                    border: "1px solid var(--tq-border-hairline)",
                   }}
                 >
                   <textarea
@@ -969,14 +1049,46 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
               )}
             </div>
           )}
+          <Divider />
+          <div style={{ marginInline: 6 }}>
+            <AlignButtons onAlign={alignToCanvas} />
+          </div>
         </>
       )}
-      {/* "⋯ more" — the rest of the inspector (weight/line/transform/decoration/
-          opacity for text; opacity/rounding for image). SVG has no ⋯ — its two
-          controls (colour + opacity) live inline above. The menu hangs
-          from the ⋯ button's LEFT edge and extends rightward so it clears the
-          element. */}
-      {kind !== "svg" && (
+      {/* Universal actions — stack order + lock, for EVERY element kind. */}
+      {!groupOnly && <Divider />}
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Btn onClick={() => onRestack?.("front")} label={t.bringToFront}>
+          <FrontIcon />
+        </Btn>
+        <Btn onClick={() => onRestack?.("back")} label={t.sendToBack}>
+          <BackIcon />
+        </Btn>
+        {onToggleLock && (
+          <Btn active={allLocked} onClick={toggleLockTargets} label={allLocked ? t.unlock : t.lock}>
+            {allLocked ? <PillLockClosedIcon /> : <PillLockOpenIcon />}
+          </Btn>
+        )}
+      </div>
+      {/* Group / ungroup — any 2+ selection (the only control on a mixed set). */}
+      {multi && (onGroup || onUngroup) && (
+        <>
+          <Divider />
+          <GroupButton
+            grouped={isGrouped}
+            onGroup={onGroup}
+            onUngroup={onUngroup}
+            groupLabel={t.group}
+            ungroupLabel={t.ungroup}
+          />
+        </>
+      )}
+      {/* "⋯ more" — pinned to the TRAILING end of the pill, always after a
+          divider (the rest of the inspector: weight/line/transform/decoration/
+          opacity for text; opacity + corner roundness for image AND shape).
+          Hidden for svg (its two controls fit inline) and mixed multi-selections
+          (no extra controls there). */}
+      {!groupOnly && (kind === "text" || kind === "image" || kind === "shape") && (
         <>
           <Divider />
           <div style={{ position: "relative" }}>
@@ -997,6 +1109,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage 
               kind={kind}
               flipUp={popoverFlipUp}
               setStyle={setStyle}
+              onAlign={alignToCanvas}
               onClose={() => setMoreOpen(false)}
             />
           </div>
@@ -1082,6 +1195,94 @@ function OpacityControl({ value, onChange }: { value: number; onChange: (pct: nu
         {value}%
       </span>
     </div>
+  );
+}
+
+type AlignSide = "left" | "center" | "right" | "top" | "middle" | "bottom";
+const ALIGN_SIDES: readonly (readonly [AlignSide, string])[] = [
+  ["left", "align_horizontal_left"],
+  ["center", "align_horizontal_center"],
+  ["right", "align_horizontal_right"],
+  ["top", "align_vertical_top"],
+  ["middle", "align_vertical_center"],
+  ["bottom", "align_vertical_bottom"],
+];
+
+// The 6 canvas-align buttons (snap to a slide edge / centre). dir=ltr so "left"
+// stays leftmost in both UI locales — alignment is spatial, not reading-order.
+function AlignButtons({ onAlign }: { onAlign: (side: AlignSide) => void }) {
+  return (
+    <div dir="ltr" style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      {ALIGN_SIDES.map(([side, glyph]) => (
+        <Btn key={side} onClick={() => onAlign(side)} label={`Align ${side}`}>
+          <span className="material-symbols-outlined" style={{ fontSize: 17 }} aria-hidden>
+            {glyph}
+          </span>
+        </Btn>
+      ))}
+    </div>
+  );
+}
+
+// Group / ungroup toggle for a multi-selection.
+function GroupButton({
+  grouped,
+  onGroup,
+  onUngroup,
+  groupLabel,
+  ungroupLabel,
+}: {
+  grouped: boolean;
+  onGroup?: () => void;
+  onUngroup?: () => void;
+  groupLabel: string;
+  ungroupLabel: string;
+}) {
+  return (
+    <Btn
+      active={grouped}
+      onClick={() => (grouped ? onUngroup?.() : onGroup?.())}
+      label={grouped ? ungroupLabel : groupLabel}
+    >
+      <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
+        {grouped ? "library_add_check" : "group_work"}
+      </span>
+    </Btn>
+  );
+}
+
+// Bring to front — a filled square lifted in front of an outlined one.
+function FrontIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="4" width="11" height="11" rx="1.5" />
+      <path d="M9 20h11a1 1 0 0 0 1-1V9" opacity="0.5" />
+    </svg>
+  );
+}
+// Send to back — the filled square pushed behind.
+function BackIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="9" width="11" height="11" rx="1.5" />
+      <path d="M15 4H5a1 1 0 0 0-1 1v10" opacity="0.5" />
+    </svg>
+  );
+}
+function PillLockClosedIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+function PillLockOpenIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 7.5-1.9" />
+    </svg>
   );
 }
 

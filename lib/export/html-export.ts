@@ -401,8 +401,9 @@ function splitMixedScriptFlexChildren(root: HTMLElement): void {
  */
 export async function exportManifestAsPptx(
   manifest: SlideManifest,
-  fileName: string
-): Promise<{ stats: BiDiPostprocessStats; slideCount: number }> {
+  fileName: string,
+  opts?: { skipDownload?: boolean }
+): Promise<{ stats: BiDiPostprocessStats; slideCount: number; blob?: Blob }> {
   // Slide canvas dimensions from the manifest's format (16:9 → 1920×1080;
   // 9:16 → 1080×1920). Used for the offscreen render container, each
   // slide's inline width/height, dom-to-pptx's PPT layout, and the BiDi
@@ -743,6 +744,9 @@ export async function exportManifestAsPptx(
       }
     }
 
+    if (opts?.skipDownload) {
+      return { stats, slideCount: slideNodes.length, blob: finalBlob };
+    }
     downloadBlob(finalBlob, fileName);
 
     return { stats, slideCount: slideNodes.length };

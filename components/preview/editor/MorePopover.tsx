@@ -11,13 +11,25 @@
 // and lives as a sibling of the pill's blur layer, so it blurs the slide directly
 // rather than the pill's flat interior. (memory: reference_backdrop_filter_traps)
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { usePopoverPosition } from "@/lib/ui/use-popover-position";
 
-type Kind = "text" | "image" | "svg";
+type Kind = "text" | "image" | "svg" | "shape";
+type AlignSide = "left" | "center" | "right" | "top" | "middle" | "bottom";
 
 const WIDTH = 232;
+
+// Canvas-align glyphs (Material Symbols) — same set the image pill uses inline.
+const ALIGN_SIDES: readonly (readonly [AlignSide, string])[] = [
+  ["left", "align_horizontal_left"],
+  ["center", "align_horizontal_center"],
+  ["right", "align_horizontal_right"],
+  ["top", "align_vertical_top"],
+  ["middle", "align_vertical_center"],
+  ["bottom", "align_vertical_bottom"],
+];
 
 // Row labels are localized via the UI-locale dictionary in the render. Symbol-
 // based controls (transform / decoration) are language-neutral, so they carry
@@ -54,6 +66,7 @@ export function MorePopover({
   kind,
   flipUp = false,
   setStyle,
+  onAlign,
   onClose,
 }: {
   open: boolean;
@@ -63,11 +76,18 @@ export function MorePopover({
   // pill) instead of down, so it never runs off the bottom edge.
   flipUp?: boolean;
   setStyle: (prop: string, value: string) => void;
+  // Align the element to a canvas edge / centre (text aligns live here, in the
+  // ⋯ menu, per the design — the inline pill stays text-style only).
+  onAlign?: (side: AlignSide) => void;
   onClose: () => void;
 }) {
   // Row labels are editor chrome → UI-locale dictionary (not the deck language).
   const t = useDict().editor.typography;
   const { dir } = useLocale();
+  const popRef = useRef<HTMLDivElement>(null);
+  // Viewport-aware placement (flip + clamp) — see usePopoverPosition. Anchors to
+  // the ⋯ button's relative wrapper this popover sits in.
+  usePopoverPosition(popRef, open, { placement: flipUp ? "top" : "bottom", align: "start", dir });
   const weightOptions = WEIGHTS; // English names regardless of deck language
   // Close on Esc only. Outside-click is intentionally NOT handled here: clicking
   // outside the pill deselects it → the pill (and this popover, which is its
@@ -101,19 +121,39 @@ export function MorePopover({
   // instant `open` flips false; the entrance (initial→animate) still plays.
   return (
     <motion.div
+      ref={popRef}
       // Editor chrome → follow the UI locale: RTL puts the label on the right and
       // the control on the left; LTR mirrors it.
       dir={dir}
-      className={`surface-popover absolute z-30 rounded-2xl px-3.5 py-3.5 ${
-        flipUp ? "bottom-full mb-3.5" : "top-full mt-3.5"
-      }`}
-      style={{ left: 0, width: WIDTH }}
+      className="surface-popover z-30 rounded-2xl px-3.5 py-3.5"
+      // position:fixed + top/left from usePopoverPosition; start hidden (no flash)
+      // and carry the hairline border so it stays defined over a light slide.
+      style={{ width: WIDTH, visibility: "hidden", border: "1px solid var(--tq-border-hairline)" }}
       initial={{ scale: 0.96, y: flipUp ? 4 : -4 }}
       animate={{ scale: 1, y: 0 }}
       transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
     >
       {kind === "text" ? (
         <>
+          {onAlign ? (
+            <Row label={t.align}>
+              <div dir="ltr" className="flex gap-0.5">
+                {ALIGN_SIDES.map(([side, glyph]) => (
+                  <button
+                    key={side}
+                    type="button"
+                    aria-label={`Align ${side}`}
+                    onClick={() => onAlign(side)}
+                    className="inline-flex h-7 w-6 items-center justify-center rounded-md text-foreground/55 transition-colors hover:text-foreground"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }} aria-hidden>
+                      {glyph}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </Row>
+          ) : null}
           <Row label={t.weight}>
             <Select
               value={weight}
@@ -267,7 +307,7 @@ function Select({
       }}
     >
       {options.map((o) => (
-        <option key={o.value} value={o.value} style={{ background: "#15151c", color: "#fff" }}>
+        <option key={o.value} value={o.value} style={{ background: "var(--tq-surface)", color: "var(--tq-text-primary)" }}>
           {o.label}
         </option>
       ))}
