@@ -953,7 +953,7 @@ export function DeckView({
   // the server from the per-commit /edit, so this just advances the saved snapshot).
   useEffect(() => {
     const onPageHide = () => {
-      if (!localDirtyRef.current || !initialVersionId) return;
+      if (!localDirtyRef.current || !initialVersionId || applyingRef.current) return;
       void fetch(`/api/projects/${projectId}/save`, {
         method: "POST",
         keepalive: true,
@@ -1078,11 +1078,15 @@ export function DeckView({
   const groupSelected = useCallback(() => {
     if (editorSelected.length < 2) return;
     // Persisted now (survives reload), so the id must not collide with a group id
-    // already saved on the slide — stamp it with the time + a counter.
+    // already saved on the slide; stamp it with the time + a counter.
     const gid = `g${Date.now().toString(36)}${editorSeqRef.current++}`;
     editorSelected.forEach((el) => el.setAttribute("data-tq-group", gid));
     setEditorSelected((cur) => [...cur]); // re-render so the pill shows Ungroup
-  }, [editorSelected]);
+    // Commit so the group survives reload + lands in the undo history.
+    const sec = editorSelected[0]?.closest("section") as HTMLElement | null;
+    const key = focusedSlideKeyFromRefs();
+    if (sec && key) handleSlideEdit(key, serializeSlideSection(sec));
+  }, [editorSelected, focusedSlideKeyFromRefs, handleSlideEdit]);
   const ungroupSelected = useCallback(() => {
     const sec = editorSelected[0]?.closest("section") as HTMLElement | null;
     const gids = new Set(
@@ -1097,7 +1101,10 @@ export function DeckView({
     );
     editorSelected.forEach((el) => el.removeAttribute("data-tq-group"));
     setEditorSelected((cur) => [...cur]);
-  }, [editorSelected]);
+    // Commit so the ungroup survives reload + lands in the undo history.
+    const key = focusedSlideKeyFromRefs();
+    if (sec && key) handleSlideEdit(key, serializeSlideSection(sec));
+  }, [editorSelected, focusedSlideKeyFromRefs, handleSlideEdit]);
   // Add a fresh text box at the slide centre + select it (double-click to type).
   const addTextBox = useCallback(() => {
     const stage = editorDoc?.getElementById("tqe-stage");
@@ -1218,7 +1225,7 @@ export function DeckView({
         idleTimerRef.current = null;
       }
       void flushCheckpoints();
-      if (localDirtyRef.current && initialVersionId) {
+      if (localDirtyRef.current && initialVersionId && !applyingRef.current) {
         void fetch(`/api/projects/${projectId}/save`, {
           method: "POST",
           keepalive: true,

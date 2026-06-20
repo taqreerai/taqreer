@@ -142,7 +142,7 @@ export function MorePopover({
                   <button
                     key={side}
                     type="button"
-                    aria-label={`Align ${side}`}
+                    aria-label={t.alignSides[side]}
                     onClick={() => onAlign(side)}
                     className="inline-flex h-7 w-6 items-center justify-center rounded-md text-foreground/55 transition-colors hover:text-foreground"
                   >

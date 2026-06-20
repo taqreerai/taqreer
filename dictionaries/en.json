@@ -997,7 +997,15 @@
       "decoration": "Decoration",
       "opacity": "Opacity",
       "rounding": "Rounding",
-      "align": "Align"
+      "align": "Align",
+      "alignSides": {
+        "left": "Align left",
+        "center": "Align center",
+        "right": "Align right",
+        "top": "Align top",
+        "middle": "Align middle",
+        "bottom": "Align bottom"
+      }
     },
     "fonts": {
       "searchPlaceholder": "Search fonts…",

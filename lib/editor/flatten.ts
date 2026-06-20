@@ -46,13 +46,12 @@ const FLATTEN_OWNED = new Set([
   "direction", "unicode-bidi",
 ]);
 
-function stripFlattenProps(style: string): string {
-  return style
-    .split(";")
-    .map((d) => d.trim())
-    .filter(Boolean)
-    .filter((decl) => !FLATTEN_OWNED.has(decl.split(":")[0].trim().toLowerCase()))
-    .join(";");
+// Remove flatten-owned props via the browser's CSS parser (the element is a live DOM
+// clone, so it carries a real CSSStyleDeclaration). A naive string split on ";" would
+// corrupt values that legitimately contain semicolons, e.g. url(data:image/svg+xml;...).
+function stripFlattenProps(el: HTMLElement): string {
+  for (const prop of FLATTEN_OWNED) el.style.removeProperty(prop);
+  return el.getAttribute("style") ?? "";
 }
 
 // Net rotation (deg) from an element's OWN computed transform matrix. Translation is
@@ -167,7 +166,7 @@ export function flattenSlideSection(
     const m = measure(el, cs);
     const clone = el.cloneNode(fullClone) as HTMLElement;
     if (!fullClone) while (clone.firstChild) clone.removeChild(clone.firstChild);
-    const prev = stripFlattenProps(clone.getAttribute("style") ?? "");
+    const prev = stripFlattenProps(clone);
     const frozen = freezeInherited(el, cs);
     // SINGLE-LINE detection (robust + self-healing): force the live element onto one
     // line and measure the content width. If that fits within the box width, the text

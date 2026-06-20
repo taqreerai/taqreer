@@ -1182,6 +1182,14 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       <iframe
         ref={iframeRef}
         srcDoc={srcDoc}
+        // The deck/AI HTML is sanitized, but sandbox it as defence-in-depth: any
+        // sanitizer bypass can't run scripts, navigate the top frame, open popups,
+        // or submit forms. NO allow-scripts: the srcDoc carries only HTML + CSS,
+        // and ALL editor interactivity (Moveable, selection, contenteditable) runs
+        // in the parent React app via a portal into editorDoc.body + listeners on
+        // editorDoc. allow-same-origin is REQUIRED so the editor keeps its
+        // contentDocument / contentWindow access.
+        sandbox="allow-same-origin"
         title="slide editor"
         style={{
           border: 0,

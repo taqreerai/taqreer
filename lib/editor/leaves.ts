@@ -52,16 +52,18 @@ export function isVisualLeaf(el: Element): boolean {
   return isTextLeaf(el);
 }
 
-// True when the element paints something of its OWN — a solid colour, a gradient,
-// or a background image — as opposed to a transparent layout wrapper. This is what
-// promotes a content-free `<div>` (a colour panel, a scrim, a full-bleed overlay)
-// to a selectable object: now that locking is manual (Layers panel), every painted
-// block is grabbable, not just text/img/svg. Needs the live view for the computed
-// style.
+// True when the element paints something of its OWN (a solid colour, a gradient,
+// a background image, a shadow, or a visible border), as opposed to a transparent
+// layout wrapper. This is what promotes a content-free `<div>` (a colour panel, a
+// scrim, a full-bleed overlay) to a selectable object: now that locking is manual
+// (Layers panel), every painted block is grabbable, not just text/img/svg. Kept in
+// lockstep with flatten.ts `hasOwnPaint` so a shadow-only shell that flatten emits is
+// also selectable / listed. Needs the live view for the computed style.
 export function hasOwnPaint(el: Element, win: Window): boolean {
   const cs = win.getComputedStyle(el);
   if (/gradient|url\(/i.test(cs.backgroundImage)) return true;
   if (isOpaqueish(cs.backgroundColor)) return true;
+  if (cs.boxShadow && cs.boxShadow !== "none") return true;
   return hasVisibleBorder(cs);
 }
 

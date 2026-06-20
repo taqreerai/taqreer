@@ -216,8 +216,12 @@ export function LayersPanel({
     const stage = doc?.getElementById("tqe-stage");
     const win = doc?.defaultView;
     const ordered = stage && win ? frontFirst(tree, win, stage) : tree;
+    // Mirror into the ref synchronously too, so a drag-END batched with this
+    // derive reads the latest order (the effect that syncs the ref runs later).
+    const next = foldGroups(ordered);
+    displayRef.current = next;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDisplayOrder(foldGroups(ordered));
+    setDisplayOrder(next);
     // restackTick: re-sort after a pill bring-to-front / send-to-back (z-only change).
   }, [tree, doc, restackTick]);
 
@@ -376,7 +380,13 @@ export function LayersPanel({
           <Reorder.Group
             axis="y"
             values={displayOrder}
-            onReorder={setDisplayOrder}
+            // Mirror into the ref synchronously so commitOrder() (drag END, an
+            // event handler) reads the latest order even if the final reorder is
+            // batched with drag-end before the ref-sync effect runs.
+            onReorder={(next) => {
+              displayRef.current = next;
+              setDisplayOrder(next);
+            }}
             className={`flex-1 space-y-0.5 overscroll-contain pt-2 ${
               isDragging ? "overflow-visible" : "overflow-y-auto"
             }`}

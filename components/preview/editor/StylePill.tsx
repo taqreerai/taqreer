@@ -906,7 +906,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
           />
           <Divider />
           <div style={{ marginInline: 6 }}>
-            <AlignButtons onAlign={alignToCanvas} />
+            <AlignButtons onAlign={alignToCanvas} labels={dict.editor.typography.alignSides} />
           </div>
         </>
       )}
@@ -916,7 +916,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
       {!groupOnly && kind === "shape" && (
         <>
           <div style={{ marginInline: 6 }}>
-            <AlignButtons onAlign={alignToCanvas} />
+            <AlignButtons onAlign={alignToCanvas} labels={dict.editor.typography.alignSides} />
           </div>
           <Divider />
           <div className="relative flex h-8 items-center justify-center px-1.5">
@@ -1051,7 +1051,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
           )}
           <Divider />
           <div style={{ marginInline: 6 }}>
-            <AlignButtons onAlign={alignToCanvas} />
+            <AlignButtons onAlign={alignToCanvas} labels={dict.editor.typography.alignSides} />
           </div>
         </>
       )}
@@ -1210,11 +1210,19 @@ const ALIGN_SIDES: readonly (readonly [AlignSide, string])[] = [
 
 // The 6 canvas-align buttons (snap to a slide edge / centre). dir=ltr so "left"
 // stays leftmost in both UI locales — alignment is spatial, not reading-order.
-function AlignButtons({ onAlign }: { onAlign: (side: AlignSide) => void }) {
+// Labels come from the UI dict (editor.typography.alignSides) so the icon-only
+// buttons get a localized accessible name in both locales.
+function AlignButtons({
+  onAlign,
+  labels,
+}: {
+  onAlign: (side: AlignSide) => void;
+  labels: Record<AlignSide, string>;
+}) {
   return (
     <div dir="ltr" style={{ display: "flex", alignItems: "center", gap: 2 }}>
       {ALIGN_SIDES.map(([side, glyph]) => (
-        <Btn key={side} onClick={() => onAlign(side)} label={`Align ${side}`}>
+        <Btn key={side} onClick={() => onAlign(side)} label={labels[side]}>
           <span className="material-symbols-outlined" style={{ fontSize: 17 }} aria-hidden>
             {glyph}
           </span>

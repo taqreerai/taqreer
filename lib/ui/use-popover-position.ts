@@ -91,7 +91,6 @@ export function usePopoverPosition(
       raf = requestAnimationFrame(place);
     };
     place();
-    raf = requestAnimationFrame(place);
     return () => cancelAnimationFrame(raf);
   }, [open, placement, align, gap, margin, dir, popoverRef]);
 }
