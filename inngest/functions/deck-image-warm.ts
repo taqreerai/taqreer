@@ -60,8 +60,8 @@ export const deckImageWarm = inngest.createFunction(
     // the dispatcher so the CEL expression stays a simple field read.
     idempotency: "event.data.idemKey",
     // One box per run; cap parallel runs so a deck can't blow the OpenAI image
-    // rate limit org-wide.
-    concurrency: { limit: 6 },
+    // rate limit org-wide. 5 = the Inngest free-plan account cap; raise on upgrade.
+    concurrency: { limit: 5 },
     triggers: [{ event: "deck.image.warm" }],
   },
   async ({ event, step, logger }) => {

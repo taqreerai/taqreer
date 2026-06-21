@@ -47,8 +47,9 @@ if pm2 describe taqreer-prod >/dev/null 2>&1; then
 else
   pm2 start npm --name taqreer-prod -- start -- -p "$PORT"
 fi
-pm2 describe taqreer-inngest >/dev/null 2>&1 || \
-  pm2 start npx --name taqreer-inngest -- inngest-cli dev -u "http://localhost:$PORT/api/inngest" --no-discovery
+# Inngest runs on Inngest Cloud (INNGEST_DEV=0 + signing/event keys in .env), so
+# there is NO local inngest-cli dev worker to start here. After a deploy that
+# adds or changes functions, re-sync the app from the Inngest Cloud dashboard.
 pm2 save
 
 echo "==> Deployed. Health check:"

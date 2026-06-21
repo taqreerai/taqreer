@@ -437,7 +437,8 @@ export const deckRegeneratePartial = inngest.createFunction(
     // (actorPrismaUserId is on every sender) + a global cap.
     concurrency: [
       { key: "event.data.actorPrismaUserId", limit: 2 },
-      { limit: 10 },
+      // 5 = the Inngest free-plan account concurrency cap; raise on plan upgrade.
+      { limit: 5 },
     ],
     // Max-tier processing priority (matches deck-generate): Max regens jump the
     // queue under contention. `event.data.tier` is set at enqueue.

@@ -1327,7 +1327,8 @@ export const deckGenerate = inngest.createFunction(
     // protects the box + the Anthropic quota under a flood.
     concurrency: [
       { key: "event.data.actorPrismaUserId", limit: 2 },
-      { limit: 10 },
+      // 5 = the Inngest free-plan account concurrency cap; raise on plan upgrade.
+      { limit: 5 },
     ],
     // Processing priority (the Max-tier perk): Max runs are scheduled as if they
     // arrived 120s earlier, so they jump ahead of lower tiers when the queue is
