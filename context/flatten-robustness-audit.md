@@ -2,6 +2,12 @@
 
 `lib/editor/flatten.ts` · `lib/editor/leaves.ts` · `components/preview/editor/SlideEditor.tsx`
 
+> Note: the `file:line` citations below are indicative, captured when the audit
+> ran. The content-parity safety net added in this PR inserted ~80 lines above
+> `collect()`, and the per-dimension fixes will shift them further, so locate
+> code by the cited SYMBOL (e.g. `collect`, `isTextLeaf`, `FLATTEN_OWNED`,
+> `clipRadiusOf`) rather than the exact line number.
+
 ---
 
 ## 1. Executive summary
