@@ -281,6 +281,37 @@ export function flattenSlideSection(
     return clone;
   };
 
+  // A bare text node directly under a dissolved / painted-shell parent (e.g. the
+  // "Page 01" in <div class="pno"><hr>Page 01</div>) is invisible to the element
+  // walk below, so it would be silently dropped. Emit each RENDERED run as its own
+  // absolute box, frozen with the parent's inherited text styles and positioned by
+  // a Range measurement (same section-space geometry as makeBox).
+  const makeTextBox = (
+    textNode: Node,
+    parentEl: HTMLElement,
+    parentCs: CSSStyleDeclaration,
+    z: number,
+  ): HTMLElement | null => {
+    const range = section.ownerDocument.createRange();
+    range.selectNodeContents(textNode);
+    const rect = range.getBoundingClientRect();
+    if (rect.width < 1 && rect.height < 1) return null; // not rendered
+    const w = Math.ceil(rect.width / scale);
+    const h = Math.ceil(rect.height / scale);
+    const left = Math.round((rect.left + rect.width / 2 - originRect.left) / scale - w / 2);
+    const top = Math.round((rect.top + rect.height / 2 - originRect.top) / scale - h / 2);
+    const box = section.ownerDocument.createElement("div");
+    box.textContent = (textNode.textContent ?? "").trim();
+    const frozen = freezeInherited(parentEl, parentCs);
+    box.setAttribute(
+      "style",
+      `${frozen}position:absolute;left:${left}px;top:${top}px;right:auto;bottom:auto;` +
+        `width:${w}px;height:${h}px;margin:0;z-index:${z};white-space:nowrap;`,
+    );
+    box.setAttribute("data-tq-flat", "1");
+    return box;
+  };
+
   const isLeaf = (el: HTMLElement) =>
     el.tagName === "IMG" || el.tagName.toLowerCase() === "svg" || isTextLeaf(el);
   const hasContent = (el: HTMLElement) =>
@@ -295,7 +326,11 @@ export function flattenSlideSection(
   // container are processed in (z-index asc, DOM order) — the order they paint — so the
   // running counter `z` reproduces the original stacking as a flat sequence.
   const out = section.cloneNode(false) as HTMLElement;
-  for (const style of Array.from(section.querySelectorAll(":scope > style"))) {
+  // Carry ALL <style> blocks (not just direct children): a nested <style> in a
+  // wrapper that dissolves would otherwise lose its @font-face / :root vars /
+  // keyframes. They are global once hoisted. SVG-internal <style> stays in its svg.
+  for (const style of Array.from(section.querySelectorAll("style"))) {
+    if (style.closest("svg")) continue;
     out.appendChild(style.cloneNode(true));
   }
   let z = 1;
@@ -309,8 +344,14 @@ export function flattenSlideSection(
         if (low === "style" || low === "script") return false;
         const cs = win.getComputedStyle(el);
         if (isHidden(cs)) return false;
+        // Cull on LAYOUT px: offsetWidth/Height are scale-invariant (fall back to
+        // rect/scale for inline boxes where offset is 0), with a 0.5px floor so a
+        // genuine 1px hairline survives at any editor zoom and the result is
+        // deterministic across zoom levels.
         const r = el.getBoundingClientRect();
-        return r.width >= 1 && r.height >= 1;
+        const w = el.offsetWidth || r.width / scale;
+        const h = el.offsetHeight || r.height / scale;
+        return w >= 0.5 && h >= 0.5;
       })
       .map((el, i) => ({ el, i, z: zOf(win.getComputedStyle(el)) }))
       .sort((a, b) => a.z - b.z || a.i - b.i)
@@ -326,6 +367,16 @@ export function flattenSlideSection(
         if (hasContent(el)) collect(el, childClip); // its content paints ON TOP, as its own boxes
       } else {
         collect(el, childClip); // transparent wrapper → dissolve, hoist its children
+      }
+    }
+    // Bare text nodes directly under this dissolved / shell parent (siblings of the
+    // element kids above) - emit each so mixed text+element content is never dropped.
+    for (const node of Array.from(parent.childNodes)) {
+      if (node.nodeType !== 3 /* TEXT_NODE */ || !(node.textContent ?? "").trim()) continue;
+      const box = makeTextBox(node, parent, win.getComputedStyle(parent), z);
+      if (box) {
+        out.appendChild(box);
+        z++;
       }
     }
   };
