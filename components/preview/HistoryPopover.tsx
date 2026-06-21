@@ -326,7 +326,7 @@ function CurrentBadge() {
   const dict = useDict();
   return (
     <span
-      className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-foreground"
+      className="rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none text-white"
       style={{ background: "var(--tq-violet)" }}
     >
       {dict.editor.history.current}

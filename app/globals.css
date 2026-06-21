@@ -343,6 +343,11 @@
      feeds the crisp --tq-border-hairline edge. */
   --tq-tint-opacity:     0.05;
   --tq-border-opacity:   0.1;
+  /* Disabled-control dim. `opacity` fades a control toward the page bg, so a
+     value tuned for dark (a light-gray ghost on near-black) is too faint on
+     white. Flip-aware via the .light override below so disabled pills/buttons
+     stay legible (still clearly disabled). */
+  --tq-disabled-opacity: 0.4;
 
   /* Flip-aware overlay tints — white-over-dark by default; the .light theme
      swaps them to black-over-light so hover / subtle-fill tints still read.
@@ -424,6 +429,9 @@
   --tq-status-down-text:   #b91c1c;
   --tq-status-down-bg:     rgba(239, 68, 68, 0.10);
   --tq-status-down-border: rgba(239, 68, 68, 0.40);
+  /* Disabled controls dim toward WHITE here, so 0.4 reads as a near-invisible
+     ghost; raise the floor so disabled pills/buttons stay legible in light. */
+  --tq-disabled-opacity:   0.6;
 }
 
 /* Monochrome logo (brand-kit + flow-card uploads) — flips white↔black with the
@@ -625,7 +633,7 @@ textarea.input-dark {
 }
 
 .input-dark:disabled {
-  opacity: 0.5;
+  opacity: var(--tq-disabled-opacity);
   cursor: not-allowed;
 }
 
@@ -657,7 +665,7 @@ textarea.input-dark {
 }
 
 .btn-pill-danger:disabled {
-  opacity: 0.5;
+  opacity: var(--tq-disabled-opacity);
   cursor: not-allowed;
 }
 
@@ -1185,7 +1193,7 @@ html.app-shell-scroll body {
 
 .btn-gradient-anim:disabled {
   animation-play-state: paused;
-  opacity: 0.4;
+  opacity: var(--tq-disabled-opacity);
   cursor: default;
   /* No `box-shadow: none` override — the resting + hover states
      no longer set a shadow, so disabled doesn't need to clear it. */
@@ -1381,7 +1389,7 @@ html.app-shell-scroll body {
 }
 
 .btn-pill:disabled {
-  opacity: 0.4;
+  opacity: var(--tq-disabled-opacity);
   cursor: default;
 }
 

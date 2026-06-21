@@ -80,7 +80,7 @@ export function Pagination({ page, pageCount, onChange }: Props) {
         aria-label={dict.components.pagination.previousPage}
         onClick={() => onChange(page - 1)}
         disabled={atStart}
-        className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
+        className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed"
       >
         <span aria-hidden className="material-symbols-outlined text-[18px]">
           {prevIcon}
@@ -124,7 +124,7 @@ export function Pagination({ page, pageCount, onChange }: Props) {
         aria-label={dict.components.pagination.nextPage}
         onClick={() => onChange(page + 1)}
         disabled={atEnd}
-        className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
+        className="btn-pill inline-flex h-8 w-8 items-center justify-center disabled:cursor-not-allowed"
       >
         <span aria-hidden className="material-symbols-outlined text-[18px]">
           {nextIcon}

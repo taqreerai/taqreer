@@ -251,7 +251,7 @@ export function GenerateSplitButton({
                       `paramsForQuality()`'s `thinking.type`. */}
                   <span className="flex shrink-0 items-center gap-2">
                     {preset.thinking ? (
-                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-emerald-200 bg-emerald-500/15">
+                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-[var(--tq-status-ok-text)] bg-[var(--tq-status-ok-bg)]">
                         {dict.flows.generate.thinking}
                       </span>
                     ) : (
