@@ -183,25 +183,23 @@ function wordCounts(text: string): Map<string, number> {
   return m;
 }
 
-// Word multiset of a subtree, tokenized PER TEXT NODE so adjacent inline runs
-// keep their boundaries (`<span>A</span><span>B</span>` stays {A, B}, never "AB").
-// `visibleOnly` skips text that does not render (display:none / collapsed / inside
-// <style>|<script>) via a Range rect; used on the LIVE source so flatten is never
-// faulted for correctly omitting invisible content. The detached output clone has
-// no layout, so it passes false (everything it carries is meant to render).
-function collectWords(root: HTMLElement, doc: Document, visibleOnly: boolean): Map<string, number> {
+// Word multiset of a subtree, tokenized PER TEXT NODE so adjacent inline runs keep
+// their boundaries (`<span>A</span><span>B</span>` stays {A, B}, never "AB"). Counts
+// only text that RENDERS (skips display:none / collapsed text via a Range rect, plus
+// <style>|<script>), so `root` MUST be in the live layout context. checkParity runs
+// this on the source AND on the flattened output once the output is swapped into that
+// same context, which keeps the visible-only filter symmetric across both sides.
+function collectWords(root: HTMLElement, doc: Document): Map<string, number> {
   const words = new Map<string, number>();
-  const range = visibleOnly ? doc.createRange() : null;
+  const range = doc.createRange();
   const tw = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = tw.nextNode(); n; n = tw.nextNode()) {
     const t = (n.textContent ?? "").trim();
     if (!t) continue;
-    if (range) {
-      if (n.parentElement?.closest("style, script")) continue;
-      range.selectNodeContents(n);
-      const r = range.getBoundingClientRect();
-      if (r.width < 1 && r.height < 1) continue;
-    }
+    if (n.parentElement?.closest("style, script")) continue;
+    range.selectNodeContents(n);
+    const r = range.getBoundingClientRect();
+    if (r.width < 1 && r.height < 1) continue;
     for (const [w, c] of wordCounts(t)) words.set(w, (words.get(w) ?? 0) + c);
   }
   return words;
@@ -209,23 +207,9 @@ function collectWords(root: HTMLElement, doc: Document, visibleOnly: boolean): M
 
 function checkParity(section: HTMLElement, out: HTMLElement, win: Window): FlattenParity {
   const doc = section.ownerDocument;
-  // Both sides census words PER TEXT NODE (see collectWords). Counting the output
-  // via `out.textContent` instead would concatenate adjacent inline runs with no
-  // whitespace (`<span>A</span><span>B</span>` becomes "AB"), so a nav/footer that
-  // sets runs side by side would falsely read the boundary words as dropped and the
-  // net would needlessly keep the slide unflattened. Per-node on BOTH sides matches
-  // word boundaries, so only a genuinely unemitted run is ever flagged.
-  const srcWords = collectWords(section, doc, true);
-  const outProbe = out.cloneNode(true) as HTMLElement;
-  outProbe.querySelectorAll("style, script").forEach((s) => s.remove());
-  const outWords = collectWords(outProbe, doc, false);
-  const missingWords: string[] = [];
-  for (const [w, count] of srcWords) {
-    if ((outWords.get(w) ?? 0) < count) missingWords.push(w);
-  }
-  // Visual atoms: output must not have FEWER than the source's VISIBLE atoms
-  // (a 0x0 defs <svg> or display:none img is excluded, so it isn't required).
   const EMBED = "canvas, video, iframe, object, embed";
+  // Count atoms that actually RENDER under the live source (a 0x0 / display:none /
+  // visibility:hidden atom is not required of the output).
   const visibleCount = (sel: string) =>
     [...section.querySelectorAll(sel)].filter((el) => {
       const cs = win.getComputedStyle(el);
@@ -233,16 +217,53 @@ function checkParity(section: HTMLElement, out: HTMLElement, win: Window): Flatt
       const r = el.getBoundingClientRect();
       return r.width >= 1 && r.height >= 1;
     }).length;
+
+  // SOURCE side, measured on the live (already laid-out + font-loaded) section BEFORE
+  // the swap below: only VISIBLE words + atoms count, so flatten is never faulted for
+  // correctly omitting invisible content.
+  const srcWords = collectWords(section, doc);
   const srcCensus: AtomCensus = {
     img: visibleCount("img"),
     svg: visibleCount("svg"),
     embed: visibleCount(EMBED),
   };
+
+  // OUTPUT WORDS, measured in the SAME live layout context. `out` is a DETACHED tree
+  // with no layout (every rect is 0), so censusing it on its own cannot apply the
+  // visible-only filter: it would count text the source correctly SKIPS as invisible
+  // (a display:none descendant a full-clone leaf carries along; svg off-canvas
+  // <text>). Because the word check is a per-word MULTISET (any output occurrence
+  // satisfies the source count), such a phantom could MASK a genuinely dropped VISIBLE
+  // word, defeating the net. So swap the output in, measure, restore. The swap is
+  // synchronous and restored net-zero before this returns (try/finally covers a
+  // throwing measure); no paint happens in between, and only innerHTML changes, so the
+  // flat boxes lay out exactly as they will once adopted. `out.innerHTML` re-inserts
+  // the hoisted <style> blocks the source already has, a no-op on the cascade.
+  const savedHtml = section.innerHTML;
+  let outWords: Map<string, number>;
+  try {
+    section.innerHTML = out.innerHTML;
+    outWords = collectWords(section, doc);
+  } finally {
+    section.innerHTML = savedHtml;
+  }
+
+  // OUTPUT ATOMS stay a PRESENCE count, NOT measured in the swap on purpose: a
+  // freshly-parsed <img> clone has not decoded yet, so a rect-based visibility check
+  // would race image decode and could FALSELY fail the net. This guard is only a
+  // coarse non-shrink check, so a deterministic presence count is the safe choice (a
+  // flatten that drops a VISIBLE atom while carrying an INVISIBLE duplicate is far
+  // rarer than the text case, and this is no worse than before).
   const outCensus: AtomCensus = {
     img: out.querySelectorAll("img").length,
     svg: out.querySelectorAll("svg").length,
     embed: out.querySelectorAll(EMBED).length,
   };
+
+  const missingWords: string[] = [];
+  for (const [w, count] of srcWords) {
+    if ((outWords.get(w) ?? 0) < count) missingWords.push(w);
+  }
   const censusShrunk =
     outCensus.img < srcCensus.img ||
     outCensus.svg < srcCensus.svg ||
