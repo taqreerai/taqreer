@@ -111,16 +111,53 @@ const TEXT_INHERIT: readonly string[] = [
   "line-height", "letter-spacing", "word-spacing", "text-align",
   "text-transform", "text-decoration", "text-indent", "direction", "unicode-bidi",
 ];
-function freezeInherited(el: HTMLElement, cs: CSSStyleDeclaration): string {
-  let out = `color:${cs.color};`;
-  const text = (el.textContent ?? "").trim().length > 0;
-  if (text) {
-    for (const p of TEXT_INHERIT) {
-      const v = cs.getPropertyValue(p);
-      if (v) out += `${p}:${v};`;
-    }
+// Build an inline-style string of `${prop}:${resolved};` for every prop that
+// resolves to a non-empty value. Shared by the leaf freeze (freezeInherited) and
+// the descendant freeze (freezeDescendants) so both tokenize props identically.
+function bakeProps(cs: CSSStyleDeclaration, props: readonly string[]): string {
+  let out = "";
+  for (const p of props) {
+    const v = cs.getPropertyValue(p);
+    if (v) out += `${p}:${v};`;
   }
   return out;
+}
+
+function freezeInherited(el: HTMLElement, cs: CSSStyleDeclaration): string {
+  let out = `color:${cs.color};`;
+  if ((el.textContent ?? "").trim().length > 0) out += bakeProps(cs, TEXT_INHERIT);
+  return out;
+}
+
+// Props baked onto each DESCENDANT of a hoisted text leaf. `display` is the
+// critical one: a rule scoped to a now-removed ancestor (`.foot b{display:block}`)
+// stops matching once the box is hoisted out, so without this the descendant
+// reverts to its tag default and stacked labels collapse to inline. Colour plus
+// the text ladder are baked too so a descendant's OWN scoped overrides (e.g.
+// `.foot b` setting color / font-size / font-weight) survive as well.
+const DESC_FREEZE: readonly string[] = ["display", "color", ...TEXT_INHERIT];
+
+// A text leaf is hoisted WHOLE (full clone), so its descendants leave behind any
+// ancestor-scoped cascade. Bake each descendant's RESOLVED DESC_FREEZE props
+// inline, read from the live (still-in-context) element. Live + clone walk in the
+// same document order, so index `i` pairs them. STRIP any prior freeze first so a
+// re-flatten of an already-flat slide stays byte-stable (mirrors stripFlattenProps
+// for the box; without it each pass would append another copy and the persisted
+// HTML would grow unbounded). SVG internals are left alone (own styling model).
+function freezeDescendants(live: HTMLElement, clone: HTMLElement, win: Window): void {
+  const liveDesc = live.querySelectorAll<HTMLElement>("*");
+  const cloneDesc = clone.querySelectorAll<HTMLElement>("*");
+  const n = Math.min(liveDesc.length, cloneDesc.length);
+  for (let i = 0; i < n; i++) {
+    const ld = liveDesc[i];
+    if (ld.closest("svg")) continue;
+    const cd = cloneDesc[i];
+    for (const p of DESC_FREEZE) cd.style.removeProperty(p);
+    const add = bakeProps(win.getComputedStyle(ld), DESC_FREEZE);
+    if (!add) continue;
+    const prior = (cd.getAttribute("style") ?? "").replace(/;\s*$/, "");
+    cd.setAttribute("style", prior ? `${prior};${add}` : add);
+  }
 }
 
 // ── Safety net: content-parity census ─────────────────────────────────────────
@@ -146,26 +183,42 @@ function wordCounts(text: string): Map<string, number> {
   return m;
 }
 
-function checkParity(section: HTMLElement, out: HTMLElement, win: Window): FlattenParity {
-  const doc = section.ownerDocument;
-  // Source side: only text that actually RENDERS counts. A zero-size client rect
-  // skips display:none / collapsed / <style>/<script> text, so flatten is never
-  // faulted for correctly omitting invisible content.
-  const srcWords = new Map<string, number>();
-  const range = doc.createRange();
-  const tw = doc.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+// Word multiset of a subtree, tokenized PER TEXT NODE so adjacent inline runs
+// keep their boundaries (`<span>A</span><span>B</span>` stays {A, B}, never "AB").
+// `visibleOnly` skips text that does not render (display:none / collapsed / inside
+// <style>|<script>) via a Range rect; used on the LIVE source so flatten is never
+// faulted for correctly omitting invisible content. The detached output clone has
+// no layout, so it passes false (everything it carries is meant to render).
+function collectWords(root: HTMLElement, doc: Document, visibleOnly: boolean): Map<string, number> {
+  const words = new Map<string, number>();
+  const range = visibleOnly ? doc.createRange() : null;
+  const tw = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = tw.nextNode(); n; n = tw.nextNode()) {
     const t = (n.textContent ?? "").trim();
-    if (!t || n.parentElement?.closest("style, script")) continue;
-    range.selectNodeContents(n);
-    const r = range.getBoundingClientRect();
-    if (r.width < 1 && r.height < 1) continue;
-    for (const [w, c] of wordCounts(t)) srcWords.set(w, (srcWords.get(w) ?? 0) + c);
+    if (!t) continue;
+    if (range) {
+      if (n.parentElement?.closest("style, script")) continue;
+      range.selectNodeContents(n);
+      const r = range.getBoundingClientRect();
+      if (r.width < 1 && r.height < 1) continue;
+    }
+    for (const [w, c] of wordCounts(t)) words.set(w, (words.get(w) ?? 0) + c);
   }
-  // Output side: everything emitted is meant to render.
+  return words;
+}
+
+function checkParity(section: HTMLElement, out: HTMLElement, win: Window): FlattenParity {
+  const doc = section.ownerDocument;
+  // Both sides census words PER TEXT NODE (see collectWords). Counting the output
+  // via `out.textContent` instead would concatenate adjacent inline runs with no
+  // whitespace (`<span>A</span><span>B</span>` becomes "AB"), so a nav/footer that
+  // sets runs side by side would falsely read the boundary words as dropped and the
+  // net would needlessly keep the slide unflattened. Per-node on BOTH sides matches
+  // word boundaries, so only a genuinely unemitted run is ever flagged.
+  const srcWords = collectWords(section, doc, true);
   const outProbe = out.cloneNode(true) as HTMLElement;
   outProbe.querySelectorAll("style, script").forEach((s) => s.remove());
-  const outWords = wordCounts(outProbe.textContent ?? "");
+  const outWords = collectWords(outProbe, doc, false);
   const missingWords: string[] = [];
   for (const [w, count] of srcWords) {
     if ((outWords.get(w) ?? 0) < count) missingWords.push(w);
@@ -245,6 +298,11 @@ export function flattenSlideSection(
     const m = measure(el, cs);
     const clone = el.cloneNode(fullClone) as HTMLElement;
     if (!fullClone) while (clone.firstChild) clone.removeChild(clone.firstChild);
+    // Bake the descendant cascade onto the full clone (no-op for shells): a text
+    // leaf carries scoped rules that match its children via an ancestor the hoist
+    // drops (e.g. `.foot b{display:block}` makes stacked labels), so freeze each
+    // descendant's resolved display + text styling inline before we own the box.
+    if (fullClone) freezeDescendants(el, clone, win);
     const prev = stripFlattenProps(clone);
     const frozen = freezeInherited(el, cs);
     // SINGLE-LINE detection (robust + self-healing): force the live element onto one
