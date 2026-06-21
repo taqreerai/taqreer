@@ -428,12 +428,24 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       );
       try {
         const flat = flattenSlideSection(sec as HTMLElement, { scale: scaleRef.current });
-        const tmp = doc.createElement("div");
-        tmp.innerHTML = flat.html;
-        const flatSec = tmp.querySelector("section");
-        if (flatSec && flatSec.innerHTML !== sec.innerHTML) {
-          sec.innerHTML = flatSec.innerHTML;
-          onNormalizeRef.current?.(slide.slideId, serializeSlideSection(sec));
+        if (!flat.parity.ok) {
+          // SAFETY NET: the flatten lost visible text or a visual atom (img/svg/
+          // embed). Do NOT swap or persist - leave the slide on its original AI
+          // HTML so editing is degraded (nested stacking) but content is never
+          // silently dropped from the deck or the export.
+          console.warn("[flatten] parity mismatch, keeping slide unflattened", {
+            slide: slide.slideId,
+            missingWords: flat.parity.missingWords,
+            census: { src: flat.parity.srcCensus, out: flat.parity.outCensus },
+          });
+        } else {
+          const tmp = doc.createElement("div");
+          tmp.innerHTML = flat.html;
+          const flatSec = tmp.querySelector("section");
+          if (flatSec && flatSec.innerHTML !== sec.innerHTML) {
+            sec.innerHTML = flatSec.innerHTML;
+            onNormalizeRef.current?.(slide.slideId, serializeSlideSection(sec));
+          }
         }
       } catch (err) {
         console.error("flatten on enter failed", err);

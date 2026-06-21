@@ -123,10 +123,89 @@ function freezeInherited(el: HTMLElement, cs: CSSStyleDeclaration): string {
   return out;
 }
 
+// ── Safety net: content-parity census ─────────────────────────────────────────
+// Flatten is lossy AND irreversible (it overwrites the slide in both stores and
+// feeds the PPTX export), so before the caller persists we verify the output
+// still holds every VISIBLE text word and every image / svg / embed the input
+// had. On any shortfall the caller keeps the slide UNFLATTENED (degraded editing,
+// but lossless) rather than silently shipping a deck with dropped content. Text
+// is a word MULTISET (catches a dropped duplicate); the census is a strict
+// non-shrink on visual atoms. Styling fidelity (collapsed lines, lost colour) is
+// NOT checked here, only content presence.
+type AtomCensus = { img: number; svg: number; embed: number };
+export type FlattenParity = {
+  ok: boolean;
+  missingWords: string[];
+  srcCensus: AtomCensus;
+  outCensus: AtomCensus;
+};
+
+function wordCounts(text: string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const w of text.split(/\s+/)) if (w) m.set(w, (m.get(w) ?? 0) + 1);
+  return m;
+}
+
+function checkParity(section: HTMLElement, out: HTMLElement, win: Window): FlattenParity {
+  const doc = section.ownerDocument;
+  // Source side: only text that actually RENDERS counts. A zero-size client rect
+  // skips display:none / collapsed / <style>/<script> text, so flatten is never
+  // faulted for correctly omitting invisible content.
+  const srcWords = new Map<string, number>();
+  const range = doc.createRange();
+  const tw = doc.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+  for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+    const t = (n.textContent ?? "").trim();
+    if (!t || n.parentElement?.closest("style, script")) continue;
+    range.selectNodeContents(n);
+    const r = range.getBoundingClientRect();
+    if (r.width < 1 && r.height < 1) continue;
+    for (const [w, c] of wordCounts(t)) srcWords.set(w, (srcWords.get(w) ?? 0) + c);
+  }
+  // Output side: everything emitted is meant to render.
+  const outProbe = out.cloneNode(true) as HTMLElement;
+  outProbe.querySelectorAll("style, script").forEach((s) => s.remove());
+  const outWords = wordCounts(outProbe.textContent ?? "");
+  const missingWords: string[] = [];
+  for (const [w, count] of srcWords) {
+    if ((outWords.get(w) ?? 0) < count) missingWords.push(w);
+  }
+  // Visual atoms: output must not have FEWER than the source's VISIBLE atoms
+  // (a 0x0 defs <svg> or display:none img is excluded, so it isn't required).
+  const EMBED = "canvas, video, iframe, object, embed";
+  const visibleCount = (sel: string) =>
+    [...section.querySelectorAll(sel)].filter((el) => {
+      const cs = win.getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden") return false;
+      const r = el.getBoundingClientRect();
+      return r.width >= 1 && r.height >= 1;
+    }).length;
+  const srcCensus: AtomCensus = {
+    img: visibleCount("img"),
+    svg: visibleCount("svg"),
+    embed: visibleCount(EMBED),
+  };
+  const outCensus: AtomCensus = {
+    img: out.querySelectorAll("img").length,
+    svg: out.querySelectorAll("svg").length,
+    embed: out.querySelectorAll(EMBED).length,
+  };
+  const censusShrunk =
+    outCensus.img < srcCensus.img ||
+    outCensus.svg < srcCensus.svg ||
+    outCensus.embed < srcCensus.embed;
+  return {
+    ok: missingWords.length === 0 && !censusShrunk,
+    missingWords: missingWords.slice(0, 25),
+    srcCensus,
+    outCensus,
+  };
+}
+
 export function flattenSlideSection(
   section: HTMLElement,
   opts: FlattenOptions = {},
-): { html: string } {
+): { html: string; parity: FlattenParity } {
   const scale = opts.scale && opts.scale > 0 ? opts.scale : 1;
   const win = section.ownerDocument.defaultView;
   if (!win) throw new Error("flattenSlideSection: section is not attached to a live document");
@@ -252,5 +331,5 @@ export function flattenSlideSection(
   };
   collect(section, "");
 
-  return { html: out.outerHTML };
+  return { html: out.outerHTML, parity: checkParity(section, out, win) };
 }
