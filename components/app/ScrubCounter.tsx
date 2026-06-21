@@ -13,7 +13,7 @@ export function ScrubCounter({
   return (
     <span
       dir="ltr"
-      className="pointer-events-none absolute bottom-2 end-2 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground"
+      className="pointer-events-none absolute bottom-2 end-2 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white"
     >
       {index + 1} / {total}
     </span>
