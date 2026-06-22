@@ -24,7 +24,13 @@ const PURGE_TOKEN = process.env.CLOUDFLARE_PURGE_TOKEN;
 function publicOrigin(): string {
   const fromEnv =
     process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
-  return (fromEnv ?? "https://taqreer.ai").replace(/\/+$/, "");
+  // Normalize to the bare origin (scheme + host) so a configured value that
+  // carries a path or trailing slash can't yield wrong purge targets.
+  try {
+    return new URL(fromEnv ?? "https://taqreer.ai").origin;
+  } catch {
+    return "https://taqreer.ai";
+  }
 }
 
 // Purge the given same-origin paths (e.g. "/ar", "/en/presentation-templates")
