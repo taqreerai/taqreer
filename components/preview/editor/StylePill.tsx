@@ -183,6 +183,30 @@ function AlignIcon({ a }: { a: Align }) {
   );
 }
 
+// Text-direction glyph: two text lines + a baseline arrow pointing in the reading
+// direction (← for RTL, → for LTR). The arrow is the distinguishing mark vs the
+// alignment icon, which conveys side via line position alone.
+function DirIcon({ d }: { d: "rtl" | "ltr" }) {
+  const ltr = d === "ltr";
+  return (
+    <svg width="18" height="14" viewBox="0 0 16 13" aria-hidden fill="currentColor">
+      <rect x={2.5} y={1.5} width={11} height={1.4} rx={0.7} />
+      <rect x={2.5} y={4.3} width={8} height={1.4} rx={0.7} />
+      {ltr ? (
+        <>
+          <rect x={2.5} y={9.6} width={9} height={1.4} rx={0.7} />
+          <path d="M11 7.9 L14 10.3 L11 12.7 Z" />
+        </>
+      ) : (
+        <>
+          <rect x={4.5} y={9.6} width={9} height={1.4} rx={0.7} />
+          <path d="M5 7.9 L2 10.3 L5 12.7 Z" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 const SIZE_MIN = 4;
 const SIZE_MAX = 1200;
 
@@ -470,6 +494,24 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
     [targets],
   );
 
+  // Set text DIRECTION on every target: the `dir` attribute (what the deck, the
+  // export pipeline, and the RTL sanitizer all read) PLUS a matching text-align
+  // (rtl → right, ltr → left). The explicit alignment is what makes the change
+  // visible — the editor bakes text-align when it flattens, so `dir` alone won't
+  // move the text — and it also stops the view-time sanitizer from re-aligning a
+  // forced-LTR block back to the right.
+  const setTextDir = useCallback(
+    (d: "rtl" | "ltr") => {
+      for (const t of targets) {
+        t.setAttribute("dir", d);
+        t.style.setProperty("text-align", d === "rtl" ? "right" : "left");
+      }
+      dirty.current = true;
+      force((n) => n + 1);
+    },
+    [targets],
+  );
+
   // Recolour the selected graphic — inline fill/stroke on its painted shapes
   // (serializes into the saved HTML).
   const recolorSvg = useCallback(
@@ -678,6 +720,11 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
   const color = rgbToHex(cs.color);
   const align = (target.style.textAlign || cs.textAlign || "right") as Align;
   const aligns: Align[] = ["left", "center", "right"];
+  // Current text direction — explicit `dir` attribute first, else the computed
+  // direction (so the active button reflects an inherited rtl/ltr too).
+  const dirAttr = target.getAttribute("dir");
+  const elDir =
+    dirAttr === "ltr" || dirAttr === "rtl" ? dirAttr : cs.direction || "rtl";
   const svgColor = kind === "svg" ? svgPaintHex(target) : "#000000";
   // A shape paints either a FILL (its background, the common solid block) or,
   // for a border-only decorative block (accent bar / top-rule / framed box), its
@@ -717,6 +764,10 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
   const italicMixed = someDiffer((el) => (getComputedStyle(el).fontStyle === "italic" ? "1" : "0"));
   const colorMixed = someDiffer((el) => rgbToHex(getComputedStyle(el).color));
   const alignMixed = someDiffer((el) => (el.style.textAlign || getComputedStyle(el).textAlign || "right"));
+  const dirMixed = someDiffer((el) => {
+    const d = el.getAttribute("dir");
+    return d === "ltr" || d === "rtl" ? d : getComputedStyle(el).direction || "rtl";
+  });
   const fontMixed = someDiffer((el) => {
     const f = (el.style.fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "");
     return f ? (canonicalFamily(f) ?? f) : "";
@@ -863,6 +914,19 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
               </Btn>
             ))}
             {alignMixed && <MixedDot label={mixedLabel} />}
+          </div>
+          <Divider />
+          {/* Text direction (RTL / LTR): sets the dir attribute + a matching
+              alignment. dir="ltr" row so RTL stays leftmost in both UI locales,
+              like the alignment row above. */}
+          <div dir="ltr" style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Btn active={elDir === "rtl" && !dirMixed} onClick={() => setTextDir("rtl")} label="Right to left">
+              <DirIcon d="rtl" />
+            </Btn>
+            <Btn active={elDir === "ltr" && !dirMixed} onClick={() => setTextDir("ltr")} label="Left to right">
+              <DirIcon d="ltr" />
+            </Btn>
+            {dirMixed && <MixedDot label={mixedLabel} />}
           </div>
         </>
       )}
