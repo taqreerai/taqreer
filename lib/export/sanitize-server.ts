@@ -311,10 +311,19 @@ function rewriteRtlArabicRowReverse(window: JSDOMWindow, html: string): string {
         .trim()
         .toLowerCase();
       if (flexDir !== "row-reverse") return;
-      if (el.querySelector("img,svg,picture,video,canvas,[data-genimage]")) {
+      if (
+        el.querySelector("img,svg,picture,video,canvas,figure,[data-genimage]")
+      ) {
         return;
       }
       if (!/[؀-ۿ]/.test(el.textContent ?? "")) return; // must carry Arabic
+      const justify = el.style
+        .getPropertyValue("justify-content")
+        .trim()
+        .toLowerCase();
+      if (justify === "flex-end" || justify === "end") {
+        el.style.setProperty("justify-content", "flex-start");
+      }
       el.style.setProperty("flex-direction", "row");
       changed = true;
     });

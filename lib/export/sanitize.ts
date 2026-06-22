@@ -549,8 +549,17 @@ function rewriteRtlArabicRowReverse(html: string): string {
     const display = styleLower(el, "display");
     if (display !== "flex" && display !== "inline-flex") return false;
     if (styleLower(el, "flex-direction") !== "row-reverse") return false;
-    if (el.querySelector("img,svg,picture,video,canvas,[data-genimage]")) return false;
+    if (el.querySelector("img,svg,picture,video,canvas,figure,[data-genimage]")) {
+      return false;
+    }
     if (!/[؀-ۿ]/.test(el.textContent ?? "")) return false; // must carry Arabic
+    // Match rewriteRtlRowFlexOrder's Case A: in RTL row-flex, flex-end packs to
+    // the visual LEFT, so a flipped eyebrow that also set flex-end would still
+    // strand left — normalise it to flex-start (the RTL start = visual right).
+    const justify = styleLower(el, "justify-content");
+    if (justify === "flex-end" || justify === "end") {
+      el.style.setProperty("justify-content", "flex-start");
+    }
     el.style.setProperty("flex-direction", "row");
     return true;
   });
