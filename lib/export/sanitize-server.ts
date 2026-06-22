@@ -100,15 +100,18 @@ export function sanitizeSlideHtmlServer(html: string): string {
         window,
         rewriteRtlMarginAutoEnd(
           window,
-          rewriteRtlRowFlexOrder(
+          rewriteRtlArabicRowReverse(
             window,
-            rewriteRtlFlexEndToFlexStart(
+            rewriteRtlRowFlexOrder(
               window,
-              rewriteRtlLtrTextAlign(
+              rewriteRtlFlexEndToFlexStart(
                 window,
-                rewriteRtlLeadColumnSide(
+                rewriteRtlLtrTextAlign(
                   window,
-                  rewriteGridAutoFlowDense(window, clean),
+                  rewriteRtlLeadColumnSide(
+                    window,
+                    rewriteGridAutoFlowDense(window, clean),
+                  ),
                 ),
               ),
             ),
@@ -274,6 +277,45 @@ function rewriteRtlRowFlexOrder(
         widthPx > fullWidthThresholdPx;
       if (!looksFullWidth) return;
       el.style.setProperty("flex-direction", "row-reverse");
+      changed = true;
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Server mirror of `rewriteRtlArabicRowReverse` in lib/export/sanitize.ts — see that
+// file's docblock. Flips a TEXT-ONLY, Arabic-bearing flex row from `row-reverse` to `row`
+// in an RTL slide so a section eyebrow ("02 المشكلة") reads right-to-left instead of
+// stranding LEFT. Runs after rewriteRtlRowFlexOrder; real split-screens (figure child)
+// keep their reverse; dir="ltr" subtrees are opted out.
+function rewriteRtlArabicRowReverse(window: JSDOMWindow, html: string): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    const slideRoot = root.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    let changed = false;
+    slideRoot.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
+      const closestDir = el.closest("[dir]");
+      if (closestDir && closestDir.getAttribute("dir") !== "rtl") return;
+      const display = el.style.getPropertyValue("display").trim().toLowerCase();
+      if (display !== "flex" && display !== "inline-flex") return;
+      const flexDir = el.style
+        .getPropertyValue("flex-direction")
+        .trim()
+        .toLowerCase();
+      if (flexDir !== "row-reverse") return;
+      if (el.querySelector("img,svg,picture,video,canvas,[data-genimage]")) {
+        return;
+      }
+      if (!/[؀-ۿ]/.test(el.textContent ?? "")) return; // must carry Arabic
+      el.style.setProperty("flex-direction", "row");
       changed = true;
     });
     return changed ? root.innerHTML : html;

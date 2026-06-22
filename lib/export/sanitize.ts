@@ -136,10 +136,12 @@ export function sanitizeSlideHtml(html: string): string {
       rewriteImageScrim(
         rewriteRtlImagePanelSide(
           rewriteRtlMarginAutoEnd(
-            rewriteRtlRowFlexOrder(
-              rewriteRtlFlexEndToFlexStart(
-                rewriteRtlLtrTextAlign(
-                  rewriteRtlLeadColumnSide(rewriteGridAutoFlowDense(clean)),
+            rewriteRtlArabicRowReverse(
+              rewriteRtlRowFlexOrder(
+                rewriteRtlFlexEndToFlexStart(
+                  rewriteRtlLtrTextAlign(
+                    rewriteRtlLeadColumnSide(rewriteGridAutoFlowDense(clean)),
+                  ),
                 ),
               ),
             ),
@@ -522,6 +524,34 @@ function rewriteRtlRowFlexOrder(html: string): string {
       widthPx > fullWidthThresholdPx;
     if (!looksFullWidth) return false;
     el.style.setProperty("flex-direction", "row-reverse");
+    return true;
+  });
+}
+
+// RTL rewriter — an Arabic text row stranded LEFT/LTR by `flex-direction:row-reverse`.
+//
+// Claude builds a section eyebrow ("02 المشكلة") as a flex row [<num>, <label>] and
+// reaches for `flex-direction:row-reverse` to "do RTL". But the row already inherits
+// dir:rtl, so row-reverse DOUBLE-reverses the main axis back to left-to-right: the
+// eyebrow packs on the visual LEFT and reads "02 المشكلة" LTR. rewriteRtlRowFlexOrder
+// above can't fix it — it only ADDS row-reverse to honor an LTR-authored image|title
+// split, and it bails on row-reverse inputs.
+//
+// Fix: for a flex row in RTL that is TEXT-ONLY (no figure) and contains ARABIC, flip
+// `row-reverse` back to `row` so the main axis follows dir:rtl — the row packs on the
+// RTL start (right) and reads right-to-left. Runs AFTER rewriteRtlRowFlexOrder, so it
+// also undoes that rewriter's row-reverse on a text-only row (an eyebrow lands RTL
+// whether Claude wrote `row` or `row-reverse`). A real split-screen keeps its
+// row-reverse (it has a figure child). Arabic-gated so a pure-Latin row that may want
+// LTR is left alone.
+function rewriteRtlArabicRowReverse(html: string): string {
+  return withRtlStyledElements(html, (el) => {
+    const display = styleLower(el, "display");
+    if (display !== "flex" && display !== "inline-flex") return false;
+    if (styleLower(el, "flex-direction") !== "row-reverse") return false;
+    if (el.querySelector("img,svg,picture,video,canvas,[data-genimage]")) return false;
+    if (!/[؀-ۿ]/.test(el.textContent ?? "")) return false; // must carry Arabic
+    el.style.setProperty("flex-direction", "row");
     return true;
   });
 }
