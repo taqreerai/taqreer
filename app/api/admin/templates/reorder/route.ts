@@ -41,6 +41,6 @@ export async function POST(request: Request) {
       }),
     ),
   );
-  revalidateTemplateSurfaces();
+  await revalidateTemplateSurfaces();
   return NextResponse.json({ ok: true });
 }

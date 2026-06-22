@@ -76,6 +76,6 @@ export async function PATCH(
   }
 
   await prisma.template.update({ where: { id }, data });
-  revalidateTemplateSurfaces();
+  await revalidateTemplateSurfaces();
   return NextResponse.json({ ok: true });
 }

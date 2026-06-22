@@ -22,6 +22,7 @@
 
 import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { purgeCloudflarePaths } from "@/lib/cloudflare/purge";
 
 // Marker that separates the Supabase host from the object path in a public URL.
 const STORAGE_PUBLIC_MARKER = "/storage/v1/object/public/";
@@ -44,15 +45,34 @@ export function edgeCoverUrl(url: string): string {
 // every public template surface. Exported for the admin curation console.
 export const MARQUEE_OWNER_EMAIL = "dev@taqreer.ai";
 
+// Public template surfaces that are Cloudflare edge-cached and render the
+// admin-featured set. Purged from the CDN after every curation write so the
+// change actually reaches visitors (both locales).
+const CDN_TEMPLATE_PATHS = [
+  "/ar",
+  "/en",
+  "/ar/presentation-templates",
+  "/en/presentation-templates",
+];
+
 // Bust every cached public template surface after an admin curation write
 // (feature / unfeature / reorder / premium) so the landing marquee + grid +
-// welcome-email strip reflect the change on the next request.
-export function revalidateTemplateSurfaces(): void {
-  // Next 16: the 2-arg form is required; "max" marks the tagged entries stale
-  // (stale-while-revalidate) so the next visit refreshes them.
-  revalidateTag("auth-marquee-columns", "max");
-  revalidateTag("landing-templates", "max");
-  revalidateTag("welcome-templates", "max");
+// welcome-email strip reflect the change.
+export async function revalidateTemplateSurfaces(): Promise<void> {
+  // IMMEDIATE expiry via { expire: 0 }, deliberately NOT the "max"
+  // stale-while-revalidate profile. We purge the Cloudflare edge cache right
+  // after this and CF refetches from origin immediately; if origin served
+  // SWR-stale HTML, CF would re-cache that stale copy for the full s-maxage
+  // (~24h). (updateTag is immediate too but throws outside a Server Action;
+  // the bare 1-arg revalidateTag is a type error + deprecated in 16.x.)
+  revalidateTag("auth-marquee-columns", { expire: 0 });
+  revalidateTag("landing-templates", { expire: 0 });
+  revalidateTag("welcome-templates", { expire: 0 });
+
+  // Next's revalidation only busts the SERVER cache; the Cloudflare edge keeps
+  // serving its copy until s-maxage. Propagate the purge to the CDN (the
+  // pattern the Next docs recommend for CDN-fronted static / ISR pages).
+  await purgeCloudflarePaths(CDN_TEMPLATE_PATHS);
 }
 
 export type MarqueeThumbnail = {

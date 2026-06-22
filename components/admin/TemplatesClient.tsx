@@ -13,6 +13,10 @@ const ACCENT = "var(--tq-purple)";
 const MUTED = "var(--tq-text-muted)";
 const PRIMARY = "var(--tq-text-primary)";
 
+// Shown when an optimistic curation save fails and the card reverts.
+const SAVE_ERROR =
+  "Couldn't save that change - it was reverted. Check your connection and try again.";
+
 function featuredSorted(list: AdminTemplate[]): AdminTemplate[] {
   return list
     .filter((t) => t.featured)
@@ -96,6 +100,9 @@ export function TemplatesClient({
   initialTemplates: AdminTemplate[];
 }) {
   const [templates, setTemplates] = useState<AdminTemplate[]>(initialTemplates);
+  // Surfaced when an optimistic save fails and the card reverts, so a failed
+  // save is visible instead of silently snapping back. Cleared on the next try.
+  const [error, setError] = useState<string | null>(null);
 
   const featured = featuredSorted(templates);
   const pool = templates.filter((t) => !t.featured);
@@ -109,6 +116,7 @@ export function TemplatesClient({
   };
 
   const togglePremium = async (id: string) => {
+    setError(null);
     const snapshot = templates;
     const cur = templates.find((t) => t.id === id);
     if (!cur) return;
@@ -125,10 +133,12 @@ export function TemplatesClient({
       if (!res.ok) throw new Error("premium failed");
     } catch {
       setTemplates(snapshot);
+      setError(SAVE_ERROR);
     }
   };
 
   const toggleFeatured = async (id: string) => {
+    setError(null);
     const snapshot = templates;
     const cur = templates.find((t) => t.id === id);
     if (!cur) return;
@@ -155,10 +165,12 @@ export function TemplatesClient({
       if (!res.ok) throw new Error("feature failed");
     } catch {
       setTemplates(snapshot);
+      setError(SAVE_ERROR);
     }
   };
 
   const move = async (id: string, dir: -1 | 1) => {
+    setError(null);
     const snapshot = templates;
     const sorted = featuredSorted(templates);
     const idx = sorted.findIndex((t) => t.id === id);
@@ -182,11 +194,34 @@ export function TemplatesClient({
       if (!res.ok) throw new Error("reorder failed");
     } catch {
       setTemplates(snapshot);
+      setError(SAVE_ERROR);
     }
   };
 
   return (
     <div className="space-y-8">
+      {error ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm"
+          style={{
+            background: "var(--tq-status-down-bg)",
+            border: "1px solid var(--tq-status-down-border)",
+            color: "var(--tq-status-down-text)",
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label="Dismiss"
+            className="material-symbols-outlined leading-none opacity-70 transition-opacity hover:opacity-100"
+            style={{ fontSize: 18 }}
+          >
+            close
+          </button>
+        </div>
+      ) : null}
       {/* Featured */}
       <section className="space-y-3">
         <div className="flex items-baseline justify-between">
