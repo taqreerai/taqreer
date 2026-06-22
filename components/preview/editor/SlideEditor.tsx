@@ -19,7 +19,7 @@ import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { isVisualLeaf, isTextEditable, resolveSelectable, hasOwnPaint } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
-import { flattenSlideSection } from "@/lib/editor/flatten";
+import { flattenSlideSection, type FlattenParity } from "@/lib/editor/flatten";
 import { buildDeckFontHead } from "@/lib/export/font-head";
 import { googleFontLinkTags } from "@/lib/editor/font-search";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
@@ -47,6 +47,9 @@ type Props = {
   // baseline (manifest + persist) so the saved source, the undo baseline, and the
   // live DOM all agree on the flat structure. A no-op when already flat.
   onNormalize?: (slideId: string, html: string) => void;
+  // Fired once per flatten with the parity report, for the fidelity observatory.
+  // Advisory only (DeckView logs sub-threshold cases); never affects the swap.
+  onFlattenResult?: (slideId: string, parity: FlattenParity) => void;
   // Slide-level undo / redo (⌘Z / ⌘⇧Z). The parent's window keydown listener
   // never sees keys pressed while focus is INSIDE the iframe, so the editor
   // forwards them out to the parent's local history stack. While a text box is
@@ -128,7 +131,7 @@ function applyResize(el: HTMLElement, width: number, height: number, transform: 
 
 export function SlideEditor({
   slide, theme, direction, language, width, height, scale,
-  selected, onSelect, onDocReady, onEdit, onNormalize, onUndo, onRedo, reloadKey = 0, disabled = false,
+  selected, onSelect, onDocReady, onEdit, onNormalize, onFlattenResult, onUndo, onRedo, reloadKey = 0, disabled = false,
   lockTick = 0, onDeleteSelected, onGroup, onUngroup, inPlaceApply = null,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -181,6 +184,10 @@ export function SlideEditor({
   useEffect(() => {
     onNormalizeRef.current = onNormalize;
   }, [onNormalize]);
+  const onFlattenResultRef = useRef(onFlattenResult);
+  useEffect(() => {
+    onFlattenResultRef.current = onFlattenResult;
+  }, [onFlattenResult]);
   // Same pattern for the undo/redo callbacks (read by the once-attached iframe
   // keydown bridge).
   const onUndoRef = useRef(onUndo);
@@ -428,6 +435,9 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       );
       try {
         const flat = flattenSlideSection(sec as HTMLElement, { scale: scaleRef.current });
+        // Observatory: report the parity result once per flatten (both branches), so the
+        // fidelity loop can log a content shortfall (and, once Phase 1 lands, style drift).
+        onFlattenResultRef.current?.(slide.slideId, flat.parity);
         if (!flat.parity.ok) {
           // SAFETY NET: the flatten lost visible text or a visual atom (img/svg/
           // embed). Do NOT swap or persist - leave the slide on its original AI

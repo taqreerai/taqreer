@@ -39,6 +39,7 @@ model User {
   // a single inverse query reads cleanly.
   notifications      Notification[] @relation("RecipientNotifications")
   notificationsActed Notification[] @relation("ActorNotifications")
+  flattenEvents      FlattenEvent[]
 }
 
 model Project {
@@ -102,6 +103,7 @@ model Project {
   jobs          Job[]
   shares        ProjectShare[]
   notifications Notification[]
+  flattenEvents FlattenEvent[]
 
   @@index([userId, isFavorite])
   @@index([brandKitId])
@@ -619,6 +621,39 @@ model UsageEvent {
   // The credit trail + the popup's "recent usage" list both read
   // per-user newest-first.
   @@index([userId, createdAt(sort: Desc)])
+}
+
+// Flatten fidelity observatory (generate > learn > enhance). One row per LOGGED flatten on
+// editor entry whose output lost content OR (Phase 1) style fidelity vs the source. Advisory
+// only: it NEVER gates persistence (the content-parity net in flatten.ts still does that), it
+// is the learn-loop's case store. PRIVACY: IDs + STRUCTURAL metadata only, never user content,
+// drift property names + getComputedStyle VALUES (a colour / radius is structural) and a
+// missing-word COUNT, never the words; the offline miner reconstructs HTML from the user's own
+// slideJson stores under existing access control. fidelityScore / highDrift stay null until the
+// Phase 1 style census lands; Phase 0 logs the content signal checkParity already computes.
+model FlattenEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  projectId     String
+  slideId       String
+  // Content gate result (already computed by checkParity, today just console.warn'd)
+  parityOk      Boolean
+  missingCount  Int      @default(0) // COUNT of dropped visible words, NEVER the words
+  // Style fidelity (Phase 1). Null until the per-leaf style census exists.
+  fidelityScore Float?
+  leafCount     Int      @default(0)
+  highDrift     Int      @default(0)
+  // Capped, redacted drift detail + denormalized generation tier (quality / flow / model) for
+  // clustering without a join. No raw user HTML.
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([projectId, parityOk])
+  @@index([fidelityScore]) // dashboard: scan the low-fidelity tail
+  @@index([createdAt])     // standalone for the TTL sweep (mirrors Notification)
 }
 
 // Phase 16.E — bell notifications.

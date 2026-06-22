@@ -29,6 +29,7 @@ import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
+import type { FlattenParity } from "@/lib/editor/flatten";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
 import { UserMenu } from "@/components/app/UserMenu";
 import {
@@ -1035,6 +1036,28 @@ export function DeckView({
       applyContentLocally(slideKey, html, { reload: false });
     },
     [applyContentLocally],
+  );
+
+  // Flatten fidelity observatory (Phase 0): fire-and-forget log of a flatten that lost
+  // content. Advisory only, it never blocks editing and swallows every error. Phase 1 adds
+  // the style-fidelity trigger; here we record only the content shortfall the editor already
+  // detects (today discarded in a console.warn). Sends a COUNT, never the dropped words.
+  const handleFlattenResult = useCallback(
+    (slideKey: string, parity: FlattenParity) => {
+      if (parity.ok) return; // no signal worth recording yet
+      void fetch(
+        `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/flatten-event`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            parityOk: parity.ok,
+            missingCount: parity.missingWords.length,
+          }),
+        },
+      ).catch(() => {}); // a telemetry hiccup must never disrupt editing
+    },
+    [projectId],
   );
 
   // Undo / redo over the focused slide's LOCAL stack. The focused slide is read
@@ -4501,6 +4524,7 @@ export function DeckView({
                 /* selected/onSelect are now the multi-select SET (§20). */
                 onEdit={handleSlideEdit}
                 onNormalize={handleNormalize}
+                onFlattenResult={handleFlattenResult}
                 // ⌘Z / ⌘⇧Z pressed while focus is inside the editor iframe never
                 // reaches the window listener above, the editor forwards them
                 // to the same local history stack.
