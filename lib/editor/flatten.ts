@@ -3,7 +3,7 @@
 // A slide is authored as nested HTML: top-level absolute layers (bg image, scrims,
 // chrome) PLUS content layers (.wrap) whose text runs are in flow. Nesting means each
 // positioned wrapper is its own STACKING CONTEXT, so a leaf's z-index can only reorder
-// it within its wrapper — never relative to the rest of the slide. That breaks global
+// it within its wrapper, never relative to the rest of the slide. That breaks global
 // restacking, layer-drag, and grouping.
 //
 // This pass dissolves all of that: every visual element (text run, image, graphic,
@@ -12,8 +12,11 @@
 //   - its measured geometry in canvas (1920x1080) space (left/top/width/height + rotate),
 //   - an explicit z-index equal to its ORIGINAL PAINT-ORDER rank (so the flat stack
 //     renders identically to the nested original, and is then freely restackable),
-//   - its INHERITED text/colour styles frozen inline (hoisting an element out of its
-//     wrapper changes what it inherits, so we bake the resolved values to keep it 1:1),
+//   - the styling its ANCESTORS gave it (inherited values, ancestry-scoped rules like
+//     `.row .idx{background:var(--red)}`, ancestor variables) frozen inline as the RESOLVED
+//     delta: hoisting drops all of that, so we SIMULATE the hoist (the element's computed
+//     style here vs as a bare section child) and bake whatever differs - general over any
+//     html, with no per-property allowlist. See diffOwnStyle / applyDiff.
 //   - its own inner HTML / scoped classes / data-* / dir preserved (fonts, colours, RTL
 //     cascade, and the export pipeline's per-leaf text bodies all stay intact).
 //
@@ -30,28 +33,216 @@ export type FlattenOptions = {
   scale?: number;
 };
 
-// Inline-style properties flatten OWNS and rewrites every pass. Stripping them from the
-// source element's prior inline style before re-applying makes re-flatten byte-stable:
-// geometry + stacking + frozen inheritance are reproduced from the live layout, never
-// accumulated.
-const FLATTEN_OWNED = new Set([
-  "position", "left", "top", "right", "bottom", "width", "height",
-  "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
-  "transform", "transform-origin", "z-index", "white-space",
-  // frozen inherited text/colour props (see freezeInherited)
-  "font-family", "font-size", "font-weight", "font-style", "font-variant",
-  "line-height", "letter-spacing", "word-spacing", "color", "text-align",
-  "text-transform", "text-decoration", "text-decoration-line",
-  "text-decoration-color", "text-decoration-style", "text-indent",
-  "direction", "unicode-bidi",
+// Geometry / box-placement properties the flatten itself OWNS and rewrites every pass
+// (position, size, margins, the rotation transform, stacking, single-line white-space, and
+// how the element sized/placed AS A FLEX-or-GRID CHILD). These are never carried by the
+// style diff below - the flatten reproduces them from the live layout, so a re-flatten
+// stays byte-stable instead of accumulating.
+// Properties the flatten OWNS on the ROOT box: it reconstructs them from layout (the measured
+// abspos geometry, the net rotation, the rounded-clip mask) rather than from the diff, so the
+// diff must skip them or it would double-apply or re-capture them on the next pass. Applies to
+// the root box only; descendants get a full diff (they have no `pos`, so their flow geometry
+// must live in the delta).
+const GEOM_SKIP = new Set([
+  "position", "top", "right", "bottom", "left",
+  "width", "height", "min-width", "min-height", "max-width", "max-height",
+  "margin-top", "margin-right", "margin-bottom", "margin-left",
+  // the legacy transform matrix + the Transforms-2 individual props, all rebuilt from the
+  // measured geometry / rotation; baking them too would translate / rotate / scale twice.
+  "transform", "transform-origin", "perspective-origin", "translate", "rotate", "scale",
+  "z-index",
+  "box-sizing", // forced border-box below so the measured width IS the rendered size
+  "flex-basis", "flex-grow", "flex-shrink", "align-self", "justify-self", "order",
+  // the rounded-clip mask: the `clip` step owns border-radius + overflow on the root, so the
+  // diff must skip BOTH shorthands' longhands (the 4 physical + 4 logical radius corners,
+  // overflow x/y) or they relocate from pos into the delta on re-flatten and break stability.
+  "border-top-left-radius", "border-top-right-radius",
+  "border-bottom-left-radius", "border-bottom-right-radius",
+  "border-start-start-radius", "border-start-end-radius",
+  "border-end-start-radius", "border-end-end-radius",
+  "overflow", "overflow-x", "overflow-y", "overflow-clip-margin",
+  // layout / paint containment hints, meaningless once the box is positioned + flat.
+  "contain", "content-visibility",
 ]);
 
-// Remove flatten-owned props via the browser's CSS parser (the element is a live DOM
-// clone, so it carries a real CSSStyleDeclaration). A naive string split on ";" would
-// corrupt values that legitimately contain semicolons, e.g. url(data:image/svg+xml;...).
-function stripFlattenProps(el: HTMLElement): string {
-  for (const prop of FLATTEN_OWNED) el.style.removeProperty(prop);
-  return el.getAttribute("style") ?? "";
+// Skipped on EVERY node (root + descendants), not just the geometry-owning root. white-space
+// is INHERITED and flatten-managed (the single-line detection sets it on the box AFTER the
+// diff runs), so a descendant must never bake it: on re-flatten it would inherit the box's
+// nowrap, the stripped probe would not, and the diff would re-capture it forever. The
+// descendant just inherits white-space from its box, which is correct.
+const ALWAYS_SKIP = new Set([
+  "white-space", "text-wrap-mode", "text-wrap-style", "white-space-collapse",
+]);
+
+// Logical box props (margin / padding / border / inset / size in the block-or-inline axes)
+// duplicate the physical longhands getComputedStyle also reports; carrying the physical set
+// is enough (direction is preserved as its own property), so the diff skips the twins.
+const LOGICAL_RE = /(^|-)(block|inline)(-|$)|block-size|inline-size/;
+
+// getComputedStyle also enumerates engine-internal / derived VENDOR properties (e.g.
+// `-webkit-text-decorations-in-effect`, `-webkit-locale`) and CUSTOM properties (`--x`) -
+// none of which belong in the persisted slideJson / export HTML: the resolved values that
+// USE a `--x` are already baked, and the internal vendor props are meaningless + engine-
+// specific. So the diff drops every `-`-prefixed property EXCEPT the handful of vendor ones
+// that are genuinely author-visual with no standard twin (gradient-text fill/clip, text
+// stroke, line-clamp). It also drops the `text-decoration` SHORTHAND, whose longhands it
+// already bakes (Chrome enumerates both) - one, not both.
+const VENDOR_KEEP = new Set([
+  "-webkit-text-fill-color", "-webkit-background-clip",
+  "-webkit-text-stroke-color", "-webkit-text-stroke-width",
+  "-webkit-line-clamp", "-webkit-box-orient",
+]);
+
+// THE flatten freeze, general form. When a leaf is hoisted out of its wrapper it loses
+// everything its ANCESTORS were giving it: inherited values, ancestry-scoped rules
+// (`.row .idx{...}`), and variables defined up the tree. Rather than enumerate which
+// properties those might be (endless + deck-specific), SIMULATE the hoist and bake the
+// difference: the element's style as it renders NOW (csIn, snapshotted) vs as it WOULD render
+// as a bare section child (csOut, from applyDiff's probe). Every property that changed IS
+// exactly what the ancestry contributed, fully resolved (a `var(--red)` lands as the literal
+// colour). `skipGeom` is true only for the ROOT box, whose geometry the measured `pos` owns;
+// for descendants applyDiff makes the probe stand in for the post-flatten box, so the diff is
+// already just their dropped ancestry (their geometry + inheritance cancel). Logical-alias
+// twins are dropped (the physical set covers them); `*-color` props that still follow
+// `currentColor` in the probe are pruned (baking `color` carries them); a node's own inline
+// `!important` props are re-stamped so a baked value still outranks a surviving rule. This reads
+// ANY html; there is no property allowlist to maintain or outgrow.
+function diffOwnStyle(
+  csIn: Map<string, string>,
+  csOut: CSSStyleDeclaration,
+  skipGeom: boolean,
+  important: Set<string>,
+): string {
+  const color = csIn.get("color");
+  let out = "";
+  for (const [p, v] of csIn) {
+    if (ALWAYS_SKIP.has(p)) continue; // inherited + flatten-managed (white-space family)
+    if (skipGeom && GEOM_SKIP.has(p)) continue; // root box: the measured `pos` owns geometry
+    // The root box is always position:absolute, which blockifies it, so its inline / inline-
+    // block / block distinction is moot. Skipping it keeps an inline-display text leaf byte-
+    // stable: its live `display` settles inline->block once `pos` is applied, which would
+    // otherwise be re-captured on the next pass. flex/grid/table/none still bake (inner layout).
+    if (skipGeom && p === "display" && (v === "inline" || v === "inline-block" || v === "block")) continue;
+    if (LOGICAL_RE.test(p)) continue;
+    if (p[0] === "-" && !VENDOR_KEEP.has(p)) continue; // vendor-internal + custom (--x) props
+    if (p === "text-decoration") continue; // redundant shorthand; its longhands are baked
+    const cv = csOut.getPropertyValue(p);
+    if (v === cv) continue; // unchanged by the hoist
+    // currentColor follower: `p` resolves to `color` here AND would STILL follow the post-hoist
+    // color in the probe, so baking `color` already carries it - prune the redundant copy (a
+    // page can enumerate a dozen such `*-color` props per element). If the probe instead
+    // resolves `p` to something other than its own color, a surviving rule set it explicitly:
+    // keep it. A `*-color` set to exactly `color` is indistinguishable from a follower (both
+    // resolve identically in both contexts) and is treated as one.
+    if (
+      p !== "color" && p !== "background-color" && p.endsWith("color") &&
+      v === color && cv === csOut.color
+    ) continue;
+    out += `${p}:${v}${important.has(p) ? " !important" : ""};`;
+  }
+  return out;
+}
+
+// Snapshot a live computed style into a plain map, read BEFORE the probe enters the section
+// (a live CSSStyleDeclaration would re-resolve once the DOM changes). Also records which
+// properties the element set `!important` inline, so diffOwnStyle can preserve that priority.
+function snapshotStyle(
+  el: Element,
+  cs: CSSStyleDeclaration,
+): { values: Map<string, string>; important: Set<string> } {
+  const values = new Map<string, string>();
+  for (let i = 0; i < cs.length; i++) {
+    const p = cs[i];
+    values.set(p, cs.getPropertyValue(p));
+  }
+  const important = new Set<string>();
+  const inline = (el as HTMLElement).style;
+  // Only sweep priorities when the inline style actually declares an !important (rare);
+  // `cssText` always serializes the flag, so this never misses one but skips the ~350-property
+  // getPropertyPriority scan for the overwhelming majority of elements.
+  if (inline && inline.length && inline.cssText.includes("important")) {
+    for (const p of values.keys()) {
+      if (inline.getPropertyPriority(p) === "important") important.add(p);
+    }
+  }
+  return { values, important };
+}
+
+// Simulate the hoist and bake, onto the OUTPUT clone, exactly what the move would drop.
+//
+// The probe is a clone of `el` dropped as a child of the live section, so getComputedStyle on
+// it reflects the POST-hoist cascade (surviving class/section rules + section inheritance, NOT
+// the dropped ancestry). It is inserted as a MIDDLE child so positional pseudos (:first/:last/
+// :only-child) don't spuriously match it; absolute :nth-child ordinals stay approximate, an
+// inherent flat-DOM limit. csIn is snapshotted BEFORE the probe enters so its presence can't
+// steal a positional pseudo from a direct-section-child `el`.
+//
+// Two passes for a full clone:
+//   1. ROOT: strip its inline -> the diff vs the bare probe is its dropped ancestry. Geometry
+//      is skipped (the measured `pos` owns it); the delta is returned for makeBox.
+//   2. DESCENDANTS: bake the root delta + measured size onto the probe root, but KEEP each
+//      descendant's own inline. Now a descendant's authored + auto geometry AND its inherited
+//      values are IDENTICAL in csIn and the probe, so they cancel; the diff is purely the
+//      ancestry-scoped rules above the leaf that targeted it (gone post-hoist). That delta is
+//      MERGED onto the kept inline (never replacing authored geometry). This is what keeps
+//      re-flatten byte-stable: once flat, nothing is dropped, so the descendant delta is empty
+//      and the merge is a no-op (a REPLACE-everything diff instead re-captures inherited values
+//      and unstable sub-pixel auto-dimensions every pass).
+// SVG internals are left exactly as cloned (own styling model + authored fill/stroke).
+// Synchronous, no paint.
+function applyDiff(
+  el: HTMLElement,
+  clone: HTMLElement,
+  fullClone: boolean,
+  win: Window,
+  section: HTMLElement,
+  rootW: number,
+  rootH: number,
+): string {
+  const real = fullClone
+    ? [el, ...Array.from(el.querySelectorAll<HTMLElement>("*"))]
+    : [el];
+  const snaps = real.map((r) => snapshotStyle(r, win.getComputedStyle(r)));
+
+  const probe = el.cloneNode(fullClone) as HTMLElement;
+  probe.removeAttribute("style"); // strip the ROOT's inline only; descendants keep theirs
+  // Insert sandwiched between two existing children when possible so :first/:last/:only-child
+  // don't match the probe; with one child, sit BEFORE it (avoids the common :last-child idiom).
+  const kids = section.children;
+  if (kids.length >= 2) section.insertBefore(probe, kids[kids.length - 1]);
+  else if (kids.length === 1) section.insertBefore(probe, kids[0]);
+  else section.appendChild(probe);
+  try {
+    const rootDelta = diffOwnStyle(snaps[0].values, win.getComputedStyle(probe), true, snaps[0].important);
+    if (!fullClone) return rootDelta;
+
+    // Make the probe stand in for the post-flatten box: the baked root styling (so descendants
+    // inherit what they actually will) + position:absolute + the MEASURED border-box size, so
+    // %-lengths resolve against the SAME containing block. position:absolute matches the flat
+    // box's own formatting context and, crucially, BLOCKIFIES an inline-display text leaf (a
+    // <span>/<a>) whose raw offsetWidth is 0 and which would otherwise ignore the width and
+    // collapse descendant %-lengths. rootW/H come from measure() (offsetWidth || rect/scale).
+    probe.setAttribute(
+      "style",
+      `${rootDelta}${rootDelta && !rootDelta.endsWith(";") ? ";" : ""}position:absolute;width:${rootW}px;height:${rootH}px;box-sizing:border-box`,
+    );
+    const prb = [probe, ...Array.from(probe.querySelectorAll<HTMLElement>("*"))];
+    const cln = [clone, ...Array.from(clone.querySelectorAll<HTMLElement>("*"))];
+    const n = Math.min(real.length, prb.length, cln.length);
+    for (let i = 1; i < n; i++) {
+      if (real[i].closest("svg")) continue; // svg subtree: leave as cloned
+      const delta = diffOwnStyle(snaps[i].values, win.getComputedStyle(prb[i]), false, snaps[i].important);
+      if (!delta) continue; // nothing dropped: the kept authored inline is already correct
+      const prior = cln[i].getAttribute("style") || "";
+      cln[i].setAttribute(
+        "style",
+        [prior, delta].filter(Boolean).map((s) => s.replace(/;$/, "")).join(";"),
+      );
+    }
+    return rootDelta;
+  } finally {
+    section.removeChild(probe);
+  }
 }
 
 // Net rotation (deg) from an element's OWN computed transform matrix. Translation is
@@ -64,6 +255,15 @@ function rotationDeg(transform: string): number {
   const p = m[1].split(",").map((s) => parseFloat(s.trim()));
   if (p.length < 4 || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) return 0;
   return Math.round((Math.atan2(p[1], p[0]) * 180) / Math.PI * 100) / 100;
+}
+
+// Net rotation including the Transforms-2 `rotate` property, which lives OUTSIDE the transform
+// matrix, so a leaf rotated via `rotate:` instead of `transform:rotate()` is not dropped.
+function rotationOf(cs: CSSStyleDeclaration): number {
+  const r = cs.rotate; // "none" | "<angle>" | "<x> <y> <z> <angle>"
+  const m = r && r !== "none" ? r.match(/(-?[\d.]+)deg/) : null;
+  const fromProp = m ? parseFloat(m[1]) : 0; // the `rotate:` prop COMPOSES with the matrix
+  return Math.round((rotationDeg(cs.transform) + fromProp) * 100) / 100;
 }
 
 // If an element CLIPS its content (overflow hidden/clip) AND has rounded corners, it
@@ -102,18 +302,17 @@ function hasOwnPaint(cs: CSSStyleDeclaration): boolean {
   return false;
 }
 
-// Inherited text/colour properties frozen inline on each flattened box. Hoisting an
-// element to the section changes its inherited cascade, so we bake the RESOLVED values
-// to keep it rendering exactly as it did inside its old wrapper. Only emitted for
-// text-bearing boxes (img/svg keep `color` for currentColor).
+// Inherited text/colour properties baked onto a SYNTHETIC text-run box (makeTextBox) - a
+// bare <div> we create for a loose text node, which has no element of its own to diff, so
+// it carries its parent's resolved text cascade verbatim. Real elements get their inherited
+// values through the simulation diff (diffOwnStyle) instead.
 const TEXT_INHERIT: readonly string[] = [
   "font-family", "font-size", "font-weight", "font-style", "font-variant",
   "line-height", "letter-spacing", "word-spacing", "text-align",
   "text-transform", "text-decoration", "text-indent", "direction", "unicode-bidi",
 ];
-// Build an inline-style string of `${prop}:${resolved};` for every prop that
-// resolves to a non-empty value. Shared by the leaf freeze (freezeInherited) and
-// the descendant freeze (freezeDescendants) so both tokenize props identically.
+// Build an inline-style string of `${prop}:${resolved};` for every prop that resolves to a
+// non-empty value. Used by freezeInherited for the synthetic text-run boxes.
 function bakeProps(cs: CSSStyleDeclaration, props: readonly string[]): string {
   let out = "";
   for (const p of props) {
@@ -127,37 +326,6 @@ function freezeInherited(el: HTMLElement, cs: CSSStyleDeclaration): string {
   let out = `color:${cs.color};`;
   if ((el.textContent ?? "").trim().length > 0) out += bakeProps(cs, TEXT_INHERIT);
   return out;
-}
-
-// Props baked onto each DESCENDANT of a hoisted text leaf. `display` is the
-// critical one: a rule scoped to a now-removed ancestor (`.foot b{display:block}`)
-// stops matching once the box is hoisted out, so without this the descendant
-// reverts to its tag default and stacked labels collapse to inline. Colour plus
-// the text ladder are baked too so a descendant's OWN scoped overrides (e.g.
-// `.foot b` setting color / font-size / font-weight) survive as well.
-const DESC_FREEZE: readonly string[] = ["display", "color", ...TEXT_INHERIT];
-
-// A text leaf is hoisted WHOLE (full clone), so its descendants leave behind any
-// ancestor-scoped cascade. Bake each descendant's RESOLVED DESC_FREEZE props
-// inline, read from the live (still-in-context) element. Live + clone walk in the
-// same document order, so index `i` pairs them. STRIP any prior freeze first so a
-// re-flatten of an already-flat slide stays byte-stable (mirrors stripFlattenProps
-// for the box; without it each pass would append another copy and the persisted
-// HTML would grow unbounded). SVG internals are left alone (own styling model).
-function freezeDescendants(live: HTMLElement, clone: HTMLElement, win: Window): void {
-  const liveDesc = live.querySelectorAll<HTMLElement>("*");
-  const cloneDesc = clone.querySelectorAll<HTMLElement>("*");
-  const n = Math.min(liveDesc.length, cloneDesc.length);
-  for (let i = 0; i < n; i++) {
-    const ld = liveDesc[i];
-    if (ld.closest("svg")) continue;
-    const cd = cloneDesc[i];
-    for (const p of DESC_FREEZE) cd.style.removeProperty(p);
-    const add = bakeProps(win.getComputedStyle(ld), DESC_FREEZE);
-    if (!add) continue;
-    const prior = (cd.getAttribute("style") ?? "").replace(/;\s*$/, "");
-    cd.setAttribute("style", prior ? `${prior};${add}` : add);
-  }
 }
 
 // ── Safety net: content-parity census ─────────────────────────────────────────
@@ -303,7 +471,7 @@ export function flattenSlideSection(
       // Ceil the box so a sub-pixel shave can't force single-line text to wrap.
       width: Math.ceil(w),
       height: Math.ceil(h),
-      rotateDeg: rotationDeg(cs.transform),
+      rotateDeg: rotationOf(cs),
     };
   };
 
@@ -319,17 +487,14 @@ export function flattenSlideSection(
     const m = measure(el, cs);
     const clone = el.cloneNode(fullClone) as HTMLElement;
     if (!fullClone) while (clone.firstChild) clone.removeChild(clone.firstChild);
-    // Bake the descendant cascade onto the full clone (no-op for shells): a text
-    // leaf carries scoped rules that match its children via an ancestor the hoist
-    // drops (e.g. `.foot b{display:block}` makes stacked labels), so freeze each
-    // descendant's resolved display + text styling inline before we own the box.
-    if (fullClone) freezeDescendants(el, clone, win);
-    const prev = stripFlattenProps(clone);
-    const frozen = freezeInherited(el, cs);
+    // SIMULATE the hoist + bake the resolved delta - everything the move drops (inherited
+    // values, ancestry-scoped rules, ancestor variables) - onto the clone + its
+    // descendants. Returns the ROOT element's delta; the geometry below is appended to it.
+    const delta = applyDiff(el, clone, fullClone, win, section, m.width, m.height);
     // SINGLE-LINE detection (robust + self-healing): force the live element onto one
     // line and measure the content width. If that fits within the box width, the text
     // is single-line and the fixed box width would otherwise SHAVE-wrap it (sub-pixel)
-    // — pin white-space:nowrap. Genuine multi-line text has a one-line width far wider
+    // pin white-space:nowrap. Genuine multi-line text has a one-line width far wider
     // than its box, so it keeps wrapping. Because it measures the would-be single-line
     // width (not the current wrapped height), re-flattening a slide whose box already
     // shave-wrapped HEALS it back to one line.
@@ -341,21 +506,44 @@ export function flattenSlideSection(
       el.style.whiteSpace = prevWS;
       if (oneLineWidth <= m.width + 4) nowrap = "white-space:nowrap;";
     }
-    // A rounded clipping ANCESTOR (a mask) rounds this box's corners, but only if the
-    // box doesn't already define its own radius. Hoisting it out of the clipper would
-    // otherwise drop the mask (a photo in a rounded card goes back to square corners).
-    const clip = clipRadius && !hasOwnRadius(cs) ? `border-radius:${clipRadius};overflow:hidden;` : "";
+    // Rounded-clip mask. Radius + overflow are flatten-OWNED here (the diff skips their
+    // longhands), so re-emit them from the live computed style every pass: a flat mask carries
+    // them as its OWN inline, which reads straight back, so re-flatten stays byte-stable. The
+    // box rounds if it has its own radius OR a rounded clipping ancestor passed one down (a
+    // photo in a rounded card). overflow is added only when the box actually MASKS: it inherits
+    // a rounded ancestor's mask (it has no own radius to mask with) OR it already clips its own
+    // content. A box that merely has its OWN radius inside a clipping ancestor is NOT force-
+    // clipped (that would crop a shadow/outline the ancestor never clipped). The `clip` keyword
+    // is preserved when the box uses it.
+    const ownR = hasOwnRadius(cs);
+    const radius = ownR ? cs.borderRadius : clipRadius;
+    const clipsOwn =
+      cs.overflowX === "hidden" || cs.overflowX === "clip" ||
+      cs.overflowY === "hidden" || cs.overflowY === "clip";
+    const masks = (!!clipRadius && !ownR) || clipsOwn;
+    const ovKw = clipsOwn && (cs.overflowX === "clip" || cs.overflowY === "clip") ? "clip" : "hidden";
+    const clip =
+      (radius ? `border-radius:${radius};` : "") +
+      (masks ? `overflow:${ovKw};` : "");
     const pos =
       // right:auto / bottom:auto neutralize any class-based right/bottom/inset from the
       // scoped <style> (which we can't strip): an absolute box with our inline left+width
       // AND a class `right` is over-constrained, and dir:rtl then IGNORES `left`.
       `position:absolute;left:${m.left}px;top:${m.top}px;right:auto;bottom:auto;` +
-      `width:${m.width}px;height:${m.height}px;margin:0;` +
+      // box-sizing:border-box so the measured (offset/border-box) width IS the rendered
+      // size - immune to padding/border re-applied by a surviving class rule (else a
+      // padded box's width would compound across re-flattens).
+      `width:${m.width}px;height:${m.height}px;margin:0;box-sizing:border-box;` +
       (m.rotateDeg ? `transform:rotate(${m.rotateDeg}deg);transform-origin:center center;` : "") +
       `z-index:${z};` +
       clip +
       nowrap; // single-line text: keep it on one line (the fixed width can't shave-wrap)
-    clone.setAttribute("style", [prev, frozen, pos].filter(Boolean).join(";"));
+    // Strip each fragment's trailing `;` before joining so adjacent self-terminated
+    // fragments don't produce `;;` empty declarations in the persisted style.
+    clone.setAttribute(
+      "style",
+      [delta, pos].filter(Boolean).map((s) => s.replace(/;$/, "")).join(";"),
+    );
     clone.setAttribute("data-tq-flat", "1");
     return clone;
   };
@@ -402,7 +590,7 @@ export function flattenSlideSection(
   };
 
   // Walk in PAINT ORDER, emitting a standalone box for every visual element. Children of a
-  // container are processed in (z-index asc, DOM order) — the order they paint — so the
+  // container are processed in (z-index asc, DOM order), the order they paint, so the
   // running counter `z` reproduces the original stacking as a flat sequence.
   const out = section.cloneNode(false) as HTMLElement;
   // Carry ALL <style> blocks (not just direct children): a nested <style> in a
