@@ -100,7 +100,7 @@ export function SlidePresenceStack({ viewers }: { viewers: PresenceViewer[] }) {
       {overflow > 0 ? (
         <div
           aria-label={dict.editor.presence.replace("{n}", String(overflow))}
-          className="-ms-[6px] flex items-center justify-center rounded-full bg-black/60 font-semibold text-foreground"
+          className="-ms-[6px] flex items-center justify-center rounded-full bg-black/60 font-semibold text-white"
           style={{
             width: AVATAR_PX,
             height: AVATAR_PX,

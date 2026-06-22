@@ -295,7 +295,7 @@ export function ProjectThumbnail({
         {actions.favoriteState ? (
           <span
             aria-label={dict.components.projectThumbnail.favorite}
-            className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-foreground"
+            className="material-symbols-outlined tq-fav-indicator pointer-events-none absolute top-2 start-2 h-[18px] w-[18px] rounded-full bg-black/70 text-white"
           >
             star
           </span>
