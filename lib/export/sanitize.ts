@@ -138,7 +138,9 @@ export function sanitizeSlideHtml(html: string): string {
           rewriteRtlMarginAutoEnd(
             rewriteRtlRowFlexOrder(
               rewriteRtlFlexEndToFlexStart(
-                rewriteRtlLtrNumericAlign(rewriteGridAutoFlowDense(clean)),
+                rewriteRtlLtrNumericAlign(
+                  rewriteRtlLeadColumnSide(rewriteGridAutoFlowDense(clean)),
+                ),
               ),
             ),
           ),
@@ -282,6 +284,62 @@ function rewriteRtlLtrNumericAlign(html: string): string {
   } catch {
     return html;
   }
+}
+
+// Parse an inline `grid-column: <start> / <end>` (CSSOM normalises to "N / M"). Returns null
+// for spans / auto / named lines - only a plain numeric line pair is re-anchorable.
+function parseGridColumn(v: string): { start: number; end: number } | null {
+  const m = (v || "").match(/^\s*(\d+)\s*\/\s*(\d+)\s*$/);
+  if (!m) return null;
+  return { start: Number(m[1]), end: Number(m[2]) };
+}
+
+// RTL rewriter — a lead/body paragraph stranded in the LEFT columns of a split grid.
+//
+// Claude composes the 12-col `.canvas` grid in an LTR mental model: it places a heading
+// block on the low columns and its supporting lead paragraph on the high columns (a
+// side-by-side split, e.g. heading `grid-column:1/8`, lead `grid-column:8/13`). The grid
+// inherits `dir:rtl`, so column 1 is the visual RIGHT and the high columns are the visual
+// LEFT: the heading lands on the right (correct, read first) while the Arabic lead is
+// isolated on the far LEFT, away from its heading. We want the primary text (heading + lead)
+// together on the right.
+//
+// Fix: when a styled grid child is a pure text block (a `<p>`, with NO heading and NO figure
+// of its own) whose inline `grid-column:A/B` is CONTIGUOUS with a sibling HEADING block at
+// `grid-column:1/A`, re-anchor the lead to the heading's span (`1/A`) so it stacks under the
+// heading on the RTL-start (right) side, freeing the left columns. Conservative: it only
+// moves a lead split directly off its heading, never a figure/image column or a standalone
+// block, and `dir="ltr"` subtrees (isolated Latin blocks) are opted out by
+// withRtlStyledElements.
+//
+// Limitation: reads INLINE grid-column only (the detached parse has no CSS cascade); a grid
+// placed by a CLASS rule isn't reached.
+function rewriteRtlLeadColumnSide(html: string): string {
+  return withRtlStyledElements(html, (el) => {
+    const gc = parseGridColumn(el.style.gridColumn);
+    if (!gc) return false;
+    // a pure body-text block: has a paragraph, but no heading + no figure of its own.
+    if (!el.querySelector("p")) return false;
+    if (el.querySelector("h1,h2,h3,h4,h5,h6,img,svg,picture,video,canvas")) return false;
+    const parent = el.parentElement;
+    if (!parent) return false;
+    // its heading sibling: grid-column starts at 1 and ENDS exactly where this lead starts.
+    const heading = Array.from(parent.children).find((s) => {
+      if (s === el) return false;
+      const sgc = parseGridColumn((s as HTMLElement).style?.gridColumn ?? "");
+      return (
+        !!sgc &&
+        sgc.start === 1 &&
+        sgc.end === gc.start &&
+        !!s.querySelector("h1,h2,h3,h4,h5,h6")
+      );
+    }) as HTMLElement | undefined;
+    if (!heading) return false;
+    const hgc = parseGridColumn(heading.style.gridColumn);
+    if (!hgc) return false;
+    el.style.setProperty("grid-column", `${hgc.start} / ${hgc.end}`);
+    return true;
+  });
 }
 
 // Defensive rewriter — keeps the prompt's "design RTL natively" rule

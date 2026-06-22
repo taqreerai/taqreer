@@ -104,7 +104,10 @@ export function sanitizeSlideHtmlServer(html: string): string {
             window,
             rewriteRtlFlexEndToFlexStart(
               window,
-              rewriteGridAutoFlowDense(window, clean),
+              rewriteRtlLeadColumnSide(
+                window,
+                rewriteGridAutoFlowDense(window, clean),
+              ),
             ),
           ),
         ),
@@ -280,6 +283,65 @@ function rewriteGridAutoFlowDense(window: JSDOMWindow, html: string): string {
   } catch {
     return html;
   }
+}
+
+// Server mirror of `rewriteRtlLeadColumnSide` in lib/export/sanitize.ts — see that file's
+// docblock. An RTL grid child that is a pure text block (a <p>, no heading/figure) split
+// contiguously off a sibling heading at `grid-column:1/A` is re-anchored to the heading's
+// span so the Arabic lead stacks under its heading on the right, not stranded on the left.
+function rewriteRtlLeadColumnSide(window: JSDOMWindow, html: string): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const wrapper = doc.body.firstElementChild;
+    const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    let changed = false;
+    for (const el of Array.from(
+      slideRoot.querySelectorAll<HTMLElement>("[style]"),
+    )) {
+      const closestDir = el.closest("[dir]");
+      if (closestDir && closestDir.getAttribute("dir") !== "rtl") continue;
+      const gc = parseGridColumn(el.style.gridColumn);
+      if (!gc) continue;
+      // a pure body-text block: has a paragraph, but no heading + no figure of its own.
+      if (!el.querySelector("p")) continue;
+      if (el.querySelector("h1,h2,h3,h4,h5,h6,img,svg,picture,video,canvas")) {
+        continue;
+      }
+      const parent = el.parentElement;
+      if (!parent) continue;
+      // its heading sibling: grid-column starts at 1 and ENDS where this lead starts.
+      const heading = Array.from(parent.children).find((s) => {
+        if (s === el) return false;
+        const sgc = parseGridColumn((s as HTMLElement).style?.gridColumn ?? "");
+        return (
+          !!sgc &&
+          sgc.start === 1 &&
+          sgc.end === gc.start &&
+          !!s.querySelector("h1,h2,h3,h4,h5,h6")
+        );
+      }) as HTMLElement | undefined;
+      if (!heading) continue;
+      const hgc = parseGridColumn(heading.style.gridColumn);
+      if (!hgc) continue;
+      el.style.setProperty("grid-column", `${hgc.start} / ${hgc.end}`);
+      changed = true;
+    }
+    return changed ? wrapper!.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Parse an inline `grid-column: <start> / <end>` (JSDOM keeps "N/M", the browser normalises
+// to "N / M" - the regex allows both). Null for spans / auto / named lines.
+function parseGridColumn(v: string): { start: number; end: number } | null {
+  const m = (v || "").match(/^\s*(\d+)\s*\/\s*(\d+)\s*$/);
+  if (!m) return null;
+  return { start: Number(m[1]), end: Number(m[2]) };
 }
 
 // Server mirror of `rewriteRtlImagePanelSide` in lib/export/sanitize.ts —
