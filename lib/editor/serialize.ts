@@ -12,7 +12,7 @@
 // lock) is runtime-only. data-tq-group (canvas grouping) is INTENTIONALLY KEPT — it
 // persists so groups survive refresh / navigation / browser close; it's an inert
 // data-attribute that dom-to-pptx ignores on export.
-const EDITOR_ATTRS = ["data-tq-id", "data-tq-cc", "data-tq-lock", "contenteditable"] as const;
+const EDITOR_ATTRS = ["data-tq-id", "data-tq-cc", "data-tq-lock", "data-tq-fidx", "contenteditable"] as const;
 // Selector for any element carrying one — derived from EDITOR_ATTRS so adding a
 // new editor attribute updates both the strip list and the query in one edit.
 const EDITOR_ATTR_SELECTOR = EDITOR_ATTRS.map((a) => `[${a}]`).join(",");

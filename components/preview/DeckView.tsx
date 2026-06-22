@@ -1038,13 +1038,14 @@ export function DeckView({
     [applyContentLocally],
   );
 
-  // Flatten fidelity observatory (Phase 0): fire-and-forget log of a flatten that lost
-  // content. Advisory only, it never blocks editing and swallows every error. Phase 1 adds
-  // the style-fidelity trigger; here we record only the content shortfall the editor already
-  // detects (today discarded in a console.warn). Sends a COUNT, never the dropped words.
+  // Flatten fidelity observatory: fire-and-forget log of a flatten that lost content OR style
+  // fidelity. Advisory only, it never blocks editing and swallows every error. Sends a COUNT
+  // (never the dropped words) + the structural style-drift list, never user HTML.
   const handleFlattenResult = useCallback(
     (slideKey: string, parity: FlattenParity) => {
-      if (parity.ok) return; // no signal worth recording yet
+      const highDrift = parity.styleDrifts.filter((d) => d.severity === "high").length;
+      // Log on a content shortfall, any HIGH-severity style drift, or enough low-severity drift.
+      if (parity.ok && highDrift === 0 && parity.fidelityScore >= 0.95) return;
       void fetch(
         `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/flatten-event`,
         {
@@ -1053,6 +1054,10 @@ export function DeckView({
           body: JSON.stringify({
             parityOk: parity.ok,
             missingCount: parity.missingWords.length,
+            fidelityScore: parity.fidelityScore,
+            leafCount: parity.leafCount,
+            highDrift,
+            styleDrifts: parity.styleDrifts,
           }),
         },
       ).catch(() => {}); // a telemetry hiccup must never disrupt editing

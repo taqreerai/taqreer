@@ -338,12 +338,43 @@ function freezeInherited(el: HTMLElement, cs: CSSStyleDeclaration): string {
 // non-shrink on visual atoms. Styling fidelity (collapsed lines, lost colour) is
 // NOT checked here, only content presence.
 type AtomCensus = { img: number; svg: number; embed: number };
+export type StyleDrift = {
+  fidx: number;      // paint-order rank, pairs the drift to its output box
+  prop: string;      // e.g. "color"
+  src: string;       // source computed value
+  out: string;       // post-flatten computed value
+  severity: "high" | "low";
+};
 export type FlattenParity = {
-  ok: boolean;
+  ok: boolean;             // the HARD content gate (unchanged)
   missingWords: string[];
   srcCensus: AtomCensus;
   outCensus: AtomCensus;
+  // Advisory STYLE-fidelity census - NEVER affects `ok`, it is the observatory signal.
+  fidelityScore: number;   // 0..1 (1 = output renders like the source on FIDELITY_PROPS)
+  styleDrifts: StyleDrift[]; // capped, high-severity first
+  leafCount: number;       // boxes measured (the score denominator)
 };
+
+// Visual properties whose post-hoist loss is USER-VISIBLE (the invisible-letters bug was a
+// `color` / `background-color` drop). The fidelity census diffs each output box against its
+// source on exactly these - NOT all ~350 props (the expensive route) and NOT geometry (the
+// flatten owns + measures that). HIGH = "you can see it's wrong"; it weighs the score harder.
+// border-radius is deliberately ABSENT: the clip step OWNS it (re-emits own + inherited-mask
+// radius), so a mask-child's source own-radius (0) vs its baked output radius is a false drift.
+const FIDELITY_PROPS = [
+  "color", "background-color", "-webkit-text-fill-color", "opacity", "visibility",
+  "font-size", "font-weight", "font-family", "line-height", "letter-spacing",
+  "text-align", "text-decoration-line", "text-transform", "box-shadow",
+] as const;
+const HIGH_SEVERITY = new Set<string>([
+  "color", "background-color", "-webkit-text-fill-color", "opacity", "visibility", "font-size",
+]);
+function captureFidelity(cs: CSSStyleDeclaration): Record<string, string> {
+  const o: Record<string, string> = {};
+  for (const p of FIDELITY_PROPS) o[p] = cs.getPropertyValue(p);
+  return o;
+}
 
 function wordCounts(text: string): Map<string, number> {
   const m = new Map<string, number>();
@@ -373,7 +404,12 @@ function collectWords(root: HTMLElement, doc: Document): Map<string, number> {
   return words;
 }
 
-function checkParity(section: HTMLElement, out: HTMLElement, win: Window): FlattenParity {
+function checkParity(
+  section: HTMLElement,
+  out: HTMLElement,
+  win: Window,
+  srcFidelity: Map<number, Record<string, string>>,
+): FlattenParity {
   const doc = section.ownerDocument;
   const EMBED = "canvas, video, iframe, object, embed";
   // Count atoms that actually RENDER under the live source (a 0x0 / display:none /
@@ -409,12 +445,42 @@ function checkParity(section: HTMLElement, out: HTMLElement, win: Window): Flatt
   // the hoisted <style> blocks the source already has, a no-op on the cascade.
   const savedHtml = section.innerHTML;
   let outWords: Map<string, number>;
+  // STYLE-FIDELITY census, accumulated in the SAME swap window (the only moment the output is
+  // laid out in the live context). Pair each box to its source by data-tq-fidx + diff the
+  // FIDELITY_PROPS. Advisory: it never touches `ok`.
+  const drifts: StyleDrift[] = [];
+  let weightedDrift = 0;
+  let leafCount = 0;
   try {
     section.innerHTML = out.innerHTML;
     outWords = collectWords(section, doc);
+    for (const box of section.querySelectorAll<HTMLElement>("[data-tq-fidx]")) {
+      const fidx = Number(box.getAttribute("data-tq-fidx"));
+      const src = srcFidelity.get(fidx);
+      if (!src) continue;
+      leafCount++;
+      const cs = win.getComputedStyle(box);
+      let high = false;
+      let low = false;
+      for (const p of FIDELITY_PROPS) {
+        const o = cs.getPropertyValue(p);
+        if (src[p] === o) continue;
+        const isHigh = HIGH_SEVERITY.has(p);
+        if (isHigh) high = true;
+        else low = true;
+        if (drifts.length < 100) {
+          drifts.push({ fidx, prop: p, src: src[p], out: o, severity: isHigh ? "high" : "low" });
+        }
+      }
+      if (high) weightedDrift += 1;
+      else if (low) weightedDrift += 0.3;
+    }
   } finally {
     section.innerHTML = savedHtml;
   }
+  // A leaf with any HIGH drift counts 1.0, a low-only leaf 0.3, a clean leaf 0.
+  const fidelityScore = leafCount ? Math.max(0, 1 - weightedDrift / leafCount) : 1;
+  drifts.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "high" ? -1 : 1));
 
   // OUTPUT ATOMS stay a PRESENCE count, NOT measured in the swap on purpose: a
   // freshly-parsed <img> clone has not decoded yet, so a rect-based visibility check
@@ -441,6 +507,9 @@ function checkParity(section: HTMLElement, out: HTMLElement, win: Window): Flatt
     missingWords: missingWords.slice(0, 25),
     srcCensus,
     outCensus,
+    fidelityScore,
+    styleDrifts: drifts.slice(0, 20),
+    leafCount,
   };
 }
 
@@ -456,6 +525,10 @@ export function flattenSlideSection(
     cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0";
 
   const originRect = section.getBoundingClientRect();
+
+  // Per-box snapshot of the SOURCE's visual props (keyed by paint-order rank), captured in
+  // makeBox while the source is still live; checkParity diffs it against the output box.
+  const srcFidelity = new Map<number, Record<string, string>>();
 
   // Geometry relative to the SECTION. offsetWidth/Height are layout (canvas) px;
   // getBoundingClientRect is on-screen (scaled) px, so its deltas are divided by `scale`.
@@ -545,6 +618,11 @@ export function flattenSlideSection(
       [delta, pos].filter(Boolean).map((s) => s.replace(/;$/, "")).join(";"),
     );
     clone.setAttribute("data-tq-flat", "1");
+    // Style-fidelity pairing: stamp the paint-order rank + snapshot the SOURCE's visual props
+    // now (it is still live). checkParity re-reads the output box by this rank in its swap; the
+    // attribute is census-only, stripped before the html is returned (+ in serialize.ts).
+    clone.setAttribute("data-tq-fidx", String(z));
+    srcFidelity.set(z, captureFidelity(cs));
     return clone;
   };
 
@@ -649,5 +727,11 @@ export function flattenSlideSection(
   };
   collect(section, "");
 
-  return { html: out.outerHTML, parity: checkParity(section, out, win) };
+  const parity = checkParity(section, out, win, srcFidelity);
+  // data-tq-fidx is census-only: strip it so the returned html (and the live editor DOM) never
+  // carry it, which keeps re-flatten byte-stable. serialize.ts strips it too as defense.
+  for (const b of Array.from(out.querySelectorAll<HTMLElement>("[data-tq-fidx]"))) {
+    b.removeAttribute("data-tq-fidx");
+  }
+  return { html: out.outerHTML, parity };
 }
