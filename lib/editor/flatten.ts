@@ -468,7 +468,9 @@ function checkParity(
         const isHigh = HIGH_SEVERITY.has(p);
         if (isHigh) high = true;
         else low = true;
-        if (drifts.length < 100) {
+        // Always collect HIGH drifts; cap LOW so a flood of low-severity noise can't crowd
+        // them out of the list before the high-first sort below.
+        if (isHigh || drifts.length < 60) {
           drifts.push({ fidx, prop: p, src: src[p], out: o, severity: isHigh ? "high" : "low" });
         }
       }
@@ -654,6 +656,14 @@ export function flattenSlideSection(
         `width:${w}px;height:${h}px;margin:0;z-index:${z};white-space:nowrap;`,
     );
     box.setAttribute("data-tq-flat", "1");
+    // Style-fidelity pairing for the SYNTHETIC text-run box: its source is the parent's
+    // resolved TEXT props, but a text run paints no box of its own, so background / shadow are
+    // the run's own (transparent / none). checkParity reads this box by rank in its swap.
+    box.setAttribute("data-tq-fidx", String(z));
+    const tsrc = captureFidelity(parentCs);
+    tsrc["background-color"] = "rgba(0, 0, 0, 0)";
+    tsrc["box-shadow"] = "none";
+    srcFidelity.set(z, tsrc);
     return box;
   };
 
