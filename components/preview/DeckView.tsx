@@ -1450,7 +1450,12 @@ export function DeckView({
       if (img.style.opacity === "0") img.style.removeProperty("opacity");
       img.classList.add("tq-genimg-in");
     }
-  }, [filledImages, editorDoc]);
+    // Re-run after an in-place undo/redo too: it swaps the section innerHTML, which replaces
+    // the patched <img> with the snapshot's SRCLESS placeholder, so the live fill must be
+    // re-applied (else undo on a slide with a filled gen-image reverts it to the shimmer until
+    // a slide switch re-runs this). SlideEditor's swap is a child effect, so it commits before
+    // this parent effect re-patches the fresh <img>.
+  }, [filledImages, editorDoc, inPlaceApply?.token]);
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
   // throttles backgrounded / out-of-focus WebSockets and occasionally
   // drops broadcast frames entirely — symptom: the spinner overlay
