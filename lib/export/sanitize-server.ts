@@ -285,10 +285,23 @@ function rewriteGridAutoFlowDense(window: JSDOMWindow, html: string): string {
   }
 }
 
+// True if the element pins an explicit grid ROW (any grid-row* longhand/shorthand), read from
+// the inline style ATTRIBUTE. Server mirror of the helper in lib/export/sanitize.ts.
+function hasInlineGridRow(el: Element): boolean {
+  return /(^|;)\s*grid-row(-start|-end)?\s*:/i.test(el.getAttribute("style") || "");
+}
+
+// True if a `<p>` is a DIRECT child (the stranded-lead shape `cell > p.lead`), excluding a
+// `<p>` buried inside a stat/figure card. Server mirror of the helper in sanitize.ts.
+function hasDirectChildP(el: Element): boolean {
+  return Array.from(el.children).some((c) => c.tagName === "P");
+}
+
 // Server mirror of `rewriteRtlLeadColumnSide` in lib/export/sanitize.ts — see that file's
-// docblock. An RTL grid child that is a pure text block (a <p>, no heading/figure) split
-// contiguously off a sibling heading at `grid-column:1/A` is re-anchored to the heading's
-// span so the Arabic lead stacks under its heading on the right, not stranded on the left.
+// docblock for the full gating rationale. Re-anchors a stranded Arabic lead under its heading,
+// tightly gated (no explicit grid-row on lead/heading, direct-child <p>, BARE heading, heading
+// strictly wider than the lead) so it never collapses an intentional two-column / sidebar /
+// stat layout.
 function rewriteRtlLeadColumnSide(window: JSDOMWindow, html: string): string {
   try {
     const doc = new window.DOMParser().parseFromString(
@@ -306,22 +319,28 @@ function rewriteRtlLeadColumnSide(window: JSDOMWindow, html: string): string {
       if (closestDir && closestDir.getAttribute("dir") !== "rtl") continue;
       const gc = parseGridColumn(el.style.gridColumn);
       if (!gc) continue;
-      // a pure body-text block: has a paragraph, but no heading + no figure of its own.
-      if (!el.querySelector("p")) continue;
+      if (hasInlineGridRow(el)) continue; // an explicit row would pin it -> overlap
+      // a pure body-text block: a DIRECT-child paragraph, no heading + no figure of its own.
+      if (!hasDirectChildP(el)) continue;
       if (el.querySelector("h1,h2,h3,h4,h5,h6,img,svg,picture,video,canvas")) {
         continue;
       }
       const parent = el.parentElement;
       if (!parent) continue;
-      // its heading sibling: grid-column starts at 1 and ENDS where this lead starts.
+      const leadWidth = gc.end - gc.start;
+      // a BARE heading sibling at 1/A (contiguous), no explicit row, STRICTLY WIDER than lead.
       const heading = Array.from(parent.children).find((s) => {
         if (s === el) return false;
-        const sgc = parseGridColumn((s as HTMLElement).style?.gridColumn ?? "");
+        const h = s as HTMLElement;
+        const sgc = parseGridColumn(h.style?.gridColumn ?? "");
         return (
           !!sgc &&
           sgc.start === 1 &&
           sgc.end === gc.start &&
-          !!s.querySelector("h1,h2,h3,h4,h5,h6")
+          sgc.end - sgc.start > leadWidth &&
+          !hasInlineGridRow(h) &&
+          !!h.querySelector("h1,h2,h3,h4,h5,h6") &&
+          !h.querySelector("p")
         );
       }) as HTMLElement | undefined;
       if (!heading) continue;

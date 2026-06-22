@@ -294,6 +294,19 @@ function parseGridColumn(v: string): { start: number; end: number } | null {
   return { start: Number(m[1]), end: Number(m[2]) };
 }
 
+// True if the element pins an explicit grid ROW (any grid-row* longhand/shorthand). Read from
+// the inline style ATTRIBUTE so every form is caught regardless of CSSOM shorthand handling;
+// the detached parse has no cascade, so a class-set row is out of scope.
+function hasInlineGridRow(el: Element): boolean {
+  return /(^|;)\s*grid-row(-start|-end)?\s*:/i.test(el.getAttribute("style") || "");
+}
+
+// True if a `<p>` is a DIRECT child (the verified stranded-lead shape `cell > p.lead`), which
+// excludes a `<p>` buried inside a stat/figure card (`cell > div.card > p`).
+function hasDirectChildP(el: Element): boolean {
+  return Array.from(el.children).some((c) => c.tagName === "P");
+}
+
 // RTL rewriter — a lead/body paragraph stranded in the LEFT columns of a split grid.
 //
 // Claude composes the 12-col `.canvas` grid in an LTR mental model: it places a heading
@@ -304,34 +317,44 @@ function parseGridColumn(v: string): { start: number; end: number } | null {
 // isolated on the far LEFT, away from its heading. We want the primary text (heading + lead)
 // together on the right.
 //
-// Fix: when a styled grid child is a pure text block (a `<p>`, with NO heading and NO figure
-// of its own) whose inline `grid-column:A/B` is CONTIGUOUS with a sibling HEADING block at
-// `grid-column:1/A`, re-anchor the lead to the heading's span (`1/A`) so it stacks under the
-// heading on the RTL-start (right) side, freeing the left columns. Conservative: it only
-// moves a lead split directly off its heading, never a figure/image column or a standalone
-// block, and `dir="ltr"` subtrees (isolated Latin blocks) are opted out by
-// withRtlStyledElements.
+// Fix: re-anchor the lead to the heading's span so it AUTO-FLOWS into the next row, UNDER the
+// heading on the RTL-start (right) side. A column-only re-anchor only works when the lead
+// falls into that next auto row, so the match is tightly gated to that one archetype and never
+// collapses an intentional two-column / sidebar / stat layout. ALL must hold:
+//   - the lead cell has a DIRECT-child `<p>`, no heading/figure of its own, and NO explicit
+//     grid-row (an explicit row would pin it on top of the heading -> hard overlap);
+//   - a sibling at `grid-column:1/A` (contiguous with the lead's start) that is a BARE heading
+//     (an h1-h6 but NO `<p>` of its own — its lead was the one stranded), with NO explicit row;
+//   - the heading's column span is STRICTLY WIDER than the lead's (a body as-wide-or-wider than
+//     its heading is a peer/main column, not a stranded lead).
+// `dir="ltr"` subtrees (isolated Latin blocks) are opted out by withRtlStyledElements.
 //
-// Limitation: reads INLINE grid-column only (the detached parse has no CSS cascade); a grid
-// placed by a CLASS rule isn't reached.
+// Limitation: reads INLINE grid-column/grid-row only (the detached parse has no CSS cascade);
+// a grid placed by a CLASS rule isn't reached.
 function rewriteRtlLeadColumnSide(html: string): string {
   return withRtlStyledElements(html, (el) => {
     const gc = parseGridColumn(el.style.gridColumn);
     if (!gc) return false;
-    // a pure body-text block: has a paragraph, but no heading + no figure of its own.
-    if (!el.querySelector("p")) return false;
+    if (hasInlineGridRow(el)) return false; // an explicit row would pin it -> overlap
+    // a pure body-text block: a DIRECT-child paragraph, no heading + no figure of its own.
+    if (!hasDirectChildP(el)) return false;
     if (el.querySelector("h1,h2,h3,h4,h5,h6,img,svg,picture,video,canvas")) return false;
     const parent = el.parentElement;
     if (!parent) return false;
-    // its heading sibling: grid-column starts at 1 and ENDS exactly where this lead starts.
+    const leadWidth = gc.end - gc.start;
+    // a BARE heading sibling at 1/A (contiguous), no explicit row, STRICTLY WIDER than the lead.
     const heading = Array.from(parent.children).find((s) => {
       if (s === el) return false;
-      const sgc = parseGridColumn((s as HTMLElement).style?.gridColumn ?? "");
+      const h = s as HTMLElement;
+      const sgc = parseGridColumn(h.style?.gridColumn ?? "");
       return (
         !!sgc &&
         sgc.start === 1 &&
         sgc.end === gc.start &&
-        !!s.querySelector("h1,h2,h3,h4,h5,h6")
+        sgc.end - sgc.start > leadWidth &&
+        !hasInlineGridRow(h) &&
+        !!h.querySelector("h1,h2,h3,h4,h5,h6") &&
+        !h.querySelector("p")
       );
     }) as HTMLElement | undefined;
     if (!heading) return false;
