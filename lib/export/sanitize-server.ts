@@ -104,9 +104,12 @@ export function sanitizeSlideHtmlServer(html: string): string {
             window,
             rewriteRtlFlexEndToFlexStart(
               window,
-              rewriteRtlLeadColumnSide(
+              rewriteRtlLtrTextAlign(
                 window,
-                rewriteGridAutoFlowDense(window, clean),
+                rewriteRtlLeadColumnSide(
+                  window,
+                  rewriteGridAutoFlowDense(window, clean),
+                ),
               ),
             ),
           ),
@@ -124,6 +127,54 @@ export function sanitizeSlideHtmlServer(html: string): string {
 // docblocks for the bug each rewriter defends against. The only
 // difference is the DOMParser source (JSDOM window instead of the
 // real one). When either rewriter's logic changes, update BOTH files.
+
+// Inline tags where `text-align` is a no-op, and the selector for block-level
+// descendants that mark an element as a CONTAINER (not a leaf text block).
+// Mirrors the constants in lib/export/sanitize.ts.
+const LTR_INLINE_TAGS = new Set([
+  "SPAN", "A", "B", "I", "EM", "STRONG", "CODE", "SMALL", "SUB", "SUP",
+  "LABEL", "ABBR", "CITE", "Q", "MARK", "U", "S", "TIME", "KBD", "SAMP", "VAR",
+]);
+const LTR_BLOCK_CHILD_SEL =
+  "p,div,h1,h2,h3,h4,h5,h6,ul,ol,li,table,section,article,header,footer,aside,figure,blockquote,hr";
+
+// Server mirror of `rewriteRtlLtrTextAlign` in lib/export/sanitize.ts — see that
+// file's docblock. Right-aligns a BLOCK-LEVEL `dir="ltr"` LEAF of purely Latin/
+// numeric text (a tier name, tagline, index number) that would otherwise sit on
+// the visual LEFT in an RTL slide. Skips inline runs, container blocks, and any
+// element with an explicit inline text-align up the chain.
+function rewriteRtlLtrTextAlign(window: JSDOMWindow, html: string): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    const slideRoot = root.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    let changed = false;
+    slideRoot.querySelectorAll<HTMLElement>('[dir="ltr"]').forEach((el) => {
+      if (LTR_INLINE_TAGS.has(el.tagName)) return; // inline run: text-align no-op
+      if (el.querySelector(LTR_BLOCK_CHILD_SEL)) return; // container, not a leaf
+      const text = (el.textContent ?? "").trim();
+      if (!text || !/[A-Za-z0-9]/.test(text)) return; // must carry Latin/numeric
+      if (/[؀-ۿݐ-ݿ]/.test(text)) return; // skip mixed-Arabic
+      for (
+        let anc: HTMLElement | null = el;
+        anc && anc !== slideRoot.parentElement;
+        anc = anc.parentElement
+      ) {
+        if (anc.style && anc.style.textAlign) return;
+      }
+      el.style.setProperty("text-align", "right");
+      changed = true;
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
 
 function rewriteRtlFlexEndToFlexStart(
   window: JSDOMWindow,

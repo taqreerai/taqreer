@@ -138,7 +138,7 @@ export function sanitizeSlideHtml(html: string): string {
           rewriteRtlMarginAutoEnd(
             rewriteRtlRowFlexOrder(
               rewriteRtlFlexEndToFlexStart(
-                rewriteRtlLtrNumericAlign(
+                rewriteRtlLtrTextAlign(
                   rewriteRtlLeadColumnSide(rewriteGridAutoFlowDense(clean)),
                 ),
               ),
@@ -235,26 +235,40 @@ function withRtlStyledElements(
   }
 }
 
-// RTL rewriter — Latin-numeral blocks that left-align because of `dir="ltr"`.
+// Inline tags where `text-align` is a no-op (the run flows with its block parent),
+// and the selector for block-level descendants that mark an element as a CONTAINER
+// (not a leaf text block). Shared by the LTR text-align rewriter below.
+const LTR_INLINE_TAGS = new Set([
+  "SPAN", "A", "B", "I", "EM", "STRONG", "CODE", "SMALL", "SUB", "SUP",
+  "LABEL", "ABBR", "CITE", "Q", "MARK", "U", "S", "TIME", "KBD", "SAMP", "VAR",
+]);
+const LTR_BLOCK_CHILD_SEL =
+  "p,div,h1,h2,h3,h4,h5,h6,ul,ol,li,table,section,article,header,footer,aside,figure,blockquote,hr";
+
+// RTL rewriter — Latin (`dir="ltr"`) text blocks that left-align in an RTL slide.
 //
-// To isolate a Latin numeral (so "01" reads left-to-right, not "10"), Claude
-// puts `dir="ltr"` on the whole NUMBER BLOCK. That also flips the element's
-// default `text-align: start` to LEFT, so in an RTL slide the number sits on the
+// To make Latin content read left-to-right (so "01" isn't reversed, "taqreer.ai"
+// reads correctly), Claude puts `dir="ltr"` on the block. That ALSO flips the
+// element's default `text-align: start` to LEFT, so in an RTL slide the Latin
+// block — a tier name "Plus", a closing tagline, an index number — sits on the
 // visual LEFT instead of the RTL start (visual RIGHT). The other rewriters can't
 // reach it — `withRtlStyledElements` deliberately OPTS OUT `dir="ltr"` subtrees.
 //
-// Fix: for a `dir="ltr"` element whose text is a bare index-style number (1-3
-// ASCII digits, nothing else) with NO explicit inline `text-align` on it OR any
-// ancestor up to the slide root, set `text-align: right` — restoring the RTL
-// start the block would have had without the dir override. Digit ORDER is
-// untouched (`dir` stays "ltr"). Any explicit inline alignment up the chain
-// (author intent, a manual left, a centred parent, an already-right root) opts
-// the number out.
+// Fix: for a BLOCK-LEVEL `dir="ltr"` LEAF whose text is purely Latin/numeric (no
+// Arabic letters) with NO explicit inline `text-align` on it OR any ancestor up to
+// the slide root, set `text-align: right` — restoring the RTL start the block would
+// have had without the dir override. Reading order is untouched (`dir` stays "ltr").
+// Gated tight so it never disturbs an intentional layout:
+//   - INLINE dir="ltr" runs (a <span> inside an Arabic paragraph) are skipped —
+//     text-align is a no-op there and the run already flows with its RTL parent;
+//   - CONTAINER blocks (anything with a block-level descendant) are skipped — only
+//     leaf text blocks are re-aligned, never a wrapper whose children inherit it;
+//   - any explicit inline text-align up the chain opts the block out (author intent:
+//     a manual left, a centred parent, an already-right root).
 //
-// Limitation: reads INLINE text-align only — the detached parse has no CSS
-// cascade — so a number aligned by a CLASS rule isn't detected. Scoped tight
-// (bare ≤3-digit numbers) to keep that edge rare.
-function rewriteRtlLtrNumericAlign(html: string): string {
+// Limitation: reads INLINE text-align only (the detached parse has no CSS cascade),
+// so a block centred by a CLASS rule isn't detected.
+function rewriteRtlLtrTextAlign(html: string): string {
   if (typeof window === "undefined") return html;
   try {
     const doc = new DOMParser().parseFromString(
@@ -267,8 +281,11 @@ function rewriteRtlLtrNumericAlign(html: string): string {
     if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
     let changed = false;
     slideRoot.querySelectorAll<HTMLElement>('[dir="ltr"]').forEach((el) => {
+      if (LTR_INLINE_TAGS.has(el.tagName)) return; // inline run: text-align no-op
+      if (el.querySelector(LTR_BLOCK_CHILD_SEL)) return; // container, not a leaf
       const text = (el.textContent ?? "").trim();
-      if (!/^\d{1,3}$/.test(text)) return; // bare index-style number only
+      if (!text || !/[A-Za-z0-9]/.test(text)) return; // must carry Latin/numeric
+      if (/[؀-ۿݐ-ݿ]/.test(text)) return; // skip mixed-Arabic
       // Opt out if any inline text-align is set on the element or an ancestor.
       for (
         let anc: HTMLElement | null = el;
