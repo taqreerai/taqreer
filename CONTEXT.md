@@ -314,10 +314,21 @@ Four formats from the studio export menu: **PPTX, PDF, PNG, HTML**.
   canvas resolution, zipped (JSZip).
 - **HTML** — standalone self-contained document download.
 
-Exports re-sanitize HTML server-side (`lib/export/sanitize.ts`: DOMPurify + font-URL
-allowlist + data-URL stripping). Thumbnails are produced by the `thumbnail-render`
-Inngest job (Puppeteer → WebP in the `slide-previews` bucket, written to
-`Project.thumbnailUrls`).
+HTML is sanitized at every boundary, not only export: `lib/export/sanitize.ts` runs on
+**view** (`SlideRenderer`) and **editor load** (before the flatten); its JSDOM mirror
+`sanitize-server.ts` runs on **save + export** (kept in lockstep — "update BOTH files").
+Past DOMPurify (+ font-URL allowlist + data-URL stripping) it runs a **family of RTL
+rewriters** that correct Claude's LTR-mental layouts on an RTL slide, reading INLINE styles
+only (detached parse, no CSS cascade — a class-set property or a `dir=ltr` subtree is out of
+reach): `rewriteRtlLeadColumnSide` (re-anchors a grid lead `<p>` stranded left under its
+heading), `rewriteRtlLtrTextAlign` (right-aligns a `dir=ltr` Latin block — a tier name,
+tagline, index number), `rewriteRtlArabicRowReverse` (flips an Arabic eyebrow's
+`flex-direction:row-reverse` to `row` so it packs right and reads RTL), plus the older
+flex/grid fixers (`rewriteRtlRowFlexOrder`, `…FlexEndToFlexStart`, `…MarginAutoEnd`,
+`…ImagePanelSide`, `rewriteGridAutoFlowDense`). Each is tightly gated and verified (empirical
+cross-deck + adversarial review) — a loose gate corrupts correct RTL layouts (the grid
+rewriter's naive v1 broke 14). Thumbnails are produced by the `thumbnail-render` Inngest job
+(Puppeteer → WebP in the `slide-previews` bucket, written to `Project.thumbnailUrls`).
 
 ---
 
@@ -335,6 +346,16 @@ deck in a single canvas with no remount:
   swaps to `SlideEditor` (`components/preview/editor/SlideEditor.tsx`), an iframe whose
   content is scaled internally. Click to select a leaf element, marquee-drag to
   multi-select, click-again on text to edit inline.
+- **Flatten on enter** — `SlideEditor` flattens the slide (every element → a standalone
+  absolute box in one stacking context) so global z-order / layer-drag / grouping work; a
+  simulation-diff bakes each leaf's resolved style so re-flatten is byte-stable. A
+  content-parity net keeps it lossless, and a **fidelity observatory** (`FlattenEvent` table
+  + PostHog `flatten.fidelity`) logs any residual style drift for offline tuning.
+- **Text style pill** — selecting a text element raises `StylePill` (a floating glass
+  toolbar): font size, bold/italic, colour, alignment (L/C/R), and an **RTL/LTR direction
+  toggle** that sets the element's `dir` attribute + a matching `text-align` (so a forced
+  direction survives the flatten + the view-time sanitizer + PPTX export). Multi-select
+  applies to all and shows a "mixed" dot.
 - **Manual edits** — save in place via `POST /api/projects/[id]/slides/[slideKey]/edit`
   (optimistic, no new version row).
 - **AI edits** — full regen, or per-slide partial regen driven by comments flagged
