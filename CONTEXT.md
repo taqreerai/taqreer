@@ -337,10 +337,9 @@ rewriter's naive v1 broke 14). Thumbnails are produced by the `thumbnail-render`
 `components/preview/DeckView.tsx` is one component that both **generates and edits** a
 deck in a single canvas with no remount:
 
-- **Generating → editing handoff** — while generating, it shows progress and streams
-  live-preview slides; on completion it becomes the editor in place (undo stacks,
-  scroll, and selection survive the transition).
-- **Roles** — `owner` / `edit` / `comment` / `view`, resolved from `resolveProjectAccess`
+- **Generating to editing handoff:** while generating it streams live-preview slides; on
+  completion it becomes the editor in place (undo stacks, scroll, and selection survive).
+- **Roles:** `owner` / `edit` / `comment` / `view`, resolved from `resolveProjectAccess`
   (owner > edit > comment > view); public links grant view-only.
 - **Workspace:** the selected slide swaps from read-only `SlideRenderer` to `SlideEditor`
   (`components/preview/editor/SlideEditor.tsx`), a same-origin iframe that IS the whole canvas.
