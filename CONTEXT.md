@@ -316,17 +316,17 @@ Four formats from the studio export menu: **PPTX, PDF, PNG, HTML**.
 
 HTML is sanitized at every boundary, not only export: `lib/export/sanitize.ts` runs on
 **view** (`SlideRenderer`) and **editor load** (before the flatten); its JSDOM mirror
-`sanitize-server.ts` runs on **save + export** (kept in lockstep — "update BOTH files").
+`sanitize-server.ts` runs on **save + export** (kept in lockstep, "update BOTH files").
 Past DOMPurify (+ font-URL allowlist + data-URL stripping) it runs a **family of RTL
 rewriters** that correct Claude's LTR-mental layouts on an RTL slide, reading INLINE styles
-only (detached parse, no CSS cascade — a class-set property or a `dir=ltr` subtree is out of
+only (detached parse, no CSS cascade, so a class-set property or a `dir=ltr` subtree is out of
 reach): `rewriteRtlLeadColumnSide` (re-anchors a grid lead `<p>` stranded left under its
-heading), `rewriteRtlLtrTextAlign` (right-aligns a `dir=ltr` Latin block — a tier name,
-tagline, index number), `rewriteRtlArabicRowReverse` (flips an Arabic eyebrow's
+heading), `rewriteRtlLtrTextAlign` (right-aligns a `dir=ltr` Latin block, e.g. a tier name,
+tagline, or index number), `rewriteRtlArabicRowReverse` (flips an Arabic eyebrow's
 `flex-direction:row-reverse` to `row` so it packs right and reads RTL), plus the older
 flex/grid fixers (`rewriteRtlRowFlexOrder`, `…FlexEndToFlexStart`, `…MarginAutoEnd`,
 `…ImagePanelSide`, `rewriteGridAutoFlowDense`). Each is tightly gated and verified (empirical
-cross-deck + adversarial review) — a loose gate corrupts correct RTL layouts (the grid
+cross-deck + adversarial review): a loose gate corrupts correct RTL layouts (the grid
 rewriter's naive v1 broke 14). Thumbnails are produced by the `thumbnail-render` Inngest job
 (Puppeteer → WebP in the `slide-previews` bucket, written to `Project.thumbnailUrls`).
 
@@ -342,30 +342,58 @@ deck in a single canvas with no remount:
   scroll, and selection survive the transition).
 - **Roles** — `owner` / `edit` / `comment` / `view`, resolved from `resolveProjectAccess`
   (owner > edit > comment > view); public links grant view-only.
-- **Editing** — each slide renders read-only via `SlideRenderer`; the selected slide
-  swaps to `SlideEditor` (`components/preview/editor/SlideEditor.tsx`), an iframe whose
-  content is scaled internally. Click to select a leaf element, marquee-drag to
-  multi-select, click-again on text to edit inline.
-- **Flatten on enter** — `SlideEditor` flattens the slide (every element → a standalone
-  absolute box in one stacking context) so global z-order / layer-drag / grouping work; a
+- **Workspace:** the selected slide swaps from read-only `SlideRenderer` to `SlideEditor`
+  (`components/preview/editor/SlideEditor.tsx`), a same-origin iframe that IS the whole canvas.
+  The native-size artboard (`#tqe-stage`, 1920x1080 or the deck format) floats inside a
+  pan/zoom scene (`#tqe-scene`, one `translate(pan) scale(zoom)` pushed via CSS vars so zoom
+  never reloads the iframe). `lib/editor/canvas-fit.ts` fits to screen on load and resize;
+  zoom chrome gives `-/NN%/+` plus fit; wheel pans, Cmd/Ctrl+wheel zooms to cursor, Space-drag
+  pans.
+- **Flatten on enter:** `SlideEditor` flattens the slide (every element becomes a standalone
+  absolute box in ONE stacking context) so global z-order / drag / grouping work; a
   simulation-diff bakes each leaf's resolved style so re-flatten is byte-stable. A
-  content-parity net keeps it lossless, and a **fidelity observatory** (`FlattenEvent` table
-  + PostHog `flatten.fidelity`) logs any residual style drift for offline tuning.
-- **Text style pill** — selecting a text element raises `StylePill` (a floating glass
-  toolbar): font size, bold/italic, colour, alignment (L/C/R), and an **RTL/LTR direction
-  toggle** that sets the element's `dir` attribute + a matching `text-align` (so a forced
-  direction survives the flatten + the view-time sanitizer + PPTX export). Multi-select
-  applies to all and shows a "mixed" dot.
-- **Manual edits** — save in place via `POST /api/projects/[id]/slides/[slideKey]/edit`
-  (optimistic, no new version row).
-- **AI edits** — full regen, or per-slide partial regen driven by comments flagged
-  `forAi` (`deck-regenerate-partial`).
-- **Undo/redo** — a per-slide client stack (capped); does not create server versions.
-- **History** — server `SlideVersion` rows (≤5 per slide) are written only on **Save**
-  and on a **10-minute idle checkpoint**; `HistoryPopover` lists and restores them.
-- **Realtime** — presence avatars per slide, live comment + regen + lock + image-ready
-  events.
-- **Export** — `ExportMenu` (PPTX/PDF/PNG/HTML), serialized so runs don't overlap.
+  content-parity net keeps it lossless (on a parity miss it leaves the nested HTML untouched),
+  and a **fidelity observatory** (`FlattenEvent` + PostHog `flatten.fidelity`) logs residual
+  style drift for offline tuning. Flatten is the precondition for every canvas op.
+- **Select and manipulate:** click selects the topmost leaf (`resolveHit` over
+  `elementsFromPoint`); a drag from empty canvas marquee-selects; Shift-click toggles;
+  double-click enters a group. `react-moveable` (portaled into the iframe body) does drag /
+  resize / rotate (Shift snaps rotation to 15 degrees; text boxes reflow on resize). Snapping:
+  6px edge-snap to the artboard and sibling leaves, plus a custom **canvas-centre** snap with
+  cross guides. A multi-selection drags via a self-driven pointer-delta / zoom loop.
+- **Layers:** `LayersPanel` lists leaves front-first by z (rebuilt from a `MutationObserver` on
+  the stage); drag-reorder restacks (writes z-index), per-layer **lock** (`data-tq-lock`, stays
+  selectable but not draggable), and **virtual grouping** (`data-tq-group` id, no reparenting,
+  members stay siblings in one z-band, folder-folded in the panel). The slide background pins
+  backmost with an editable colour swatch.
+- **Element ops:** add a text box (slide-centred, theme font, bilingual default), delete,
+  bring-to-front / send-to-back, group / ungroup. Double-click text enters `contentEditable`
+  with a custom caret sized to the visible glyph height; Enter inserts a line break (no split).
+- **Style pill:** selecting an element raises `StylePill` (a floating glass toolbar, anchored by
+  a parent-side rAF loop that reads the live selection rect). Text: size (free-type plus a
+  spinner), bold/italic, colour, alignment (L/C/R), and an **RTL/LTR direction toggle** (sets
+  `dir` plus a matching `text-align`, so a forced direction survives the flatten, the view-time
+  sanitizer, and PPTX export). Image: replace / regenerate (AI). SVG: recolour plus opacity.
+  Shape: fill/border. All kinds: canvas-align to a slide edge or centre. A multi-selection
+  shows a "mixed" dot.
+- **Overlays:** selection borders, hover, marquee, caret, centre guides, and Moveable all live
+  in the iframe body as `position:fixed` layers that read each target's live
+  `getBoundingClientRect` every frame, so they compose correctly under the scene transform with
+  no coordinate math.
+- **Undo/redo:** a per-slide client stack of paired `{before, after}` HTML snapshots (max 100),
+  pushed on each edit; Cmd+Z / Cmd+Shift+Z apply a snapshot IN PLACE via an `inPlaceApply` token
+  (a section innerHTML swap, no iframe reload). An external write (regen / restore / peer edit)
+  clears that slide's stack so a stale snapshot cannot apply over a new baseline.
+- **Persist vs save:** every edit/undo POSTs `.../edit` silently (per-slide-chained,
+  crash-safety, no version row). **Save** (cloud-icon click, or leaving the canvas via a
+  `pagehide` keepalive) flushes dirty slides to `.../checkpoint` (`SlideVersion` rows, max 5 per
+  slide) then pins `savedVersionId` plus a per-slide snapshot; a **10-minute idle checkpoint**
+  auto-saves in the background. The cloud-save control reflects saved / unsaved / saving from a
+  dirty-gen counter; `HistoryPopover` lists and restores checkpoints.
+- **AI edits:** full regen, or per-slide partial regen driven by comments flagged `forAi`
+  (`deck-regenerate-partial`), re-flattening after.
+- **Realtime:** presence avatars per slide; live comment + regen + lock + image-ready events.
+- **Export:** `ExportMenu` (PPTX/PDF/PNG/HTML), serialized so runs do not overlap.
 
 ---
 
