@@ -10,12 +10,12 @@ import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
 import { decodeSvgBytes } from "@/lib/brand/svg-decode";
 import { isPolychromeSvg } from "@/lib/brand/svg-polychrome";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
+import { estimateSlideCountFromText, type Quality } from "@/lib/types/quality";
 import {
-  DEFAULT_QUALITY,
-  estimateSlideCountFromText,
-  isQuality,
-  type Quality,
-} from "@/lib/types/quality";
+  ensureFresh,
+  getActivePresetKeys,
+  defaultPresetKey,
+} from "@/lib/config/runtime-config";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
@@ -410,8 +410,13 @@ function buildClaudeBrand(
 function resolveLanguage(raw: unknown): ContentLanguage {
   return isContentLanguage(raw) ? raw : "ar";
 }
+// Validates against the ACTIVE DB presets (admin Settings can add/retire them),
+// not the bundled snapshot — so a newly added preset is selectable and a
+// retired one falls back to the default. Caller awaits ensureFresh() first.
 function resolveQuality(raw: unknown): Quality {
-  return isQuality(raw) ? raw : DEFAULT_QUALITY;
+  return typeof raw === "string" && getActivePresetKeys().includes(raw)
+    ? raw
+    : defaultPresetKey();
 }
 function resolveSource(raw: unknown): SourceMeta | null {
   if (raw == null) return null;
@@ -515,6 +520,7 @@ export async function POST(request: Request) {
         cookieHeader: request.headers.get("cookie"),
         fallbackLocale: dbUser.language,
         appOrigin: process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai",
+        freeCredits: grant.granted,
       });
     }
   }
@@ -635,6 +641,7 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+  await ensureFresh();
   const quality = resolveQuality(payload.quality);
 
   // ─── Credit preflight (billing plan Phase A) ──────────────────────

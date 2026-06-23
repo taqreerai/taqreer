@@ -4,7 +4,7 @@ import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
 import { holdCredits, settleHold } from "@/lib/credits/server";
 import { generationCost } from "@/lib/credits/cost";
-import { isQuality, type Quality } from "@/lib/types/quality";
+import { type Quality } from "@/lib/types/quality";
 import { prisma } from "@/lib/prisma";
 import { sourceKindToFlow } from "@/lib/project/flow";
 import {
@@ -16,6 +16,11 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
+import {
+  ensureFresh,
+  defaultPresetKey,
+  creditCostFor,
+} from "@/lib/config/runtime-config";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
@@ -1598,6 +1603,9 @@ export const deckGenerate = inngest.createFunction(
       });
     }
 
+    // Refresh the runtime-config snapshot so the worker honours live admin
+    // edits to a preset's model/thinking/cost (shared in-process cache).
+    await ensureFresh();
     const callParams = paramsForQuality(effectiveQuality);
     logger.info("claude_quality_preset", {
       quality: effectiveQuality ?? "opus-low (default)",
@@ -2564,15 +2572,26 @@ export const deckGenerate = inngest.createFunction(
     // Idempotent per jobId; legacy uncharged jobs return not_found.
     await step.run("credit-settle", async () => {
       if (!jobId) return;
-      // Legacy quality keys ("medium", "opus-max", ...) fall back to the
-      // default preset for pricing - same fallback paramsForQuality uses
-      // for the actual model call.
-      const pricedPreset: Quality = isQuality(data.quality)
-        ? data.quality
-        : "opus-balanced";
+      // Price on the preset actually used, DB-aware: an admin-added preset is
+      // valid even though it isn't in the bundled snapshot, and the DB cost is
+      // used so an admin cost edit is honoured at settle exactly as it was at
+      // the hold (the hold ran preflight with creditCostFor). Legacy / inactive
+      // keys fall back to the default preset, mirroring resolveQuality.
+      // ensureFresh first: this step runs minutes after the hold.
+      await ensureFresh();
+      // Price on the preset the deck ACTUALLY ran on (the held key). creditCostFor
+      // reads the full preset map (including one an admin deactivated mid-run), so
+      // the settle matches the hold instead of re-pricing down to a cheaper default
+      // when the preset is toggled off between hold and settle. A truly unknown /
+      // legacy key falls back to the default cost inside creditCostFor.
+      const pricedPreset: Quality = data.quality ?? defaultPresetKey();
       const result = await settleHold({
         jobKey: jobId,
-        chargeAmount: generationCost(pricedPreset, manifest.slides.length),
+        chargeAmount: generationCost(
+          pricedPreset,
+          manifest.slides.length,
+          creditCostFor,
+        ),
         metadata: {
           status: stoppedEarly ? "cancelled_keep_partial" : "succeeded",
           produced: manifest.slides.length,

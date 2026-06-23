@@ -20,21 +20,26 @@
 // Only after all four pass may the caller place the hold.
 
 import type { Quality } from "@/lib/types/quality";
-import { QUALITY_PRESETS } from "@/lib/types/quality";
 import { normalizePlan } from "@/lib/plan";
 import {
   type Flow,
   type SlideEstimateInput,
-  type TierConfig,
   ALL_FLOWS,
   SYSTEM_SLIDE_CAP,
-  TIERS,
   estimateSlides,
   effectivePreset,
   generationCost,
   maxAffordableSlides,
   quoteGeneration,
 } from "@/lib/credits/cost";
+import {
+  type TierConfigRow,
+  ensureFresh,
+  getTier,
+  getActivePresets,
+  getActivePresetKeys,
+  creditCostFor,
+} from "@/lib/config/runtime-config";
 import { getBalance, type BalanceSnapshot } from "@/lib/credits/server";
 
 // A deck below this is not a deck (cover + body + closing).
@@ -109,24 +114,27 @@ export async function preflightGenerate(args: {
 }): Promise<PreflightResult> {
   const now = args.now ?? new Date();
   const plan = normalizePlan(args.plan);
-  const tier: TierConfig = args.isAdmin
+  await ensureFresh();
+  const baseTier = getTier(plan);
+  const tier: TierConfigRow = args.isAdmin
     ? {
-        ...TIERS[plan],
-        flows: ALL_FLOWS,
-        presets: QUALITY_PRESETS.map((p) => p.key),
+        ...baseTier,
+        flows: [...ALL_FLOWS],
+        unlockedPresetKeys: getActivePresetKeys(),
         slideCap: SYSTEM_SLIDE_CAP,
       }
-    : TIERS[plan];
+    : baseTier;
   const balance = await getBalance(args.userId, now);
   const estimate = estimateSlides(args.slideInput);
 
   const quoteFor = (preset: Quality): PresetQuote => {
-    const unlocked = tier.presets.includes(preset);
+    const unlocked = tier.unlockedPresetKeys.includes(preset);
     const quote = quoteGeneration({
       preset,
       flow: args.flow,
       estimate,
       slideCap: tier.slideCap,
+      costOf: creditCostFor,
     });
     return {
       preset,
@@ -137,12 +145,19 @@ export async function preflightGenerate(args: {
         unlocked && (!!args.isAdmin || quote.holdCredits <= balance.total),
     };
   };
-  const quotes = QUALITY_PRESETS.map((p) => quoteFor(p.key));
+  const quotes = getActivePresets().map((p) => quoteFor(p.key));
 
   if (!tier.flows.includes(args.flow)) {
     return { ok: false, plan, balance, reason: "flow_locked", quotes };
   }
-  if (!tier.presets.includes(args.preset)) {
+  // Locked if the tier doesn't unlock it OR it's inactive. updatePreset leaves a
+  // deactivated key in unlockedPresetKeys, so the active set is the source of
+  // truth here too (matching the quotes, the picker, and resolveQuality) rather
+  // than relying solely on the upstream resolveQuality coercion.
+  if (
+    !tier.unlockedPresetKeys.includes(args.preset) ||
+    !getActivePresetKeys().includes(args.preset)
+  ) {
     return { ok: false, plan, balance, reason: "preset_locked", quotes };
   }
   // An EXACT size above the cap blocks BEFORE generating (enhance is a
@@ -169,18 +184,23 @@ export async function preflightGenerate(args: {
     flow: args.flow,
     estimate,
     slideCap: tier.slideCap,
+    costOf: creditCostFor,
   });
 
   if (!args.isAdmin && quote.holdCredits > balance.total) {
-    const affordable = maxAffordableSlides(effective, balance.total);
+    const affordable = maxAffordableSlides(effective, balance.total, creditCostFor);
     const reducedSlides =
       affordable >= MIN_REDUCED_SLIDES
         ? Math.min(affordable, quote.holdSlides)
         : null;
-    const cheaperPresets = tier.presets.filter((p) => {
+    const cheaperPresets = tier.unlockedPresetKeys.filter((p) => {
       if (p === args.preset) return false;
+      // Never suggest an inactive preset: it isn't in the picker, and a direct
+      // request gets coerced to the default (resolveQuality). Active-only here
+      // keeps it consistent with the quotes + the picker.
+      if (!getActivePresetKeys().includes(p)) return false;
       const alt = effectivePreset(p, args.flow);
-      return generationCost(alt, quote.holdSlides) <= balance.total;
+      return generationCost(alt, quote.holdSlides, creditCostFor) <= balance.total;
     });
     return {
       ok: false,
@@ -191,7 +211,7 @@ export async function preflightGenerate(args: {
         reducedSlides,
         reducedCredits:
           reducedSlides !== null
-            ? generationCost(effective, reducedSlides)
+            ? generationCost(effective, reducedSlides, creditCostFor)
             : null,
         cheaperPresets: [...cheaperPresets],
         topupGap: quote.holdCredits - balance.total,

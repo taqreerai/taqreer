@@ -66,7 +66,11 @@
 // stay legacy-resolvable in paramsForQuality, existing decks regen
 // fine). fable-low (Claude Fable 5 + adaptive low) added as the
 // experimental top tier to baseline cost/quality.
-export type Quality = "opus-fast" | "opus-balanced" | "fable-low";
+// Relaxed from a literal union to `string`: preset keys are DB-driven now
+// (lib/config/runtime-config.ts). The active set is QUALITY_PRESETS below
+// (a bundled client snapshot, kept in sync with the seed) on the client, and
+// getActivePresets() on the server. Any stored Job.quality still type-checks.
+export type Quality = string;
 
 export const QUALITY_PRESETS: ReadonlyArray<{
   key: Quality;
@@ -120,10 +124,10 @@ export const DEFAULT_QUALITY: Quality = "opus-fast";
 // ("not available" 404s) that a deck may have been generated with.
 export const REGEN_QUALITY: Quality = "opus-fast";
 
+// Client-safe validity check against the bundled snapshot. Server routes that
+// must honour DB-added presets validate against getActivePresetKeys() instead.
 export function isQuality(value: unknown): value is Quality {
-  return (
-    value === "opus-fast" || value === "opus-balanced" || value === "fable-low"
-  );
+  return typeof value === "string" && QUALITY_PRESETS.some((p) => p.key === value);
 }
 
 // Compute the estimated total wall-clock for a tier given a slide

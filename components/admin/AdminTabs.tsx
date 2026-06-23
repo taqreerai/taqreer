@@ -15,6 +15,7 @@ const TABS = [
   { path: "/admin/templates", label: "Templates", icon: "grid_view" },
   { path: "/admin/users", label: "Users", icon: "group" },
   { path: "/admin/broadcast", label: "Broadcast", icon: "campaign" },
+  { path: "/admin/settings", label: "Settings", icon: "tune" },
 ] as const;
 
 export function AdminTabs() {

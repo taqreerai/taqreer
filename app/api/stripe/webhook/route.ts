@@ -167,7 +167,10 @@ export async function POST(request: Request) {
           // Purchase/upgrade activation - tell the user (renewals are
           // covered by invoice.payment_succeeded's "credited" path;
           // this session-scoped emit fires once per checkout).
-          const { TIERS } = await import("@/lib/credits/cost");
+          const { ensureFresh, getTier } = await import(
+            "@/lib/config/runtime-config"
+          );
+          await ensureFresh();
           await fanOutNotification({
             type: "billing.plan_changed",
             projectId: null,
@@ -176,7 +179,7 @@ export async function POST(request: Request) {
             allowSelfEcho: true,
             payload: {
               plan: grant.plan,
-              credits: TIERS[grant.plan].monthlyAllotment,
+              credits: getTier(grant.plan).monthlyAllotment,
             },
           }).catch(() => {});
         }
@@ -217,8 +220,15 @@ export async function POST(request: Request) {
         const isRenewal = invoice.billing_reason === "subscription_cycle";
         await applySubscriptionGrant(prismaUserId, subId, plan);
         if (isRenewal) {
-          const { TIERS } = await import("@/lib/credits/cost");
-          await notifyCredited(prismaUserId, TIERS[plan].monthlyAllotment, "renewal");
+          const { ensureFresh, getTier } = await import(
+            "@/lib/config/runtime-config"
+          );
+          await ensureFresh();
+          await notifyCredited(
+            prismaUserId,
+            getTier(plan).monthlyAllotment,
+            "renewal",
+          );
         }
         // Branded receipt (our design), for the initial payment + every
         // renewal. Caught so a mail hiccup never fails the webhook.

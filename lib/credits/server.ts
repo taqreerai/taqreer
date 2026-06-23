@@ -31,7 +31,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { broadcastToUser } from "@/lib/realtime/server-broadcast";
 import { normalizePlan } from "@/lib/plan";
-import { TIERS, TOPUP_EXPIRY_MONTHS } from "@/lib/credits/cost";
+import { TOPUP_EXPIRY_MONTHS } from "@/lib/credits/cost";
+import {
+  ensureFresh,
+  getFreeCredits,
+  getTier,
+} from "@/lib/config/runtime-config";
 
 type Tx = Prisma.TransactionClient;
 
@@ -469,7 +474,8 @@ export async function grantSignupCredits(args: {
   metadata?: Prisma.InputJsonValue;
 }): Promise<{ granted: number; alreadyGranted: boolean }> {
   const now = args.now ?? new Date();
-  const amount = TIERS.free.signupGrant;
+  await ensureFresh();
+  const amount = getFreeCredits();
   const result = await prisma.$transaction(async (tx) => {
     await lockAccount(tx, args.userId);
     const account = await tx.creditAccount.findUniqueOrThrow({
@@ -516,7 +522,8 @@ export async function grantSubscriptionCycle(args: {
 }): Promise<BalanceSnapshot> {
   const now = args.now ?? new Date();
   const plan = normalizePlan(args.plan);
-  const tier = TIERS[plan];
+  await ensureFresh();
+  const tier = getTier(plan);
   const resetAt = args.periodEnd ?? addMonths(now, 1);
   await prisma.$transaction(async (tx) => {
     await lockAccount(tx, args.userId);
@@ -561,7 +568,8 @@ export async function changePlanKeepBalance(args: {
 }): Promise<BalanceSnapshot> {
   const now = args.now ?? new Date();
   const plan = normalizePlan(args.plan);
-  const tier = TIERS[plan];
+  await ensureFresh();
+  const tier = getTier(plan);
   await prisma.$transaction(async (tx) => {
     await lockAccount(tx, args.userId);
     await tx.creditAccount.update({

@@ -77,6 +77,7 @@ export default async function DashboardPage({
         cookieHeader: hdrs.get("cookie"),
         fallbackLocale: lang,
         appOrigin: process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai",
+        freeCredits: grant.granted,
       });
     }
   }

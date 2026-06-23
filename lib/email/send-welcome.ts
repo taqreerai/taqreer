@@ -24,11 +24,14 @@ function getClient(): Resend | null {
 // Brand pre-isolated so it keeps LTR order inside the Arabic copy (Outlook bidi).
 const BR = ltrIsolate("taqreer.ai");
 
+// Latin numerals only (n is a JS number) even inside the Arabic copy. The
+// credit count is interpolated from getFreeCredits() so editing the free
+// grant in admin Settings propagates here (was hardcoded 400 - the bug).
 const COPY = {
   ar: {
     subject: `مرحبًا بك في ${BR}`,
-    preheader: "أضفنا 400 رصيد مجاني إلى حسابك لتبدأ أول عرض.",
-    credits: "400 رصيد مجاني مضافة لحسابك",
+    preheader: (n: number) => `أضفنا ${n} رصيد مجاني إلى حسابك لتبدأ أول عرض.`,
+    credits: (n: number) => `${n} رصيد مجاني مضافة لحسابك`,
     title: `مرحبًا بك في ${BR}`,
     sub: `ابدأ من فكرة، نص، أو ملف، ودع ${BR} يحوّله إلى عرض مصمم وجاهز للتعديل بالعربية أو الإنجليزية. أضفنا رصيدك المجاني، ويمكنك إنشاء أول عرض الآن.`,
     button: "ابدأ الإنشاء",
@@ -38,8 +41,8 @@ const COPY = {
   },
   en: {
     subject: "Welcome to taqreer.ai",
-    preheader: "400 free credits have been added to your account.",
-    credits: "400 free credits added",
+    preheader: (n: number) => `${n} free credits have been added to your account.`,
+    credits: (n: number) => `${n} free credits added`,
     title: "Welcome to taqreer.ai",
     sub: "Turn your ideas into fully designed presentations in Arabic and English, then export them to PowerPoint. Your credits are ready whenever you are.",
     button: "Start creating",
@@ -61,6 +64,8 @@ export type SendWelcomeInput = {
   locale: string;
   appOrigin: string;
   templates: WelcomeTemplate[];
+  // The free-signup credit amount to advertise (= getFreeCredits()).
+  freeCredits: number;
 };
 
 export type SendWelcomeResult =
@@ -90,8 +95,8 @@ export async function sendWelcome(
 
   const html = renderEmail({
     lang,
-    preheader: c.preheader,
-    eyebrowHtml: creditsPill(c.credits),
+    preheader: c.preheader(input.freeCredits),
+    eyebrowHtml: creditsPill(c.credits(input.freeCredits)),
     title: c.title,
     subHtml: c.sub,
     buttonLabel: c.button,
@@ -137,6 +142,10 @@ export async function dispatchWelcomeEmail(opts: {
   // The account's stored language — final fallback.
   fallbackLocale: string;
   appOrigin: string;
+  // The credit amount ACTUALLY granted (grantSignupCredits' `granted`), so the
+  // email advertises exactly what was credited rather than a separate re-read
+  // that could drift if the free grant is edited between the grant + this send.
+  freeCredits: number;
 }): Promise<void> {
   const cookieLocale = opts.cookieHeader
     ?.split(";")
@@ -155,6 +164,7 @@ export async function dispatchWelcomeEmail(opts: {
       locale,
       appOrigin: opts.appOrigin,
       templates,
+      freeCredits: opts.freeCredits,
     });
   } catch (err) {
     console.error(

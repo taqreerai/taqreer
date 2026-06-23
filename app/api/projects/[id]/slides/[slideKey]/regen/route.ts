@@ -29,7 +29,7 @@ import {
   rollbackVersionAndJob,
   toJson,
 } from "@/lib/api/regen-helpers";
-import { REGEN_QUALITY } from "@/lib/types/quality";
+import { ensureFresh, regenPresetKey } from "@/lib/config/runtime-config";
 
 type RegenPayload = { replay?: boolean };
 type CachedComment = {
@@ -94,8 +94,10 @@ export async function POST(
       },
     },
   });
-  // Regens always run on the fast Opus preset, not the deck's original quality.
-  const originalQuality = REGEN_QUALITY;
+  // Regens run on the configured regen preset (fastest active no-thinking),
+  // resolved LIVE so it follows admin Settings rather than a frozen preset id.
+  await ensureFresh();
+  const originalQuality = regenPresetKey();
   if (
     !project ||
     !project.presentation ||

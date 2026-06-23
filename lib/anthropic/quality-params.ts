@@ -59,6 +59,8 @@
 // `sonnet-fast`, `opus-fast`, and `opus-balanced` are the only keys
 // with explicit cases below; everything else hits the default.
 
+import { paramsForPreset } from "@/lib/config/runtime-config";
+
 export type AnthropicCallParams = {
   model: string;
   thinking: { type: "adaptive" } | { type: "disabled" };
@@ -69,79 +71,30 @@ export type AnthropicCallParams = {
   maxTokens: number;
 };
 
-const HAIKU = "claude-haiku-4-5";
-const SONNET = "claude-sonnet-4-6";
-// Claude Fable 5 - the tier above Opus ($10/$50 per MTok). Adaptive
-// thinking ONLY: an explicit thinking:disabled returns a 400 on Fable
-// (unlike Opus 4.7/4.8) - always pair it with adaptive.
-const FABLE = "claude-fable-5";
-// Bumped 4-7 → 4-8 (2026-05-29, Opus 4.8 launch). No API-shape change:
-// 4.8 keeps adaptive thinking + output_config.effort and the same
-// $5/$25 pricing, and the migration guide confirms no breaking changes
-// from 4.7. ⚠️ 4.8 RECALIBRATES the token budget behind each effort
-// tier vs 4.7 (medium = somewhat more thinking, high = somewhat less),
-// so the measured cost/quality numbers in the comments below are
-// 4.7-era and need re-baselining on 4.8.
-const OPUS = "claude-opus-4-8";
+// Active preset model ids live in the DB now (lib/config/runtime-config.ts) +
+// the seed. This single constant backs only the legacy/cold fallback below.
+const FALLBACK_OPUS = "claude-opus-4-8";
 
+// Fallback = the canonical default (opus-balanced: Opus 4.8 + adaptive +
+// effort:low), matching the prior `default` branch. Used when the key is null,
+// unknown, or a retired legacy key (opus-max, and the menu-dropped haiku-fast /
+// sonnet-fast which used to have explicit cases). Pre-launch decks are
+// disposable and every regen path forces opus-fast, so a legacy key is never
+// reprocessed in practice; this is purely a safety net.
+const FALLBACK_PARAMS: AnthropicCallParams = {
+  model: FALLBACK_OPUS,
+  thinking: { type: "adaptive" },
+  outputConfig: { effort: "low" },
+  maxTokens: 128000,
+};
+
+// Maps a quality preset key → Anthropic call params, sourced from the DB-backed
+// runtime config (admin-editable). Unknown/legacy keys fall back to the default.
+// Same name + signature as before, so every call site (deck-generate, partial
+// regen) is unchanged. Callers should `await ensureFresh()` once upstream so the
+// snapshot is current; this stays sync because it runs inside the Inngest step.
 export function paramsForQuality(
   quality: string | undefined | null,
 ): AnthropicCallParams {
-  switch (quality) {
-    case "haiku-fast":
-      // Cheapest + fastest tier (2026-06-12). Haiku 4.5, thinking off -
-      // sonnet-fast was running slow on multi-slide decks; haiku is the
-      // speed/cost floor. Same code guards (restart drop + rolling CSS)
-      // protect the output if it drafts-then-refines.
-      return { model: HAIKU, thinking: { type: "disabled" }, maxTokens: 64000 };
-    case "sonnet-fast":
-      // thinking:disabled - MEASURED decision, twice:
-      //   • 2026-06-12 morning: thinking-off drafted the deck in the
-      //     text channel then re-emitted a refined copy (the
-      //     2026-05-25/30 pathology, HTML-era form). Tried adaptive +
-      //     effort:low as the fix...
-      //   • 2026-06-12 afternoon: ...and REVERTED same day. "low" on
-      //     Sonnet 4.6 burned ~100k thinking tokens / ~$1.5 / ~12 min
-      //     on a 5-slide deck (vs ~$0.35 / ~5 min thinking-off). The
-      //     cheap preset cannot carry that tax.
-      // The draft pathology is instead handled downstream in code:
-      // deck-generate's restart guard (drops the draft pass) + rolling
-      // interstitial CSS capture (late style blocks still reach
-      // slides). Occasional double-output token cost stays, but decks
-      // come out correct.
-      return { model: SONNET, thinking: { type: "disabled" }, maxTokens: 128000 };
-    case "opus-fast":
-      return { model: OPUS, thinking: { type: "disabled" }, maxTokens: 128000 };
-    case "fable-low":
-      // Experimental top tier (2026-06-12) for cost/quality baselining.
-      // Fable rejects thinking:disabled outright - adaptive + effort:low
-      // is the lightest valid config.
-      return {
-        model: FABLE,
-        thinking: { type: "adaptive" },
-        outputConfig: { effort: "low" },
-        maxTokens: 128000,
-      };
-    // ─── Default + legacy fallback ──────────────────────────────
-    // Catches `opus-balanced` (canonical default) AND any legacy
-    // quality string from earlier menu shapes — including `opus-max`,
-    // retired from the menu 2026-05-29 (its old effort:high path was
-    // removed; it now lands here on `low` like everything else). All
-    // resolve to Opus + adaptive + effort:low.
-    //
-    // Was effort:medium until 2026-05-29: on Opus 4.8 the `medium`
-    // budget over-thought this structured-output deck task — a
-    // 5-slide deck ran 16 min / ~$1.69 (~60k output tokens, roughly
-    // half of it thinking). 4.7 data already showed low/medium/high
-    // were quality-indistinguishable here, so dropped to `low` to cut
-    // the thinking tax. Re-baselining low's cost/time on 4.8.
-    case "opus-balanced":
-    default:
-      return {
-        model: OPUS,
-        thinking: { type: "adaptive" },
-        outputConfig: { effort: "low" },
-        maxTokens: 128000,
-      };
-  }
+  return paramsForPreset(quality) ?? FALLBACK_PARAMS;
 }

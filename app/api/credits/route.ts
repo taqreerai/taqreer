@@ -8,7 +8,13 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePlan } from "@/lib/plan";
 import { getBalance } from "@/lib/credits/server";
-import { TIERS } from "@/lib/credits/cost";
+import {
+  ensureFresh,
+  getFreeCredits,
+  getActivePresets,
+  getTier,
+} from "@/lib/config/runtime-config";
+import { TIER_ORDER } from "@/lib/credits/cost";
 
 // Recent ledger entries for the popup's "recent usage" list. Holds are
 // transient (they settle into a charge or a release), so the list shows
@@ -53,6 +59,7 @@ export async function GET() {
 
   const plan = normalizePlan(dbUser.plan);
   const now = new Date();
+  await ensureFresh();
   const [balance, account, recent, topupGranted] = await Promise.all([
     getBalance(dbUser.id, now),
     prisma.creditAccount.findUnique({
@@ -94,17 +101,34 @@ export async function GET() {
     balance.monthlyAllotment > 0
       ? balance.monthlyAllotment
       : account?.signupGrantedAt
-        ? TIERS.free.signupGrant
+        ? getFreeCredits()
         : 0;
   const capacity = Math.max(
     balance.total,
     cycleGrant + (topupGranted._sum.amountGranted ?? 0),
   );
 
+  // Active generation presets for the picker (DB-driven). Each carries its DB
+  // cost + the lowest tier that unlocks it, so GenerateSplitButton shows exactly
+  // what the server will charge and gate on. Inactive presets are absent here,
+  // so they disappear from the picker; an added preset appears with no deploy.
+  const presets = getActivePresets().map((p) => ({
+    key: p.key,
+    label: p.label,
+    thinking: p.thinking,
+    baseCredits: p.baseCredits,
+    perSlideCredits: p.perSlideCredits,
+    gateTier:
+      TIER_ORDER.find((plan) =>
+        getTier(plan).unlockedPresetKeys.includes(p.key),
+      ) ?? null,
+  }));
+
   return NextResponse.json({
     plan,
     isAdmin: dbUser.role === "admin",
     cadence: dbUser.subscriptions[0]?.cadence ?? null,
+    presets,
     balance: {
       total: balance.total,
       subscription: balance.subscription,

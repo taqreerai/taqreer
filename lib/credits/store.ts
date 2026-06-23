@@ -17,8 +17,20 @@
 //      router.refresh).
 
 import { useEffect, useSyncExternalStore } from "react";
+import type { KnownPlan } from "@/lib/plan";
 
 export const CREDIT_BALANCE_EVENT = "taqreer:credit-balance-changed";
+
+// One active generation preset, DB-driven, as the picker needs it: its cost
+// (base + per-slide) and the lowest tier that unlocks it (null = ungated).
+export type CreditPreset = {
+  key: string;
+  label: string;
+  thinking: boolean;
+  baseCredits: number;
+  perSlideCredits: number;
+  gateTier: KnownPlan | null;
+};
 
 export type CreditRecentEvent = {
   id: string;
@@ -45,6 +57,9 @@ export type CreditData = {
   };
   // The ring denominator: this cycle's grant + active pack principal.
   capacity: number;
+  // Active presets for the generation picker (admin Settings -> DB). Absent
+  // presets are inactive and don't render; costs/gating here match the charge.
+  presets: CreditPreset[];
   recent: CreditRecentEvent[];
 };
 

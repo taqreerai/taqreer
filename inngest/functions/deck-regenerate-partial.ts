@@ -3,6 +3,12 @@ import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
 import { holdCredits, settleHold } from "@/lib/credits/server";
 import { regenCost } from "@/lib/credits/cost";
+import {
+  ensureFresh,
+  getPreset,
+  regenPresetKey,
+  creditCostFor,
+} from "@/lib/config/runtime-config";
 import { prisma } from "@/lib/prisma";
 import {
   SLIDE_DIMENSIONS,
@@ -11,7 +17,7 @@ import {
   type SlideManifest,
 } from "@/lib/schema/slide";
 import { paramsForQuality } from "@/lib/anthropic/quality-params";
-import { isQuality, type Quality } from "@/lib/types/quality";
+import { type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
@@ -554,12 +560,15 @@ export const deckRegeneratePartial = inngest.createFunction(
       );
     });
 
-    // Resolve the original deck's quality preset → Claude call params.
-    // Falls back to "medium" (the paramsForQuality default) for older
-    // in-flight events that predate the `quality` field.
-    const eventQuality: Quality | null = isQuality(data.quality)
-      ? data.quality
-      : null;
+    // Resolve the deck's quality preset → Claude call params + cost. Use the
+    // held key if it still exists (active OR deactivated — the deck ran on it,
+    // and creditCostFor/paramsForPreset read the full map); only a truly unknown
+    // / legacy key falls back to regenPresetKey() (the fastest active no-thinking
+    // preset), preserving the "regens never think" intent even if the configured
+    // regen preset was retired. ensureFresh so the worker honours live edits.
+    await ensureFresh();
+    const eventQuality: Quality =
+      data.quality && getPreset(data.quality) ? data.quality : regenPresetKey();
 
     // ─── Credit pre-authorization (billing plan Phase A) ───────────
     // Regen costs perSlide × N (no base). Hold before any Claude call;
@@ -568,8 +577,9 @@ export const deckRegeneratePartial = inngest.createFunction(
     // across Inngest retries.
     const regenChargeKey = `regen:${versionId}`;
     const regenAmount = regenCost(
-      eventQuality ?? "opus-balanced",
+      eventQuality,
       targetSlideIds.length,
+      creditCostFor,
     );
     const regenHold = await step.run("credit-hold", async () => {
       const project = await prisma.project.findUnique({
@@ -587,7 +597,7 @@ export const deckRegeneratePartial = inngest.createFunction(
         waive: project.user.role === "admin",
         metadata: {
           kind: "deck.regenerate.partial",
-          preset: eventQuality ?? "opus-balanced",
+          preset: eventQuality,
           slides: targetSlideIds.length,
           estimateShown: regenAmount,
         },
@@ -600,7 +610,7 @@ export const deckRegeneratePartial = inngest.createFunction(
     }
     const callParams = paramsForQuality(eventQuality);
     logger.info("partial_regen_quality_preset", {
-      quality: eventQuality ?? "medium (default)",
+      quality: eventQuality,
       model: callParams.model,
       thinking: callParams.thinking.type,
       effort: callParams.outputConfig?.effort ?? "n/a",

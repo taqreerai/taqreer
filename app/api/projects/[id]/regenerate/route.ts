@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { REGEN_QUALITY } from "@/lib/types/quality";
+import { ensureFresh, regenPresetKey } from "@/lib/config/runtime-config";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -50,10 +50,13 @@ export async function POST(
       { status: 400 },
     );
   }
-  // Regens always run on the fast Opus preset (override the original deck quality).
+  // Regens run on the configured regen preset (the fastest active no-thinking
+  // preset), resolved LIVE so it follows admin Settings instead of a frozen id
+  // that could be deactivated/deleted out from under the worker.
+  await ensureFresh();
   const eventPayload = {
     ...((latestJob.inputJson ?? {}) as Record<string, unknown>),
-    quality: REGEN_QUALITY,
+    quality: regenPresetKey(),
   };
 
   // Compute the next version number inside the transaction and retry on

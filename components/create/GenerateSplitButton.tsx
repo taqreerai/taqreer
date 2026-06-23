@@ -28,11 +28,27 @@ import {
   type Quality,
 } from "@/lib/types/quality";
 import { useDict } from "@/components/i18n/LocaleProvider";
-import { generationCost, TIERS, TIER_ORDER } from "@/lib/credits/cost";
+import { CREDIT_COST, TIERS, TIER_ORDER } from "@/lib/credits/cost";
 import { normalizePlan, planLabel } from "@/lib/plan";
-import { useCreditBalance, formatCredits } from "@/lib/credits/store";
+import {
+  useCreditBalance,
+  formatCredits,
+  type CreditPreset,
+} from "@/lib/credits/store";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import type { KnownPlan } from "@/lib/plan";
+
+// Pre-hydration fallback = the bundled snapshot (matches the seed). Once
+// /api/credits resolves, the picker uses the DB-driven `credits.presets` so an
+// admin-toggled-inactive preset disappears and cost/gating track Settings edits.
+const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.map((p) => ({
+  key: p.key,
+  label: p.label,
+  thinking: p.thinking,
+  baseCredits: CREDIT_COST[p.key]?.base ?? 0,
+  perSlideCredits: CREDIT_COST[p.key]?.perSlide ?? 0,
+  gateTier: TIER_ORDER.find((t) => TIERS[t].presets.includes(p.key)) ?? null,
+}));
 
 export function GenerateSplitButton({
   onGenerate,
@@ -102,6 +118,15 @@ export function GenerateSplitButton({
   // Admin/superuser: every preset is unlocked and no credit cost shows
   // (the run is never charged). Mirrors the server preflight bypass.
   const isAdmin = credits?.isAdmin ?? false;
+  // DB-driven active presets from admin Settings; bundled fallback until the
+  // first /api/credits resolves. Inactive presets are absent -> never shown.
+  // Also hide presets that NO tier unlocks (gateTier null) from non-admins:
+  // they'd render ungated/selectable but the server refuses them with
+  // preset_locked. Admins see everything (they bypass gating). This also covers
+  // the transient state where a preset is added but not yet unlocked in a tier.
+  const presets = (credits?.presets ?? FALLBACK_PRESETS).filter(
+    (p) => isAdmin || p.gateTier !== null,
+  );
 
   return (
     <div ref={splitButtonRef} className="relative">
@@ -195,15 +220,14 @@ export function GenerateSplitButton({
                 </span>
               ) : null}
             </div>
-            {QUALITY_PRESETS.map((preset) => {
-              const cost = generationCost(preset.key, effectiveSlideCount);
-              const gateTier = TIER_ORDER.find((t) =>
-                TIERS[t].presets.includes(preset.key),
-              );
+            {presets.map((preset) => {
+              const cost =
+                preset.baseCredits + effectiveSlideCount * preset.perSlideCredits;
+              const gateTier = preset.gateTier;
               const gated =
                 !isAdmin &&
                 userPlan !== null &&
-                gateTier !== undefined &&
+                gateTier !== null &&
                 TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
               const affordable = credits ? cost <= credits.balance.total : true;
               const active = quality === preset.key;

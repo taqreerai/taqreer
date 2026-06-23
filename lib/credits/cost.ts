@@ -34,6 +34,14 @@ export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
     "fable-low": { base: 500, perSlide: 28 },
   };
 
+// A preset → cost lookup. Defaults to the CREDIT_COST constant (the client
+// snapshot). The server passes `creditCostFor` (DB-backed, lib/config/
+// runtime-config) so an admin cost edit takes effect on the charge, while the
+// client estimate stays on the bundled constant until it receives props.
+export type CostLookup = (preset: string) => { base: number; perSlide: number };
+const defaultCostLookup: CostLookup = (preset) =>
+  CREDIT_COST[preset] ?? CREDIT_COST["opus-fast"];
+
 // Haiku title/name generation - flat (§3).
 export const NAME_GEN_COST = 5;
 
@@ -132,14 +140,22 @@ export function effectivePreset(preset: Quality, _flow: Flow): Quality {
 }
 
 /** §3 formula: full-deck generation cost. */
-export function generationCost(preset: Quality, slides: number): number {
-  const { base, perSlide } = CREDIT_COST[preset];
+export function generationCost(
+  preset: Quality,
+  slides: number,
+  costOf: CostLookup = defaultCostLookup,
+): number {
+  const { base, perSlide } = costOf(preset);
   return base + Math.max(0, slides) * perSlide;
 }
 
 /** Regen (partial or full): no base, per regenerated slide only (§3). */
-export function regenCost(preset: Quality, slides: number): number {
-  return Math.max(0, slides) * CREDIT_COST[preset].perSlide;
+export function regenCost(
+  preset: Quality,
+  slides: number,
+  costOf: CostLookup = defaultCostLookup,
+): number {
+  return Math.max(0, slides) * costOf(preset).perSlide;
 }
 
 /**
@@ -147,8 +163,12 @@ export function regenCost(preset: Quality, slides: number): number {
  * base doesn't fit. Used for the "condensed version" offer when the
  * input is worth more slides than the balance covers.
  */
-export function maxAffordableSlides(preset: Quality, balance: number): number {
-  const { base, perSlide } = CREDIT_COST[preset];
+export function maxAffordableSlides(
+  preset: Quality,
+  balance: number,
+  costOf: CostLookup = defaultCostLookup,
+): number {
+  const { base, perSlide } = costOf(preset);
   if (balance < base + perSlide) return 0;
   return Math.floor((balance - base) / perSlide);
 }
@@ -238,6 +258,8 @@ export function quoteGeneration(args: {
   flow: Flow;
   estimate: SlideEstimate;
   slideCap: number;
+  // Server passes creditCostFor (DB-backed); omit on the client for the constant.
+  costOf?: CostLookup;
 }): {
   effective: Quality;
   holdSlides: number;
@@ -252,7 +274,7 @@ export function quoteGeneration(args: {
   return {
     effective,
     holdSlides,
-    holdCredits: generationCost(effective, holdSlides),
+    holdCredits: generationCost(effective, holdSlides, args.costOf),
     exact: args.estimate.exact,
   };
 }

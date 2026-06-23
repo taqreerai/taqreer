@@ -756,3 +756,49 @@ model AdminBroadcast {
 
   @@index([createdAt(sort: Desc)])
 }
+
+// ─── Admin-editable runtime config (lib/config/runtime-config.ts) ──────
+// Generation presets, the tier knobs, and the free-credit amount used to
+// be code constants (lib/types/quality.ts, lib/anthropic/quality-params.ts,
+// lib/credits/cost.ts). The admin Settings tab edits them live. Seeded from
+// those constants so launch behaviour is identical; the runtime layer caches
+// in-process and falls back to the same constants on a DB miss.
+// `PlatformSettings.configVersion` bumps on every write so the cache reloads.
+
+model Preset {
+  key              String   @id            // "opus-fast" — matches Job.quality strings
+  label            String                  // "Opus 4.8"
+  model            String                  // "claude-opus-4-8" (an Anthropic model id)
+  thinking         Boolean  @default(false)
+  effort           String?                 // "low|medium|high|xhigh|max" — null when thinking off
+  maxTokens        Int      @default(128000)
+  baseCredits      Int
+  perSlideCredits  Int
+  secsPerSlide     Int
+  baseOverheadSecs Int
+  active           Boolean  @default(true)  // admin manual on/off (drives the inactive chip)
+  autoInactive     Boolean  @default(false) // reserved: live-API "model missing" flag (Phase 4)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([sortOrder])
+}
+
+model Tier {
+  plan               String   @id          // "free|plus|pro|max" (KnownPlan)
+  priceUsd           Int                    // DISPLAY-ONLY (real price = a Stripe product)
+  monthlyAllotment   Int
+  signupGrant        Int                    // free.signupGrant == the FREE-credits amount
+  slideCap           Int
+  unlockedPresetKeys String[]               // soft refs to Preset.key
+  flows              String[]               // subset of ALL_FLOWS
+  sortOrder          Int      @default(0)
+  updatedAt          DateTime @updatedAt
+}
+
+model PlatformSettings {
+  id            String   @id @default("singleton") // single row
+  configVersion Int      @default(1)                // bumped on every preset/tier write
+  updatedAt     DateTime @updatedAt
+}

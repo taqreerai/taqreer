@@ -112,6 +112,7 @@ export async function POST(request: Request) {
           cookieHeader: request.headers.get("cookie"),
           fallbackLocale: dbUser.language,
           appOrigin: process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai",
+          freeCredits: grant.granted,
         });
       }
     }

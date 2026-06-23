@@ -21,7 +21,7 @@ import {
   toJson,
   type RegenTx,
 } from "@/lib/api/regen-helpers";
-import { REGEN_QUALITY } from "@/lib/types/quality";
+import { ensureFresh, regenPresetKey } from "@/lib/config/runtime-config";
 
 // Promoted comment shape returned from the snapshot tx — what the
 // Inngest dispatch ships to the worker.
@@ -205,8 +205,10 @@ export async function POST(
 
   const { promoted, newVersion } = result;
   const targetSlideIds = uniqueSlideIds(promoted);
-  // Regens always run on the fast Opus preset, not the deck's original quality.
-  const originalQuality = REGEN_QUALITY;
+  // Regens run on the configured regen preset (fastest active no-thinking),
+  // resolved LIVE so it follows admin Settings rather than a frozen preset id.
+  await ensureFresh();
+  const originalQuality = regenPresetKey();
 
   // Job row + Inngest dispatch. A failure at either step rolls back
   // the version, the comment promotions, AND (if it got created) the
