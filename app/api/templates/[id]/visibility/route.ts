@@ -84,6 +84,10 @@ export async function PATCH(
           ? undefined
           : new Date()
         : null, // true/false → false: clear.
+      // Featured templates must stay public: un-publishing also clears the
+      // featured slot (a featured-but-private row would be a stale orphan,
+      // already filtered out of every featured surface by `isPublic = true`).
+      featuredOrder: nextPublic ? undefined : null,
     },
   });
   if (result.count === 0) {

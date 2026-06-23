@@ -23,7 +23,8 @@ import {
 } from "@/components/app/TemplateTile";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { useRefreshWhileThumbnailsPending } from "@/components/app/useRefreshWhileThumbnailsPending";
-import { prepareTemplateUse } from "@/lib/mimic/template-seed";
+import { prepareTemplateUse, isPremiumGate } from "@/lib/mimic/template-seed";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import type { SlideFormat } from "@/lib/schema/slide";
 
 export type MyTemplatesTemplate = TemplateTileData & {
@@ -56,6 +57,10 @@ export function MyTemplates({
   // two seed requests + two navigations. Mirrors TemplateTile's
   // useBusy state — same UX contract, different surface.
   const [useBusy, setUseBusy] = useState(false);
+  // Premium gate: a public premium template used by a non-Pro non-owner 402s ->
+  // open the in-place upgrade modal (mirrors TemplatesPageClient + the spec:
+  // premium public templates are clickable but pop the payment when unmet).
+  const [gateOpen, setGateOpen] = useState(false);
 
   const handleUseTemplate = async () => {
     if (!preview || useBusy) return;
@@ -67,6 +72,12 @@ export function MyTemplates({
       await prepareTemplateUse("template", preview.id);
       window.location.assign(`/use-template/${preview.id}`);
     } catch (err) {
+      if (isPremiumGate(err)) {
+        setPreview(null);
+        setGateOpen(true);
+        setUseBusy(false);
+        return;
+      }
       console.warn("[MyTemplates] use prep failed", err);
       setUseBusy(false);
     }
@@ -131,6 +142,11 @@ export function MyTemplates({
         onClose={() => setPreview(null)}
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}
+      />
+      <UpgradeModal
+        open={gateOpen}
+        requiredTier="pro"
+        onClose={() => setGateOpen(false)}
       />
     </>
   );

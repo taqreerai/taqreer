@@ -116,14 +116,21 @@ export default async function DashboardPage({
     // heading font + chrome colours) rather than from a PNG — see MyTemplates.
     // The brand snapshot is small (~300 bytes per template).
     prisma.template.findMany({
-      where: { ownerId: dbUser.id },
-      orderBy: { createdAt: "desc" },
-      // "القوالب" tab shows up to 10 (5 per row × 2 rows).
+      // §22: the "القوالب" tab now surfaces PUBLIC templates to EVERY user
+      // (discovery), not just their own. OR(own, public) -> public first by
+      // publishedAt (featured + community), then the user's own private rows.
+      where: { OR: [{ ownerId: dbUser.id }, { isPublic: true }] },
+      orderBy: [
+        { publishedAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
+      // up to 10 (5 per row × 2 rows).
       take: 10,
-      // `thumbnailUrls` feeds TemplateLightbox (opened in place from a tile).
-      // `isPublic` drives the 3-dots menu's visibility toggle label.
+      // `thumbnailUrls` feeds TemplateLightbox; `ownerId` -> isMine (the 3-dots
+      // edit menu + the visibility toggle render only for the user's own tiles).
       select: {
         id: true,
+        ownerId: true,
         brand: true,
         thumbnailUrls: true,
         isPublic: true,
@@ -143,9 +150,9 @@ export default async function DashboardPage({
       (brand.fontHeading as { name?: unknown; url?: unknown } | undefined) ?? {};
     return {
       id: t.id,
-      // Dashboard only shows the user's OWN templates (query filters by
-      // ownerId), so isMine is always true.
-      isMine: true,
+      // The tab now mixes the user's own + public community templates; the
+      // 3-dots edit menu + visibility toggle render only for the user's own.
+      isMine: t.ownerId === dbUser.id,
       isPublic: t.isPublic,
       isPremium: t.isPremium,
       thumbnailUrls: t.thumbnailUrls,
