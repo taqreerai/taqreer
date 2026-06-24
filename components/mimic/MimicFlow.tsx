@@ -35,6 +35,7 @@ import {
   isCreditGatePayload,
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
+import { useSlideCap } from "@/lib/credits/store";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
@@ -233,6 +234,11 @@ export default function MimicFlow({
   // override (same shape /create uses). Matches /create's default.
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
+  // Cap the custom slide count at the user's tier ceiling (free = 10). Preflight
+  // rejects an over-cap run server-side; this stops the user picking one. The
+  // render-phase clamp also covers a mid-session downgrade lowering the cap.
+  const slideCap = useSlideCap();
+  if (slideCountValue > slideCap) setSlideCountValue(slideCap);
 
   // ─── Brand pickers — always shown. The "mimic branding" toggle was
   //     removed (2026-05-29): the branding card is now permanent, so
@@ -1101,7 +1107,7 @@ export default function MimicFlow({
                           value={slideCountValue}
                           onChange={setSlideCountValue}
                           min={1}
-                          max={20}
+                          max={slideCap}
                         />
                       </motion.div>
                     ) : null}

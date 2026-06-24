@@ -14,7 +14,7 @@ import {
   getActivePresets,
   getTier,
 } from "@/lib/config/runtime-config";
-import { TIER_ORDER } from "@/lib/credits/cost";
+import { TIER_ORDER, SYSTEM_SLIDE_CAP } from "@/lib/credits/cost";
 
 // Recent ledger entries for the popup's "recent usage" list. Holds are
 // transient (they settle into a charge or a release), so the list shows
@@ -127,6 +127,10 @@ export async function GET() {
   return NextResponse.json({
     plan,
     isAdmin: dbUser.role === "admin",
+    // Per-run slide ceiling for this user's tier (admin -> the 75 system cap).
+    // The slide steppers cap their max here so a free user (10) can't pick a
+    // count preflight would reject.
+    slideCap: dbUser.role === "admin" ? SYSTEM_SLIDE_CAP : getTier(plan).slideCap,
     cadence: dbUser.subscriptions[0]?.cadence ?? null,
     presets,
     balance: {

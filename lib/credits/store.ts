@@ -45,6 +45,9 @@ export type CreditData = {
   // Superuser: the chrome shows an "Admin" chip instead of the plan/credit
   // UI, and the generation picker treats every preset as unlocked.
   isAdmin?: boolean;
+  // Per-run slide ceiling for the user's tier (free = 10; admin = system cap).
+  // The create/mimic/datasheet slide steppers cap their max at this value.
+  slideCap: number;
   // Billing interval of the active paid subscription (null = free/none) →
   // drives the plan banner's monthly/yearly pill.
   cadence: "monthly" | "yearly" | null;
@@ -143,6 +146,17 @@ export function useCreditBalance(): CreditData | null {
     creditStore.ensureHydrated();
   }, []);
   return data;
+}
+
+/**
+ * The per-run slide cap for the signed-in user's tier (free = 10), used as the
+ * max on the create/mimic/datasheet slide steppers. Falls back to the free cap
+ * (10) until the first /api/credits fetch resolves, so a free user can never
+ * over-pick during the brief hydration window (calling it also triggers that
+ * fetch via useCreditBalance).
+ */
+export function useSlideCap(): number {
+  return useCreditBalance()?.slideCap ?? 10;
 }
 
 /** Latin-digit thousands formatting (1,234) - brand rule: Latin numerals. */

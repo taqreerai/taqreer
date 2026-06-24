@@ -43,6 +43,7 @@ import {
   isCreditGatePayload,
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
+import { useSlideCap } from "@/lib/credits/store";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
@@ -297,6 +298,11 @@ export default function CreatePage() {
   // ─── Output / rules state ──────────────────────────────────────
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
+  // Cap the custom slide count at the user's tier ceiling (free = 10). Preflight
+  // rejects an over-cap run server-side; this stops the user picking one. The
+  // render-phase clamp also covers a mid-session downgrade lowering the cap.
+  const slideCap = useSlideCap();
+  if (slideCountValue > slideCap) setSlideCountValue(slideCap);
   const [pagination, setPagination] = useState<boolean>(true);
   // context/images.md — opt-in "images deck". On → deck-generate uses the
   // photography-led system prompt + reserves generated-image boxes.
@@ -985,7 +991,7 @@ export default function CreatePage() {
                           value={slideCountValue}
                           onChange={setSlideCountValue}
                           min={1}
-                          max={20}
+                          max={slideCap}
                         />
                       </motion.div>
                     ) : null}
