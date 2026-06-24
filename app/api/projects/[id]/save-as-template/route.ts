@@ -50,6 +50,7 @@ import { inngest } from "@/inngest/client";
 import { deriveBrandSnapshot } from "@/lib/template/derive-brand";
 import { SlideManifestSchema } from "@/lib/schema/slide";
 import { MAX_TEMPLATE_SLIDES } from "@/lib/template/constants";
+import { revalidateTemplateSurfaces } from "@/lib/auth/marquee-projects";
 import type { Prisma } from "@prisma/client";
 
 type SaveAsTemplateBody = {
@@ -170,6 +171,12 @@ export async function POST(
     },
     select: { id: true },
   });
+
+  // A new PUBLIC template appears on the public surfaces immediately (seeded
+  // with the deck's real slides), so purge them. Private -> not shown, skip.
+  if (isPublic) {
+    await revalidateTemplateSurfaces();
+  }
 
   // Fire-and-forget — see header for failure isolation rationale.
   await inngest

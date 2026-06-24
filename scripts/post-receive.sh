@@ -55,3 +55,11 @@ pm2 save
 echo "==> Deployed. Health check:"
 sleep 5
 curl -s -o /dev/null -w 'HTTP %{http_code}\n' "http://localhost:$PORT/ar"
+
+# Purge the Cloudflare edge cache: this build changed every hashed JS/CSS chunk,
+# so any HTML still cached at the edge points at chunks that now 404 -> the page
+# loads without hydration. dotenv/config loads .env (CLOUDFLARE_ZONE_ID +
+# CLOUDFLARE_PURGE_TOKEN); no-ops + logs if unset. Non-fatal: a CDN hiccup must
+# not fail an otherwise-healthy deploy.
+echo "==> Purge Cloudflare edge cache"
+npx tsx -r dotenv/config scripts/purge-cf.ts || echo "(cf purge failed - non-fatal)"

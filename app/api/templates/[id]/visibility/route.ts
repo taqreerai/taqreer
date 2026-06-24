@@ -21,6 +21,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { revalidateTemplateSurfaces } from "@/lib/auth/marquee-projects";
 
 type VisibilityBody = { isPublic?: unknown };
 
@@ -100,6 +101,10 @@ export async function PATCH(
     where: { id: templateId },
     select: { isPublic: true, publishedAt: true },
   });
+  // A visibility flip (either direction) changes what the public template
+  // surfaces show, so bust the Next + Cloudflare caches for them.
+  await revalidateTemplateSurfaces();
+
   return NextResponse.json({
     ok: true,
     isPublic: updated?.isPublic ?? nextPublic,

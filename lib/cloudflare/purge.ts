@@ -67,3 +67,44 @@ export async function purgeCloudflarePaths(paths: string[]): Promise<void> {
     console.error("[cf-purge] request failed", err);
   }
 }
+
+// Purge the ENTIRE zone cache. Used after a DEPLOY: a new build changes every
+// hashed JS/CSS chunk filename, so any HTML still cached at the edge points at
+// old chunks that 404 after the atomic swap -> the page loads without
+// hydration (static HTML, no animations). Per-URL purging can't cover that (the
+// stale HTML lives at many URLs + references many chunks), so we purge
+// everything and let CF refetch fresh. Logs (vs the silent per-URL no-op)
+// because it runs once per deploy and the deploy output should show it ran.
+export async function purgeCloudflareEverything(): Promise<void> {
+  if (!ZONE_ID || !PURGE_TOKEN) {
+    console.log(
+      "[cf-purge] purge_everything skipped (CLOUDFLARE_ZONE_ID / CLOUDFLARE_PURGE_TOKEN unset)",
+    );
+    return;
+  }
+  try {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${PURGE_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ purge_everything: true }),
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.error(
+        `[cf-purge] purge_everything HTTP ${res.status}`,
+        detail.slice(0, 300),
+      );
+    } else {
+      console.log("[cf-purge] purge_everything OK");
+    }
+  } catch (err) {
+    console.error("[cf-purge] purge_everything request failed", err);
+  }
+}

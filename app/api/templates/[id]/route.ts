@@ -25,6 +25,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { revalidateTemplateSurfaces } from "@/lib/auth/marquee-projects";
 
 const TEMPLATE_BUCKET = "slide-previews";
 
@@ -49,6 +50,7 @@ export async function DELETE(
     },
     select: {
       id: true,
+      isPublic: true,
       owner: { select: { supabaseUserId: true } },
     },
   });
@@ -101,6 +103,12 @@ export async function DELETE(
   });
   if (deleted.count === 0) {
     return NextResponse.json({ error: "Template not found" }, { status: 404 });
+  }
+
+  // Deleting a PUBLIC template removes it from the public surfaces, so purge
+  // them. A private template was never shown there -> skip the purge.
+  if (template.isPublic) {
+    await revalidateTemplateSurfaces();
   }
 
   return NextResponse.json({ ok: true });
