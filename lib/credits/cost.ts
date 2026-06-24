@@ -238,6 +238,22 @@ export function estimateSlides(input: SlideEstimateInput): SlideEstimate {
   }
 }
 
+/**
+ * The slide count to DISPLAY on the split-button credit estimate. Reuses the
+ * server's estimateSlides so the shown price tracks the run, then clamps to the
+ * user's tier cap (the run is capped there too, so the estimate must not exceed
+ * it). A null (unknown) estimate collapses to undefined, letting the button fall
+ * back to its historical 8-slide default. Pure + client-safe (same as
+ * estimateSlides), so create/datasheet/mimic can call it directly.
+ */
+export function displaySlideEstimate(
+  input: SlideEstimateInput,
+  slideCap: number,
+): number | undefined {
+  const est = estimateSlides(input).slides;
+  return est == null ? undefined : Math.min(est, slideCap);
+}
+
 // When the input size is unknowable up front (create-from-file before
 // extraction), the prompt's own default targets 8-12 slides - hold for
 // that upper bound (capped by the tier), not the full tier cap, so a

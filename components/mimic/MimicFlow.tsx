@@ -26,7 +26,7 @@
 //   • Row uses `justify-center` to keep the trio centered and
 //     `items-stretch` to equalize the three cards to the tallest.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -36,6 +36,7 @@ import {
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap } from "@/lib/credits/store";
+import { displaySlideEstimate } from "@/lib/credits/cost";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
@@ -575,6 +576,23 @@ export default function MimicFlow({
   const contentFileReady = contentStage === "ready" && !!contentExtracted;
   const contentTextReady = contentText.trim().length > 0;
   const contentReady = contentFileReady || contentTextReady;
+  // Split-button credit estimate: dynamic by the brief content (auto) or the
+  // manual count (custom), via the same estimateSlides the server holds on (it
+  // keys off the brief text, NOT the reference design's page count), capped at
+  // the tier limit. A content file's text isn't counted client-side -> unknown.
+  const estimatedSlideCount = useMemo(
+    () =>
+      displaySlideEstimate(
+        slideCountMode === "custom"
+          ? { kind: "fixed", count: slideCountValue }
+          : {
+              kind: "mimic",
+              briefText: contentTextReady ? contentText.trim() : null,
+            },
+        slideCap,
+      ),
+    [slideCountMode, slideCountValue, contentTextReady, contentText, slideCap],
+  );
   const extracting =
     designStage === "extracting" || contentStage === "extracting";
 
@@ -1174,11 +1192,7 @@ export default function MimicFlow({
             onGenerate={handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
-            slideCount={
-              slideCountMode === "custom"
-                ? slideCountValue
-                : (designExtracted?.pageCount ?? undefined)
-            }
+            slideCount={estimatedSlideCount}
             disabled={generateDisabled}
             loading={generateLoading}
             label={generateLabel}

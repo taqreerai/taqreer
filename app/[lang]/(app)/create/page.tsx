@@ -35,7 +35,7 @@
 // brand kit (sessionStorage or the user's default).
 
 import { DesignStylePicker } from "@/components/create/DesignStylePicker";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import {
@@ -44,6 +44,7 @@ import {
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap } from "@/lib/credits/store";
+import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
@@ -337,6 +338,20 @@ export default function CreatePage() {
   const fileReady = hasFile && contentFileStage === "ready" && !!contentAnthropicFileId;
   const fileExtracting = hasFile && contentFileStage === "extracting";
   const contentReady = hasText || fileReady;
+  // Split-button credit estimate: dynamic by the textarea content (auto) or the
+  // manual count (custom), via the same estimateSlides the server holds on, and
+  // capped at the tier limit like the run. A content file's text isn't counted
+  // client-side, so a file in auto mode reads as unknown (button shows its 8).
+  const estimatedSlideCount = useMemo(
+    () =>
+      displaySlideEstimate(
+        slideCountMode === "custom"
+          ? { kind: "fixed", count: slideCountValue }
+          : { kind: "text", text: hasFile ? "" : contentText },
+        slideCap,
+      ),
+    [slideCountMode, slideCountValue, hasFile, contentText, slideCap],
+  );
   const generateDisabled =
     !contentReady || submitting || fileExtracting;
   const generateLoading = submitting || fileExtracting;
@@ -1043,7 +1058,7 @@ export default function CreatePage() {
             onGenerate={handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
-            slideCount={slideCountMode === "custom" ? slideCountValue : undefined}
+            slideCount={estimatedSlideCount}
             disabled={generateDisabled}
             loading={generateLoading}
           />

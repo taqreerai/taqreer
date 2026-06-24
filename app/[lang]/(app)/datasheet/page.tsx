@@ -45,7 +45,7 @@
 //   • GenerateSplitButton + quality presets
 
 import { DesignStylePicker } from "@/components/create/DesignStylePicker";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -55,6 +55,7 @@ import {
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap } from "@/lib/credits/store";
+import { displaySlideEstimate } from "@/lib/credits/cost";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -297,6 +298,25 @@ export default function DatasheetPage() {
   // render-phase clamp also covers a mid-session downgrade lowering the cap.
   const slideCap = useSlideCap();
   if (slideCountValue > slideCap) setSlideCountValue(slideCap);
+  // Split-button credit estimate: dynamic by the parsed data (auto: cover +
+  // closing + a slide per sheet + ~1 per 20 rows) or the manual count (custom),
+  // via the same estimateSlides the server holds on, capped at the tier limit.
+  const estimatedSlideCount = useMemo(
+    () =>
+      displaySlideEstimate(
+        slideCountMode === "custom"
+          ? { kind: "fixed", count: slideCountValue }
+          : dataParsed
+            ? {
+                kind: "datasheet",
+                sheetCount: dataParsed.sheetCount,
+                totalRows: dataParsed.totalRows,
+              }
+            : { kind: "text", text: "" },
+        slideCap,
+      ),
+    [slideCountMode, slideCountValue, dataParsed, slideCap],
+  );
   const [pagination, setPagination] = useState<boolean>(true);
   const [designStyle, setDesignStyle] = useState<string | null>(null);
   const [persistentText, setPersistentText] = useState<string>("");
@@ -893,7 +913,7 @@ export default function DatasheetPage() {
             onGenerate={handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
-            slideCount={slideCountMode === "custom" ? slideCountValue : undefined}
+            slideCount={estimatedSlideCount}
             disabled={generateDisabled}
             loading={generateLoading}
           />
