@@ -229,9 +229,9 @@ export default function MimicFlow({
     isTemplate ? templateSeed!.format : "16:9",
   );
   // Slide count — defaults to "auto" so Claude picks based on content
-  // (8 fallback in the prompt). When "custom" the user enters an
-  // explicit number 1..20; we forward that as the brief's slideCount
-  // override (same shape /create uses). Matches /create's default.
+  // (8 fallback in the prompt). When "custom" the user enters an explicit
+  // number up to their tier cap (slideCap below); we forward that as the
+  // brief's slideCount override (same shape /create uses). Matches /create's default.
   const [slideCountMode, setSlideCountMode] = useState<SlideCountMode>("auto");
   const [slideCountValue, setSlideCountValue] = useState<number>(8);
   // Cap the custom slide count at the user's tier ceiling (free = 10). Preflight
@@ -1174,7 +1174,11 @@ export default function MimicFlow({
             onGenerate={handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
-            slideCount={designExtracted?.pageCount ?? undefined}
+            slideCount={
+              slideCountMode === "custom"
+                ? slideCountValue
+                : (designExtracted?.pageCount ?? undefined)
+            }
             disabled={generateDisabled}
             loading={generateLoading}
             label={generateLabel}
