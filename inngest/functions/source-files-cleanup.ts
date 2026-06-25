@@ -31,7 +31,9 @@ const PAGE = 100;
 // bucket. Anything beyond it is logged and picked up the next night.
 const MAX_DELETE_PER_RUN = 5000;
 
-type Walk = { stale: string[]; truncated: boolean };
+// `cappedByCount` is transient (a later hourly run resumes); `overDepth`
+// is deterministic (the walker never descends that far) and needs a human.
+type Walk = { stale: string[]; cappedByCount: boolean; overDepth: boolean };
 
 // Recursively collect object keys older than `cutoff`. Supabase
 // `.list()` returns folder placeholders (null id, no metadata) and
@@ -44,15 +46,18 @@ async function collectStaleObjects(
   acc: Walk,
 ): Promise<void> {
   if (depth > MAX_DEPTH) {
-    // Never silently retain: an over-depth prefix means the bucket nests
-    // deeper than expected, so flag the run instead of skipping quietly.
-    acc.truncated = true;
+    // Deterministic, NOT self-healing: the walker never descends past
+    // MAX_DEPTH, so these objects are skipped on every run until the
+    // bucket structure or the limit changes. Flag distinctly so it gets
+    // investigated rather than presumed to clear on the next sweep.
+    acc.overDepth = true;
     return;
   }
   let offset = 0;
   for (;;) {
     if (acc.stale.length >= MAX_DELETE_PER_RUN) {
-      acc.truncated = true;
+      // Transient: a later hourly run resumes from where this left off.
+      acc.cappedByCount = true;
       return;
     }
     const { data, error } = await admin.storage
@@ -95,7 +100,7 @@ export const sourceFilesCleanup = inngest.createFunction(
     const result = await step.run("purge-stale-source-files", async () => {
       const admin = getSupabaseAdmin();
       const cutoff = Date.now() - MAX_AGE_MS;
-      const acc: Walk = { stale: [], truncated: false };
+      const acc: Walk = { stale: [], cappedByCount: false, overDepth: false };
       await collectStaleObjects(admin, "", cutoff, 0, acc);
 
       let removed = 0;
@@ -108,15 +113,21 @@ export const sourceFilesCleanup = inngest.createFunction(
         if (error) throw new Error(`remove failed: ${error.message}`);
         removed += batch.length;
       }
-      return { removed, truncated: acc.truncated };
+      return { removed, cappedByCount: acc.cappedByCount, overDepth: acc.overDepth };
     });
 
     logger.info("source-files-cleanup complete", result);
-    if (result.truncated) {
+    if (result.cappedByCount) {
       logger.warn(
-        `source-files-cleanup left some stale objects unswept (hit the ` +
-          `${MAX_DELETE_PER_RUN}-object per-run cap or an over-depth prefix); ` +
-          `the remainder is purged on a subsequent hourly run.`,
+        `source-files-cleanup hit the ${MAX_DELETE_PER_RUN}-object per-run ` +
+          `cap; the remainder is purged on subsequent hourly runs.`,
+      );
+    }
+    if (result.overDepth) {
+      logger.warn(
+        `source-files-cleanup found objects nested deeper than MAX_DEPTH ` +
+          `(${MAX_DEPTH}); the walker does not descend that far, so they are ` +
+          `NOT swept and need investigation or a higher MAX_DEPTH.`,
       );
     }
     return result;

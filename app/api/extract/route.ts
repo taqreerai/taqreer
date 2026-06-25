@@ -82,6 +82,13 @@ export async function POST(request: Request) {
     const rawFormat = String(formData.get("format") ?? "16:9");
     const rawKind = String(formData.get("kind") ?? "enhance");
 
+    // Allowlist the flow kind. It is persisted to Job.inputJson.flowKind
+    // and emitted to Inngest, where extract-source branches on it, so a
+    // free-form value would skew that downstream routing.
+    if (rawKind !== "create" && rawKind !== "enhance" && rawKind !== "mimic") {
+      return NextResponse.json({ error: "Invalid flow kind." }, { status: 400 });
+    }
+
     if (!(file instanceof File)) {
       return NextResponse.json(
         { error: "File is required" },
