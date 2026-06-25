@@ -32,3 +32,6 @@ scratch/
 
 # Email design lab (local preview only — never shipped/committed)
 public/email-lab/
+
+# Next.js audit/review build output
+.next-audit
