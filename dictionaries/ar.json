@@ -493,7 +493,7 @@
     "contentPlaceholder": "اكتب فكرة العرض أو محتواه هنا…",
     "or": "أو",
     "dropTitle": "اسحب الملف هنا أو انقر للاختيار",
-    "dropSubtitle": "PDF / PPTX / DOCX / TXT · حتى 100 ميجابايت",
+    "dropSubtitle": "PDF / PPTX / DOCX · حتى 100 ميجابايت",
     "removeFile": "إزالة الملف",
     "unitKB": "ك.ب",
     "unitMB": "م.ب",
@@ -779,7 +779,7 @@
       "common": {
         "content": "المحتوى", "language": "اللغة", "arabic": "العربية", "english": "الإنجليزية",
         "textareaPlaceholder": "اكتب محتوى عرضك هنا...", "or": "أو",
-        "dropTitle": "اسحب أو انقر لاختيار ملف", "dropHintMain": "PDF / PPTX / DOCX / TXT · حتى 100 ميجابايت",
+        "dropTitle": "اسحب أو انقر لاختيار ملف", "dropHintMain": "PDF / PPTX / DOCX · حتى 100 ميجابايت",
         "brandIdentity": "الهوية البصرية", "colors": "الألوان", "font": "الخط", "file": "ملف",
         "uploadLogo": "ارفع شعارك", "logoHint": "SVG فقط", "saveDefault": "حفظ كهوية افتراضية",
         "outputSettings": "إعدادات الإخراج", "slideSize": "مقاس الشريحة", "numSlides": "عدد الشرائح",

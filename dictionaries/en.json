@@ -493,7 +493,7 @@
     "contentPlaceholder": "Write your presentation content here...",
     "or": "or",
     "dropTitle": "Drag or click to choose a file",
-    "dropSubtitle": "PDF / PPTX / DOCX / TXT · up to 100 MB",
+    "dropSubtitle": "PDF / PPTX / DOCX · up to 100 MB",
     "removeFile": "Remove file",
     "unitKB": "KB",
     "unitMB": "MB",
@@ -779,7 +779,7 @@
       "common": {
         "content": "Content", "language": "Language", "arabic": "Arabic", "english": "English",
         "textareaPlaceholder": "Write your deck content here…", "or": "or",
-        "dropTitle": "Drag or click to choose a file", "dropHintMain": "PDF / PPTX / DOCX / TXT · up to 100 MB",
+        "dropTitle": "Drag or click to choose a file", "dropHintMain": "PDF / PPTX / DOCX · up to 100 MB",
         "brandIdentity": "Brand identity", "colors": "Colors", "font": "Font", "file": "File",
         "uploadLogo": "Upload your logo", "logoHint": "SVG only", "saveDefault": "Save as default kit",
         "outputSettings": "Output settings", "slideSize": "Slide size", "numSlides": "Slide count",
