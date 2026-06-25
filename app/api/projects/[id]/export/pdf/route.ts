@@ -20,7 +20,11 @@
 
 import { NextResponse } from "next/server";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
-import puppeteer from "puppeteer";
+import {
+  launchGuardedBrowser,
+  closeGuardedBrowser,
+  guardPageEgress,
+} from "@/lib/export/puppeteer-pool";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { captureServerEvent } from "@/lib/analytics/posthog-server";
@@ -150,13 +154,11 @@ export async function POST(
   // does the pagination from the CSS.
   const html = buildHtmlDocumentServer(manifest, { printPageBreaks: true });
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
+  const browser = await launchGuardedBrowser();
   let pdfBuffer: Buffer;
   try {
     const page = await browser.newPage();
+    await guardPageEgress(page);
     // Viewport size matches a single slide so element layout
     // settles before pagination kicks in. The actual PDF page size
     // is driven by `page.pdf({ width, height })` below; viewport
@@ -232,7 +234,7 @@ export async function POST(
       error: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
-    await browser.close().catch(() => undefined);
+    await closeGuardedBrowser(browser);
     return NextResponse.json(
       {
         error:
@@ -243,9 +245,7 @@ export async function POST(
       { status: 500 },
     );
   }
-  await browser.close().catch((err) => {
-    console.error("[export/pdf] browser.close failed", err);
-  });
+  await closeGuardedBrowser(browser);
 
   const baseName = safeFileName(project.title || manifest.title, "presentation");
   const filename = `${baseName}.pdf`;

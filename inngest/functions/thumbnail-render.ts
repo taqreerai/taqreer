@@ -39,7 +39,11 @@
 
 import { inngest } from "@/inngest/client";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import puppeteer from "puppeteer";
+import {
+  launchGuardedBrowser,
+  closeGuardedBrowser,
+  guardPageEgress,
+} from "@/lib/export/puppeteer-pool";
 import sharp from "sharp";
 import { SlideManifestSchema, dimensionsForFormat } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
@@ -134,12 +138,10 @@ export const thumbnailRender = inngest.createFunction(
         { auth: { autoRefreshToken: false, persistSession: false } },
       );
 
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-dev-shm-usage"],
-      });
+      const browser = await launchGuardedBrowser();
       try {
         const page = await browser.newPage();
+        await guardPageEgress(page);
         // Viewport sized to a SINGLE slide + 1 px pad. The earlier
         // `canvasH * (slides+1)` recipe crossed Chromium's hard
         // 16,384 px screenshot limit on long decks — at 9:16 that
@@ -260,9 +262,7 @@ export const thumbnailRender = inngest.createFunction(
         }
         return urls;
       } finally {
-        await browser.close().catch((err) => {
-          logger.warn("thumbnail-render: browser.close failed", { err });
-        });
+        await closeGuardedBrowser(browser);
       }
     });
 

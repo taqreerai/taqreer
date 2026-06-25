@@ -19,7 +19,11 @@
 import { NextResponse } from "next/server";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import JSZip from "jszip";
-import puppeteer from "puppeteer";
+import {
+  launchGuardedBrowser,
+  closeGuardedBrowser,
+  guardPageEgress,
+} from "@/lib/export/puppeteer-pool";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { captureServerEvent } from "@/lib/analytics/posthog-server";
@@ -138,13 +142,11 @@ export async function POST(
   // the runtime contract is single-sourced. Container deployments
   // need `--no-sandbox` + `--disable-dev-shm-usage`; bare-metal dev
   // tolerates them too.
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
+  const browser = await launchGuardedBrowser();
   const zip = new JSZip();
   try {
     const page = await browser.newPage();
+    await guardPageEgress(page);
     // Viewport sized to a SINGLE slide + 1 px pad on the height.
     // Was `canvasH * (slides+1)` — that grew linearly with deck
     // length and crossed Chromium's hard 16,384 px screenshot
@@ -222,13 +224,7 @@ export async function POST(
       zip.file(entryName, png);
     }
   } finally {
-    await browser.close().catch((err) => {
-      // Browser close failure logs but doesn't leak the partial ZIP
-      // — JSZip's buffer lives in process memory and gets GC'd when
-      // the response finishes. We just orphan a Chromium instance
-      // briefly; the OS reaper handles it on idle.
-      console.error("[export/png] browser.close failed", err);
-    });
+    await closeGuardedBrowser(browser);
   }
 
   // ArrayBuffer (not Uint8Array) so the BlobPart type narrows
