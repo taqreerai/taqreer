@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import type { Prisma } from "@prisma/client";
 
 type RetryPayload = {
   type?: string;
@@ -49,7 +50,14 @@ export async function POST(
   const latestJob = project.jobs[0];
   const inputJson = (latestJob?.inputJson ?? {}) as RetryPayload;
 
-  await prisma.$transaction(async (tx) => {
+  // Mint a FRESH job rather than re-queueing the failed one. The credit
+  // hold keys on jobId (deck-generate's holdCredits), so reusing the
+  // settled job's id made the worker treat the released hold as "already
+  // held", debit nothing, and run the retry for free. A new jobId forces a
+  // real hold (debit + a fresh balance check via takeFunds), which settles
+  // the actual cost on success and releases on failure, so a retry is
+  // billed exactly like a first attempt and never runs free.
+  const retryJob = await prisma.$transaction(async (tx) => {
     await tx.project.update({
       where: { id: project.id },
       data: { status: "queued" },
@@ -62,12 +70,14 @@ export async function POST(
       });
     }
 
-    if (latestJob) {
-      await tx.job.update({
-        where: { id: latestJob.id },
-        data: { status: "queued" },
-      });
-    }
+    return tx.job.create({
+      data: {
+        projectId: project.id,
+        type: latestJob?.type ?? "deck.generate",
+        status: "queued",
+        inputJson: (latestJob?.inputJson ?? {}) as Prisma.InputJsonValue,
+      },
+    });
   });
 
   try {
@@ -82,7 +92,7 @@ export async function POST(
         projectId: project.id,
         presentationId: project.presentation.id,
         versionId: latestVersion?.id,
-        jobId: latestJob?.id,
+        jobId: retryJob.id,
         // Phase 16.D — actor for `deck.regen.{started,finished}`
         // self-echo skip in DeckView's broadcast handlers.
         actorPrismaUserId: access.user.prismaId,
@@ -102,11 +112,9 @@ export async function POST(
         .update({ where: { id: latestVersion.id }, data: { status: "failed" } })
         .catch(() => undefined);
     }
-    if (latestJob) {
-      await prisma.job
-        .update({ where: { id: latestJob.id }, data: { status: "failed" } })
-        .catch(() => undefined);
-    }
+    await prisma.job
+      .update({ where: { id: retryJob.id }, data: { status: "failed" } })
+      .catch(() => undefined);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to dispatch retry" },
       { status: 500 },
