@@ -70,6 +70,13 @@ async function collectStaleObjects(
     if (error) throw new Error(`list "${prefix}" failed: ${error.message}`);
     if (!data || data.length === 0) break;
     for (const entry of data) {
+      // Enforce the cap mid-page too: a single page's pushes (or a
+      // recursive descent below) can reach the ceiling between the
+      // top-of-page checks, so re-check before processing each entry.
+      if (acc.stale.length >= MAX_DELETE_PER_RUN) {
+        acc.cappedByCount = true;
+        return;
+      }
       const path = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (!entry.id) {
         // Folder placeholder; descend into it.
