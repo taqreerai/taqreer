@@ -60,6 +60,11 @@ export async function launchGuardedBrowser(): Promise<Browser> {
 export async function closeGuardedBrowser(browser: Browser): Promise<void> {
   try {
     await browser.close();
+  } catch {
+    // Close failures are non-critical (they orphan a Chromium the OS
+    // reaps). Never propagate: these calls live in finally blocks after a
+    // successful render/upload, so a thrown close error would mask the real
+    // result or trigger a needless step retry.
   } finally {
     release();
   }
