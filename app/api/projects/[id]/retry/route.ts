@@ -10,6 +10,10 @@ type RetryPayload = {
   brief?: unknown;
 };
 
+// Thrown inside the retry transaction when the atomic failed -> queued
+// swap finds the project already transitioned (a concurrent retry won).
+const RETRY_IN_PROGRESS = "retry_in_progress";
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -57,28 +61,48 @@ export async function POST(
   // real hold (debit + a fresh balance check via takeFunds), which settles
   // the actual cost on success and releases on failure, so a retry is
   // billed exactly like a first attempt and never runs free.
-  const retryJob = await prisma.$transaction(async (tx) => {
-    await tx.project.update({
-      where: { id: project.id },
-      data: { status: "queued" },
-    });
-
-    if (latestVersion) {
-      await tx.presentationVersion.update({
-        where: { id: latestVersion.id },
+  const retryJob = await prisma
+    .$transaction(async (tx) => {
+      // Atomic failed -> queued swap. The status check above is a cheap
+      // pre-filter; two concurrent retries can both pass it, so without
+      // this guarded update each would mint a job and dispatch a billable
+      // generation. Scoping the update to status:"failed" lets exactly one
+      // request win; the loser sees count 0 and aborts.
+      const transitioned = await tx.project.updateMany({
+        where: { id: project.id, status: "failed" },
         data: { status: "queued" },
       });
-    }
+      if (transitioned.count !== 1) throw new Error(RETRY_IN_PROGRESS);
 
-    return tx.job.create({
-      data: {
-        projectId: project.id,
-        type: latestJob?.type ?? "deck.generate",
-        status: "queued",
-        inputJson: (latestJob?.inputJson ?? {}) as Prisma.InputJsonValue,
-      },
+      if (latestVersion) {
+        await tx.presentationVersion.update({
+          where: { id: latestVersion.id },
+          data: { status: "queued" },
+        });
+      }
+
+      return tx.job.create({
+        data: {
+          projectId: project.id,
+          type: latestJob?.type ?? "deck.generate",
+          status: "queued",
+          inputJson: (latestJob?.inputJson ?? {}) as Prisma.InputJsonValue,
+        },
+      });
+    })
+    .catch((txError: unknown) => {
+      if (txError instanceof Error && txError.message === RETRY_IN_PROGRESS) {
+        return null;
+      }
+      throw txError;
     });
-  });
+
+  if (!retryJob) {
+    return NextResponse.json(
+      { error: "A retry is already in progress for this deck." },
+      { status: 409 },
+    );
+  }
 
   try {
     await sendInngestEventWithRetry({
