@@ -20,7 +20,7 @@
 // image's URL — once cleared it falls through to the hash-derived fresh URL.
 
 import { NextResponse } from "next/server";
-import { clientIp, rateLimited } from "@/lib/api/rate-limit";
+import { rateLimited } from "@/lib/api/rate-limit";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
@@ -43,13 +43,6 @@ export async function POST(
     params,
   }: { params: Promise<{ id: string; slideKey: string; genid: string }> },
 ) {
-  // Flood guard: each regen with a NEW prompt is a real gpt-image call (free
-  // COGS to the user), so bound the rate to stop a script burning unbounded
-  // image spend. The same-prompt path is already bill-once via the warm
-  // pipeline's existence check; this caps distinct-prompt churn.
-  const limited = rateLimited(`image-regen:${clientIp(request)}`, 20, 5 * 60_000);
-  if (limited) return limited;
-
   const { id: projectId, slideKey, genid } = await params;
 
   if (!GENID_RE.test(genid)) {
@@ -62,6 +55,14 @@ export async function POST(
   if ("error" in access) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
+
+  // Flood guard: each regen with a NEW prompt is a real gpt-image call (free
+  // COGS), so bound distinct-prompt churn. Keyed on the authenticated owner
+  // (after access resolves) so a missing-header "unknown" IP can't share one
+  // bucket and 429 unrelated users, and only authorized requests count. The
+  // same-prompt path stays bill-once via the warm pipeline's existence check.
+  const limited = rateLimited(`image-regen:${access.user.id}`, 20, 5 * 60_000);
+  if (limited) return limited;
 
   let raw: Body;
   try {
