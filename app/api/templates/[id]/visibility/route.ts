@@ -101,9 +101,12 @@ export async function PATCH(
     where: { id: templateId },
     select: { isPublic: true, publishedAt: true },
   });
-  // A visibility flip (either direction) changes what the public template
-  // surfaces show, so bust the Next + Cloudflare caches for them.
-  await revalidateTemplateSurfaces();
+  // A visibility flip changes what the public template surfaces show, so bust
+  // the Next + Cloudflare caches. A no-op re-PATCH (true->true / false->false)
+  // changes nothing (publishedAt is left untouched too), so skip the purge.
+  if (nextPublic !== current.isPublic) {
+    await revalidateTemplateSurfaces();
+  }
 
   return NextResponse.json({
     ok: true,
