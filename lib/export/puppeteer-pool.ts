@@ -99,6 +99,11 @@ function isAllowedRequestUrl(raw: string): boolean {
   if (host === "fonts.googleapis.com" || host === "fonts.gstatic.com") {
     return true;
   }
+  // Country flags: the generation prompt directs Claude to emit
+  // `<img src="https://flagcdn.com/<cc>.svg">`, and the HTML exporter
+  // already special-cases this host. Without it, flags vanish from
+  // exports + thumbnails. (Static flag CDN, not an SSRF surface.)
+  if (host === "flagcdn.com") return true;
   const supa = supabaseHost();
   return supa !== "" && host === supa;
 }
