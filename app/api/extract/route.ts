@@ -40,7 +40,7 @@ const ALLOWED_MIME = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.ms-powerpoint",
-  // Word (.docx) — a /create content source; extract-source converts it
+  // Word (.docx): a /create content source; extract-source converts it
   // to PDF via LibreOffice, the same path PPTX takes.
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
@@ -124,6 +124,21 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
+    }
+
+    // DOCX is a /create content source only (a Word brief Claude reads
+    // as a document block). Enhance and mimic ingest existing DECKS
+    // (PDF / PPT), so reject a Word doc there instead of driving the
+    // backend into a path the flow pickers never offer.
+    if (
+      resolvedMime ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" &&
+      rawKind !== "create"
+    ) {
+      return NextResponse.json(
+        { error: "Word documents are supported only for new decks." },
+        { status: 400 },
+      );
     }
 
     // Validate the requested slide format. Stored on the Job row
