@@ -56,14 +56,6 @@ export async function POST(
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
-  // Flood guard: each regen with a NEW prompt is a real gpt-image call (free
-  // COGS), so bound distinct-prompt churn. Keyed on the authenticated owner
-  // (after access resolves) so a missing-header "unknown" IP can't share one
-  // bucket and 429 unrelated users, and only authorized requests count. The
-  // same-prompt path stays bill-once via the warm pipeline's existence check.
-  const limited = rateLimited(`image-regen:${access.user.id}`, 20, 5 * 60_000);
-  if (limited) return limited;
-
   let raw: Body;
   try {
     raw = (await request.json()) as Body;
@@ -84,6 +76,14 @@ export async function POST(
     typeof raw.aspect === "string" && ASPECTS.has(raw.aspect as GenImageAspect)
       ? (raw.aspect as GenImageAspect)
       : "landscape";
+
+  // Flood guard: bound distinct-prompt regen churn so it can't burn unbounded
+  // gpt-image COGS. Keyed on the authenticated owner and placed AFTER input
+  // validation, so only requests eligible to enqueue deck.image.warm burn
+  // quota (a malformed request can't lock a user out of their own budget).
+  // Same-prompt re-confirms stay bill-once via the warm existence check.
+  const limited = rateLimited(`image-regen:${access.user.id}`, 20, 5 * 60_000);
+  if (limited) return limited;
 
   // The LATEST version is the one the status route reads GeneratedImage rows
   // from (`presentation.versions[0]`, ordered versionNumber desc). Update the
