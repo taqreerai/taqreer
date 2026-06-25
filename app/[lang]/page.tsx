@@ -85,8 +85,10 @@ const PX = "px-4 sm:px-6 lg:px-8";
 const SECTION = "flex min-h-screen flex-col justify-center py-24";
 
 // Canonical + hreflang for the landing. The root layout no longer emits these
-// (so it can render statically), so the landing owns them here; title /
-// description / OG image inherit from the layout's generateMetadata.
+// (so it can render statically), so the landing owns them here. title /
+// description still inherit, but Next REPLACES (does not deep-merge)
+// openGraph across routes, so the og:image + siteName are re-declared below,
+// otherwise the prime ad-landing share preview renders with no image.
 export async function generateMetadata({
   params,
 }: {
@@ -96,7 +98,13 @@ export async function generateMetadata({
   const locale = lang === "en" ? "en" : "ar";
   return {
     alternates: localeAlternates(locale, ""),
-    openGraph: { url: `/${locale}` },
+    openGraph: {
+      url: `/${locale}`,
+      siteName: "taqreer.ai",
+      images: ["/og-image.png"],
+      locale: locale === "en" ? "en_US" : "ar_SA",
+      type: "website",
+    },
   };
 }
 
