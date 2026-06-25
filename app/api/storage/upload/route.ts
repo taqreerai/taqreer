@@ -6,6 +6,12 @@ import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 
 const allowedBuckets = new Set(["source-files", "brand-assets"]);
 
+// Hard ceiling on any single upload. Matches the source-files bucket's
+// own fileSizeLimit and the prod nginx client_max_body_size; enforced
+// here too so an oversized upload gets a clean 400 instead of a raw
+// storage error or an nginx 413.
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
+
 function safeFileName(name: string) {
   return name.replace(/[^\w.\-]+/g, "-");
 }
@@ -43,6 +49,15 @@ export async function POST(request: Request) {
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        {
+          error: `File exceeds the 100 MB limit (got ${(file.size / 1024 / 1024).toFixed(1)} MB).`,
+        },
+        { status: 400 },
+      );
     }
 
     // Folder-level format gating. The brand-assets/logos path is the logo

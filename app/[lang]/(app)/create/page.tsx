@@ -364,8 +364,7 @@ export default function CreatePage() {
       lower.endsWith(".pdf") ||
       lower.endsWith(".pptx") ||
       lower.endsWith(".ppt") ||
-      lower.endsWith(".docx") ||
-      lower.endsWith(".txt");
+      lower.endsWith(".docx");
     if (!extOk) {
       setError(t.fileTypeError);
       return null;
@@ -721,7 +720,7 @@ export default function CreatePage() {
             <input
               ref={contentInputRef}
               type="file"
-              accept=".pdf,.pptx,.ppt,.docx,.txt"
+              accept=".pdf,.pptx,.ppt,.docx"
               className="hidden"
               onChange={(event) => setContentFromInput(event.target.files?.[0])}
             />

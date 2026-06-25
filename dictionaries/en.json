@@ -509,7 +509,7 @@
     "slideNumbering": "Slide numbering",
     "designStyle": "Design style",
     "startFailed": "Couldn't start generation. Try again.",
-    "fileTypeError": "Please upload a PDF, PowerPoint, Word, or text file.",
+    "fileTypeError": "Please upload a PDF, PowerPoint, or Word file.",
     "fileTooLarge": "The file exceeds the 100 MB max ({size}).",
     "parseFailed": "Couldn't parse the content file. Try again.",
     "createFailed": "Couldn't create the project",

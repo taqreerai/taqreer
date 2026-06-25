@@ -509,7 +509,7 @@
     "slideNumbering": "ترقيم الشرائح",
     "designStyle": "نمط التصميم",
     "startFailed": "لم نتمكن من بدء الإنشاء. حاول مرة أخرى.",
-    "fileTypeError": "ارفع ملف PDF أو PowerPoint أو Word أو TXT.",
+    "fileTypeError": "ارفع ملف PDF أو PowerPoint أو Word.",
     "fileTooLarge": "الملف يتجاوز الحد الأقصى 100 ميجابايت ({size}).",
     "parseFailed": "لم نتمكن من قراءة ملف المحتوى. حاول مرة أخرى.",
     "createFailed": "لم نتمكن من إنشاء المشروع",

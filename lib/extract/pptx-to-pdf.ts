@@ -67,15 +67,39 @@ const CANDIDATE_BINS = [
  * safe — see file header), read the resulting PDF, clean up.
  */
 export async function pptxToPdf(pptxBuffer: Buffer): Promise<Buffer> {
+  return officeToPdf(pptxBuffer, "pptx");
+}
+
+/**
+ * Convert a DOCX (Word) buffer to a PDF buffer via the SAME headless
+ * LibreOffice path. Used by the /create content flow so an uploaded
+ * Word brief becomes a PDF Claude reads as a `document` block. DOCX
+ * carries no slide/theme structure, so callers skip the PPTX-only
+ * font/colour/text extraction.
+ */
+export async function docxToPdf(docxBuffer: Buffer): Promise<Buffer> {
+  return officeToPdf(docxBuffer, "docx");
+}
+
+/**
+ * Shared headless-LibreOffice convert-to-PDF. `inputExt` sets the temp
+ * input filename's extension so LibreOffice selects the right import
+ * filter (.pptx → Impress, .docx → Writer); the output is always
+ * `out/input.pdf` (LibreOffice names the output by input basename).
+ */
+async function officeToPdf(
+  buffer: Buffer,
+  inputExt: "pptx" | "docx",
+): Promise<Buffer> {
   // Isolated tmp namespace for this conversion: input, output, AND
   // the LibreOffice profile. Deleted in the finally block.
-  const workDir = await mkdtemp(path.join(tmpdir(), "taqreer-pptx-"));
-  const inputPath = path.join(workDir, "input.pptx");
+  const workDir = await mkdtemp(path.join(tmpdir(), `taqreer-${inputExt}-`));
+  const inputPath = path.join(workDir, `input.${inputExt}`);
   const outDir = path.join(workDir, "out");
   const profileDir = path.join(workDir, "profile");
 
   try {
-    await writeFile(inputPath, pptxBuffer);
+    await writeFile(inputPath, buffer);
 
     // LibreOffice writes `out/<basename>.pdf` — basename matches
     // the input file's basename without extension, so we control it
@@ -119,7 +143,7 @@ export async function pptxToPdf(pptxBuffer: Buffer): Promise<Buffer> {
 
     // None of the candidate binaries existed.
     throw new Error(
-      `LibreOffice is not installed on the server. To enable PPTX uploads, ` +
+      `LibreOffice is not installed on the server. To enable PPTX/DOCX uploads, ` +
         `install LibreOffice on the host:\n` +
         `  • macOS:  brew install --cask libreoffice\n` +
         `  • Linux:  apt-get install -y libreoffice-impress\n` +

@@ -32,7 +32,7 @@
 // the SourceMeta blob with anthropicFileId + fonts + colors.
 
 import { PDFDocument } from "pdf-lib";
-import { pptxToPdf } from "./pptx-to-pdf";
+import { pptxToPdf, docxToPdf } from "./pptx-to-pdf";
 import { extractFontsFromPptx } from "./fonts-pptx";
 import { extractColorsFromPptx } from "./colors-pptx";
 import { detectPptxLanguage } from "./language-pptx";
@@ -114,16 +114,27 @@ export async function extract(
     mime ===
       "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
     mime === "application/vnd.ms-powerpoint";
+  const isDocx =
+    mime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime === "application/msword";
   const isPdf = mime === "application/pdf";
 
-  if (!isPptx && !isPdf) {
+  if (!isPptx && !isPdf && !isDocx) {
     throw new Error(`Unsupported source MIME for extraction: ${mime}`);
   }
 
-  // Step 1: normalize to PDF. PDFs pass through. PPTXs go through
+  // Step 1: normalize to PDF. PDFs pass through. PPTX + DOCX go through
   // LibreOffice — see lib/extract/pptx-to-pdf.ts header for the
-  // concurrency-safety details (per-call profile dir, etc).
-  const pdfBytes = isPdf ? buffer : await pptxToPdf(buffer);
+  // concurrency-safety details (per-call profile dir, etc). DOCX is a
+  // /create content source (a Word brief Claude reads as a PDF document
+  // block); it has no slide/theme structure, so the PPTX-only extraction
+  // below is skipped and its fonts/colours/text stay empty.
+  const pdfBytes = isPdf
+    ? buffer
+    : isDocx
+      ? await docxToPdf(buffer)
+      : await pptxToPdf(buffer);
 
   // Step 2: PPTX structural extraction. Each extractor walks the
   // zip directly without rendering. Run in parallel — they share

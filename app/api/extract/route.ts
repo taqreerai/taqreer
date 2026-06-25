@@ -1,7 +1,7 @@
 // Phase 17.A — POST /api/extract
 //
 // File-upload entry point for the upload-driven create flows
-// (Enhance + Mimic). Accepts a PDF or PPTX, stages it to Supabase,
+// (Enhance + Mimic). Accepts a PDF, PPTX, or DOCX, stages it to Supabase,
 // creates a Job row, and fires `source.extract.requested` so the
 // extract-source Inngest function picks it up. Returns `{ jobId }`
 // to the client, which then polls GET /api/extract/[jobId] for
@@ -40,6 +40,9 @@ const ALLOWED_MIME = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.ms-powerpoint",
+  // Word (.docx) — a /create content source; extract-source converts it
+  // to PDF via LibreOffice, the same path PPTX takes.
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
 function safeFileName(name: string) {
@@ -109,11 +112,14 @@ export async function POST(request: Request) {
           "application/vnd.openxmlformats-officedocument.presentationml.presentation";
       } else if (lower.endsWith(".ppt")) {
         resolvedMime = "application/vnd.ms-powerpoint";
+      } else if (lower.endsWith(".docx")) {
+        resolvedMime =
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       } else {
         return NextResponse.json(
           {
             error:
-              "Unsupported file type. Upload a PDF or PowerPoint (.pptx, .ppt).",
+              "Unsupported file type. Upload a PDF, PowerPoint (.pptx, .ppt), or Word (.docx) document.",
           },
           { status: 400 },
         );

@@ -11,6 +11,7 @@ import {
   extractSource,
   creditsMaintenance,
   notificationsCleanup,
+  sourceFilesCleanup,
 } from "@/inngest/index";
 
 export const { GET, POST, PUT } = serve({
@@ -26,5 +27,6 @@ export const { GET, POST, PUT } = serve({
     extractSource,
     creditsMaintenance,
     notificationsCleanup,
+    sourceFilesCleanup,
   ],
 });
