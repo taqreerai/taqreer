@@ -18,6 +18,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import type { KnownPlan } from "@/lib/plan";
+import type { TierDisplayNumber } from "@/lib/credits/pricing-tokens";
 
 export const CREDIT_BALANCE_EVENT = "taqreer:credit-balance-changed";
 
@@ -63,6 +64,10 @@ export type CreditData = {
   // Active presets for the generation picker (admin Settings -> DB). Absent
   // presets are inactive and don't render; costs/gating here match the charge.
   presets: CreditPreset[];
+  // Per-tier display numbers for the in-app plan cards (BillingSection): the
+  // free signup grant or a paid monthly allotment, plus the slide cap. Filled
+  // into the {credits}/{slides} dict tokens so the cards track admin Settings.
+  tierNumbers: TierDisplayNumber[];
   recent: CreditRecentEvent[];
 };
 

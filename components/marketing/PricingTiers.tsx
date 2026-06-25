@@ -15,6 +15,11 @@ import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useIsAuthed } from "@/hooks/useIsAuthed";
 import { localizedHref } from "@/lib/i18n/navigation";
+import {
+  fillPricingTokens,
+  tierNumberFor,
+  type TierDisplayNumber,
+} from "@/lib/credits/pricing-tokens";
 
 type Billing = "monthly" | "yearly";
 
@@ -98,7 +103,14 @@ function pricingRevealDirection(idx: number): "right" | "left" | "up" {
 // Tier rows here are positional; map index → plan key for checkout.
 const TIER_PLAN_KEYS = ["free", "plus", "pro", "max"] as const;
 
-export function PricingTiers() {
+export function PricingTiers({
+  // Live per-tier numbers (free signup grant / paid monthly allotment + slide
+  // cap) from the server, filled into the {credits}/{slides} dict tokens so the
+  // cards track admin Settings instead of hardcoded literals.
+  tierNumbers,
+}: {
+  tierNumbers: TierDisplayNumber[];
+}) {
   const [billing, setBilling] = useState<Billing>("yearly");
   const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
@@ -167,6 +179,7 @@ export function PricingTiers() {
               pricing={t}
               billing={billing}
               isAuthed={isAuthed}
+              nums={tierNumberFor(tierNumbers, TIER_PLAN_KEYS[idx])}
               busy={busy === `tier_${TIER_PLAN_KEYS[idx]}_${billing}`}
               onCheckout={() => checkout(TIER_PLAN_KEYS[idx])}
             />
@@ -186,6 +199,7 @@ function PricingCard({
   pricing,
   billing,
   isAuthed,
+  nums,
   busy,
   onCheckout,
 }: {
@@ -194,6 +208,7 @@ function PricingCard({
   pricing: PricingCopy;
   billing: Billing;
   isAuthed: boolean;
+  nums?: TierDisplayNumber;
   busy: boolean;
   onCheckout: () => void;
 }) {
@@ -204,7 +219,12 @@ function PricingCard({
 
   // Row 0 is the credits line; rows 1..6 are copy.features[0..5]. The enabled
   // booleans live on tier.features (structure), the labels come from copy.
-  const featureLabels = [copy.credits, ...copy.features];
+  // Fill {credits}/{slides} with the tier's live numbers. credits = the free
+  // signup grant or a paid monthly allotment; slides = the per-tier cap.
+  const featureLabels = [
+    fillPricingTokens(copy.credits, { credits: nums?.credits }),
+    ...copy.features.map((f) => fillPricingTokens(f, { slides: nums?.slides })),
+  ];
 
   return (
     // Standard card border (hairline, same as our other cards). Hover = a gentle

@@ -17,6 +17,12 @@ import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
 import { localeAlternates } from "@/lib/seo/alternates";
+import {
+  ensureFresh,
+  getFreeCredits,
+  pricingDisplayNumbers,
+} from "@/lib/config/runtime-config";
+import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
 
 export const dynamic = "force-static";
 
@@ -64,7 +70,22 @@ export default async function PricingPage(props: {
   const { lang } = await props.params;
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
+  await ensureFresh();
   const t = dict.pricing;
+  // Live config numbers so the cards, the "how credits work" grid, and the FAQ
+  // (+ its JSON-LD) advertise the current free-credit amount, not a literal.
+  // The Settings write revalidates + CF-purges this page on every admin edit.
+  const freeCredits = getFreeCredits();
+  const tierNumbers = pricingDisplayNumbers();
+  const creditPoints = t.credits.points.map((p) => ({
+    ...p,
+    title: fillPricingTokens(p.title, { credits: freeCredits }),
+    body: fillPricingTokens(p.body, { credits: freeCredits }),
+  }));
+  const pricingFaq = t.faq.map((item) => ({
+    ...item,
+    a: fillPricingTokens(item.a, { credits: freeCredits }),
+  }));
 
   return (
     <div className="pb-8">
@@ -74,7 +95,7 @@ export default async function PricingPage(props: {
             { name: locale === "ar" ? "الرئيسية" : "Home", url: `/${locale}` },
             { name: t.breadcrumb, url: `/${locale}/pricing` },
           ]),
-          faqPageSchema(t.faq),
+          faqPageSchema(pricingFaq),
         ]}
       />
 
@@ -97,7 +118,7 @@ export default async function PricingPage(props: {
 
       {/* Plans — reuses the landing pricing component (toggle + checkout). */}
       <section className="py-8">
-        <PricingTiers />
+        <PricingTiers tierNumbers={tierNumbers} />
       </section>
 
       {/* How credits work — 4 points. */}
@@ -106,7 +127,7 @@ export default async function PricingPage(props: {
           <SectionHeader title={t.credits.title} subtitle={t.credits.subtitle} />
         </ScrollReveal>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {t.credits.points.map((point, i) => (
+          {creditPoints.map((point, i) => (
             <ScrollReveal key={i} direction="up" delay={i * 0.06}>
               <div className="surface-card h-full rounded-[14px] p-6">
                 <span
@@ -129,7 +150,7 @@ export default async function PricingPage(props: {
           <SectionHeader title={dict.landing.sections.faq.title} />
         </ScrollReveal>
         <ScrollReveal direction="up">
-          <FaqAccordion items={t.faq} />
+          <FaqAccordion items={pricingFaq} />
         </ScrollReveal>
       </section>
     </div>

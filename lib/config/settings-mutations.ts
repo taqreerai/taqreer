@@ -12,6 +12,8 @@ import { prisma } from "@/lib/prisma";
 import { invalidateLocal } from "@/lib/config/runtime-config";
 import { ALL_FLOWS, SYSTEM_SLIDE_CAP } from "@/lib/credits/cost";
 import { listModels } from "@/lib/anthropic/models";
+import { revalidatePath } from "next/cache";
+import { purgeCloudflarePaths } from "@/lib/cloudflare/purge";
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 type Effort = (typeof EFFORTS)[number];
@@ -88,6 +90,18 @@ function isNonNegInt(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n) && n >= 0;
 }
 
+// Marketing surfaces (landing + /pricing) that DISPLAY config values (free
+// credits, monthly allotment, slide caps); busted after every Settings write.
+const CONFIG_SURFACES = ["/ar", "/en", "/ar/pricing", "/en/pricing"];
+
+// Revalidate the Next full-route cache (so the next render reads the live
+// config) then purge the Cloudflare edge (so visitors get that fresh render) -
+// the force-static landing/pricing otherwise keep serving build-time numbers.
+async function revalidatePricingSurfaces(): Promise<void> {
+  for (const p of CONFIG_SURFACES) revalidatePath(p);
+  await purgeCloudflarePaths(CONFIG_SURFACES);
+}
+
 // mutate -> bump configVersion -> audit, then drop the local cache.
 async function commit(opts: {
   adminUserId: string;
@@ -112,6 +126,7 @@ async function commit(opts: {
     });
   });
   invalidateLocal();
+  await revalidatePricingSurfaces();
 }
 
 function validatePresetShape(input: PresetInput) {

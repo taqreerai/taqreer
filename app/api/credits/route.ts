@@ -13,6 +13,7 @@ import {
   getFreeCredits,
   getActivePresets,
   getTier,
+  pricingDisplayNumbers,
 } from "@/lib/config/runtime-config";
 import { TIER_ORDER, SYSTEM_SLIDE_CAP } from "@/lib/credits/cost";
 
@@ -133,6 +134,10 @@ export async function GET() {
     slideCap: dbUser.role === "admin" ? SYSTEM_SLIDE_CAP : getTier(plan).slideCap,
     cadence: dbUser.subscriptions[0]?.cadence ?? null,
     presets,
+    // Per-tier display numbers (free signup grant / paid monthly allotment +
+    // slide cap) so BillingSection's /plans + UpgradeModal cards track admin
+    // Settings like the landing, instead of frozen literals.
+    tierNumbers: pricingDisplayNumbers(),
     balance: {
       total: balance.total,
       subscription: balance.subscription,

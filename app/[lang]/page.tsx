@@ -28,6 +28,12 @@ import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { faqPageSchema } from "@/lib/seo/schema";
+import {
+  ensureFresh,
+  getFreeCredits,
+  pricingDisplayNumbers,
+} from "@/lib/config/runtime-config";
+import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
 import { localeAlternates } from "@/lib/seo/alternates";
 import type { Metadata } from "next";
 
@@ -121,7 +127,18 @@ export default async function LandingPage({
     getProjectCount(),
     getLandingTemplates(),
     getDictionary(lang),
+    ensureFresh(),
   ]);
+  // Live config numbers for the pricing cards + the {credits} token in the FAQ
+  // (and its JSON-LD), so the advertised free-credit amount tracks admin
+  // Settings instead of a hardcoded literal. The Settings write revalidates +
+  // CF-purges this page so an edit reaches visitors without a deploy.
+  const freeCredits = getFreeCredits();
+  const tierNumbers = pricingDisplayNumbers();
+  const landingFaq = dict.landing.faq.map((item) => ({
+    ...item,
+    a: fillPricingTokens(item.a, { credits: freeCredits }),
+  }));
 
   return (
     <SmoothScrollProvider>
@@ -129,7 +146,7 @@ export default async function LandingPage({
       {/* FAQPage structured data, mirrored from the rendered FAQ accordion
           (dict.landing.faq). Eligible for FAQ rich results + a strong source
           for AI answer extraction. */}
-      <JsonLd data={faqPageSchema(dict.landing.faq)} />
+      <JsonLd data={faqPageSchema(landingFaq)} />
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
       <MagneticGlow fixed glowYOffset={0.2} dots={false} />
@@ -227,7 +244,7 @@ export default async function LandingPage({
             />
           </ScrollReveal>
           <ScrollReveal direction="up" className="mt-12">
-            <PricingTiers />
+            <PricingTiers tierNumbers={tierNumbers} />
           </ScrollReveal>
         </section>
 
@@ -241,7 +258,7 @@ export default async function LandingPage({
             />
           </ScrollReveal>
           <ScrollReveal direction="up" className={PX}>
-            <FaqAccordion />
+            <FaqAccordion items={landingFaq} />
           </ScrollReveal>
         </section>
 

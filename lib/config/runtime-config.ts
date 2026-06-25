@@ -218,6 +218,30 @@ export function getFreeCredits(): number {
   return getTier("free").signupGrant;
 }
 
+// Per-tier numbers the PRICING surfaces display, from the live config: the free
+// tier shows its signup grant, paid tiers their monthly allotment; `slides` is
+// the per-tier cap. The marketing pages + /api/credits feed these into the
+// pricing cards (otherwise hardcoded literals) so the advertised figures track
+// admin Settings instead of drifting from the grant/charge.
+export function pricingDisplayNumbers(): {
+  plan: string;
+  credits: number;
+  slides: number;
+}[] {
+  // Iterate the FIXED plan set (not getTiers()) so the result ALWAYS carries
+  // all four plans — a partially-wiped tiers table can't yield a short list that
+  // would leave a card rendering a raw {credits}/{slides} token. getTier() falls
+  // back to the free/SEED tier for any missing plan.
+  return (["free", "plus", "pro", "max"] as const).map((plan) => {
+    const t = getTier(plan);
+    return {
+      plan,
+      credits: plan === "free" ? t.signupGrant : t.monthlyAllotment,
+      slides: t.slideCap,
+    };
+  });
+}
+
 // ─── Seed helpers ─────────────────────────────────────────────────────
 /**
  * CREATE-ONLY seed: inserts any missing Preset/Tier/PlatformSettings rows from

@@ -128,12 +128,12 @@
       "points": [
         { "title": "Monthly credits with your plan", "body": "Every plan gives you a monthly credit balance to create presentations and reports." },
         { "title": "Credits by usage", "body": "Each deck uses credits based on its slide count and the model used." },
-        { "title": "400 free credits", "body": "You get 400 free credits at signup to try the platform before subscribing." },
+        { "title": "{credits} free credits", "body": "You get {credits} free credits at signup to try the platform before subscribing." },
         { "title": "Top-up packs when needed", "body": "Subscribers can buy extra credit packs anytime." }
       ]
     },
     "faq": [
-      { "q": "Is there a free plan?", "a": "Yes. Start free with 400 credits at signup, no card required. Upgrade later as you need." },
+      { "q": "Is there a free plan?", "a": "Yes. Start free with {credits} credits at signup, no card required. Upgrade later as you need." },
       { "q": "How do credits work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, and can buy top-up packs when needed." },
       { "q": "Can I upgrade or cancel anytime?", "a": "Yes. Upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." },
       { "q": "What is the difference between monthly and yearly?", "a": "Yearly costs less per month than monthly with the same features. Choose monthly for flexibility or yearly to save." }
@@ -714,32 +714,32 @@
         {
           "name": "Free",
           "description": "To try it out and make simple decks fast.",
-          "credits": "400 credits (signup gift)",
-          "features": ["Fast model", "Up to 10 slides per deck", "Images with the latest GPT models", "Enhance · Mimic · Data", "Thinking model", "Premium templates"],
+          "credits": "{credits} credits (signup gift)",
+          "features": ["Fast model", "Up to {slides} slides per deck", "Images with the latest GPT models", "Enhance · Mimic · Data", "Thinking model", "Premium templates"],
           "footnote": "Upgrade anytime",
           "cta": "Start free"
         },
         {
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
-          "credits": "2,000 credits / month",
-          "features": ["All creation methods", "Fast and thinking models", "Images with the latest GPT models", "Up to 30 slides per deck", "Custom brand identity", "Premium templates"],
+          "credits": "{credits} credits / month",
+          "features": ["All creation methods", "Fast and thinking models", "Images with the latest GPT models", "Up to {slides} slides per deck", "Custom brand identity", "Premium templates"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
         {
           "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
-          "credits": "5,000 credits / month",
-          "features": ["All models", "Images with the latest GPT models", "Premium templates", "Up to 60 slides per deck", "Custom brand identity", "All creation methods"],
+          "credits": "{credits} credits / month",
+          "features": ["All models", "Images with the latest GPT models", "Premium templates", "Up to {slides} slides per deck", "Custom brand identity", "All creation methods"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
         {
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
-          "credits": "12,000 credits / month",
-          "features": ["All models and all methods", "Images with the latest GPT models", "Up to 75 slides per deck", "Premium templates", "Custom brand identity", "Processing priority"],
+          "credits": "{credits} credits / month",
+          "features": ["All models and all methods", "Images with the latest GPT models", "Up to {slides} slides per deck", "Premium templates", "Custom brand identity", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }
@@ -750,7 +750,7 @@
       { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file in taqreer.ai, choose your brand, and the AI designs a complete presentation in minutes that you can edit and export to PowerPoint." },
       { "q": "Does taqreer.ai design presentations and reports in Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it turns your ideas and data into designed presentations and reports in Arabic and English." },
       { "q": "Does it fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
-      { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus 400 free credits at signup to try the platform." },
+      { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus {credits} free credits at signup to try the platform." },
       { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },
       { "q": "Can I export the deck to PowerPoint?", "a": "Yes. You can export your decks as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." },
       { "q": "Can I apply my own brand identity?", "a": "Yes. Upload your logo, colors, and fonts in the brand identity section, and taqreer.ai applies them automatically so your decks stay on-brand." },

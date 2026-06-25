@@ -19,6 +19,7 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { dateFnsLocale } from "@/lib/i18n/date";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
 import { TIERS, TIER_ORDER, TOPUP_PACKS } from "@/lib/credits/cost";
+import { fillPricingTokens, tierNumberFor } from "@/lib/credits/pricing-tokens";
 import { SegmentedToggle } from "@/components/create/controls";
 import { PlanUsage } from "@/components/app/PlanUsage";
 import { normalizePlan, type KnownPlan } from "@/lib/plan";
@@ -200,7 +201,18 @@ export function BillingSection({
             const footnote =
               cadence === "yearly" && !isFree ? pricing.billedYearly : copy.footnote;
             const lookupKey = `tier_${tier}_${cadence}`;
-            const featureLabels = [copy.credits, ...copy.features];
+            // Fill the {credits}/{slides} dict tokens from the LIVE per-tier
+            // numbers (/api/credits), so the cards track admin Settings. Falls
+            // back to the bundled SEED only until /api/credits resolves (a
+            // self-correcting skeleton, never a raw token).
+            const num = tierNumberFor(credits?.tierNumbers, tier) ?? {
+              credits: isFree ? TIERS.free.signupGrant : TIERS[tier].monthlyAllotment,
+              slides: TIERS[tier].slideCap,
+            };
+            const featureLabels = [
+              fillPricingTokens(copy.credits, { credits: num.credits }),
+              ...copy.features.map((f) => fillPricingTokens(f, { slides: num.slides })),
+            ];
             return (
               <div
                 key={tier}
