@@ -1325,7 +1325,14 @@ export const deckGenerate = inngest.createFunction(
   {
     id: "deck-generate",
     name: "Generate Presentation Deck",
-    retries: 3,
+    // 1 retry, not 3: the Claude stream IS the run's cost (~6 min of output
+    // tokens). On a transient failure Inngest re-runs the whole stream step
+    // from scratch, re-billing Anthropic in full each time. Capping at 1
+    // bounds a transient failure to 2x (was up to 4x); a real failure then
+    // surfaces and the user can retry, billed via a fresh hold (PR #100).
+    // Cheap steps are memoized on success, so this only limits re-runs of
+    // the expensive stream.
+    retries: 1,
     // Abuse / cost guard: bound parallel generations so one account can't fan
     // out unlimited Claude-burning runs. Per-user (actorPrismaUserId is on every
     // sender) limit keeps legit concurrent users unaffected; the global cap

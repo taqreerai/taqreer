@@ -438,7 +438,9 @@ export const deckRegeneratePartial = inngest.createFunction(
   {
     id: "deck-regenerate-partial",
     name: "Regenerate Selected Slides with Comments",
-    retries: 2,
+    // 1 retry, not 2: same cost shape as deck-generate. A retry re-runs the
+    // (single-slide) Claude stream and re-bills it, so cap re-burns at 2x.
+    retries: 1,
     // Same abuse / cost guard as deck-generate: bounded parallel regens per user
     // (actorPrismaUserId is on every sender) + a global cap.
     concurrency: [
