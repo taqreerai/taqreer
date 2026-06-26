@@ -14,8 +14,10 @@ import {
   getActivePresets,
   getTier,
   pricingDisplayNumbers,
+  defaultPresetKey,
 } from "@/lib/config/runtime-config";
 import { TIER_ORDER, SYSTEM_SLIDE_CAP } from "@/lib/credits/cost";
+import { getDisplayPrices } from "@/lib/billing/display-prices";
 
 // Recent ledger entries for the popup's "recent usage" list. Holds are
 // transient (they settle into a charge or a release), so the list shows
@@ -125,6 +127,8 @@ export async function GET() {
       ) ?? null,
   }));
 
+  const tierPrices = await getDisplayPrices();
+
   return NextResponse.json({
     plan,
     isAdmin: dbUser.role === "admin",
@@ -134,10 +138,15 @@ export async function GET() {
     slideCap: dbUser.role === "admin" ? SYSTEM_SLIDE_CAP : getTier(plan).slideCap,
     cadence: dbUser.subscriptions[0]?.cadence ?? null,
     presets,
+    // The server's default preset key, so the picker can reconcile a stale
+    // selection (a retired preset) to what the server would coerce to.
+    defaultPresetKey: defaultPresetKey(),
     // Per-tier display numbers (free signup grant / paid monthly allotment +
     // slide cap) so BillingSection's /plans + UpgradeModal cards track admin
     // Settings like the landing, instead of frozen literals.
     tierNumbers: pricingDisplayNumbers(),
+    // Live Stripe prices (the actual charge) for the in-app plan cards.
+    tierPrices,
     balance: {
       total: balance.total,
       subscription: balance.subscription,

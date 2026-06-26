@@ -34,6 +34,7 @@ import {
   pricingDisplayNumbers,
 } from "@/lib/config/runtime-config";
 import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
+import { getDisplayPrices } from "@/lib/billing/display-prices";
 import { localeAlternates } from "@/lib/seo/alternates";
 import type { Metadata } from "next";
 
@@ -123,10 +124,11 @@ export default async function LandingPage({
   // No auth read here: the nav/pricing/grid resolve auth client-side
   // (useIsAuthed, a cookie check — no Supabase client) and the data calls are
   // cached, so this page renders statically (ISR) and stays light.
-  const [projectCount, landingTemplates, dict] = await Promise.all([
+  const [projectCount, landingTemplates, dict, tierPrices] = await Promise.all([
     getProjectCount(),
     getLandingTemplates(),
     getDictionary(lang),
+    getDisplayPrices(),
     ensureFresh(),
   ]);
   // Live config numbers for the pricing cards + the {credits} token in the FAQ
@@ -244,7 +246,7 @@ export default async function LandingPage({
             />
           </ScrollReveal>
           <ScrollReveal direction="up" className="mt-12">
-            <PricingTiers tierNumbers={tierNumbers} />
+            <PricingTiers tierNumbers={tierNumbers} tierPrices={tierPrices} />
           </ScrollReveal>
         </section>
 

@@ -64,10 +64,16 @@ export type CreditData = {
   // Active presets for the generation picker (admin Settings -> DB). Absent
   // presets are inactive and don't render; costs/gating here match the charge.
   presets: CreditPreset[];
+  // The server's default preset key (what an inactive/retired selection is
+  // coerced to), so the picker never highlights a dead key.
+  defaultPresetKey: string;
   // Per-tier display numbers for the in-app plan cards (BillingSection): the
   // free signup grant or a paid monthly allotment, plus the slide cap. Filled
   // into the {credits}/{slides} dict tokens so the cards track admin Settings.
   tierNumbers: TierDisplayNumber[];
+  // Live Stripe prices (monthly + per-month-when-yearly) per tier for the
+  // in-app plan cards, so they show the actual charge, not a literal.
+  tierPrices: { plan: string; monthly: number; yearly: number }[];
   recent: CreditRecentEvent[];
 };
 

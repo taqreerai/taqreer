@@ -43,6 +43,7 @@ import {
   emailSubscriptionEnding,
 } from "@/lib/billing/receipt-email";
 import { broadcastToUser } from "@/lib/realtime/server-broadcast";
+import { revalidatePricingSurfaces } from "@/lib/config/revalidate-surfaces";
 import type { KnownPlan } from "@/lib/plan";
 
 // Next.js App Router: raw body for signature verification.
@@ -395,6 +396,19 @@ export async function POST(request: Request) {
         // credits land with the admin panel (billing plan §9). Logged
         // only for now so the event is recorded as handled.
         console.info("[stripe] charge.refunded received", { id: event.id });
+        break;
+
+      case "price.created":
+      case "price.updated":
+      case "price.deleted":
+      case "product.updated":
+        // A tier Price changed in Stripe (possibly out-of-band of a deploy):
+        // refresh the force-static pricing surfaces so the cards never advertise
+        // a price we no longer charge. Best-effort - a purge blip must not 500
+        // the webhook (Stripe would retry forever). Checkout resolves Prices live.
+        await revalidatePricingSurfaces().catch((e) =>
+          console.error("[stripe] pricing revalidate failed", e),
+        );
         break;
 
       default:

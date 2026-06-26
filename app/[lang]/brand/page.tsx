@@ -21,6 +21,7 @@ import Image from "next/image";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { ensureFresh, getPreset } from "@/lib/config/runtime-config";
 
 export const metadata: Metadata = {
   title: "Design System - taqreer.ai",
@@ -238,7 +239,17 @@ const TOC: { id: string; n: string; title: string }[] = [
   { id: "email", n: "16", title: "Email" },
 ];
 
-export default function BrandPage() {
+export default async function BrandPage() {
+  // §15 (Models & presets) shows the live per-deck credit cost. The 3 showcase
+  // rows mirror the seeded presets, so derive their 8-slide cost from the live
+  // config instead of baking it - tracks admin Settings, not a frozen literal.
+  await ensureFresh();
+  const deckCost = (key: string) => {
+    // Honest on this internal reference: a retired / deleted preset shows a dash,
+    // not the default preset's cost under this row's hardcoded model label.
+    const p = getPreset(key);
+    return p ? String(p.baseCredits + 8 * p.perSlideCredits) : "-";
+  };
   return (
     <div dir="ltr" className="relative min-h-screen overflow-x-clip text-foreground">
       <style>{AURORA_CSS}</style>
@@ -1394,20 +1405,20 @@ export default function BrandPage() {
                     <PresetRow
                       model="Opus 4.8"
                       thinking={false}
-                      credits="180"
+                      credits={deckCost("opus-fast")}
                       active
                     />
                     <PresetRow
                       model="Opus 4.8"
                       thinking
                       gate="Plus"
-                      credits="576"
+                      credits={deckCost("opus-balanced")}
                     />
                     <PresetRow
                       model="Fable 5"
                       thinking
                       gate="Pro"
-                      credits="724"
+                      credits={deckCost("fable-low")}
                       muted="parked"
                     />
                   </div>

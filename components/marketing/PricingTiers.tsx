@@ -30,8 +30,6 @@ type Tier = {
   // enabled booleans; row 0 maps to dict...tiers[i].credits, rows 1..6 map to
   // dict...tiers[i].features[0..5].
   features: { enabled: boolean }[];
-  priceMonthly: string;
-  priceYearly: string; // per-month price when billed yearly
   isFree?: boolean; // Free has no cadence / no yearly footnote
   popular?: boolean;
 };
@@ -47,8 +45,6 @@ const TIERS: Tier[] = [
       { enabled: false },
       { enabled: false },
     ],
-    priceMonthly: "$0",
-    priceYearly: "$0",
     isFree: true,
   },
   {
@@ -61,8 +57,6 @@ const TIERS: Tier[] = [
       { enabled: true },
       { enabled: false },
     ],
-    priceMonthly: "$15",
-    priceYearly: "$13",
   },
   {
     features: [
@@ -74,8 +68,6 @@ const TIERS: Tier[] = [
       { enabled: true },
       { enabled: true },
     ],
-    priceMonthly: "$30",
-    priceYearly: "$27",
     popular: true,
   },
   {
@@ -88,10 +80,12 @@ const TIERS: Tier[] = [
       { enabled: true },
       { enabled: true },
     ],
-    priceMonthly: "$70",
-    priceYearly: "$63",
   },
 ];
+
+// Per-tier feature-enabled booleans, exported so the in-app BillingSection
+// renders the SAME unlocked set instead of a duplicated hardcoded count.
+export const PRICING_TIER_FEATURES = TIERS.map((t) => t.features);
 
 // Outer tiers fly in from the side; inner tiers rise (4 tiers).
 function pricingRevealDirection(idx: number): "right" | "left" | "up" {
@@ -108,8 +102,12 @@ export function PricingTiers({
   // cap) from the server, filled into the {credits}/{slides} dict tokens so the
   // cards track admin Settings instead of hardcoded literals.
   tierNumbers,
+  // Live prices from Stripe (the actual charge), so the cards never advertise a
+  // price we don't bill. monthly + the per-month figure when billed yearly.
+  tierPrices,
 }: {
   tierNumbers: TierDisplayNumber[];
+  tierPrices: { plan: string; monthly: number; yearly: number }[];
 }) {
   const [billing, setBilling] = useState<Billing>("yearly");
   const [busy, setBusy] = useState<string | null>(null);
@@ -180,6 +178,7 @@ export function PricingTiers({
               billing={billing}
               isAuthed={isAuthed}
               nums={tierNumberFor(tierNumbers, TIER_PLAN_KEYS[idx])}
+              priceInfo={tierPrices.find((p) => p.plan === TIER_PLAN_KEYS[idx])}
               busy={busy === `tier_${TIER_PLAN_KEYS[idx]}_${billing}`}
               onCheckout={() => checkout(TIER_PLAN_KEYS[idx])}
             />
@@ -200,6 +199,7 @@ function PricingCard({
   billing,
   isAuthed,
   nums,
+  priceInfo,
   busy,
   onCheckout,
 }: {
@@ -209,11 +209,14 @@ function PricingCard({
   billing: Billing;
   isAuthed: boolean;
   nums?: TierDisplayNumber;
+  priceInfo?: { plan: string; monthly: number; yearly: number };
   busy: boolean;
   onCheckout: () => void;
 }) {
   const { locale } = useLocale();
-  const price = billing === "yearly" ? tier.priceYearly : tier.priceMonthly;
+  const priceNum =
+    (billing === "yearly" ? priceInfo?.yearly : priceInfo?.monthly) ?? 0;
+  const price = `$${priceNum.toLocaleString("en-US")}`;
   const footnote =
     billing === "yearly" && !tier.isFree ? pricing.billedYearly : copy.footnote;
 

@@ -23,6 +23,7 @@ import {
   pricingDisplayNumbers,
 } from "@/lib/config/runtime-config";
 import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
+import { getDisplayPrices } from "@/lib/billing/display-prices";
 
 export const dynamic = "force-static";
 
@@ -71,6 +72,7 @@ export default async function PricingPage(props: {
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
   await ensureFresh();
+  const tierPrices = await getDisplayPrices();
   const t = dict.pricing;
   // Live config numbers so the cards, the "how credits work" grid, and the FAQ
   // (+ its JSON-LD) advertise the current free-credit amount, not a literal.
@@ -118,7 +120,7 @@ export default async function PricingPage(props: {
 
       {/* Plans — reuses the landing pricing component (toggle + checkout). */}
       <section className="py-8">
-        <PricingTiers tierNumbers={tierNumbers} />
+        <PricingTiers tierNumbers={tierNumbers} tierPrices={tierPrices} />
       </section>
 
       {/* How credits work — 4 points. */}

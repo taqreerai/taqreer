@@ -128,6 +128,18 @@ export function GenerateSplitButton({
     (p) => isAdmin || p.gateTier !== null,
   );
 
+  // Highlight reconciliation: if the selected quality is no longer an ACTIVE
+  // preset (admin retired it), highlight the default the server coerces to - but
+  // only if that default is a RENDERED row; else the first listed preset, so the
+  // highlight never lands on a row the picker doesn't show.
+  const reconciledKey =
+    presets.find((p) => p.key === credits?.defaultPresetKey)?.key ??
+    presets[0]?.key ??
+    quality;
+  const effectiveQuality = presets.some((p) => p.key === quality)
+    ? quality
+    : reconciledKey;
+
   return (
     <div ref={splitButtonRef} className="relative">
       {/* Outer pill — the `.btn-gradient-anim` class supplies the
@@ -230,7 +242,7 @@ export function GenerateSplitButton({
                 gateTier !== null &&
                 TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
               const affordable = credits ? cost <= credits.balance.total : true;
-              const active = quality === preset.key;
+              const active = effectiveQuality === preset.key;
               return (
                 <button
                   key={preset.key}

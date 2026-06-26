@@ -22,6 +22,7 @@ import { TIERS, TIER_ORDER, TOPUP_PACKS } from "@/lib/credits/cost";
 import { fillPricingTokens, tierNumberFor } from "@/lib/credits/pricing-tokens";
 import { SegmentedToggle } from "@/components/create/controls";
 import { PlanUsage } from "@/components/app/PlanUsage";
+import { PRICING_TIER_FEATURES } from "@/components/marketing/PricingTiers";
 import { normalizePlan, type KnownPlan } from "@/lib/plan";
 
 type Cadence = "monthly" | "yearly";
@@ -41,15 +42,6 @@ const YEARLY_PER_MONTH: Record<"plus" | "pro" | "max", number> = {
   plus: 13,
   pro: 27,
   max: 63,
-};
-
-// How many of the landing's 7 feature rows (credits + 6 features) are
-// enabled per tier - mirrors TIERS in components/marketing/PricingTiers.
-const FEATURES_ENABLED: Record<KnownPlan, number> = {
-  free: 4,
-  plus: 6,
-  pro: 7,
-  max: 7,
 };
 
 // "Pro" carries the landing's popular pill here too.
@@ -193,11 +185,14 @@ export function BillingSection({
               minTier != null && idx < TIER_ORDER.indexOf(minTier);
             const popular = tier === POPULAR_TIER;
             const copy = pricing.tiers[idx];
+            // Live Stripe price (the actual charge) from /api/credits; the
+            // bundled constants are only a pre-hydration fallback (self-correcting).
+            const tp = credits?.tierPrices?.find((p) => p.plan === tier);
             const priceUsd = isFree
               ? 0
               : cadence === "yearly"
-                ? YEARLY_PER_MONTH[tier as "plus" | "pro" | "max"]
-                : TIERS[tier].priceUsd;
+                ? (tp?.yearly ?? YEARLY_PER_MONTH[tier as "plus" | "pro" | "max"])
+                : (tp?.monthly ?? TIERS[tier].priceUsd);
             const footnote =
               cadence === "yearly" && !isFree ? pricing.billedYearly : copy.footnote;
             const lookupKey = `tier_${tier}_${cadence}`;
@@ -235,7 +230,8 @@ export function BillingSection({
 
                 <div className="mb-8 flex-grow space-y-4">
                   {featureLabels.map((label, fi) => {
-                    const enabled = fi < FEATURES_ENABLED[tier];
+                    const enabled =
+                      PRICING_TIER_FEATURES[idx]?.[fi]?.enabled ?? false;
                     return (
                       <div
                         key={fi}
