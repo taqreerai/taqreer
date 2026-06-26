@@ -64,8 +64,10 @@ export function TemplatesPageClient({
 
   const [format, setFormat] = useState<FormatFilter>(null);
   const [language, setLanguage] = useState<LanguageFilter>(null);
-  // Default: own. Most-common landing intent is "see my own work".
-  const [owner, setOwner] = useState<OwnerFilter>("own");
+  // Default: all (own + community). This is a browse surface; leading with
+  // "own" hid every public/community template behind a chip the user had to
+  // discover, so public templates read as "not showing".
+  const [owner, setOwner] = useState<OwnerFilter>("all");
   const [colorHex, setColorHex] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   // Lightbox target. null = closed. Drives both TemplateLightbox
@@ -178,13 +180,13 @@ export function TemplatesPageClient({
   const filtersActive =
     format !== null ||
     language !== null ||
-    owner !== "own" ||
+    owner !== "all" ||
     colorHex !== null;
 
   const resetFilters = () => {
     setFormat(null);
     setLanguage(null);
-    setOwner("own");
+    setOwner("all");
     setColorHex(null);
     setPage(0);
   };

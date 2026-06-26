@@ -29,7 +29,7 @@ export function HomeLibrary({
   projects: ProjectsGridProject[];
   templates: MyTemplatesTemplate[];
 }) {
-  const [tab, setTab] = useState<Tab>("projects");
+  const [tab, setTab] = useState<Tab>("templates");
   const dict = useDict();
   const { locale } = useLocale();
 
