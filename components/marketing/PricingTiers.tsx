@@ -216,7 +216,13 @@ function PricingCard({
   const { locale } = useLocale();
   const priceNum =
     (billing === "yearly" ? priceInfo?.yearly : priceInfo?.monthly) ?? 0;
-  const price = `$${priceNum.toLocaleString("en-US")}`;
+  // A paid tier with no resolved price must never quote $0 (it would underquote
+  // and still allow checkout); show a neutral placeholder + disable the CTA.
+  // Cap fractional yearly per-month figures (annual / 12) to 2 decimals.
+  const priceUnavailable = !tier.isFree && priceNum <= 0;
+  const price = priceUnavailable
+    ? "-"
+    : `$${priceNum.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   const footnote =
     billing === "yearly" && !tier.isFree ? pricing.billedYearly : copy.footnote;
 
@@ -289,7 +295,7 @@ function PricingCard({
           <button
             type="button"
             onClick={onCheckout}
-            disabled={busy}
+            disabled={busy || priceUnavailable}
             className="btn-gradient block w-full py-3 text-sm disabled:opacity-70"
           >
             {busy ? "…" : copy.cta}

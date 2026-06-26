@@ -229,7 +229,7 @@ export function pricingDisplayNumbers(): {
   slides: number;
 }[] {
   // Iterate the FIXED plan set (not getTiers()) so the result ALWAYS carries
-  // all four plans — a partially-wiped tiers table can't yield a short list that
+  // all four plans. A partially-wiped tiers table can't yield a short list that
   // would leave a card rendering a raw {credits}/{slides} token. getTier() falls
   // back to the free/SEED tier for any missing plan.
   return (["free", "plus", "pro", "max"] as const).map((plan) => {

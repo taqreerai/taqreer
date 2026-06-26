@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import { purgeCloudflarePaths } from "@/lib/cloudflare/purge";
 import { invalidateDisplayPrices } from "@/lib/billing/display-prices";
+import { invalidateLocal } from "@/lib/config/runtime-config";
 
 export const CONFIG_SURFACES = [
   "/ar",
@@ -20,9 +21,12 @@ export const CONFIG_SURFACES = [
   "/en/brand",
 ];
 
-// Drop the in-process Stripe-price cache (so the re-render re-fetches live
-// prices), revalidate the Next route cache, then purge the Cloudflare edge.
+// Drop the in-process runtime-config snapshot (tiers / presets / free credits)
+// AND the Stripe-price cache, so the re-render reads fresh numbers even if the
+// config snapshot TTL is still hot, then revalidate the Next route cache and
+// purge the Cloudflare edge. Self-contained: a caller need not invalidate first.
 export async function revalidatePricingSurfaces(): Promise<void> {
+  invalidateLocal();
   invalidateDisplayPrices();
   for (const p of CONFIG_SURFACES) revalidatePath(p);
   await purgeCloudflarePaths(CONFIG_SURFACES);
