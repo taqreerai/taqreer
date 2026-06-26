@@ -32,11 +32,16 @@ export function UpgradeModal({
   // Jump straight to the checkout step for a known price (the credit
   // gate's "buy the covering top-up pack" path).
   initialLookupKey = null,
+  // Contextual headline when opened from a credit / preset / flow / cap gate,
+  // so the tiers modal explains WHY it opened (replaces the old intermediate
+  // CreditGateDialog card). Shown only on the plans step.
+  gateContext = null,
 }: {
   open: boolean;
   onClose: () => void;
   requiredTier?: KnownPlan | null;
   initialLookupKey?: string | null;
+  gateContext?: { title: string; body: string } | null;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -107,9 +112,17 @@ export function UpgradeModal({
               <div className="flex items-start justify-between gap-3 px-8 pt-7">
                 <div>
                   <h3 id="upgrade-modal-title" className="text-xl font-bold text-foreground">
-                    {done ? t.successTitle : lookupKey ? t.checkoutTitle : t.title}
+                    {done
+                      ? t.successTitle
+                      : lookupKey
+                        ? t.checkoutTitle
+                        : gateContext
+                          ? gateContext.title
+                          : t.title}
                   </h3>
-                  {!done && !lookupKey && requiredTier ? (
+                  {!done && !lookupKey && gateContext ? (
+                    <p className="mt-1 text-sm text-muted">{gateContext.body}</p>
+                  ) : !done && !lookupKey && requiredTier ? (
                     <p className="mt-1 text-sm text-muted">
                       {t.requiresTier.replace(
                         "{tier}",
