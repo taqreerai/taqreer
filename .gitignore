@@ -35,3 +35,6 @@ public/email-lab/
 
 # Next.js audit/review build output
 .next-audit
+
+# Generated social-media assets (local deliverables, not shipped)
+social/
