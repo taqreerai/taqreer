@@ -135,6 +135,44 @@ function Swatch({
   );
 }
 
+// Designer palette chip — shows the RESOLVED hex + rgb (not a CSS var name),
+// so the swatch reads as a print-style brand handoff a graphic designer can copy
+// straight into Illustrator / Figma. The fill is a hardcoded literal so each
+// chip renders its true colour regardless of the page's current theme.
+function PaletteChip({
+  name,
+  hex,
+  rgb,
+  fill,
+  note,
+}: {
+  name: string;
+  hex: string;
+  rgb: string;
+  fill?: string;
+  note?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className="h-12 w-12 flex-shrink-0 rounded-lg border border-border"
+        style={{ background: fill ?? hex }}
+      />
+      <div className="min-w-0">
+        <p className="truncate text-[13px] font-medium text-foreground">{name}</p>
+        <code className="block font-mono text-[11px] text-muted-foreground">
+          {hex}
+          <span className="text-foreground/30"> · </span>
+          {rgb}
+        </code>
+        {note ? (
+          <p className="truncate text-[11px] text-muted-foreground">{note}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // Menu row (kebab / account menu demos).
 function Item({
   icon,
@@ -222,21 +260,22 @@ function PresetRow({
 
 const TOC: { id: string; n: string; title: string }[] = [
   { id: "tokens", n: "01", title: "Tokens & themes" },
-  { id: "logo", n: "02", title: "Logo" },
-  { id: "type", n: "03", title: "Typography" },
-  { id: "brand", n: "04", title: "Brand, motion & gradients" },
-  { id: "surfaces", n: "05", title: "Surfaces & elevation" },
-  { id: "buttons", n: "06", title: "Buttons" },
-  { id: "icons", n: "07", title: "Icons" },
-  { id: "inputs", n: "08", title: "Inputs & controls" },
-  { id: "menus", n: "09", title: "Menus & popovers" },
-  { id: "toasts", n: "10", title: "Toasts & notifications" },
-  { id: "uploads", n: "11", title: "Upload areas" },
-  { id: "modals", n: "12", title: "Modals & dialogs" },
-  { id: "feedback", n: "13", title: "Tooltip & status" },
-  { id: "plan", n: "14", title: "Plan, tiers & tables" },
-  { id: "models", n: "15", title: "Models & presets" },
-  { id: "email", n: "16", title: "Email" },
+  { id: "palette", n: "02", title: "Color palette" },
+  { id: "logo", n: "03", title: "Logo" },
+  { id: "type", n: "04", title: "Typography" },
+  { id: "brand", n: "05", title: "Brand, motion & gradients" },
+  { id: "surfaces", n: "06", title: "Surfaces & elevation" },
+  { id: "buttons", n: "07", title: "Buttons" },
+  { id: "icons", n: "08", title: "Icons" },
+  { id: "inputs", n: "09", title: "Inputs & controls" },
+  { id: "menus", n: "10", title: "Menus & popovers" },
+  { id: "toasts", n: "11", title: "Toasts & notifications" },
+  { id: "uploads", n: "12", title: "Upload areas" },
+  { id: "modals", n: "13", title: "Modals & dialogs" },
+  { id: "feedback", n: "14", title: "Tooltip & status" },
+  { id: "plan", n: "15", title: "Plan, tiers & tables" },
+  { id: "models", n: "16", title: "Models & presets" },
+  { id: "email", n: "17", title: "Email" },
 ];
 
 export default async function BrandPage() {
@@ -337,7 +376,7 @@ export default async function BrandPage() {
                   className="h-1.5 w-1.5 rounded-full"
                   style={{ background: "#fff" }}
                 />
-                16 live sections
+                17 live sections
               </span>
               {[
                 "Real tokens from globals.css",
@@ -429,10 +468,102 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 02 — Logo */}
+          {/* 02 - Color palette (designer handoff) */}
+          <Section
+            id="palette"
+            n="02"
+            title="Color palette"
+            lead="The full brand palette as flat hex and RGB values, for use outside the product (decks, print, social, partner artwork). The system is blue-only: one accent on a neutral grayscale, with a small semantic set for status. Values are absolute, the same numbers the app ships. Use Latin numerals 0-9 everywhere."
+          >
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <Frame>
+                <Label>Core brand: blue</Label>
+                <div className="space-y-4">
+                  <PaletteChip
+                    name="Brand Blue (primary)"
+                    hex="#0057FF"
+                    rgb="rgb(0, 87, 255)"
+                    note="The locked accent. Solid on light surfaces."
+                  />
+                  <PaletteChip
+                    name="Bright Blue"
+                    hex="#3380FF"
+                    rgb="rgb(51, 128, 255)"
+                    note="Accent on dark surfaces."
+                  />
+                  <PaletteChip
+                    name="Brand gradient"
+                    hex="#0057FF → #3380FF"
+                    rgb="135deg"
+                    fill="linear-gradient(135deg, #0057FF 0%, #3380FF 100%)"
+                  />
+                  <PaletteChip
+                    name="Full ramp"
+                    hex="#0042E0 · #0057FF · #66A3FF"
+                    rgb="135deg"
+                    fill="linear-gradient(135deg, #0042E0 0%, #0057FF 50%, #66A3FF 100%)"
+                  />
+                </div>
+              </Frame>
+
+              <Frame>
+                <Label>Neutrals: dark theme</Label>
+                <div className="space-y-4">
+                  <PaletteChip name="Page gutter" hex="#0A0A0A" rgb="rgb(10, 10, 10)" />
+                  <PaletteChip name="Content panel" hex="#161616" rgb="rgb(22, 22, 22)" />
+                  <PaletteChip name="Inset / inactive" hex="#111111" rgb="rgb(17, 17, 17)" />
+                  <PaletteChip name="Cards & chrome" hex="#171717" rgb="rgb(23, 23, 23)" />
+                  <PaletteChip name="Primary text" hex="#FFFFFF" rgb="rgb(255, 255, 255)" />
+                  <PaletteChip name="Muted text" hex="#B4B4B4" rgb="rgb(180, 180, 180)" />
+                  <PaletteChip name="Accent" hex="#3380FF" rgb="rgb(51, 128, 255)" />
+                </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                  Hairline border: white at 10%. Focus border: white at 26%.
+                </p>
+              </Frame>
+
+              <Frame>
+                <Label>Neutrals: light theme</Label>
+                <div className="space-y-4">
+                  <PaletteChip name="Page gutter" hex="#FFFFFF" rgb="rgb(255, 255, 255)" />
+                  <PaletteChip name="Content panel" hex="#EEEEEE" rgb="rgb(238, 238, 238)" />
+                  <PaletteChip name="Inset / inactive" hex="#F5F5F5" rgb="rgb(245, 245, 245)" />
+                  <PaletteChip name="Cards & chrome" hex="#FFFFFF" rgb="rgb(255, 255, 255)" />
+                  <PaletteChip name="Primary text" hex="#0A0A0A" rgb="rgb(10, 10, 10)" />
+                  <PaletteChip name="Muted text" hex="#737373" rgb="rgb(115, 115, 115)" />
+                  <PaletteChip name="Accent" hex="#0057FF" rgb="rgb(0, 87, 255)" />
+                </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                  Accent hover: #0046CC. Hairline border: #E5E5E5. Focus border: #A1A1A1.
+                </p>
+              </Frame>
+
+              <Frame className="sm:col-span-2 lg:col-span-3">
+                <Label>Semantic: status only</Label>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <PaletteChip
+                    name="Danger / error"
+                    hex="#DC2626"
+                    rgb="rgb(220, 38, 38)"
+                  />
+                  <PaletteChip name="Success" hex="#34D399" rgb="rgb(52, 211, 153)" />
+                  <PaletteChip name="Warning" hex="#FBBF24" rgb="rgb(251, 191, 36)" />
+                  <PaletteChip name="Down" hex="#F87171" rgb="rgb(248, 113, 113)" />
+                </div>
+                <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
+                  These carry meaning, never decoration: success, warning, error.
+                  Keep all other color energy on the single blue accent. There is
+                  no purple, no second brand hue, and no gradient outside the two
+                  blue ramps above.
+                </p>
+              </Frame>
+            </div>
+          </Section>
+
+          {/* 03 — Logo */}
           <Section
             id="logo"
-            n="02"
+            n="03"
             title="Logo"
             lead="A single lowercase wordmark, taqreer, with the two e's drawn as stacked horizontal bars - a quiet nod to slides and lines of text. There is no separate icon lockup beyond the bars. ThemeLogo swaps the two assets by theme automatically."
           >
@@ -503,10 +634,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 03 — Typography */}
+          {/* 04 — Typography */}
           <Section
             id="type"
-            n="03"
+            n="04"
             title="Typography"
             lead="One typeface carries the whole product: Cairo, a contemporary Arabic + Latin sans with even rhythm in both directions. It is why Arabic and English sit in the same layout without a seam. Numerals are always Latin (0-9), even inside Arabic."
           >
@@ -580,10 +711,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 04 — Brand, motion & gradients */}
+          {/* 05 — Brand, motion & gradients */}
           <Section
             id="brand"
-            n="04"
+            n="05"
             title="Brand, motion & gradients"
             lead="The animated mark is the real ParagraphWriteIcon (three bars that write in). Color energy lives in exactly two places: the ambient aurora that grounds key pages, and the AI mesh that marks generative actions. Both are all-blue; everywhere else stays flat."
           >
@@ -677,10 +808,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 05 — Surfaces */}
+          {/* 06 — Surfaces */}
           <Section
             id="surfaces"
-            n="05"
+            n="06"
             title="Surfaces & elevation"
             lead="Four solid tones stack from the page gutter up to floating chrome. Every card, menu, popover and modal is the same recipe: solid --tq-surface plus a 1px hairline border. The dim behind a modal is --tq-modal-dim."
           >
@@ -738,10 +869,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 06 — Buttons */}
+          {/* 07 — Buttons */}
           <Section
             id="buttons"
-            n="06"
+            n="07"
             title="Buttons"
             lead="Primary CTA is solid blue. Secondary is the ghost pill. Destructive is solid red. The AI mesh is its own thing (section 04). Disabled drops opacity; the in-button spinner is a spinning progress_activity glyph, no separate loader."
           >
@@ -788,10 +919,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 07 — Icons */}
+          {/* 08 — Icons */}
           <Section
             id="icons"
-            n="07"
+            n="08"
             title="Icons"
             lead="Material Symbols Outlined, loaded at weight 200 (thin) to match the app. Tint with currentColor, mute with text-foreground/30, and use .icon-hover for muted-to-primary interactive glyphs. The FILL axis toggles outlined to filled."
           >
@@ -882,10 +1013,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 08 — Inputs & controls */}
+          {/* 09 — Inputs & controls */}
           <Section
             id="inputs"
-            n="08"
+            n="09"
             title="Inputs & controls"
             lead="Text fields use .input-dark; the focus ring is the neutral --tq-border-focus, not the accent. Toggles are pill-shaped with a sliding indicator. Choosers use the ghost pill with an active full-white border."
           >
@@ -937,10 +1068,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 09 — Menus & popovers */}
+          {/* 10 — Menus & popovers */}
           <Section
             id="menus"
-            n="09"
+            n="10"
             title="Menus & popovers"
             lead="One primitive covers the kebab (3-dots) menus on project / template / brand-kit tiles, the account menu, and the export / history / language popovers: a .surface-popover or .surface-menu shell of .dropdown-item rows, a hairline divider, and a destructive last item. Framer entry 0.18s."
           >
@@ -983,10 +1114,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 10 — Toasts & notifications */}
+          {/* 11 — Toasts & notifications */}
           <Section
             id="toasts"
-            n="10"
+            n="11"
             title="Toasts & notifications"
             lead="The bell dropdown and the transient toast share one surface: .in-slide-popover, 320px wide. The unread badge and dot are Tailwind bg-blue-500 (a sky info chip, intentionally not the brand accent). Toasts stack up to 3, ignore items older than 5s, and auto-dismiss after 15s."
           >
@@ -1069,10 +1200,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 11 — Upload areas */}
+          {/* 12 — Upload areas */}
           <Section
             id="uploads"
-            n="11"
+            n="12"
             title="Upload areas"
             lead="Dropzones are a 1px dashed border on bg-overlay-soft. Idle is border-foreground/15 (brighter on hover); drag-over tints the border and fill blue. The picked state becomes a solid surface row; logos are normalised with the .logo-monochrome filter."
           >
@@ -1152,10 +1283,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 12 — Modals & dialogs (full width, stacked rows) */}
+          {/* 13 — Modals & dialogs (full width, stacked rows) */}
           <Section
             id="modals"
-            n="12"
+            n="13"
             title="Modals & dialogs"
             lead="A modal is the .modal-dim layer behind a .surface-modal panel: header with a close-X, body, then a footer pill row. Confirms are compact (max-w-md, p-8). The message shape (centered icon, semibold title, muted body) covers success, empty and confirm-email states."
           >
@@ -1251,10 +1382,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 13 — Tooltip & status */}
+          {/* 14 — Tooltip & status */}
           <Section
             id="feedback"
-            n="13"
+            n="14"
             title="Tooltip & status"
             lead="The tooltip is a dark hairline pill (.sidebar-tooltip), portalled and Framer-faded at 0.16s. The status triad (ok / warn / down) has dot, text, bg and border token variants for chips and banners - now legible in light mode too."
           >
@@ -1294,10 +1425,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 14 — Plan, tiers & tables */}
+          {/* 15 — Plan, tiers & tables */}
           <Section
             id="plan"
-            n="14"
+            n="15"
             title="Plan, tiers & tables"
             lead="Tier badges are the solid-blue .badge-purple pill. The active plan card is .plan-banner (one solid blue border). Usage is the .progress-track / .progress-bar pair. Settings-style data is the .settings-row grid with hairline dividers, never a <table>."
           >
@@ -1385,10 +1516,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 15 — Models & presets */}
+          {/* 16 — Models & presets */}
           <Section
             id="models"
-            n="15"
+            n="16"
             title="Models & presets"
             lead="The generation-model picker (GenerateSplitButton). Each row is the bare model name plus a speed chip - a green Thinking chip for adaptive-reasoning presets, a neutral Fast chip for no-thinking - then a blue tier-gate pill on presets above the user's plan, then the live per-deck credit cost. Credits below assume an 8-slide deck (base + slides x perSlide)."
           >
@@ -1449,10 +1580,10 @@ export default async function BrandPage() {
             </div>
           </Section>
 
-          {/* 16 — Email */}
+          {/* 17 — Email */}
           <Section
             id="email"
-            n="16"
+            n="17"
             title="Email"
             lead="Transactional mail uses its own inline-styled shell (lib/email/shell.ts), not globals.css, because mail clients drop external CSS. A flat #111111 canvas, a 62px baked logo box, weight-400 title, #b4b4b4 body, and one blue pill button (#0057FF). Billing mail sends from billing@taqreer.ai; everything else from share@. Inline styles, Cairo, no em dash, Latin numerals, one locale per send."
           >
