@@ -434,6 +434,18 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         requestAnimationFrame(() => requestAnimationFrame(() => r())),
       );
       try {
+        // The gen-image fade animation must NOT be live when flatten reads computed
+        // styles: mid-fade the class .tq-genimg-in holds opacity below 1, and flatten
+        // bakes whatever getComputedStyle returns inline (undo later replays that stale
+        // fractional value). Neutralize the class synchronously here, in the same tick
+        // as the flatten, so getComputedStyle returns the resting opacity (1, or a
+        // user-set inline value). Class-only: do not touch style.opacity. DeckView
+        // re-adds the class on the next URL land, so the fade still plays for users.
+        for (const img of sec.querySelectorAll<HTMLImageElement>(
+          "img[data-genimage][src]",
+        )) {
+          img.classList.remove("tq-genimg-in");
+        }
         const flat = flattenSlideSection(sec as HTMLElement, { scale: scaleRef.current });
         // Observatory: report the parity result once per flatten (both branches), so the
         // fidelity loop can log a content shortfall (and, once Phase 1 lands, style drift).
