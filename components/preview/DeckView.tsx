@@ -2154,7 +2154,13 @@ export function DeckView({
         .catch((err) => {
           console.warn("[realtime] initial track failed", err);
         });
-    })();
+    })().catch((err) => {
+      // The async open can reject (a stale-channel race during a fast
+      // re-open, a network blip on the token round-trip, ...). Swallow it
+      // as a warning so it never surfaces as an unhandled promise rejection
+      // (those were the onunhandledrejection events Sentry was catching).
+      if (!cancelled) console.warn("[realtime] channel open failed", err);
+    });
     return () => {
       cancelled = true;
       presenceHandleRef.current = null;

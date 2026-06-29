@@ -220,6 +220,25 @@ export async function openProjectChannel(
   }
   const topic = `project:${projectId}`;
 
+  // A prior open for this topic may not have finished tearing down: the React
+  // effect cleanup calls close() (an async removeChannel) WITHOUT awaiting it,
+  // then re-runs synchronously when a dep changes (e.g. a profile / locale
+  // PATCH). Supabase's client.channel() dedupes by topic, so it would hand us
+  // back that STALE, already-subscribed channel, and adding presence .on()
+  // listeners to a subscribed channel throws ("cannot add `presence` callbacks
+  // ... after `subscribe()`"). Remove any leftover channel for this topic
+  // first so we always bind + subscribe a fresh one.
+  const existing = client
+    .getChannels()
+    .find((c) => c.topic === `realtime:${topic}`);
+  if (existing) {
+    try {
+      await client.removeChannel(existing);
+    } catch {
+      // best-effort: a failed remove still lets the fresh bind proceed
+    }
+  }
+
   const channel = client.channel(topic, {
     config: {
       // Don't echo our own broadcasts back to us — every emitter
