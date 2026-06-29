@@ -1,0 +1,93 @@
+name: Uptime monitor
+
+# External health check for https://taqreer.ai/api/status. That route is
+# origin-dependent (returns 522 / times out when the Hetzner box is
+# unreachable), and this runs on a GitHub-hosted runner OUTSIDE Hetzner +
+# Cloudflare, so it catches a full origin outage the way a real user would,
+# the exact failure we hit when nbg1's network leaf faulted.
+#
+# On a confirmed failure it opens a GitHub issue (which emails repo watchers)
+# and, if a webhook is configured, pings it; the issue auto-closes on recovery.
+#
+# Caveats: GitHub's scheduled runner can be delayed several minutes under load
+# and is itself unavailable during a GitHub incident, so for tight / phone
+# alerting pair this with a hosted monitor (UptimeRobot, Better Stack). Set an
+# optional repo secret UPTIME_WEBHOOK_URL (a Slack- or Discord-compatible
+# incoming webhook) to also get a chat / phone ping.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # every 5 minutes (GitHub's minimum)
+  workflow_dispatch: {}
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      URL: https://taqreer.ai/api/status
+      LABEL: uptime-down
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      WEBHOOK: ${{ secrets.UPTIME_WEBHOOK_URL }}
+    steps:
+      - name: Probe the endpoint (3 attempts before declaring down)
+        id: probe
+        run: |
+          code=000
+          for i in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$URL" || echo 000)
+            echo "attempt $i -> $code"
+            [ "$code" = "200" ] && break
+            [ "$i" -lt 3 ] && sleep 15
+          done
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "200" ]; then
+            echo "status=up" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=down" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure incident label exists
+        if: steps.probe.outputs.status == 'down'
+        run: gh label create "$LABEL" --color B60205 --description "Open while the uptime check is failing" --force --repo "$GITHUB_REPOSITORY" || true
+
+      - name: Open incident + ping (on failure, de-duplicated)
+        if: steps.probe.outputs.status == 'down'
+        env:
+          CODE: ${{ steps.probe.outputs.code }}
+        run: |
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "$LABEL" --json number --jq '.[0].number')
+          ts=$(date -u +"%Y-%m-%d %H:%M UTC")
+          if [ -n "$existing" ]; then
+            echo "Incident issue #$existing already open; not duplicating."
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "🔴 taqreer.ai is DOWN" \
+            --label "$LABEL" \
+            --body "Automated uptime check failed at $ts. Last HTTP code from \`$URL\`: **$CODE** (200 expected). This issue auto-closes when the site recovers."
+          if [ -n "$WEBHOOK" ]; then
+            msg="🔴 taqreer.ai is DOWN ($ts) — /api/status returned $CODE"
+            curl -sS -X POST -H "Content-Type: application/json" \
+              -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$WEBHOOK" || true
+          fi
+
+      - name: Close incident on recovery
+        if: steps.probe.outputs.status == 'up'
+        run: |
+          ts=$(date -u +"%Y-%m-%d %H:%M UTC")
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "$LABEL" --json number --jq '.[].number'); do
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "✅ Recovered at $ts — \`$URL\` returned 200. Auto-closing."
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY"
+            if [ -n "$WEBHOOK" ]; then
+              msg="✅ taqreer.ai recovered ($ts)"
+              curl -sS -X POST -H "Content-Type: application/json" \
+                -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$WEBHOOK" || true
+            fi
+          done
