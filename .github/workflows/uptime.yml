@@ -6,14 +6,17 @@ name: Uptime monitor
 # Cloudflare, so it catches a full origin outage the way a real user would,
 # the exact failure we hit when nbg1's network leaf faulted.
 #
-# On a confirmed failure it opens a GitHub issue (which emails repo watchers)
-# and, if a webhook is configured, pings it; the issue auto-closes on recovery.
+# On a confirmed failure it opens a (de-duplicated) GitHub issue AND emails
+# dev@taqreer.ai via Resend; the issue auto-closes and a recovery email is sent
+# when the site comes back. Exactly one down email + one recovery email per
+# incident (tied to the issue open/close), never every 5 minutes.
 #
-# Caveats: GitHub's scheduled runner can be delayed several minutes under load
-# and is itself unavailable during a GitHub incident, so for tight / phone
-# alerting pair this with a hosted monitor (UptimeRobot, Better Stack). Set an
-# optional repo secret UPTIME_WEBHOOK_URL (a Slack- or Discord-compatible
-# incoming webhook) to also get a chat / phone ping.
+# Requires repo secret RESEND_API_KEY (same key the app uses; from address must
+# be on the verified taqreer.ai domain).
+#
+# Caveat: GitHub's scheduled runner can be delayed several minutes under load and
+# is itself unavailable during a GitHub incident, so for tight / phone alerting
+# pair this with a hosted monitor (UptimeRobot, Better Stack).
 
 on:
   schedule:
@@ -34,7 +37,11 @@ jobs:
       URL: https://taqreer.ai/api/status
       LABEL: uptime-down
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      WEBHOOK: ${{ secrets.UPTIME_WEBHOOK_URL }}
+      # Email alerts via Resend (same provider the app uses). RESEND_API_KEY is
+      # a repo secret; the from address must be on the verified taqreer.ai domain.
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      ALERT_FROM: "taqreer.ai uptime <share@taqreer.ai>"
+      ALERT_TO: dev@taqreer.ai
     steps:
       - name: Probe the endpoint (3 attempts before declaring down)
         id: probe
@@ -72,10 +79,14 @@ jobs:
             --title "🔴 taqreer.ai is DOWN" \
             --label "$LABEL" \
             --body "Automated uptime check failed at $ts. Last HTTP code from \`$URL\`: **$CODE** (200 expected). This issue auto-closes when the site recovers."
-          if [ -n "$WEBHOOK" ]; then
-            msg="🔴 taqreer.ai is DOWN ($ts) — /api/status returned $CODE"
-            curl -sS -X POST -H "Content-Type: application/json" \
-              -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$WEBHOOK" || true
+          if [ -n "$RESEND_API_KEY" ]; then
+            jq -n --arg from "$ALERT_FROM" --arg to "$ALERT_TO" \
+              --arg subject "🔴 taqreer.ai is DOWN" \
+              --arg text "Uptime check failed at $ts. $URL returned $CODE (200 expected). Checked externally from GitHub Actions; a GitHub issue was opened and auto-closes on recovery." \
+              '{from:$from,to:[$to],subject:$subject,text:$text}' \
+              | curl -sS -X POST https://api.resend.com/emails \
+                  -H "Authorization: Bearer $RESEND_API_KEY" \
+                  -H "Content-Type: application/json" -d @- >/dev/null || true
           fi
 
       - name: Close incident on recovery
@@ -85,9 +96,13 @@ jobs:
           for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "$LABEL" --json number --jq '.[].number'); do
             gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "✅ Recovered at $ts — \`$URL\` returned 200. Auto-closing."
             gh issue close "$n" --repo "$GITHUB_REPOSITORY"
-            if [ -n "$WEBHOOK" ]; then
-              msg="✅ taqreer.ai recovered ($ts)"
-              curl -sS -X POST -H "Content-Type: application/json" \
-                -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$WEBHOOK" || true
+            if [ -n "$RESEND_API_KEY" ]; then
+              jq -n --arg from "$ALERT_FROM" --arg to "$ALERT_TO" \
+                --arg subject "✅ taqreer.ai recovered" \
+                --arg text "$URL is back to 200 as of $ts. The incident issue was auto-closed." \
+                '{from:$from,to:[$to],subject:$subject,text:$text}' \
+                | curl -sS -X POST https://api.resend.com/emails \
+                    -H "Authorization: Bearer $RESEND_API_KEY" \
+                    -H "Content-Type: application/json" -d @- >/dev/null || true
             fi
           done
