@@ -648,6 +648,17 @@ export function DeckView({
   // HeroCommentOverlay (`onAiBoundsChange`), cleared by the toolbar scope
   // chip's ✕, on submit, on slide change, and when leaving AI mode.
   const [pendingAiBounds, setPendingAiBounds] = useState<CommentBounds | null>(null);
+  // §17 discovery cue — a finished region-draw should draw the eye to the
+  // bottom bar (that's where the instruction gets typed). Each valid drag
+  // release bumps this counter; PreviewActionBar plays a dock-style bounce
+  // whenever it changes. Kept separate from `pendingAiBounds` so a redraw
+  // (bounds non-null → non-null) still re-triggers the notice.
+  const [aiRegionNudge, setAiRegionNudge] = useState(0);
+  const handleAiBoundsChange = useCallback((b: CommentBounds | null) => {
+    setPendingAiBounds(b);
+    // Only a real (kept) region nudges — a too-small drag reports null.
+    if (b) setAiRegionNudge((n) => n + 1);
+  }, []);
   // Slide-nav tab (§16) — Slides (the thumbnail grid) vs Comments (the embedded
   // CommentsPanel) for REVIEWING comments outside comment mode. In comment mode
   // BOTH side panels hide (the canvas is the comment surface), so there's no
@@ -3980,7 +3991,7 @@ export function DeckView({
       onRequestCommentMode={canComment ? () => setCommentMode(true) : undefined}
       forAi={studioMode === "ai"}
       pendingAiBounds={pendingAiBounds}
-      onAiBoundsChange={setPendingAiBounds}
+      onAiBoundsChange={handleAiBoundsChange}
     />
   );
 
@@ -4224,6 +4235,9 @@ export function DeckView({
                   // collects + submits the instruction. `hasAiRegion` flips the
                   // input placeholder once a region is drawn.
                   hasAiRegion={pendingAiBounds != null}
+                  // Bumps on each valid region-draw release → the bar bounces
+                  // to point the user at the instruction input.
+                  aiRegionNudge={aiRegionNudge}
                   onAiSubmit={handleAiSubmit}
                   // Locked focused slide → PreviewActionBar disables
                   // the Comment button (only the toggle-out path

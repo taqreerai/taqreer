@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
@@ -257,6 +257,7 @@ export function PreviewActionBar({
   onToggleLock,
   onRegenSlide,
   hasAiRegion,
+  aiRegionNudge,
   onAiSubmit,
   historyOpen,
   applying,
@@ -323,6 +324,10 @@ export function PreviewActionBar({
   // (a region is drawn) only flips the placeholder copy from "select a region"
   // to "write your edits".
   hasAiRegion?: boolean;
+  // Increments on each completed region-draw (mouse release). A change plays a
+  // one-shot dock-style bounce on the pill so the user notices the bar and
+  // knows to type the instruction here. Ignore the value; only changes matter.
+  aiRegionNudge?: number;
   onAiSubmit?: (text: string) => Promise<void> | void;
   historyOpen?: boolean;
   // Partial regen in flight. Locks the toolbar buttons so the user
@@ -351,6 +356,28 @@ export function PreviewActionBar({
   const dict = useDict();
   const { dir, locale } = useLocale();
   const [regen, setRegen] = useState<ButtonState>({ status: "idle" });
+  // §17 discovery bounce — when a region-draw finishes (aiRegionNudge changes),
+  // play a one-shot dock-style bounce on the pill so the eye lands on the bar
+  // and the user knows to type the edit here. Imperative controls (not a
+  // declarative `animate`) so the same keyframe replays on every fresh draw.
+  const bounceControls = useAnimationControls();
+  const reduceMotion = useReducedMotion();
+  const lastNudge = useRef(aiRegionNudge ?? 0);
+  useEffect(() => {
+    const n = aiRegionNudge ?? 0;
+    if (n === lastNudge.current) return; // mount / unrelated re-render
+    lastNudge.current = n;
+    if (reduceMotion) return;
+    // Decaying up-bounce (mac dock launch): a firm hop that settles in ~0.8s.
+    void bounceControls.start({
+      y: [0, -14, 0, -7, 0, -3, 0],
+      transition: {
+        duration: 0.8,
+        times: [0, 0.16, 0.36, 0.52, 0.68, 0.84, 1],
+        ease: "easeOut",
+      },
+    });
+  }, [aiRegionNudge, reduceMotion, bounceControls]);
   // Export + Share moved to the StudioHeader (command-bar redesign §16) —
   // useExportActions + the ShareDialog live up there now, not in this bar.
   // Edit⇄AI mode-content resize: the two mode contents are absolutely stacked
@@ -506,14 +533,18 @@ export function PreviewActionBar({
           separators. Match the visual recipe in SlideNavSidebar's
           header / footer borders so the toolbar reads as part of
           the same chrome family. */}
-      <div
+      <motion.div
         // Pill shape — `rounded-full` on a flex row of square (36 × 36) circle
         // children → a stadium silhouette. The pill is auto-width, so it follows
         // the mode content's animated width (below) and resizes smoothly without
         // any layout-projection (framer `layout` doesn't animate reliably here).
         // dir=rtl so the Edit⇄AI toggle leads on the RIGHT (RTL leading edge)
         // and the rest of the cluster flows leftward from it.
+        // `animate={bounceControls}` drives the §17 region-draw notice bounce
+        // (y only) — idle until the first draw, so it never touches the resting
+        // layout or the child width-spring.
         dir={dir}
+        animate={bounceControls}
         className={`surface-card flex items-center gap-1 rounded-full p-1.5 ${
           horizontal ? "flex-row" : "flex-col"
         }`}
@@ -590,7 +621,12 @@ export function PreviewActionBar({
                       (user direction — don't over-explain). */}
                   <input
                     type="text"
-                    dir="auto"
+                    // Empty input: dir=auto resolves LTR even under a dir=rtl
+                    // parent (it ignores the placeholder), so the Arabic
+                    // placeholder + caret left-align on /ar. Anchor the empty
+                    // state to the locale dir; once the user types, hand back
+                    // to auto so a typed EN instruction on /ar still flips LTR.
+                    dir={aiInput ? "auto" : dir}
                     value={aiInput}
                     onChange={(e) => setAiInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -788,7 +824,7 @@ export function PreviewActionBar({
             onClick={() => router.push(localizedHref("/dashboard", locale))}
           />
         </div>
-      </div>
+      </motion.div>
 
       {/* Status toast below the toolbar — error (red) or info (muted).
           The `success` variant was only set by the legacy save-template
