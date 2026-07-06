@@ -10,11 +10,15 @@
 // Clicking a tile opens the SAME TemplateLightbox modal as the dashboard
 // "قوالبي" widget. Its "use" CTA routes a logged-out visitor to /signup
 // and a signed-in user into the use-template flow (/use-template/[id]).
+//
+// `detailLinks` mode (the /presentation-templates hub): tiles with an
+// admin-assigned slug render as REAL anchors to the template's SEO detail
+// page (/presentation-templates/[slug]) — a crawlable path Google can follow —
+// instead of opening the lightbox. Slugless tiles keep the lightbox.
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
-import { useIsAuthed } from "@/hooks/useIsAuthed";
+import { useUseTemplate } from "@/hooks/useUseTemplate";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { TemplateLightbox } from "@/components/app/TemplateLightbox";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
@@ -39,50 +43,25 @@ function scatterDelay(index: number): number {
 
 export function LandingTemplatesGrid({
   templates,
+  detailLinks = false,
 }: {
   templates: LandingTemplate[];
+  // Hub mode: slugged tiles become anchors to their SEO detail page.
+  detailLinks?: boolean;
 }) {
   // Lightbox target. null = closed.
   const [preview, setPreview] = useState<LandingTemplate | null>(null);
   const { locale } = useLocale();
-  // Auth resolved client-side (useIsAuthed: cookie-presence check, no Supabase
-  // client) so the pages that render this stay static AND light.
-  const isAuthed = useIsAuthed();
-  // "Use template" busy gate — blocks double-clicks while the seed
-  // request is in flight (logged-in path only). Mirrors MyTemplates.
-  const [useBusy, setUseBusy] = useState(false);
-  const router = useRouter();
+  // Shared seed-then-navigate flow (hooks/useUseTemplate). On the landing,
+  // the 402 → /#pricing redirect is a same-document hash nav (no unmount),
+  // so close the lightbox when the gate fires.
+  const { busy: useBusy, startTemplateUse } = useUseTemplate({
+    onGated: () => setPreview(null),
+  });
 
   const handleUseTemplate = async () => {
-    if (!preview || useBusy) return;
-    // Logged-out → straight to the signup funnel (no seed work).
-    if (!isAuthed) {
-      router.push(localizedHref("/signup", locale));
-      return;
-    }
-    // Logged-in → mint the Mimic reference behind the CTA's busy
-    // spinner, then hard-navigate to the (now-cached) use flow. The seed logic
-    // (lib/mimic/template-seed) pulls zod (~280 KB), so it's dynamically
-    // imported here at click-time — it never ships in the static landing bundle.
-    setUseBusy(true);
-    const { prepareTemplateUse, redirectToPricingIfGated } = await import(
-      "@/lib/mimic/template-seed"
-    );
-    try {
-      await prepareTemplateUse("template", preview.id);
-      window.location.assign(`/use-template/${preview.id}`);
-    } catch (err) {
-      // 402 = premium template, user isn't on Pro → route to pricing.
-      // On the landing, /#pricing is a same-document hash nav (no
-      // unmount), so release the busy gate + close the lightbox.
-      if (redirectToPricingIfGated(err)) {
-        setUseBusy(false);
-        setPreview(null);
-        return;
-      }
-      console.warn("[LandingTemplatesGrid] use prep failed", err);
-      setUseBusy(false);
-    }
+    if (!preview) return;
+    await startTemplateUse(preview.id);
   };
 
   // No public templates → render nothing (the section collapses rather
@@ -107,6 +86,11 @@ export function LandingTemplatesGrid({
             <LandingTemplateTile
               template={tpl}
               onOpen={() => setPreview(tpl)}
+              href={
+                detailLinks && tpl.slug
+                  ? localizedHref(`/presentation-templates/${tpl.slug}`, locale)
+                  : undefined
+              }
             />
           </ScrollReveal>
         ))}
@@ -128,12 +112,16 @@ export function LandingTemplatesGrid({
 function LandingTemplateTile({
   template,
   onOpen,
+  href,
 }: {
   template: LandingTemplate;
   onOpen: () => void;
+  // When set, the tile is a real anchor to the template's detail page
+  // (crawlable). Otherwise it's a button that opens the lightbox.
+  href?: string;
 }) {
   const dict = useDict();
-  const rootRef = useRef<HTMLButtonElement | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
   const entryXRef = useRef<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -148,7 +136,7 @@ function LandingTemplateTile({
   // Scrub logic mirrors ProjectThumbnail.handleMouseMove: ignore bare
   // hover until the cursor moves past the activation threshold, then map
   // horizontal position to a slide index (RTL — rightmost pixel = slide 1).
-  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
     if (!isMultiSlide) return;
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
@@ -173,34 +161,51 @@ function LandingTemplateTile({
     entryXRef.current = null;
   };
 
+  // Shared tile body — identical inside the anchor (detail-link mode) and
+  // the lightbox button.
+  const tileBody = src ? (
+    <img
+      alt={dict.landing.templatesGrid.coverAlt}
+      src={src}
+      className={`h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.06] ${imgObjectClass}`}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+    />
+  ) : (
+    <span className="flex h-full w-full items-center justify-center">
+      <span className="material-symbols-outlined text-[28px] text-muted opacity-25">
+        image
+      </span>
+    </span>
+  );
+
   return (
     <div className="tq-thumbnail group relative aspect-video w-full overflow-hidden rounded-[14px]">
-      <button
-        ref={rootRef}
-        type="button"
-        onClick={onOpen}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        aria-label={dict.landing.templatesGrid.previewAria}
-        className="absolute inset-0 block cursor-zoom-in"
-      >
-        {src ? (
-          <img
-            alt={dict.landing.templatesGrid.coverAlt}
-            src={src}
-            className={`h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.06] ${imgObjectClass}`}
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-          />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center">
-            <span className="material-symbols-outlined text-[28px] text-muted opacity-25">
-              image
-            </span>
-          </span>
-        )}
-      </button>
+      {href ? (
+        <a
+          ref={rootRef as React.Ref<HTMLAnchorElement>}
+          href={href}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          aria-label={dict.landing.templatesGrid.previewAria}
+          className="absolute inset-0 block cursor-pointer"
+        >
+          {tileBody}
+        </a>
+      ) : (
+        <button
+          ref={rootRef as React.Ref<HTMLButtonElement>}
+          type="button"
+          onClick={onOpen}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          aria-label={dict.landing.templatesGrid.previewAria}
+          className="absolute inset-0 block cursor-zoom-in"
+        >
+          {tileBody}
+        </button>
+      )}
 
       {/* Scrub counter — bottom-end, only while actively scrubbing a
           multi-slide template. Matches the dashboard tile's chrome. */}

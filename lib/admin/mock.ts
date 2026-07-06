@@ -107,6 +107,14 @@ export const MOCK_USERS: AdminUser[] = [
 
 // ─── Templates ────────────────────────────────────────────────────────────
 
+export type AdminTemplateSeo = {
+  slug: string | null;
+  nameAr: string | null;
+  nameEn: string | null;
+  descriptionAr: string | null;
+  descriptionEn: string | null;
+};
+
 export type AdminTemplate = {
   id: string;
   name: string;
@@ -115,6 +123,9 @@ export type AdminTemplate = {
   premium: boolean;
   featured: boolean;
   order: number | null; // manual landing order when featured (0-based)
+  // Public detail-page metadata (/presentation-templates/[slug]); optional so
+  // the mock fixtures don't need it. null slug = no detail page.
+  seo?: AdminTemplateSeo;
 };
 
 export const MOCK_TEMPLATES: AdminTemplate[] = [

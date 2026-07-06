@@ -38,6 +38,11 @@ export default async function AdminTemplatesPage() {
           language: true,
           isPremium: true,
           featuredOrder: true,
+          slug: true,
+          nameAr: true,
+          nameEn: true,
+          descriptionAr: true,
+          descriptionEn: true,
         },
         // Featured first (by curated order), then the rest by recency.
         orderBy: [
@@ -55,13 +60,20 @@ export default async function AdminTemplatesPage() {
       (r.thumbnailUrls ?? []).find((u) => u && !u.includes("/showcase-")) ?? null;
     return {
       id: r.id,
-      // Templates have no name; caption with format + language (middot ok).
-      name: `${fmt} · ${r.language.toUpperCase()}`,
+      // Caption: the curated EN name when set, else format + language.
+      name: r.nameEn ?? r.nameAr ?? `${fmt} · ${r.language.toUpperCase()}`,
       thumbnail: cover,
       format: fmt,
       premium: r.isPremium,
       featured: r.featuredOrder !== null,
       order: r.featuredOrder,
+      seo: {
+        slug: r.slug,
+        nameAr: r.nameAr,
+        nameEn: r.nameEn,
+        descriptionAr: r.descriptionAr,
+        descriptionEn: r.descriptionEn,
+      },
     };
   });
 

@@ -147,11 +147,14 @@ export function breadcrumbSchema(items: { name: string; url: string }[]) {
 }
 
 // CollectionPage: marks a page that presents a curated set (e.g. /templates).
+// `items` (optional) itemizes the set as an ItemList of the members' detail
+// pages, tying the hub to the per-template pages in the structured-data graph.
 export function collectionPageSchema(opts: {
   name: string;
   description: string;
   path: string;
   locale: Locale;
+  items?: { name: string; url: string }[];
 }) {
   return {
     "@context": "https://schema.org",
@@ -161,5 +164,48 @@ export function collectionPageSchema(opts: {
     url: `${SITE_URL}${opts.path}`,
     inLanguage: opts.locale === "ar" ? "ar" : "en",
     isPartOf: { "@type": "WebSite", name: "taqreer.ai", url: SITE_URL },
+    ...(opts.items && opts.items.length > 0
+      ? {
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: opts.items.map((it, i) => ({
+              "@type": "ListItem",
+              position: i + 1,
+              name: it.name,
+              url: it.url.startsWith("http") ? it.url : `${SITE_URL}${it.url}`,
+            })),
+          },
+        }
+      : {}),
+  };
+}
+
+// CreativeWork: a single template's detail page (/presentation-templates/[slug]).
+// Deliberately CreativeWork rather than Product (no offers/reviews to back a
+// Product) or ImageObject (the page is the work, not just its cover).
+export function creativeWorkSchema(opts: {
+  name: string;
+  description: string;
+  path: string;
+  image: string;
+  locale: Locale;
+  // BCP-47 of the template CONTENT (a template can be Arabic on the /en page).
+  inLanguage: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: opts.name,
+    description: opts.description,
+    url: `${SITE_URL}${opts.path}`,
+    image: opts.image.startsWith("http")
+      ? opts.image
+      : `${SITE_URL}${opts.image}`,
+    inLanguage: opts.inLanguage,
+    isPartOf: {
+      "@type": "CollectionPage",
+      url: `${SITE_URL}/${opts.locale}/presentation-templates`,
+    },
+    publisher: { "@type": "Organization", name: "taqreer.ai", url: SITE_URL },
   };
 }

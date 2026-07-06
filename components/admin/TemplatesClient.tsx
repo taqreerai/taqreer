@@ -7,7 +7,7 @@
 // local update and a snapshot-revert on failure. Dark-only, LTR (admin layout).
 
 import { useState } from "react";
-import type { AdminTemplate } from "@/lib/admin/mock";
+import type { AdminTemplate, AdminTemplateSeo } from "@/lib/admin/mock";
 
 const ACCENT = "var(--tq-purple)";
 const MUTED = "var(--tq-text-muted)";
@@ -16,6 +16,18 @@ const PRIMARY = "var(--tq-text-primary)";
 // Shown when an optimistic curation save fails and the card reverts.
 const SAVE_ERROR =
   "Couldn't save that change - it was reverted. Check your connection and try again.";
+
+// Mirrors the server's slug rule (app/api/admin/templates/[id]): latinized
+// kebab-case. Checked client-side for an instant message; the API re-validates.
+const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+const EMPTY_SEO: AdminTemplateSeo = {
+  slug: null,
+  nameAr: null,
+  nameEn: null,
+  descriptionAr: null,
+  descriptionEn: null,
+};
 
 function featuredSorted(list: AdminTemplate[]): AdminTemplate[] {
   return list
@@ -94,6 +106,133 @@ function IconButton({
   );
 }
 
+// Inline per-card editor for the public detail-page metadata
+// (/presentation-templates/[slug]). Draft-local; persists via the same PATCH
+// route as the toggles ({ seo: {...} }).
+function SeoEditor({
+  seo,
+  busy,
+  error,
+  onSave,
+  onCancel,
+}: {
+  seo: AdminTemplateSeo;
+  busy: boolean;
+  error: string | null;
+  onSave: (draft: AdminTemplateSeo) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState<AdminTemplateSeo>(seo);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const set = (key: keyof AdminTemplateSeo, value: string) =>
+    setDraft((d) => ({ ...d, [key]: value.length > 0 ? value : null }));
+
+  const inputStyle: React.CSSProperties = {
+    background: "var(--tq-overlay-soft)",
+    border: "1px solid var(--tq-border-hairline)",
+    color: PRIMARY,
+  };
+
+  const handleSave = () => {
+    const slug = draft.slug?.trim() ?? null;
+    if (slug && !SLUG_RE.test(slug)) {
+      setLocalError(
+        "Slug must be lowercase latin kebab-case, e.g. business-pitch",
+      );
+      return;
+    }
+    setLocalError(null);
+    onSave({ ...draft, slug });
+  };
+
+  return (
+    <div
+      className="space-y-2 rounded-lg p-3"
+      style={{ background: "var(--tq-overlay-soft)" }}
+    >
+      <label className="block text-xs" style={{ color: MUTED }}>
+        Slug (public URL; empty = no page)
+        <input
+          dir="ltr"
+          value={draft.slug ?? ""}
+          onChange={(e) => set("slug", e.target.value)}
+          placeholder="business-pitch"
+          className="mt-1 w-full rounded-md px-2 py-1.5 font-mono text-xs"
+          style={inputStyle}
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block text-xs" style={{ color: MUTED }}>
+          Name (AR)
+          <input
+            dir="rtl"
+            value={draft.nameAr ?? ""}
+            onChange={(e) => set("nameAr", e.target.value)}
+            className="mt-1 w-full rounded-md px-2 py-1.5 text-xs"
+            style={inputStyle}
+          />
+        </label>
+        <label className="block text-xs" style={{ color: MUTED }}>
+          Name (EN)
+          <input
+            dir="ltr"
+            value={draft.nameEn ?? ""}
+            onChange={(e) => set("nameEn", e.target.value)}
+            className="mt-1 w-full rounded-md px-2 py-1.5 text-xs"
+            style={inputStyle}
+          />
+        </label>
+      </div>
+      <label className="block text-xs" style={{ color: MUTED }}>
+        Description (AR)
+        <textarea
+          dir="rtl"
+          rows={2}
+          value={draft.descriptionAr ?? ""}
+          onChange={(e) => set("descriptionAr", e.target.value)}
+          className="mt-1 w-full resize-none rounded-md px-2 py-1.5 text-xs"
+          style={inputStyle}
+        />
+      </label>
+      <label className="block text-xs" style={{ color: MUTED }}>
+        Description (EN)
+        <textarea
+          dir="ltr"
+          rows={2}
+          value={draft.descriptionEn ?? ""}
+          onChange={(e) => set("descriptionEn", e.target.value)}
+          className="mt-1 w-full resize-none rounded-md px-2 py-1.5 text-xs"
+          style={inputStyle}
+        />
+      </label>
+      {localError || error ? (
+        <p className="text-xs" style={{ color: "var(--tq-status-down-text)" }}>
+          {localError ?? error}
+        </p>
+      ) : null}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-full px-3 py-1 text-xs font-medium"
+          style={{ color: MUTED }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy}
+          className="rounded-full px-3 py-1 text-xs font-medium disabled:opacity-50"
+          style={{ background: ACCENT, color: "#fff" }}
+        >
+          {busy ? "Saving..." : "Save SEO"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function TemplatesClient({
   initialTemplates,
 }: {
@@ -103,6 +242,39 @@ export function TemplatesClient({
   // Surfaced when an optimistic save fails and the card reverts, so a failed
   // save is visible instead of silently snapping back. Cleared on the next try.
   const [error, setError] = useState<string | null>(null);
+  // Per-card SEO editor state (one open at a time; not optimistic — the form
+  // stays open with an error on failure instead of reverting).
+  const [seoOpenId, setSeoOpenId] = useState<string | null>(null);
+  const [seoBusy, setSeoBusy] = useState(false);
+  const [seoError, setSeoError] = useState<string | null>(null);
+
+  const saveSeo = async (id: string, draft: AdminTemplateSeo) => {
+    setSeoBusy(true);
+    setSeoError(null);
+    try {
+      const res = await fetch(`/api/admin/templates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seo: draft }),
+      });
+      if (res.status === 409) {
+        setSeoError("That slug is already used by another template.");
+        return;
+      }
+      if (!res.ok) {
+        setSeoError(SAVE_ERROR);
+        return;
+      }
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, seo: draft } : t)),
+      );
+      setSeoOpenId(null);
+    } catch {
+      setSeoError(SAVE_ERROR);
+    } finally {
+      setSeoBusy(false);
+    }
+  };
 
   const featured = featuredSorted(templates);
   const pool = templates.filter((t) => !t.featured);
@@ -268,6 +440,14 @@ export function TemplatesClient({
                   <PremiumToggle on={t.premium} onClick={() => togglePremium(t.id)} />
                   <div className="flex items-center gap-1">
                     <IconButton
+                      icon={t.seo?.slug ? "link" : "add_link"}
+                      label={t.seo?.slug ? `SEO page: /${t.seo.slug}` : "Add SEO page"}
+                      onClick={() => {
+                        setSeoError(null);
+                        setSeoOpenId(seoOpenId === t.id ? null : t.id);
+                      }}
+                    />
+                    <IconButton
                       icon="keyboard_arrow_up"
                       label="Move up"
                       onClick={() => move(t.id, -1)}
@@ -286,6 +466,15 @@ export function TemplatesClient({
                     />
                   </div>
                 </div>
+                {seoOpenId === t.id ? (
+                  <SeoEditor
+                    seo={t.seo ?? EMPTY_SEO}
+                    busy={seoBusy}
+                    error={seoError}
+                    onSave={(draft) => saveSeo(t.id, draft)}
+                    onCancel={() => setSeoOpenId(null)}
+                  />
+                ) : null}
               </div>
             ))}
           </div>
@@ -322,18 +511,37 @@ export function TemplatesClient({
                 </div>
                 <div className="flex items-center justify-between gap-1">
                   <PremiumToggle on={t.premium} onClick={() => togglePremium(t.id)} />
-                  <button
-                    type="button"
-                    onClick={() => toggleFeatured(t.id)}
-                    className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-                    style={{ color: ACCENT, background: "var(--tq-overlay-soft)" }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                      star
-                    </span>
-                    Feature
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <IconButton
+                      icon={t.seo?.slug ? "link" : "add_link"}
+                      label={t.seo?.slug ? `SEO page: /${t.seo.slug}` : "Add SEO page"}
+                      onClick={() => {
+                        setSeoError(null);
+                        setSeoOpenId(seoOpenId === t.id ? null : t.id);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleFeatured(t.id)}
+                      className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+                      style={{ color: ACCENT, background: "var(--tq-overlay-soft)" }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                        star
+                      </span>
+                      Feature
+                    </button>
+                  </div>
                 </div>
+                {seoOpenId === t.id ? (
+                  <SeoEditor
+                    seo={t.seo ?? EMPTY_SEO}
+                    busy={seoBusy}
+                    error={seoError}
+                    onSave={(draft) => saveSeo(t.id, draft)}
+                    onCancel={() => setSeoOpenId(null)}
+                  />
+                ) : null}
               </div>
             ))}
           </div>

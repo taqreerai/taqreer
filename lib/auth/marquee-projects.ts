@@ -56,8 +56,9 @@ const CDN_TEMPLATE_PATHS = [
 ];
 
 // Bust every cached public template surface after an admin curation write
-// (feature / unfeature / reorder / premium) so the landing marquee + grid +
-// welcome-email strip reflect the change.
+// (feature / unfeature / reorder / premium / slug + SEO copy edits) so the
+// landing marquee + grid + welcome-email strip + per-template detail pages
+// reflect the change.
 export async function revalidateTemplateSurfaces(): Promise<void> {
   // IMMEDIATE expiry via { expire: 0 }, deliberately NOT the "max"
   // stale-while-revalidate profile. We purge the Cloudflare edge cache right
@@ -68,11 +69,34 @@ export async function revalidateTemplateSurfaces(): Promise<void> {
   revalidateTag("auth-marquee-columns", { expire: 0 });
   revalidateTag("landing-templates", { expire: 0 });
   revalidateTag("welcome-templates", { expire: 0 });
+  revalidateTag("template-detail", { expire: 0 });
+
+  // Purge the per-template detail pages too. Slugs are read fresh (not via the
+  // cache we just revalidated) and fail-soft: a DB hiccup degrades to purging
+  // only the fixed surfaces. The sitemap carries the detail URLs, so it gets
+  // purged alongside. purgeCloudflarePaths batches past the CF 30-file cap.
+  let detailPaths: string[] = [];
+  try {
+    const rows = await prisma.template.findMany({
+      where: { isPublic: true, slug: { not: null } },
+      select: { slug: true },
+    });
+    detailPaths = rows.flatMap((r) => [
+      `/ar/presentation-templates/${r.slug}`,
+      `/en/presentation-templates/${r.slug}`,
+    ]);
+  } catch (err) {
+    console.error("[templates] slug purge-list query failed", err);
+  }
 
   // Next's revalidation only busts the SERVER cache; the Cloudflare edge keeps
   // serving its copy until s-maxage. Propagate the purge to the CDN (the
   // pattern the Next docs recommend for CDN-fronted static / ISR pages).
-  await purgeCloudflarePaths(CDN_TEMPLATE_PATHS);
+  await purgeCloudflarePaths([
+    ...CDN_TEMPLATE_PATHS,
+    "/sitemap.xml",
+    ...detailPaths,
+  ]);
 }
 
 export type MarqueeThumbnail = {
@@ -192,6 +216,12 @@ export type LandingTemplate = {
   // Per-slide WebP URLs in deck order (cover first), showcase slides
   // excluded. The hover-scrub walks this array.
   slides: string[];
+  // SEO detail-page fields (admin-assigned; null until curated). Present on
+  // the /presentation-templates hub list so tiles can deep-link; the landing
+  // grid loader omits them (lightbox-only surface).
+  slug?: string | null;
+  nameAr?: string | null;
+  nameEn?: string | null;
 };
 
 // 2 rows × 4 columns on the landing templates section.
@@ -319,12 +349,23 @@ export const getTemplatesPageList = unstable_cache(
   async (): Promise<LandingTemplate[]> => {
     try {
       const rows = await prisma.$queryRaw<
-        { id: string; format: string; isPremium: boolean; thumbnails: string[] }[]
+        {
+          id: string;
+          format: string;
+          isPremium: boolean;
+          thumbnails: string[];
+          slug: string | null;
+          nameAr: string | null;
+          nameEn: string | null;
+        }[]
       >`
         SELECT t.id,
                CASE WHEN (t.brand->>'format') = '9:16' THEN '9:16' ELSE '16:9' END AS format,
                t."isPremium" AS "isPremium",
-               t."thumbnailUrls" AS thumbnails
+               t."thumbnailUrls" AS thumbnails,
+               t.slug AS slug,
+               t."nameAr" AS "nameAr",
+               t."nameEn" AS "nameEn"
         FROM "Template" t
         INNER JOIN "User" u ON t."ownerId" = u.id
         LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
@@ -342,6 +383,9 @@ export const getTemplatesPageList = unstable_cache(
           id: row.id,
           format: row.format,
           isPremium: row.isPremium,
+          slug: row.slug,
+          nameAr: row.nameAr,
+          nameEn: row.nameEn,
           slides: (row.thumbnails ?? [])
             .filter((url) => url && !url.includes("/showcase-"))
             .map(edgeCoverUrl),
@@ -354,4 +398,127 @@ export const getTemplatesPageList = unstable_cache(
   },
   ["templates-page-list"],
   { revalidate: 300, tags: ["landing-templates", "templates-page-list"] },
+);
+
+// ─── /presentation-templates/[slug] detail pages ──────────────────────
+//
+// SEO detail page data: a single public curator template addressed by its
+// admin-assigned slug. Same curator-gating + deleted-source exclusion +
+// showcase-slide stripping as the hub list. Cached under "template-detail"
+// (busted by revalidateTemplateSurfaces on every curation write).
+
+export type TemplateDetail = {
+  id: string;
+  slug: string;
+  format: string;
+  isPremium: boolean;
+  language: string;
+  slideCount: number;
+  nameAr: string | null;
+  nameEn: string | null;
+  descriptionAr: string | null;
+  descriptionEn: string | null;
+  // Per-slide WebP URLs (cover first), showcase slides stripped, edge-proxied.
+  slides: string[];
+  updatedAt: Date;
+};
+
+export const getPublicTemplateBySlug = unstable_cache(
+  async (slug: string): Promise<TemplateDetail | null> => {
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          id: string;
+          slug: string;
+          format: string;
+          isPremium: boolean;
+          language: string;
+          slideCount: number;
+          nameAr: string | null;
+          nameEn: string | null;
+          descriptionAr: string | null;
+          descriptionEn: string | null;
+          thumbnails: string[];
+          updatedAt: Date;
+        }[]
+      >`
+        SELECT t.id,
+               t.slug AS slug,
+               CASE WHEN (t.brand->>'format') = '9:16' THEN '9:16' ELSE '16:9' END AS format,
+               t."isPremium" AS "isPremium",
+               t.language AS language,
+               t."slideCount" AS "slideCount",
+               t."nameAr" AS "nameAr",
+               t."nameEn" AS "nameEn",
+               t."descriptionAr" AS "descriptionAr",
+               t."descriptionEn" AS "descriptionEn",
+               t."thumbnailUrls" AS thumbnails,
+               t."updatedAt" AS "updatedAt"
+        FROM "Template" t
+        INNER JOIN "User" u ON t."ownerId" = u.id
+        LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
+        WHERE u.email = ${MARQUEE_OWNER_EMAIL}
+          AND t."isPublic" = true
+          AND t.slug = ${slug}
+          AND t."thumbnailUrls" IS NOT NULL
+          AND array_length(t."thumbnailUrls", 1) > 0
+          AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
+        LIMIT 1
+      `;
+      const row = rows[0];
+      if (!row) return null;
+      const slides = (row.thumbnails ?? [])
+        .filter((url) => url && !url.includes("/showcase-"))
+        .map(edgeCoverUrl);
+      if (slides.length === 0) return null;
+      return {
+        id: row.id,
+        slug: row.slug,
+        format: row.format,
+        isPremium: row.isPremium,
+        language: row.language,
+        slideCount: row.slideCount,
+        nameAr: row.nameAr,
+        nameEn: row.nameEn,
+        descriptionAr: row.descriptionAr,
+        descriptionEn: row.descriptionEn,
+        slides,
+        updatedAt: row.updatedAt,
+      };
+    } catch (err) {
+      // DB hiccup → treat as not-found (the page 404s rather than 500s).
+      console.error("[template-detail] query failed", err);
+      return null;
+    }
+  },
+  ["template-detail"],
+  { revalidate: 300, tags: ["template-detail"] },
+);
+
+// Public slugs + updatedAt for the sitemap and generateStaticParams. Fail-soft
+// to [] so a DB hiccup degrades the sitemap to static routes instead of 500ing.
+export const getPublicTemplateSlugs = unstable_cache(
+  async (): Promise<{ slug: string; updatedAt: Date }[]> => {
+    try {
+      const rows = await prisma.$queryRaw<{ slug: string; updatedAt: Date }[]>`
+        SELECT t.slug AS slug, t."updatedAt" AS "updatedAt"
+        FROM "Template" t
+        INNER JOIN "User" u ON t."ownerId" = u.id
+        LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
+        WHERE u.email = ${MARQUEE_OWNER_EMAIL}
+          AND t."isPublic" = true
+          AND t.slug IS NOT NULL
+          AND t."thumbnailUrls" IS NOT NULL
+          AND array_length(t."thumbnailUrls", 1) > 0
+          AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
+        ORDER BY (t."featuredOrder" IS NULL) ASC, t."featuredOrder" ASC, t."publishedAt" DESC
+      `;
+      return rows;
+    } catch (err) {
+      console.error("[template-detail] slug list query failed", err);
+      return [];
+    }
+  },
+  ["template-detail-slugs"],
+  { revalidate: 300, tags: ["template-detail"] },
 );

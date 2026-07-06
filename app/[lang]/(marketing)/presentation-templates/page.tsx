@@ -15,6 +15,7 @@ import { getTemplatesPageList } from "@/lib/auth/marquee-projects";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
+import { ExploreMoreSection } from "@/components/marketing/ExploreMoreSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import {
@@ -80,6 +81,19 @@ export default async function TemplatesPage(props: {
   ]);
   const t = dict.templates;
 
+  // Itemize the slugged templates in the CollectionPage graph — ties the hub
+  // to the per-template detail pages (name falls back across languages, then
+  // to the generic label).
+  const collectionItems = templates
+    .filter((tpl) => tpl.slug)
+    .map((tpl) => ({
+      name:
+        (locale === "ar"
+          ? tpl.nameAr ?? tpl.nameEn
+          : tpl.nameEn ?? tpl.nameAr) ?? t.detail.fallbackName,
+      url: `/${locale}/presentation-templates/${tpl.slug}`,
+    }));
+
   return (
     <div className="pb-8">
       <JsonLd
@@ -93,6 +107,7 @@ export default async function TemplatesPage(props: {
             description: t.meta.description,
             path: `/${locale}/presentation-templates`,
             locale,
+            items: collectionItems,
           }),
           faqPageSchema(t.faq),
         ]}
@@ -129,7 +144,7 @@ export default async function TemplatesPage(props: {
             <SectionHeader title={t.gallery.title} subtitle={t.gallery.subtitle} />
           </ScrollReveal>
           <ScrollReveal direction="up">
-            <LandingTemplatesGrid templates={templates} />
+            <LandingTemplatesGrid templates={templates} detailLinks />
           </ScrollReveal>
         </section>
       ) : null}
@@ -166,6 +181,9 @@ export default async function TemplatesPage(props: {
           <FaqAccordion items={t.faq} />
         </ScrollReveal>
       </section>
+
+      {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
+      <ExploreMoreSection locale={locale} current="templates" dict={dict} />
     </div>
   );
 }

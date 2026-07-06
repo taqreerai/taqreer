@@ -12,6 +12,7 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { BidiExportCompare } from "@/components/marketing/BidiExportCompare";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
+import { ExploreMoreSection } from "@/components/marketing/ExploreMoreSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
@@ -161,6 +162,9 @@ export default async function ArabicPresentationsPage(props: {
           <FaqAccordion items={t.faq} />
         </ScrollReveal>
       </section>
+
+      {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
+      <ExploreMoreSection locale={locale} current="arabicPresentations" dict={dict} />
     </div>
   );
 }

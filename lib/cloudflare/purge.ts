@@ -33,9 +33,14 @@ function publicOrigin(): string {
   }
 }
 
+// Cloudflare's purge-by-URL endpoint accepts at most 30 files per request;
+// larger lists must be split or the whole call 400s and purges nothing.
+const PURGE_BATCH_SIZE = 30;
+
 // Purge the given same-origin paths (e.g. "/ar", "/en/presentation-templates")
 // from the Cloudflare edge cache. Returns when done (or immediately when
-// unconfigured); never throws.
+// unconfigured); never throws. Lists longer than the API's 30-file cap are
+// purged in sequential batches.
 export async function purgeCloudflarePaths(paths: string[]): Promise<void> {
   if (!ZONE_ID || !PURGE_TOKEN) return; // unconfigured -> no-op (dev / pre-setup)
   if (paths.length === 0) return;
@@ -45,26 +50,29 @@ export async function purgeCloudflarePaths(paths: string[]): Promise<void> {
     (p) => origin + (p.startsWith("/") ? p : "/" + p),
   );
 
-  try {
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${PURGE_TOKEN}`,
-          "Content-Type": "application/json",
+  for (let i = 0; i < files.length; i += PURGE_BATCH_SIZE) {
+    const batch = files.slice(i, i + PURGE_BATCH_SIZE);
+    try {
+      const res = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${PURGE_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ files: batch }),
+          // A slow CDN must not hang the admin write that awaits this.
+          signal: AbortSignal.timeout(5000),
         },
-        body: JSON.stringify({ files }),
-        // A slow CDN must not hang the admin write that awaits this.
-        signal: AbortSignal.timeout(5000),
-      },
-    );
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      console.error(`[cf-purge] HTTP ${res.status}`, detail.slice(0, 300));
+      );
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        console.error(`[cf-purge] HTTP ${res.status}`, detail.slice(0, 300));
+      }
+    } catch (err) {
+      console.error("[cf-purge] request failed", err);
     }
-  } catch (err) {
-    console.error("[cf-purge] request failed", err);
   }
 }
 

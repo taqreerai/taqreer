@@ -109,7 +109,42 @@
       { "q": "Can I edit a template?", "a": "Completely. Change text, colors, images, slides, and their order in the editor, with autosave." },
       { "q": "Do the templates support Arabic?", "a": "Yes. Every template is Arabic-first with correct right-to-left direction and Arabic fonts." },
       { "q": "How do I use a template?", "a": "Pick a template, add your content and brand, let the AI redesign the deck, then export to PowerPoint." }
-    ]
+    ],
+    "detail": {
+      "fallbackName": "Presentation template",
+      "fallbackDescription": "A professionally designed presentation template from taqreer.ai, fully editable and exportable to PowerPoint.",
+      "useCta": "Use this template",
+      "useBusy": "Preparing...",
+      "browseAll": "Browse all templates",
+      "slidesTitle": "Inside this template",
+      "relatedTitle": "More templates",
+      "facts": {
+        "slides": "Slides",
+        "language": "Language",
+        "format": "Format",
+        "languageAr": "Arabic",
+        "languageEn": "English"
+      },
+      "howTitle": "How to use this template",
+      "howSteps": [
+        { "title": "Pick the template", "body": "Start from this design as the base for your deck." },
+        { "title": "Add your content and brand", "body": "Write your topic or upload a file, and pick your logo, colors, and fonts." },
+        { "title": "Edit and export", "body": "Fine-tune the slides in the editor, then export to PowerPoint or PDF." }
+      ]
+    }
+  },
+  "exploreMore": {
+    "title": "Explore more",
+    "subtitle": "Everything taqreer.ai does, one page each.",
+    "links": {
+      "aiPresentations": { "title": "AI presentations", "body": "Turn an idea or a file into a designed deck." },
+      "reportDesign": { "title": "Report design", "body": "Turn spreadsheets into designed reports with charts." },
+      "redesign": { "title": "Redesign a deck", "body": "Upload an existing presentation and let AI redesign it." },
+      "presentationStyle": { "title": "Match a style", "body": "Mimic the design style of a deck you like." },
+      "arabicPresentations": { "title": "Arabic presentations", "body": "Arabic-first design with true right-to-left support." },
+      "templates": { "title": "Templates", "body": "Ready-made, editable presentation templates." },
+      "pricing": { "title": "Pricing", "body": "Simple plans; start free." }
+    }
   },
   "pricing": {
     "meta": {

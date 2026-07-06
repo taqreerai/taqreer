@@ -10,6 +10,7 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { FlowPreview } from "@/components/marketing/FlowPreview";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
+import { ExploreMoreSection } from "@/components/marketing/ExploreMoreSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
@@ -139,6 +140,9 @@ export default async function RedesignPage(props: {
           <FaqAccordion items={t.faq} />
         </ScrollReveal>
       </section>
+
+      {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
+      <ExploreMoreSection locale={locale} current="redesign" dict={dict} />
     </div>
   );
 }

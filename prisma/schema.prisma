@@ -421,6 +421,15 @@ model Template {
   // featured (admin console > Templates). The public surfaces read
   // `featuredOrder IS NOT NULL ORDER BY featuredOrder` (lib/auth/marquee-projects).
   featuredOrder   Int?
+  // SEO detail page (marketing /presentation-templates/[slug]). All nullable:
+  // a template gets a public detail page ONLY when the curator assigns a slug
+  // in the admin console; slugless templates keep the lightbox-only behavior.
+  // Names/descriptions are per-locale data (not dictionary chrome copy).
+  slug            String?   @unique
+  nameAr          String?
+  nameEn          String?
+  descriptionAr   String?
+  descriptionEn   String?
   publishedAt     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
