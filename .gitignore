@@ -38,3 +38,7 @@ public/email-lab/
 
 # Generated social-media assets (local deliverables, not shipped)
 social/
+
+# Local working files (screenshots, scratch notes), never shipped
+scratchpad/
+supa-signin.png
