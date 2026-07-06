@@ -109,20 +109,23 @@ export function FlowPageSkeleton({
   fluid?: boolean;
 }) {
   return (
+    // Same outer wrapper as the real flow pages, so width/padding match.
     <div
-      className="mt-[6vh] flex w-full animate-pulse flex-col items-center gap-6 px-4"
+      className="page-container flex w-full animate-pulse justify-center"
       aria-hidden="true"
     >
-      <header className="flex flex-col items-center gap-3 text-center">
-        <SkeletonBar className="h-8 w-64 max-w-full rounded-lg" />
-        <SkeletonBar className="h-4 w-80 max-w-full" />
-      </header>
-      <div
-        className={`flex flex-wrap justify-center gap-4 ${fluid ? "w-full items-stretch" : ""}`}
-      >
-        {Array.from({ length: cards }, (_, i) => (
-          <FlowCardSkeleton key={i} fluid={fluid} />
-        ))}
+      <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+        <header className="flex flex-col items-center gap-3 text-center">
+          <SkeletonBar className="h-8 w-64 max-w-full rounded-lg" />
+          <SkeletonBar className="h-4 w-80 max-w-full" />
+        </header>
+        <div
+          className={`flex flex-wrap justify-center gap-4 ${fluid ? "w-full items-stretch" : ""}`}
+        >
+          {Array.from({ length: cards }, (_, i) => (
+            <FlowCardSkeleton key={i} fluid={fluid} />
+          ))}
+        </div>
       </div>
     </div>
   );
