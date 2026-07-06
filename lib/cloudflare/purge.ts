@@ -36,6 +36,30 @@ function publicOrigin(): string {
 // Cloudflare's purge-by-URL endpoint accepts at most 30 files per request;
 // larger lists must be split or the whole call 400s and purges nothing.
 const PURGE_BATCH_SIZE = 30;
+// In-flight batch cap: well under Cloudflare's purge token bucket (25 reqs
+// on Free/Pro plans) so a large slug set never bursts into silent 429s.
+const PURGE_CONCURRENCY = 5;
+
+// Minimal bounded-concurrency runner (p-limit without the dependency): run
+// `worker` over `items`, at most `limit` in flight. Workers must not throw
+// (ours are fully fail-soft).
+async function runBounded<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const lanes = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const item = items[next++];
+        await worker(item);
+      }
+    },
+  );
+  await Promise.all(lanes);
+}
 
 // Purge the given same-origin paths (e.g. "/ar", "/en/presentation-templates")
 // from the Cloudflare edge cache. Returns when done (or immediately when
@@ -50,38 +74,37 @@ export async function purgeCloudflarePaths(paths: string[]): Promise<void> {
     (p) => origin + (p.startsWith("/") ? p : "/" + p),
   );
 
-  // Batches fire CONCURRENTLY: the admin/API write awaiting this must pay one
-  // 5 s worst case, not 5 s per batch (a large slug set could otherwise push
-  // the write toward its own timeout). Each batch is independently fail-soft.
+  // Batches fire CONCURRENTLY (bounded): the admin/API write awaiting this
+  // pays ~one 5 s worst case per WAVE, not 5 s per batch — while the cap
+  // keeps a large slug set from bursting past Cloudflare's purge token
+  // bucket (25 reqs on Free/Pro). Each batch is independently fail-soft.
   const batches: string[][] = [];
   for (let i = 0; i < files.length; i += PURGE_BATCH_SIZE) {
     batches.push(files.slice(i, i + PURGE_BATCH_SIZE));
   }
-  await Promise.all(
-    batches.map(async (batch) => {
-      try {
-        const res = await fetch(
-          `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${PURGE_TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ files: batch }),
-            // A slow CDN must not hang the admin write that awaits this.
-            signal: AbortSignal.timeout(5000),
+  await runBounded(batches, PURGE_CONCURRENCY, async (batch) => {
+    try {
+      const res = await fetch(
+        `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${PURGE_TOKEN}`,
+            "Content-Type": "application/json",
           },
-        );
-        if (!res.ok) {
-          const detail = await res.text().catch(() => "");
-          console.error(`[cf-purge] HTTP ${res.status}`, detail.slice(0, 300));
-        }
-      } catch (err) {
-        console.error("[cf-purge] request failed", err);
+          body: JSON.stringify({ files: batch }),
+          // A slow CDN must not hang the admin write that awaits this.
+          signal: AbortSignal.timeout(5000),
+        },
+      );
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        console.error(`[cf-purge] HTTP ${res.status}`, detail.slice(0, 300));
       }
-    }),
-  );
+    } catch (err) {
+      console.error("[cf-purge] request failed", err);
+    }
+  });
 }
 
 // Purge the ENTIRE zone cache. Used after a DEPLOY: a new build changes every
