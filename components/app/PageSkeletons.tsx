@@ -74,3 +74,56 @@ export function BrowsePageSkeleton() {
     </div>
   );
 }
+
+// One flow card ghost: surface-card rounded-2xl p-4 min-h-[440px] with the
+// CardHeader (icon + title) up top and content/footer bars.
+function FlowCardSkeleton({ fluid }: { fluid: boolean }) {
+  return (
+    <div
+      className={`surface-card flex min-h-[440px] flex-col gap-4 rounded-2xl p-4 ${
+        fluid ? "min-w-[320px] flex-1" : "w-[360px] shrink-0"
+      }`}
+    >
+      {/* CardHeader: icon + title. */}
+      <div className="flex items-center gap-2">
+        <SkeletonBar className="h-6 w-6 rounded-md" />
+        <SkeletonBar className="h-4 w-24" />
+      </div>
+      {/* Main content slot (textarea / dropzone / preset list). */}
+      <div className="min-h-[180px] flex-1 rounded-xl bg-[var(--tq-overlay-soft)]" />
+      {/* Footer controls. */}
+      <SkeletonBar className="h-10 w-full rounded-xl" />
+    </div>
+  );
+}
+
+// Composition for the 4 flow pages (/create, /enhance, /mimic, /datasheet):
+// the centered header at mt-[6vh] over the wrapped card row - same wrapper
+// classes as the real pages. `fluid` mirrors /enhance's flex-1 cards;
+// create/datasheet use 3 fixed-width cards, mimic 2.
+export function FlowPageSkeleton({
+  cards,
+  fluid = false,
+}: {
+  cards: number;
+  fluid?: boolean;
+}) {
+  return (
+    <div
+      className="mt-[6vh] flex w-full animate-pulse flex-col items-center gap-6 px-4"
+      aria-hidden="true"
+    >
+      <header className="flex flex-col items-center gap-3 text-center">
+        <SkeletonBar className="h-8 w-64 max-w-full rounded-lg" />
+        <SkeletonBar className="h-4 w-80 max-w-full" />
+      </header>
+      <div
+        className={`flex flex-wrap justify-center gap-4 ${fluid ? "w-full items-stretch" : ""}`}
+      >
+        {Array.from({ length: cards }, (_, i) => (
+          <FlowCardSkeleton key={i} fluid={fluid} />
+        ))}
+      </div>
+    </div>
+  );
+}
