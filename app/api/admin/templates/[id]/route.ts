@@ -19,11 +19,9 @@ import {
   MARQUEE_OWNER_EMAIL,
   revalidateTemplateSurfaces,
 } from "@/lib/auth/marquee-projects";
-
-// Latinized kebab-case, 3-80 chars ("business-pitch", "annual-report-2026").
-const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const SLUG_MAX = 80;
-const SEO_TEXT_MAX = 300;
+// Shared with the Haiku auto-generation pipeline (lib/template/seo.ts) so the
+// manual and generated paths enforce identical slug/text rules.
+import { SLUG_RE, SLUG_MAX, SEO_TEXT_MAX } from "@/lib/template/seo";
 
 type SeoBody = {
   slug?: string | null;

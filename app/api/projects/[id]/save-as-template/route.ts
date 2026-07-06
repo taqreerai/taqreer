@@ -194,6 +194,23 @@ export async function POST(
       );
     });
 
+  // SEO copy auto-generation (Haiku): slug + bilingual name/description for
+  // the public detail page. The function self-gates (curator-only templates,
+  // never clobbers existing copy), so firing unconditionally is safe. Same
+  // failure isolation as the render event.
+  await inngest
+    .send({
+      id: `template-seo:${template.id}`,
+      name: "template.seo-generate",
+      data: { templateId: template.id },
+    })
+    .catch((err) => {
+      console.error(
+        "[save-as-template] inngest.send(template.seo-generate) failed:",
+        err,
+      );
+    });
+
   return NextResponse.json(
     { ok: true, templateId: template.id },
     { status: 201 },
