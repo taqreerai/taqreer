@@ -112,7 +112,9 @@ export default async function TemplateDetailPage(props: {
   const displayName = name ?? t.fallbackName;
   const displayDescription = description ?? t.fallbackDescription;
   const cover = tpl.slides[0];
-  const restSlides = tpl.slides.slice(1);
+  // Cap the strip at 6 slides so the grid stays symmetric (3x2 on desktop,
+  // 2x3 on mobile) instead of leaving an orphan row.
+  const restSlides = tpl.slides.slice(1, 7);
   const isPortrait = tpl.format === "9:16";
   const related = all
     .filter((other) => other.slug && other.slug !== slug)
