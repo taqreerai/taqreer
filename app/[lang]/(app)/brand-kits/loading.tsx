@@ -7,7 +7,7 @@ import { SkeletonBar } from "@/components/app/PageSkeletons";
 
 export default function Loading() {
   return (
-    <div className="page-container animate-pulse" aria-hidden="true">
+    <div className="page-container tq-skeleton-delayed" aria-hidden="true">
       <header className="mb-8 flex items-start justify-between gap-4">
         <div className="space-y-3">
           <SkeletonBar className="h-8 w-48 rounded-lg" />

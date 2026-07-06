@@ -67,7 +67,7 @@ export function TileGridSkeleton({
 // Composition used by the browse pages that mirror /projects exactly.
 export function BrowsePageSkeleton() {
   return (
-    <div className="page-container animate-pulse" aria-hidden="true">
+    <div className="page-container tq-skeleton-delayed" aria-hidden="true">
       <PageHeaderSkeleton />
       <FilterRowSkeleton />
       <TileGridSkeleton />
@@ -111,7 +111,7 @@ export function FlowPageSkeleton({
   return (
     // Same outer wrapper as the real flow pages, so width/padding match.
     <div
-      className="page-container flex w-full animate-pulse justify-center"
+      className="page-container tq-skeleton-delayed flex w-full justify-center"
       aria-hidden="true"
     >
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">

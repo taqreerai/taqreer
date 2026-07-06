@@ -10,7 +10,7 @@ import { PageHeaderSkeleton } from "@/components/app/PageSkeletons";
 
 export default function AppLoading() {
   return (
-    <div className="page-container animate-pulse" aria-hidden="true">
+    <div className="page-container tq-skeleton-delayed" aria-hidden="true">
       <PageHeaderSkeleton />
     </div>
   );

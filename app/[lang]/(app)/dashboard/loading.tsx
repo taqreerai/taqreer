@@ -9,7 +9,7 @@ import { SkeletonBar, TileGridSkeleton } from "@/components/app/PageSkeletons";
 
 export default function DashboardLoading() {
   return (
-    <div className="page-container animate-pulse pb-16" aria-hidden="true">
+    <div className="page-container tq-skeleton-delayed pb-16" aria-hidden="true">
       {/* Centered launcher hero — greeting line + the 4 flow cards. */}
       <section className="flex min-h-[calc(100vh-9rem)] items-center justify-center">
         <div className="w-full">

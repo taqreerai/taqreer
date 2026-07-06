@@ -559,6 +559,43 @@ button, a, [role="button"] {
   margin-bottom: 16px;
 }
 
+/* ─── Delayed skeleton reveal (time-aware fallback) ───
+   Put on the ROOT of every loading.tsx skeleton (PageSkeletons.tsx). The
+   fallback mounts invisible and only fades in after 300 ms, so a fast
+   navigation (router-cached / quick render) never flashes a skeleton — the
+   skeleton is for renders that are actually slow. Pure CSS on purpose:
+   loading fallbacks paint BEFORE hydration, so a JS timer can't do this.
+   Humans read < ~300 ms as instant; the 150 ms fade keeps the appearance
+   soft.
+
+   The pulse lives HERE too (second animation in the same declaration,
+   450 ms delayed so it starts right as the reveal completes) — do NOT also
+   put Tailwind's `animate-pulse` on the element: both write the `animation`
+   property, so one silently kills the other. Reduced-motion users get the
+   skeleton immediately and static. */
+@keyframes tq-skeleton-reveal {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes tq-skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+.tq-skeleton-delayed {
+  opacity: 0;
+  animation:
+    tq-skeleton-reveal 150ms ease-out 300ms forwards,
+    tq-skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 450ms infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tq-skeleton-delayed {
+    opacity: 1;
+    animation: none;
+  }
+}
+
 .input-dark {
   /* Solid surface — fill + border ride the shared surface scalars
      (`--tq-tint-opacity`, `--tq-border-opacity`) so this input reads as
