@@ -25,7 +25,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import { revalidateTemplateSurfaces } from "@/lib/auth/marquee-projects";
+import {
+  revalidateTemplateSurfaces,
+  templateDetailPaths,
+} from "@/lib/auth/marquee-projects";
 
 const TEMPLATE_BUCKET = "slide-previews";
 
@@ -51,6 +54,7 @@ export async function DELETE(
     select: {
       id: true,
       isPublic: true,
+      slug: true,
       owner: { select: { supabaseUserId: true } },
     },
   });
@@ -106,9 +110,13 @@ export async function DELETE(
   }
 
   // Deleting a PUBLIC template removes it from the public surfaces, so purge
-  // them. A private template was never shown there -> skip the purge.
+  // them. A private template was never shown there -> skip the purge. The
+  // deleted row's slug is gone from the fresh-slug query, so its detail URLs
+  // must ride along explicitly or the edge keeps serving them until s-maxage.
   if (template.isPublic) {
-    await revalidateTemplateSurfaces();
+    await revalidateTemplateSurfaces(
+      template.slug ? templateDetailPaths(template.slug) : [],
+    );
   }
 
   return NextResponse.json({ ok: true });

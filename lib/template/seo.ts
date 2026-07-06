@@ -15,6 +15,9 @@ import { z } from "zod";
 export const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const SLUG_MAX = 80;
 export const SEO_TEXT_MAX = 300;
+// Generated NAMES get a tighter cap than descriptions: the prompt asks for
+// under 60 chars, but a model that ignores it must not break tiles/titles.
+export const SEO_NAME_MAX = 80;
 
 // What we ask Haiku to return (structured output). Kept permissive here;
 // hard limits are applied by normalizeSeoDraft below.
@@ -99,14 +102,14 @@ export type NormalizedSeoDraft = {
 // unusable -> null (callers write what survived; the template stays valid
 // without SEO copy). The slug falls back to a latinized nameEn.
 export function normalizeSeoDraft(draft: SeoDraft): NormalizedSeoDraft {
-  const text = (value: string): string | null => {
-    const cleaned = applyCopyRules(value).slice(0, SEO_TEXT_MAX).trim();
+  const text = (value: string, max: number): string | null => {
+    const cleaned = applyCopyRules(value).slice(0, max).trim();
     return cleaned.length > 0 ? cleaned : null;
   };
-  const nameAr = text(draft.nameAr);
-  const nameEn = text(draft.nameEn);
-  const descriptionAr = text(draft.descriptionAr);
-  const descriptionEn = text(draft.descriptionEn);
+  const nameAr = text(draft.nameAr, SEO_NAME_MAX);
+  const nameEn = text(draft.nameEn, SEO_NAME_MAX);
+  const descriptionAr = text(draft.descriptionAr, SEO_TEXT_MAX);
+  const descriptionEn = text(draft.descriptionEn, SEO_TEXT_MAX);
 
   const rawSlug = draft.slug.trim().toLowerCase();
   let slug: string | null =

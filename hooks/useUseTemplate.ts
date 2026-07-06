@@ -36,18 +36,25 @@ export function useUseTemplate(opts?: {
       return;
     }
     setBusy(true);
-    const { prepareTemplateUse, redirectToPricingIfGated } = await import(
-      "@/lib/mimic/template-seed"
-    );
     try {
-      await prepareTemplateUse("template", templateId);
-      window.location.assign(`/use-template/${templateId}`);
-    } catch (err) {
-      if (redirectToPricingIfGated(err)) {
-        setBusy(false);
-        opts?.onGated?.();
+      // Inside the try: a failed chunk load (network blip, stale hash right
+      // after a deploy) must release the busy gate, not strand the CTA.
+      const { prepareTemplateUse, redirectToPricingIfGated } = await import(
+        "@/lib/mimic/template-seed"
+      );
+      try {
+        await prepareTemplateUse("template", templateId);
+        window.location.assign(`/use-template/${templateId}`);
         return;
+      } catch (err) {
+        if (redirectToPricingIfGated(err)) {
+          setBusy(false);
+          opts?.onGated?.();
+          return;
+        }
+        throw err;
       }
+    } catch (err) {
       console.warn("[useUseTemplate] use prep failed", err);
       setBusy(false);
     }

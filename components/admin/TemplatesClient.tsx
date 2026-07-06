@@ -134,7 +134,9 @@ function SeoEditor({
   };
 
   const handleSave = () => {
-    const slug = draft.slug?.trim() ?? null;
+    // `|| null`: whitespace-only input trims to "" -> treat as "no page",
+    // matching the server's ""-clears-slug contract.
+    const slug = draft.slug?.trim() || null;
     if (slug && !SLUG_RE.test(slug)) {
       setLocalError(
         "Slug must be lowercase latin kebab-case, e.g. business-pitch",

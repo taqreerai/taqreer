@@ -60,7 +60,7 @@ export default async function AdminTemplatesPage() {
       (r.thumbnailUrls ?? []).find((u) => u && !u.includes("/showcase-")) ?? null;
     return {
       id: r.id,
-      // Caption: the curated EN name when set, else format + language.
+      // Caption: curated EN name, else the AR name, else format + language.
       name: r.nameEn ?? r.nameAr ?? `${fmt} · ${r.language.toUpperCase()}`,
       thumbnail: cover,
       format: fmt,

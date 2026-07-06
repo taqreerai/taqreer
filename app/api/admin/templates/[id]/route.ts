@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import {
   MARQUEE_OWNER_EMAIL,
   revalidateTemplateSurfaces,
+  templateDetailPaths,
 } from "@/lib/auth/marquee-projects";
 // Shared with the Haiku auto-generation pipeline (lib/template/seo.ts) so the
 // manual and generated paths enforce identical slug/text rules.
@@ -73,6 +74,7 @@ export async function PATCH(
       id: true,
       isPublic: true,
       featuredOrder: true,
+      slug: true,
       owner: { select: { email: true } },
     },
   });
@@ -163,6 +165,12 @@ export async function PATCH(
     }
     throw err;
   }
-  await revalidateTemplateSurfaces();
+  // A slug rename/removal drops the OLD slug from the fresh-slug purge
+  // query; pass its detail URLs explicitly so the edge copy is evicted.
+  const oldSlugGone =
+    data.slug !== undefined && tpl.slug !== null && tpl.slug !== data.slug;
+  await revalidateTemplateSurfaces(
+    oldSlugGone && tpl.slug ? templateDetailPaths(tpl.slug) : [],
+  );
   return NextResponse.json({ ok: true });
 }

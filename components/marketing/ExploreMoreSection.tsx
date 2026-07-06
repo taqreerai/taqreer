@@ -28,8 +28,10 @@ const SPOKE_PATHS: Record<SpokeKey, string> = {
   templates: "/presentation-templates",
 };
 
-// Sibling order = the SPOKE_PATHS declaration order; the current spoke is
-// dropped, the first 3 remaining siblings + pricing render.
+// Each spoke links the 3 siblings that FOLLOW it in SPOKE_PATHS order,
+// wrapping around (a rotation, not a fixed slice) - so every spoke gets
+// linked from 3 others and the crawl graph covers all of them. A plain
+// filter + slice(0, 3) would never surface the last entries.
 export function ExploreMoreSection({
   locale,
   current,
@@ -40,9 +42,12 @@ export function ExploreMoreSection({
   dict: Dict;
 }) {
   const t = dict.exploreMore;
-  const siblings = (Object.keys(SPOKE_PATHS) as SpokeKey[])
-    .filter((key) => key !== current)
-    .slice(0, 3);
+  const keys = Object.keys(SPOKE_PATHS) as SpokeKey[];
+  const start = keys.indexOf(current);
+  const siblings = Array.from(
+    { length: 3 },
+    (_, i) => keys[(start + 1 + i) % keys.length],
+  );
   const links = [
     ...siblings.map((key) => ({
       href: localizedHref(SPOKE_PATHS[key], locale),

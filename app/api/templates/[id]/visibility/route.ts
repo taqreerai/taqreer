@@ -21,7 +21,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
-import { revalidateTemplateSurfaces } from "@/lib/auth/marquee-projects";
+import {
+  revalidateTemplateSurfaces,
+  templateDetailPaths,
+} from "@/lib/auth/marquee-projects";
 
 type VisibilityBody = { isPublic?: unknown };
 
@@ -62,7 +65,7 @@ export async function PATCH(
   // column") when already public.
   const current = await prisma.template.findFirst({
     where: { id: templateId, owner: { supabaseUserId: user.id } },
-    select: { isPublic: true },
+    select: { isPublic: true, slug: true },
   });
   if (!current) {
     return NextResponse.json({ error: "Template not found" }, { status: 404 });
@@ -105,7 +108,11 @@ export async function PATCH(
   // the Next + Cloudflare caches. A no-op re-PATCH (true->true / false->false)
   // changes nothing (publishedAt is left untouched too), so skip the purge.
   if (nextPublic !== current.isPublic) {
-    await revalidateTemplateSurfaces();
+    // Unpublishing drops the slug from the fresh-slug purge query, so the
+    // detail URLs must be passed explicitly to evict the edge copy.
+    await revalidateTemplateSurfaces(
+      !nextPublic && current.slug ? templateDetailPaths(current.slug) : [],
+    );
   }
 
   return NextResponse.json({

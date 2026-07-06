@@ -50,30 +50,38 @@ export async function purgeCloudflarePaths(paths: string[]): Promise<void> {
     (p) => origin + (p.startsWith("/") ? p : "/" + p),
   );
 
+  // Batches fire CONCURRENTLY: the admin/API write awaiting this must pay one
+  // 5 s worst case, not 5 s per batch (a large slug set could otherwise push
+  // the write toward its own timeout). Each batch is independently fail-soft.
+  const batches: string[][] = [];
   for (let i = 0; i < files.length; i += PURGE_BATCH_SIZE) {
-    const batch = files.slice(i, i + PURGE_BATCH_SIZE);
-    try {
-      const res = await fetch(
-        `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${PURGE_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ files: batch }),
-          // A slow CDN must not hang the admin write that awaits this.
-          signal: AbortSignal.timeout(5000),
-        },
-      );
-      if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        console.error(`[cf-purge] HTTP ${res.status}`, detail.slice(0, 300));
-      }
-    } catch (err) {
-      console.error("[cf-purge] request failed", err);
-    }
+    batches.push(files.slice(i, i + PURGE_BATCH_SIZE));
   }
+  await Promise.all(
+    batches.map(async (batch) => {
+      try {
+        const res = await fetch(
+          `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${PURGE_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ files: batch }),
+            // A slow CDN must not hang the admin write that awaits this.
+            signal: AbortSignal.timeout(5000),
+          },
+        );
+        if (!res.ok) {
+          const detail = await res.text().catch(() => "");
+          console.error(`[cf-purge] HTTP ${res.status}`, detail.slice(0, 300));
+        }
+      } catch (err) {
+        console.error("[cf-purge] request failed", err);
+      }
+    }),
+  );
 }
 
 // Purge the ENTIRE zone cache. Used after a DEPLOY: a new build changes every

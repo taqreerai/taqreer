@@ -33,6 +33,9 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    # A hung gh/Resend call must not hold the `uptime` concurrency group
+    # (cancel-in-progress: false) and queue every later scheduled probe.
+    timeout-minutes: 5
     env:
       URL: https://taqreer.ai/api/status
       LABEL: uptime-down
@@ -84,9 +87,10 @@ jobs:
               --arg subject "🔴 taqreer.ai is DOWN" \
               --arg text "Uptime check failed at $ts. $URL returned $CODE (200 expected). Checked externally from GitHub Actions; a GitHub issue was opened and auto-closes on recovery." \
               '{from:$from,to:[$to],subject:$subject,text:$text}' \
-              | curl -sS -X POST https://api.resend.com/emails \
+              | curl -sS --fail --max-time 15 -X POST https://api.resend.com/emails \
                   -H "Authorization: Bearer $RESEND_API_KEY" \
-                  -H "Content-Type: application/json" -d @- >/dev/null || true
+                  -H "Content-Type: application/json" -d @- >/dev/null \
+              || echo "::warning::Resend down-alert email failed to send"
           fi
 
       - name: Close incident on recovery
@@ -101,8 +105,9 @@ jobs:
                 --arg subject "✅ taqreer.ai recovered" \
                 --arg text "$URL is back to 200 as of $ts. The incident issue was auto-closed." \
                 '{from:$from,to:[$to],subject:$subject,text:$text}' \
-                | curl -sS -X POST https://api.resend.com/emails \
+                | curl -sS --fail --max-time 15 -X POST https://api.resend.com/emails \
                     -H "Authorization: Bearer $RESEND_API_KEY" \
-                    -H "Content-Type: application/json" -d @- >/dev/null || true
+                    -H "Content-Type: application/json" -d @- >/dev/null \
+                || echo "::warning::Resend recovery email failed to send"
             fi
           done

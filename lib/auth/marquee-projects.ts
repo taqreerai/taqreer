@@ -59,7 +59,14 @@ const CDN_TEMPLATE_PATHS = [
 // (feature / unfeature / reorder / premium / slug + SEO copy edits) so the
 // landing marquee + grid + welcome-email strip + per-template detail pages
 // reflect the change.
-export async function revalidateTemplateSurfaces(): Promise<void> {
+//
+// `extraPaths`: same-origin paths to purge IN ADDITION to the current public
+// slugs - the slug query below only sees the row's NEW state, so a rename,
+// slug removal, unpublish, or delete must pass the PREVIOUS slug's URLs or
+// the old edge object keeps serving until s-maxage.
+export async function revalidateTemplateSurfaces(
+  extraPaths: string[] = [],
+): Promise<void> {
   // IMMEDIATE expiry via { expire: 0 }, deliberately NOT the "max"
   // stale-while-revalidate profile. We purge the Cloudflare edge cache right
   // after this and CF refetches from origin immediately; if origin served
@@ -96,7 +103,17 @@ export async function revalidateTemplateSurfaces(): Promise<void> {
     ...CDN_TEMPLATE_PATHS,
     "/sitemap.xml",
     ...detailPaths,
+    ...extraPaths,
   ]);
+}
+
+// The two edge-cached URLs of one template's detail page - the `extraPaths`
+// shape for purging a slug that is being renamed/removed/unpublished.
+export function templateDetailPaths(slug: string): string[] {
+  return [
+    `/ar/presentation-templates/${slug}`,
+    `/en/presentation-templates/${slug}`,
+  ];
 }
 
 export type MarqueeThumbnail = {
