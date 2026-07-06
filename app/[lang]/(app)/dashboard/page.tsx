@@ -2,7 +2,7 @@ import { QuickActions } from "@/components/app/QuickActions";
 import { HomeLibrary } from "@/components/app/HomeLibrary";
 import type { ProjectsGridProject } from "@/components/app/ProjectsGrid";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/user";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
@@ -22,19 +22,16 @@ export default async function DashboardPage({
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Request-cached: reuses the (app) layout's Supabase auth round trip.
+  const user = await getAuthUser();
 
   if (!user) {
     redirect(`/${lang}/login?next=/${lang}/dashboard`);
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { supabaseUserId: user.id },
-    select: { id: true, creditAccount: { select: { signupGrantedAt: true } } },
-  });
+  // Single round trip: the upsert IS the existence check (empty update
+  // returns the existing row; a brand-new user comes back with
+  // creditAccount null, which is exactly what gates the signup grant below).
   const dbUser = await prisma.user.upsert({
     where: { supabaseUserId: user.id },
     update: {},
@@ -45,13 +42,13 @@ export default async function DashboardPage({
       image: user.user_metadata?.avatar_url ?? null,
       plan: "free",
     },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      creditAccount: { select: { signupGrantedAt: true } },
+    },
   });
-
-  if (!existingUser) {
-    console.info("Created missing Prisma user for authenticated Supabase user", {
-      supabaseUserId: user.id,
-    });
-  }
 
   // One-time signup grant, gated on signupGrantedAt (idempotent under a row
   // lock). Landing on the dashboard is a 4th user-creation path; without this a
@@ -59,7 +56,7 @@ export default async function DashboardPage({
   // mis-redirected so the client grant call never ran on this origin - keeps 0
   // credits. Abuse checks live in maybeGrantSignupCredits; a failure or block
   // just leaves the balance untouched (never breaks the dashboard render).
-  if (!existingUser?.creditAccount?.signupGrantedAt) {
+  if (!dbUser.creditAccount?.signupGrantedAt) {
     const hdrs = await headers();
     const grant = await maybeGrantSignupCredits({
       userId: dbUser.id,

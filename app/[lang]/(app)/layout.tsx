@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/app/DashboardShell";
 import { PostHogIdentify } from "@/components/analytics/PostHogIdentify";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/user";
 import { prisma } from "@/lib/prisma";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
@@ -34,13 +34,11 @@ export default async function AppLayout({
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = await params;
-  const supabase = await createClient();
   // `getUser()` round-trips to Supabase auth so a forged / stale
-  // cookie can't pass the protected-layout gate. `getSession()`
-  // reads the cookie only (unverified).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // cookie can't pass the protected-layout gate (`getSession()` reads the
+  // cookie only, unverified). getAuthUser is request-cached, so the page's
+  // own auth check reuses this round trip instead of paying it twice.
+  const user = await getAuthUser();
 
   if (!user) {
     redirect(`/${lang}/login?next=/${lang}/dashboard`);
