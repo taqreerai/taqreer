@@ -117,11 +117,12 @@ export function EmbeddedCheckout({
     <CheckoutElementsProvider stripe={getStripe(locale)} options={options}>
       <CheckoutForm
         isTopup={lookupKey.startsWith("topup_")}
-        // Promo codes are enabled on YEARLY subscription sessions only
-        // (mirror of the server's allow_promotion_codes condition in
-        // /api/stripe/checkout - applying a code on any other session
-        // would be rejected by Stripe anyway).
-        allowPromo={lookupKey.endsWith("_yearly")}
+        // Yearly session: the session total is the ANNUAL charge, so the
+        // amount + CTA label "/ year" instead of "/ month" - and promo
+        // codes are enabled (mirror of the server's allow_promotion_codes
+        // condition in /api/stripe/checkout; applying a code on any other
+        // session would be rejected by Stripe anyway).
+        isYearly={lookupKey.endsWith("_yearly")}
         onSuccess={onSuccess}
       />
     </CheckoutElementsProvider>
@@ -130,13 +131,14 @@ export function EmbeddedCheckout({
 
 function CheckoutForm({
   isTopup,
-  allowPromo,
+  isYearly,
   onSuccess,
 }: {
   isTopup: boolean;
-  allowPromo: boolean;
+  isYearly: boolean;
   onSuccess?: () => void;
 }) {
+  const allowPromo = isYearly;
   const dict = useDict();
   const { locale } = useLocale();
   const t = dict.checkout;
@@ -177,7 +179,12 @@ function CheckoutForm({
   // when a customer email exists (the bug that froze the pay button),
   // so the email renders read-only and confirm() takes no override.
   const amount = checkout.total.total.amount;
-  const cta = (isTopup ? t.payCta : t.subscribeCta).replace("{amount}", amount);
+  // Yearly sessions charge the ANNUAL total - the CTA and the amount
+  // suffix must say "/ year", never "/ month" (user-reported 2026-07-07:
+  // the yearly total rendered labelled per-month).
+  const cta = (
+    isTopup ? t.payCta : isYearly ? t.subscribeCtaYearly : t.subscribeCta
+  ).replace("{amount}", amount);
   // The session's applied discount (only ever one promo at a time in
   // our flow). Stripe recomputes total.total after apply/remove, so the
   // order summary + CTA amounts above track it automatically.
@@ -270,7 +277,10 @@ function CheckoutForm({
           <p className="mt-0.5 text-lg font-bold text-foreground tabular-nums">
             <bdi dir="ltr">{amount}</bdi>
             {!isTopup && (
-              <span className="text-xs font-normal text-muted"> {dict.landing.pricing.perMonth}</span>
+              <span className="text-xs font-normal text-muted">
+                {" "}
+                {isYearly ? t.perYear : dict.landing.pricing.perMonth}
+              </span>
             )}
           </p>
           {/* SAR/USD switch on its own row (it's a wide segmented
