@@ -99,3 +99,60 @@ export function tierPriceFor(
 ): TierPrice | undefined {
   return list?.find((t) => t.plan === plan);
 }
+
+// ─── Top-up packs (same live-from-Stripe + catalog-fallback contract) ──
+// The packs the billing UI renders: credits from the Price's grant
+// metadata mirror in the catalog, price from Stripe by lookup_key. A
+// pack whose live Price is missing/zero falls back to its catalog
+// amount, so the four cards always render and never show $0.
+
+export type TopupDisplayPack = { key: string; credits: number; priceUsd: number };
+
+const TOPUP_SPECS = BILLING_CATALOG.filter((s) => s.grant.kind === "topup");
+
+function catalogTopupPacks(): TopupDisplayPack[] {
+  return TOPUP_SPECS.map((s) => ({
+    key: s.lookupKey.replace(/^topup_/, ""),
+    credits: s.grant.kind === "topup" ? s.grant.credits : 0,
+    priceUsd: s.amount / 100,
+  }));
+}
+
+let topupCache: { at: number; data: TopupDisplayPack[] } | null = null;
+
+/** Drop the cached packs so the next read re-fetches (after a Stripe change). */
+export function invalidateTopupDisplayPacks(): void {
+  topupCache = null;
+}
+
+export async function getTopupDisplayPacks(): Promise<TopupDisplayPack[]> {
+  if (topupCache && Date.now() - topupCache.at < TTL_MS) return topupCache.data;
+  if (!process.env.STRIPE_SECRET_KEY) {
+    const data = catalogTopupPacks();
+    topupCache = { at: Date.now(), data };
+    return data;
+  }
+  let data: TopupDisplayPack[];
+  try {
+    const { stripe } = await import("@/lib/billing/stripe");
+    const res = await stripe.prices.list({
+      lookup_keys: TOPUP_SPECS.map((s) => s.lookupKey),
+      active: true,
+      limit: 100,
+    });
+    data = TOPUP_SPECS.map((spec) => {
+      const p = res.data.find((d) => d.lookup_key === spec.lookupKey);
+      const live = p?.unit_amount != null && p.unit_amount > 0 ? p.unit_amount : null;
+      return {
+        key: spec.lookupKey.replace(/^topup_/, ""),
+        credits: spec.grant.kind === "topup" ? spec.grant.credits : 0,
+        priceUsd: (live ?? spec.amount) / 100,
+      };
+    });
+  } catch (err) {
+    console.error("[display-prices] Stripe top-up fetch failed, using catalog", err);
+    data = catalogTopupPacks();
+  }
+  topupCache = { at: Date.now(), data };
+  return data;
+}

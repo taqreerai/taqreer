@@ -11,7 +11,7 @@
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { TOPUP_PACKS } from "@/lib/credits/cost";
 import { formatCredits, useCreditBalance } from "@/lib/credits/store";
-import { normalizePlan } from "@/lib/plan";
+import { normalizePlan, planLabel } from "@/lib/plan";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 
 // The 402 body POST /api/projects returns when preflight blocks.
@@ -23,6 +23,8 @@ export type CreditGatePayload = {
     | "slide_cap_exceeded";
   balance: number;
   slideCap: number | null;
+  // flow_locked: the cheapest plan that unlocks the flow (fills {tier}).
+  minFlowTier?: string | null;
   options: {
     reducedSlides: number | null;
     reducedCredits: number | null;
@@ -60,11 +62,13 @@ export function CreditGateDialog({
 
   // Subscriber out of credits: jump straight to the smallest covering pack's
   // checkout (the refill they actually want). Free users + every other gate
-  // land on the tiers so they can pick a plan to upgrade.
+  // land on the tiers so they can pick a plan to upgrade. Packs come live
+  // from /api/credits (Stripe-backed), bundled constant as fallback.
+  const packs = credits?.topupPacks ?? TOPUP_PACKS;
   const coveringPack =
     gate?.error === "insufficient_credits" && !isFree && gate.options
-      ? TOPUP_PACKS.find((p) => p.credits >= gate.options!.topupGap) ??
-        TOPUP_PACKS[TOPUP_PACKS.length - 1]
+      ? packs.find((p) => p.credits >= gate.options!.topupGap) ??
+        packs[packs.length - 1]
       : null;
   const initialLookupKey = coveringPack ? `topup_${coveringPack.key}` : null;
 
@@ -79,9 +83,16 @@ export function CreditGateDialog({
         .replace("{have}", formatCredits(gate.balance));
       gateContext = { title: t.insufficientTitle, body: `${detail} ${cta}`.trim() };
     } else if (gate.error === "flow_locked") {
+      // Fill {tier} with the localized name of the cheapest plan whose
+      // flows include the gated one (server-derived from live config);
+      // "plus" fallback covers a stale client against an older payload.
+      const tierKey = gate.minFlowTier ?? "plus";
       gateContext = {
         title: t.flowLockedTitle,
-        body: `${t.flowLockedBody} ${cta}`.trim(),
+        body: `${t.flowLockedBody.replace(
+          "{tier}",
+          planLabel(dict.components.planUsage, tierKey),
+        )} ${cta}`.trim(),
       };
     } else if (gate.error === "preset_locked") {
       gateContext = {

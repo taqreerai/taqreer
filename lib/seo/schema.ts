@@ -93,8 +93,16 @@ export function webSiteSchema(locale: Locale) {
 }
 
 // SoftwareApplication: describes the product itself to Search + AI features.
-export function softwareApplicationSchema(locale: Locale) {
+// The AggregateOffer is DERIVED from the live tier prices (the layout passes
+// getDisplayPrices(), which itself falls back to the billing catalog), so a
+// repricing never leaves stale structured data. Omitted entirely only when
+// no price list is provided at all.
+export function softwareApplicationSchema(
+  locale: Locale,
+  tierPrices?: readonly { plan: string; monthly: number }[],
+) {
   const e = ENTITY[locale];
+  const monthly = (tierPrices ?? []).map((t) => t.monthly);
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -105,14 +113,17 @@ export function softwareApplicationSchema(locale: Locale) {
     description: e.appDescription,
     inLanguage: ["ar", "en"],
     featureList: e.features,
-    // Free tier + paid plans (USD): Free 0, Plus 15, Pro 30, Max 70.
-    offers: {
-      "@type": "AggregateOffer",
-      priceCurrency: "USD",
-      lowPrice: "0",
-      highPrice: "70",
-      offerCount: "4",
-    },
+    ...(monthly.length > 0
+      ? {
+          offers: {
+            "@type": "AggregateOffer",
+            priceCurrency: "USD",
+            lowPrice: String(Math.min(...monthly)),
+            highPrice: String(Math.max(...monthly)),
+            offerCount: String(monthly.length),
+          },
+        }
+      : {}),
     publisher: { "@type": "Organization", name: "taqreer.ai", url: SITE_URL },
   };
 }

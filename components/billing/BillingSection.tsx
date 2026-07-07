@@ -18,8 +18,17 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { dateFnsLocale } from "@/lib/i18n/date";
 import { useCreditBalance, formatCredits } from "@/lib/credits/store";
-import { TIERS, TIER_ORDER, TOPUP_PACKS } from "@/lib/credits/cost";
-import { fillPricingTokens, tierNumberFor } from "@/lib/credits/pricing-tokens";
+import {
+  TIERS,
+  TIER_ORDER,
+  TOPUP_PACKS,
+  TOPUP_EXPIRY_MONTHS,
+} from "@/lib/credits/cost";
+import {
+  fillPricingTokens,
+  tierNumberFor,
+  yearlyDiscountPct,
+} from "@/lib/credits/pricing-tokens";
 import { SegmentedToggle } from "@/components/create/controls";
 import { PlanUsage } from "@/components/app/PlanUsage";
 import { PRICING_TIER_FEATURES } from "@/components/marketing/PricingTiers";
@@ -36,13 +45,13 @@ type Summary = {
   cadence: "monthly" | "yearly" | null;
 };
 
-// Per-month price shown on the cards (the yearly column shows the
-// discounted per-month figure, matching the landing).
-const YEARLY_PER_MONTH: Record<"plus" | "pro" | "max", number> = {
-  plus: 13,
-  pro: 27,
-  max: 63,
-};
+// Pre-hydration fallback for the yearly per-month figure: derived from
+// the bundled TIERS monthly price at the catalog's uniform 25% yearly
+// discount (lib/billing/prices.ts), NOT a second hand-maintained table.
+// The live Stripe price from /api/credits always wins once loaded.
+const YEARLY_DISCOUNT = 0.25;
+const yearlyPerMonthFallback = (tier: "plus" | "pro" | "max"): number =>
+  Math.round(TIERS[tier].priceUsd * (1 - YEARLY_DISCOUNT) * 100) / 100;
 
 // "Pro" carries the landing's popular pill here too.
 const POPULAR_TIER: KnownPlan = "pro";
@@ -109,6 +118,11 @@ export function BillingSection({
 
   const plan = summary ? summary.plan : credits ? normalizePlan(credits.plan) : "free";
 
+  // "Save {pct}%" derived from the live Stripe prices (/api/credits);
+  // falls back to the catalog's uniform discount until they resolve.
+  const discountPct =
+    yearlyDiscountPct(credits?.tierPrices) ?? Math.round(YEARLY_DISCOUNT * 100);
+
   const currentIdx = TIER_ORDER.indexOf(plan);
   // The renewal date rides on the summary (the billing mirror), so it must
   // NOT wait on the credit store - gating on `credits` could blank the
@@ -161,7 +175,7 @@ export function BillingSection({
                     {pricing.yearly}{" "}
                     {/* Solid blue chip + white text - same as landing. */}
                     <span className="-me-1.5 rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[10px] font-medium text-white">
-                      {pricing.discount}
+                      {pricing.discount.replace("{pct}", String(discountPct))}
                     </span>
                   </>
                 ),
@@ -191,7 +205,7 @@ export function BillingSection({
             const priceUsd = isFree
               ? 0
               : cadence === "yearly"
-                ? (tp?.yearly ?? YEARLY_PER_MONTH[tier as "plus" | "pro" | "max"])
+                ? (tp?.yearly ?? yearlyPerMonthFallback(tier as "plus" | "pro" | "max"))
                 : (tp?.monthly ?? TIERS[tier].priceUsd);
             const footnote =
               cadence === "yearly" && !isFree ? pricing.billedYearly : copy.footnote;
@@ -306,13 +320,15 @@ export function BillingSection({
       <section>
         <h2 className="text-lg font-semibold text-foreground">{t.packsTitle}</h2>
         <p className="mt-0.5 text-xs text-muted">
-          {plan === "free" ? t.topupSubscribersOnly : t.packsHint}
+          {plan === "free"
+            ? t.topupSubscribersOnly
+            : t.packsHint.replace("{months}", String(TOPUP_EXPIRY_MONTHS))}
         </p>
         <div
           className={`mt-4 grid gap-6 md:grid-cols-2 xl:grid-cols-4 ${plan === "free" ? "opacity-60" : ""}`}
           dir={dir}
         >
-          {TOPUP_PACKS.map((pack) => {
+          {(credits?.topupPacks ?? TOPUP_PACKS).map((pack) => {
             const lookupKey = `topup_${pack.key}`;
             return (
               <div

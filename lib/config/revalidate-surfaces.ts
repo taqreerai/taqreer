@@ -8,7 +8,10 @@
 // for config numbers, and the Stripe webhook (price/product events) for prices.
 import { revalidatePath } from "next/cache";
 import { purgeCloudflarePaths } from "@/lib/cloudflare/purge";
-import { invalidateDisplayPrices } from "@/lib/billing/display-prices";
+import {
+  invalidateDisplayPrices,
+  invalidateTopupDisplayPacks,
+} from "@/lib/billing/display-prices";
 import { invalidateLocal } from "@/lib/config/runtime-config";
 
 export const CONFIG_SURFACES = [
@@ -28,6 +31,7 @@ export const CONFIG_SURFACES = [
 export async function revalidatePricingSurfaces(): Promise<void> {
   invalidateLocal();
   invalidateDisplayPrices();
+  invalidateTopupDisplayPacks();
   for (const p of CONFIG_SURFACES) revalidatePath(p);
   await purgeCloudflarePaths(CONFIG_SURFACES);
 }

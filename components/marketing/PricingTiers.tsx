@@ -3,10 +3,11 @@
 // Landing pricing — the monthly/yearly toggle needs client state, so the tiers
 // + cards live here (moved out of the server `app/page.tsx`).
 //
-// Tiers mirror the LOCKED monthly pricing in context/subscriptionmodel.md
-// (Free $0 / Plus $15 / Pro $30 / Max $70 - tier names renamed 2026-06-11).
-// YEARLY is a ~10%-off placeholder - the model is monthly-only, so confirm
-// real annual pricing before launch.
+// No price/credit literals live here: prices come from Stripe via
+// `tierPrices` (getDisplayPrices), credits/slides from admin config via
+// `tierNumbers`, and the yearly "Save {pct}%" chip is DERIVED from the
+// actual monthly-vs-yearly prices (yearlyDiscountPct) - repricing is a
+// Stripe/admin change, never an edit here.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -18,6 +19,7 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import {
   fillPricingTokens,
   tierNumberFor,
+  yearlyDiscountPct,
   type TierDisplayNumber,
 } from "@/lib/credits/pricing-tokens";
 
@@ -117,6 +119,10 @@ export function PricingTiers({
   // client) so the pages that render this stay static AND light.
   const isAuthed = useIsAuthed();
   const t = dict.landing.pricing;
+  // "Save {pct}%" derived from the live prices; chip hidden when no paid
+  // tier resolves both cadences (tierPrices is catalog-fallback-fed, so
+  // in practice this only hides on a genuinely broken price set).
+  const discountPct = yearlyDiscountPct(tierPrices);
 
   // Signed-in pricing CTA → our EMBEDDED checkout page for that tier +
   // cadence (stays on taqreer.ai). Signed-out keeps the /signup link
@@ -145,13 +151,18 @@ export function PricingTiers({
               value: "yearly",
               label: (
                 <>
-                  {t.yearly}{" "}
+                  {t.yearly}
                   {/* Solid blue chip + white text - readable on the
                       active (white) and idle segment in BOTH themes
                       (user direction 2026-06-11). */}
-                  <span className="-me-1.5 rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[10px] font-medium text-white">
-                    {t.discount}
-                  </span>
+                  {discountPct !== null ? (
+                    <>
+                      {" "}
+                      <span className="-me-1.5 rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        {t.discount.replace("{pct}", String(discountPct))}
+                      </span>
+                    </>
+                  ) : null}
                 </>
               ),
             },

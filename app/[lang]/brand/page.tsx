@@ -21,7 +21,8 @@ import Image from "next/image";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
-import { ensureFresh, getPreset } from "@/lib/config/runtime-config";
+import { ensureFresh, getPreset, getTier } from "@/lib/config/runtime-config";
+import { getDisplayPrices, tierPriceFor } from "@/lib/billing/display-prices";
 
 export const metadata: Metadata = {
   title: "Design System - taqreer.ai",
@@ -289,6 +290,11 @@ export default async function BrandPage() {
     const p = getPreset(key);
     return p ? String(p.baseCredits + 8 * p.perSlideCredits) : "-";
   };
+  // The plan-banner + receipt MOCKUPS below quote the Pro tier; feed them the
+  // live allotment + Stripe price so this reference page never shows a stale
+  // number after a repricing (fail-soft catalog fallback inside).
+  const proAllotment = getTier("pro").monthlyAllotment;
+  const proMonthly = tierPriceFor(await getDisplayPrices(), "pro")?.monthly ?? 0;
   return (
     <div dir="ltr" className="relative min-h-screen overflow-x-clip text-foreground">
       <style>{AURORA_CSS}</style>
@@ -1448,7 +1454,7 @@ export default async function BrandPage() {
                         Pro plan
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        5,000 credits / month
+                        {proAllotment.toLocaleString("en-US")} credits / month
                       </p>
                     </div>
                     <span className="badge-purple">Active</span>
@@ -1703,7 +1709,7 @@ export default async function BrandPage() {
                     >
                       {[
                         ["Plan", "Pro - monthly"],
-                        ["Amount paid", "$30.00"],
+                        ["Amount paid", `$${proMonthly.toFixed(2)}`],
                         ["Date", "2026-06-15"],
                       ].map(([k, v], i) => (
                         <div

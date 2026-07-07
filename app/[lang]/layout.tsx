@@ -14,6 +14,7 @@ import {
   webSiteSchema,
   softwareApplicationSchema,
 } from "@/lib/seo/schema";
+import { getDisplayPrices } from "@/lib/billing/display-prices";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -128,6 +129,10 @@ export default async function RootLayout({
   if (!isLocale(lang)) notFound();
   const dir = dirForLocale(lang);
   const dict = await getDictionary(lang);
+  // Live tier prices for the SoftwareApplication AggregateOffer (fail-soft:
+  // getDisplayPrices always resolves - Stripe, else the billing catalog -
+  // so static generation never breaks and the JSON-LD never goes stale).
+  const tierPrices = await getDisplayPrices();
 
   return (
     <html
@@ -173,7 +178,7 @@ export default async function RootLayout({
           data={[
             organizationSchema(lang),
             webSiteSchema(lang),
-            softwareApplicationSchema(lang),
+            softwareApplicationSchema(lang, tierPrices),
           ]}
         />
         <ScrollReset />
