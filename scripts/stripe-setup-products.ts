@@ -109,6 +109,13 @@ async function main() {
       ...(spec.interval ? { recurring: { interval: spec.interval } } : {}),
       metadata: grantToMetadata(spec.grant),
     });
+    // Archive the replaced Price (Stripe prices can't be deleted, only
+    // deactivated). Existing subscriptions on it keep billing; it just
+    // stops being offerable and stops cluttering the dashboard.
+    if (current) {
+      await stripe.prices.update(current.id, { active: false });
+      console.log(`  price - archived stale ${current.id}`);
+    }
     // Also stamp the grant onto the Product (webhook can read either).
     await stripe.products.update(productId, {
       metadata: { taqreerProductKey: spec.productKey, ...grantToMetadata(spec.grant) },
