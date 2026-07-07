@@ -8,6 +8,7 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import { CookieBanner } from "@/components/legal/CookieBanner";
 import { PostHogProvider } from "@/components/analytics/PostHogProvider";
+import { GoogleAdsTag } from "@/components/analytics/GoogleAdsTag";
 import { JsonLd } from "@/components/seo/JsonLd";
 import {
   organizationSchema,
@@ -185,6 +186,7 @@ export default async function RootLayout({
         <LocaleProvider locale={lang} dict={dict}>
           {children}
           <PostHogProvider />
+          <GoogleAdsTag />
           <CookieBanner />
         </LocaleProvider>
       </body>
