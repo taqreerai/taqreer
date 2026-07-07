@@ -13,11 +13,15 @@ import {
   getFreeCredits,
   getActivePresets,
   getTier,
+  getImageCredits,
   pricingDisplayNumbers,
   defaultPresetKey,
 } from "@/lib/config/runtime-config";
 import { TIER_ORDER, SYSTEM_SLIDE_CAP } from "@/lib/credits/cost";
-import { getDisplayPrices } from "@/lib/billing/display-prices";
+import {
+  getDisplayPrices,
+  getTopupDisplayPacks,
+} from "@/lib/billing/display-prices";
 
 // Recent ledger entries for the popup's "recent usage" list. Holds are
 // transient (they settle into a charge or a release), so the list shows
@@ -127,7 +131,10 @@ export async function GET() {
       ) ?? null,
   }));
 
-  const tierPrices = await getDisplayPrices();
+  const [tierPrices, topupPacks] = await Promise.all([
+    getDisplayPrices(),
+    getTopupDisplayPacks(),
+  ]);
 
   return NextResponse.json({
     plan,
@@ -141,12 +148,18 @@ export async function GET() {
     // The server's default preset key, so the picker can reconcile a stale
     // selection (a retired preset) to what the server would coerce to.
     defaultPresetKey: defaultPresetKey(),
+    // Credits per generated image (images-mode surcharge) - the DB knob,
+    // so the client estimate holds parity with the server quote.
+    imageCredits: getImageCredits(),
     // Per-tier display numbers (free signup grant / paid monthly allotment +
     // slide cap) so BillingSection's /plans + UpgradeModal cards track admin
     // Settings like the landing, instead of frozen literals.
     tierNumbers: pricingDisplayNumbers(),
     // Live Stripe prices (the actual charge) for the in-app plan cards.
     tierPrices,
+    // Live top-up packs (credits + price from Stripe by lookup_key, catalog
+    // fallback) so the pack cards track Stripe instead of the constant.
+    topupPacks,
     balance: {
       total: balance.total,
       subscription: balance.subscription,

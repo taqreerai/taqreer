@@ -11,6 +11,7 @@
 import type { Quality } from "@/lib/types/quality";
 import { estimateSlideCountFromText } from "@/lib/types/quality";
 import type { KnownPlan } from "@/lib/plan";
+import { MAX_GENERATED_IMAGES } from "@/lib/images/slide-images";
 
 export type Flow = "create" | "enhance" | "mimic" | "datasheet";
 
@@ -23,15 +24,18 @@ export const ALL_FLOWS: readonly Flow[] = [
 
 export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
   {
-    // Re-priced 2026-06-12 off MEASURED COGS (thinking-off Opus 4.8
-    // produced a 5-slide deck for ~$0.10): 100+10 keeps >90% margin
-    // while making the default preset feel cheap. opus-balanced holds
-    // its old price until its 4.8 thinking baseline is measured.
-    // fable-low is PROVISIONAL (Fable 5 is $10/$50 per MTok - 2x
-    // Opus) pending the same baseline.
-    "opus-fast": { base: 100, perSlide: 10 },
+    // Re-priced 2026-07-07 off PRODUCTION Job-table averages (see
+    // context/pricing-study-2026-07.md §3): opus-fast really costs
+    // ~$0.62/deck (not the $0.10 sample the 06-12 pricing used), so
+    // its perSlide moved 10 -> 15 to stay above cost at the cheaper
+    // per-credit revenue of the 2026-07 ladder. opus-balanced measured
+    // ~$0.89/deck - its old price already clears cost, unchanged.
+    // fable-low measured ~$3.22/deck (n=1): repriced 500+28 -> 900+60
+    // so it can NEVER be reactivated below cost; stays inactive until
+    // demand + a bigger sample justify it.
+    "opus-fast": { base: 100, perSlide: 15 },
     "opus-balanced": { base: 400, perSlide: 22 },
-    "fable-low": { base: 500, perSlide: 28 },
+    "fable-low": { base: 900, perSlide: 60 },
   };
 
 // A preset → cost lookup. Defaults to the CREDIT_COST constant (the client
@@ -44,6 +48,29 @@ const defaultCostLookup: CostLookup = (preset) =>
 
 // Haiku title/name generation - flat (§3).
 export const NAME_GEN_COST = 5;
+
+// Credits per GENERATED IMAGE on images-mode decks (2026-07 repricing:
+// gpt-image-2 costs ~$0.05-0.08/image and was previously uncharged -
+// the biggest unpriced COGS, see context/pricing-study-2026-07.md).
+// This is the CLIENT-SAFE fallback; the server reads the DB-backed
+// admin knob via getImageCredits() (lib/config/runtime-config).
+export const IMAGE_CREDITS_PER_IMAGE = 5;
+
+/**
+ * The image surcharge a generation HOLDS for: one image per slide, capped
+ * at the per-deck image ceiling (MAX_GENERATED_IMAGES). Claude reserves
+ * boxes freely, so the settle charges the ACTUAL box count - clamped to
+ * the hold like everything else, so overflow boxes are free rather than
+ * ever exceeding the shown estimate. 0 when images mode is off.
+ */
+export function imagesSurcharge(
+  slides: number,
+  imagesMode: boolean,
+  perImage: number = IMAGE_CREDITS_PER_IMAGE,
+): number {
+  if (!imagesMode) return 0;
+  return Math.min(Math.max(0, slides), MAX_GENERATED_IMAGES) * perImage;
+}
 
 // Nothing above 75 slides is ever exposed (≈128k output-token ceiling).
 export const SYSTEM_SLIDE_CAP = 75;
@@ -62,38 +89,39 @@ export type TierConfig = {
   flows: readonly Flow[];
 };
 
-// The tier ladder (§1; names Free/Plus/Pro/Max per user direction
-// 2026-06-11 - the grants/caps/gates are the original LOCKED values,
-// only the labels moved: starter->plus, plus->pro, pro->max). Keys
-// match lib/plan.ts KNOWN_PLANS.
+// The tier ladder - growth-first repricing 2026-07-07 (see
+// context/pricing-study-2026-07.md §1): undercuts Gamma on every tier
+// with ~2x its credits; free = 1,000 one-time (~4 decks incl. images).
+// Names Free/Plus/Pro/Max per user direction 2026-06-11. Keys match
+// lib/plan.ts KNOWN_PLANS.
 export const TIERS: Record<KnownPlan, TierConfig> = {
   free: {
     priceUsd: 0,
     monthlyAllotment: 0,
-    signupGrant: 400,
+    signupGrant: 1000,
     slideCap: 10,
     presets: ["opus-fast"],
     flows: ["create"],
   },
   plus: {
-    priceUsd: 15,
-    monthlyAllotment: 2000,
+    priceUsd: 9,
+    monthlyAllotment: 4000,
     signupGrant: 0,
     slideCap: 30,
     presets: ["opus-fast", "opus-balanced"],
     flows: ALL_FLOWS,
   },
   pro: {
-    priceUsd: 30,
-    monthlyAllotment: 5000,
+    priceUsd: 19,
+    monthlyAllotment: 10000,
     signupGrant: 0,
     slideCap: 60,
     presets: ["opus-fast", "opus-balanced", "fable-low"],
     flows: ALL_FLOWS,
   },
   max: {
-    priceUsd: 70,
-    monthlyAllotment: 12000,
+    priceUsd: 49,
+    monthlyAllotment: 28000,
     signupGrant: 0,
     slideCap: 75,
     presets: ["opus-fast", "opus-balanced", "fable-low"],
@@ -112,9 +140,10 @@ export function nextTier(plan: KnownPlan): KnownPlan | null {
 
 // Top-up packs (§1, PROPOSED; 4 packs per user direction 2026-06-11 to
 // match the 4 tier cards). Per-credit prices sit WELL ABOVE every
-// tier's subscription rate (Plus is the priciest at $0.0075/credit;
-// the cheapest pack here is $0.0094) so topping up can never undercut
-// upgrading - the "can't cheat the top-up system" rule. sourceKey
+// tier's subscription rate (after the 2026-07 repricing Plus is the
+// priciest at $0.00225/credit; the cheapest pack here is $0.0094) so
+// topping up can never undercut upgrading - the "can't cheat the
+// top-up system" rule. sourceKey
 // idempotency lives in the ledger; this table is the catalog the
 // pricing UI + Stripe Prices map onto.
 export const TOPUP_PACKS = [
@@ -276,6 +305,11 @@ export function quoteGeneration(args: {
   slideCap: number;
   // Server passes creditCostFor (DB-backed); omit on the client for the constant.
   costOf?: CostLookup;
+  // Images-mode surcharge (imagesSurcharge): the hold covers one image
+  // per slide up to the deck ceiling; the settle charges actual boxes.
+  imagesMode?: boolean;
+  // Server passes getImageCredits() (DB-backed); omit for the constant.
+  imageCredits?: number;
 }): {
   effective: Quality;
   holdSlides: number;
@@ -290,7 +324,9 @@ export function quoteGeneration(args: {
   return {
     effective,
     holdSlides,
-    holdCredits: generationCost(effective, holdSlides, args.costOf),
+    holdCredits:
+      generationCost(effective, holdSlides, args.costOf) +
+      imagesSurcharge(holdSlides, args.imagesMode === true, args.imageCredits),
     exact: args.estimate.exact,
   };
 }

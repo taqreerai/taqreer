@@ -67,6 +67,10 @@ export type CreditData = {
   // The server's default preset key (what an inactive/retired selection is
   // coerced to), so the picker never highlights a dead key.
   defaultPresetKey: string;
+  // Credits per generated image (images-mode surcharge; DB admin knob).
+  // Absent on a stale cached payload -> client falls back to the bundled
+  // IMAGE_CREDITS_PER_IMAGE constant.
+  imageCredits?: number;
   // Per-tier display numbers for the in-app plan cards (BillingSection): the
   // free signup grant or a paid monthly allotment, plus the slide cap. Filled
   // into the {credits}/{slides} dict tokens so the cards track admin Settings.
@@ -74,6 +78,9 @@ export type CreditData = {
   // Live Stripe prices (monthly + per-month-when-yearly) per tier for the
   // in-app plan cards, so they show the actual charge, not a literal.
   tierPrices: { plan: string; monthly: number; yearly: number }[];
+  // Live top-up packs (Stripe by lookup_key, catalog fallback). Optional so
+  // a stale cached payload degrades to the bundled TOPUP_PACKS constant.
+  topupPacks?: { key: string; credits: number; priceUsd: number }[];
   recent: CreditRecentEvent[];
 };
 

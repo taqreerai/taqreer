@@ -47,32 +47,42 @@ export type TierConfigRow = {
 };
 
 // ─── SEED — equal to the current code constants ───────────────────────
+// 2026-07-07 repricing (context/pricing-study-2026-07.md): opus-fast
+// 15/slide (real COGS ~$0.62/deck), fable-low 900+60 AND inactive (sold
+// >2x below cost at 500+28; keep off until measured), new tier ladder.
 export const SEED_PRESETS: readonly PresetConfig[] = [
-  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,  maxTokens: 128000, baseCredits: 100, perSlideCredits: 10, secsPerSlide: 8,  baseOverheadSecs: 25, active: true, sortOrder: 0 },
+  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,  maxTokens: 128000, baseCredits: 100, perSlideCredits: 15, secsPerSlide: 8,  baseOverheadSecs: 25, active: true, sortOrder: 0 },
   { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low", maxTokens: 128000, baseCredits: 400, perSlideCredits: 22, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 1 },
-  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low", maxTokens: 128000, baseCredits: 500, perSlideCredits: 28, secsPerSlide: 20, baseOverheadSecs: 45, active: true, sortOrder: 2 },
+  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low", maxTokens: 128000, baseCredits: 900, perSlideCredits: 60, secsPerSlide: 20, baseOverheadSecs: 45, active: false, sortOrder: 2 },
 ];
 
 export const SEED_TIERS: readonly TierConfigRow[] = [
-  { plan: "free", priceUsd: 0,  monthlyAllotment: 0,     signupGrant: 400, slideCap: 10, unlockedPresetKeys: ["opus-fast"], flows: ["create"], sortOrder: 0 },
-  { plan: "plus", priceUsd: 15, monthlyAllotment: 2000,  signupGrant: 0,   slideCap: 30, unlockedPresetKeys: ["opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 1 },
-  { plan: "pro",  priceUsd: 30, monthlyAllotment: 5000,  signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 2 },
-  { plan: "max",  priceUsd: 70, monthlyAllotment: 12000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
+  { plan: "free", priceUsd: 0,  monthlyAllotment: 0,     signupGrant: 1000, slideCap: 10, unlockedPresetKeys: ["opus-fast"], flows: ["create"], sortOrder: 0 },
+  { plan: "plus", priceUsd: 9,  monthlyAllotment: 4000,  signupGrant: 0,    slideCap: 30, unlockedPresetKeys: ["opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 1 },
+  { plan: "pro",  priceUsd: 19, monthlyAllotment: 10000, signupGrant: 0,    slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 2 },
+  { plan: "max",  priceUsd: 49, monthlyAllotment: 28000, signupGrant: 0,    slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
 ];
 
 // Seed default + regen preset, mirroring DEFAULT_QUALITY / REGEN_QUALITY.
 const SEED_DEFAULT_KEY = "opus-fast";
 
+// Mirrors IMAGE_CREDITS_PER_IMAGE (lib/credits/cost.ts) - kept as a
+// literal here to avoid a config->cost import cycle; parity is asserted
+// by scripts/check-config-parity.ts.
+const SEED_IMAGE_CREDITS = 5;
+
 // ─── In-process snapshot ──────────────────────────────────────────────
 type Snapshot = {
   presets: Map<string, PresetConfig>;
   tiers: Map<string, TierConfigRow>;
+  imageCredits: number;
   version: number;
 };
 
 const SEED_SNAPSHOT: Snapshot = {
   presets: new Map(SEED_PRESETS.map((p) => [p.key, p])),
   tiers: new Map(SEED_TIERS.map((t) => [t.plan, t])),
+  imageCredits: SEED_IMAGE_CREDITS,
   version: 0,
 };
 
@@ -121,9 +131,10 @@ export async function ensureFresh(): Promise<void> {
   try {
     const settings = await prisma.platformSettings.findUnique({
       where: { id: "singleton" },
-      select: { configVersion: true },
+      select: { configVersion: true, imageCredits: true },
     });
     const version = settings?.configVersion ?? 0;
+    const imageCredits = settings?.imageCredits ?? SEED_IMAGE_CREDITS;
     if (snapshot && snapshot.version === version) return;
     const [presets, tiers] = await Promise.all([
       prisma.preset.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -131,12 +142,18 @@ export async function ensureFresh(): Promise<void> {
     ]);
     if (presets.length === 0 || tiers.length === 0) {
       // Not seeded yet — keep serving SEED, but remember the version.
-      snapshot = { presets: SEED_SNAPSHOT.presets, tiers: SEED_SNAPSHOT.tiers, version };
+      snapshot = {
+        presets: SEED_SNAPSHOT.presets,
+        tiers: SEED_SNAPSHOT.tiers,
+        imageCredits,
+        version,
+      };
       return;
     }
     snapshot = {
       presets: new Map(presets.map((p) => [p.key, rowToPreset(p)])),
       tiers: new Map(tiers.map((t) => [t.plan, rowToTier(t)])),
+      imageCredits,
       version,
     };
   } catch (err) {
@@ -216,6 +233,10 @@ export function getTiers(): TierConfigRow[] {
 /** THE free-credit amount — single source of truth = the free tier's signup grant. */
 export function getFreeCredits(): number {
   return getTier("free").signupGrant;
+}
+/** Credits charged per generated image (images-mode decks). DB-backed admin knob. */
+export function getImageCredits(): number {
+  return current().imageCredits;
 }
 
 // Per-tier numbers the PRICING surfaces display, from the live config: the free

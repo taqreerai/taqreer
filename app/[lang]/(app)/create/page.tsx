@@ -1058,6 +1058,7 @@ export default function CreatePage() {
             quality={quality}
             onQualityChange={setQuality}
             slideCount={estimatedSlideCount}
+            imagesMode={imagesMode}
             disabled={generateDisabled}
             loading={generateLoading}
           />

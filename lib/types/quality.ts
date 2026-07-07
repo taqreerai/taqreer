@@ -95,6 +95,11 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // we don't under-promise.
   secsPerSlide: number;
   baseOverheadSecs: number;
+  // Mirrors the seed's Preset.active: an inactive preset stays
+  // legacy-resolvable (params/cost lookups work) but never renders in
+  // the pre-hydration picker fallback. Kept in sync with SEED_PRESETS
+  // (asserted by scripts/check-config-parity.ts).
+  active: boolean;
 }> = [
   // Labels are intent-based Arabic (سريع = fast / no thinking,
   // تفكير = thinking) — the distinction users care about is "does it
@@ -107,9 +112,12 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // retired from the menu 2026-05-29.
   // ETA constants re-baselined on the 2026-06-12 measured run:
   // opus-fast streamed a 5-slide deck in 53s wall.
-  { key: "opus-fast",      label: "Opus 4.8", thinking: false, secsPerSlide: 8,  baseOverheadSecs: 25 },
-  { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60 },
-  { key: "fable-low",      label: "Fable 5",  thinking: true,  secsPerSlide: 20, baseOverheadSecs: 45 },
+  { key: "opus-fast",      label: "Opus 4.8", thinking: false, secsPerSlide: 8,  baseOverheadSecs: 25, active: true },
+  { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60, active: true },
+  // Inactive 2026-07-07: sold >2x below cost at the old 500+28 credit
+  // price (measured ~$3.22/deck); repriced 900+60 and kept OFF until
+  // demand + a bigger sample justify reactivating (pricing study §4.3).
+  { key: "fable-low",      label: "Fable 5",  thinking: true,  secsPerSlide: 20, baseOverheadSecs: 45, active: false },
 ];
 
 // Default — `opus-fast`: measured 2026-06-12 as the best

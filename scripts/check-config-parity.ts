@@ -11,13 +11,14 @@ import {
   getTier,
   getTiers,
   getFreeCredits,
+  getImageCredits,
   defaultPresetKey,
   regenPresetKey,
   ensureFresh,
 } from "../lib/config/runtime-config";
 import { QUALITY_PRESETS, DEFAULT_QUALITY, REGEN_QUALITY } from "../lib/types/quality";
 import { paramsForQuality } from "../lib/anthropic/quality-params";
-import { CREDIT_COST, TIERS } from "../lib/credits/cost";
+import { CREDIT_COST, TIERS, IMAGE_CREDITS_PER_IMAGE } from "../lib/credits/cost";
 import { KNOWN_PLANS } from "../lib/plan";
 
 function checkAgainstConstants(label: string) {
@@ -27,9 +28,10 @@ function checkAgainstConstants(label: string) {
   }
   assert.deepEqual(
     getActivePresets().map((p) => p.key).sort(),
-    [...QUALITY_PRESETS].map((p) => p.key).sort(),
+    QUALITY_PRESETS.filter((p) => p.active).map((p) => p.key).sort(),
     "active preset keys",
   );
+  assert.equal(getImageCredits(), IMAGE_CREDITS_PER_IMAGE, "image credits");
   assert.equal(getTiers().length, KNOWN_PLANS.length, "tier count");
   for (const plan of KNOWN_PLANS) {
     const t = getTier(plan);

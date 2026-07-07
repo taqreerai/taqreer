@@ -30,6 +30,8 @@ type Props = {
   models: LiveModel[];
   flows: string[];
   configVersion: number;
+  // Per-generated-image surcharge (PlatformSettings.imageCredits).
+  imageCredits: number;
 };
 
 type PresetForm = {
@@ -141,7 +143,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function SettingsClient({ presets, tiers, models, flows, configVersion }: Props) {
+export function SettingsClient({ presets, tiers, models, flows, configVersion, imageCredits }: Props) {
   const router = useRouter();
   const [presetModal, setPresetModal] = useState<{ mode: "add" | "edit"; key?: string } | null>(
     null,
@@ -152,6 +154,32 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion }:
   const [tierForm, setTierForm] = useState<TierForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Image surcharge inline editor (Platform section).
+  const [imageCreditsDraft, setImageCreditsDraft] = useState(String(imageCredits));
+  const [imageSaving, setImageSaving] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const saveImageCredits = async () => {
+    setImageSaving(true);
+    setImageError(null);
+    try {
+      const res = await fetch("/api/admin/settings/platform", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ imageCredits: imageCreditsDraft }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "Save failed");
+      }
+      router.refresh();
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setImageSaving(false);
+    }
+  };
 
   const freeTier = tiers.find((t) => t.plan === "free");
 
@@ -459,6 +487,45 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion }:
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Platform-wide pricing knobs */}
+      <section className="space-y-3">
+        <div className="space-y-0.5">
+          <h2 className="text-lg font-semibold" style={{ color: PRIMARY }}>
+            Image pricing
+          </h2>
+          <p className="text-xs" style={{ color: MUTED }}>
+            Credits charged per generated image on images-mode decks (held one
+            per slide up to the 12-image deck cap; settled on actual boxes).
+            0 = images free.
+          </p>
+        </div>
+        <div className="surface-card flex flex-wrap items-end gap-3 rounded-xl p-4">
+          <Field label="Credits per image">
+            <input
+              type="number"
+              min={0}
+              value={imageCreditsDraft}
+              onChange={(e) => setImageCreditsDraft(e.target.value)}
+              className="w-32 rounded-lg px-3 py-2 text-sm"
+              style={inputStyle}
+            />
+          </Field>
+          <button
+            type="button"
+            onClick={saveImageCredits}
+            disabled={imageSaving || imageCreditsDraft === String(imageCredits)}
+            className="btn-pill px-4 py-2 text-sm disabled:opacity-50"
+          >
+            {imageSaving ? "Saving..." : "Save"}
+          </button>
+          {imageError ? (
+            <span className="text-xs" style={{ color: DANGER }}>
+              {imageError}
+            </span>
+          ) : null}
         </div>
       </section>
 

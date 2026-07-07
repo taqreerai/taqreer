@@ -10,8 +10,8 @@
 // change here.
 //
 // Amounts are in the smallest currency unit (cents). Subscription
-// amounts mirror context/subscriptionmodel.md (monthly) + the landing's
-// ~10%-off yearly (per-month × 12). Top-up amounts mirror TOPUP_PACKS.
+// amounts mirror TIERS (monthly) + a uniform 25%-off yearly (per-month
+// × 12; 2026-07 repricing). Top-up amounts mirror TOPUP_PACKS.
 
 import { TIERS, TOPUP_PACKS } from "@/lib/credits/cost";
 import { KNOWN_PLANS, type KnownPlan } from "@/lib/plan";
@@ -38,12 +38,14 @@ export type PriceSpec = {
   grant: PriceGrant;
 };
 
-// Per-month price (cents) when billed YEARLY - the landing's ~10%-off
-// figures. The yearly Stripe Price charges interval=year at ×12.
+// Per-month price (USD) when billed YEARLY - a uniform 25% off the
+// monthly price (2026-07 repricing; fractional dollars are fine, the
+// ×12×100 yearly amounts below are integer cents: 8100/17100/44100).
+// The yearly Stripe Price charges interval=year at ×12.
 const YEARLY_PER_MONTH_USD: Record<"plus" | "pro" | "max", number> = {
-  plus: 13,
-  pro: 27,
-  max: 63,
+  plus: 6.75,
+  pro: 14.25,
+  max: 36.75,
 };
 
 const PAID_PLANS = KNOWN_PLANS.filter(

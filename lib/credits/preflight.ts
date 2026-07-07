@@ -29,6 +29,7 @@ import {
   estimateSlides,
   effectivePreset,
   generationCost,
+  imagesSurcharge,
   maxAffordableSlides,
   quoteGeneration,
 } from "@/lib/credits/cost";
@@ -38,6 +39,7 @@ import {
   getTier,
   getActivePresets,
   getActivePresetKeys,
+  getImageCredits,
   creditCostFor,
 } from "@/lib/config/runtime-config";
 import { getBalance, type BalanceSnapshot } from "@/lib/credits/server";
@@ -81,6 +83,10 @@ export type PreflightBlocked = {
     | "preset_locked"
     | "slide_cap_exceeded"
     | "insufficient_credits";
+  // For flow_locked: the cheapest tier whose flows include the requested
+  // flow (from live config), so the gate copy names the right plan
+  // instead of a hardcoded tier name. Null if NO tier unlocks the flow.
+  minFlowTier?: string | null;
   // For slide_cap_exceeded: the cap that was exceeded.
   slideCap?: number;
   // For insufficient_credits - the two offers (+ supporting info).
@@ -105,6 +111,9 @@ export async function preflightGenerate(args: {
   flow: Flow;
   preset: Quality;
   slideInput: SlideEstimateInput;
+  // Images-mode deck: the quote (and hold) carries the per-image
+  // surcharge (imagesSurcharge) on top of the slide cost.
+  imagesMode?: boolean;
   // Admin/superuser: all flows + presets unlocked and the credit gate
   // skipped (the run is waived downstream by holdCredits). The slide
   // cap rises only to SYSTEM_SLIDE_CAP - 75 is a hard output-token
@@ -126,6 +135,13 @@ export async function preflightGenerate(args: {
     : baseTier;
   const balance = await getBalance(args.userId, now);
   const estimate = estimateSlides(args.slideInput);
+  const imagesMode = args.imagesMode === true;
+  const imageCredits = getImageCredits();
+  // Slide cost + image surcharge for a preset at a slide count - the
+  // shape every offer below must price with so shown == held.
+  const costWithImages = (preset: Quality, slides: number): number =>
+    generationCost(preset, slides, creditCostFor) +
+    imagesSurcharge(slides, imagesMode, imageCredits);
 
   const quoteFor = (preset: Quality): PresetQuote => {
     const unlocked = tier.unlockedPresetKeys.includes(preset);
@@ -135,6 +151,8 @@ export async function preflightGenerate(args: {
       estimate,
       slideCap: tier.slideCap,
       costOf: creditCostFor,
+      imagesMode,
+      imageCredits,
     });
     return {
       preset,
@@ -148,7 +166,13 @@ export async function preflightGenerate(args: {
   const quotes = getActivePresets().map((p) => quoteFor(p.key));
 
   if (!tier.flows.includes(args.flow)) {
-    return { ok: false, plan, balance, reason: "flow_locked", quotes };
+    // Cheapest tier (ladder order) that unlocks the flow - drives the
+    // "{tier}" token in the gate copy.
+    const minFlowTier =
+      (["free", "plus", "pro", "max"] as const).find((p) =>
+        getTier(p).flows.includes(args.flow),
+      ) ?? null;
+    return { ok: false, plan, balance, reason: "flow_locked", minFlowTier, quotes };
   }
   // Locked if the tier doesn't unlock it OR it's inactive. updatePreset leaves a
   // deactivated key in unlockedPresetKeys, so the active set is the source of
@@ -185,10 +209,18 @@ export async function preflightGenerate(args: {
     estimate,
     slideCap: tier.slideCap,
     costOf: creditCostFor,
+    imagesMode,
+    imageCredits,
   });
 
   if (!args.isAdmin && quote.holdCredits > balance.total) {
-    const affordable = maxAffordableSlides(effective, balance.total, creditCostFor);
+    // The reduced-slides offer must fit slide cost + image surcharge, so
+    // probe downward from the plain-cost affordable count (surcharge only
+    // ever pushes the count lower; imagesSurcharge is monotonic in slides).
+    let affordable = maxAffordableSlides(effective, balance.total, creditCostFor);
+    while (affordable >= MIN_REDUCED_SLIDES && costWithImages(effective, affordable) > balance.total) {
+      affordable--;
+    }
     const reducedSlides =
       affordable >= MIN_REDUCED_SLIDES
         ? Math.min(affordable, quote.holdSlides)
@@ -200,7 +232,7 @@ export async function preflightGenerate(args: {
       // keeps it consistent with the quotes + the picker.
       if (!getActivePresetKeys().includes(p)) return false;
       const alt = effectivePreset(p, args.flow);
-      return generationCost(alt, quote.holdSlides, creditCostFor) <= balance.total;
+      return costWithImages(alt, quote.holdSlides) <= balance.total;
     });
     return {
       ok: false,
@@ -210,9 +242,7 @@ export async function preflightGenerate(args: {
       options: {
         reducedSlides,
         reducedCredits:
-          reducedSlides !== null
-            ? generationCost(effective, reducedSlides, creditCostFor)
-            : null,
+          reducedSlides !== null ? costWithImages(effective, reducedSlides) : null,
         cheaperPresets: [...cheaperPresets],
         topupGap: quote.holdCredits - balance.total,
       },

@@ -326,6 +326,34 @@ export async function updateTier(
   });
 }
 
+/**
+ * Platform-wide pricing knobs (PlatformSettings singleton). Currently
+ * one field: imageCredits - the per-generated-image surcharge on
+ * images-mode decks (2026-07 repricing). 0 is allowed (images free);
+ * the upsert create seeds the singleton on an unseeded DB.
+ */
+export async function updatePlatformSettings(
+  adminUserId: string,
+  input: { imageCredits: number },
+): Promise<void> {
+  assert(
+    isNonNegInt(input.imageCredits),
+    "Image credits must be a non-negative integer.",
+  );
+  await commit({
+    adminUserId,
+    eventType: "admin.settings.platform.update",
+    metadata: { imageCredits: input.imageCredits },
+    mutate: async (tx) => {
+      await tx.platformSettings.upsert({
+        where: { id: "singleton" },
+        create: { id: "singleton", configVersion: 1, imageCredits: input.imageCredits },
+        update: { imageCredits: input.imageCredits },
+      });
+    },
+  });
+}
+
 // After removing/deactivating `key`, every tier must still have >= 1 active
 // unlocked preset, else generation for that tier would be impossible.
 async function assertTiersKeepActivePreset(key: string): Promise<void> {

@@ -20,6 +20,7 @@ import {
   ensureFresh,
   defaultPresetKey,
   creditCostFor,
+  getImageCredits,
 } from "@/lib/config/runtime-config";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
@@ -2592,16 +2593,33 @@ export const deckGenerate = inngest.createFunction(
       // when the preset is toggled off between hold and settle. A truly unknown /
       // legacy key falls back to the default cost inside creditCostFor.
       const pricedPreset: Quality = data.quality ?? defaultPresetKey();
+      // Images-mode surcharge (2026-07 repricing): charge the ACTUAL
+      // reserved boxes in the saved deck, capped at the per-deck image
+      // ceiling (the fill dispatcher stops there too, so boxes beyond it
+      // never become images). The ledger clamps the total to the hold -
+      // which covered one image per held slide - so a box-heavy deck can
+      // never charge past the shown estimate. Off-mode decks: 0. Regen
+      // flows deliberately do NOT charge images (fills are reconciled,
+      // not regenerated).
+      const imageBoxes = isImagesMode(data)
+        ? Math.min(
+            manifest.slides.reduce(
+              (n, s) =>
+                n + (typeof s.html === "string" ? scanGenImages(s.html).length : 0),
+              0,
+            ),
+            MAX_GENERATED_IMAGES,
+          )
+        : 0;
       const result = await settleHold({
         jobKey: jobId,
-        chargeAmount: generationCost(
-          pricedPreset,
-          manifest.slides.length,
-          creditCostFor,
-        ),
+        chargeAmount:
+          generationCost(pricedPreset, manifest.slides.length, creditCostFor) +
+          imageBoxes * getImageCredits(),
         metadata: {
           status: stoppedEarly ? "cancelled_keep_partial" : "succeeded",
           produced: manifest.slides.length,
+          ...(imageBoxes > 0 ? { imageBoxes } : {}),
         },
       });
       if (result.ok) {

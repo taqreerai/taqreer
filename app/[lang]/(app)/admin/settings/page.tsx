@@ -24,7 +24,7 @@ export default async function AdminSettingsPage() {
     listModels(),
     prisma.platformSettings.findUnique({
       where: { id: "singleton" },
-      select: { configVersion: true },
+      select: { configVersion: true, imageCredits: true },
     }),
   ]);
 
@@ -35,6 +35,7 @@ export default async function AdminSettingsPage() {
       models={models}
       flows={[...ALL_FLOWS]}
       configVersion={settings?.configVersion ?? 0}
+      imageCredits={settings?.imageCredits ?? 5}
     />
   );
 }

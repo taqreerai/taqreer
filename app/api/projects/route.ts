@@ -690,6 +690,9 @@ export async function POST(request: Request) {
     flow: creditFlow,
     preset: quality,
     slideInput,
+    // Images-mode decks hold (and settle) a per-image surcharge on top
+    // of the slide cost - 2026-07 repricing; images were free before.
+    imagesMode: payload.imagesMode === true,
     // Admin/superuser: no flow/preset/slide-cap/credit gate. The deck
     // still generates; the hold is waived in the pipeline (owner role).
     isAdmin: dbUser.role === "admin",
@@ -700,6 +703,7 @@ export async function POST(request: Request) {
         error: preflight.reason,
         balance: preflight.balance.total,
         slideCap: preflight.slideCap ?? null,
+        minFlowTier: preflight.minFlowTier ?? null,
         options: preflight.options ?? null,
         quotes: preflight.quotes,
       },

@@ -28,7 +28,12 @@ import {
   type Quality,
 } from "@/lib/types/quality";
 import { useDict } from "@/components/i18n/LocaleProvider";
-import { CREDIT_COST, TIERS, TIER_ORDER } from "@/lib/credits/cost";
+import {
+  CREDIT_COST,
+  TIERS,
+  TIER_ORDER,
+  imagesSurcharge,
+} from "@/lib/credits/cost";
 import { normalizePlan, planLabel } from "@/lib/plan";
 import {
   useCreditBalance,
@@ -41,7 +46,11 @@ import type { KnownPlan } from "@/lib/plan";
 // Pre-hydration fallback = the bundled snapshot (matches the seed). Once
 // /api/credits resolves, the picker uses the DB-driven `credits.presets` so an
 // admin-toggled-inactive preset disappears and cost/gating track Settings edits.
-const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.map((p) => ({
+const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.filter(
+  // Inactive presets never render - matches getActivePresets() server-side,
+  // so the pre-hydration menu can't flash a preset /api/credits will drop.
+  (p) => p.active,
+).map((p) => ({
   key: p.key,
   label: p.label,
   thinking: p.thinking,
@@ -58,6 +67,10 @@ export function GenerateSplitButton({
   // back to 8 (the historical default) when missing — the menu
   // is decorative anyway, no real consequence.
   slideCount,
+  // Images-mode deck: the per-preset estimate carries the per-image
+  // surcharge, mirroring the server quote (preflight) so the shown
+  // number stays the held number (price == charge parity).
+  imagesMode = false,
   disabled = false,
   loading = false,
   // Label override — defaults to the localized "Create" (the create-flow term,
@@ -69,6 +82,7 @@ export function GenerateSplitButton({
   quality: Quality;
   onQualityChange: (next: Quality) => void;
   slideCount?: number | null;
+  imagesMode?: boolean;
   disabled?: boolean;
   loading?: boolean;
   label?: string;
@@ -234,7 +248,15 @@ export function GenerateSplitButton({
             </div>
             {presets.map((preset) => {
               const cost =
-                preset.baseCredits + effectiveSlideCount * preset.perSlideCredits;
+                preset.baseCredits +
+                effectiveSlideCount * preset.perSlideCredits +
+                // Same surcharge the server holds (preset-independent);
+                // live DB rate once /api/credits resolves, constant before.
+                imagesSurcharge(
+                  effectiveSlideCount,
+                  imagesMode,
+                  credits?.imageCredits,
+                );
               const gateTier = preset.gateTier;
               const gated =
                 !isAdmin &&
