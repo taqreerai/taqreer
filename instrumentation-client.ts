@@ -36,6 +36,15 @@ if (process.env.NODE_ENV === "production") {
 
     enableLogs: true,
 
+    // In-app WebView noise (Instagram/Facebook/TikTok inject their own
+    // scripts under app:// URLs; their native bridges die on page unload).
+    // Not our code, zero user impact - drop before sending.
+    ignoreErrors: [
+      "Java object is gone",
+      "window.webkit.messageHandlers",
+    ],
+    denyUrls: [/^app:\/\//],
+
     // Replay integration only when consented; masked even then (never record
     // text content or media).
     integrations: consented
