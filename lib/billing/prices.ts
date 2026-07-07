@@ -10,8 +10,9 @@
 // change here.
 //
 // Amounts are in the smallest currency unit (cents). Subscription
-// amounts mirror TIERS (monthly) + a uniform 25%-off yearly (per-month
-// × 12; 2026-07 repricing). Top-up amounts mirror TOPUP_PACKS.
+// amounts mirror TIERS (monthly) + a uniform 15%-off yearly base
+// (promo codes can top yearly up to 25% total; per-month × 12; 2026-07
+// repricing). Top-up amounts mirror TOPUP_PACKS.
 
 import { TIERS, TOPUP_PACKS } from "@/lib/credits/cost";
 import { KNOWN_PLANS, type KnownPlan } from "@/lib/plan";

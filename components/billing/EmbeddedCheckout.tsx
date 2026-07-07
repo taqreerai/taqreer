@@ -206,7 +206,14 @@ function CheckoutForm({
     setPromoBusy(true);
     setPromoError(null);
     try {
-      await checkout.removePromotionCode();
+      // Same discriminated result shape as applyPromotionCode - an error
+      // resolves (not rejects), so surface it or removal looks successful.
+      const result = await checkout.removePromotionCode();
+      if (result.type === "error") {
+        setPromoError(result.error.message || t.promoInvalid);
+      }
+    } catch {
+      setPromoError(t.promoInvalid);
     } finally {
       setPromoBusy(false);
     }

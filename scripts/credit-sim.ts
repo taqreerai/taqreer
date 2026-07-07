@@ -1093,7 +1093,9 @@ async function main() {
       sourceKey: `sim-topup-reset-${user.id}`,
       ...quiet,
     });
-    const burn = 1300; // burns the sub bucket only (sub is spent first)
+    // Burn a third of the sub bucket only (sub is spent first): derived,
+    // so a repriced allotment keeps subLeft positive and topup untouched.
+    const burn = Math.floor(PLUS_CREDITS / 3);
     const subLeft = PLUS_CREDITS - burn;
     await ledger.chargeCredits({
       userId: user.id,
