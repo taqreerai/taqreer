@@ -49,6 +49,9 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
   const [grantTarget, setGrantTarget] = useState<string | "all" | null>(null);
   const [grantAmount, setGrantAmount] = useState("");
   const [grantReason, setGrantReason] = useState("");
+  // Send the credit-gift email to each granted user (default OFF - most
+  // grants are quiet support adjustments; gifting campaigns opt in).
+  const [grantSendEmail, setGrantSendEmail] = useState(false);
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [granting, setGranting] = useState(false);
@@ -78,6 +81,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
           target: grantTarget,
           amount,
           reason: grantReason.trim() || undefined,
+          sendEmail: grantSendEmail,
         }),
       });
       if (!res.ok) throw new Error("grant failed");
@@ -92,6 +96,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
       setGrantTarget(null);
       setGrantAmount("");
       setGrantReason("");
+      setGrantSendEmail(false);
     } catch {
       // leave the modal open so the admin can retry
     } finally {
@@ -349,6 +354,17 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
               style={inputStyle}
             />
           </div>
+          <label
+            className="flex cursor-pointer items-center gap-2 text-xs font-medium"
+            style={{ color: MUTED }}
+          >
+            <input
+              type="checkbox"
+              checked={grantSendEmail}
+              onChange={(e) => setGrantSendEmail(e.target.checked)}
+            />
+            Email users about the gift (credit-gift email, per-user language)
+          </label>
           {grantTarget === "all" ? (
             <p className="text-xs" style={{ color: MUTED }}>
               This applies the grant to every user. In production this is
