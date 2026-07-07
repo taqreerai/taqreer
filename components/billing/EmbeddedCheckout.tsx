@@ -337,10 +337,11 @@ function CheckoutForm({
                   type="button"
                   onClick={applyPromo}
                   disabled={promoBusy || paying || promoDraft.trim() === ""}
-                  // Generous horizontal padding: the short label ("تطبيق" /
-                  // "Apply") on a fully-rounded pill reads as a circle
-                  // without it.
-                  className="btn-pill h-12 shrink-0 px-8 text-sm disabled:opacity-50"
+                  // Fixed 30% of the row: a width (not padding) so the short
+                  // label ("تطبيق" / "Apply") can never collapse the pill
+                  // into a circle (.btn-pill's own padding beats px-*
+                  // utilities - unlayered CSS wins over Tailwind layers).
+                  className="btn-pill h-12 w-[30%] shrink-0 text-sm disabled:opacity-50"
                 >
                   {promoBusy ? t.promoApplying : t.promoApply}
                 </button>
