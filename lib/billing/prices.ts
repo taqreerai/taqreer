@@ -74,7 +74,10 @@ export const BILLING_CATALOG: readonly PriceSpec[] = [
         lookupKey: `tier_${plan}_yearly`,
         productKey,
         productName,
-        amount: YEARLY_PER_MONTH_USD[plan] * 12 * 100,
+        // Rounded: the per-month figure is fractional dollars, and IEEE
+        // floats make 7.65*12*100 = 9180.000000000002 - Stripe rejects a
+        // non-integer unit_amount.
+        amount: Math.round(YEARLY_PER_MONTH_USD[plan] * 12 * 100),
         currency: "usd",
         interval: "year",
         grant: { kind: "subscription", plan, cadence: "yearly" },
