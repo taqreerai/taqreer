@@ -46,10 +46,10 @@ type Summary = {
 };
 
 // Pre-hydration fallback for the yearly per-month figure: derived from
-// the bundled TIERS monthly price at the catalog's uniform 25% yearly
+// the bundled TIERS monthly price at the catalog's uniform 15% yearly
 // discount (lib/billing/prices.ts), NOT a second hand-maintained table.
 // The live Stripe price from /api/credits always wins once loaded.
-const YEARLY_DISCOUNT = 0.25;
+const YEARLY_DISCOUNT = 0.15;
 const yearlyPerMonthFallback = (tier: "plus" | "pro" | "max"): number =>
   Math.round(TIERS[tier].priceUsd * (1 - YEARLY_DISCOUNT) * 100) / 100;
 

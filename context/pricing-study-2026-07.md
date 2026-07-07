@@ -13,14 +13,16 @@ Taqreer launched as the most expensive non-enterprise ladder in its competitive 
 | Tier | Today | Proposed (mo) | Proposed (annual, per mo) | Credits/mo | Per-credit revenue |
 |---|---|---|---|---|---|
 | Free | $0, 200 cr one-time, 6-slide cap | $0, **1,000 cr one-time**, 10-slide cap | - | one-time | - |
-| Plus | $15, 2,000 cr | **$9** | **$6.75** ($81/yr) | **4,000** | $0.00225 |
-| Pro | $30, 5,000 cr | **$19** | **$14** ($171/yr, ~26% off) | **10,000** | $0.0019 |
-| Max | $70, 12,000 cr | **$49** | **$37** ($441/yr) | **28,000** | $0.00175 |
+| Plus | $15, 2,000 cr | **$9** | **$7.65** ($91.80/yr) | **4,000** | $0.00225 |
+| Pro | $30, 5,000 cr | **$19** | **$16.15** ($193.80/yr) | **10,000** | $0.0019 |
+| Max | $70, 12,000 cr | **$49** | **$41.65** ($499.80/yr) | **28,000** | $0.00175 |
+
+Annual = uniform **15% off** (decided 2026-07-07, revised from the earlier 25% draft). Campaign **promo codes top yearly up to 25% total** for the first year: Stripe-dashboard-managed coupons at percent_off 11.76, duration "once", yearly checkouts only (the promo field renders only there).
 
 Alongside the price cut (same release):
 1. **Charge 5 credits per generated image** (today images are free: up to 12 x $0.05-0.08 per deck of pure COGS).
 2. **Bump `opus-fast` to 100 base + 15/slide** (from 10/slide) so the fast preset is not sold below cost at the new cheaper per-credit rates.
-3. **Make yearly real at ~25% off** (current code is a ~10% placeholder).
+3. **Make yearly real at 15% off** (current code is a ~10% placeholder), with promo codes as the 25% first-year campaign lever.
 4. Keep `fable-low` inactive, or reprice it to ~900 base + 60/slide before reactivating (see 4.3).
 
 Year 1-2 margin target: **blended gross margin >= 50%**; the entry tier may dip to 25-30% for heavy users; full-burn fast-preset usage may go negative on Plus and that is accepted under growth-first (see 5.3 for monitoring triggers).
@@ -146,7 +148,7 @@ At new per-credit revenue ($0.0019 on Pro), fable-low's COGS of ~$0.0044/credit 
 1. **Existing subscribers**: auto-move to new (cheaper) prices, or grandfather? (Recommend auto-move + email.)
 2. **Image credit price**: 5 cr/image proposed; alternatives: 3 cr (cheaper feel) or free-tier-capped instead of charged.
 3. **Max tier**: ship at $49/28,000 or defer the tier entirely until power users appear (market top tiers are $90+ or $200+; $49 is deliberately an easy upsell instead).
-4. **Annual discount depth**: 25% proposed (market range 17-40%).
+4. **Annual discount depth**: DECIDED 2026-07-07 - 15% base, 25% total via first-year promo codes (yearly only, Stripe-dashboard-managed).
 5. **Referral credits** (+200 like Gamma): now or later?
 
 ## 9. Implementation pointer (separate task, after sign-off)

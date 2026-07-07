@@ -38,14 +38,17 @@ export type PriceSpec = {
   grant: PriceGrant;
 };
 
-// Per-month price (USD) when billed YEARLY - a uniform 25% off the
-// monthly price (2026-07 repricing; fractional dollars are fine, the
-// ×12×100 yearly amounts below are integer cents: 8100/17100/44100).
-// The yearly Stripe Price charges interval=year at ×12.
+// Per-month price (USD) when billed YEARLY - a uniform 15% off the
+// monthly price (2026-07 repricing; user direction 2026-07-07: 15%
+// base, and promo codes top yearly up to 25% total - see the coupon
+// guidance in app/api/stripe/checkout/route.ts). Fractional dollars
+// are fine: the ×12×100 yearly amounts are integer cents
+// (9180/19380/49980). The yearly Stripe Price charges interval=year
+// at ×12.
 const YEARLY_PER_MONTH_USD: Record<"plus" | "pro" | "max", number> = {
-  plus: 6.75,
-  pro: 14.25,
-  max: 36.75,
+  plus: 7.65,
+  pro: 16.15,
+  max: 41.65,
 };
 
 const PAID_PLANS = KNOWN_PLANS.filter(

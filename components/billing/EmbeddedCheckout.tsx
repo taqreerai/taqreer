@@ -115,16 +115,26 @@ export function EmbeddedCheckout({
 
   return (
     <CheckoutElementsProvider stripe={getStripe(locale)} options={options}>
-      <CheckoutForm isTopup={lookupKey.startsWith("topup_")} onSuccess={onSuccess} />
+      <CheckoutForm
+        isTopup={lookupKey.startsWith("topup_")}
+        // Promo codes are enabled on YEARLY subscription sessions only
+        // (mirror of the server's allow_promotion_codes condition in
+        // /api/stripe/checkout - applying a code on any other session
+        // would be rejected by Stripe anyway).
+        allowPromo={lookupKey.endsWith("_yearly")}
+        onSuccess={onSuccess}
+      />
     </CheckoutElementsProvider>
   );
 }
 
 function CheckoutForm({
   isTopup,
+  allowPromo,
   onSuccess,
 }: {
   isTopup: boolean;
+  allowPromo: boolean;
   onSuccess?: () => void;
 }) {
   const dict = useDict();
@@ -133,6 +143,12 @@ function CheckoutForm({
   const state = useCheckoutElements();
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  // Promo code entry (yearly sessions only). The applied state is read
+  // from the session's own discountAmounts, so it survives re-renders
+  // and currency switches without local mirroring.
+  const [promoDraft, setPromoDraft] = useState("");
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   if (state.type === "loading") {
     return (
@@ -162,6 +178,39 @@ function CheckoutForm({
   // so the email renders read-only and confirm() takes no override.
   const amount = checkout.total.total.amount;
   const cta = (isTopup ? t.payCta : t.subscribeCta).replace("{amount}", amount);
+  // The session's applied discount (only ever one promo at a time in
+  // our flow). Stripe recomputes total.total after apply/remove, so the
+  // order summary + CTA amounts above track it automatically.
+  const appliedDiscount = checkout.discountAmounts?.[0] ?? null;
+
+  async function applyPromo() {
+    const code = promoDraft.trim();
+    if (!code) return;
+    setPromoBusy(true);
+    setPromoError(null);
+    try {
+      const result = await checkout.applyPromotionCode(code);
+      if (result.type === "error") {
+        setPromoError(result.error.message || t.promoInvalid);
+      } else {
+        setPromoDraft("");
+      }
+    } catch {
+      setPromoError(t.promoInvalid);
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+
+  async function removePromo() {
+    setPromoBusy(true);
+    setPromoError(null);
+    try {
+      await checkout.removePromotionCode();
+    } finally {
+      setPromoBusy(false);
+    }
+  }
 
   async function pay() {
     setPaying(true);
@@ -224,6 +273,74 @@ function CheckoutForm({
             <CurrencySelectorElement />
           </div>
         </div>
+
+        {/* Promo code - yearly subscriptions only (mirrors the server's
+            allow_promotion_codes). Applied state renders as a removable
+            row; the amounts above re-derive from the session. */}
+        {allowPromo ? (
+          <div>
+            <label
+              htmlFor="promo-code"
+              className="mb-2 block text-sm font-medium text-foreground"
+            >
+              {t.promoLabel}
+            </label>
+            {appliedDiscount ? (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--tq-border-hairline)] px-3 py-2">
+                <span className="text-sm text-foreground">
+                  {t.promoApplied.replace(
+                    "{code}",
+                    appliedDiscount.promotionCode ?? appliedDiscount.displayName,
+                  )}
+                  <span className="ms-2 text-xs text-muted tabular-nums">
+                    <bdi dir="ltr">-{appliedDiscount.amount}</bdi>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={removePromo}
+                  disabled={promoBusy || paying}
+                  className="text-xs text-muted underline-offset-2 hover:underline disabled:opacity-50"
+                >
+                  {t.promoRemove}
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  id="promo-code"
+                  type="text"
+                  value={promoDraft}
+                  onChange={(e) => setPromoDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void applyPromo();
+                    }
+                  }}
+                  placeholder={t.promoPlaceholder}
+                  className="input-dark flex-1"
+                  dir="ltr"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  onClick={applyPromo}
+                  disabled={promoBusy || paying || promoDraft.trim() === ""}
+                  className="btn-pill px-4 py-2 text-sm disabled:opacity-50"
+                >
+                  {promoBusy ? t.promoApplying : t.promoApply}
+                </button>
+              </div>
+            )}
+            {promoError ? (
+              <p className="mt-2 text-xs text-danger" role="alert">
+                {promoError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div>
           <label className="mb-2 block text-sm font-medium text-foreground">

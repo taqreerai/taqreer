@@ -110,6 +110,20 @@ async function main() {
 
   const quiet = { notify: false };
 
+  // ── Derived pricing shorthands ─────────────────────────────────────
+  // Every expectation below derives from the live constants so the next
+  // repricing updates the sim instead of breaking it.
+  const FREE_GRANT = cost.TIERS.free.signupGrant;
+  const PLUS_CREDITS = cost.TIERS.plus.monthlyAllotment;
+  const PRO_CREDITS = cost.TIERS.pro.monthlyAllotment;
+  const MAX_CREDITS = cost.TIERS.max.monthlyAllotment;
+  const FREE_CAP = cost.TIERS.free.slideCap;
+  const PLUS_CAP = cost.TIERS.plus.slideCap;
+  // Standard top-up pack used by the pack scenarios (the "small" pack).
+  const PACK = cost.TOPUP_PACKS.find((p) => p.key === "small")!.credits;
+  const genCost = (preset: Quality, slides: number) =>
+    cost.generationCost(preset, slides);
+
   async function wipeSimUsers() {
     await prisma.user.deleteMany({
       where: { email: { endsWith: `@${SIM_DOMAIN}` } },
@@ -294,6 +308,7 @@ async function main() {
   {
     // 1.1 Fixed-size deck charges exactly the formula price.
     const user = await makeUser("plus");
+    const price = genCost("opus-fast", 10); // base + 10 × perSlide
     const result = await fakeGenerate({
       userId: user.id,
       plan: "plus",
@@ -303,26 +318,34 @@ async function main() {
       outcome: { kind: "success", produce: 10 },
     });
     assertEstimateInvariant(result);
-    check("1.1", "Fixed 10-slide opus-fast deck costs exactly 200", {
+    check("1.1", `Fixed 10-slide opus-fast deck costs exactly ${price}`, {
       before: result.before,
       after: result.after,
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 200, charged 200, refunded 0, balance 2000→1800",
+      expected: `held ${price}, charged ${price}, refunded 0, balance ${PLUS_CREDITS}→${PLUS_CREDITS - price}`,
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}, balance ${result.before}→${result.after}`,
       pass:
-        result.held === 200 &&
-        result.charged === 200 &&
+        result.held === price &&
+        result.charged === price &&
         result.refunded === 0 &&
-        result.before === 2000 &&
-        result.after === 1800,
+        result.before === PLUS_CREDITS &&
+        result.after === PLUS_CREDITS - price,
     });
   }
 
   {
     // 1.2 Auto mode: hold the estimate, charge the actual, release the rest.
     const user = await makeUser("plus");
+    // estimate: ceil(1000/100)+2 = 12 slides → hold genCost(12);
+    // actual 9 → charge genCost(9), release the difference.
+    const estSlides = cost.estimateSlides({
+      kind: "text",
+      text: words(1000),
+    }).slides!;
+    const hold = genCost("opus-fast", estSlides);
+    const charge = genCost("opus-fast", 9);
     const result = await fakeGenerate({
       userId: user.id,
       plan: "plus",
@@ -332,34 +355,39 @@ async function main() {
       outcome: { kind: "success", produce: 9 },
     });
     assertEstimateInvariant(result);
-    // estimate: ceil(1000/100)+2 = 12 → hold 100+12×10 = 220
-    // actual 9 → charge 100+9×10 = 190, release 30
-    check("1.2", "Auto count: hold 12-slide max, charge the 9 produced", {
+    check("1.2", `Auto count: hold ${estSlides}-slide max, charge the 9 produced`, {
       before: result.before,
       after: result.after,
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 220, charged 190, refunded 30, balance 2000→1810",
+      expected: `held ${hold}, charged ${charge}, refunded ${hold - charge}, balance ${PLUS_CREDITS}→${PLUS_CREDITS - charge}`,
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}, balance ${result.before}→${result.after}`,
       pass:
-        result.held === 220 &&
-        result.charged === 190 &&
-        result.refunded === 30 &&
-        result.after === 1810,
+        result.held === hold &&
+        result.charged === charge &&
+        result.refunded === hold - charge &&
+        result.after === PLUS_CREDITS - charge,
     });
   }
 
   {
     // 1.3 Model overshoots the estimate → charge CLAMPS to what was shown.
     const user = await makeUser("plus");
+    const estSlides = cost.estimateSlides({
+      kind: "text",
+      text: words(1000),
+    }).slides!; // 12
+    const hold = genCost("opus-fast", estSlides);
+    const overshoot = estSlides + 2; // produce 2 past the estimate
+    const rawCost = genCost("opus-fast", overshoot);
     const result = await fakeGenerate({
       userId: user.id,
       plan: "plus",
       flow: "create",
       preset: "opus-fast",
-      slideInput: { kind: "text", text: words(1000) }, // hold 220 (12 slides)
-      outcome: { kind: "success", produce: 14 }, // raw cost would be 240
+      slideInput: { kind: "text", text: words(1000) }, // hold = estSlides
+      outcome: { kind: "success", produce: overshoot }, // raw cost > hold
     });
     assertEstimateInvariant(result);
     check("1.3", "Overproduced deck never charges past the shown estimate", {
@@ -368,9 +396,9 @@ async function main() {
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 220, charged clamped to 220 (not 240), refunded 0",
+      expected: `held ${hold}, charged clamped to ${hold} (not ${rawCost}), refunded 0`,
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}`,
-      pass: result.held === 220 && result.charged === 220 && result.refunded === 0,
+      pass: result.held === hold && result.charged === hold && result.refunded === 0,
     });
   }
 
@@ -415,15 +443,18 @@ async function main() {
       slideInput: { kind: "text", text: words(1200) },
     });
     const q = quotes.quotes;
+    // Quotes cover ACTIVE presets only: fable-low is inactive in the
+    // seed, so it must not be quoted at all (it isn't in the picker).
+    const fastQuote = genCost("opus-fast", est.slides!);
+    const balancedQuote = genCost("opus-balanced", est.slides!);
     const expectQuotes =
-      q.find((x) => x.preset === "opus-fast")?.credits === 240 &&
-      q.find((x) => x.preset === "opus-balanced")?.credits === 708 &&
-      q.find((x) => x.preset === "fable-low")?.credits === 892;
-    check("2.1", "Create-from-text estimate: 1200 words → 14 slides, 3 quotes", {
-      before: 5000,
-      after: 5000,
-      expected:
-        "14 slides; opus-fast 240 / opus-balanced 708 / fable-low 892 shown before generating",
+      q.find((x) => x.preset === "opus-fast")?.credits === fastQuote &&
+      q.find((x) => x.preset === "opus-balanced")?.credits === balancedQuote &&
+      q.find((x) => x.preset === "fable-low") === undefined;
+    check("2.1", "Create-from-text estimate: 1200 words → 14 slides, active quotes", {
+      before: PRO_CREDITS,
+      after: PRO_CREDITS,
+      expected: `14 slides; opus-fast ${fastQuote} / opus-balanced ${balancedQuote} shown before generating; fable-low (inactive) not quoted`,
       observed: `${est.slides} slides; quotes ${q.map((x) => `${x.preset}=${x.credits}`).join(", ")}`,
       pass: est.slides === 14 && expectQuotes,
     });
@@ -431,8 +462,8 @@ async function main() {
     // 2.2 Enhance rebuilds 1:1 → page count is the count, known up front.
     const enhanceEst = cost.estimateSlides({ kind: "enhance", pageCount: 24 });
     check("2.2", "Enhance estimate = source page count (exact)", {
-      before: 5000,
-      after: 5000,
+      before: PRO_CREDITS,
+      after: PRO_CREDITS,
       expected: "24 slides, exact (charge == quote)",
       observed: `${enhanceEst.slides} slides, exact=${enhanceEst.exact}`,
       pass: enhanceEst.slides === 24 && enhanceEst.exact === true,
@@ -445,8 +476,8 @@ async function main() {
       briefText: words(700),
     });
     check("2.3", "Mimic estimate: user pick wins; else from the brief", {
-      before: 5000,
-      after: 5000,
+      before: PRO_CREDITS,
+      after: PRO_CREDITS,
       expected: "picked 15 → 15 exact; 700-word brief → 9 estimated",
       observed: `pick ${mimicPick.slides} (exact=${mimicPick.exact}); brief ${mimicBrief.slides} (exact=${mimicBrief.exact})`,
       pass:
@@ -463,8 +494,8 @@ async function main() {
       totalRows: 120,
     });
     check("2.4", "Datasheet estimate from structure (3 sheets, 120 rows)", {
-      before: 5000,
-      after: 5000,
+      before: PRO_CREDITS,
+      after: PRO_CREDITS,
       expected: "2 + 3 sheets + 120/20 rows = 11 slides",
       observed: `${dataEst.slides} slides (basis=${dataEst.basis})`,
       pass: dataEst.slides === 11,
@@ -473,8 +504,8 @@ async function main() {
     // 2.5 A user-set count always wins.
     const fixedEst = cost.estimateSlides({ kind: "fixed", count: 7 });
     check("2.5", "User-set slide count overrides estimation", {
-      before: 5000,
-      after: 5000,
+      before: PRO_CREDITS,
+      after: PRO_CREDITS,
       expected: "7 slides, exact",
       observed: `${fixedEst.slides} slides, exact=${fixedEst.exact}`,
       pass: fixedEst.slides === 7 && fixedEst.exact === true,
@@ -484,11 +515,16 @@ async function main() {
   // ─── Section 3 - Low credits vs oversized content ────────────────
 
   {
-    // Free user with credits for ~6 sonnet slides drops in a 2800-word
-    // brief (worth ~30 raw, capped at 10 for the Free tier).
-    const user = await makeUser("free"); // 400
-    // Spend down to 160 first (a real 16-slide… no - a fixed 14-slide
-    // deck doesn't fit Free's cap; burn with two small decks instead).
+    // Free user burned down to exactly a 6-slide balance drops in a
+    // 2800-word brief (worth ~30 raw, capped at FREE_CAP for the Free
+    // tier). Scenario shape: the balance affords a reduced deck but not
+    // the capped hold.
+    const user = await makeUser("free"); // FREE_GRANT
+    const reducedTarget = 6; // the reduce offer the block must surface
+    const lowBalance = genCost("opus-fast", reducedTarget); // affords exactly 6 slides
+    const capHold = genCost("opus-fast", FREE_CAP); // the capped-brief hold
+    // Spend down: one small real deck, then a manual charge to land
+    // exactly on lowBalance.
     await fakeGenerate({
       userId: user.id,
       plan: "free",
@@ -496,14 +532,14 @@ async function main() {
       preset: "opus-fast",
       slideInput: { kind: "fixed", count: 7 },
       outcome: { kind: "success", produce: 7 },
-    }); // 170 → 230 left
+    });
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
-      amount: 70,
+      amount: FREE_GRANT - genCost("opus-fast", 7) - lowBalance,
       metadata: { reason: "sim burn-down" },
       ...quiet,
-    }); // → 160 left
+    }); // → lowBalance left
 
     const bigText = words(2800);
     const blocked = await fakeGenerate({
@@ -521,19 +557,18 @@ async function main() {
     check("3.1", "Oversized brief + low balance: stop BEFORE generating", {
       before: blocked.before,
       after: blocked.after,
-      expected:
-        "blocked insufficient_credits, balance untouched (160), offers: reduce to 6 @ 160 or top up 40 (no cheaper preset exists on Free)",
+      expected: `blocked insufficient_credits, balance untouched (${lowBalance}), offers: reduce to ${reducedTarget} @ ${lowBalance} or top up ${capHold - lowBalance} (no cheaper preset exists on Free)`,
       observed: `${blocked.status} (${blocked.blockedReason}); balance ${blocked.before}→${blocked.after}; options ${JSON.stringify(opts)}`,
       pass:
         blocked.status === "blocked" &&
         blocked.blockedReason === "insufficient_credits" &&
-        blocked.before === 160 &&
-        blocked.after === 160 &&
+        blocked.before === lowBalance &&
+        blocked.after === lowBalance &&
         opts !== null &&
-        opts.reducedSlides === 6 &&
-        opts.reducedCredits === 160 &&
+        opts.reducedSlides === reducedTarget &&
+        opts.reducedCredits === lowBalance &&
         opts.cheaperPresets.length === 0 &&
-        opts.topupGap === 40,
+        opts.topupGap === capHold - lowBalance,
     });
 
     // 3.2 The user picks the reduce offer → the deck is simply a normal
@@ -543,8 +578,8 @@ async function main() {
       plan: "free",
       flow: "create",
       preset: "opus-fast",
-      slideInput: { kind: "fixed", count: 6 },
-      outcome: { kind: "success", produce: 6 },
+      slideInput: { kind: "fixed", count: reducedTarget },
+      outcome: { kind: "success", produce: reducedTarget },
     });
     assertEstimateInvariant(reduced);
     check("3.2", "Reduced deck: charged exactly the affordable size", {
@@ -553,19 +588,28 @@ async function main() {
       held: reduced.held,
       charged: reduced.charged,
       refunded: reduced.refunded,
-      expected: "charged 160 (6 slides), balance 160→0",
+      expected: `charged ${lowBalance} (${reducedTarget} slides), balance ${lowBalance}→0`,
       observed: `charged ${reduced.charged}, balance ${reduced.before}→${reduced.after}`,
-      pass: reduced.charged === 160 && reduced.after === 0,
+      pass: reduced.charged === lowBalance && reduced.after === 0,
     });
   }
 
   {
     // 3.3 Cheaper-model path: the block lists presets that DO fit.
     const user = await makeUser("pro");
+    const est = cost.estimateSlides({
+      kind: "text",
+      text: words(1200),
+    }).slides!; // 14
+    const balancedQuote = genCost("opus-balanced", est);
+    const fastQuote = genCost("opus-fast", est);
+    // Land the balance between the two quotes: opus-balanced blocked,
+    // opus-fast still affordable at the full size.
+    const midBalance = Math.floor((fastQuote + balancedQuote) / 2);
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
-      amount: 4400, // 5000 → 600
+      amount: PRO_CREDITS - midBalance,
       metadata: { reason: "sim burn-down" },
       ...quiet,
     });
@@ -574,24 +618,21 @@ async function main() {
       plan: "pro",
       flow: "create",
       preset: "opus-balanced",
-      slideInput: { kind: "text", text: words(1200) }, // 14 slides → 708
-      outcome: { kind: "success", produce: 14 },
+      slideInput: { kind: "text", text: words(1200) }, // est slides → balancedQuote
+      outcome: { kind: "success", produce: est },
     });
     const opts3 =
       !blocked.preflight.ok && blocked.preflight.options
         ? blocked.preflight.options
         : null;
-    const cheaperOk =
-      opts3 !== null &&
-      opts3.cheaperPresets.includes("opus-fast") &&
-      opts3.cheaperPresets.includes("opus-fast");
+    const cheaperOk = opts3 !== null && opts3.cheaperPresets.includes("opus-fast");
     const fallback = await fakeGenerate({
       userId: user.id,
       plan: "pro",
       flow: "create",
       preset: "opus-fast",
       slideInput: { kind: "text", text: words(1200) },
-      outcome: { kind: "success", produce: 14 },
+      outcome: { kind: "success", produce: est },
     });
     assertEstimateInvariant(fallback);
     check("3.3", "Cheaper model offered and charges its own price", {
@@ -599,30 +640,38 @@ async function main() {
       after: fallback.after,
       held: fallback.held,
       charged: fallback.charged,
-      expected:
-        "opus-balanced (708) blocked at 600; opus-fast offered; opus-fast full 14 slides charged 240",
+      expected: `opus-balanced (${balancedQuote}) blocked at ${midBalance}; opus-fast offered; opus-fast full ${est} slides charged ${fastQuote}`,
       observed: `blocked=${blocked.blockedReason}, cheaper=${JSON.stringify(opts3?.cheaperPresets)}, fallback charged ${fallback.charged}, balance ${blocked.before}→${fallback.after}`,
       pass:
         blocked.status === "blocked" &&
         cheaperOk &&
-        fallback.charged === 240 &&
-        fallback.after === 360,
+        fallback.charged === fastQuote &&
+        fallback.after === midBalance - fastQuote,
     });
   }
 
   {
     // 3.4 Top-up path: buy a pack, then the original choice fits.
     const user = await makeUser("pro");
+    const est = cost.estimateSlides({
+      kind: "text",
+      text: words(1200),
+    }).slides!; // 14
+    const balancedQuote = genCost("opus-balanced", est);
+    // Same sub balance as 3.3: below the opus-balanced quote on its own,
+    // so the pack is what unblocks the run.
+    const fastQuote = genCost("opus-fast", est);
+    const midBalance = Math.floor((fastQuote + balancedQuote) / 2);
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
-      amount: 4400,
+      amount: PRO_CREDITS - midBalance,
       metadata: { reason: "sim burn-down" },
       ...quiet,
-    }); // → 600
+    }); // → midBalance
     await ledger.grantTopup({
       userId: user.id,
-      credits: 1000,
+      credits: PACK,
       sourceKey: `sim-topup-${user.id}`,
       ...quiet,
     });
@@ -631,48 +680,49 @@ async function main() {
       plan: "pro",
       flow: "create",
       preset: "opus-balanced",
-      slideInput: { kind: "text", text: words(1200) }, // 708
-      outcome: { kind: "success", produce: 14 },
+      slideInput: { kind: "text", text: words(1200) }, // balancedQuote
+      outcome: { kind: "success", produce: est },
     });
     assertEstimateInvariant(result);
     const split = await ledger.getBalance(user.id);
+    const topupLeft = PACK - (balancedQuote - midBalance);
     check("3.4", "Top-up unblocks; subscription spent before the pack", {
       before: result.before,
       after: result.after,
       held: result.held,
       charged: result.charged,
-      expected:
-        "1600 → charged 708 → 892 total (subscription 0, top-up 892 - sub bucket burns first)",
+      expected: `${midBalance + PACK} → charged ${balancedQuote} → ${topupLeft} total (subscription 0, top-up ${topupLeft} - sub bucket burns first)`,
       observed: `balance ${result.before}→${result.after} (sub ${split.subscription}, topup ${split.topup})`,
       pass:
-        result.before === 1600 &&
-        result.charged === 708 &&
+        result.before === midBalance + PACK &&
+        result.charged === balancedQuote &&
         split.subscription === 0 &&
-        split.topup === 892,
+        split.topup === topupLeft,
     });
   }
 
   {
     // 3.5 Source deck above the tier cap blocks at preflight - never a
     // truncated rebuild, never a charge.
-    const user = await makeUser("plus"); // cap 30
+    const user = await makeUser("plus"); // cap PLUS_CAP
+    const oversized = PLUS_CAP * 2; // a source deck twice the tier cap
     const result = await fakeGenerate({
       userId: user.id,
       plan: "plus",
       flow: "enhance",
       preset: "opus-fast",
-      slideInput: { kind: "enhance", pageCount: 60 },
-      outcome: { kind: "success", produce: 60 },
+      slideInput: { kind: "enhance", pageCount: oversized },
+      outcome: { kind: "success", produce: oversized },
     });
-    check("3.5", "60-page enhance on a 30-cap tier blocks, charges 0", {
+    check("3.5", `${oversized}-page enhance on a ${PLUS_CAP}-cap tier blocks, charges 0`, {
       before: result.before,
       after: result.after,
-      expected: "blocked slide_cap_exceeded, balance unchanged 2000",
+      expected: `blocked slide_cap_exceeded, balance unchanged ${PLUS_CREDITS}`,
       observed: `${blockedDesc(result)}, balance ${result.before}→${result.after}`,
       pass:
         result.status === "blocked" &&
         result.blockedReason === "slide_cap_exceeded" &&
-        result.after === 2000,
+        result.after === PLUS_CREDITS,
     });
   }
 
@@ -685,25 +735,31 @@ async function main() {
   {
     // 4.1 Cancel late: pay for the slides actually made.
     const user = await makeUser("plus");
+    const fullCount = PLUS_CAP; // a full-cap deck
+    const cancelAt = fullCount - 5;
+    const holdFull = genCost("opus-fast", fullCount);
+    const partialCost = genCost("opus-fast", cancelAt);
     const result = await fakeGenerate({
       userId: user.id,
       plan: "plus",
       flow: "create",
       preset: "opus-fast",
-      slideInput: { kind: "fixed", count: 30 }, // hold 400
-      outcome: { kind: "cancel", afterSlides: 25 },
+      slideInput: { kind: "fixed", count: fullCount }, // hold holdFull
+      outcome: { kind: "cancel", afterSlides: cancelAt },
     });
     assertEstimateInvariant(result);
-    check("4.1", "Cancel at 25/30: pays for 25, refunds the rest", {
+    check("4.1", `Cancel at ${cancelAt}/${fullCount}: pays for ${cancelAt}, refunds the rest`, {
       before: result.before,
       after: result.after,
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 400, charged 350 (100 + 25×10), refunded 50",
+      expected: `held ${holdFull}, charged ${partialCost} (base + ${cancelAt} slides), refunded ${holdFull - partialCost}`,
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}`,
       pass:
-        result.held === 400 && result.charged === 350 && result.refunded === 50,
+        result.held === holdFull &&
+        result.charged === partialCost &&
+        result.refunded === holdFull - partialCost,
     });
 
     // 4.2 Cancel before anything streamed: full release.
@@ -712,7 +768,7 @@ async function main() {
       plan: "plus",
       flow: "create",
       preset: "opus-fast",
-      slideInput: { kind: "fixed", count: 30 },
+      slideInput: { kind: "fixed", count: fullCount },
       outcome: { kind: "cancel", afterSlides: 0 },
     });
     check("4.2", "Cancel before first slide: full refund", {
@@ -721,11 +777,11 @@ async function main() {
       held: early.held,
       charged: early.charged,
       refunded: early.refunded,
-      expected: "held 400, charged 0, refunded 400, balance unchanged",
+      expected: `held ${holdFull}, charged 0, refunded ${holdFull}, balance unchanged`,
       observed: `held ${early.held}, charged ${early.charged}, refunded ${early.refunded}, balance ${early.before}→${early.after}`,
       pass:
         early.charged === 0 &&
-        early.refunded === 400 &&
+        early.refunded === holdFull &&
         early.before === early.after,
     });
   }
@@ -736,48 +792,51 @@ async function main() {
     const before = await balanceOf(user.id);
     // Local in-canvas edit: pure content save, no Claude → no ledger call.
     const afterLocal = await balanceOf(user.id);
-    // AI partial regen of 3 slides on opus-balanced: 3 × 22 = 66.
+    // AI partial regen of 3 slides on opus-balanced: 3 × perSlide, no base.
+    const regenPrice = cost.regenCost("opus-balanced", 3);
+    const namePrice = cost.NAME_GEN_COST;
     const regen = await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-regen-${user.id}`,
-      amount: cost.regenCost("opus-balanced", 3),
+      amount: regenPrice,
       metadata: { kind: "partial-regen", slides: 3, preset: "opus-balanced" },
       ...quiet,
     });
     const afterRegen = await balanceOf(user.id);
-    // Name-gen (Haiku): flat 5.
+    // Name-gen (Haiku): flat NAME_GEN_COST.
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-namegen-${user.id}`,
-      amount: cost.NAME_GEN_COST,
+      amount: namePrice,
       metadata: { kind: "name-gen" },
       ...quiet,
     });
     const afterName = await balanceOf(user.id);
-    check("4.3", "AI edits charge (regen 66, name-gen 5); local edits free", {
+    check("4.3", `AI edits charge (regen ${regenPrice}, name-gen ${namePrice}); local edits free`, {
       before,
       after: afterName,
-      charged: 71,
-      expected: "local edit ±0; regen −66; name-gen −5",
+      charged: regenPrice + namePrice,
+      expected: `local edit ±0; regen −${regenPrice}; name-gen −${namePrice}`,
       observed: `local ${before}→${afterLocal}; regen →${afterRegen}; name-gen →${afterName}`,
       pass:
         before === afterLocal &&
         regen.ok &&
-        afterRegen === before - 66 &&
-        afterName === before - 71,
+        afterRegen === before - regenPrice &&
+        afterName === before - regenPrice - namePrice,
     });
   }
 
   {
     // 4.4 Two simultaneous generations racing one balance: only one wins.
-    const user = await makeUser("free"); // 400
-    // Two 10-slide sonnet decks at 200 - wait, two×200 = exactly 400
-    // fits. Use 300-credit jobs so only one can fit: 17-slide… Free cap
-    // is 10. Burn 100 first → 300 left; each job costs 200.
+    const user = await makeUser("free"); // FREE_GRANT
+    // Two identical full-cap decks; leave 1.5 jobs' worth of credits so
+    // both preflights pass but only ONE hold can fit the balance.
+    const jobCost = genCost("opus-fast", FREE_CAP);
+    const raceBalance = jobCost + Math.floor(jobCost / 2);
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
-      amount: 100,
+      amount: FREE_GRANT - raceBalance,
       metadata: { reason: "sim burn-down" },
       ...quiet,
     });
@@ -787,26 +846,26 @@ async function main() {
         plan: "free",
         flow: "create",
         preset: "opus-fast",
-        slideInput: { kind: "fixed", count: 10 },
-        outcome: { kind: "success", produce: 10 },
+        slideInput: { kind: "fixed", count: FREE_CAP },
+        outcome: { kind: "success", produce: FREE_CAP },
       }),
       fakeGenerate({
         userId: user.id,
         plan: "free",
         flow: "create",
         preset: "opus-fast",
-        slideInput: { kind: "fixed", count: 10 },
-        outcome: { kind: "success", produce: 10 },
+        slideInput: { kind: "fixed", count: FREE_CAP },
+        outcome: { kind: "success", produce: FREE_CAP },
       }),
     ]);
     const wins = [a, b].filter((r) => r.status === "succeeded").length;
     const finalBalance = await balanceOf(user.id);
     check("4.4", "Concurrent double-spend: exactly one generation wins", {
-      before: 300,
+      before: raceBalance,
       after: finalBalance,
-      expected: "1 of 2 succeeds, balance 300→100, never negative",
+      expected: `1 of 2 succeeds, balance ${raceBalance}→${raceBalance - jobCost}, never negative`,
       observed: `${wins} succeeded, balance →${finalBalance}`,
-      pass: wins === 1 && finalBalance === 100,
+      pass: wins === 1 && finalBalance === raceBalance - jobCost,
     });
   }
 
@@ -844,14 +903,14 @@ async function main() {
     const again = await ledger.grantSignupCredits({ userId: user.id, ...quiet });
     const balance = await balanceOf(user.id);
     check("4.6", "Signup grant cannot be re-claimed", {
-      before: 400,
+      before: FREE_GRANT,
       after: balance,
-      expected: "second grant returns alreadyGranted, balance stays 400",
+      expected: `second grant returns alreadyGranted, balance stays ${FREE_GRANT}`,
       observed: `alreadyGranted=${again.alreadyGranted}, balance ${balance}`,
-      pass: again.alreadyGranted === true && balance === 400,
+      pass: again.alreadyGranted === true && balance === FREE_GRANT,
     });
     notes.push(
-      "4.7 Multi-account farming: each NEW account legitimately receives the one-time 400. " +
+      `4.7 Multi-account farming: each NEW account legitimately receives the one-time ${FREE_GRANT}. ` +
         "The ledger bounds the per-account grant (4.6) but cannot see that two accounts are one person - " +
         "that defense lives at the identity layer (email verification already required; add device/IP velocity " +
         "checks and payment-method-fingerprint dedupe before launch). OPEN ITEM, not covered by this system.",
@@ -885,22 +944,21 @@ async function main() {
       h1.ok &&
       h2.ok &&
       h2.alreadyHeld === true &&
-      afterHolds === 1500 &&
+      afterHolds === PLUS_CREDITS - 500 &&
       s1.ok &&
       !s1.alreadySettled &&
       s2.ok &&
       s2.alreadySettled === true &&
       s3.ok &&
       s3.alreadySettled === true &&
-      end === 1700;
+      end === PLUS_CREDITS - 300;
     check("5.1", "Retries: double hold, double settle, late release - one debit", {
-      before: 2000,
+      before: PLUS_CREDITS,
       after: end,
       held: 500,
       charged: 300,
       refunded: 200,
-      expected:
-        "hold once (2000→1500), settle 300 once (→1700), replays are no-ops",
+      expected: `hold 500 once (${PLUS_CREDITS}→${PLUS_CREDITS - 500}), settle 300 once (→${PLUS_CREDITS - 300}), replays are no-ops`,
       observed: `afterHolds ${afterHolds}, end ${end}, h2.alreadyHeld=${h2.ok && h2.alreadyHeld}, s2.replay=${s2.ok && s2.alreadySettled}, s3.replay=${s3.ok && s3.alreadySettled}`,
       pass,
     });
@@ -909,6 +967,7 @@ async function main() {
   {
     // 5.2 Failed generation after retries: full refund, charged 0.
     const user = await makeUser("pro");
+    const holdExp = genCost("opus-balanced", 20);
     const result = await fakeGenerate({
       userId: user.id,
       plan: "pro",
@@ -923,10 +982,10 @@ async function main() {
       held: result.held,
       charged: result.charged,
       refunded: result.refunded,
-      expected: "held 840, charged 0, refunded 840, balance unchanged",
+      expected: `held ${holdExp}, charged 0, refunded ${holdExp}, balance unchanged`,
       observed: `held ${result.held}, charged ${result.charged}, refunded ${result.refunded}, balance ${result.before}→${result.after}`,
       pass:
-        result.held === 840 &&
+        result.held === holdExp &&
         result.charged === 0 &&
         result.refunded === result.held &&
         result.before === result.after,
@@ -934,7 +993,9 @@ async function main() {
 
     // 5.2b Preset gate: a tier can never run (or be charged for) a
     // preset it hasn't unlocked. (plus unlocked opus-balanced
-    // 2026-06-12 - fable-low is the pro+ gate now.)
+    // 2026-06-12 - fable-low is the pro+ gate now, and is ALSO inactive
+    // in the 2026-07 seed; either condition alone returns preset_locked,
+    // so the tier-gate semantic still holds.)
     const starterUser = await makeUser("plus");
     const gated = await fakeGenerate({
       userId: starterUser.id,
@@ -970,12 +1031,12 @@ async function main() {
     check("5.3", "Free tier: source flows blocked before any charge", {
       before: result.before,
       after: result.after,
-      expected: "blocked flow_locked, balance unchanged 400",
+      expected: `blocked flow_locked, balance unchanged ${FREE_GRANT}`,
       observed: `${blockedDesc(result)}, balance ${result.before}→${result.after}`,
       pass:
         result.status === "blocked" &&
         result.blockedReason === "flow_locked" &&
-        result.after === 400,
+        result.after === FREE_GRANT,
     });
   }
 
@@ -983,54 +1044,61 @@ async function main() {
 
   {
     // 6.1 Spend order + exact-source refunds across buckets.
-    const user = await makeUser("plus"); // sub 2000
+    const user = await makeUser("plus"); // sub PLUS_CREDITS
     await ledger.grantTopup({
       userId: user.id,
-      credits: 1000,
+      credits: PACK,
       sourceKey: `sim-topup-order-${user.id}`,
       ...quiet,
     });
-    // Hold 2200 (= all 2000 sub + 200 topup), settle 2100 → the 100
-    // refund must land back in the TOP-UP bucket (charge eats the
-    // subscription portion first).
+    // Hold the whole sub bucket + 200 of the pack, settle 100 less →
+    // the 100 refund must land back in the TOP-UP bucket (charge eats
+    // the subscription portion first).
+    const holdAmt = PLUS_CREDITS + 200;
+    const chargeAmt = PLUS_CREDITS + 100;
+    const packLeft = PACK - 100;
     const h = await ledger.holdCredits({
       userId: user.id,
       jobKey: "sim-bucket-job",
-      amount: 2200,
+      amount: holdAmt,
       ...quiet,
     });
     const s = await ledger.settleHold({
       jobKey: "sim-bucket-job",
-      chargeAmount: 2100,
+      chargeAmount: chargeAmt,
       ...quiet,
     });
     const split = await ledger.getBalance(user.id);
     check("6.1", "Buckets: sub spent first; refund returns to the pack", {
-      before: 3000,
+      before: PLUS_CREDITS + PACK,
       after: split.total,
-      held: 2200,
+      held: holdAmt,
       charged: s.ok ? s.charged : null,
       refunded: s.ok ? s.refunded : null,
-      expected: "after settle: total 900 = sub 0 + topup 900",
+      expected: `after settle: total ${packLeft} = sub 0 + topup ${packLeft}`,
       observed: `total ${split.total} = sub ${split.subscription} + topup ${split.topup} (hold ok=${h.ok})`,
       pass:
-        split.total === 900 && split.subscription === 0 && split.topup === 900,
+        split.total === packLeft &&
+        split.subscription === 0 &&
+        split.topup === packLeft,
     });
   }
 
   {
     // 6.2 Monthly reset: allotment snaps back, no rollover, pack survives.
-    const user = await makeUser("plus"); // sub 2000, resets +1 month
+    const user = await makeUser("plus"); // sub PLUS_CREDITS, resets +1 month
     await ledger.grantTopup({
       userId: user.id,
-      credits: 1000,
+      credits: PACK,
       sourceKey: `sim-topup-reset-${user.id}`,
       ...quiet,
     });
+    const burn = 1300; // burns the sub bucket only (sub is spent first)
+    const subLeft = PLUS_CREDITS - burn;
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
-      amount: 1300, // burns all… no: sub first → sub 700 left, topup untouched
+      amount: burn, // sub first → subLeft remains, topup untouched
       metadata: { reason: "sim burn-down" },
       ...quiet,
     });
@@ -1052,15 +1120,14 @@ async function main() {
     check("6.2", "Reset: unused sub credits forfeited, top-up survives", {
       before: beforeReset.total,
       after: after.total,
-      expected:
-        "before: sub 700 + topup 1000; after reset: sub 2000 + topup 1000 = 3000; re-run no-op",
+      expected: `before: sub ${subLeft} + topup ${PACK}; after reset: sub ${PLUS_CREDITS} + topup ${PACK} = ${PLUS_CREDITS + PACK}; re-run no-op`,
       observed: `before sub ${beforeReset.subscription}/topup ${beforeReset.topup}; after sub ${after.subscription}/topup ${after.topup}; reset=${reset.reset}, rerun=${reset2.reset}`,
       pass:
-        beforeReset.subscription === 700 &&
-        beforeReset.topup === 1000 &&
+        beforeReset.subscription === subLeft &&
+        beforeReset.topup === PACK &&
         reset.reset === true &&
-        after.subscription === 2000 &&
-        after.topup === 1000 &&
+        after.subscription === PLUS_CREDITS &&
+        after.topup === PACK &&
         reset2.reset === false,
     });
 
@@ -1077,33 +1144,34 @@ async function main() {
     check("6.3", "Top-up expires 12 months after purchase", {
       before: after.total,
       after: afterExpiry.total,
-      expected: "1000 pack credits expire; subscription bucket untouched",
+      expected: `${PACK} pack credits expire; subscription bucket untouched`,
       observed: `expired ${expired.expired}; sub ${afterExpiry.subscription}, topup ${afterExpiry.topup}`,
       pass:
-        expired.expired === 1000 &&
+        expired.expired === PACK &&
         afterExpiry.topup === 0 &&
-        afterExpiry.subscription === 2000,
+        afterExpiry.subscription === PLUS_CREDITS,
     });
   }
 
   {
     // 6.4 Downgrade keeps everything spendable.
-    const user = await makeUser("max"); // 12000
+    const user = await makeUser("max"); // MAX_CREDITS
     await ledger.grantTopup({
       userId: user.id,
-      credits: 1000,
+      credits: PACK,
       sourceKey: `sim-topup-downgrade-${user.id}`,
       ...quiet,
     });
+    const total = MAX_CREDITS + PACK;
     const before = await ledger.getBalance(user.id);
     await ledger.changePlanKeepBalance({ userId: user.id, plan: "free", ...quiet });
     const after = await ledger.getBalance(user.id);
-    check("6.4", "Downgrade pro→free: balance fully preserved", {
+    check("6.4", "Downgrade max→free: balance fully preserved", {
       before: before.total,
       after: after.total,
-      expected: "13000 stays 13000 (next cycle's allotment becomes 0)",
+      expected: `${total} stays ${total} (next cycle's allotment becomes 0)`,
       observed: `total ${after.total}, sub ${after.subscription}, topup ${after.topup}, nextAllotment ${after.monthlyAllotment}`,
-      pass: after.total === 13000 && after.monthlyAllotment === 0,
+      pass: after.total === total && after.monthlyAllotment === 0,
     });
   }
 

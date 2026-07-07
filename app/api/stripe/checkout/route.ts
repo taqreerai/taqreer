@@ -112,7 +112,16 @@ export async function POST(request: Request) {
           },
         }),
     return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
-    allow_promotion_codes: true,
+    // Promo codes: YEARLY subscriptions only (user direction 2026-07-07).
+    // Base yearly pricing is 15% off monthly; campaign codes top it up to
+    // 25% TOTAL. Codes are created in the Stripe dashboard, not seeded:
+    //   coupon percent_off = 11.76 (0.85 x 0.8824 = 0.7500 of monthly),
+    //   duration = "once" (first year only; renewals bill the 15%-off
+    //   list price), attach a promotion code (the shareable string).
+    // Monthly + top-up sessions never show a promo field, so a yearly
+    // coupon can't be redeemed against a monthly price.
+    allow_promotion_codes:
+      spec.grant.kind === "subscription" && spec.grant.cadence === "yearly",
     // Let the user save the card for future payments: shows the opt-in checkbox
     // in the Payment Element AND auto-redisplays the saved card on the next
     // checkout (1-click). Needs a customer (set above). Works in both modes; a
