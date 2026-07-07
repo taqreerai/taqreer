@@ -326,7 +326,9 @@ function CheckoutForm({
                     }
                   }}
                   placeholder={t.promoPlaceholder}
-                  className="input-dark flex-1"
+                  // h-12 pins the row height so the input and the Apply
+                  // button match each other (and the email field below).
+                  className="input-dark h-12 min-w-0 flex-1 py-0"
                   dir="ltr"
                   autoComplete="off"
                   spellCheck={false}
@@ -335,7 +337,10 @@ function CheckoutForm({
                   type="button"
                   onClick={applyPromo}
                   disabled={promoBusy || paying || promoDraft.trim() === ""}
-                  className="btn-pill px-4 py-2 text-sm disabled:opacity-50"
+                  // Generous horizontal padding: the short label ("تطبيق" /
+                  // "Apply") on a fully-rounded pill reads as a circle
+                  // without it.
+                  className="btn-pill h-12 shrink-0 px-8 text-sm disabled:opacity-50"
                 >
                   {promoBusy ? t.promoApplying : t.promoApply}
                 </button>
@@ -357,7 +362,7 @@ function CheckoutForm({
             type="email"
             value={checkout.email ?? ""}
             disabled
-            className="input-dark"
+            className="input-dark h-12 py-0"
             dir="ltr"
             autoComplete="email"
           />

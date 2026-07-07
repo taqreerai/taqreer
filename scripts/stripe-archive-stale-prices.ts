@@ -51,7 +51,9 @@ async function main() {
       if (del && price.type === "recurring") {
         try {
           // Recurring prices are plans under the hood; deleting the plan
-          // removes the price (the dashboard's "Delete price").
+          // removes the price (the dashboard's "Delete price"). VERIFIED
+          // live 2026-07-07: plans.del accepted the price_... ids and the
+          // 8 stale prices disappeared from a filterless prices.list.
           await stripe.plans.del(price.id);
           console.log(`DELETED  ${label}`);
           continue;

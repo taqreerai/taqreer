@@ -52,6 +52,14 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
   // Send the credit-gift email to each granted user (default OFF - most
   // grants are quiet support adjustments; gifting campaigns opt in).
   const [grantSendEmail, setGrantSendEmail] = useState(false);
+
+  // Opening the grant modal always starts with the email checkbox OFF -
+  // a checked-then-cancelled state must not leak into an unrelated grant
+  // (CR PR#112).
+  const openGrant = (target: string | "all") => {
+    setGrantSendEmail(false);
+    setGrantTarget(target);
+  };
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [granting, setGranting] = useState(false);
@@ -198,7 +206,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
 
         <button
           type="button"
-          onClick={() => setGrantTarget("all")}
+          onClick={() => openGrant("all")}
           className="btn-pill flex h-10 items-center gap-2 px-4 text-sm font-medium"
         >
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
@@ -276,7 +284,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
               <div className="flex flex-shrink-0 items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setGrantTarget(u.id)}
+                  onClick={() => openGrant(u.id)}
                   aria-label="Grant credits"
                   title="Grant credits"
                   className="grid h-8 w-8 place-items-center rounded-full transition-colors"

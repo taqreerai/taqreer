@@ -1,0 +1,606 @@
+- generic [active]:
+  - generic:
+    - generic:
+      - main [ref=f16e1]:
+        - generic:
+          - button "Skip to content"
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic "Header":
+                      - generic [ref=f16e2]:
+                        - navigation "Breadcrumbs" [ref=f16e3]:
+                          - list [ref=f16e4]:
+                            - listitem [ref=f16e5]:
+                              - link "Products" [ref=f16e6] [cursor=pointer]:
+                                - /url: /acct_1TZZjTA6BGgoBWri/products
+                        - generic [ref=f16e7]:
+                          - img [ref=f16e10]
+                          - generic [ref=f16e12]:
+                            - heading "Taqreer Plus Active" [level=1] [ref=f16e13]:
+                              - generic [ref=f16e14]:
+                                - generic [ref=f16e15]: Taqreer Plus
+                                - generic [ref=f16e18]: Active
+                            - generic "Header description" [ref=f16e19]: 6 prices
+                      - generic [ref=f16e21]:
+                        - button "Edit product" [ref=f16e22] [cursor=pointer]
+                        - button [ref=f16e23] [cursor=pointer]:
+                          - img [ref=f16e24]
+                - main:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic [ref=f16e27]: Insights
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic: MRR
+                                  - generic:
+                                    - generic:
+                                      - text: $0.00
+                                      - generic: As of Jul 7
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic [ref=f16e29]: Details
+                              - button [ref=f16e32] [cursor=pointer]:
+                                - img [ref=f16e33]
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic: Product ID
+                                  - button "Copy to clipboard, prod_Uhazgj61MJMngk" [ref=f16e35] [cursor=pointer]:
+                                    - generic: prod_Uhazgj61MJMngk
+                                    - img [ref=f16e36]
+                                - generic:
+                                  - generic: Product category
+                                  - generic:
+                                    - generic: None
+                                - generic:
+                                  - generic: Managed Payments
+                                  - generic:
+                                    - generic: Needs info
+                                - generic:
+                                  - generic: Marketing feature list
+                                  - generic: —
+                                - generic:
+                                  - generic: Description
+                                  - generic: —
+                                - generic:
+                                  - generic: Attributes
+                                  - generic: —
+                              - button "View more":
+                                - generic:
+                                  - text: View more
+                                  - img [ref=f16e42] [cursor=pointer]
+                        - generic:
+                          - generic:
+                            - generic [ref=f16e45]: Pricing
+                            - button [ref=f16e48] [cursor=pointer]:
+                              - img [ref=f16e49]
+                          - table [ref=f16e51]:
+                            - rowgroup [ref=f16e52]:
+                              - row "Price Description Subscriptions Created" [ref=f16e53]:
+                                - columnheader "Price" [ref=f16e54]:
+                                  - button "Price" [ref=f16e56]:
+                                    - generic [ref=f16e58]: Price
+                                - columnheader [ref=f16e59]:
+                                  - button [ref=f16e61]
+                                - columnheader "Description" [ref=f16e62]:
+                                  - button "Description" [ref=f16e64]:
+                                    - generic [ref=f16e66]: Description
+                                - columnheader "Subscriptions" [ref=f16e67]:
+                                  - button "Subscriptions" [ref=f16e69]:
+                                    - generic [ref=f16e71]: Subscriptions
+                                - columnheader "Created" [ref=f16e72]:
+                                  - button "Created" [ref=f16e74]:
+                                    - generic [ref=f16e76]: Created
+                                - columnheader [ref=f16e77]
+                            - rowgroup [ref=f16e78]:
+                              - row "$91.80 USD Per year — 0 active Jul 7 Row actions" [ref=f16e79]:
+                                - cell "$91.80 USD Per year" [ref=f16e80]:
+                                  - link "$91.80 USD Per year" [ref=f16e83] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriz3VwJO3i
+                                    - generic [ref=f16e87]:
+                                      - text: $91.80 USD
+                                      - generic [ref=f16e88]:
+                                        - img [ref=f16e89]
+                                        - text: Per year
+                                - cell [ref=f16e91]:
+                                  - link [ref=f16e94] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriz3VwJO3i
+                                - cell "—" [ref=f16e96]:
+                                  - link "—" [ref=f16e99] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriz3VwJO3i
+                                    - generic [ref=f16e101]: —
+                                - cell "0 active" [ref=f16e102]:
+                                  - link "0 active" [ref=f16e105] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriz3VwJO3i
+                                    - generic [ref=f16e108]: 0 active
+                                - cell "Jul 7" [ref=f16e109]:
+                                  - link "Jul 7" [ref=f16e112] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriz3VwJO3i
+                                    - generic [ref=f16e114]: Jul 7
+                                - cell "Row actions" [ref=f16e115]:
+                                  - button "Row actions" [ref=f16e118] [cursor=pointer]:
+                                    - img "Row actions" [ref=f16e119]
+                              - row "$9.00 USD Per month — 0 active Jul 7 Row actions" [ref=f16e121]:
+                                - cell "$9.00 USD Per month" [ref=f16e122]:
+                                  - link "$9.00 USD Per month" [ref=f16e125] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriRJUlhSEm
+                                    - generic [ref=f16e129]:
+                                      - text: $9.00 USD
+                                      - generic [ref=f16e130]:
+                                        - img [ref=f16e131]
+                                        - text: Per month
+                                - cell [ref=f16e133]:
+                                  - link [ref=f16e136] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriRJUlhSEm
+                                - cell "—" [ref=f16e138]:
+                                  - link "—" [ref=f16e141] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriRJUlhSEm
+                                    - generic [ref=f16e143]: —
+                                - cell "0 active" [ref=f16e144]:
+                                  - link "0 active" [ref=f16e147] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriRJUlhSEm
+                                    - generic [ref=f16e150]: 0 active
+                                - cell "Jul 7" [ref=f16e151]:
+                                  - link "Jul 7" [ref=f16e154] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TqYDFA6BGgoBWriRJUlhSEm
+                                    - generic [ref=f16e156]: Jul 7
+                                - cell "Row actions" [ref=f16e157]:
+                                  - button "Row actions" [ref=f16e160] [cursor=pointer]:
+                                    - img "Row actions" [ref=f16e161]
+                              - row "$15.00 USD Per month — 0 active Jun 15 Row actions" [ref=f16e163]:
+                                - cell "$15.00 USD Per month" [ref=f16e164]:
+                                  - link "$15.00 USD Per month" [ref=f16e167] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TigfqA6BGgoBWrimRxIOEGb
+                                    - generic [ref=f16e171]:
+                                      - text: $15.00 USD
+                                      - generic [ref=f16e172]:
+                                        - img [ref=f16e173]
+                                        - text: Per month
+                                - cell [ref=f16e175]:
+                                  - link [ref=f16e178] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TigfqA6BGgoBWrimRxIOEGb
+                                - cell "—" [ref=f16e180]:
+                                  - link "—" [ref=f16e183] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TigfqA6BGgoBWrimRxIOEGb
+                                    - generic [ref=f16e185]: —
+                                - cell "0 active" [ref=f16e186]:
+                                  - link "0 active" [ref=f16e189] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TigfqA6BGgoBWrimRxIOEGb
+                                    - generic [ref=f16e192]: 0 active
+                                - cell "Jun 15" [ref=f16e193]:
+                                  - link "Jun 15" [ref=f16e196] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TigfqA6BGgoBWrimRxIOEGb
+                                    - generic [ref=f16e198]: Jun 15
+                                - cell "Row actions" [ref=f16e199]:
+                                  - button "Row actions" [ref=f16e202] [cursor=pointer]:
+                                    - img "Row actions" [ref=f16e203]
+                              - row "$156.00 USD Per year — 0 active Jun 14 Row actions" [ref=f16e205]:
+                                - cell "$156.00 USD Per year" [ref=f16e206]:
+                                  - link "$156.00 USD Per year" [ref=f16e209] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnHA6BGgoBWrizSGApuZb
+                                    - generic [ref=f16e213]:
+                                      - text: $156.00 USD
+                                      - generic [ref=f16e214]:
+                                        - img [ref=f16e215]
+                                        - text: Per year
+                                - cell [ref=f16e217]:
+                                  - link [ref=f16e220] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnHA6BGgoBWrizSGApuZb
+                                - cell "—" [ref=f16e222]:
+                                  - link "—" [ref=f16e225] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnHA6BGgoBWrizSGApuZb
+                                    - generic [ref=f16e227]: —
+                                - cell "0 active" [ref=f16e228]:
+                                  - link "0 active" [ref=f16e231] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnHA6BGgoBWrizSGApuZb
+                                    - generic [ref=f16e234]: 0 active
+                                - cell "Jun 14" [ref=f16e235]:
+                                  - link "Jun 14" [ref=f16e238] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnHA6BGgoBWrizSGApuZb
+                                    - generic [ref=f16e240]: Jun 14
+                                - cell "Row actions" [ref=f16e241]:
+                                  - button "Row actions" [ref=f16e244] [cursor=pointer]:
+                                    - img "Row actions" [ref=f16e245]
+                              - row "$1.00 USD Per month Archived — 0 active Jun 14 Row actions" [ref=f16e247]:
+                                - cell "$1.00 USD Per month" [ref=f16e248]:
+                                  - link "$1.00 USD Per month" [ref=f16e251] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiI5TA6BGgoBWrijlf4zYuz
+                                    - generic [ref=f16e255]:
+                                      - text: $1.00 USD
+                                      - generic [ref=f16e256]:
+                                        - img [ref=f16e257]
+                                        - text: Per month
+                                - cell "Archived" [ref=f16e259]:
+                                  - link "Archived" [ref=f16e262] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiI5TA6BGgoBWrijlf4zYuz
+                                    - generic [ref=f16e267]: Archived
+                                - cell "—" [ref=f16e268]:
+                                  - link "—" [ref=f16e271] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiI5TA6BGgoBWrijlf4zYuz
+                                    - generic [ref=f16e273]: —
+                                - cell "0 active" [ref=f16e274]:
+                                  - link "0 active" [ref=f16e277] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiI5TA6BGgoBWrijlf4zYuz
+                                    - generic [ref=f16e280]: 0 active
+                                - cell "Jun 14" [ref=f16e281]:
+                                  - link "Jun 14" [ref=f16e284] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiI5TA6BGgoBWrijlf4zYuz
+                                    - generic [ref=f16e286]: Jun 14
+                                - cell "Row actions" [ref=f16e287]:
+                                  - button "Row actions" [ref=f16e290] [cursor=pointer]:
+                                    - img "Row actions" [ref=f16e291]
+                              - row "$15.00 USD Per month Archived — 0 active Jun 14 Row actions" [ref=f16e293]:
+                                - cell "$15.00 USD Per month" [ref=f16e294]:
+                                  - link "$15.00 USD Per month" [ref=f16e297] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnGA6BGgoBWriG3wsUeRv
+                                    - generic [ref=f16e301]:
+                                      - text: $15.00 USD
+                                      - generic [ref=f16e302]:
+                                        - img [ref=f16e303]
+                                        - text: Per month
+                                - cell "Archived" [ref=f16e305]:
+                                  - link "Archived" [ref=f16e308] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnGA6BGgoBWriG3wsUeRv
+                                    - generic [ref=f16e313]: Archived
+                                - cell "—" [ref=f16e314]:
+                                  - link "—" [ref=f16e317] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnGA6BGgoBWriG3wsUeRv
+                                    - generic [ref=f16e319]: —
+                                - cell "0 active" [ref=f16e320]:
+                                  - link "0 active" [ref=f16e323] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnGA6BGgoBWriG3wsUeRv
+                                    - generic [ref=f16e326]: 0 active
+                                - cell "Jun 14" [ref=f16e327]:
+                                  - link "Jun 14" [ref=f16e330] [cursor=pointer]:
+                                    - /url: /acct_1TZZjTA6BGgoBWri/prices/price_1TiBnGA6BGgoBWriG3wsUeRv
+                                    - generic [ref=f16e332]: Jun 14
+                                - cell "Row actions" [ref=f16e333]:
+                                  - button "Row actions" [ref=f16e336] [cursor=pointer]:
+                                    - img "Row actions" [ref=f16e337]
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic [ref=f16e339]:
+                                - generic [ref=f16e340]: Trials
+                                - generic [ref=f16e341]: Preview
+                              - button [ref=f16e344] [cursor=pointer]:
+                                - img [ref=f16e345]
+                            - generic [ref=f16e347]:
+                              - img
+                              - generic [ref=f16e349]: No trials
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic [ref=f16e351]: Cross-sells
+                              - generic:
+                                - generic:
+                                  - text: Suggest a related product for customers to add to their order, right in Checkout.
+                                  - link "Learn more" [ref=f16e352] [cursor=pointer]:
+                                    - /url: https://docs.stripe.com/payments/checkout/cross-sells
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic [ref=f16e353]: Cross-sells to
+                                - textbox "Find a product…" [ref=f16e359]
+                        - generic:
+                          - generic:
+                            - generic [ref=f16e362]: Features
+                            - generic [ref=f16e363]:
+                              - img
+                              - generic [ref=f16e365]: No features
+                        - generic:
+                          - generic [ref=f16e367]: Logs
+                          - generic:
+                            - generic:
+                              - generic:
+                                - table [ref=f16e368]:
+                                  - rowgroup [ref=f16e369]:
+                                    - row "POST /v1/products/prod_Uhazgj61MJMngk 200 OK 7/7/26, 3:34:58 PM" [ref=f16e370]:
+                                      - cell "POST /v1/products/prod_Uhazgj61MJMngk" [ref=f16e371]:
+                                        - button "POST /v1/products/prod_Uhazgj61MJMngk" [ref=f16e374] [cursor=pointer]:
+                                          - generic [ref=f16e377]: POST /v1/products/prod_Uhazgj61MJMngk
+                                      - cell "200 OK" [ref=f16e378]:
+                                        - button "200 OK" [ref=f16e381] [cursor=pointer]:
+                                          - generic [ref=f16e384]: 200 OK
+                                      - cell "7/7/26, 3:34:58 PM" [ref=f16e385]:
+                                        - button "7/7/26, 3:34:58 PM" [ref=f16e388] [cursor=pointer]:
+                                          - generic [ref=f16e390]: 7/7/26, 3:34:58 PM
+                                    - row "POST /v1/prices 200 OK 7/7/26, 3:34:57 PM" [ref=f16e391]:
+                                      - cell "POST /v1/prices" [ref=f16e392]:
+                                        - button "POST /v1/prices" [ref=f16e395] [cursor=pointer]:
+                                          - generic [ref=f16e398]: POST /v1/prices
+                                      - cell "200 OK" [ref=f16e399]:
+                                        - button "200 OK" [ref=f16e402] [cursor=pointer]:
+                                          - generic [ref=f16e405]: 200 OK
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e406]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e409] [cursor=pointer]:
+                                          - generic [ref=f16e411]: 7/7/26, 3:34:57 PM
+                                    - row "POST /v1/products/prod_Uhazgj61MJMngk 200 OK 7/7/26, 3:34:57 PM" [ref=f16e412]:
+                                      - cell "POST /v1/products/prod_Uhazgj61MJMngk" [ref=f16e413]:
+                                        - button "POST /v1/products/prod_Uhazgj61MJMngk" [ref=f16e416] [cursor=pointer]:
+                                          - generic [ref=f16e419]: POST /v1/products/prod_Uhazgj61MJMngk
+                                      - cell "200 OK" [ref=f16e420]:
+                                        - button "200 OK" [ref=f16e423] [cursor=pointer]:
+                                          - generic [ref=f16e426]: 200 OK
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e427]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e430] [cursor=pointer]:
+                                          - generic [ref=f16e432]: 7/7/26, 3:34:57 PM
+                                    - row "POST /v1/prices 200 OK 7/7/26, 3:34:57 PM" [ref=f16e433]:
+                                      - cell "POST /v1/prices" [ref=f16e434]:
+                                        - button "POST /v1/prices" [ref=f16e437] [cursor=pointer]:
+                                          - generic [ref=f16e440]: POST /v1/prices
+                                      - cell "200 OK" [ref=f16e441]:
+                                        - button "200 OK" [ref=f16e444] [cursor=pointer]:
+                                          - generic [ref=f16e447]: 200 OK
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e448]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e451] [cursor=pointer]:
+                                          - generic [ref=f16e453]: 7/7/26, 3:34:57 PM
+                                    - row "POST /v1/products/prod_Uhazgj61MJMngk 200 OK 6/15/26, 10:59:58 PM" [ref=f16e454]:
+                                      - cell "POST /v1/products/prod_Uhazgj61MJMngk" [ref=f16e455]:
+                                        - button "POST /v1/products/prod_Uhazgj61MJMngk" [ref=f16e458] [cursor=pointer]:
+                                          - generic [ref=f16e461]: POST /v1/products/prod_Uhazgj61MJMngk
+                                      - cell "200 OK" [ref=f16e462]:
+                                        - button "200 OK" [ref=f16e465] [cursor=pointer]:
+                                          - generic [ref=f16e468]: 200 OK
+                                      - cell "6/15/26, 10:59:58 PM" [ref=f16e469]:
+                                        - button "6/15/26, 10:59:58 PM" [ref=f16e472] [cursor=pointer]:
+                                          - generic [ref=f16e474]: 6/15/26, 10:59:58 PM
+                                - button "Inspect more logs in Workbench" [ref=f16e476] [cursor=pointer]
+                        - generic:
+                          - generic [ref=f16e478]: Events
+                          - generic:
+                            - generic:
+                              - generic:
+                                - table [ref=f16e479]:
+                                  - rowgroup [ref=f16e480]:
+                                    - row "A product with ID prod_Uhazgj61MJMngk was updated 7/7/26, 3:34:58 PM" [ref=f16e481]:
+                                      - cell "A product with ID prod_Uhazgj61MJMngk was updated" [ref=f16e482]:
+                                        - button "A product with ID prod_Uhazgj61MJMngk was updated" [ref=f16e485] [cursor=pointer]:
+                                          - generic [ref=f16e487]: A product with ID prod_Uhazgj61MJMngk was updated
+                                      - cell [ref=f16e488]:
+                                        - button [ref=f16e491] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:58 PM" [ref=f16e492]:
+                                        - button "7/7/26, 3:34:58 PM" [ref=f16e495] [cursor=pointer]:
+                                          - generic [ref=f16e497]: 7/7/26, 3:34:58 PM
+                                    - row "A new price called price_1TqYDFA6BGgoBWriz3VwJO3i was created 7/7/26, 3:34:57 PM" [ref=f16e498]:
+                                      - cell "A new price called price_1TqYDFA6BGgoBWriz3VwJO3i was created" [ref=f16e499]:
+                                        - button "A new price called price_1TqYDFA6BGgoBWriz3VwJO3i was created" [ref=f16e502] [cursor=pointer]:
+                                          - generic [ref=f16e504]: A new price called price_1TqYDFA6BGgoBWriz3VwJO3i was created
+                                      - cell [ref=f16e505]:
+                                        - button [ref=f16e508] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e509]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e512] [cursor=pointer]:
+                                          - generic [ref=f16e514]: 7/7/26, 3:34:57 PM
+                                    - row "A new plan called price_1TqYDFA6BGgoBWriz3VwJO3i was created 7/7/26, 3:34:57 PM" [ref=f16e515]:
+                                      - cell "A new plan called price_1TqYDFA6BGgoBWriz3VwJO3i was created" [ref=f16e516]:
+                                        - button "A new plan called price_1TqYDFA6BGgoBWriz3VwJO3i was created" [ref=f16e519] [cursor=pointer]:
+                                          - generic [ref=f16e521]: A new plan called price_1TqYDFA6BGgoBWriz3VwJO3i was created
+                                      - cell [ref=f16e522]:
+                                        - button [ref=f16e525] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e526]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e529] [cursor=pointer]:
+                                          - generic [ref=f16e531]: 7/7/26, 3:34:57 PM
+                                    - row "The price_1TiBnHA6BGgoBWrizSGApuZb price was updated 7/7/26, 3:34:57 PM" [ref=f16e532]:
+                                      - cell "The price_1TiBnHA6BGgoBWrizSGApuZb price was updated" [ref=f16e533]:
+                                        - button "The price_1TiBnHA6BGgoBWrizSGApuZb price was updated" [ref=f16e536] [cursor=pointer]:
+                                          - generic [ref=f16e538]: The price_1TiBnHA6BGgoBWrizSGApuZb price was updated
+                                      - cell [ref=f16e539]:
+                                        - button [ref=f16e542] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e543]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e546] [cursor=pointer]:
+                                          - generic [ref=f16e548]: 7/7/26, 3:34:57 PM
+                                    - row "A product with ID prod_Uhazgj61MJMngk was updated 7/7/26, 3:34:57 PM" [ref=f16e549]:
+                                      - cell "A product with ID prod_Uhazgj61MJMngk was updated" [ref=f16e550]:
+                                        - button "A product with ID prod_Uhazgj61MJMngk was updated" [ref=f16e553] [cursor=pointer]:
+                                          - generic [ref=f16e555]: A product with ID prod_Uhazgj61MJMngk was updated
+                                      - cell [ref=f16e556]:
+                                        - button [ref=f16e559] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e560]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e563] [cursor=pointer]:
+                                          - generic [ref=f16e565]: 7/7/26, 3:34:57 PM
+                                    - row "A new price called price_1TqYDFA6BGgoBWriRJUlhSEm was created 7/7/26, 3:34:57 PM" [ref=f16e566]:
+                                      - cell "A new price called price_1TqYDFA6BGgoBWriRJUlhSEm was created" [ref=f16e567]:
+                                        - button "A new price called price_1TqYDFA6BGgoBWriRJUlhSEm was created" [ref=f16e570] [cursor=pointer]:
+                                          - generic [ref=f16e572]: A new price called price_1TqYDFA6BGgoBWriRJUlhSEm was created
+                                      - cell [ref=f16e573]:
+                                        - button [ref=f16e576] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e577]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e580] [cursor=pointer]:
+                                          - generic [ref=f16e582]: 7/7/26, 3:34:57 PM
+                                    - row "A new plan called price_1TqYDFA6BGgoBWriRJUlhSEm was created 7/7/26, 3:34:57 PM" [ref=f16e583]:
+                                      - cell "A new plan called price_1TqYDFA6BGgoBWriRJUlhSEm was created" [ref=f16e584]:
+                                        - button "A new plan called price_1TqYDFA6BGgoBWriRJUlhSEm was created" [ref=f16e587] [cursor=pointer]:
+                                          - generic [ref=f16e589]: A new plan called price_1TqYDFA6BGgoBWriRJUlhSEm was created
+                                      - cell [ref=f16e590]:
+                                        - button [ref=f16e593] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e594]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e597] [cursor=pointer]:
+                                          - generic [ref=f16e599]: 7/7/26, 3:34:57 PM
+                                    - row "The price_1TigfqA6BGgoBWrimRxIOEGb price was updated 7/7/26, 3:34:57 PM" [ref=f16e600]:
+                                      - cell "The price_1TigfqA6BGgoBWrimRxIOEGb price was updated" [ref=f16e601]:
+                                        - button "The price_1TigfqA6BGgoBWrimRxIOEGb price was updated" [ref=f16e604] [cursor=pointer]:
+                                          - generic [ref=f16e606]: The price_1TigfqA6BGgoBWrimRxIOEGb price was updated
+                                      - cell [ref=f16e607]:
+                                        - button [ref=f16e610] [cursor=pointer]
+                                      - cell "7/7/26, 3:34:57 PM" [ref=f16e611]:
+                                        - button "7/7/26, 3:34:57 PM" [ref=f16e614] [cursor=pointer]:
+                                          - generic [ref=f16e616]: 7/7/26, 3:34:57 PM
+                                    - row "The price_1TiBnGA6BGgoBWriG3wsUeRv price was updated 6/15/26, 11:09:08 PM" [ref=f16e617]:
+                                      - cell "The price_1TiBnGA6BGgoBWriG3wsUeRv price was updated" [ref=f16e618]:
+                                        - button "The price_1TiBnGA6BGgoBWriG3wsUeRv price was updated" [ref=f16e621] [cursor=pointer]:
+                                          - generic [ref=f16e623]: The price_1TiBnGA6BGgoBWriG3wsUeRv price was updated
+                                      - cell [ref=f16e624]:
+                                        - button [ref=f16e627] [cursor=pointer]
+                                      - cell "6/15/26, 11:09:08 PM" [ref=f16e628]:
+                                        - button "6/15/26, 11:09:08 PM" [ref=f16e631] [cursor=pointer]:
+                                          - generic [ref=f16e633]: 6/15/26, 11:09:08 PM
+                                    - row "The price_1TiBnGA6BGgoBWriG3wsUeRv plan changed 6/15/26, 11:09:08 PM" [ref=f16e634]:
+                                      - cell "The price_1TiBnGA6BGgoBWriG3wsUeRv plan changed" [ref=f16e635]:
+                                        - button "The price_1TiBnGA6BGgoBWriG3wsUeRv plan changed" [ref=f16e638] [cursor=pointer]:
+                                          - generic [ref=f16e640]: The price_1TiBnGA6BGgoBWriG3wsUeRv plan changed
+                                      - cell [ref=f16e641]:
+                                        - button [ref=f16e644] [cursor=pointer]
+                                      - cell "6/15/26, 11:09:08 PM" [ref=f16e645]:
+                                        - button "6/15/26, 11:09:08 PM" [ref=f16e648] [cursor=pointer]:
+                                          - generic [ref=f16e650]: 6/15/26, 11:09:08 PM
+                                - button "Inspect more events in Workbench" [ref=f16e653] [cursor=pointer]:
+                                  - generic [ref=f16e654]: Inspect more events in Workbench
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic [ref=f16e656]: Metadata
+                            - button [ref=f16e659] [cursor=pointer]:
+                              - img [ref=f16e660]
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: cadence
+                                - generic: yearly
+                              - generic:
+                                - generic: grantKind
+                                - generic: subscription
+                              - generic:
+                                - generic: plan
+                                - generic: plus
+                              - generic:
+                                - generic: taqreerProductKey
+                                - generic: tier_plus
+      - paragraph
+  - generic:
+    - generic:
+      - iframe
+    - generic [ref=f16e664]:
+      - generic:
+        - button "taqreer.ai" [ref=f16e665] [cursor=pointer]:
+          - img [ref=f16e666]
+          - generic [ref=f16e669]: taqreer.ai
+        - generic [ref=f16e670]:
+          - button "Notifications" [ref=f16e672] [cursor=pointer]:
+            - img [ref=f16e673]
+          - button "Search" [ref=f16e676] [cursor=pointer]:
+            - img [ref=f16e677]
+    - generic [ref=f16e679]:
+      - generic [ref=f16e680] [cursor=pointer]:
+        - heading [level=2] [ref=f16e681]: Setup guide
+        - button [ref=f16e684]:
+          - img
+      - generic [ref=f16e685]:
+        - heading [level=3] [ref=f16e687] [cursor=pointer]: Set up Managed Payments
+        - list [ref=f16e688]:
+          - button [ref=f16e689] [cursor=pointer]:
+            - progressbar [ref=f16e691]:
+              - img [ref=f16e692]
+            - paragraph [ref=f16e696]: Get started with Managed Payments
+          - button [ref=f16e697] [cursor=pointer]:
+            - progressbar [ref=f16e699]:
+              - img [ref=f16e700]
+            - paragraph [ref=f16e704]: Tell us what you’re selling
+        - heading [level=3] [ref=f16e706] [cursor=pointer]: Set up recurring payments
+        - list [ref=f16e707]:
+          - button [ref=f16e708] [cursor=pointer]:
+            - progressbar [ref=f16e710]:
+              - img [ref=f16e711]
+            - paragraph [ref=f16e715]: Choose a pricing model
+          - button [ref=f16e716] [cursor=pointer]:
+            - progressbar [ref=f16e718]:
+              - img [ref=f16e719]
+            - paragraph [ref=f16e723]: Choose how to accept recurring payments
+          - button [ref=f16e724] [cursor=pointer]:
+            - progressbar [ref=f16e726]:
+              - img [ref=f16e727]
+            - paragraph [ref=f16e731]: Create a recurring product
+          - button [ref=f16e732] [cursor=pointer]:
+            - progressbar [ref=f16e734]:
+              - img [ref=f16e735]
+            - paragraph [ref=f16e739]: Build your checkout
+        - heading [level=3] [ref=f16e741] [cursor=pointer]: Set up payments
+        - list [ref=f16e742]:
+          - button [ref=f16e743] [cursor=pointer]:
+            - progressbar [ref=f16e745]:
+              - img [ref=f16e746]
+            - paragraph [ref=f16e750]: Choose how to accept payments
+          - button [ref=f16e751] [cursor=pointer]:
+            - progressbar [ref=f16e753]:
+              - img [ref=f16e754]
+            - paragraph [ref=f16e758]: Create a non-recurring product
+          - button [ref=f16e759] [cursor=pointer]:
+            - progressbar [ref=f16e761]:
+              - img [ref=f16e762]
+            - paragraph [ref=f16e766]: Build your checkout
+        - heading [level=3] [ref=f16e768] [cursor=pointer]: Set up invoices
+        - list [ref=f16e769]:
+          - button [ref=f16e770] [cursor=pointer]:
+            - progressbar [ref=f16e772]:
+              - img [ref=f16e773]
+            - paragraph [ref=f16e777]: Add your branding
+          - button [ref=f16e778] [cursor=pointer]:
+            - progressbar [ref=f16e780]:
+              - img [ref=f16e781]
+            - paragraph [ref=f16e785]: Create a customer
+          - button [ref=f16e786] [cursor=pointer]:
+            - progressbar [ref=f16e788]:
+              - img [ref=f16e789]
+            - paragraph [ref=f16e793]: Create an invoice
+          - button [ref=f16e794] [cursor=pointer]:
+            - progressbar [ref=f16e796]:
+              - img [ref=f16e797]
+            - paragraph [ref=f16e801]: Set up reminders
+        - heading [level=3] [ref=f16e803] [cursor=pointer]: Finish your setup
+        - list [ref=f16e804]:
+          - button [ref=f16e805] [cursor=pointer]:
+            - progressbar [ref=f16e807]:
+              - img [ref=f16e808]
+            - paragraph [ref=f16e812]: Verify your email
+          - button [ref=f16e813] [cursor=pointer]:
+            - progressbar [ref=f16e815]:
+              - img [ref=f16e816]
+            - paragraph [ref=f16e820]: Verify your business
+          - button [ref=f16e821] [cursor=pointer]:
+            - progressbar [ref=f16e823]:
+              - img [ref=f16e824]
+            - paragraph [ref=f16e828]: Create your Stripe profile
+        - heading [level=3] [ref=f16e830] [cursor=pointer]: Go live
+        - list [ref=f16e831]:
+          - button [ref=f16e832] [cursor=pointer]:
+            - progressbar [ref=f16e834]:
+              - img [ref=f16e835]
+            - paragraph [ref=f16e839]: Create a live customer
+          - button [ref=f16e840] [cursor=pointer]:
+            - progressbar [ref=f16e842]:
+              - img [ref=f16e843]
+            - paragraph [ref=f16e847]: Create a live invoice
+        - generic [ref=f16e848]:
+          - img [ref=f16e850]
+          - generic [ref=f16e851]:
+            - generic [ref=f16e852]: You're ready to go!
+            - link [ref=f16e853] [cursor=pointer]:
+              - /url: /acct_1TZZjTA6BGgoBWri/startup-perks
+              - text: View your perks
+    - generic [ref=f16e854] [cursor=pointer]:
+      - button "Show Workbench":
+        - button "Developers" [ref=f16e857]:
+          - img [ref=f16e860]
+        - generic [ref=f16e863]:
+          - generic [ref=f16e864]:
+            - button "Inspect" [ref=f16e867]:
+              - generic [ref=f16e869]:
+                - img [ref=f16e870]
+                - generic [ref=f16e872]: prod_Uhazgj61MJMngk
+            - button "Health" [ref=f16e874]:
+              - img [ref=f16e876]
+            - button "API activity" [ref=f16e880]:
+              - img [ref=f16e882]
+            - button "Event deliveries" [ref=f16e885]:
+              - img [ref=f16e887]
+          - button "Open Workbench" [ref=f16e891]
+  - generic:
+    - iframe
