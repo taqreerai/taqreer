@@ -472,7 +472,7 @@ function readBriefThemeFont(brief: unknown): ThemeType["font"] {
   }
   const uploaded = fonts?.uploaded?.find((f) => f?.name)?.name;
   if (uploaded) return { name: uploaded };
-  return { name: "Cairo", url: googleFontUrl("Cairo") };
+  return { name: "Noto Sans Arabic", url: googleFontUrl("Noto Sans Arabic") };
 }
 
 // Build the create-HTML deck theme SERVER-SIDE (the model authors only section
