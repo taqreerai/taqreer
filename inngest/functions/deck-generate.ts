@@ -674,9 +674,25 @@ function resolveEffectiveQuality(data: DeckGenerateEvent): {
 function resolveFormat(event: DeckGenerateEvent): SlideFormat {
   const candidate = (event.brief as { brand?: { slideSize?: unknown } } | null)?.brand
     ?.slideSize;
-  return SLIDE_FORMATS.includes(candidate as SlideFormat)
-    ? (candidate as SlideFormat)
-    : "16:9";
+  if (!SLIDE_FORMATS.includes(candidate as SlideFormat)) return "16:9";
+  const format = candidate as SlideFormat;
+  // 3:4 is a create-only social-post ratio (the picker's `withPost` tile is
+  // create-only). If it ever rides in on a non-create brief — a crafted
+  // payload, or a future UI that shares the picker — fall back to 16:9 so the
+  // social base prompt and the PDF/PNG-only export contract stay unreachable
+  // outside create. This is the single chokepoint: the prompt swap, canvas
+  // dims, and the saved manifest format all derive from resolveFormat.
+  if (format === "3:4") {
+    const sourceKind = (event.brief as { source?: { kind?: string } } | null)?.source
+      ?.kind;
+    const isCreateFlow =
+      (event.type ?? "create") === "create" &&
+      sourceKind !== "data" &&
+      sourceKind !== "mimic" &&
+      sourceKind !== "enhance";
+    if (!isCreateFlow) return "16:9";
+  }
+  return format;
 }
 
 // Deep-strip uploaded-font `storageUrl`s from the brief before it's dumped
