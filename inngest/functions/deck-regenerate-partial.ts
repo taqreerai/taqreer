@@ -21,6 +21,7 @@ import { type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
+import { enforceCanvasFrame } from "@/lib/deck/scaffold";
 import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
@@ -254,7 +255,7 @@ SAFE AREA. Keep readable content inside a consistent margin, never edge to edge.
 
 OUTPUT — STRICT
 - Return ONLY the new HTML for the active slide. No JSON. No markdown fences. No prose. No explanation.
-- Start with the slide root element (typically a single \`<div style="position:relative; width:${width}px; height:${height}px; ...">…</div>\`). Inline \`<style>\` tags are allowed inside the slide HTML.
+- Start with the slide root element: a single \`<section class="tq-canvas" style="position:relative; width:${width}px; height:${height}px; ...">…</section>\` (same root shape as the sibling slides). Inline \`<style>\` tags are allowed inside the slide HTML.
 - Do NOT include <!DOCTYPE>, <html>, <head>, <body>. Slide body content only.
 
 CANVAS — same as the rest of the deck
@@ -764,10 +765,20 @@ export const deckRegeneratePartial = inngest.createFunction(
           // (huge, list broken). unscope → scope rebuilds both forms. Idempotent
           // on already-correct CSS. Applies to every per-slide regen + redesign,
           // every project (the single chokepoint both routes dispatch into).
-          const html = rawHtml.replace(
+          const rescoped = rawHtml.replace(
             /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
             (_m, css: string) =>
               `<style>${scopeDeckCss(unscopeDeckCss(css))}</style>`,
+          );
+          // FIX B (audit 2026-07-08) — regen output never passed
+          // buildSlideHtml, so it carried neither the `.tq-canvas` scope
+          // class (redesign mode can return a bare `<div>` root, leaving the
+          // whole rescoped stylesheet matching NOTHING) nor the enforced
+          // canvas frame (any geometry the model emitted was final,
+          // persisted). Stamp the class + append the frame here.
+          const html = enforceCanvasFrame(
+            rescoped,
+            SLIDE_DIMENSIONS[sourceFormat],
           );
           completedSlides += 1;
           // Push the heartbeat promise into the queue (NOT fire-and-

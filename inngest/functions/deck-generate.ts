@@ -170,7 +170,8 @@ Country flags: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code,
 Icons: inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour.
 Charts / graphs: inline \`<svg>\`.
 
-AVOID (these don't render in export): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.`;
+AVOID (these don't render in export): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.
+ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport units (\`vw\`/\`vh\`/\`vmin\`/\`vmax\`), \`@media\`, \`position: fixed\` — the canvas is a fixed-size frame (dimensions in the brief); use px values and absolute positioning inside it.`;
 
 // Mimic flow's HTML system addendum. SYSTEM_PROMPT_CREATE_HTML tells the model to
 // design an ORIGINAL system; mimic needs the OPPOSITE — reproduce the attached

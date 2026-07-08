@@ -190,16 +190,59 @@ function splitFirstCompound(sel: string): [string, string] {
   return [sel, ""];
 }
 
-function scopeOneSelector(sel: string, scope: string): string {
-  const s = sel.trim();
-  if (!s) return scope;
+// Rewrite `#ident` to `[id="ident"]` (identical targeting, class-level
+// specificity). Without this, an authored `#hero{position:absolute;…}` scopes
+// to `.tq-canvas#hero` at (1,1,0) and outranks every class-based enforcement
+// (audit 2026-07-08). String-aware so `[href="#x"]` attr values survive.
+function neutralizeIdSpecificity(sel: string): string {
+  let out = "";
+  let str: '"' | "'" | null = null;
+  for (let i = 0; i < sel.length; i++) {
+    const c = sel[i];
+    if (str) {
+      out += c;
+      if (c === "\\") out += sel[++i] ?? "";
+      else if (c === str) str = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      str = c;
+      out += c;
+      continue;
+    }
+    if (c === "#") {
+      const m = /^[A-Za-z_-][\w-]*/.exec(sel.slice(i + 1));
+      if (m) {
+        out += `[id="${m[0]}"]`;
+        i += m[0].length;
+        continue;
+      }
+    }
+    out += c;
+  }
+  return out;
+}
+
+// One scoped arm: the selector plus whether its SUBJECT is the scope root
+// itself (a compound on the `<section>`, e.g. `.tq-canvas.content`) rather
+// than a descendant. Root-subject arms get the geometry-filtered declaration
+// block below — the confirmed `.tq-canvas.content{position:absolute;inset:…}`
+// bug displaced a live deck's whole canvas through exactly this arm.
+type ScopedArm = { sel: string; rootSubject: boolean };
+
+function scopeOneSelector(sel: string, scope: string): ScopedArm[] {
+  const s = neutralizeIdSpecificity(sel.trim());
+  if (!s) return [{ sel: scope, rootSubject: true }];
   // `&` (CSS nesting) — leave to the parent context; rare from the model.
-  if (s.startsWith("&")) return s;
+  if (s.startsWith("&")) return [{ sel: s, rootSubject: false }];
   const m = s.match(ROOT_SELECTOR);
   if (m) {
     // `section.cover` → `.tq-canvas.cover`; `section .x` → `.tq-canvas .x`;
     // `section` → `.tq-canvas`; `:root` → `.tq-canvas`.
-    return scope + s.slice(m[0].length);
+    const remainder = s.slice(m[0].length);
+    const [compound, rest] = splitFirstCompound(remainder);
+    void compound;
+    return [{ sel: scope + remainder, rootSubject: rest.trim() === "" }];
   }
   // A class / id / attr / pseudo-leading FIRST compound can be on the scope ROOT
   // itself — the model styles the slide root via a class on the `<section>`
@@ -207,17 +250,67 @@ function scopeOneSelector(sel: string, scope: string): string {
   // `.tq-canvas.slide`, so a descendant-only `.tq-canvas .slide` would MISS it
   // (the white-on-white bug). Match BOTH the root (compound) and descendants.
   const [first, rest] = splitFirstCompound(s);
-  if (/^[.#[:]/.test(first)) {
-    return `${scope}${first}${rest}, ${scope} ${first}${rest}`;
+  if (/^[.[:]/.test(first) || first.startsWith("[id=")) {
+    return [
+      // Root arm's subject is the section only when there's no combinator.
+      { sel: `${scope}${first}${rest}`, rootSubject: rest.trim() === "" },
+      { sel: `${scope} ${first}${rest}`, rootSubject: false },
+    ];
   }
   // Tag- / `*`-leading → only ever a descendant of the scope root.
-  return `${scope} ${s}`;
+  return [{ sel: `${scope} ${s}`, rootSubject: false }];
 }
 
-function scopeSelectorList(prelude: string, scope: string): string {
-  return splitTopLevel(prelude, ",")
-    .map((sel) => scopeOneSelector(sel, scope))
-    .join(", ");
+// Declarations that must never apply to the slide ROOT via a scoped compound:
+// canvas geometry (the enforced frame owns it) and whole-slide hiding. Kept
+// off the root ARM only — the descendant arm keeps the full block, so inner
+// layout classes keep working exactly as authored.
+const ROOT_UNSAFE_DECL =
+  /^\s*(?:position|inset(?:-[a-z]+)?|top|right|bottom|left|width|height|min-width|min-height|max-width|max-height|margin(?:-[a-z-]+)?|transform|translate|rotate|scale|zoom|float)\s*:/i;
+const ROOT_HIDING_DECL =
+  /^\s*(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse)|opacity\s*:\s*0(?:\.0*)?\s*(?:!|;|$)|content-visibility\s*:\s*hidden)/i;
+
+function filterRootBlock(block: string): string {
+  return splitTopLevel(block, ";")
+    .filter(
+      (decl) =>
+        decl.trim() !== "" &&
+        !ROOT_UNSAFE_DECL.test(decl) &&
+        !ROOT_HIDING_DECL.test(decl),
+    )
+    .join(";");
+}
+
+// `position:fixed` has no legitimate use inside a fixed-size slide, and in the
+// Puppeteer print path a fixed element escapes the slide clip and repeats on
+// every PDF page. Rewrite to absolute — what the author meant on a canvas.
+function neutralizeFixedPosition(block: string): string {
+  return block.replace(/(^|[;{\s])position\s*:\s*fixed\b/gi, "$1position:absolute");
+}
+
+// Emit the rule(s) for one prelude+block: descendant arms keep the full block;
+// root-subject arms get the geometry/hiding-filtered block (dropped entirely
+// when nothing survives the filter).
+function emitScopedRule(prelude: string, block: string, scope: string): string[] {
+  const arms = splitTopLevel(prelude, ",").flatMap((sel) =>
+    scopeOneSelector(sel, scope),
+  );
+  const safeBlock = neutralizeFixedPosition(block);
+  const rootArms = arms.filter((a) => a.rootSubject).map((a) => a.sel);
+  const descArms = arms.filter((a) => !a.rootSubject).map((a) => a.sel);
+  const needsSplit =
+    rootArms.length > 0 &&
+    splitTopLevel(safeBlock, ";").some(
+      (d) => ROOT_UNSAFE_DECL.test(d) || ROOT_HIDING_DECL.test(d),
+    );
+  if (!needsSplit) {
+    return [`${[...rootArms, ...descArms].join(", ")}{${safeBlock}}`];
+  }
+  const out: string[] = [];
+  const rootBlock = filterRootBlock(safeBlock);
+  if (rootBlock.trim()) out.push(`${rootArms.join(", ")}{${rootBlock}}`);
+  if (descArms.length) out.push(`${descArms.join(", ")}{${safeBlock}}`);
+  return out;
 }
 
 const AT_NAME = /^@([a-zA-Z-]+)/;
@@ -227,7 +320,7 @@ export function scopeDeckCss(css: string, scope = ".tq-canvas"): string {
   const out: string[] = [];
   for (const node of nodes) {
     if (node.kind === "rule") {
-      out.push(`${scopeSelectorList(node.prelude, scope)}{${node.block}}`);
+      out.push(...emitScopedRule(node.prelude, node.block, scope));
     } else if (node.kind === "at-statement") {
       // Drop @import (remote-CSS exfil / injection); keep other statements.
       if (/^@import\b/i.test(node.text)) continue;
