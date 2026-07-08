@@ -168,14 +168,22 @@ export type BrandFontMode = "google" | "upload";
 
 export type BrandFontState = {
   mode: BrandFontMode;
-  // Google mode — one family name (null = none picked → Claude defaults).
+  // Google mode — one family name (null = none picked → server default).
   googleFamily: string | null;
   // Upload mode — ≤ MAX_UPLOADED_FONTS families.
   uploaded: UploadedFontFamily[];
 };
 
+// Pre-selected family when no brand kit supplies a font. Keeping a REAL
+// selection here (not null) means the brief always carries a name + css2
+// URL, so no-font generations render this webfont instead of falling to
+// the server's system-font default. Mirrors DEFAULT_FONT_NAME/_URL in
+// app/api/projects/route.ts (kept literal there — that route deliberately
+// doesn't import this client module).
+export const DEFAULT_GOOGLE_FAMILY = "Noto Sans Arabic";
+
 export function emptyBrandFont(): BrandFontState {
-  return { mode: "google", googleFamily: null, uploaded: [] };
+  return { mode: "google", googleFamily: DEFAULT_GOOGLE_FAMILY, uploaded: [] };
 }
 
 // Derive a clean display name from a font filename: strip the extension
