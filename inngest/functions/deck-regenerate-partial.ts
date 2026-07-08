@@ -257,6 +257,7 @@ OUTPUT — STRICT
 - Return ONLY the new HTML for the active slide. No JSON. No markdown fences. No prose. No explanation.
 - Start with the slide root element: a single \`<section class="tq-canvas" style="position:relative; width:${width}px; height:${height}px; ...">…</section>\` (same root shape as the sibling slides). Inline \`<style>\` tags are allowed inside the slide HTML.
 - Do NOT include <!DOCTYPE>, <html>, <head>, <body>. Slide body content only.
+- AVOID (they break the fixed-canvas contract): \`!important\`, viewport units (\`vw\`/\`vh\`/\`vmin\`/\`vmax\`), \`@media\`, \`position: fixed\` — use px values and absolute positioning inside the fixed frame.
 
 CANVAS — same as the rest of the deck
 - ${width}×${height} fixed canvas (${format}). The slide root sets width:${width}px / height:${height}px.

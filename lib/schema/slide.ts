@@ -124,11 +124,22 @@ export const ThemeSchema = z.preprocess((val) => {
   return val;
 }, ThemeObject);
 
+// The pipeline-controlled slide-role vocabulary. Single source of truth —
+// consumed by the schema enum below, deck-generate's data-role coercion, and
+// scaffold.ts's role-to-class mirroring, so the three can't drift apart.
+export const SLIDE_ROLE_VALUES = [
+  "cover",
+  "section",
+  "content",
+  "stats",
+  "quote",
+  "image",
+  "closing",
+] as const;
+
 export const SlideSchema = z.object({
   slideId: z.string().min(1),
-  role: z
-    .enum(["cover", "section", "content", "stats", "quote", "image", "closing"])
-    .optional(),
+  role: z.enum(SLIDE_ROLE_VALUES).optional(),
   // Body HTML — no <!DOCTYPE>, <html>, <head>, <body> wrapper. The
   // renderer wraps each slide in a 1920×1080 container with the theme
   // CSS vars and the document direction set on the root.

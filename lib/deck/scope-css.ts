@@ -266,7 +266,7 @@ function scopeOneSelector(sel: string, scope: string): ScopedArm[] {
 // off the root ARM only — the descendant arm keeps the full block, so inner
 // layout classes keep working exactly as authored.
 const ROOT_UNSAFE_DECL =
-  /^\s*(?:position|inset(?:-[a-z]+)?|top|right|bottom|left|width|height|min-width|min-height|max-width|max-height|margin(?:-[a-z-]+)?|transform|translate|rotate|scale|zoom|float)\s*:/i;
+  /^\s*(?:position|inset(?:-[a-z-]+)?|top|right|bottom|left|width|height|min-width|min-height|max-width|max-height|margin(?:-[a-z-]+)?|transform|translate|rotate|scale|zoom|float)\s*:/i;
 const ROOT_HIDING_DECL =
   /^\s*(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse)|opacity\s*:\s*0(?:\.0*)?\s*(?:!|;|$)|content-visibility\s*:\s*hidden)/i;
 

@@ -16,6 +16,8 @@
 // The result is a self-contained `slide.html` every downstream consumer renders
 // unchanged.
 
+import { SLIDE_ROLE_VALUES } from "@/lib/schema/slide";
+
 const CANVAS_CLASS = "tq-canvas";
 
 // Stamp the scope class onto a `<section>`'s class list (idempotent), merging
@@ -36,15 +38,7 @@ const CLASS_ATTR = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
 // widen the class-collision surface the scoper's compound-arm filter guards
 // against for no benefit.
 const ROLE_ATTR = /\bdata-role\s*=\s*"([a-z-]+)"/i;
-const MIRRORED_ROLES = new Set([
-  "cover",
-  "section",
-  "content",
-  "stats",
-  "quote",
-  "image",
-  "closing",
-]);
+const MIRRORED_ROLES = new Set<string>(SLIDE_ROLE_VALUES);
 
 export function withCanvasClass(sectionHtml: string): string {
   return stampCanvasClass(sectionHtml, /<section\b([^>]*)>/i, "section");
@@ -172,7 +166,12 @@ export function enforceCanvasFrame(
     ? withCanvasClass(sectionHtml)
     : stampCanvasClass(sectionHtml, /<div\b([^>]*)>/i, "div");
   const frameTag = `<style>${canvasFrameCss(canvas)}</style>`;
-  const closer = hasSection ? /<\/section>\s*$/i : /<\/div>\s*$/i;
-  const closed = withClass.replace(closer, (m) => `${frameTag}${m.trim()}`);
-  return closed !== withClass ? closed : `${withClass}${frameTag}`;
+  // Insert before the LAST closing tag of the SAME root type we stamped —
+  // an end-anchored match would miss when the model appended trailing junk
+  // after the root, leaving the <style> outside any element (the sanitizer's
+  // DOMParser round-trip can drop it there). CR PR #117.
+  const closeTag = hasSection ? "</section>" : "</div>";
+  const at = withClass.toLowerCase().lastIndexOf(closeTag);
+  if (at === -1) return `${withClass}${frameTag}`;
+  return `${withClass.slice(0, at)}${frameTag}${withClass.slice(at)}`;
 }

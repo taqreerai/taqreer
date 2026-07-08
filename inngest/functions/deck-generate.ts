@@ -10,6 +10,7 @@ import { sourceKindToFlow } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
   SLIDE_DIMENSIONS,
+  SLIDE_ROLE_VALUES,
   type SlideFormat,
   type SlideManifest,
   type SlideType,
@@ -211,15 +212,7 @@ const AUTO_PALETTE_ADDENDUM = `PALETTE — choose a 3-6 color hex palette that m
 
 // Valid `data-role` values (mirror SlideSchema.role). Used to coerce the
 // section's `data-role` to the schema enum; anything else → undefined.
-const SLIDE_ROLES = new Set<NonNullable<SlideType["role"]>>([
-  "cover",
-  "section",
-  "content",
-  "stats",
-  "quote",
-  "image",
-  "closing",
-]);
+const SLIDE_ROLES = new Set<NonNullable<SlideType["role"]>>(SLIDE_ROLE_VALUES);
 
 // Images mode = create/scratch + MIMIC (opt-in, 2026-06-14: mimic recreates the
 // reference's imagery via gpt-image, see MIMIC_IMG_ADDENDUM). enhance + data keep
