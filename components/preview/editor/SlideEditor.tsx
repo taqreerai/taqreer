@@ -61,6 +61,14 @@ type Props = {
   // self-save — which updates `slide.html` — never blows away the live DOM the
   // user is editing. See the bodyHtml effect.
   reloadKey?: number;
+  // When true, SKIP the flatten-on-enter pass and keep the slide's original
+  // authored HTML. Social (3:4) carousels use the full CSS toolbox — descendant
+  // selectors (`.list li::before` bullets), pseudo-element decoration, and
+  // nested fills (`.progress i`) — which flatten's de-nesting silently breaks
+  // (the selectors stop matching once every node becomes a flat sibling). For
+  // those decks fidelity beats flat-layer editing, so we render as authored
+  // (editing runs in the same degraded-but-lossless mode as a parity-fail).
+  disableFlatten?: boolean;
   // When true (slide locked / mid-regen) the editor renders IDENTICALLY but is
   // inert — no hover box, no click-to-select, no edit mode, no selection box.
   // Kept mounted (rather than swapped for SlideRenderer) so disabling never
@@ -131,7 +139,7 @@ function applyResize(el: HTMLElement, width: number, height: number, transform: 
 
 export function SlideEditor({
   slide, theme, direction, language, width, height, scale,
-  selected, onSelect, onDocReady, onEdit, onNormalize, onFlattenResult, onUndo, onRedo, reloadKey = 0, disabled = false,
+  selected, onSelect, onDocReady, onEdit, onNormalize, onFlattenResult, onUndo, onRedo, reloadKey = 0, disableFlatten = false, disabled = false,
   lockTick = 0, onDeleteSelected, onGroup, onUngroup, inPlaceApply = null,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -188,6 +196,11 @@ export function SlideEditor({
   useEffect(() => {
     onFlattenResultRef.current = onFlattenResult;
   }, [onFlattenResult]);
+  // Read inside the once-attached wire() closure without re-wiring on change.
+  const disableFlattenRef = useRef(disableFlatten);
+  useEffect(() => {
+    disableFlattenRef.current = disableFlatten;
+  }, [disableFlatten]);
   // Same pattern for the undo/redo callbacks (read by the once-attached iframe
   // keydown bridge).
   const onUndoRef = useRef(onUndo);
@@ -433,6 +446,13 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       await new Promise<void>((r) =>
         requestAnimationFrame(() => requestAnimationFrame(() => r())),
       );
+      // Social (3:4) decks skip flatten entirely — its de-nesting breaks the
+      // descendant selectors + pseudo-elements the social prompt leans on. Keep
+      // the authored HTML (same lossless, degraded-editing path as parity-fail);
+      // tagging + overlay wiring below still run on the nested structure.
+      if (disableFlattenRef.current) {
+        // nothing to flatten — fall through to tagging/overlays
+      } else {
       try {
         // The gen-image fade animation must NOT be live when flatten reads computed
         // styles: mid-fade the class .tq-genimg-in holds opacity below 1, and flatten
@@ -471,6 +491,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         }
       } catch (err) {
         console.error("flatten on enter failed", err);
+      }
       }
 
       // Normalize FILLED gen-images saved with their transient streaming

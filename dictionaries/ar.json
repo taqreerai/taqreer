@@ -1116,6 +1116,7 @@
     },
     "screen": {
       "designing": "جار تصميم عرضك…",
+      "designingPost": "جار تصميم منشورك…",
       "redesigning": "جار إعادة التصميم…",
       "createFailedTitle": "تعذر إنشاء العرض",
       "tryAgain": "حاول مرة أخرى",

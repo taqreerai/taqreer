@@ -243,28 +243,6 @@ function isProgress(value: unknown): value is Progress {
   );
 }
 
-// Map the streaming progress to a 0..100 % bar. Thinking gets a small head
-// start so the bar never sits at 0 while Claude warms up. Designing fills the
-// long middle (5–90 %). Validating/saving cover the tail.
-function progressPercent(progress: Progress | null): number {
-  if (!progress) return 5;
-  switch (progress.stage) {
-    case "thinking":
-      return 5;
-    case "designing": {
-      if (progress.estimatedTotal <= 0) return 10;
-      const ratio = Math.min(progress.currentSlide / progress.estimatedTotal, 1);
-      return Math.round(5 + ratio * 85);
-    }
-    case "validating":
-      return 92;
-    case "saving":
-      return 98;
-    default:
-      return 5;
-  }
-}
-
 // Fallback scale used while ResizeObserver is wiring up to the hero.
 const FALLBACK_SCALE = 0.18;
 
@@ -623,6 +601,8 @@ export function DeckView({
     manifest?.format ?? initialFormat,
   );
   const aspectRatio = `${canvasW} / ${canvasH}`;
+  // 3:4 is a social post, not a deck — the generating title says "post".
+  const isPostFormat = (manifest?.format ?? initialFormat) === "3:4";
 
   // gridRef is defined here so it can be passed to <motion.div>
   // below. The scale + height measurement effect that uses it lives
@@ -3827,7 +3807,6 @@ export function DeckView({
     return "pending";
   };
 
-  const percent = progressPercent(progress);
     // Slot count switches on the user's slide-count mode:
     //   • custom (user picked N) → fixed-N tiles. Today's behavior.
     //   • auto                   → reserve a slot per slide Claude COMMITTED
@@ -4513,7 +4492,9 @@ export function DeckView({
                   className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-foreground"
                 >
                   <h1 className="font-headline-lg text-[28px] font-bold">
-                    {dict.editor.screen.designing}
+                    {isPostFormat
+                      ? dict.editor.screen.designingPost
+                      : dict.editor.screen.designing}
                   </h1>
                   <div className="text-muted flex items-center justify-center gap-3 text-sm">
                     <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
@@ -4534,21 +4515,6 @@ export function DeckView({
                                     : dict.editor.progress.writing
                               : dict.editor.progress.startingDesign}
                     </span>
-                  </div>
-                  <div className="w-full max-w-md">
-                    <div
-                      className="progress-track"
-                      role="progressbar"
-                      aria-valuenow={percent}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    >
-                      <div
-                        className="progress-bar"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                    <p className="text-muted mt-2 text-xs">{percent}%</p>
                   </div>
                   {isSlow && (
                     <span className="text-[11px] leading-relaxed text-foreground/60">
@@ -4579,6 +4545,9 @@ export function DeckView({
                 onUndo={handleLocalUndo}
                 onRedo={handleLocalRedo}
                 reloadKey={editorReloadKey}
+                // Social (3:4) posts render as authored — flatten's de-nesting
+                // would strip their descendant-selector bullets + nested fills.
+                disableFlatten={isPostFormat}
                 lockTick={lockTick}
                 inPlaceApply={inPlaceApply}
                 onDeleteSelected={deleteSelected}

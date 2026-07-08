@@ -1116,6 +1116,7 @@
     },
     "screen": {
       "designing": "Designing your presentation…",
+      "designingPost": "Designing your post…",
       "redesigning": "Redesigning…",
       "createFailedTitle": "Couldn't create the presentation",
       "tryAgain": "Try again",
