@@ -535,6 +535,8 @@
     "brandCard": "Brand identity",
     "colors": "Colors",
     "addColor": "Add color",
+    "autoColors": "Auto",
+    "autoColorsHint": "AI picks colors that match your content",
     "logo": "Logo",
     "saveAsDefault": "Save as default brand kit",
     "outputCard": "Output settings",

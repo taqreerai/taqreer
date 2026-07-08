@@ -199,6 +199,15 @@ const MIMIC_IMG_ADDENDUM = `MIMIC IMAGES: images mode is ON for this mimic. Stud
 // just redirects the base prompt toward it. Appended AFTER so it wins.
 const ENHANCE_HTML_ADDENDUM = `ENHANCE MODE — this is a REDESIGN of an EXISTING deck, not a fresh original. Override "Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief" and "VARY the composition slide to slide" above: follow the per-slide redesign brief in the user message instead. PRESERVE each source slide's CONTENT and the brand's VISUAL IDENTITY (palette, fonts, logo); improve only layout, hierarchy, typography, spacing, and rhythm. LOCK one consistent chrome + type system across every slide — a single coherent redesign, not a set of unrelated layouts. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
 
+// Auto-palette addendum — appended ONLY when the brief carries no brand
+// colors (palette "auto": the user left the picker on Auto and no kit filled
+// it). Claude chooses a content-matched palette and rides it on the cover
+// section as `data-deck-palette`; the server adopts it into theme.palette
+// the moment the cover closes (ingestSlide), so the injected var(--brand-*)
+// values the slides reference ARE Claude's colors. Not used for enhance /
+// mimic — those preserve the SOURCE deck's identity instead.
+const AUTO_PALETTE_ADDENDUM = `PALETTE — choose a 3-6 color hex palette that matches the deck's content and mood, emit it on the COVER <section> as data-deck-palette="#RRGGBB,#RRGGBB,…" (dominant hue first — it becomes var(--primary)/var(--brand-1), then --secondary, --accent, --brand-4…), and reference only the injected variables in your CSS.`;
+
 // Valid `data-role` values (mirror SlideSchema.role). Used to coerce the
 // section's `data-role` to the schema enum; anything else → undefined.
 const SLIDE_ROLES = new Set<NonNullable<SlideType["role"]>>([
@@ -449,6 +458,32 @@ function readBriefBrandColors(brief: unknown): {
       ? first.toUpperCase()
       : null;
   return { colors, dominant };
+}
+
+// True when the brief carries at least one usable brand hex — i.e. the user
+// (or their brand kit) actually picked colors. False = palette "auto":
+// AUTO_PALETTE_ADDENDUM asks Claude to choose, and parseDeckPalette adopts
+// the choice off the cover section.
+function briefHasBrandColors(brief: unknown): boolean {
+  const { colors } = readBriefBrandColors(brief);
+  return colors.some((c) => /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c));
+}
+
+// Parse Claude's cover-emitted `data-deck-palette="#hex,#hex,…"` (auto-palette
+// mode). Returns 3-8 valid entries — padded with #FFFFFF exactly like
+// buildCreateHtmlTheme pads a sparse brand — or null when the attribute is
+// missing or holds nothing usable (caller keeps the server default palette).
+function parseDeckPalette(html: string): string[] | null {
+  const match = /\bdata-deck-palette\s*=\s*("([^"]*)"|'([^']*)')/i.exec(html);
+  const raw = match?.[2] ?? match?.[3];
+  if (!raw) return null;
+  const colors = raw
+    .split(/[\s,;]+/)
+    .filter((c) => /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c))
+    .slice(0, 8);
+  if (colors.length === 0) return null;
+  while (colors.length < 3) colors.push("#FFFFFF");
+  return colors;
 }
 
 // Read the brand's single font from the brief for the SERVER-built create-HTML
@@ -1273,7 +1308,12 @@ function buildSourceTextDirective(
       `  • Default to a chart for every key finding. Bullets only when a chart genuinely doesn't fit (definitions, methodology notes, qualitative quotes).`,
       `  • Max ONE primary chart per slide. Multi-chart slides feel like Tableau dashboards and read badly at presentation pace. If you have two findings, make two slides.`,
       `  • Charts must render as inline <svg> with an explicit viewBox + readable labels (axis ticks, units, legend if needed). NO <canvas>, NO chart-library tags, NO <img> placeholders, NO external assets.`,
-      `  • Use the user's brand palette for chart fills + strokes. Apply colours in declared order — primary brand colour for the headline series, secondary for comparisons. Never invent palette entries that aren't in brand.colors.`,
+      // With no user colors the AUTO_PALETTE_ADDENDUM has Claude choose the
+      // palette; the chart rule then binds to the injected variables (which
+      // carry Claude's own choice) instead of a brand.colors list.
+      readBriefBrandColors(event.brief).colors.length > 0
+        ? `  • Use the user's brand palette for chart fills + strokes. Apply colours in declared order — primary brand colour for the headline series, secondary for comparisons. Never invent palette entries that aren't in brand.colors.`
+        : `  • Use the injected brand variables for chart fills + strokes — var(--primary) for the headline series, var(--secondary) / var(--accent) for comparisons. Stay within the palette you declared in data-deck-palette; no extra hues.`,
       ``,
       `CHART-TYPE HEURISTICS:`,
       `  • Time-series / trends over time → line chart (or area chart if cumulative; thin stroke, faded fill underneath).`,
@@ -1811,8 +1851,16 @@ export const deckGenerate = inngest.createFunction(
         // lock the chrome". The flow-specific addenda are mutually exclusive
         // (distinct source kinds / type), but compose cleanly regardless.
         const htmlSourceKind = readSource(data)?.kind;
+        // Palette "auto" — no user/kit colors in the brief. Only for flows
+        // that design an ORIGINAL system (create scratch/text/images +
+        // datasheet); enhance/mimic derive identity from their source deck.
+        const paletteAuto =
+          !briefHasBrandColors(data.brief) &&
+          htmlSourceKind !== "mimic" &&
+          data.type !== "enhance";
         const htmlSystem = [
           SYSTEM_PROMPT_CREATE_HTML,
+          paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           // Mimic with images on recreates the reference's imagery (its own
           // addendum); every other images-on flow uses the generic reserve-a-box
           // rules.
@@ -1918,6 +1966,24 @@ export const deckGenerate = inngest.createFunction(
             });
             slides.length = 0;
             streamingPreview.length = 0;
+          }
+          // Auto-palette: adopt Claude's cover-emitted palette the moment the
+          // cover closes. `theme` IS `streamingTheme` (same object), so the
+          // live preview recolors from the first slide on, and assembleManifest
+          // (which reads the same `theme`) inherits it. Invalid/missing →
+          // keep the server default (today's near-black/white fallback).
+          if (paletteAuto && parsed.role === "cover") {
+            const chosen = parseDeckPalette(parsed.html);
+            if (chosen) {
+              theme.palette = chosen;
+              logger.info("deck_auto_palette_adopted", {
+                palette: chosen.join(","),
+              });
+            } else {
+              logger.warn("deck_auto_palette_missing", {
+                slideId: parsed.slideId,
+              });
+            }
           }
           const role =
             parsed.role && SLIDE_ROLES.has(parsed.role as never)
@@ -2519,10 +2585,19 @@ export const deckGenerate = inngest.createFunction(
         where: { id: projectId, slideCount: null },
         data: { slideCount: slideCountFromManifest },
       });
-      if (dominantColorFromBrief != null) {
+      // Auto-palette runs have no brief colors — fall back to the manifest
+      // theme's first entry (Claude's chosen dominant) so the /projects color
+      // filter still gets a real value.
+      const dominantColorForFreeze =
+        dominantColorFromBrief ??
+        (typeof manifest.theme.palette[0] === "string" &&
+        /^#[0-9A-Fa-f]{6}$/.test(manifest.theme.palette[0])
+          ? manifest.theme.palette[0]
+          : null);
+      if (dominantColorForFreeze != null) {
         await prisma.project.updateMany({
           where: { id: projectId, dominantColor: null },
-          data: { dominantColor: dominantColorFromBrief },
+          data: { dominantColor: dominantColorForFreeze },
         });
       }
       // colorTags freeze — empty-array guard ensures we only write

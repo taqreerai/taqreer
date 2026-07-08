@@ -189,7 +189,11 @@ export default function CreatePage() {
   const [language, setLanguage] = useState<LanguageCode>("ar");
 
   // ─── Branding state ────────────────────────────────────────────
-  const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
+  // [] = palette "Auto": Claude picks a content-matched palette at
+  // generation time (deck-generate AUTO_PALETTE_ADDENDUM). A brand kit
+  // with colors, or any manual pick, switches to manual. addColor seeds
+  // DEFAULT_PALETTE so the first manual edit starts from real swatches.
+  const [colors, setColors] = useState<string[]>([]);
   // Single brand-font model: ONE Google family (Claude varies weights) OR
   // up to 5 uploaded families (Claude pairs). Replaces the old heading +
   // body two-slot UI.
@@ -493,7 +497,13 @@ export default function CreatePage() {
   const updateColor = (index: number, next: string) =>
     setColors((c) => c.map((v, i) => (i === index ? next : v)));
   const addColor = () =>
-    setColors((c) => (c.length >= MAX_PALETTE ? c : [...c, "#FFFFFF"]));
+    setColors((c) =>
+      c.length === 0
+        ? [...DEFAULT_PALETTE]
+        : c.length >= MAX_PALETTE
+          ? c
+          : [...c, "#FFFFFF"],
+    );
   const removeColor = (index: number) =>
     setColors((c) =>
       c.length <= MIN_PALETTE ? c : c.filter((_, i) => i !== index),
@@ -572,7 +582,9 @@ export default function CreatePage() {
 
       const brand = {
         colors,
-        paletteMode: "manual" as const,
+        // Empty colors = Auto: deck-generate keys off the empty array; the
+        // mode string just keeps the stored brief honest.
+        paletteMode: colors.length > 0 ? ("manual" as const) : ("auto" as const),
         paletteScreenshotUrl: null,
         fonts: {
           heading: fontField,
@@ -853,6 +865,27 @@ export default function CreatePage() {
                 {t.colors}
               </span>
               <div className="flex items-center gap-1.5">
+                {/* Auto pill — active (solid stroke) when no colors are
+                    picked; in manual mode it becomes the way back to Auto. */}
+                <button
+                  type="button"
+                  onClick={() => setColors([])}
+                  disabled={colors.length === 0}
+                  title={t.autoColorsHint}
+                  className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
+                    colors.length === 0
+                      ? "border-foreground/40 text-foreground"
+                      : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
+                  }`}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 13 }}
+                  >
+                    auto_awesome
+                  </span>
+                  {t.autoColors}
+                </button>
                 {colors.map((color, index) => (
                   <InlinePaletteSwatch
                     key={index}
