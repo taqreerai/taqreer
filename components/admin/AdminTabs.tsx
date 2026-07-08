@@ -14,6 +14,7 @@ const TABS = [
   { path: "/admin", label: "Overview", icon: "dashboard" },
   { path: "/admin/templates", label: "Templates", icon: "grid_view" },
   { path: "/admin/users", label: "Users", icon: "group" },
+  { path: "/admin/decks", label: "Decks", icon: "slideshow" },
   { path: "/admin/broadcast", label: "Broadcast", icon: "campaign" },
   { path: "/admin/settings", label: "Settings", icon: "tune" },
 ] as const;

@@ -167,6 +167,23 @@ export async function resolveProjectAccess(
     }
   }
 
+  // Admin read-only bypass (admin console > Decks). Grants VIEW only, and only
+  // when the route asks for view: an admin without real access hitting an
+  // edit/comment route must keep 404ing exactly as before (existence-hiding).
+  // Role comes from the Prisma row, same trust chain as requireAdminPage;
+  // banned callers were already rejected above. Deliberately not gated on
+  // explicitlyRevoked: a user revoking an old share must not disable oversight.
+  if (!role && user && requiredRole === "view") {
+    const adminRow = await prisma.user.findUnique({
+      where: { supabaseUserId: user.id },
+      select: { id: true, role: true },
+    });
+    if (adminRow?.role === "admin") {
+      role = "view";
+      prismaUserIdForCtx = adminRow.id;
+    }
+  }
+
   // Public-view fallback — only when the caller hasn't already
   // matched a stronger role, the project's link is on, AND the
   // caller wasn't explicitly revoked. The revoke check is what
