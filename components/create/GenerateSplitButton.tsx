@@ -352,7 +352,9 @@ export function GenerateSplitButton({
                         amber when the balance doesn't cover it. */}
                     <span
                       className={`min-w-16 text-end text-xs font-medium tabular-nums ${
-                        affordable ? "text-foreground/70" : "text-amber-400"
+                        affordable
+                          ? "text-foreground/70"
+                          : "text-[var(--tq-status-warn-text)]"
                       }`}
                       dir="ltr"
                     >

@@ -54,6 +54,13 @@ export async function POST(
   // regenerated slides keep premium design quality - and premium pricing);
   // deactivated/legacy keys fall back to the fastest active no-thinking
   // preset. Resolved LIVE so it follows admin Settings.
+  //
+  // Deliberately the latest job of ANY status (unlike the partial/slide
+  // regen routes, which filter succeeded): this route also serves RETRY on
+  // a failed generation, and the retry must reuse that failed attempt's
+  // inputJson - including its credit-hold contract, which was priced on the
+  // same quality this inherits. Filtering to succeeded would 400 the retry
+  // of a first-ever generation and desync quality from the spread payload.
   await ensureFresh();
   const eventPayload = {
     ...((latestJob.inputJson ?? {}) as Record<string, unknown>),
