@@ -50,17 +50,23 @@ export type TierConfigRow = {
 // 2026-07-07 repricing (context/pricing-study-2026-07.md): opus-fast
 // 15/slide (real COGS ~$0.62/deck), fable-low 900+60 AND inactive (sold
 // >2x below cost at 500+28; keep off until measured), new tier ladder.
+// 2026-07-08 preset restructure: 3-level quality ladder (fast / low /
+// medium), ungated everywhere - credits are the only meter. opus-medium
+// credits are a PLACEHOLDER until the low-vs-medium cost test lands.
 export const SEED_PRESETS: readonly PresetConfig[] = [
-  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,  maxTokens: 128000, baseCredits: 100, perSlideCredits: 15, secsPerSlide: 8,  baseOverheadSecs: 25, active: true, sortOrder: 0 },
-  { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low", maxTokens: 128000, baseCredits: 400, perSlideCredits: 22, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 1 },
-  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low", maxTokens: 128000, baseCredits: 900, perSlideCredits: 60, secsPerSlide: 20, baseOverheadSecs: 45, active: false, sortOrder: 2 },
+  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 100, perSlideCredits: 15, secsPerSlide: 8,  baseOverheadSecs: 25, active: true, sortOrder: 0 },
+  { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 400, perSlideCredits: 22, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 1 },
+  { key: "opus-medium",   label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "medium", maxTokens: 128000, baseCredits: 600, perSlideCredits: 30, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 2 },
+  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 900, perSlideCredits: 60, secsPerSlide: 20, baseOverheadSecs: 45, active: false, sortOrder: 3 },
 ];
 
+// Preset ladder per tier (user direction 2026-07-08): free stays on the
+// no-thinking draft preset; Plus adds balanced; Pro/Max unlock medium.
 export const SEED_TIERS: readonly TierConfigRow[] = [
   { plan: "free", priceUsd: 0,  monthlyAllotment: 0,     signupGrant: 1000, slideCap: 10, unlockedPresetKeys: ["opus-fast"], flows: ["create"], sortOrder: 0 },
   { plan: "plus", priceUsd: 9,  monthlyAllotment: 4000,  signupGrant: 0,    slideCap: 30, unlockedPresetKeys: ["opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 1 },
-  { plan: "pro",  priceUsd: 19, monthlyAllotment: 10000, signupGrant: 0,    slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 2 },
-  { plan: "max",  priceUsd: 49, monthlyAllotment: 28000, signupGrant: 0,    slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
+  { plan: "pro",  priceUsd: 19, monthlyAllotment: 10000, signupGrant: 0,    slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 2 },
+  { plan: "max",  priceUsd: 49, monthlyAllotment: 28000, signupGrant: 0,    slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
 ];
 
 // Seed default + regen preset, mirroring DEFAULT_QUALITY / REGEN_QUALITY.

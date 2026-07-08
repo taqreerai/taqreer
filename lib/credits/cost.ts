@@ -35,6 +35,9 @@ export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
     // demand + a bigger sample justify it.
     "opus-fast": { base: 100, perSlide: 15 },
     "opus-balanced": { base: 400, perSlide: 22 },
+    // Placeholder 2026-07-08 (preset restructure) - final numbers come
+    // from the low-vs-medium cost test; live price is DB-driven anyway.
+    "opus-medium": { base: 600, perSlide: 30 },
     "fable-low": { base: 900, perSlide: 60 },
   };
 
@@ -95,6 +98,8 @@ export type TierConfig = {
 // Names Free/Plus/Pro/Max per user direction 2026-06-11. Keys match
 // lib/plan.ts KNOWN_PLANS.
 export const TIERS: Record<KnownPlan, TierConfig> = {
+  // Preset ladder 2026-07-08: free = draft only (no thinking); Plus adds
+  // balanced; Pro/Max unlock the medium "professional design" preset.
   free: {
     priceUsd: 0,
     monthlyAllotment: 0,
@@ -116,7 +121,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 10000,
     signupGrant: 0,
     slideCap: 60,
-    presets: ["opus-fast", "opus-balanced", "fable-low"],
+    presets: ["opus-fast", "opus-balanced", "opus-medium"],
     flows: ALL_FLOWS,
   },
   max: {
@@ -124,7 +129,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 28000,
     signupGrant: 0,
     slideCap: 75,
-    presets: ["opus-fast", "opus-balanced", "fable-low"],
+    presets: ["opus-fast", "opus-balanced", "opus-medium"],
     flows: ALL_FLOWS,
   },
 };

@@ -28,6 +28,10 @@ export type CreditPreset = {
   key: string;
   label: string;
   thinking: boolean;
+  // Adaptive-thinking effort tier (null when thinking is off). Drives the
+  // 3-level design-quality chip in the picker (draft / standard / premium);
+  // the boolean alone can't tell effort low from medium.
+  effort: string | null;
   baseCredits: number;
   perSlideCredits: number;
   gateTier: KnownPlan | null;

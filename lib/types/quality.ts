@@ -100,6 +100,9 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // the pre-hydration picker fallback. Kept in sync with SEED_PRESETS
   // (asserted by scripts/check-config-parity.ts).
   active: boolean;
+  // Adaptive-thinking effort tier (null when thinking is off). Mirrors the
+  // seed; drives the 3-level design-quality chip (draft/standard/premium).
+  effort: string | null;
 }> = [
   // Labels are intent-based Arabic (سريع = fast / no thinking,
   // تفكير = thinking) — the distinction users care about is "does it
@@ -112,12 +115,15 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // retired from the menu 2026-05-29.
   // ETA constants re-baselined on the 2026-06-12 measured run:
   // opus-fast streamed a 5-slide deck in 53s wall.
-  { key: "opus-fast",      label: "Opus 4.8", thinking: false, secsPerSlide: 8,  baseOverheadSecs: 25, active: true },
-  { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  secsPerSlide: 25, baseOverheadSecs: 60, active: true },
+  { key: "opus-fast",      label: "Opus 4.8", thinking: false, effort: null,     secsPerSlide: 8,  baseOverheadSecs: 25, active: true },
+  { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  effort: "low",    secsPerSlide: 25, baseOverheadSecs: 60, active: true },
+  // 2026-07-08 preset restructure: medium effort = the "premium design"
+  // top tier; placeholder 600+30 credits until the cost test sets finals.
+  { key: "opus-medium",    label: "Opus 4.8", thinking: true,  effort: "medium", secsPerSlide: 25, baseOverheadSecs: 60, active: true },
   // Inactive 2026-07-07: sold >2x below cost at the old 500+28 credit
   // price (measured ~$3.22/deck); repriced 900+60 and kept OFF until
   // demand + a bigger sample justify reactivating (pricing study §4.3).
-  { key: "fable-low",      label: "Fable 5",  thinking: true,  secsPerSlide: 20, baseOverheadSecs: 45, active: false },
+  { key: "fable-low",      label: "Fable 5",  thinking: true,  effort: "low",    secsPerSlide: 20, baseOverheadSecs: 45, active: false },
 ];
 
 // Default — `opus-fast`: measured 2026-06-12 as the best

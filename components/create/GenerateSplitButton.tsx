@@ -54,10 +54,22 @@ const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.filter(
   key: p.key,
   label: p.label,
   thinking: p.thinking,
+  effort: p.effort,
   baseCredits: CREDIT_COST[p.key]?.base ?? 0,
   perSlideCredits: CREDIT_COST[p.key]?.perSlide ?? 0,
   gateTier: TIER_ORDER.find((t) => TIERS[t].presets.includes(p.key)) ?? null,
 }));
+
+// 3-level design-quality chip (2026-07-08 restructure): no thinking =
+// draft; thinking at effort medium+ = premium; thinking low = standard.
+// Mirrors what paramsForPreset sends to the API for each preset.
+function designLevel(p: {
+  thinking: boolean;
+  effort?: string | null;
+}): "draft" | "standard" | "premium" {
+  if (!p.thinking) return "draft";
+  return p.effort && p.effort !== "low" ? "premium" : "standard";
+}
 
 export function GenerateSplitButton({
   onGenerate,
@@ -233,9 +245,9 @@ export function GenerateSplitButton({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 4 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.25 }}
-            className=" absolute start-0 bottom-full z-30 mb-2 w-80 overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
+            className=" absolute start-0 bottom-full z-30 mb-2 w-[26rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           >
-            <div className="flex items-center justify-between px-3 py-2 text-[11px] text-foreground/40">
+            <div className="flex items-center justify-between px-4 py-2.5 text-[11px] text-foreground/40">
               <span>{dict.flows.generate.generationQuality}</span>
               {credits && !isAdmin ? (
                 <span dir="ltr" className="tabular-nums">
@@ -278,69 +290,63 @@ export function GenerateSplitButton({
                     }
                     onQualityChange(preset.key);
                   }}
-                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-start text-sm transition-colors ${
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-start transition-colors ${
                     active
                       ? "bg-foreground/[0.06] text-foreground"
                       : "text-foreground/70 hover:bg-foreground/[0.04] hover:text-foreground"
                   }`}
                 >
-                  {/* Left cluster (visual right in RTL): check + label.
-                      `flex-1` so the label cluster grows and pushes the
-                      chip + eta to a stable visual-left edge — chips and
-                      etas end up vertically aligned across rows
-                      regardless of label width. */}
-                  <span className="flex flex-1 items-center gap-2 min-w-0">
-                    <span
-                      className="material-symbols-outlined leading-none"
-                      style={{ fontSize: 16, opacity: active ? 1 : 0 }}
-                    >
-                      check
-                    </span>
-                    <span className="truncate">{preset.label}</span>
+                  {/* Check + title/description column. The DESIGN-LEVEL
+                      name is the row title (user direction 2026-07-08:
+                      chips dropped as redundant next to the descriptions;
+                      without them the model label alone would read
+                      "Opus 4.8" three times). */}
+                  <span
+                    className="material-symbols-outlined shrink-0 leading-none"
+                    style={{ fontSize: 18, opacity: active ? 1 : 0 }}
+                  >
+                    check
                   </span>
-                  {/* Right cluster (visual left in RTL): thinking chip
-                      + ETA. Both pinned to a consistent x position
-                      across rows. The chip sits to the right of the
-                      ETA in DOM order, which in RTL renders the chip
-                      VISUALLY to the LEFT of the eta and to the FAR
-                      right of the eta cluster — same column down the
-                      list. Driven by the `thinking` field on each
-                      QUALITY_PRESETS entry; mirror of
-                      `paramsForQuality()`'s `thinking.type`. */}
-                  <span className="flex shrink-0 items-center gap-2">
-                    {preset.thinking ? (
-                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-[var(--tq-status-ok-text)] bg-[var(--tq-status-ok-bg)]">
-                        {dict.flows.generate.thinking}
-                      </span>
-                    ) : (
-                      <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none text-foreground/50 bg-[var(--tq-surface)]">
-                        {dict.flows.generate.fast}
-                      </span>
-                    )}
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-sm font-medium">
+                      {designLevel(preset) === "premium"
+                        ? dict.flows.generate.premiumDesign
+                        : designLevel(preset) === "standard"
+                          ? dict.flows.generate.standardDesign
+                          : dict.flows.generate.draftDesign}
+                    </span>
+                    <span className="truncate text-xs text-foreground/45">
+                      {designLevel(preset) === "premium"
+                        ? dict.flows.generate.premiumDesignDesc
+                        : designLevel(preset) === "standard"
+                          ? dict.flows.generate.standardDesignDesc
+                          : dict.flows.generate.draftDesignDesc}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2.5">
                     {gated && gateTier ? (
-                      // Gated-tier pill - same chip vocabulary as the
-                      // fast/thinking pills, brand-blue tint.
-                      <span className="rounded-full bg-[var(--tq-purple)] px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white">
+                      // Gated-tier pill - brand-blue, doubles as the upsell
+                      // affordance (click opens UpgradeModal).
+                      <span className="rounded-full bg-[var(--tq-purple)] px-2.5 py-1 text-[10px] font-semibold leading-none text-white">
                         {planLabel(dict.components.planUsage, gateTier)}
                       </span>
                     ) : null}
-                    {/* Per-preset credit estimate - the same cost table
-                        the ledger charges from (lib/credits/cost.ts), so
-                        the shown number IS the held number. Amber when
-                        the current balance doesn't cover it. */}
-                    {credits && !isAdmin ? (
-                      <span
-                        className={`text-[11px] tabular-nums ${
-                          affordable ? "text-foreground/60" : "text-amber-400"
-                        }`}
-                        dir="ltr"
-                      >
-                        {dict.flows.generate.creditsEstimate.replace(
-                          "{credits}",
-                          formatCredits(cost),
-                        )}
-                      </span>
-                    ) : null}
+                    {/* Per-preset credit estimate - the same cost table the
+                        ledger charges from (lib/credits/cost.ts), so the
+                        shown number IS the held number. Shown for everyone
+                        (it replaced the design chip as the row's key fact);
+                        amber when the balance doesn't cover it. */}
+                    <span
+                      className={`min-w-16 text-end text-xs font-medium tabular-nums ${
+                        affordable ? "text-foreground/70" : "text-amber-400"
+                      }`}
+                      dir="ltr"
+                    >
+                      {dict.flows.generate.creditsEstimate.replace(
+                        "{credits}",
+                        formatCredits(cost),
+                      )}
+                    </span>
                   </span>
                 </button>
               );

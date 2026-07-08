@@ -661,6 +661,12 @@
       "generationQuality": "Generation quality",
       "thinking": "Thinking",
       "fast": "Fast",
+      "draftDesign": "Quick draft",
+      "standardDesign": "Balanced design",
+      "premiumDesign": "Professional design",
+      "draftDesignDesc": "Fastest and cheapest, simpler layouts",
+      "standardDesignDesc": "Thinks through the design, good quality",
+      "premiumDesignDesc": "Deepest design planning, highest quality",
       "etaMin": "~{eta} min",
       "balance": "Balance: {count} cr",
       "creditsEstimate": "\u2248 {credits} cr"
@@ -752,7 +758,7 @@
           "name": "Free",
           "description": "To try it out and make simple decks fast.",
           "credits": "{credits} credits (signup gift)",
-          "features": ["Fast model", "Up to {slides} slides per deck", "Images with the latest GPT models", "Enhance · Mimic · Data", "Thinking model", "Premium templates"],
+          "features": ["Quick draft quality", "Up to {slides} slides per deck", "Images with the latest GPT models", "Enhance · Mimic · Data", "Balanced and Professional design", "Premium templates"],
           "footnote": "Upgrade anytime",
           "cta": "Start free"
         },
@@ -760,7 +766,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["All creation methods", "Fast and thinking models", "Images with the latest GPT models", "Up to {slides} slides per deck", "Custom brand identity", "Premium templates"],
+          "features": ["All creation methods", "Balanced design quality", "Images with the latest GPT models", "Up to {slides} slides per deck", "Custom brand identity", "Premium templates"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -768,7 +774,7 @@
           "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
           "credits": "{credits} credits / month",
-          "features": ["All models", "Images with the latest GPT models", "Premium templates", "Up to {slides} slides per deck", "Custom brand identity", "All creation methods"],
+          "features": ["All quality presets", "Images with the latest GPT models", "Premium templates", "Up to {slides} slides per deck", "Custom brand identity", "All creation methods"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -776,7 +782,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["All models and all methods", "Images with the latest GPT models", "Up to {slides} slides per deck", "Premium templates", "Custom brand identity", "Processing priority"],
+          "features": ["All presets and all methods", "Images with the latest GPT models", "Up to {slides} slides per deck", "Premium templates", "Custom brand identity", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }

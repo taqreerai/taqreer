@@ -123,6 +123,7 @@ export async function GET() {
     key: p.key,
     label: p.label,
     thinking: p.thinking,
+    effort: p.effort ?? null,
     baseCredits: p.baseCredits,
     perSlideCredits: p.perSlideCredits,
     gateTier:
