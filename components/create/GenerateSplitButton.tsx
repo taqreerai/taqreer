@@ -249,7 +249,9 @@ export function GenerateSplitButton({
           >
             <div className="flex items-center justify-between px-4 py-2.5 text-[11px] text-foreground/40">
               <span>{dict.flows.generate.generationQuality}</span>
-              {credits && !isAdmin ? (
+              {/* Balance shows for EVERYONE (admins included) - it's the
+                  denominator the per-row estimates are judged against. */}
+              {credits ? (
                 <span dir="ltr" className="tabular-nums">
                   {dict.flows.generate.balance.replace(
                     "{count}",
