@@ -131,6 +131,11 @@ type Props = {
   // — the user isn't identifiable).
   currentUserName?: string | null;
   currentUserImage?: string | null;
+  // True when this viewer is an admin using the read-only oversight
+  // bypass (admin console > Decks). Suppresses presence track() so the
+  // deck owner never sees the admin navigating their slides; the admin
+  // still RECEIVES presence/broadcast (receive is independent of send).
+  isAdminObserver?: boolean;
   projectTitle: string;
   presentationId: string | null;
   initialProjectStatus: string;
@@ -332,6 +337,7 @@ export function DeckView({
   currentUserId,
   currentUserName,
   currentUserImage,
+  isAdminObserver = false,
   projectTitle,
   presentationId,
   initialProjectStatus,
@@ -2143,6 +2149,10 @@ export function DeckView({
       });
 
       presenceHandleRef.current = localHandle;
+      // Admin oversight is invisible: never track(), so the owner sees
+      // no admin avatar. Receive stays live (presence sync + broadcasts
+      // don't require the client to track).
+      if (isAdminObserver) return;
       // Initial track with current slide / visibility — the re-track
       // effect below also fires on mount but races the async open;
       // tracking here makes the user appear to others immediately
@@ -2190,6 +2200,7 @@ export function DeckView({
     currentUserId,
     currentUserName,
     currentUserImage,
+    isAdminObserver,
     canComment,
   ]);
 
@@ -2287,7 +2298,8 @@ export function DeckView({
   // ref so a no-op when the channel hasn't finished opening yet —
   // the initial-open path above handles the first track.
   useEffect(() => {
-    if (!currentUserId) return;
+    // isAdminObserver: invisible oversight never re-tracks either.
+    if (!currentUserId || isAdminObserver) return;
     const fire = () => {
       // Track is async + fire-and-forget here — re-track is a UX
       // courtesy, not a contract, so failures just log. Without the
@@ -2308,7 +2320,13 @@ export function DeckView({
     fire();
     document.addEventListener("visibilitychange", fire);
     return () => document.removeEventListener("visibilitychange", fire);
-  }, [currentSlideIndex, currentUserId, currentUserName, currentUserImage]);
+  }, [
+    currentSlideIndex,
+    currentUserId,
+    currentUserName,
+    currentUserImage,
+    isAdminObserver,
+  ]);
 
   // Per-slide viewer arrays consumed by SlideNavSidebar. Filters out
   // self (own avatar doesn't appear on own sidebar — the active-

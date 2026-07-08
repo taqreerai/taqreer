@@ -72,6 +72,7 @@ export default async function ProjectPage({
       key={deckKey}
       projectId={projectId}
       role={access.role}
+      isAdminObserver={access.isAdminObserver === true}
       // Optional chain — anonymous public-view callers may have a
       // ProjectAccessContext where access.user is { id: null, prismaId: null }.
       currentUserId={access.user?.prismaId ?? null}

@@ -33,6 +33,11 @@ export type ProjectAccessError = {
 
 export type ProjectAccessContext = {
   role: ProjectRole;
+  // True when the role was granted by the admin read-only bypass below
+  // (role=admin viewing a deck they don't own / weren't shared). Lets the
+  // viewer suppress presence tracking so deck owners don't see the admin
+  // navigating their slides. UX-only; never used for authorization.
+  isAdminObserver?: boolean;
   // `id` here is the Supabase user id (from auth.users); `prismaId`
   // is the application User row id. We expose both because routes
   // mix usage — some compare against Supabase ids (e.g. ownership),
@@ -173,6 +178,7 @@ export async function resolveProjectAccess(
   // Role comes from the Prisma row, same trust chain as requireAdminPage;
   // banned callers were already rejected above. Deliberately not gated on
   // explicitlyRevoked: a user revoking an old share must not disable oversight.
+  let isAdminObserver = false;
   if (!role && user && requiredRole === "view") {
     const adminRow = await prisma.user.findUnique({
       where: { supabaseUserId: user.id },
@@ -181,6 +187,7 @@ export async function resolveProjectAccess(
     if (adminRow?.role === "admin") {
       role = "view";
       prismaUserIdForCtx = adminRow.id;
+      isAdminObserver = true;
     }
   }
 
@@ -211,6 +218,7 @@ export async function resolveProjectAccess(
 
   return {
     role,
+    isAdminObserver,
     user: { id: userIdForCtx, prismaId: prismaUserIdForCtx },
     project: { id: project.id, user: { id: project.user.id } },
   };
