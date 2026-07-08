@@ -22,6 +22,8 @@ import {
   defaultPresetKey,
   creditCostFor,
   getImageCredits,
+  getPreset,
+  getActivePresets,
 } from "@/lib/config/runtime-config";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
@@ -253,6 +255,10 @@ type DeckGenerateEvent = {
   versionId: string;
   jobId?: string | null;
   type?: "create" | "enhance";
+  // First-deck gift flag - set by /api/projects when this is the user's
+  // very first deck; upgrades the CALL params to the cheapest thinking
+  // preset while billing stays on `quality`. See resolveEffectiveQuality.
+  firstDeckBoost?: boolean;
   enhance?: EnhanceData;
   brief: unknown;
   // User-picked generation quality preset. Maps to model + thinking +
@@ -604,7 +610,21 @@ function resolveEffectiveQuality(data: DeckGenerateEvent): {
 } {
   const source = readSource(data);
   const sourceKind = source?.kind ?? "scratch";
-  // Auto-upgrade DISABLED (2026-05-30). History: thinking-off presets
+  // First-deck gift (2026-07-08): the user's very FIRST deck runs at the
+  // cheapest ACTIVE thinking preset while the CHARGE (hold/settle) and
+  // Job.quality stay on the preset they picked. Free users' first
+  // impression is a thinking-designed deck; the preset gate applies from
+  // deck 2 on. The flag is set server-side by /api/projects (prior project
+  // count === 0) and deliberately neutralized on regen re-dispatches.
+  // Caller must have run ensureFresh() before this resolves.
+  if (data.firstDeckBoost) {
+    const picked = data.quality ? getPreset(data.quality) : undefined;
+    if (!picked || !picked.thinking) {
+      const boost = getActivePresets().find((p) => p.thinking)?.key;
+      if (boost) return { effective: boost, autoUpgraded: true, sourceKind };
+    }
+  }
+  // General auto-upgrade DISABLED (2026-05-30). History: thinking-off presets
   // (sonnet-fast, opus-fast) emit malformed / draft-then-final JSON on
   // 30+-slide decks, which used to FAIL the run — so we force-upgraded
   // them to `opus-balanced` (thinking on). The call-claude step now
@@ -1630,6 +1650,11 @@ export const deckGenerate = inngest.createFunction(
     // The user's preset choice is preserved on Job.quality for
     // analytics; only the actual API call is upgraded. Log line
     // `claude_quality_auto_upgrade` traces the swap.
+    // Refresh the runtime-config snapshot FIRST so the worker honours live
+    // admin edits to a preset's model/thinking/cost (shared in-process
+    // cache) — resolveEffectiveQuality reads the preset table for the
+    // first-deck boost.
+    await ensureFresh();
     const {
       effective: effectiveQuality,
       autoUpgraded,
@@ -1641,13 +1666,9 @@ export const deckGenerate = inngest.createFunction(
         to: effectiveQuality,
         sourceKind,
         reason:
-          "thinking-off presets emit malformed/partial JSON on long decks; forced thinking-on opus-balanced",
+          "first-deck gift: the user's first deck runs on the cheapest thinking preset; charge stays on the picked preset",
       });
     }
-
-    // Refresh the runtime-config snapshot so the worker honours live admin
-    // edits to a preset's model/thinking/cost (shared in-process cache).
-    await ensureFresh();
     const callParams = paramsForQuality(effectiveQuality);
     logger.info("claude_quality_preset", {
       quality: effectiveQuality ?? "opus-low (default)",

@@ -149,6 +149,11 @@ export async function GET() {
     // The server's default preset key, so the picker can reconcile a stale
     // selection (a retired preset) to what the server would coerce to.
     defaultPresetKey: defaultPresetKey(),
+    // First-deck gift eligibility (no projects yet): the picker shows the
+    // "first deck runs at Balanced quality" note; /api/projects applies the
+    // actual upgrade server-side with the same zero-projects condition.
+    firstDeckBoost:
+      (await prisma.project.count({ where: { userId: dbUser.id } })) === 0,
     // Credits per generated image (images-mode surcharge) - the DB knob,
     // so the client estimate holds parity with the server quote.
     imageCredits: getImageCredits(),

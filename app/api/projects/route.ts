@@ -15,6 +15,7 @@ import {
   ensureFresh,
   getActivePresetKeys,
   defaultPresetKey,
+  getPreset,
 } from "@/lib/config/runtime-config";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import { detectImageRegion } from "@/lib/geo/image-region";
@@ -772,11 +773,21 @@ export async function POST(request: Request) {
     // no-op on the multipart message shape.
     ...(validatedSource ? { source: validatedSource } : {}),
   };
+  // First-deck gift: the user's very FIRST deck runs at the cheapest active
+  // thinking preset (resolveEffectiveQuality in deck-generate does the
+  // upgrade) while the hold/charge above stayed on the picked preset. Count
+  // BEFORE the project row is created in the transaction below. Only fires
+  // when the picked preset is thinking-off (paid pickers already get it).
+  const firstDeckBoost =
+    !(getPreset(quality)?.thinking ?? false) &&
+    (await prisma.project.count({ where: { userId: dbUser.id } })) === 0;
+
   const eventPayload = {
     type: projectType,
     enhance: projectType === "enhance" ? payload.enhance ?? null : null,
     brief,
     quality,
+    ...(firstDeckBoost ? { firstDeckBoost: true } : {}),
     // Pre-auth contract for deck-generate's holdCredits step: the
     // amount quoted (and shown) here is the MOST the job may charge.
     credit: {

@@ -29,7 +29,7 @@ import {
   rollbackVersionAndJob,
   toJson,
 } from "@/lib/api/regen-helpers";
-import { ensureFresh, regenPresetKey } from "@/lib/config/runtime-config";
+import { ensureFresh, regenPresetFor } from "@/lib/config/runtime-config";
 
 type RegenPayload = { replay?: boolean };
 type CachedComment = {
@@ -94,10 +94,17 @@ export async function POST(
       },
     },
   });
-  // Regens run on the configured regen preset (fastest active no-thinking),
-  // resolved LIVE so it follows admin Settings rather than a frozen preset id.
+  // Regens INHERIT the deck's original generation preset (premium decks keep
+  // premium design quality on regenerated slides, priced on the same key);
+  // deactivated/legacy keys fall back to the fastest active no-thinking
+  // preset. Resolved LIVE so it follows admin Settings.
   await ensureFresh();
-  const originalQuality = regenPresetKey();
+  const genJob = await prisma.job.findFirst({
+    where: { projectId, type: "deck.generate", status: "succeeded" },
+    orderBy: { createdAt: "desc" },
+    select: { quality: true },
+  });
+  const originalQuality = regenPresetFor(genJob?.quality);
   if (
     !project ||
     !project.presentation ||

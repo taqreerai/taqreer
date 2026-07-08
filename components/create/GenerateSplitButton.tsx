@@ -258,6 +258,20 @@ export function GenerateSplitButton({
                 </span>
               ) : null}
             </div>
+            {/* First-deck gift note - server upgrades the very first deck's
+                call params to the Balanced (thinking) preset while charging
+                the picked preset (/api/projects firstDeckBoost). */}
+            {credits?.firstDeckBoost ? (
+              <div className="flex items-center gap-1.5 border-b border-[var(--tq-border-hairline)] px-4 pb-2.5 text-[11px] text-[var(--tq-status-ok-text)]">
+                <span
+                  className="material-symbols-outlined leading-none"
+                  style={{ fontSize: 14 }}
+                >
+                  redeem
+                </span>
+                {dict.flows.generate.firstDeckGift}
+              </div>
+            ) : null}
             {presets.map((preset) => {
               const cost =
                 preset.baseCredits +

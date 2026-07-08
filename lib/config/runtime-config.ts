@@ -200,6 +200,26 @@ export function regenPresetKey(): string {
   return noThink?.key ?? defaultPresetKey();
 }
 
+/**
+ * Regen preset for a deck: inherit the deck's ORIGINAL generation preset
+ * when it's still ACTIVE, so a premium deck's regenerated slides match the
+ * design quality the owner paid for (the regen charge scales with the same
+ * key via regenCost). Deactivated/legacy/unknown keys fall back to the
+ * fastest active no-thinking preset (the old behavior for every deck).
+ * Callers pass the latest deck.generate Job.quality for the project.
+ */
+export function regenPresetFor(
+  originalQuality: string | null | undefined,
+): string {
+  if (
+    originalQuality &&
+    getActivePresets().some((p) => p.key === originalQuality)
+  ) {
+    return originalQuality;
+  }
+  return regenPresetKey();
+}
+
 /** Anthropic call params for a preset key, or undefined for an unknown key. */
 export function paramsForPreset(
   key: string | null | undefined,

@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { ensureFresh, regenPresetKey } from "@/lib/config/runtime-config";
+import { ensureFresh, regenPresetFor } from "@/lib/config/runtime-config";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -50,13 +50,17 @@ export async function POST(
       { status: 400 },
     );
   }
-  // Regens run on the configured regen preset (the fastest active no-thinking
-  // preset), resolved LIVE so it follows admin Settings instead of a frozen id
-  // that could be deactivated/deleted out from under the worker.
+  // Regens INHERIT the deck's original generation preset (a premium deck's
+  // regenerated slides keep premium design quality - and premium pricing);
+  // deactivated/legacy keys fall back to the fastest active no-thinking
+  // preset. Resolved LIVE so it follows admin Settings.
   await ensureFresh();
   const eventPayload = {
     ...((latestJob.inputJson ?? {}) as Record<string, unknown>),
-    quality: regenPresetKey(),
+    quality: regenPresetFor(latestJob.quality),
+    // The original event may carry the one-time first-deck gift flag;
+    // regens are not first decks - never re-gift.
+    firstDeckBoost: false,
   };
 
   // Compute the next version number inside the transaction and retry on
