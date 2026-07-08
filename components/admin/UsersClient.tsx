@@ -145,7 +145,11 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
       setUsers((prev) =>
         prev.map((u) =>
           u.id === setTarget.id
-            ? { ...u, credits: typeof total === "number" ? total : amount }
+            ? {
+                ...u,
+                credits: typeof total === "number" ? total : amount,
+                subscriptionCredits: amount,
+              }
             : u,
         ),
       );
@@ -495,6 +499,17 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
         onClose={() => setSetTarget(null)}
       >
         <div className="space-y-4">
+          {setTarget ? (
+            <p className="text-xs" style={{ color: MUTED }}>
+              Current subscription balance:{" "}
+              <span style={{ color: PRIMARY }}>
+                {setTarget.subscriptionCredits.toLocaleString("en-US")}
+              </span>
+              {setTarget.credits - setTarget.subscriptionCredits > 0
+                ? ` (+ ${(setTarget.credits - setTarget.subscriptionCredits).toLocaleString("en-US")} top-up credits, not affected)`
+                : ""}
+            </p>
+          ) : null}
           <div className="space-y-1">
             <label className="text-xs font-medium" style={{ color: MUTED }}>
               New balance (credits)

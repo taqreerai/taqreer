@@ -55,6 +55,7 @@ export default async function AdminUsersPage() {
         email: u.email,
         plan: asPlan(u.plan),
         credits: balance.total,
+        subscriptionCredits: balance.subscription,
         joinedAt: u.createdAt.toISOString().slice(0, 10),
         banned: !!u.bannedAt,
         signupIp: u.signupIp,

@@ -23,9 +23,14 @@ const IP_RE = /^[0-9a-fA-F:.]+$/;
 const COUNTRY_RE = /^[A-Z0-9]{2}$/; // A2 codes + CF sentinels XX / T1
 const CITY_MAX_LEN = 64;
 
-/** Charset/length-validated IP, or null. */
+/**
+ * Charset/length-validated IP, or null. Lowercased so IPv6 text-form case
+ * differences can't split the shared-IP grouping in the admin users list
+ * (CR PR #121). Zero-compression variants are left alone - Cloudflare emits
+ * a consistent compressed form.
+ */
 export function sanitizeIp(raw: string | null | undefined): string | null {
-  const ip = raw?.trim();
+  const ip = raw?.trim().toLowerCase();
   if (!ip || ip.length > IP_MAX_LEN || !IP_RE.test(ip)) return null;
   return ip;
 }

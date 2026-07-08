@@ -88,6 +88,9 @@ export type AdminUser = {
   email: string;
   plan: Plan;
   credits: number;
+  // Subscription-bucket share of `credits` - what the Set credits action
+  // overwrites (the remainder is top-ups, which it never touches).
+  subscriptionCredits: number;
   joinedAt: string; // ISO date
   banned: boolean;
   // Signup forensics (User.signupIp/Country/City, stamped at provisioning).
@@ -100,7 +103,7 @@ export type AdminUser = {
 
 const MOCK_USERS_BASE: Omit<
   AdminUser,
-  "signupIp" | "signupCountry" | "signupCity" | "sharedIp"
+  "signupIp" | "signupCountry" | "signupCity" | "sharedIp" | "subscriptionCredits"
 >[] = [
   { id: "u1", name: "Noura Al-Otaibi", email: "noura@example.com", plan: "pro", credits: 4120, joinedAt: "2026-06-14", banned: false },
   { id: "u2", name: "Khalid Hassan", email: "khalid@example.com", plan: "max", credits: 11380, joinedAt: "2026-06-12", banned: false },
@@ -116,6 +119,7 @@ const MOCK_USERS_BASE: Omit<
 
 export const MOCK_USERS: AdminUser[] = MOCK_USERS_BASE.map((u) => ({
   ...u,
+  subscriptionCredits: u.credits,
   signupIp: null,
   signupCountry: null,
   signupCity: null,
