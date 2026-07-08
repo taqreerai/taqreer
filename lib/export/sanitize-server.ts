@@ -106,11 +106,14 @@ export function sanitizeSlideHtmlServer(html: string): string {
               window,
               rewriteRtlFlexEndToFlexStart(
                 window,
-                rewriteRtlLtrTextAlign(
+                rewriteRtlOverconstrainedAbsolute(
                   window,
-                  rewriteRtlLeadColumnSide(
+                  rewriteRtlLtrTextAlign(
                     window,
-                    rewriteGridAutoFlowDense(window, clean),
+                    rewriteRtlLeadColumnSide(
+                      window,
+                      rewriteGridAutoFlowDense(window, clean),
+                    ),
                   ),
                 ),
               ),
@@ -171,6 +174,79 @@ function rewriteRtlLtrTextAlign(window: JSDOMWindow, html: string): string {
         if (anc.style && anc.style.textAlign) return;
       }
       el.style.setProperty("text-align", "right");
+      changed = true;
+    });
+    return changed ? root.innerHTML : html;
+  } catch {
+    return html;
+  }
+}
+
+// Server mirror of `effectiveHorizontalConstraints` in lib/export/sanitize.ts —
+// raw-attribute parsing (declaration order + `inset` shorthand expansion);
+// JSDOM's cssstyle doesn't expand `inset` into longhands, so CSSOM reads
+// would silently miss the shorthand here.
+function effectiveHorizontalConstraints(rawStyle: string): {
+  left: string | null;
+  right: string | null;
+  width: string | null;
+} {
+  let left: string | null = null;
+  let right: string | null = null;
+  let width: string | null = null;
+  for (const decl of rawStyle.toLowerCase().split(";")) {
+    const colon = decl.indexOf(":");
+    if (colon === -1) continue;
+    const prop = decl.slice(0, colon).trim();
+    const value = decl.slice(colon + 1).trim();
+    if (!value) continue;
+    if (prop === "left") left = value;
+    else if (prop === "right") right = value;
+    else if (prop === "width") width = value;
+    else if (prop === "inset") {
+      const parts = value.split(/\s+/);
+      if (parts.length === 1) {
+        left = parts[0];
+        right = parts[0];
+      } else if (parts.length === 2 || parts.length === 3) {
+        left = parts[1];
+        right = parts[1];
+      } else if (parts.length >= 4) {
+        right = parts[1];
+        left = parts[3];
+      }
+    }
+  }
+  return { left, right, width };
+}
+
+// Server mirror of `rewriteRtlOverconstrainedAbsolute` in lib/export/sanitize.ts
+// — see that file's docblock (over-constrained absolute under RTL anchors from
+// the RIGHT edge; Claude designed for the LTR left+width resolution; `right:auto`
+// restores it; measured on deck cmrc99wc50001f06ddy2al5cq slide 1).
+function rewriteRtlOverconstrainedAbsolute(
+  window: JSDOMWindow,
+  html: string,
+): string {
+  try {
+    const doc = new window.DOMParser().parseFromString(
+      `<!DOCTYPE html><div>${html}</div>`,
+      "text/html",
+    );
+    const root = doc.body.firstElementChild;
+    if (!root) return html;
+    const slideRoot = root.firstElementChild as HTMLElement | null;
+    if (!slideRoot || slideRoot.getAttribute("dir") !== "rtl") return html;
+    let changed = false;
+    slideRoot.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
+      const closestDir = el.closest("[dir]");
+      if (closestDir && closestDir.getAttribute("dir") !== "rtl") return;
+      const raw = el.getAttribute("style") ?? "";
+      if (!/\b(?:inset|left)\s*:/i.test(raw)) return;
+      const { left, right, width } = effectiveHorizontalConstraints(raw);
+      if (!left || left === "auto" || !right || right === "auto") return;
+      if (!width || width === "auto") return;
+      el.style.setProperty("right", "auto");
       changed = true;
     });
     return changed ? root.innerHTML : html;

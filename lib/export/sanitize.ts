@@ -139,8 +139,10 @@ export function sanitizeSlideHtml(html: string): string {
             rewriteRtlArabicRowReverse(
               rewriteRtlRowFlexOrder(
                 rewriteRtlFlexEndToFlexStart(
-                  rewriteRtlLtrTextAlign(
-                    rewriteRtlLeadColumnSide(rewriteGridAutoFlowDense(clean)),
+                  rewriteRtlOverconstrainedAbsolute(
+                    rewriteRtlLtrTextAlign(
+                      rewriteRtlLeadColumnSide(rewriteGridAutoFlowDense(clean)),
+                    ),
                   ),
                 ),
               ),
@@ -404,6 +406,92 @@ function rewriteRtlLeadColumnSide(html: string): string {
 // alignment in row flex is a different surface and false-positives
 // would be higher (e.g. chrome rows that genuinely want main-axis
 // flex-end). Add it only if a real failure mode shows up.
+// Effective horizontal constraints off a RAW inline style string,
+// respecting declaration order (last write per property wins) and
+// expanding the `inset` shorthand. Raw parsing (not CSSOM) for two
+// reasons the wild data made concrete:
+//   • order matters — flattened/edited slides carry styles like
+//     `right:96px;left:920px;inset:auto;top:110px;…` where the later
+//     `inset:auto` RESETS the earlier longhands, and
+//   • JSDOM's cssstyle doesn't reliably expand the `inset` shorthand
+//     into left/right longhands the way browsers do (same reason
+//     parseGridColumn reads the raw attribute).
+// Unknown/irrelevant declarations are skipped by property name, so a
+// stray `;` inside url(...) data can only produce ignored junk pairs.
+function effectiveHorizontalConstraints(rawStyle: string): {
+  left: string | null;
+  right: string | null;
+  width: string | null;
+} {
+  let left: string | null = null;
+  let right: string | null = null;
+  let width: string | null = null;
+  for (const decl of rawStyle.toLowerCase().split(";")) {
+    const colon = decl.indexOf(":");
+    if (colon === -1) continue;
+    const prop = decl.slice(0, colon).trim();
+    const value = decl.slice(colon + 1).trim();
+    if (!value) continue;
+    if (prop === "left") left = value;
+    else if (prop === "right") right = value;
+    else if (prop === "width") width = value;
+    else if (prop === "inset") {
+      // 1 value: all sides; 2: v h; 3: t h b; 4: t r b l.
+      const parts = value.split(/\s+/);
+      if (parts.length === 1) {
+        left = parts[0];
+        right = parts[0];
+      } else if (parts.length === 2 || parts.length === 3) {
+        left = parts[1];
+        right = parts[1];
+      } else if (parts.length >= 4) {
+        right = parts[1];
+        left = parts[3];
+      }
+    }
+  }
+  return { left, right, width };
+}
+
+// Over-constrained absolute box under RTL — the cover-displacement
+// family, on AUTHORED INNER elements (the canvas itself is pinned by
+// the enforced frame; this rewriter covers everything inside it).
+// Claude writes `inset:96px` + an explicit `width` picturing CSS's
+// default (LTR) resolution: left + width win, right is ignored. Under
+// `dir="rtl"` the browser resolves the over-constraint from the RIGHT
+// edge instead, so the whole block flips sides — measured live on
+// deck cmrc99wc50001f06ddy2al5cq slide 1, where a 900px cover text
+// column (`inset:96px;width:900px`, `.pad` class carries
+// position:absolute) anchored ON TOP of the right-half photo instead
+// of the left white panel.
+//
+// Fix: `right:auto` (appended, so it wins), restoring the LTR
+// resolution Claude designed for — RTL and LTR decks then place the
+// box identically. Guards:
+//   • BOTH horizontal edges must be effectively non-auto (declaration
+//     order respected — see effectiveHorizontalConstraints; flattened
+//     slides' `inset:Xpx auto auto Ypx` never matches, and a later
+//     `inset:auto` correctly voids earlier longhands);
+//   • explicit non-auto width (left+right+auto width = intentional
+//     stretch, not over-constraint);
+//   • NO inline position gate: the wild repro keeps
+//     `position:absolute` in a CLASS rule the inline-only walk can't
+//     see, and `right` is a no-op on non-positioned elements anyway,
+//     so firing without the gate is safe by construction.
+// Symmetric full-bleed images (`inset:0;width:<canvas>px`) match but
+// resolve to the same box from either edge — a visual no-op.
+function rewriteRtlOverconstrainedAbsolute(html: string): string {
+  return withRtlStyledElements(html, (el) => {
+    const raw = el.getAttribute("style") ?? "";
+    if (!/\b(?:inset|left)\s*:/i.test(raw)) return false;
+    const { left, right, width } = effectiveHorizontalConstraints(raw);
+    if (!left || left === "auto" || !right || right === "auto") return false;
+    if (!width || width === "auto") return false;
+    el.style.setProperty("right", "auto");
+    return true;
+  });
+}
+
 function rewriteRtlFlexEndToFlexStart(html: string): string {
   return withRtlStyledElements(html, (el) => {
     const display = styleLower(el, "display");
