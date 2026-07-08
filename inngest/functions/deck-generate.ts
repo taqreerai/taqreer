@@ -2587,12 +2587,18 @@ export const deckGenerate = inngest.createFunction(
       });
       // Auto-palette runs have no brief colors — fall back to the manifest
       // theme's first entry (Claude's chosen dominant) so the /projects color
-      // filter still gets a real value.
+      // filter still gets a real value. parseDeckPalette admits 3-digit hex
+      // too, so expand #abc → #aabbcc before the #RRGGBB freeze (CR PR #116).
+      const paletteLead = manifest.theme.palette[0];
+      const paletteLeadFull =
+        typeof paletteLead === "string" && /^#[0-9A-Fa-f]{3}$/.test(paletteLead)
+          ? `#${[...paletteLead.slice(1)].map((c) => c + c).join("")}`
+          : paletteLead;
       const dominantColorForFreeze =
         dominantColorFromBrief ??
-        (typeof manifest.theme.palette[0] === "string" &&
-        /^#[0-9A-Fa-f]{6}$/.test(manifest.theme.palette[0])
-          ? manifest.theme.palette[0]
+        (typeof paletteLeadFull === "string" &&
+        /^#[0-9A-Fa-f]{6}$/.test(paletteLeadFull)
+          ? paletteLeadFull
           : null);
       if (dominantColorForFreeze != null) {
         await prisma.project.updateMany({

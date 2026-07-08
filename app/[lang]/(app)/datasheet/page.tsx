@@ -747,6 +747,7 @@ export default function DatasheetPage() {
                   type="button"
                   onClick={() => setColors([])}
                   disabled={colors.length === 0}
+                  aria-pressed={colors.length === 0}
                   title={dict.flows.autoColorsHint}
                   className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
                     colors.length === 0
