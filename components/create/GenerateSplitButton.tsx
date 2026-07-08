@@ -166,6 +166,27 @@ export function GenerateSplitButton({
     ? quality
     : reconciledKey;
 
+  // First-deck gift: the gift TARGET (cheapest thinking preset, mirrors the
+  // server's boostPresetKey) is ungated and billed at the DRAFT preset's
+  // price for the user's first deck - /api/projects rewrites the charge to
+  // the draft preset and boosts the run. The picker also defaults there so
+  // the gift is the selection, not a footnote.
+  const boostKey = presets.find((p) => p.thinking)?.key ?? null;
+  const draftPreset = presets.find((p) => !p.thinking) ?? null;
+  const giftKey = credits?.firstDeckBoost ? boostKey : null;
+  const giftDefaulted = useRef(false);
+  useEffect(() => {
+    // One-shot: when the credits payload reveals gift eligibility and the
+    // user hasn't picked anything beyond the server default, move the
+    // selection to the gifted tier.
+    if (giftDefaulted.current || !giftKey) return;
+    if (quality === credits?.defaultPresetKey || quality === draftPreset?.key) {
+      giftDefaulted.current = true;
+      onQualityChange(giftKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot sync on credits arrival; deps deliberately minimal
+  }, [giftKey]);
+
   return (
     <div ref={splitButtonRef} className="relative">
       {/* Outer pill — the `.btn-gradient-anim` class supplies the
@@ -275,9 +296,14 @@ export function GenerateSplitButton({
               </div>
             ) : null}
             {presets.map((preset) => {
+              // First-deck gift row: billed at the DRAFT preset's rates
+              // (mirrors /api/projects' quality rewrite) and never gated.
+              const isGiftRow = giftKey !== null && preset.key === giftKey;
+              const costPreset =
+                isGiftRow && draftPreset ? draftPreset : preset;
               const cost =
-                preset.baseCredits +
-                effectiveSlideCount * preset.perSlideCredits +
+                costPreset.baseCredits +
+                effectiveSlideCount * costPreset.perSlideCredits +
                 // Same surcharge the server holds (preset-independent);
                 // live DB rate once /api/credits resolves, constant before.
                 imagesSurcharge(
@@ -288,6 +314,7 @@ export function GenerateSplitButton({
               const gateTier = preset.gateTier;
               const gated =
                 !isAdmin &&
+                !isGiftRow &&
                 userPlan !== null &&
                 gateTier !== null &&
                 TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
@@ -340,7 +367,13 @@ export function GenerateSplitButton({
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2.5">
-                    {gated && gateTier ? (
+                    {isGiftRow ? (
+                      // First-deck gift pill - replaces the tier pill on the
+                      // gifted row (row is selectable, billed as draft).
+                      <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold leading-none text-[var(--tq-status-ok-text)] bg-[var(--tq-status-ok-bg)]">
+                        {dict.flows.generate.giftPill}
+                      </span>
+                    ) : gated && gateTier ? (
                       // Gated-tier pill - brand-blue, doubles as the upsell
                       // affordance (click opens UpgradeModal).
                       <span className="rounded-full bg-[var(--tq-purple)] px-2.5 py-1 text-[10px] font-semibold leading-none text-white">

@@ -16,6 +16,8 @@ import {
   getActivePresetKeys,
   defaultPresetKey,
   getPreset,
+  boostPresetKey,
+  regenPresetKey,
 } from "@/lib/config/runtime-config";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import { detectImageRegion } from "@/lib/geo/image-region";
@@ -656,7 +658,26 @@ export async function POST(request: Request) {
     );
   }
   await ensureFresh();
-  const quality = resolveQuality(payload.quality);
+  let quality = resolveQuality(payload.quality);
+
+  // ─── First-deck gift (BEFORE preflight - it changes gating + price) ──
+  // The user's very first deck runs at the cheapest ACTIVE thinking preset
+  // while being billed as the draft preset. Two entry shapes:
+  //   • picked a thinking-off preset → keep quality, boost only the run;
+  //   • picked the gift tier itself (the picker defaults there and ungates
+  //     it for first-deck users) → rewrite quality to the draft preset so
+  //     preflight gates + prices it as draft, and boost the run back up.
+  // Count BEFORE the project row is created in the transaction below.
+  let firstDeckBoost = false;
+  if ((await prisma.project.count({ where: { userId: dbUser.id } })) === 0) {
+    const picked = getPreset(quality);
+    if (!(picked?.thinking ?? false)) {
+      firstDeckBoost = true;
+    } else if (quality === boostPresetKey()) {
+      quality = regenPresetKey();
+      firstDeckBoost = true;
+    }
+  }
 
   // ─── Credit preflight (billing plan Phase A) ──────────────────────
   // The ONLY money gate before the Inngest hold: tier flow/preset/cap
@@ -773,15 +794,6 @@ export async function POST(request: Request) {
     // no-op on the multipart message shape.
     ...(validatedSource ? { source: validatedSource } : {}),
   };
-  // First-deck gift: the user's very FIRST deck runs at the cheapest active
-  // thinking preset (resolveEffectiveQuality in deck-generate does the
-  // upgrade) while the hold/charge above stayed on the picked preset. Count
-  // BEFORE the project row is created in the transaction below. Only fires
-  // when the picked preset is thinking-off (paid pickers already get it).
-  const firstDeckBoost =
-    !(getPreset(quality)?.thinking ?? false) &&
-    (await prisma.project.count({ where: { userId: dbUser.id } })) === 0;
-
   const eventPayload = {
     type: projectType,
     enhance: projectType === "enhance" ? payload.enhance ?? null : null,

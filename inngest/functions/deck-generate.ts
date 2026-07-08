@@ -23,7 +23,7 @@ import {
   creditCostFor,
   getImageCredits,
   getPreset,
-  getActivePresets,
+  boostPresetKey,
 } from "@/lib/config/runtime-config";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
@@ -620,7 +620,7 @@ function resolveEffectiveQuality(data: DeckGenerateEvent): {
   if (data.firstDeckBoost) {
     const picked = data.quality ? getPreset(data.quality) : undefined;
     if (!picked || !picked.thinking) {
-      const boost = getActivePresets().find((p) => p.thinking)?.key;
+      const boost = boostPresetKey();
       if (boost) return { effective: boost, autoUpgraded: true, sourceKind };
     }
   }
